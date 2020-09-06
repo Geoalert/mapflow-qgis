@@ -1,0 +1,35 @@
+stages:
+- zip
+- upload
+
+.only: &only
+  refs:
+  - master
+  changes:
+  - src/**
+
+.cache: &cache
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+  - /cache
+
+zip:
+  image: alpine
+  stage: zip
+  cache: *cache
+  only: *only
+  script:
+  - apk add --no-cache zip
+  - mkdir /cache
+  - cd src
+  - zip -r /cache/energy_geoalert_master_src.zip ./
+  - cp files/index.xml /cache/
+
+upload:
+  image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest
+  stage: upload
+  only: *only
+  cache: *cache
+  script:
+  - cd /cache
+  - s3 sync . s3://energy-geoalert/
