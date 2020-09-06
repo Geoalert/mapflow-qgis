@@ -20,7 +20,6 @@ zip:
   only: *only
   script:
   - apk add --no-cache zip
-  - mkdir cache
   - cp files/index.xml cache/
   - cd src
   - zip -r ../cache/energy_geoalert_master_src.zip ./
