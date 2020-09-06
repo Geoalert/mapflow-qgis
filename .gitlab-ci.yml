@@ -31,5 +31,6 @@ upload:
   only: *only
   cache: *cache
   script:
+  - ls -al
   - cd /cache
   - s3 sync . s3://energy-geoalert/
