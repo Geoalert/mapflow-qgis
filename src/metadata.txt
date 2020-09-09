@@ -16,7 +16,7 @@ changelog=----Внесенные изменения..
 
 
 # Tags are comma separated with spaces allowed
-tags=Буфер, GeoAlert, inspector....
+tags=Буфер охранной зоны, Powerline, обработка ДЗЗ, inspector....
 category=Vector
 
 homepage=http://power.geoalert.io
