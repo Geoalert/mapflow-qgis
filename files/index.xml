@@ -1,33 +1,33 @@
 <plugins>
-<pyqgis_plugin name="Powerline inspector" version="v1" date="20.08.20" plugin_id="0">
+<pyqgis_plugin name="Powerline inspector" version="v1.1" date="20.08.20" plugin_id="0">
 <description>
 <![CDATA[ Описание ]]>
 </description>
 <about>
 <![CDATA[ “Space Powerline Inspector” extracts the precise forest mask through the “Forest Detection” and “Forest Detection with Heights” workflows - the segmentation mask enriched with tree height estimates ]]>
 </about>
-<version>v1 20.08.20</version>
+<version>v1.1</version>
 <trusted>True</trusted>
 <qgis_minimum_version>3.00.0</qgis_minimum_version>
 <qgis_maximum_version>3.99.0</qgis_maximum_version>
 <homepage>
 <![CDATA[ http://power.geoalert.io/ ]]>
 </homepage>
-<file_name>energy_geoalert.zip</file_name>
+<file_name>energy_geoalert_master_src.zip</file_name>
 <!--         <icon>/static/packages/survey.png</icon> -->
 <author_name>
 <![CDATA[ Geoalert ]]>
 </author_name>
-<download_url>./energy_geoalert.zip</download_url>
+<download_url>energy_geoalert_master_src.zip</download_url>
 <uploaded_by>
 <![CDATA[ -- ]]>
 </uploaded_by>
 <create_date>2020-08-20T20:00:00.000000</create_date>
-<update_date>2020-08-20T20:00:00.000000</update_date>
+<update_date>2020-09-08T20:00:00.000000</update_date>
 <experimental>False</experimental>
 <deprecated>False</deprecated>
 <tags>
-<![CDATA[ geology,stratigraphy ]]>
+<![CDATA[ remote sensing data processing, powerlines monitoring ]]>
 </tags>
 <average_vote>3.99985714796</average_vote>
 <rating_votes>2</rating_votes>
