@@ -21,7 +21,7 @@ category=Vector
 homepage=https://power.geoalert.io
 tracker=
 repository=
-icon=icon.png
+icon=icon.svg
 # experimental flag
 experimental=False
 
