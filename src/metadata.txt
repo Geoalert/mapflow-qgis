@@ -1,9 +1,8 @@
 [general]
 name=Energy inspector
-qgisMinimumVersion=3.0
-description=Текст описания
+QgisMinimumVersion=3.0
 about=“Space Powerline Inspector” extracts the precise forest mask through the “Forest Detection” and “Forest Detection with Heights” workflows - the segmentation mask enriched with tree height estimates
-version=1.1
+version=v22.08.20
 author=Geoalert
 email=hello@geoalert.io
 
@@ -12,14 +11,14 @@ email=hello@geoalert.io
 # Optional items:
 
 # Uncomment the following line and add your changelog:
-changelog=----Внесенные изменения..
+changelog="Реализован сценарий оператора охранной зоны ЛЭП - построение буфера"
 
 
 # Tags are comma separated with spaces allowed
 tags=Буфер охранной зоны, Powerline, обработка ДЗЗ, inspector....
 category=Vector
 
-homepage=http://power.geoalert.io
+homepage=https://power.geoalert.io
 tracker=
 repository=
 icon=icon.svg
