@@ -20,7 +20,7 @@
    <item>
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
-      <number>2</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="tab">
       <attribute name="title">
@@ -897,8 +897,8 @@ TIF файла:</string>
       <widget class="QLabel" name="label_25">
        <property name="geometry">
         <rect>
-         <x>10</x>
-         <y>130</y>
+         <x>5</x>
+         <y>240</y>
          <width>111</width>
          <height>36</height>
         </rect>
@@ -924,8 +924,8 @@ TIF файла:</string>
       <widget class="QgsMapLayerComboBox" name="MapLay_CB_2">
        <property name="geometry">
         <rect>
-         <x>145</x>
-         <y>135</y>
+         <x>140</x>
+         <y>245</y>
          <width>191</width>
          <height>21</height>
         </rect>
@@ -934,8 +934,8 @@ TIF файла:</string>
       <widget class="QCheckBox" name="checkUp_f">
        <property name="geometry">
         <rect>
-         <x>370</x>
-         <y>130</y>
+         <x>365</x>
+         <y>240</y>
          <width>211</width>
          <height>31</height>
         </rect>
@@ -947,8 +947,8 @@ TIF файла:</string>
       <widget class="QCheckBox" name="checkUp_b">
        <property name="geometry">
         <rect>
-         <x>370</x>
-         <y>190</y>
+         <x>365</x>
+         <y>300</y>
          <width>221</width>
          <height>31</height>
         </rect>
@@ -960,8 +960,8 @@ TIF файла:</string>
       <widget class="QgsMapLayerComboBox" name="MapLay_CB_3">
        <property name="geometry">
         <rect>
-         <x>150</x>
-         <y>195</y>
+         <x>145</x>
+         <y>305</y>
          <width>191</width>
          <height>21</height>
         </rect>
@@ -970,8 +970,8 @@ TIF файла:</string>
       <widget class="QLabel" name="label_28">
        <property name="geometry">
         <rect>
-         <x>15</x>
-         <y>190</y>
+         <x>10</x>
+         <y>300</y>
          <width>111</width>
          <height>36</height>
         </rect>
@@ -983,8 +983,8 @@ TIF файла:</string>
       <widget class="QLabel" name="label_29">
        <property name="geometry">
         <rect>
-         <x>15</x>
-         <y>245</y>
+         <x>20</x>
+         <y>135</y>
          <width>131</width>
          <height>31</height>
         </rect>
@@ -996,8 +996,8 @@ TIF файла:</string>
       <widget class="QgsMapLayerComboBox" name="vectorComboBox_2">
        <property name="geometry">
         <rect>
-         <x>155</x>
-         <y>250</y>
+         <x>160</x>
+         <y>140</y>
          <width>191</width>
          <height>22</height>
         </rect>
@@ -1019,8 +1019,8 @@ TIF файла:</string>
       <widget class="Line" name="line_4">
        <property name="geometry">
         <rect>
-         <x>7</x>
-         <y>110</y>
+         <x>2</x>
+         <y>220</y>
          <width>561</width>
          <height>16</height>
         </rect>
@@ -1032,8 +1032,8 @@ TIF файла:</string>
       <widget class="Line" name="line_5">
        <property name="geometry">
         <rect>
-         <x>10</x>
-         <y>170</y>
+         <x>5</x>
+         <y>280</y>
          <width>561</width>
          <height>16</height>
         </rect>
@@ -1071,8 +1071,8 @@ TIF файла:</string>
       <widget class="QLabel" name="label_24">
        <property name="geometry">
         <rect>
-         <x>15</x>
-         <y>275</y>
+         <x>20</x>
+         <y>165</y>
          <width>201</width>
          <height>36</height>
         </rect>
@@ -1084,8 +1084,8 @@ TIF файла:</string>
       <widget class="QComboBox" name="categoryComboBox_2">
        <property name="geometry">
         <rect>
-         <x>200</x>
-         <y>280</y>
+         <x>205</x>
+         <y>170</y>
          <width>146</width>
          <height>22</height>
         </rect>

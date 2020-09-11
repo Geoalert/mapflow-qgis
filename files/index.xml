@@ -6,7 +6,7 @@
 <about>
 <![CDATA[ “Space Powerline Inspector” extracts the precise forest mask through the “Forest Detection” and “Forest Detection with Heights” workflows - the segmentation mask enriched with tree height estimates ]]>
 </about>
-<version>v22.08.20</version>
+<version>v10.09.20</version>
 <trusted>True</trusted>
 <qgis_minimum_version>3.00.0</qgis_minimum_version>
 <qgis_maximum_version>3.99.0</qgis_maximum_version>

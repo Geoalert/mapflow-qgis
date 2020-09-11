@@ -1,8 +1,9 @@
 [general]
 name=Energy inspector
-QgisMinimumVersion=3.0
+qgisMinimumVersion=3.0
+description=Текст описания
 about=“Space Powerline Inspector” extracts the precise forest mask through the “Forest Detection” and “Forest Detection with Heights” workflows - the segmentation mask enriched with tree height estimates
-version=v22.08.20
+version=v10.09.20
 author=Geoalert
 email=hello@geoalert.io
 
@@ -27,4 +28,5 @@ experimental=False
 
 # deprecated flag (applies to the whole plugin, not just a single version)
 deprecated=False
+
 

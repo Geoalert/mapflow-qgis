@@ -86,6 +86,11 @@ class EnergyGeoalert:
         self.dlg.ButtonUpload.clicked.connect(self.uploadOnServer)
         #кнопка удаления слоя
         self.dlg.ButtonDel.clicked.connect(self.DelLay)
+
+        #кнопка выбора TIF для загрузки
+        self.dlg.but_inputTIF.clicked.connect(self.select_tif)
+
+
 #--------------------------------------------------------
 #-------Вкладка (Подготовка к обработке)
             #добавление типа опоры в список
@@ -128,6 +133,25 @@ class EnergyGeoalert:
         # кнопка выбора папки сохранения отчета через обзор
         self.dlg.but_dir_2.clicked.connect(self.select_output_file_2)
 
+
+
+#-------------------------------------------------------------------------
+
+    # получаем список дефинишинсов
+    def WFDefeni(self):
+            URL_up = self.server + '/rest/projects/default'  # url запроса
+            headers = self.authorization
+
+            r = requests.get(URL_up, headers=headers)
+            #print(r.text)
+            wfds = r.json()['workflowDefs']
+            self.dlg.comboBoxTypeProc.clear()
+            for wfd in wfds:
+                print(wfd['name'])
+                try:
+                    self.dlg.comboBoxTypeProc.addItem(wfd['name'])
+                except:
+                    None
 
         #вписываем тип опоры в поле добавления
     def intype(self):
@@ -209,9 +233,12 @@ class EnergyGeoalert:
         #чистим комбобоксы
         self.dlg.categoryComboBox_2.clear()
         #заполняем комбобоксы названиями полей с их индексами
-        for idx, field in enumerate(self.Poilayer_2.fields()):
-            self.dlg.categoryComboBox_2.addItem(field.name(), idx)
-            #print(idx, field.name())
+        try:
+            for idx, field in enumerate(self.Poilayer_2.fields()):
+                self.dlg.categoryComboBox_2.addItem(field.name(), idx)
+                #print(idx, field.name())
+        except:
+            None
 
     def PointProc(self):
         # получение слоев из комбобокса
@@ -220,11 +247,14 @@ class EnergyGeoalert:
         self.dlg.categoryComboBox.clear()
         self.dlg.comboType.clear()
 
-        #заполняем комбобоксы названиями полей с их индексами
-        for idx, field in enumerate(self.Poilayer.fields()):
-            self.dlg.categoryComboBox.addItem(field.name(), idx)
-            self.dlg.comboType.addItem(field.name(), idx)
-            #print(idx, field.name())
+        try:
+            #заполняем комбобоксы названиями полей с их индексами
+            for idx, field in enumerate(self.Poilayer.fields()):
+                self.dlg.categoryComboBox.addItem(field.name(), idx)
+                self.dlg.comboType.addItem(field.name(), idx)
+                #print(idx, field.name())
+        except:
+            None
     # Определение координат точки зная угол и расстояние от исходной точки.
     # координаты точки списком ['x','y'], расстояние отклонения точки, угол в радианах
     def PointXY(self, pointAxy, radius, n_rad):
@@ -338,6 +368,143 @@ class EnergyGeoalert:
             self.os_line = self.shape_export([line], '_central', ogr.wkbLineString, 0)
             print('Файл осевой линии создан')
             self.provoda()
+
+
+    #экспорт во временный слой. Передаем списком объекты, окончание к названию, тип геометрии
+    #возвращает временный векторный слой
+    def export_vlayer(self, geometry, postfix, type_geom, nameF):
+        #print(geometry)
+        flag = True
+        if nameF == 0:
+            flag = False
+            nameF = str(self.Poilayer).split("'")[1]  # имя исходного слоя
+            name_oporyX2 = self.sotrD + self.sotrD
+            smeschen = len(self.sotrD)
+            # добавляем по два раза одно название для левого и правого пролета
+            #print(name_oporyX2)
+        name_d = nameF + postfix
+        # указание драйвера
+        driverName = "ESRI Shapefile"
+        drv = ogr.GetDriverByName(driverName)
+        if drv is None:
+            print("%s Драйвер не поключился.\n" % driverName)
+        # создание файла
+        # создание новоо слоя
+        file_adr = self.dlg.input_directory.text() + nameF + postfix +'.shp'
+        ogrData_save = drv.CreateDataSource(file_adr)
+        layerName = os.path.basename(self.dlg.input_directory.text() + nameF)
+        #--проекция
+        #получение проекции из слоя
+        projPoi = str(self.Poilayer.crs()).split(' ')[1][:-1]  # текстовое значение проекции EPSG
+        projPoi = int(projPoi.split(":")[1])
+        #создание и указание проекции
+        self.srs = osr.SpatialReference()
+        self.srs.ImportFromEPSG(projPoi)
+        try:
+            layer_save = ogrData_save.CreateLayer(layerName, self.srs, geom_type=type_geom, options=['ENCODING=UTF-8'])
+        except:
+            infoString = 'Слой "%s" уже открыт в QGIS. Для перезаписи удалите этот слой из QGIS и запустите обработку повторно.' % (name_d)
+            QMessageBox.information(self.dlg, "Ахтунг!", infoString)
+
+        # копируем созданную геометрию(и прикреплённые к ней значения полей)
+        # добавлем новое поле
+
+        fieldDef = ogr.FieldDefn( "id", ogr.OFTString )
+        fieldDef.SetWidth( 30 )
+        if layer_save.CreateField ( fieldDef ) != 0:
+            print("не могу создать поле %s" % fieldDef.GetNameRef())
+        # fieldDef = ogr.FieldDefn("name", ogr.OFTString)
+        # fieldDef.SetWidth( 30 )
+        # if layer_save.CreateField ( fieldDef ) != 0:
+        #     print("не могу создать поле %s" % fieldDef.GetNameRef())
+        # создание полей для полигонов
+        if flag == False:
+
+            for name_field in ['name', 'len', 'l', 'r', 'side']:
+
+                fieldDef = ogr.FieldDefn(name_field, ogr.OFTString)
+                fieldDef.SetWidth(30)
+                if layer_save.CreateField(fieldDef) != 0:
+                    print("не могу создать поле %s" % fieldDef.GetNameRef())
+
+
+            # непонятная поправлялка для полигонов
+        if type_geom == ogr.wkbPolygon:#если тип - полигон, то обрабатывать таким макаром
+            n_1 = 0
+            side_atr = 'L'
+            for ring in geometry:
+                # Create polygon
+                poly = ogr.Geometry(ogr.wkbPolygon)
+                poly.AddGeometry(ring)
+                # создаем OGRFeature (фигуру/объект)
+                feat = ogr.Feature(layer_save.GetLayerDefn())
+                feat.SetGeometry(poly)  # присоединяем геометрию к OGRFeature
+                outFeat = ogr.Feature(layer_save.GetLayerDefn())
+
+                if flag == False:
+                    feat.SetField('type', 'poligon')  # устанавливаем атрибут
+                    if n_1 == smeschen-1:
+                        n_1 = 0
+                        side_atr = 'R'
+
+                    name_atr = str(name_oporyX2[n_1]) + '_' + str(name_oporyX2[n_1 + 1])  # название пролета
+                    feat.SetField('name', name_atr)  # устанавливаем атрибут
+
+                    # if n_1 < smeschen - 1:
+                    #     side_atr = 'L'
+                    # else:
+                    #     side_atr = 'R'
+                    feat.SetField('side', side_atr)  # устанавливаем атрибут
+
+                    # блокируем старый код
+                    # feat.SetField('type', 'poligon')  # устанавливаем атрибут
+                    # name_atr = str(self.sotrD[n_1]) + '_' + str(self.sotrD[n_1 + 1]) #название пролета
+                    # feat.SetField('name', name_atr)  # устанавливаем атрибут название пролета
+                    # # копируем созданную геометрию(и прикреплённые к ней значения полей)
+
+                    feat.SetField('len', self.dist_opor[n_1])  # устанавливаем атрибут длина пролета
+                    feat.SetField('l', self.buf_oz[n_1][0])  # устанавливаем атрибут левый буфер
+                    feat.SetField('r', self.buf_oz[n_1][1])  # устанавливаем атрибут правый буфер
+
+                    #self.dist_opor = []  # список расстояний между опорами
+                    #self.buf_oz = [] #список ОЗ [L,R]
+
+                outFeat.SetFrom(feat)
+                #print('Полигон')
+                # print(feat)
+                if layer_save is None:
+                    print('Создание слоя не удалось!')
+                # запись объекта в слой
+                # сохранялка
+                #print('Сохранялка')
+                if layer_save.CreateFeature(outFeat) != 0:
+                    print("Ошибка создания объекта в шейп файле.\n")
+                n_1 += 1
+
+        else: #если тип НЕ полигон....
+            for geo in geometry:
+                feat = ogr.Feature(layer_save.GetLayerDefn())
+                feat.SetGeometry(geo) #присоединяем геометрию к OGRFeature
+                feat.SetField('type', 'line')  # устанавливаем атрибут
+                #print(feat)
+                if layer_save is None:
+                    print('Создание слоя проволилось!')
+                # запись объекта в слой
+                # сохранялка
+                #print('Сохранялка')
+                if layer_save.CreateFeature(feat) != 0:
+                    print("Ошибка создания объекта в шейп файле.\n")
+
+
+        # Открытие файла
+        print(file_adr)
+        vlayer = QgsVectorLayer(file_adr, name_d, "ogr")
+
+        vlayer_id = vlayer.id()  # получение айдишника слоя
+        # Загрузка файла в окно qgis
+        # QgsProject.instance().addMapLayer(vlayer)
+
+        return vlayer, vlayer_id, file_adr
 
 
     #экспорт в shp передаем списком объекты, окончание к названию, тип геометрии
@@ -490,8 +657,8 @@ class EnergyGeoalert:
         self.dist_opor = [] #список расстояний между опорами
         self.buf_oz = [] # список расстояний буфера ОЗ слева и справа [L,R]
 
-        # n_buf = 1.45 #коэффициент увеличения буфера для разрезания
-        n_buf = 1
+        n_buf = 1.45 #коэффициент увеличения буфера для разрезания
+        #n_buf = 1
 
         for i in self.sotrD:  # перебор точек по возрастанию номеров
             print('---------------------------------------')
@@ -536,10 +703,10 @@ class EnergyGeoalert:
 
                 if azrzn < -180 and n1[1] > n2[1]:
                     azrzn = azrzn * (-1)
-                    print('поправили', i-1)
-                print(ugoldeg - azrzn)
+                    #print('поправили', i-1)
+                #print(ugoldeg - azrzn)
                 if ugoldeg - azrzn < 1:
-                    print('Правый внутренний')
+                    #print('Правый внутренний')
                     ugR = azim1 - (ugoldeg / 2)  # угол расположения правой точки
                     ugL = ugR + 180  # угол левой точки
                     ############################
@@ -556,12 +723,12 @@ class EnergyGeoalert:
                     liPoL.append(poiPolyL)
                     liPoR.append(poiPolyR)
                 elif -1 < (ugoldeg + azrzn) < 1 or ugoldeg + abs(azrzn) > 359:
-                    print('Левый внутренний')
+                    #print('Левый внутренний')
                     ugL = (ugoldeg / 2) + azim1  # угол расположения левой точки
 
                     #print(n1, n2, n3)
                     if n1[0] > n2[0] < n3[0]:  # поправлялка для углов с началом в четвертой четверти и концом в первой
-                        print('До Поправлялка:', ugL)
+                        #print('До Поправлялка:', ugL)
                         ugL = ugL + 90
                         #print('Поправлялка:', ugL)
 
@@ -630,6 +797,8 @@ class EnergyGeoalert:
         poiPolyR = self.PointXY(n1, atr1[1] + self.classNapr * n_buf, radians(ugR))
         liPoL.append(poiPolyL)
         liPoR.append(poiPolyR)
+
+        #-----------------------------------------------------------------
         polygonBig = ogr.Geometry(ogr.wkbLinearRing)  # создаем общий полигон буфера
         for poi in liPoL: #вписываем точки левой границы
             polygonBig.AddPoint(poi[0], poi[1])
@@ -637,7 +806,10 @@ class EnergyGeoalert:
             polygonBig.AddPoint(poi[0], poi[1])
         polygonBig.AddPoint(liPoL[0][0], liPoL[0][1]) #замыкаем полигон на первую точку
         #print(polygonBig)
-        self.shape_export([polygonBig], '_Big_poly', ogr.wkbPolygon, 0) #создание общего полигона
+
+        # self.shape_export([polygonBig], '_Big_poly', ogr.wkbPolygon, 0) #создание общего полигона
+        #-----------------------------------------------------------------
+
 
         # создание полигонов пролетов
         # деление на лево и право!
@@ -661,32 +833,118 @@ class EnergyGeoalert:
                     xn1 = [side[n], liPoC[n]]
 
         self.shape_export([lineR, lineL], '_lines', ogr.wkbLineString, 0)  # создание линий проводов
+
         lines_lay = qgis.utils.iface.activeLayer()
+        lines_lay_id = QgsProcessingFeatureSourceDefinition(lines_lay.id())
 
-        # lines_lay_id = QgsProcessingFeatureSourceDefinition(lines_lay.id())
-        # #  Построение буфера вокруг линий проводов
-        # buf_lay = processing.run("native:buffer",
-        #                {'INPUT': lines_lay_id,
-        #                 'DISTANCE': self.classNapr,
-        #                 'SEGMENTS': 5,
-        #                 'END_CAP_STYLE': 1,
-        #                 'JOIN_STYLE': 0,
-        #                 'MITER_LIMIT': 2,
-        #                 'DISSOLVE': True,
-        #                 'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
-        #
-        #
-        # print(buf_lay.id())
-        #
-        # QgsProject.instance().addMapLayer(buf_lay)  # добавим на карту
+        nameBP = str(self.Poilayer).split("'")[1]# Название большого полигона
+        file_adrB = self.dlg.input_directory.text() + nameBP + '_Big_poly.shp'
+        print(file_adrB)
+
+        #  Построение буфера вокруг линий проводов
+        processing.run("native:buffer",
+                       {'INPUT': lines_lay_id,
+                        'DISTANCE': self.classNapr,
+                        'SEGMENTS': 5,
+                        'END_CAP_STYLE': 1,
+                        'JOIN_STYLE': 0,
+                        'MITER_LIMIT': 2,
+                        'DISSOLVE': True,
+                        'OUTPUT': file_adrB})#['OUTPUT']
+
+        vlayer = QgsVectorLayer(file_adrB, nameBP+'_Big_poly', "ogr")
+        if not vlayer:
+            print("Layer failed to load!")
+        buf_id = vlayer.id()
+        QgsProject.instance().addMapLayer(vlayer)  # добавим на карту
 
 
-        self.segments = self.shape_export(prolyoty, '_segment', ogr.wkbPolygon, 0)  # создание полигонов по пролетам
-        layer_segm = qgis.utils.iface.activeLayer()
+        self.layer_seg_temp, self.layer_seg_temp_id, adres_rem = self.export_vlayer(prolyoty, '__segbig', ogr.wkbPolygon, 0)  # создание полигонов по пролетам
+        # layer_segm = qgis.utils.iface.activeLayer()
+        print(self.layer_seg_temp_id)
+        QgsProject.instance().addMapLayer(self.layer_seg_temp) #
 
 
 
-    #генерация отчета
+        lay_s = QgsProcessingFeatureSourceDefinition(self.layer_seg_temp_id)#слой сегментов
+        lay_b = QgsProcessingFeatureSourceDefinition( buf_id )
+        adr_segm = self.dlg.input_directory.text() + nameBP + '_segment.shp'
+        print(adr_segm)
+        # обработка пересечения с получением слоя сегментов.
+        processing.run("native:intersection",
+                       {'INPUT': lay_s,
+                        'OVERLAY': lay_b,
+                        'OUTPUT': adr_segm})
+
+        vlayer_seg = QgsVectorLayer(adr_segm, nameBP+'_segment', "ogr")
+        QgsProject.instance().addMapLayer(vlayer_seg)  # добавим на карту
+        QgsProject.instance().removeMapLayer(self.layer_seg_temp_id)# удаляем лишний слой
+
+
+        #генерация отчета
+
+    # рассчеты расстояния от точки до линии
+    def lenPoiToLine(self, nom_prol, poiNXY, featAtXY): # № пролета, список точек с координатами, список объектов с атрибутами и коорлинатами
+        minL, minR = 10000, 10000
+
+        nom = [int(nom_prol.split('_')[0]), int(nom_prol.split('_')[1])] #список из двух номеров опор
+
+        #print('Nomera opor:', nom)
+        #print('Tochki opor:', poiNXY)
+        #print('Объекты:', featAtXY)
+        points2 = []
+        for point_1 in poiNXY: #перебор точек
+            if nom[0] == point_1[0] or nom[1] == point_1[0]:
+                # print('Точка:', point_1)
+                points2.append(point_1[-2:])
+
+        p1 , p2 = points2[0], points2[1] # координаты точек отрезка
+
+        for feat_1 in featAtXY: #перебор объектов
+            if nom_prol == feat_1[0]:
+                # print('Полигон: ', feat_1[0])
+                # print('Геометрия', feat_1)
+                np = 0
+                minX = 10000
+                for po in feat_1[-1]: #перебираем точки объекта
+                    np += 1
+                    # print("Номер точки:", np)
+                    # print(po)
+                    ugolA, len1 = self.ugol_degrees(po, p1, p2) #считаем угол и расстояния
+                    ugolB, len2 = self.ugol_degrees(po, p2, p1) #считаем угол и расстояния
+                    # print('Угол А, длина, Угол Б, длина:')
+                    # print(ugolA, len1, ugolB, len2)
+
+                    if ugolA >= 90 or ugolB >= 90: #если один из углов больше или равер 90 град
+                        minH = min([len1, len2]) # выбираем минимальное расстояние до одной из точек отрезка
+                        # print('За пределами отрезка. Расстояние:', minH)
+                    else:
+                        minH = len1 * sin(radians(ugolA)) # считаем длину перпендикуляра к отрезку
+                        # print('sin:', ugolA, sin(radians(ugolA)))
+                        # print('В пределах отрезка. Расстояние:', minH)
+                    if minX > minH:
+                        minX = minH
+                #         print('Уменьшаем:', minX, minH)
+
+                if feat_1[1] == 'L' and minL > minX:
+                    minL = minX
+                elif feat_1[1] == 'R' and minR > minX:
+                    minR = minX
+        minR = round(minR, 2)
+        minL = round(minL, 2)
+
+        if minR == 10000:
+            minR = 'Нет'
+        if minL == 10000:
+            minL = 'Нет'
+
+        minR = str(minR)
+        minL = str(minL)
+        # print('export:', minL, minR)
+        return minL, minR
+
+
+
     def report(self):
         #получаем id слоев
         layer_segment = self.dlg.MapLay_CB.currentLayer()
@@ -710,6 +968,27 @@ class EnergyGeoalert:
         inputF = QgsProcessingFeatureSourceDefinition(layer_segment.id())
         overlayF = QgsProcessingFeatureSourceDefinition(layer_2.id())
         overBuild = QgsProcessingFeatureSourceDefinition(layer_3.id())
+
+######################-----------------------------
+        #Получаем атрибуты и координаты опор
+        # vectorComboBox_2x(), fxy.y()])  # добавляем в список координаты
+        ###################
+        numOp_2 = self.dlg.categoryComboBox_2.currentIndex()  # получаем id поля с номерами опор
+        # print(self.Poilayer_2.fields())
+        itera_2 = self.Poilayer.getFeatures()  # QgsFeatureRequest().setFlags(QgsFeatureRequest.NoGeometry))
+        numbList_2 = []  # список номеров опор
+        for feature in itera_2:  # перебор атрибутов каждой точки
+            attrs = feature.attributes()
+            # если оба атрибута не имеют пустых полей...
+            if attrs[numOp_2] != None:
+                f = feature.geometry().asPoint()  # координаты из геометрии
+                # print(f, [f.x(), f.y()])
+                numbList_2.append([attrs[numOp_2], f.x(), f.y()])  # добавляем в список номера опор и x,y координаты
+
+            else:
+                print('Есть пустые поля!!')
+                break
+####--------------------------------------------------------
 
         if len(name_file) != 0 and len(dir_adres) != 0:
             outputF = dir_adres + '/' + name_file + '.shp'
@@ -739,8 +1018,6 @@ class EnergyGeoalert:
                 QgsProject.instance().removeMapLayer(uni_rezult_id)  # удаляем временный слой
 
                 temp_data = temp_layer['OUTPUT']
-
-                #['OUTPUT']
                 QgsProject.instance().addMapLayer(temp_data) #добавляем временный слой на карту
 
                 #считаем разрезанные площади и сохраняем в шейп
@@ -755,11 +1032,26 @@ class EnergyGeoalert:
                 QgsProject.instance().removeMapLayer(temp_data.id())  # удаляем временный слой
 
                 # получаем список атрибутов слоя леса разбитого по пролетам
-                iter_2 = vlayer.getFeatures(QgsFeatureRequest().setFlags(QgsFeatureRequest.NoGeometry))
+                iter_2 = vlayer.getFeatures()#QgsFeatureRequest().setFlags(QgsFeatureRequest.NoGeometry))
                 attrs_lay= []  # словарь атрибутов
                 for feat2 in iter_2:  # перебор атрибутов каждого объекта
+                    # получение геометри и присоединение к атрибутам
+                    # fnf = str(feat2.geometry()).find(')')
+                    # stf = str(feat2.geometry()).rfind('(') + 1
+                    #print('Geometriya:', feat2.geometry().asMultiPolygon())
+                    #print('Segm1', feat2.geometry().asMultiPolygon()[0])
+
+                    # получение и добавление в список всех пар коорлинат объекта
+                    coord = []
+                    for x in feat2.geometry().asMultiPolygon():
+                        # print('one:', x[0])
+                        for c in x[0]:
+                            # print(c.x(), c.y())
+                            coord.append([c.x(), c.y()])
+                    #print('coord:', coord)
+
                     # ['name', 'side', 'class_id','area']:
-                    attrs_lay.append([feat2['name'], feat2['side'], feat2['class_id'], feat2['area']])
+                    attrs_lay.append([feat2['name'], feat2['side'], feat2['class_id'], feat2['area'], coord])
                 #print('слой леса: ', attrs_lay)
 
                 #считаем площадь половинок пролетов
@@ -779,7 +1071,6 @@ class EnergyGeoalert:
                 #Складываем значения по атрибутам
 
                 table_exp = [] #таблица заполнения для экспорта
-
                 list_seg = [] # список обработаных пролетов
 
                 for seg in attrs_lay_seg: #перебираем все половинки пролетов
@@ -816,8 +1107,7 @@ class EnergyGeoalert:
                     list_seg.append(seg[0])
 
                     table_exp.append([seg[0], seg[1], seg[2], seg[3], area_prol, name04_l, name04_r, name10_l, name10_r, name99_l, name99_r])
-                print('экспортная таблица', table_exp)
-
+                # print('экспортная таблица', table_exp)
 
                 #print(len(attrs_lay_seg))
                 #print(attrs_lay_seg)
@@ -829,6 +1119,10 @@ class EnergyGeoalert:
                 #iter_art = attrs_lay_seg.keys() #получаем список всех названий опор
 
                 for i in table_exp: #перебор всех пролетов
+
+                    minL, minR = self.lenPoiToLine(i[0], numbList_2, attrs_lay) # рассчет расстояния до линии
+                    #minL, minR = '-', '-'
+
                     #print(attrs_lay.get(i))
                     # значения колонок в отчете
                     kold1 = i[0] #номер пролета (по номерам опор)
@@ -850,25 +1144,20 @@ class EnergyGeoalert:
                     kold10 = str(round(float(i[9]), 2))
                     kold11 = str(round(float(i[10]), 2))
 
+                    kold12 = minL
+                    kold13 = minR
 
                     kold14 = str(round(float(i[4]), 2)) # площадь пролета
                     kold15= str(round(float(i[7]) + float(i[8]) + float(i[9]) + float(i[10]), 2)) #площадь растительности в пролете выше 4м
 
-
-                    #if attrs_lay.get(i) != None: # Если в пролете есть объекты заменяем на значение
-                    #    kold15 = str(round(float(attrs_lay.get(i)[6]), 2)) # площадь растительности
-
-
                     #составляем строку
-                    strokad = kold1 + ';' + kold2 + ';' +  kold3 + ';' + kold4 + ';' + kold5 + ';' + kold6 + ';' + kold7 + ';' + kold8 + ';' + kold9 + ';' + kold10 + ';' + kold11 + ';;;' + kold14 + ';' +  kold15 + ';\n'
+                    strokad = kold1 + ';' + kold2 + ';' +  kold3 + ';' + kold4 + ';' + kold5 + ';' + kold6 + ';' + kold7 + ';' + kold8 + ';' + kold9 + ';' + kold10 + ';' + kold11 + ';' + kold12 + ';' + kold13 + ';' + kold14 + ';' +  kold15 + ';\n'
                     #добавляем строку к тексту.
                     csv_text += strokad
-
 
                 file_path = dir_adres +'/'+ name_file + '_forest.csv'#адрес сохранения отчета
                 with open(file_path, 'w') as file_csv:
                     file_csv.write(csv_text)
-
 
                 ######--------- Обработка лейаута
                 # адрес файла лейаута
@@ -911,33 +1200,6 @@ class EnergyGeoalert:
 
             if checB is True:
                 print('Build report')
-    ######################-------------------------------------
-                #vectorComboBox_2x(), fxy.y()])  # добавляем в список координаты
-                ###################
-                numOp_2 = self.dlg.categoryComboBox_2.currentIndex()#получаем id поля с номерами опор
-                #self.Poilayer_2     #слой с точками
-                # print(self.Poilayer_2.fields())
-
-                itera_2 = self.Poilayer.getFeatures()#QgsFeatureRequest().setFlags(QgsFeatureRequest.NoGeometry))
-                numbList_2 = []  # список номеров опор
-
-                for feature in itera_2:  # перебор атрибутов каждой точки
-                    attrs = feature.attributes()
-                    #print(attrs)
-                    # print(attrs[numOp]) #выбор атрибута по индексу из комбобокса
-                    # если оба атрибута не имеют пустых полей...
-                    if attrs[numOp_2] != None:
-                        f = feature.geometry().asPoint() #координаты из геометрии
-                        # print(f)
-                        #print([f.x(), f.y()])
-                        numbList_2.append([attrs[numOp_2], f.x(), f.y()])  # добавляем в список номера опор и x,y координаты
-
-                    else:
-                        print('Есть пустые поля!!')
-                        break
-                #print(numbList_2)
-    ####--------------------------------------------------------
-
 
                 csv_text = '№№ опор, ограничивающих пролет;Длина пролета L, м;Ширина охранной зоны от оси ВЛ, м;;Количество зданий, сооружений;Расстояние от начальной опоры пролета, м;Расстояние по горизонтали от крайнего провода, м\n' \
                            ';;слева (D1);справа (D2);;;\n' \
@@ -949,21 +1211,23 @@ class EnergyGeoalert:
                                                                     'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
                 # получаем таблицу атрибутов порезаного на пролеты слоя домов
-                iter_seg = temp_layer.getFeatures()#QgsFeatureRequest().setFlags(QgsFeatureRequest.NoGeometry))
+                iter_seg = temp_layer.getFeatures() #QgsFeatureRequest().setFlags(QgsFeatureRequest.NoGeometry))
                 attrs_lay = []  # список атрибутов
                 for feature2 in iter_seg:  # перебор атрибутов каждого объекта
                     ab = feature2.attributes()
 
-                    # получение геометри и присоединение к атрибутам
-                    fn = str(feature2.geometry()).find(')')
-                    st = str(feature2.geometry()).rfind('(') + 1
-                    coordinate = str(feature2.geometry())[st:fn].split(', ')
+                    # получение и добавление в список всех пар коорлинат объекта
                     coord = []
-                    for xyC in coordinate:
-                        coord.append(xyC.split(' '))
+                    for x in feature2.geometry().asMultiPolygon():
+                        # print('one:', x[0])
+                        for c in x[0]:
+                            # print(c.x(), c.y())
+                            coord.append([c.x(), c.y()])
+
                     #ab.append(coord)  # получение геометрии
                     #print(attrs_lay)
-                    attrs_lay.append([ab[1], coord])
+                    print('Слой:', ab[5])
+                    attrs_lay.append([ab[1], ab[5], coord])
 
                 # получаем таблицу атрибутов слоя пролетов
                 iter_prol = layer_segment.getFeatures(QgsFeatureRequest().setFlags(QgsFeatureRequest.NoGeometry))
@@ -974,14 +1238,29 @@ class EnergyGeoalert:
                 iter_art = attrs_lay_prol.keys()  # получаем список всех названий опор
 
                 for i in iter_art:  # перебор всех пролетов
-                    print('перебор пролета:', i)
-                    nom_point = int(i.split('_')[0])# получаем номер первой опоры в пролете
-                    print('nom_point:', nom_point)
 
+                    minL, minR = self.lenPoiToLine(i, numbList_2, attrs_lay)  # рассчет расстояния до линии
+
+                    if minL != 'Нет':
+                        minL = float(minL)
+                    if minR != 'Нет':
+                        minR = float(minR)
+
+                    if minL != 'Нет' and minR != 'Нет':
+                        minim = str(min([float(minL), float(minR)]))
+                    elif minL == 'Нет' and minR != 'Нет':
+                        minim = str(minR)
+                    elif minL != 'Нет' and minR == 'Нет':
+                        minim = str(minL)
+                    else:
+                        minim = 'Нет'
+
+
+                    #print('перебор пролета:', i)
+                    nom_point = int(i.split('_')[0])# получаем номер первой опоры в пролете
+                    #print('nom_point:', nom_point)
 
                     seg = attrs_lay_prol[i]
-
-
 
                     #значения колонок в отчете
                     kol1 = i
@@ -997,7 +1276,7 @@ class EnergyGeoalert:
                         if nom_point == poi[0]:
                             #print(poi)
                             break
-                    print(poi)
+                    # print(poi)
 
                     min_dist = 10000
                     for xi in attrs_lay: #пербор списка объектов в пролетах
@@ -1005,13 +1284,13 @@ class EnergyGeoalert:
                         if xi[0] == i:
                             n += 1
                             #print('по условию', xi[1])
-                            for p_o_r in xi[1]: #перебор точек каждого дома
+                            for p_o_r in xi[-1]: #перебор точек каждого дома
                                 #print('test p_o_r', p_o_r)
                                 x = float(p_o_r[0])
                                 y = float(p_o_r[1])
-                                print(x, y)
-                                print(poi[1:])
-                                ugoldeg_no, dis = self.ugol_degrees(poi[1:], [x,y], [0, 0]) # меряем расстояние (в торая переменная)
+                                # print(x, y)
+                                # print(poi[1:])
+                                ugoldeg_no, dis= self.ugol_degrees(poi[1:], [x,y], [0, 0]) # меряем расстояние (в торая переменная)
 
                                 if dis < min_dist:# если расстояние от опоры до точки меньше чем уже имебщееся
                                     min_dist = dis # заменяем на меньшее
@@ -1022,10 +1301,10 @@ class EnergyGeoalert:
                     else:
                         min_dist = str(round(min_dist, 2))
 
-
                     kol5 = str(n)
                     kol6 = min_dist
-                    stroka = kol1 + ';' + kol2 + ';' + kol3 + ';' + kol4 + ';' + kol5 + ';' + kol6 +  ';\n'
+                    kol7 = minim
+                    stroka = kol1 + ';' + kol2 + ';' + kol3 + ';' + kol4 + ';' + kol5 + ';' + kol6 +  ';' + kol7 + '\n'
                     csv_text += stroka
 
                 csv_text = csv_text
@@ -1070,8 +1349,6 @@ class EnergyGeoalert:
                     project.layoutManager().addLayout(composition)
                     os.remove(self.plugin_dir + '/' + name_file + '.qpt')  # удаляем временный файл лейаута
 
-                    #-------------------------------------------------------------------------------------------
-
                     # создать и показать сообщение//create a string and show it
                     infoString = "Создан атлас отчета!\n" \
                                  "Перейдите в меню (Проекты > Макеты > %s) и завершите экспорт атласа через меню (Атлас > Export Atlas as images...) " % (name_file)
@@ -1080,13 +1357,12 @@ class EnergyGeoalert:
         else:
             print('Сначала укажите папку для сохранение и название отчета!')
 
-        #удалялка временных файлов
 
     #расчет азимута между точками на плоскости
     def azimuts(self, n1, n2):
         # измеряем расстояние между точками
         distan = sqrt((n2[0] - n1[0]) ** 2 + (n2[1] - n1[1]) ** 2)
-        #print('Расстояние между точками:', distan)
+        # print('Расстояние между точками:', distan)
         # рассчитываем азимут (от направления на восток, против часовой стрелки)
         azimut = asin(fabs(n1[1] - n2[1]) / distan)
         # теперь в градусы
@@ -1109,13 +1385,16 @@ class EnergyGeoalert:
         a12 = sqrt((n2[0] - n1[0]) ** 2 + (n2[1] - n1[1]) ** 2)
         a10 = sqrt((n0[0] - n1[0]) ** 2 + (n0[1] - n1[1]) ** 2)
         a02 = sqrt((n2[0] - n0[0]) ** 2 + (n2[1] - n0[1]) ** 2)
-        #print(a12, a10, a02)
+
         # обработка исключений неправильных углов.
         # если ошибка - переход на след. объект.
-        #try:
-        ugol_rad = acos((a12 ** 2 + a10 ** 2 - a02 ** 2) / (2 * a12 * a10))
-        #print('Радианы', ugol_rad)
-        #except:
+        try:
+            ugol_rad = acos((a12 ** 2 + a10 ** 2 - a02 ** 2) / (2 * a12 * a10))
+            #print('Радианы', ugol_rad)
+        except:
+            print('Ощибка. Исходные показатели: ', a12, a10, a02)
+            print('Координаты:', n0, n1, n2)
+            ugol_rad = 0
         #    return [181, a10, a12]
         # переведём в градусы
         ugol_deg = degrees(ugol_rad)
@@ -1127,7 +1406,7 @@ class EnergyGeoalert:
         if len(filename) > 0:
             self.dlg.input_directory.setText(filename)
             # print filename
-            with open(self.plugin_dir + '\\pathdir', "wb") as f:  # записать в файл путь к папке
+            with open(self.plugin_dir + '/pathdir', "wb") as f:  # записать в файл путь к папке
                 f.write(filename.encode('utf8'))
                 # пишем текст в окно статуса
 
@@ -1136,6 +1415,28 @@ class EnergyGeoalert:
         # запоминаем адрес в файл для автоматической подгрузки, если он не пустой
         if len(filename) > 0:
             self.dlg.input_directory_2.setText(filename)
+
+    #кнопка выбора tif для загрузки на сервер
+    def select_tif(self):
+        filename = QFileDialog.getOpenFileName(None, "Select .TIF File", './', 'Files (*.tif *.TIF *.Tif)')
+        # запоминаем адрес в файл для автоматической подгрузки, если он не пустой
+        print(filename)
+        if len(filename[0]) > 0:
+            self.dlg.input_TIF.setText(filename[0])
+
+    # загрузка tif на сервер
+    def up_tif(self):
+        file_in = self.dlg.input_TIF.text() #получаем адрес файла
+        headers = self.authorization #{'Authorization': 'Basic idxxxxxxxxxxxxxxxxx'} # формируем заголовок для залогинивания
+        files = {'file': open(file_in, 'rb')}
+        ip = self.server
+        URL_up = ip + '/rest/rasters'
+        r = requests.post(URL_up, headers=headers, files=files)
+        print('Ответ сервера:')
+        print(r.text)
+        uri = r.json()['uri'] #получаем адрес для использования загруженного файла
+        return uri
+
 
     #-----------------------------
     #Удалить слой
@@ -1204,8 +1505,12 @@ class EnergyGeoalert:
                           "cache_raster": "%s" % (cacheUP),
                           "raster_login": "%s" % (login),
                           "raster_password": "%s" % (password)}
-            #elif ph_satel == 3: # Передача TIF файла для обработки
+            elif ph_satel == 3: # Передача TIF файла для обработки
+                uri = self.up_tif()
 
+                params = {"source_type": "tif",
+                          "url": "%s" % (uri)}
+                print(uri)
 
 
             projection = Vlayer.crs() #получаем проекцию EPSG
@@ -1251,10 +1556,9 @@ class EnergyGeoalert:
             #print(bodyUp)
 
             rpost = requests.request("POST", url=URL_up, data=bodyUp, headers=self.headers)
+            print(rpost.text)
+            print(rpost.status_code)
 
-            #rpost = requests.post(url=URL_up, headers=self.headers, data=bodyUP)
-            #print(rpost.text)
-            #print(rpost.status_code)
             # создать и показать сообщение//create a string and show it
             infoString = "Слой загружен на сервер! \n Обработка может занять от 10 секунд до нескольких минут"
             QMessageBox.information(self.dlg, "About", infoString)
@@ -1383,14 +1687,19 @@ class EnergyGeoalert:
         # шифруем логин и пароль (переводим строки в байты)
         userAndPass = b64encode(str.encode(self.login)+b":"+str.encode(self.password)).decode("ascii")
         # составляем хеадер для запроса
+        self.authorization = {'Authorization': 'Basic %s' % userAndPass} #для авторизации при загрузке TIF
         self.headers = {'Authorization': 'Basic %s' % userAndPass, 'content-type': "application/json"}
-        #print('Basic %s' % userAndPass)
+        print('Пользовательский ключ: %s' % userAndPass)
         # выполняем запрос
         r = requests.get(url=URL, headers=self.headers)
         # получаем ответ
         #print(r.text)
         # код ответа
         #print(r.status_code)
+
+        # заполняем комбобокс доступными воркфлоудифинишинсами
+        self.WFDefeni()
+        
 
         # текст ответа от сервера распознаем как json и разбиваем на список со словарями
         self.dictData = json.loads(r.text)
