@@ -23,6 +23,7 @@ zip:
   - mkdir -p cache
   - cp files/index.xml cache/
   - cd src
+  - ls -al
   - zip -r ../cache/energy_geoalert_master_src.zip ./
 
 upload:
