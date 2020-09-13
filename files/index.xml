@@ -1,5 +1,5 @@
-<plugins>
-<pyqgis_plugin name="Powerline inspector" version="v22.08.20" date="22.08.20" plugin_id="0">
+  <plugins>
+<pyqgis_plugin name="Powerline inspector" version="v10.09.20" date="10.09.20" plugin_id="0">
 <description>
 <![CDATA[ Описание ]]>
 </description>
