@@ -7,6 +7,7 @@ stages:
   - master
   changes:
   - src/**
+  - files/**
 
 .cache: &cache
   key: ${CI_COMMIT_SHORT_SHA}
