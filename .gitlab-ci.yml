@@ -25,7 +25,7 @@ zip:
   - cp files/index.xml cache/
   - cd src
   - ls -al
-  - zip -r ../cache/energy_geoalert_master_src.zip ./
+  - zip -r ../cache/geoalert_master_src.zip ./
 
 upload:
   image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest
