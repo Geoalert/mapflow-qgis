@@ -1,12 +1,12 @@
   <plugins>
-<pyqgis_plugin name="Powerline inspector" version="v10.09.20" date="10.09.20" plugin_id="0">
+<pyqgis_plugin name="Powerline inspector" version="20.09.10" date="20.09.10" plugin_id="0">
 <description>
 <![CDATA[ Описание ]]>
 </description>
 <about>
 <![CDATA[ “Space Powerline Inspector” extracts the precise forest mask through the “Forest Detection” and “Forest Detection with Heights” workflows - the segmentation mask enriched with tree height estimates ]]>
 </about>
-<version>v10.09.20</version>
+<version>20.09.10</version>
 <trusted>True</trusted>
 <qgis_minimum_version>3.00.0</qgis_minimum_version>
 <qgis_maximum_version>3.99.0</qgis_maximum_version>
