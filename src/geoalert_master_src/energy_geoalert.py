@@ -369,7 +369,6 @@ class EnergyGeoalert:
             print('Файл осевой линии создан')
             self.provoda()
 
-
     #экспорт во временный слой. Передаем списком объекты, окончание к названию, тип геометрии
     #возвращает временный векторный слой
     def export_vlayer(self, geometry, postfix, type_geom, nameF):
@@ -505,7 +504,6 @@ class EnergyGeoalert:
         # QgsProject.instance().addMapLayer(vlayer)
 
         return vlayer, vlayer_id, file_adr
-
 
     #экспорт в shp передаем списком объекты, окончание к названию, тип геометрии
     def shape_export(self, geometry, postfix, type_geom, nameF):
@@ -943,8 +941,6 @@ class EnergyGeoalert:
         # print('export:', minL, minR)
         return minL, minR
 
-
-
     def report(self):
         #получаем id слоев
         layer_segment = self.dlg.MapLay_CB.currentLayer()
@@ -1357,7 +1353,6 @@ class EnergyGeoalert:
         else:
             print('Сначала укажите папку для сохранение и название отчета!')
 
-
     #расчет азимута между точками на плоскости
     def azimuts(self, n1, n2):
         # измеряем расстояние между точками
@@ -1459,12 +1454,14 @@ class EnergyGeoalert:
         self.button_connect()
     # Выгрузить слой на сервер для обработки
     def uploadOnServer(self, iface):
-        self.button_connect()
+        # self.button_connect()
         NewLayName = self.dlg.NewLayName.text()
-        if len(NewLayName) > 0: #если имя не пустое - начинаем загрузку
+
+        if len(NewLayName) > 0 and NewLayName not in self.listNameProc: #если имя не пустое - начинаем загрузку
             self.dlg.NewLayName.clear() #очистить поле имени
             # сценарий обработки
             proc = self.dlg.comboBoxTypeProc.currentText()
+            print('------------------------------------Сценарий обработки:', proc)
             # получение слоев из комбобокса
             Vlayer = self.dlg.mMapLayerComboBox.currentLayer()
             # Подложка для обработки
@@ -1565,7 +1562,7 @@ class EnergyGeoalert:
         else:
             print('Сначала укажите имя для обработки, выберите полигональный слой и тип обработки')
             # создать и показать сообщение//create a string and show it
-            infoString = "Сначала укажите имя для обработки, выберите полигональный слой и тип обработки"
+            infoString = "Название обработки не задано или уже есть обработка с таким названием. \n Введите другое название!"
             QMessageBox.information(self.dlg, "About", infoString)
 
         self.button_connect()
@@ -1670,7 +1667,10 @@ class EnergyGeoalert:
 
         else:
             print('Сначала выберите слой в таблице')
-        os.remove(file_temp)  # удаление временного файла
+        try:
+            os.remove(file_temp)  # удаление временного файла
+        except:
+            print('Временный файл удалить не удалось, ну пусть будет, он никому не мешает и весит мало.', file_temp)
     #подключение по сигналу с кнопки"подключить"
     def button_connect(self):
         print('подключение')
@@ -1689,7 +1689,7 @@ class EnergyGeoalert:
         # составляем хеадер для запроса
         self.authorization = {'Authorization': 'Basic %s' % userAndPass} #для авторизации при загрузке TIF
         self.headers = {'Authorization': 'Basic %s' % userAndPass, 'content-type': "application/json"}
-        print('Пользовательский ключ: %s' % userAndPass)
+        # print('Пользовательский ключ: %s' % userAndPass)
         # выполняем запрос
         r = requests.get(url=URL, headers=self.headers)
         # получаем ответ
@@ -1712,8 +1712,9 @@ class EnergyGeoalert:
         self.dlg.tableWidget.setRowCount(self.kol_tab)  # создаем строки таблицы
         # перебор в цикле элементов списка и ключей
         nx = 0 #счетчик
-
+        self.listNameProc = []#список названий обработок
         for i in reversed(range(self.kol_tab)):
+            self.listNameProc.append(self.dictData[i]['name'])#заполняем список названий обработок
             #print(self.dictData[i]['projectId'])
             statf = QTableWidgetItem(str(self.dictData[i]['percentCompleted'])+'%')
             namef = QTableWidgetItem(self.dictData[i]['name'])
@@ -1735,8 +1736,8 @@ class EnergyGeoalert:
                               'meta',
                               'created',
                               'updated']
-            for x in spisok_znachen:
-                print(x + ': ', self.dictData[i][x], )
+            #for x in spisok_znachen:
+                # print(x + ': ', self.dictData[i][x], )
             print('-'*12)
 
             # вписываем значения в соответствующие ячейки
@@ -1746,7 +1747,7 @@ class EnergyGeoalert:
             self.dlg.tableWidget.setItem(nx, 3, createf)
             nx += 1
     # noinspection PyMethodMayBeStatic
-
+        print(self.listNameProc)
     #Перепроецирование
     def projection_transform(self, x, y, num_crs, num_crsNew):
         crs = QgsCoordinateReferenceSystem(num_crs) #исходная проекция

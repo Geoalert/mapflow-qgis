@@ -770,21 +770,6 @@
          <height>21</height>
         </rect>
        </property>
-       <item>
-        <property name="text">
-         <string>Forest Detection</string>
-        </property>
-       </item>
-       <item>
-        <property name="text">
-         <string>Forest Detection With Heights</string>
-        </property>
-       </item>
-       <item>
-        <property name="text">
-         <string>Buildings Detection</string>
-        </property>
-       </item>
       </widget>
       <widget class="QLabel" name="label_7">
        <property name="geometry">
