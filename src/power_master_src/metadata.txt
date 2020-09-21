@@ -1,11 +1,11 @@
 [general]
-name=Geoalert
+name=Energy inspector 2
 qgisMinimumVersion=3.0
 description=Текст описания
-about=Geoalert
-version=20.08.24
-author=Geoalert
-email=hello@geoalert.io
+about=Обо всем этом... Заполнить после завершения модуля
+version=1.1
+author=Снегур Александр
+email=sneguraw@gmail.com
 
 # End of mandatory metadata
 
@@ -14,12 +14,11 @@ email=hello@geoalert.io
 # Uncomment the following line and add your changelog:
 changelog=----Внесенные изменения..
 
-
 # Tags are comma separated with spaces allowed
-tags=GeoAlert....
+tags=Буфер, GeoAlert, inspector....
 category=Vector
 
-homepage=http://power.geoalert.io
+homepage=http://snegur-maps.ru
 tracker=
 repository=
 icon=icon.svg

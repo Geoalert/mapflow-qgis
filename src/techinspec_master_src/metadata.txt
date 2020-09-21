@@ -1,0 +1,31 @@
+[general]
+name=Geoalert Mapflow analytic platform
+qgisMinimumVersion=3.0
+description="QGIS - Work with Geoalert to apply automatic ML mapping pipelines to satellite imagery. Use your vector polygons to define areas of processing"
+about=“Buildings footprints, Roads; Forest Detection and Forest Detection with Heights pipelines - the segmentation mask enriched with tree height estimates
+version=20.09.10 beta
+author=Geoalert
+email=hello@geoalert.io
+
+# End of mandatory metadata
+
+# Optional items:
+
+# Uncomment the following line and add your changelog:
+changelog=""
+
+
+# Tags are comma separated with spaces allowed
+tags=Earth Observation, AI analytics of satellite images, Mapflow, Geoalert, обработка ДЗЗ, API....
+
+homepage=https://geoalert.io
+tracker=
+repository=
+icon=icon.png
+# experimental flag
+experimental=False
+
+# deprecated flag (applies to the whole plugin, not just a single version)
+deprecated=False
+
+

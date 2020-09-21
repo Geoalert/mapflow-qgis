@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/plugins/energy_geoalert" >
+        <file>icon.svg</file>
+    </qresource>
+</RCC>

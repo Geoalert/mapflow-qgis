@@ -2,5 +2,5 @@
 
 def classFactory(iface):
     #
-    from .energy_geoalert import EnergyGeoalert
-    return EnergyGeoalert(iface)
+    from .geoalert import Geoalert
+    return Geoalert(iface)
