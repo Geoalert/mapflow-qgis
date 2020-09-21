@@ -176,7 +176,7 @@ class Geoalert:
         self.button_connect()
     # Выгрузить слой на сервер для обработки
     def uploadOnServer(self, iface):
-        self.button_connect()
+        # self.button_connect()
         NewLayName = self.dlg.NewLayName.text()
         if len(NewLayName) > 0 and NewLayName not in self.listNameProc: #если имя не пустое - начинаем загрузку
             self.dlg.NewLayName.clear() #очистить поле имени
