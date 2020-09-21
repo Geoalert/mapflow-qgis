@@ -16,10 +16,10 @@ changelog=----Внесенные изменения..
 
 
 # Tags are comma separated with spaces allowed
-tags=GeoAlert....
+tags=Geoalert
 category=Vector
 
-homepage=http://power.geoalert.io
+homepage=https://geoalert.io
 tracker=
 repository=
 icon=icon.svg
