@@ -24,8 +24,7 @@ zip:
   - mkdir -p cache
   - cp files/index.xml cache/
   - cd src
-  - ls -al
-  - zip -r ../cache/geoalert_master_src.zip ./
+  - for n in $(ls);do zip -r ../cache/${n}.zip ${n};done 
 
 upload:
   image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest
