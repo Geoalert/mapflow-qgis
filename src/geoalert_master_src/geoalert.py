@@ -23,6 +23,7 @@ import requests
 import json
 from math import *
 from base64 import b64encode
+from threading import Thread# работа с процессами
 
 class Geoalert:
 
@@ -392,16 +393,22 @@ class Geoalert:
             os.remove(file_temp)  # удаление временного файла
         except:
             print('Временный файл удалить не удалось, ну пусть будет, он никому не мешает и весит мало.', file_temp)
+
     #подключение по сигналу с кнопки"подключить"
-    def button_connect(self):
+    def button_connect(self): # подключение и обновление в отдельном процессе
+        proc = Thread(target=self.button_con, args=(5,))
+        proc.start()
+
+    #подключение к серверу
+    def button_con(self, secn):
+
+        flag = True
         print('подключение')
-        # получаем введенный логин и праоль
+            # получаем введенный логин и праоль
         self.login = self.dlg.line_login.text()
         self.password = self.dlg.mLinePassword.text()
         self.server = self.dlg.line_server.text()
-
         #print(self.login, self.password, self.server)
-
         URL = self.server + "/rest/processings"
         # we need to base 64 encode it
         # and then decode it to acsii as python 3 stores it as a byte string
@@ -410,62 +417,73 @@ class Geoalert:
         # составляем хеадер для запроса
         self.authorization = {'Authorization': 'Basic %s' % userAndPass} #для авторизации при загрузке TIF
         self.headers = {'Authorization': 'Basic %s' % userAndPass, 'content-type': "application/json"}
-        print('Пользовательский ключ: %s' % userAndPass)
-        # выполняем запрос
-        r = requests.get(url=URL, headers=self.headers)
-        # получаем ответ
-        #print(r.text)
-        # код ответа
-        #print(r.status_code)
-        #заполняем комбобокс доступными воркфлоудифинишинсами
+        # заполняем комбобокс доступными воркфлоудифинишинсами
         self.WFDefeni()
+        while flag == True:
 
-        # текст ответа от сервера распознаем как json и разбиваем на список со словарями
-        self.dictData = json.loads(r.text)
-        #print(self.dictData)
+            #print('Пользовательский ключ: %s' % userAndPass)
+            # выполняем запрос
+            r = requests.get(url=URL, headers=self.headers)
+            # получаем ответ
+            #print(r.text)
+            # код ответа
+            #print(r.status_code)
+            # текст ответа от сервера распознаем как json и разбиваем на список со словарями
+            self.dictData = json.loads(r.text)
+            #print(self.dictData)
 
-        # получаем список ключей по которым можно получить знаечния
-        #print(self.dictData[0].keys())
+            # получаем список ключей по которым можно получить знаечния
+            #print(self.dictData[0].keys())
 
-        self.kol_tab = len(self.dictData) #количество элементов
-        self.dlg.tableWidget.setRowCount(self.kol_tab)  # создаем строки таблицы
-        # перебор в цикле элементов списка и ключей
-        nx = 0 #счетчик
-        self.listNameProc = []  # список названий обработок
-        for i in reversed(range(self.kol_tab)):
-            self.listNameProc.append(self.dictData[i]['name']) #заполняем список названий обработок
-            #print(self.dictData[i]['projectId'])
-            statf = QTableWidgetItem(str(self.dictData[i]['percentCompleted'])+'%')
-            namef = QTableWidgetItem(self.dictData[i]['name'])
-            createf = QTableWidgetItem(self.dictData[i]['created'])
-            Status = QTableWidgetItem(self.dictData[i]['status'])
+            self.kol_tab = len(self.dictData) #количество элементов
+            self.dlg.tableWidget.setRowCount(self.kol_tab)  # создаем строки таблицы
+            # перебор в цикле элементов списка и ключей
+            nx = 0 #счетчик
+            flag = False
 
-            #вывод всех значений
-            spisok_znachen = ['id',
-                              'name',
-                              'projectId',
-                              'vectorLayer',
-                              'rasterLayer',
-                              'workflowDef',
-                              'aoiCount',
-                              'aoiArea',
-                              'status',
-                              'percentCompleted',
-                              'params',
-                              'meta',
-                              'created',
-                              'updated']
-            for x in spisok_znachen:
-                print(x + ': ', self.dictData[i][x], )
-            print('-'*12)
+            for i in reversed(range(self.kol_tab)):
+                #print(self.dictData[i]['projectId'])
+                statf = QTableWidgetItem(str(self.dictData[i]['percentCompleted'])+'%')
+                namef = QTableWidgetItem(self.dictData[i]['name'])
+                createf = QTableWidgetItem(self.dictData[i]['created'])
+                Status = QTableWidgetItem(self.dictData[i]['status'])
 
-            # вписываем значения в соответствующие ячейки
-            self.dlg.tableWidget.setItem(nx, 0, statf)  #
-            self.dlg.tableWidget.setItem(nx, 1, namef)
-            self.dlg.tableWidget.setItem(nx, 2, Status)
-            self.dlg.tableWidget.setItem(nx, 3, createf)
-            nx += 1
-        print(self.listNameProc)
+                if self.dictData[i]['status'] == "IN_PROGRESS": #если хоть одна задача в процессе выполнения
+                    #print('Status:', self.dictData[i]['status'])
+                    flag = True #добавляем значение для обновления статуса
+
+                #вывод всех значений
+                spisok_znachen = ['id',
+                                  'name',
+                                  'projectId',
+                                  'vectorLayer',
+                                  'rasterLayer',
+                                  'workflowDef',
+                                  'aoiCount',
+                                  'aoiArea',
+                                  'status',
+                                  'percentCompleted',
+                                  'params',
+                                  'meta',
+                                  'created',
+                                  'updated']
+                #for x in spisok_znachen:
+                #    print(x + ': ', self.dictData[i][x], )
+                #print('-'*12)
+
+                # вписываем значения в соответствующие ячейки
+                self.dlg.tableWidget.setItem(nx, 0, statf)  #
+                self.dlg.tableWidget.setItem(nx, 1, namef)
+                self.dlg.tableWidget.setItem(nx, 2, Status)
+                self.dlg.tableWidget.setItem(nx, 3, createf)
+                nx += 1
+
+            if flag == True:
+                print('Жддем', secn, 'секунд')
+                time.sleep(secn)# ожидание следующей итеррации
+
+
+
     def tr(self, message):
 
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
