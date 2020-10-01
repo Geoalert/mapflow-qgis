@@ -20,7 +20,7 @@
    <item>
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
-      <number>2</number>
+      <number>3</number>
      </property>
      <widget class="QWidget" name="tab">
       <attribute name="title">
@@ -1199,7 +1199,7 @@ TIF файла:</string>
          </rect>
         </property>
         <property name="text">
-         <string>http://178.57.73.151:8050</string>
+         <string>https://platform.geoalert.io</string>
         </property>
        </widget>
        <widget class="QLabel" name="label_4">
