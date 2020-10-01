@@ -440,8 +440,9 @@ class Geoalert:
             # перебор в цикле элементов списка и ключей
             nx = 0 #счетчик
             flag = False
-
+            self.listNameProc = []  # список названий обработок
             for i in reversed(range(self.kol_tab)):
+                self.listNameProc.append(self.dictData[i]['name'])  # заполняем список названий обработок
                 #print(self.dictData[i]['projectId'])
                 statf = QTableWidgetItem(str(self.dictData[i]['percentCompleted'])+'%')
                 namef = QTableWidgetItem(self.dictData[i]['name'])
