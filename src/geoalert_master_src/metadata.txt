@@ -3,7 +3,7 @@ name=Geoalert
 qgisMinimumVersion=3.0
 description=Текст описания
 about=Geoalert
-version=20.08.24
+version=20.10.01
 author=Geoalert
 email=hello@geoalert.io
 
