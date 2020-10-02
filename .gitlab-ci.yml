@@ -22,7 +22,9 @@ zip:
   script:
   - apk add --no-cache zip
   - mkdir -p cache
-  - cp files/index.xml cache/
+  - cp files/mapflow.xml cache/
+  - cp files/techinspec.xml cache/
+  - cp files/power.xml cache/
   - cd src
   - for n in $(ls);do zip -r ../cache/${n}.zip ${n};done 
 
