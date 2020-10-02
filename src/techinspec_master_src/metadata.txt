@@ -1,9 +1,7 @@
 [general]
-name=Geoalert Mapflow analytic platform
+name=Techinspection powerline
 qgisMinimumVersion=3.0
-description="QGIS - Work with Geoalert to apply automatic ML mapping pipelines to satellite imagery. Use your vector polygons to define areas of processing"
-about=“Buildings footprints, Roads; Forest Detection and Forest Detection with Heights pipelines - the segmentation mask enriched with tree height estimates
-version=20.10.01 beta
+version=20.10.01 
 author=Geoalert
 email=hello@geoalert.io
 
@@ -16,9 +14,9 @@ changelog=""
 
 
 # Tags are comma separated with spaces allowed
-tags=Earth Observation, AI analytics of satellite images, Mapflow, Geoalert, обработка ДЗЗ, API....
+tags=
 
-homepage=https://geoalert.io
+homepage=http://ti-ees.ru
 tracker=
 repository=
 icon=icon.png
