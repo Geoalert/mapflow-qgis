@@ -22,7 +22,7 @@ category=Vector
 homepage=https://geoalert.io
 tracker=
 repository=
-icon=icon.svg
+icon=icon.png
 # experimental flag
 experimental=False
 
