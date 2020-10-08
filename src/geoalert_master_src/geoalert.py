@@ -217,7 +217,7 @@ class Geoalert:
                 password = self.dlg.mLinePassword_3.text()
                 url_xyz = self.dlg.line_server_2.text()
 
-                params = {"source_type": "xyz",
+                params = {#"source_type": "xyz",
                           "url": "%s" % (url_xyz),
                           "zoom": "18",
                           "cache_raster": "%s" % (cacheUP),
