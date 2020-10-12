@@ -1,12 +1,12 @@
   <plugins>
-<pyqgis_plugin name="Geoalert QGIS - Powerlines" version="20.10.01" date="20.10.01" plugin_id="0">
+<pyqgis_plugin name="Geoalert QGIS - Powerlines" version="09.10.20" date="09.10.20" plugin_id="0">
 <description>
 <![CDATA[ Описание ]]>
 </description>
 <about>
 <![CDATA[ Extract building footprints in satellite imagery with AI. Apply other models like roads and forest masks extraction and classification. "Geoalert Mapflow" platform - create your account at mapflow.ai  ]]>
 </about>
-<version>20.10.01</version>
+<version>09.10.20</version>
 <trusted>True</trusted>
 <qgis_minimum_version>3.00.0</qgis_minimum_version>
 <qgis_maximum_version>3.99.0</qgis_maximum_version>
