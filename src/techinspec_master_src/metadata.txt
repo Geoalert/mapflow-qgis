@@ -1,7 +1,7 @@
 [general]
 name=Techinspection powerline
 qgisMinimumVersion=3.0
-version=20.10.01 
+version=1.0
 author=Geoalert
 email=hello@geoalert.io
 
