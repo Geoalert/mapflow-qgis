@@ -6,7 +6,7 @@ stages:
   refs:
   - master
   changes:
-  - src/geoalert_master_src/**
+  - src/**
   - files/**
 
 .cache: &cache
