@@ -6,7 +6,7 @@ stages:
   refs:
   - master
   changes:
-  - src/*
+  - src/**/*
   - files/**
 
 .cache: &cache
