@@ -36,4 +36,4 @@ upload:
   script:
   - cd cache
   - aws s3 sync . s3://energy-geoalert/
-  - aws cloudfront create-invalidation --distribution-id=E2JFC731MVBPFE --paths "/*"
+  - aws cloudfront create-invalidation --distribution-id=E2JFC731MVBPFE --paths /
