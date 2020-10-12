@@ -18,7 +18,7 @@ changelog:
 
 
 # Tags are comma separated with spaces allowed
-tags=Earth Observation, AI analytics of satellite images, Mapflow, Geoalert, Обработка ДЗЗ, API....
+tags=Earth Observation, AI analytics of satellite images, Mapflow, Geoalert, обработка ДЗЗ, API....
 category=Vector
 
 homepage=https://geoalert.io
