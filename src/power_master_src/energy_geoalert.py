@@ -1171,6 +1171,8 @@ class EnergyGeoalert:
             #print(ph_satel)
             # чекбокс (обновить кеш)
             cacheUP = str(self.dlg.checkUp.isChecked())
+
+            checkXYZ = self.dlg.checkXYZ.isChecked()  # выбран тип ссылки XYZ
             #print(cacheUP)
             # Features_lay = Vlayer.getFeatures()
             if ph_satel == 0: #Google
@@ -1198,14 +1200,29 @@ class EnergyGeoalert:
                 password = self.dlg.mLinePassword_3.text()
                 url_xyz = self.dlg.line_server_2.text()
 
-                params = {#"source_type": "xyz",
-                          "url": "%s" % (url_xyz),
-                          "zoom": "18",
-                          "cache_raster": "%s" % (cacheUP),
-                          "raster_login": "%s" % (login),
-                          "raster_password": "%s" % (password)}
+                # params = {#"source_type": "xyz",
+                #           "url": "%s" % (url_xyz),
+                #           "zoom": "18",
+                #           "cache_raster": "%s" % (cacheUP),
+                #           "raster_login": "%s" % (login),
+                #           "raster_password": "%s" % (password)}
+                #выбираем тип ссылки
+                if checkXYZ == True:
+                    params = {"source_type": "xyz",
+                        "url": "%s" % (url_xyz),
+                        "zoom": "18",
+                        "cache_raster": "%s" % (cacheUP),
+                        "raster_login": "%s" % (login),
+                        "raster_password": "%s" % (password)}
+                else:
+                    params = { # "source_type": "xyz",
+                        "url": "%s" % (url_xyz),
+                        "zoom": "18",
+                        "cache_raster": "%s" % (cacheUP),
+                        "raster_login": "%s" % (login),
+                        "raster_password": "%s" % (password)}
             #elif ph_satel == 3: # Передача TIF файла для обработки
-
+                print(params)
 
 
             projection = Vlayer.crs() #получаем проекцию EPSG
@@ -1426,9 +1443,9 @@ class EnergyGeoalert:
                               'meta',
                               'created',
                               'updated']
-            for x in spisok_znachen:
-                print(x + ': ', self.dictData[i][x], )
-            print('-'*12)
+            # for x in spisok_znachen:
+            #     print(x + ': ', self.dictData[i][x], )
+            # print('-'*12)
 
             # вписываем значения в соответствующие ячейки
             self.dlg.tableWidget.setItem(nx, 0, statf)  #

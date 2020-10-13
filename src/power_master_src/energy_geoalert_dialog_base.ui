@@ -1126,7 +1126,7 @@ TIF файла:</string>
        <property name="geometry">
         <rect>
          <x>355</x>
-         <y>90</y>
+         <y>125</y>
          <width>141</width>
          <height>21</height>
         </rect>
@@ -1139,7 +1139,7 @@ TIF файла:</string>
        <property name="geometry">
         <rect>
          <x>355</x>
-         <y>65</y>
+         <y>100</y>
          <width>141</width>
          <height>21</height>
         </rect>
@@ -1152,7 +1152,7 @@ TIF файла:</string>
        <property name="geometry">
         <rect>
          <x>265</x>
-         <y>70</y>
+         <y>105</y>
          <width>46</width>
          <height>16</height>
         </rect>
@@ -1165,7 +1165,7 @@ TIF файла:</string>
        <property name="geometry">
         <rect>
          <x>265</x>
-         <y>90</y>
+         <y>125</y>
          <width>56</width>
          <height>16</height>
         </rect>
@@ -1254,6 +1254,25 @@ TIF файла:</string>
        </property>
        <property name="text">
         <string>Рабочая папка для хранения файлов:</string>
+       </property>
+      </widget>
+      <widget class="QCheckBox" name="checkXYZ">
+       <property name="enabled">
+        <bool>true</bool>
+       </property>
+       <property name="geometry">
+        <rect>
+         <x>270</x>
+         <y>60</y>
+         <width>261</width>
+         <height>31</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Тип ссылки &quot;XYZ&quot;</string>
+       </property>
+       <property name="checked">
+        <bool>true</bool>
        </property>
       </widget>
      </widget>
