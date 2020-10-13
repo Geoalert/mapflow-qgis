@@ -1,12 +1,12 @@
   <plugins>
-<pyqgis_plugin name="Geoalert QGIS" version="1.1" date="09.10.20" plugin_id="0">
+<pyqgis_plugin name="Geoalert QGIS" version="1.2" date="12.10.20" plugin_id="0">
 <description>
 <![CDATA[ Описание ]]>
 </description>
 <about>
 <![CDATA[ Extract building footprints in satellite imagery with AI. Apply other models like roads and forest masks extraction and classification. "Geoalert Mapflow" platform - create your account at mapflow.ai  ]]>
 </about>
-<version>1.1</version>
+<version>1.2</version>
 <trusted>True</trusted>
 <qgis_minimum_version>3.00.0</qgis_minimum_version>
 <qgis_maximum_version>3.99.0</qgis_maximum_version>
@@ -23,7 +23,7 @@
 <![CDATA[ -- ]]>
 </uploaded_by>
 <create_date>2020-08-22T20:00:00.000000</create_date>
-<update_date>2020-10-01T13:00:00.000000</update_date>
+<update_date>2020-10-12T13:00:00.000000</update_date>
 <experimental>False</experimental>
 <deprecated>False</deprecated>
 <tags>

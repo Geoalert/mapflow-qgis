@@ -13,7 +13,6 @@ email=hello@geoalert.io
 
 # Uncomment the following line and add your changelog:
 changelog:
-	(10.10.2020)
 	(09.10.20) remove mandatory 'xyz' for API params
 	(02.10.20) asynchronous requests for the processing status
 
