@@ -190,6 +190,8 @@ class Geoalert:
             #print(ph_satel)
             # чекбокс (обновить кеш)
             cacheUP = str(self.dlg.checkUp.isChecked())
+
+            TypeURL = self.dlg.comboBoxURLType.currentIndex()  # выбран тип ссылки///
             #print(cacheUP)
             # Features_lay = Vlayer.getFeatures()
             if ph_satel == 0: #Google
@@ -217,12 +219,22 @@ class Geoalert:
                 password = self.dlg.mLinePassword_3.text()
                 url_xyz = self.dlg.line_server_2.text()
 
-                params = {#"source_type": "xyz",
-                          "url": "%s" % (url_xyz),
-                          "zoom": "18",
-                          "cache_raster": "%s" % (cacheUP),
-                          "raster_login": "%s" % (login),
-                          "raster_password": "%s" % (password)}
+                # выбираем тип ссылки
+                if TypeURL == 0:
+                    params = {"source_type": "xyz",
+                              "url": "%s" % (url_xyz),
+                              "zoom": "18",
+                              "cache_raster": "%s" % (cacheUP),
+                              "raster_login": "%s" % (login),
+                              "raster_password": "%s" % (password)}
+                elif TypeURL == 1:
+                    params = {"source_type": "tms",
+                              "url": "%s" % (url_xyz),
+                              "zoom": "18",
+                              "cache_raster": "%s" % (cacheUP),
+                              "raster_login": "%s" % (login),
+                              "raster_password": "%s" % (password)}
+
             elif ph_satel == 3: # Передача TIF файла для обработки
                 uri = self.up_tif()
 

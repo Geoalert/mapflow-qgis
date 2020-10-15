@@ -387,8 +387,8 @@ TIF файла:</string>
       <widget class="QgsPasswordLineEdit" name="mLinePassword_3">
        <property name="geometry">
         <rect>
-         <x>355</x>
-         <y>90</y>
+         <x>360</x>
+         <y>130</y>
          <width>141</width>
          <height>21</height>
         </rect>
@@ -400,8 +400,8 @@ TIF файла:</string>
       <widget class="QLineEdit" name="line_login_3">
        <property name="geometry">
         <rect>
-         <x>355</x>
-         <y>65</y>
+         <x>360</x>
+         <y>105</y>
          <width>141</width>
          <height>21</height>
         </rect>
@@ -413,8 +413,8 @@ TIF файла:</string>
       <widget class="QLabel" name="label_43">
        <property name="geometry">
         <rect>
-         <x>265</x>
-         <y>70</y>
+         <x>270</x>
+         <y>110</y>
          <width>46</width>
          <height>16</height>
         </rect>
@@ -426,8 +426,8 @@ TIF файла:</string>
       <widget class="QLabel" name="label_44">
        <property name="geometry">
         <rect>
-         <x>265</x>
-         <y>90</y>
+         <x>270</x>
+         <y>130</y>
          <width>56</width>
          <height>16</height>
         </rect>
@@ -520,8 +520,8 @@ TIF файла:</string>
       <widget class="QLabel" name="label_6">
        <property name="geometry">
         <rect>
-         <x>275</x>
-         <y>225</y>
+         <x>285</x>
+         <y>300</y>
          <width>171</width>
          <height>21</height>
         </rect>
@@ -533,8 +533,8 @@ TIF файла:</string>
       <widget class="QComboBox" name="comBox_satelit_mon">
        <property name="geometry">
         <rect>
-         <x>275</x>
-         <y>255</y>
+         <x>285</x>
+         <y>330</y>
          <width>171</width>
          <height>21</height>
         </rect>
@@ -558,8 +558,8 @@ TIF файла:</string>
       <widget class="QPushButton" name="Button_view">
        <property name="geometry">
         <rect>
-         <x>275</x>
-         <y>285</y>
+         <x>285</x>
+         <y>360</y>
          <width>176</width>
          <height>46</height>
         </rect>
@@ -585,8 +585,8 @@ TIF файла:</string>
       <widget class="QLineEdit" name="zmin">
        <property name="geometry">
         <rect>
-         <x>375</x>
-         <y>150</y>
+         <x>385</x>
+         <y>225</y>
          <width>46</width>
          <height>26</height>
         </rect>
@@ -605,8 +605,8 @@ TIF файла:</string>
       <widget class="QLineEdit" name="zmax">
        <property name="geometry">
         <rect>
-         <x>375</x>
-         <y>180</y>
+         <x>385</x>
+         <y>255</y>
          <width>46</width>
          <height>26</height>
         </rect>
@@ -625,8 +625,8 @@ TIF файла:</string>
       <widget class="QLabel" name="label_27">
        <property name="geometry">
         <rect>
-         <x>270</x>
-         <y>130</y>
+         <x>280</x>
+         <y>205</y>
          <width>171</width>
          <height>16</height>
         </rect>
@@ -638,8 +638,8 @@ TIF файла:</string>
       <widget class="QLabel" name="label_31">
        <property name="geometry">
         <rect>
-         <x>270</x>
-         <y>155</y>
+         <x>280</x>
+         <y>230</y>
          <width>116</width>
          <height>16</height>
         </rect>
@@ -651,8 +651,8 @@ TIF файла:</string>
       <widget class="QLabel" name="label_32">
        <property name="geometry">
         <rect>
-         <x>270</x>
-         <y>185</y>
+         <x>280</x>
+         <y>260</y>
          <width>106</width>
          <height>16</height>
         </rect>
@@ -660,6 +660,39 @@ TIF файла:</string>
        <property name="text">
         <string>Максимальный</string>
        </property>
+      </widget>
+      <widget class="Line" name="line">
+       <property name="geometry">
+        <rect>
+         <x>265</x>
+         <y>185</y>
+         <width>326</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+      </widget>
+      <widget class="QComboBox" name="comboBoxURLType">
+       <property name="geometry">
+        <rect>
+         <x>265</x>
+         <y>70</y>
+         <width>231</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <item>
+        <property name="text">
+         <string notr="true">Тип ссылки XYZ</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Тип ссылки TMS</string>
+        </property>
+       </item>
       </widget>
      </widget>
     </widget>

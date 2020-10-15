@@ -137,6 +137,28 @@ class EnergyGeoalert:
 
         self.dlg.NameOpor.clear()
         self.dlg.NameOpor.setText(text)
+
+    #кнопка выбора tif для загрузки на сервер
+    def select_tif(self):
+        filename = QFileDialog.getOpenFileName(None, "Select .TIF File", './', 'Files (*.tif *.TIF *.Tif)')
+        # запоминаем адрес в файл для автоматической подгрузки, если он не пустой
+        print(filename)
+        if len(filename[0]) > 0:
+            self.dlg.input_TIF.setText(filename[0])
+
+
+    # загрузка tif на сервер
+    def up_tif(self):
+        file_in = self.dlg.input_TIF.text() #получаем адрес файла
+        headers = self.authorization #{'Authorization': 'Basic idxxxxxxxxxxxxxxxxx'} # формируем заголовок для залогинивания
+        files = {'file': open(file_in, 'rb')}
+        ip = self.server
+        URL_up = ip + '/rest/rasters'
+        r = requests.post(URL_up, headers=headers, files=files)
+        print('Ответ сервера:')
+        print(r.text)
+        uri = r.json()['uri'] #получаем адрес для использования загруженного файла
+        return uri
     #загрузка списка опор в окно
     def ListCSV(self):
         #загружаем список из файла
@@ -820,7 +842,7 @@ class EnergyGeoalert:
                 #print(attrs_lay_seg)
                 csv_text = '№№ опор, ограничивающих пролет;Длина пролета L, м;Ширина охранной зоны от оси ВЛ, м;;;Площадь кустарника в просеке на длине пролета (высота от 0 до 3 м);;Площадь поросли в просеке на длине пролета (высота от 3 до 6 м);;Площадь насаждений высотой свыше 6 м в просеке на длине пролета;;Горизонтальное расстояние до насаждений;;Общая площадь, м2;;Примечание' \
                            '\n;;;;;Всего;-;sparse, м2;dense, м2;sparse, м2;dense, м2;;;;;' \
-                           '\n;;слева (D1);справа (D2);общая (D);от 0 до 3 м;от 0 до 3 м;от 3 до 6 м;от 3 до 6 м;от 6 м и выше;от 6 м и выше;слева, м;справа, м;охр. зоны в пролете ВЛ;растительности в пролете на ширине просеки выше 4 м;' \
+                           '\n;;слева (D1);справа (D2);общая (D);от 0 до 3 м;от 0 до 3 м;от 3 до 6 м;от 3 до 6 м;от 6 м и выше;от 6 м и выше;слева, м;справа, м;охр. зоны в пролете ВЛ;растительности в пролете на ширине просеки выше 3 м;' \
                            '\n1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16\n'
 
                 #iter_art = attrs_lay_seg.keys() #получаем список всех названий опор
@@ -849,7 +871,7 @@ class EnergyGeoalert:
 
 
                     kold14 = str(round(float(i[4]), 2)) # площадь пролета
-                    kold15= str(round(float(i[7]) + float(i[8]) + float(i[9]) + float(i[10]), 2)) #площадь растительности в пролете выше 4м
+                    kold15= str(round(float(i[7]) + float(i[8]) + float(i[9]) + float(i[10]), 2)) #площадь растительности в пролете выше 3м
 
 
                     #if attrs_lay.get(i) != None: # Если в пролете есть объекты заменяем на значение
@@ -1172,7 +1194,7 @@ class EnergyGeoalert:
             # чекбокс (обновить кеш)
             cacheUP = str(self.dlg.checkUp.isChecked())
 
-            checkXYZ = self.dlg.checkXYZ.isChecked()  # выбран тип ссылки XYZ
+            TypeURL = self.dlg.comboBoxURLType.currentIndex()  # выбран тип ссылки///
             #print(cacheUP)
             # Features_lay = Vlayer.getFeatures()
             if ph_satel == 0: #Google
@@ -1200,29 +1222,30 @@ class EnergyGeoalert:
                 password = self.dlg.mLinePassword_3.text()
                 url_xyz = self.dlg.line_server_2.text()
 
-                # params = {#"source_type": "xyz",
-                #           "url": "%s" % (url_xyz),
-                #           "zoom": "18",
-                #           "cache_raster": "%s" % (cacheUP),
-                #           "raster_login": "%s" % (login),
-                #           "raster_password": "%s" % (password)}
                 #выбираем тип ссылки
-                if checkXYZ == True:
+                if TypeURL == 0:
                     params = {"source_type": "xyz",
                         "url": "%s" % (url_xyz),
                         "zoom": "18",
                         "cache_raster": "%s" % (cacheUP),
                         "raster_login": "%s" % (login),
                         "raster_password": "%s" % (password)}
-                else:
-                    params = { # "source_type": "xyz",
+                elif TypeURL == 1:
+                    params = { "source_type": "tms",
                         "url": "%s" % (url_xyz),
                         "zoom": "18",
                         "cache_raster": "%s" % (cacheUP),
                         "raster_login": "%s" % (login),
                         "raster_password": "%s" % (password)}
-            #elif ph_satel == 3: # Передача TIF файла для обработки
-                print(params)
+
+            elif ph_satel == 3: # Передача TIF файла для обработки
+                uri = self.up_tif()
+
+                params = {"source_type": "tif",
+                          "url": "%s" % (uri)}
+                print(uri)
+
+                # print(params)
 
 
             projection = Vlayer.crs() #получаем проекцию EPSG

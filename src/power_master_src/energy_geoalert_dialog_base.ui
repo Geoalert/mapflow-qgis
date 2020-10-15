@@ -1256,24 +1256,25 @@ TIF файла:</string>
         <string>Рабочая папка для хранения файлов:</string>
        </property>
       </widget>
-      <widget class="QCheckBox" name="checkXYZ">
-       <property name="enabled">
-        <bool>true</bool>
-       </property>
+      <widget class="QComboBox" name="comboBoxURLType">
        <property name="geometry">
         <rect>
-         <x>270</x>
-         <y>60</y>
-         <width>261</width>
-         <height>31</height>
+         <x>265</x>
+         <y>65</y>
+         <width>231</width>
+         <height>21</height>
         </rect>
        </property>
-       <property name="text">
-        <string>Тип ссылки &quot;XYZ&quot;</string>
-       </property>
-       <property name="checked">
-        <bool>true</bool>
-       </property>
+       <item>
+        <property name="text">
+         <string notr="true">Тип ссылки XYZ</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Тип ссылки TMS</string>
+        </property>
+       </item>
       </widget>
      </widget>
     </widget>
