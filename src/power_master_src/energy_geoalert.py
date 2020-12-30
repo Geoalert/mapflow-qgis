@@ -1373,7 +1373,7 @@ class EnergyGeoalert:
 
             #x1 = name_d.rfind('_')
             #извлекаем проекцию из метаданных
-            Projection = self.dictData[row_nom]['meta']['EPSG'] #name_d[x1 + 1:]
+            Projection = 'EPSG:4326' #self.dictData[row_nom]['meta']['EPSG'] #name_d[x1 + 1:]
 
             #система координат для преобразования файла
             crs_EPSG = QgsCoordinateReferenceSystem(Projection)
