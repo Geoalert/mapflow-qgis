@@ -1106,7 +1106,8 @@ TIF файла:</string>
         </rect>
        </property>
        <property name="text">
-        <string>https://securewatch.digitalglobe.com/earthservice/wmtsaccess?SERVICE=WMTS&amp;VERSION=1.0.0&amp;STYLE=&amp;REQUEST=GetTile&amp;CONNECTID=31fdd556-4c57-4c6e-937f-3deff1987415&amp;LAYER=DigitalGlobe:ImageryTileService&amp;FORMAT=image/jpeg&amp;TileRow={y}&amp;TileCol={x}&amp;TileMatrixSet=EPSG:3857&amp;TileMatrix=EPSG:3857:{z}</string>
+        <string>https://d.tiles.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.jpg?access_token=pk.eyJ1Ijoib3BlbnN0cmVldG1hcCIsImEiOiJjaml5MjVyb3MwMWV0M3hxYmUzdGdwbzE4In0.q548FjhsSJzvXsGlPsFxAQ
+        </string>
        </property>
       </widget>
       <widget class="QLabel" name="label_17">
