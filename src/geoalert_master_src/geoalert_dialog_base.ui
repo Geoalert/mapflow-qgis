@@ -6,585 +6,614 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>641</width>
-    <height>542</height>
+    <width>651</width>
+    <height>515</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Geoalert</string>
   </property>
-  <widget class="QTabWidget" name="tabWidget">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>641</width>
-     <height>541</height>
-    </rect>
-   </property>
-   <property name="currentIndex">
-    <number>0</number>
-   </property>
-   <widget class="QWidget" name="tab">
-    <attribute name="title">
-     <string>Mapflow processing</string>
-    </attribute>
-    <widget class="QLabel" name="label_22">
-     <property name="geometry">
-      <rect>
-       <x>270</x>
-       <y>20</y>
-       <width>111</width>
-       <height>21</height>
-      </rect>
+  <property name="sizeGripEnabled">
+   <bool>false</bool>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout_3">
+   <item>
+    <widget class="QTabWidget" name="tabWidget">
+     <property name="currentIndex">
+      <number>0</number>
      </property>
-     <property name="text">
-      <string>Imagery source:</string>
-     </property>
+     <widget class="QWidget" name="tab_2">
+      <attribute name="title">
+       <string>Processing</string>
+      </attribute>
+      <widget class="QPushButton" name="ButtonConnect">
+       <property name="geometry">
+        <rect>
+         <x>420</x>
+         <y>20</y>
+         <width>141</width>
+         <height>36</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Connect</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_8">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>110</y>
+         <width>111</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>AOI layer:</string>
+       </property>
+      </widget>
+      <widget class="QgsMapLayerComboBox" name="mMapLayerComboBox">
+       <property name="geometry">
+        <rect>
+         <x>130</x>
+         <y>110</y>
+         <width>151</width>
+         <height>21</height>
+        </rect>
+       </property>
+      </widget>
+      <widget class="QTableWidget" name="tableWidget">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>205</y>
+         <width>601</width>
+         <height>216</height>
+        </rect>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_2">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>140</y>
+         <width>116</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>AI model:</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_9">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>80</y>
+         <width>116</width>
+         <height>26</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Processing name:</string>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="NewLayName">
+       <property name="geometry">
+        <rect>
+         <x>130</x>
+         <y>80</y>
+         <width>151</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+      <widget class="QComboBox" name="comboBox_satelit">
+       <property name="geometry">
+        <rect>
+         <x>420</x>
+         <y>80</y>
+         <width>181</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <item>
+        <property name="text">
+         <string>Google</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Yandex</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Ручной ввод в Настройках</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Загрузка файла</string>
+        </property>
+       </item>
+      </widget>
+      <widget class="QLineEdit" name="line_login">
+       <property name="geometry">
+        <rect>
+         <x>100</x>
+         <y>15</y>
+         <width>141</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+      <widget class="QgsPasswordLineEdit" name="mLinePassword">
+       <property name="geometry">
+        <rect>
+         <x>100</x>
+         <y>40</y>
+         <width>141</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+      <widget class="Line" name="line_3">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>60</y>
+         <width>601</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+      </widget>
+      <widget class="QCheckBox" name="checkUp">
+       <property name="geometry">
+        <rect>
+         <x>305</x>
+         <y>125</y>
+         <width>151</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Update image in cahe</string>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="ButtonDownload">
+       <property name="geometry">
+        <rect>
+         <x>380</x>
+         <y>430</y>
+         <width>226</width>
+         <height>31</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Load processing results</string>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="ButtonDel">
+       <property name="geometry">
+        <rect>
+         <x>15</x>
+         <y>430</y>
+         <width>71</width>
+         <height>31</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Delete</string>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="input_TIF">
+       <property name="geometry">
+        <rect>
+         <x>325</x>
+         <y>175</y>
+         <width>151</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="but_inputTIF">
+       <property name="geometry">
+        <rect>
+         <x>475</x>
+         <y>175</y>
+         <width>31</width>
+         <height>23</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>...</string>
+       </property>
+      </widget>
+      <widget class="QComboBox" name="comboBoxTypeProc">
+       <property name="geometry">
+        <rect>
+         <x>130</x>
+         <y>140</y>
+         <width>151</width>
+         <height>21</height>
+        </rect>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_47">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>20</y>
+         <width>51</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Login:</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_48">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>40</y>
+         <width>76</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Password:</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_7">
+       <property name="geometry">
+        <rect>
+         <x>245</x>
+         <y>175</y>
+         <width>81</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Load TIF-image:</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_22">
+       <property name="geometry">
+        <rect>
+         <x>310</x>
+         <y>80</y>
+         <width>111</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Imagery source:</string>
+       </property>
+      </widget>
+      <widget class="QCheckBox" name="savePass_serv">
+       <property name="geometry">
+        <rect>
+         <x>260</x>
+         <y>30</y>
+         <width>151</width>
+         <height>20</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Save Login/Password</string>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="ButtonUpload">
+       <property name="geometry">
+        <rect>
+         <x>455</x>
+         <y>120</y>
+         <width>146</width>
+         <height>36</height>
+        </rect>
+       </property>
+       <property name="autoFillBackground">
+        <bool>false</bool>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">background-color: rgb(128, 200, 255);</string>
+       </property>
+       <property name="text">
+        <string>Start processing</string>
+       </property>
+      </widget>
+     </widget>
+     <widget class="QWidget" name="tab_4">
+      <attribute name="title">
+       <string>Settings</string>
+      </attribute>
+      <widget class="Line" name="line_5">
+       <property name="geometry">
+        <rect>
+         <x>5</x>
+         <y>80</y>
+         <width>611</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_45">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>200</y>
+         <width>71</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Password:</string>
+       </property>
+      </widget>
+      <widget class="QComboBox" name="comboBoxURLType">
+       <property name="geometry">
+        <rect>
+         <x>235</x>
+         <y>165</y>
+         <width>151</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <item>
+        <property name="text">
+         <string notr="true">xyz</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>tms</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>wms</string>
+        </property>
+       </item>
+      </widget>
+      <widget class="QLabel" name="label_46">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>170</y>
+         <width>46</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Login:</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_28">
+       <property name="geometry">
+        <rect>
+         <x>15</x>
+         <y>10</y>
+         <width>156</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Work directory on PC:</string>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="input_directory">
+       <property name="geometry">
+        <rect>
+         <x>175</x>
+         <y>10</y>
+         <width>216</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+      <widget class="QgsPasswordLineEdit" name="mLinePassword_3">
+       <property name="geometry">
+        <rect>
+         <x>85</x>
+         <y>200</y>
+         <width>126</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="Button_view">
+       <property name="geometry">
+        <rect>
+         <x>435</x>
+         <y>180</y>
+         <width>151</width>
+         <height>41</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Connect to satellite
+imagery provider</string>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="but_dir">
+       <property name="geometry">
+        <rect>
+         <x>390</x>
+         <y>10</y>
+         <width>31</width>
+         <height>23</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>...</string>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="line_login_3">
+       <property name="geometry">
+        <rect>
+         <x>85</x>
+         <y>165</y>
+         <width>126</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="line_server_2">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>120</y>
+         <width>586</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>https://services.digitalglobe.com/earthservice/tmsaccess/tms/1.0.0/DigitalGlobe:ImageryTileService@EPSG:3857@jpg/{z}/{x}/{y}.jpg?connectId=71a837e4-2609-4496-b5ea-5f0e4fdb020d</string>
+       </property>
+      </widget>
+      <widget class="QCheckBox" name="checkSatelitPass">
+       <property name="geometry">
+        <rect>
+         <x>235</x>
+         <y>200</y>
+         <width>151</width>
+         <height>20</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Save Login/Password</string>
+       </property>
+      </widget>
+      <widget class="QCheckBox" name="checkSatelitPass_2">
+       <property name="geometry">
+        <rect>
+         <x>440</x>
+         <y>155</y>
+         <width>136</width>
+         <height>20</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>***use z0-z14</string>
+       </property>
+       <property name="checked">
+        <bool>true</bool>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_24">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>100</y>
+         <width>441</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Add satellite imagery provider: (&lt;a href=&quot;https://securewatchdocs.maxar.com/en-us/Miscellaneous/DevGuides/MapsAPI/Examples/arcgisonline.htm?Highlight=TMS&quot;&gt;how to connect to Maxar Securewatch?&lt;/a&gt;)</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_33">
+       <property name="geometry">
+        <rect>
+         <x>15</x>
+         <y>55</y>
+         <width>161</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Geoalert server link:</string>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="line_server">
+       <property name="geometry">
+        <rect>
+         <x>175</x>
+         <y>55</y>
+         <width>246</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">background-color: rgb(240, 240, 240);</string>
+       </property>
+       <property name="text">
+        <string>https://platform.geoalert.io</string>
+       </property>
+      </widget>
+      <widget class="Line" name="line_6">
+       <property name="geometry">
+        <rect>
+         <x>5</x>
+         <y>35</y>
+         <width>611</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_29">
+       <property name="geometry">
+        <rect>
+         <x>235</x>
+         <y>150</y>
+         <width>146</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Raster tile type:</string>
+       </property>
+      </widget>
+      <widget class="Line" name="line">
+       <property name="geometry">
+        <rect>
+         <x>415</x>
+         <y>155</y>
+         <width>3</width>
+         <height>61</height>
+        </rect>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Vertical</enum>
+       </property>
+      </widget>
+     </widget>
     </widget>
-    <widget class="QPushButton" name="ButtonConnect">
-     <property name="geometry">
-      <rect>
-       <x>40</x>
-       <y>130</y>
-       <width>141</width>
-       <height>41</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Connect</string>
-     </property>
-    </widget>
-    <widget class="QPushButton" name="ButtonDownload">
-     <property name="geometry">
-      <rect>
-       <x>380</x>
-       <y>465</y>
-       <width>226</width>
-       <height>41</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Load processing results</string>
-     </property>
-    </widget>
-    <widget class="QPushButton" name="but_inputTIF">
-     <property name="geometry">
-      <rect>
-       <x>540</x>
-       <y>80</y>
-       <width>31</width>
-       <height>23</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>...</string>
-     </property>
-    </widget>
-    <widget class="QLabel" name="label_8">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>220</y>
-       <width>111</width>
-       <height>21</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>AOI layer:</string>
-     </property>
-    </widget>
-    <widget class="QComboBox" name="comboBoxTypeProc">
-     <property name="geometry">
-      <rect>
-       <x>130</x>
-       <y>250</y>
-       <width>181</width>
-       <height>21</height>
-      </rect>
-     </property>
-    </widget>
-    <widget class="QPushButton" name="ButtonUpload">
-     <property name="geometry">
-      <rect>
-       <x>400</x>
-       <y>230</y>
-       <width>151</width>
-       <height>41</height>
-      </rect>
-     </property>
-     <property name="autoFillBackground">
-      <bool>false</bool>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">background-color: rgb(128, 200, 255);</string>
-     </property>
-     <property name="text">
-      <string>Start processing</string>
-     </property>
-    </widget>
-    <widget class="QLabel" name="label_7">
-     <property name="geometry">
-      <rect>
-       <x>270</x>
-       <y>80</y>
-       <width>111</width>
-       <height>20</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Upload TIF-image:</string>
-     </property>
-    </widget>
-    <widget class="QgsMapLayerComboBox" name="mMapLayerComboBox">
-     <property name="geometry">
-      <rect>
-       <x>130</x>
-       <y>220</y>
-       <width>181</width>
-       <height>21</height>
-      </rect>
-     </property>
-    </widget>
-    <widget class="QComboBox" name="comboBox_satelit">
-     <property name="geometry">
-      <rect>
-       <x>390</x>
-       <y>20</y>
-       <width>181</width>
-       <height>21</height>
-      </rect>
-     </property>
-     <property name="currentText">
-      <string>Mapbox Satellite</string>
-     </property>
-     <item>
-      <property name="text">
-       <string>Mapbox Satellite</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string>Yandex</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string>Ручной ввод в Настройках</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string>Загрузка файла</string>
-      </property>
-     </item>
-    </widget>
-    <widget class="QLineEdit" name="input_TIF">
-     <property name="geometry">
-      <rect>
-       <x>390</x>
-       <y>80</y>
-       <width>151</width>
-       <height>21</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
-    <widget class="Line" name="line_5">
-     <property name="geometry">
-      <rect>
-       <x>250</x>
-       <y>50</y>
-       <width>351</width>
-       <height>20</height>
-      </rect>
-     </property>
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-    </widget>
-    <widget class="QPushButton" name="ButtonDel">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>465</y>
-       <width>71</width>
-       <height>41</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Delete</string>
-     </property>
-    </widget>
-    <widget class="QLineEdit" name="NewLayName">
-     <property name="geometry">
-      <rect>
-       <x>130</x>
-       <y>190</y>
-       <width>441</width>
-       <height>21</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
-    <widget class="QCheckBox" name="checkUp">
-     <property name="geometry">
-      <rect>
-       <x>350</x>
-       <y>130</y>
-       <width>171</width>
-       <height>31</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Update image in cache</string>
-     </property>
-    </widget>
-    <widget class="Line" name="line_4">
-     <property name="geometry">
-      <rect>
-       <x>240</x>
-       <y>0</y>
-       <width>16</width>
-       <height>161</height>
-      </rect>
-     </property>
-     <property name="orientation">
-      <enum>Qt::Vertical</enum>
-     </property>
-    </widget>
-    <widget class="QLabel" name="label_2">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>250</y>
-       <width>116</width>
-       <height>21</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>AI model:</string>
-     </property>
-    </widget>
-    <widget class="QTableWidget" name="tableWidget">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>285</y>
-       <width>596</width>
-       <height>171</height>
-      </rect>
-     </property>
-    </widget>
-    <widget class="Line" name="line_3">
-     <property name="geometry">
-      <rect>
-       <x>5</x>
-       <y>175</y>
-       <width>601</width>
-       <height>16</height>
-      </rect>
-     </property>
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-    </widget>
-    <widget class="QLabel" name="label_9">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>190</y>
-       <width>116</width>
-       <height>26</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Processing name:</string>
-     </property>
-    </widget>
-    <widget class="QLabel" name="label_47">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>20</y>
-       <width>51</width>
-       <height>16</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Login:</string>
-     </property>
-    </widget>
-    <widget class="QLabel" name="label_48">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>50</y>
-       <width>76</width>
-       <height>16</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Password:</string>
-     </property>
-    </widget>
-    <widget class="QLineEdit" name="line_login">
-     <property name="geometry">
-      <rect>
-       <x>100</x>
-       <y>20</y>
-       <width>141</width>
-       <height>21</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
-    <widget class="QCheckBox" name="savePass_serv">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>80</y>
-       <width>211</width>
-       <height>21</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Save Login/Password</string>
-     </property>
-    </widget>
-    <widget class="QgsPasswordLineEdit" name="mLinePassword">
-     <property name="geometry">
-      <rect>
-       <x>100</x>
-       <y>50</y>
-       <width>141</width>
-       <height>21</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
-    <widget class="Line" name="line_9">
-     <property name="geometry">
-      <rect>
-       <x>250</x>
-       <y>110</y>
-       <width>351</width>
-       <height>20</height>
-      </rect>
-     </property>
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-    </widget>
-   </widget>
-   <widget class="QWidget" name="tab_2">
-    <attribute name="title">
-     <string>Settings</string>
-    </attribute>
-    <widget class="QLabel" name="label_33">
-     <property name="geometry">
-      <rect>
-       <x>15</x>
-       <y>10</y>
-       <width>171</width>
-       <height>21</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Geoalert server link:</string>
-     </property>
-    </widget>
-    <widget class="QLineEdit" name="line_server">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>40</y>
-       <width>231</width>
-       <height>21</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>https://platform.geoalert.io</string>
-     </property>
-    </widget>
-    <widget class="QCheckBox" name="checkSatelitPass">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>280</y>
-       <width>201</width>
-       <height>20</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Save Login/Password</string>
-     </property>
-    </widget>
-    <widget class="QPushButton" name="Button_view">
-     <property name="geometry">
-      <rect>
-       <x>230</x>
-       <y>260</y>
-       <width>161</width>
-       <height>46</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Connect</string>
-     </property>
-    </widget>
-    <widget class="QComboBox" name="comboBoxURLType">
-     <property name="geometry">
-      <rect>
-       <x>240</x>
-       <y>220</y>
-       <width>151</width>
-       <height>21</height>
-      </rect>
-     </property>
-     <item>
-      <property name="text">
-       <string notr="true">Source type XYZ</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string>Source type TMS</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string>Source type WMS</string>
-      </property>
-     </item>
-    </widget>
-    <widget class="QLabel" name="label_23">
-     <property name="geometry">
-      <rect>
-       <x>20</x>
-       <y>170</y>
-       <width>441</width>
-       <height>16</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Add satellite imagery provider: (&lt;a href=&quot;https://securewatchdocs.maxar.com/en-us/Miscellaneous/DevGuides/MapsAPI/Examples/arcgisonline.htm?Highlight=TMS&quot;&gt;how to connect to Maxar Securewatch?&lt;/a&gt;)</string>
-     </property>
-    </widget>
-    <widget class="QLabel" name="label_45">
-     <property name="geometry">
-      <rect>
-       <x>15</x>
-       <y>245</y>
-       <width>71</width>
-       <height>16</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Password:</string>
-     </property>
-    </widget>
-    <widget class="QgsPasswordLineEdit" name="mLinePassword_3">
-     <property name="geometry">
-      <rect>
-       <x>90</x>
-       <y>245</y>
-       <width>131</width>
-       <height>21</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
-    <widget class="QLabel" name="label_28">
-     <property name="geometry">
-      <rect>
-       <x>350</x>
-       <y>10</y>
-       <width>151</width>
-       <height>16</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Destination folder:</string>
-     </property>
-    </widget>
-    <widget class="QLineEdit" name="input_directory">
-     <property name="geometry">
-      <rect>
-       <x>350</x>
-       <y>40</y>
-       <width>181</width>
-       <height>21</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
-    <widget class="QLabel" name="label_46">
-     <property name="geometry">
-      <rect>
-       <x>15</x>
-       <y>225</y>
-       <width>46</width>
-       <height>16</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Login:</string>
-     </property>
-    </widget>
-    <widget class="QLineEdit" name="line_server_2">
-     <property name="geometry">
-      <rect>
-       <x>15</x>
-       <y>195</y>
-       <width>371</width>
-       <height>21</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
-    <widget class="QPushButton" name="but_dir">
-     <property name="geometry">
-      <rect>
-       <x>530</x>
-       <y>40</y>
-       <width>31</width>
-       <height>23</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>...</string>
-     </property>
-    </widget>
-    <widget class="QLineEdit" name="line_login_3">
-     <property name="geometry">
-      <rect>
-       <x>90</x>
-       <y>220</y>
-       <width>131</width>
-       <height>21</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
-   </widget>
-  </widget>
+   </item>
+  </layout>
  </widget>
  <customwidgets>
   <customwidget>
@@ -598,6 +627,11 @@
    <header>qgspasswordlineedit.h</header>
   </customwidget>
  </customwidgets>
+ <tabstops>
+  <tabstop>ButtonConnect</tabstop>
+  <tabstop>mMapLayerComboBox</tabstop>
+  <tabstop>tableWidget</tabstop>
+ </tabstops>
  <resources/>
  <connections/>
 </ui>

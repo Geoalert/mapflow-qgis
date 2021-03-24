@@ -56,40 +56,22 @@ class Geoalert:
         self.toolbar.setObjectName(u'Geoaler')
 
 ####################################################################
-        # работа с таблицей
-    #---Table---------------------------------
-        self.dlg.tableWidget.clear()
-        stolbci = [u" Processing", u"Name", u"Status", u"Сreated"]
-        StolbKol = len(stolbci) #4#количество столбцов
-        self.dlg.tableWidget.setColumnCount(StolbKol) #создаем столбцы
-        self.dlg.tableWidget.setHorizontalHeaderLabels(stolbci) #даем названия столбцам
-        #перебор всех столбцов и настройка
-        for nom in range(StolbKol):
-            # Устанавливаем выравнивание на заголовки
-            self.dlg.tableWidget.horizontalHeaderItem(nom).setTextAlignment(Qt.AlignCenter)
-        # указываем ширину столбцов
-        self.dlg.tableWidget.setColumnWidth(0, 80)
-        self.dlg.tableWidget.setColumnWidth(1, 200)
-        # выделять всю строку при нажатии
-        self.dlg.tableWidget.setSelectionBehavior(QAbstractItemView.SelectRows)
-        # запретить редактировать таблицу пользователю
-        self.dlg.tableWidget.setEditTriggers(QAbstractItemView.NoEditTriggers)
-    #--------------------------------------------
+        # создание и настройка таблицы
+        self.makeTable()
         # Нажатие кнопки "Подключить"
         self.dlg.ButtonConnect.clicked.connect( self.button_connect )
         # загрузить выбраный результат
         self.dlg.ButtonDownload.clicked.connect(self.addSucces)
-        #Кнопка: Выгрузить слой на сервер для обработки
+        # Кнопка: Выгрузить слой на сервер для обработки
         self.dlg.ButtonUpload.clicked.connect(self.uploadOnServer)
-        #кнопка удаления слоя
+        # кнопка удаления слоя
         self.dlg.ButtonDel.clicked.connect(self.DelLay)
-        #кнопка выбора TIF для загрузки
+        # кнопка выбора TIF для загрузки
         self.dlg.but_inputTIF.clicked.connect(self.select_tif)
         # Кнопка подключения снимков
         self.dlg.Button_view.clicked.connect(self.sart_view)
         # кнопка выбора папки через обзор
         self.dlg.but_dir.clicked.connect(self.select_output_file)
-
         # чтение настроек логин/пароль
         self.readSettings()
         # чтение настроек логин/пароль для сервиса космоснимков
@@ -103,7 +85,27 @@ class Geoalert:
 
 
 # ------------------------------
-
+    # создание и настройка таблицы
+    def makeTable(self):
+        self.dlg.tableWidget.clear()
+        stolbci = [u" Processing", u"Name", u"Status", u"Сreated", u"ID"]
+        StolbKol = len(stolbci)  # 4#количество столбцов
+        self.dlg.tableWidget.setColumnCount(StolbKol)  # создаем столбцы
+        self.dlg.tableWidget.setHorizontalHeaderLabels(stolbci)  # даем названия столбцам
+        # перебор всех столбцов и настройка
+        for nom in range(StolbKol):
+            # Устанавливаем выравнивание на заголовки
+            self.dlg.tableWidget.horizontalHeaderItem(nom).setTextAlignment(Qt.AlignCenter)
+        # указываем ширину столбцов
+        self.dlg.tableWidget.setColumnWidth(0, 80)
+        self.dlg.tableWidget.setColumnWidth(1, 200)
+        self.dlg.tableWidget.setColumnWidth(4, 50)
+        # выделять всю строку при нажатии
+        self.dlg.tableWidget.setSelectionBehavior(QAbstractItemView.SelectRows)
+        # запретить редактировать таблицу пользователю
+        self.dlg.tableWidget.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        # включить сортировку в таблице
+        self.dlg.tableWidget.setSortingEnabled(True)
     # загрузка рабочей папки из настроек в интерфейс
     def get_output_file(self):
         s = QgsSettings()
@@ -164,8 +166,6 @@ class Geoalert:
         ip = self.server
         URL_up = ip + '/rest/rasters'
         r = requests.post(URL_up, headers=headers, files=files)
-
-
         print('Ответ сервера:', r.text)
 
         if 'url' in r.text:
@@ -174,10 +174,8 @@ class Geoalert:
         elif 'uri' in r.text:
             url = r.json()['uri']  # получаем адрес для использования загруженного файла
             print('Используется: URI')
-
         params = {"source_type": "tif", "url": "%s" % (url)}
         self.upOnServ_proc(params)
-
 
     # Удалить слой
     def DelLay(self):
@@ -214,7 +212,7 @@ class Geoalert:
             # чекбокс (обновить кеш)
             cacheUP = str(self.dlg.checkUp.isChecked())
 
-            #print(cacheUP)
+            print(cacheUP)
             # Features_lay = Vlayer.getFeatures()
 
             #всплывающее сообщение
@@ -230,7 +228,7 @@ class Geoalert:
                           "cache_raster": "%s" % (cacheUP),
                           "zoom": "18",  # }#,
                           "projection": "%s" % (proj_EPSG)}  # Проекция
-                self.uploadOnServer(params)
+                self.upOnServ_proc(params)
             elif ph_satel == 1: #Yandex
                 url_xyz = 'http://sat04.maps.yandex.net/tiles?l=sat&x={x}&y={y}&z={z}'
                 proj_EPSG = 'epsg:3395'
@@ -239,30 +237,42 @@ class Geoalert:
                           "cache_raster": "%s" % (cacheUP),
                           "zoom": "18",  # }#,
                           "projection": "%s" % (proj_EPSG)}  # Проекция
-                self.uploadOnServer(params)
+                self.upOnServ_proc(params)
             elif ph_satel == 2: # Ручной ввод - секьюр вотч
                 infoString = "Поставщиком космических снимков может взыматься плата за их использование!"
                 QMessageBox.information(self.dlg, "About", infoString)
                 login = self.dlg.line_login_3.text()
                 password = self.dlg.mLinePassword_3.text()
                 url_xyz = self.dlg.line_server_2.text()
-                TypeURL = self.dlg.comboBoxURLType.currentIndex()  # выбран тип ссылки///
+                #TypeURL = self.dlg.comboBoxURLType.currentIndex()  # выбран тип ссылки///
+
+                TypeURL = self.dlg.comboBoxURLType.text()
+
+                params = {"source_type": TypeURL,
+                          "url": "%s" % (url_xyz),
+                          "zoom": "18",
+                          "cache_raster": "%s" % (cacheUP),
+                          "raster_login": "%s" % (login),
+                          "raster_password": "%s" % (password)}
+
                 # выбираем тип ссылки
-                if TypeURL == 0:
-                    params = {"source_type": "xyz",
-                              "url": "%s" % (url_xyz),
-                              "zoom": "18",
-                              "cache_raster": "%s" % (cacheUP),
-                              "raster_login": "%s" % (login),
-                              "raster_password": "%s" % (password)}
-                elif TypeURL == 1:
-                    params = {"source_type": "tms",
-                              "url": "%s" % (url_xyz),
-                              "zoom": "18",
-                              "cache_raster": "%s" % (cacheUP),
-                              "raster_login": "%s" % (login),
-                              "raster_password": "%s" % (password)}
-                self.uploadOnServer(params)
+                # if TypeURL == 0:
+                #     params = {"source_type": "xyz",
+                #               "url": "%s" % (url_xyz),
+                #               "zoom": "18",
+                #               "cache_raster": "%s" % (cacheUP),
+                #               "raster_login": "%s" % (login),
+                #               "raster_password": "%s" % (password)}
+                # elif TypeURL == 1:
+                #     params = {"source_type": "tms",
+                #               "url": "%s" % (url_xyz),
+                #               "zoom": "18",
+                #               "cache_raster": "%s" % (cacheUP),
+                #               "raster_login": "%s" % (login),
+                #               "raster_password": "%s" % (password)}
+
+
+                self.upOnServ_proc(params)
 
 
             elif ph_satel == 3: # Передача TIF файла для обработки
@@ -275,8 +285,6 @@ class Geoalert:
             infoString = "Название обработки не задано или уже есть обработка с таким названием. " \
                          "\n Введите другое название!"
             QMessageBox.information(self.dlg, "About", infoString)
-
-
 
     def upOnServ_proc(self, params):
         NewLayName = self.dlg.NewLayName.text()
@@ -379,25 +387,32 @@ class Geoalert:
     def addSucces(self):
         # получить номер выбранной строки в таблице!
         row = self.dlg.tableWidget.currentIndex().row()
+        print(row)
         #print(row)
         if row != -1:
-            # Номер в dictData
-            row_nom = (self.kol_tab - row - 1)
-            #получаем данные о слое и его ID
-            id_v = self.dictData[row_nom]['id']
-            #print(id_v)
+            # # Номер в dictData
+            # row_nom =  (self.kol_tab - row - 1)
+            # #получаем данные о слое и его ID
+            # id_v = self.dictData[row_nom]['id']
+            # #print(id_v)
 
+            id_v = self.dlg.tableWidget.model().index(row, 4).data()
+            print(id_v)
             URL_f = self.server + "/rest/processings/" + id_v + "/result"
             r = requests.get(url=URL_f, headers=self.headers)
 
-            # получаем ответ
-            #print(r.text)
             # адрес для сохранения файла
-            name_d = self.dictData[row_nom]['name']
+            name_d = self.dlg.tableWidget.model().index(row, 1).data() #self.dictData[row_nom]['name']
 
-            #Получаем растр-подложку
-            #print(self.dictData[row_nom]['rasterLayer']['tileUrl'])
-            rastrXYZ = self.dictData[row_nom]['rasterLayer']['tileUrl']
+            # находим ссылку на растр по id
+            for dD in self.dictData:
+                #print(dD)
+                if dD['id'] == id_v:
+
+                    rastrXYZ = dD['rasterLayer']['tileUrl']
+                    print(rastrXYZ)
+                    break
+
             url = '&url=' + rastrXYZ
             #print(rastrXYZ)
             min_max = "&zmax=18&zmin=0"
@@ -414,13 +429,12 @@ class Geoalert:
 
             #система координат для преобразования файла
             crs_EPSG = QgsCoordinateReferenceSystem(Projection)
-            #временный файл
 
+            #временный файл
             file_temp = self.dlg.input_directory.text() + name_d + '_temp.geojson'
-            print(file_temp)
+            #print(file_temp)
             with open(file_temp, "wb") as f:
                 f.write(str.encode(r.text))
-
             vlayer_temp = QgsVectorLayer(file_temp, name_d+'_temp', "ogr")
 
             #экспорт в shp
@@ -439,13 +453,13 @@ class Geoalert:
                 print("Layer failed to load!")
             # Загрузка файла в окно qgis
             QgsProject.instance().addMapLayer(vlayer)
-
+            time.sleep(1)
+            qgis.utils.iface.zoomToActiveLayer()  # приблизить к охвату активного слоя
             try:
                 os.remove(file_temp)  # удаление временного файла
+                print('Временный файл удален:', file_temp)
             except:
-                print('Временный файл удалить не удалось, ну пусть будет, он никому не мешает и весит мало.', file_temp)
-
-
+                print('Временный файл удалить не удалось, ну пусть будет, он никому не мешает и весит мало:', file_temp)
 
         else:
             print('Сначала выберите слой в таблице')
@@ -489,7 +503,6 @@ class Geoalert:
                 proc.start()
     # циклическое переподключение к серверу для получения статусов обработок
     def button_con(self, URL):
-
         while self.flag == True:
 
             # выполняем запрос
@@ -514,6 +527,7 @@ class Geoalert:
                 statf = QTableWidgetItem(str(self.dictData[i]['percentCompleted'])+'%')
                 namef = QTableWidgetItem(self.dictData[i]['name'])
                 Status = QTableWidgetItem(self.dictData[i]['status'])
+                ids = QTableWidgetItem(self.dictData[i]['id'])
                 #дата и время создания
                 cre = self.dictData[i]['created']
                 cre2 = cre.split('T')
@@ -523,36 +537,37 @@ class Geoalert:
                     self.flag = True #добавляем значение для обновления статуса
 
                 #вывод всех значений
-                spisok_znachen = ['id',
-                                  'name',
-                                  'projectId',
-                                  'vectorLayer',
-                                  'rasterLayer',
-                                  'workflowDef',
-                                  'aoiCount',
-                                  'aoiArea',
-                                  'status',
-                                  'percentCompleted',
-                                  'params',
-                                  'meta',
-                                  'created',
-                                  'updated']
-                #for x in spisok_znachen:
-                #    print(x + ': ', self.dictData[i][x], )
-                #print('-'*12)
+                # spisok_znachen = ['id',
+                #                   'name',
+                #                   'projectId',
+                #                   'vectorLayer',
+                #                   'rasterLayer',
+                #                   'workflowDef',
+                #                   'aoiCount',
+                #                   'aoiArea',
+                #                   'status',
+                #                   'percentCompleted',
+                #                   'params',
+                #                   'meta',
+                #                   'created',
+                #                   'updated']
+                # for x in spisok_znachen:
+                #     print(x + ': ', self.dictData[i][x], )
+                # print('-'*12)
 
                 # вписываем значения в соответствующие ячейки
                 self.dlg.tableWidget.setItem(nx, 0, statf)
                 self.dlg.tableWidget.setItem(nx, 1, namef)
                 self.dlg.tableWidget.setItem(nx, 2, Status)
                 self.dlg.tableWidget.setItem(nx, 3, createf)
+                self.dlg.tableWidget.setItem(nx, 4, ids)
+
                 nx += 1
 
             if self.flag == True:
                 secn = 5 # задержка обновления в секундах
                 print('Обновление через', secn, 'секунд')
                 time.sleep(secn) # ожидание следующей итеррации
-
     # запись переменных в хранилилище настроек
     def storeSettings(self):
         print('сохранение настроек Geoalert')
@@ -624,18 +639,8 @@ class Geoalert:
     def tr(self, message):
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
         return QCoreApplication.translate('Geoalert', message)
-    def add_action(
-        self,
-        icon_path,
-        text,
-        callback,
-        enabled_flag=True,
-        add_to_menu=False,
-        add_to_toolbar=True,
-        status_tip=None,
-        whats_this=None,
-        parent=None):
-
+    def add_action(self, icon_path, text, callback, enabled_flag=True, add_to_menu=False,
+                    add_to_toolbar=True, status_tip=None, whats_this=None, parent=None):
 
         icon = QIcon(icon_path)
         action = QAction(icon, text, parent)
