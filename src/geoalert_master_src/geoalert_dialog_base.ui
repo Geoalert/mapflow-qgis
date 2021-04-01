@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>651</width>
-    <height>515</height>
+    <width>644</width>
+    <height>513</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -66,9 +66,9 @@
        <property name="geometry">
         <rect>
          <x>10</x>
-         <y>205</y>
+         <y>175</y>
          <width>601</width>
-         <height>216</height>
+         <height>246</height>
         </rect>
        </property>
       </widget>
@@ -120,26 +120,9 @@
          <height>21</height>
         </rect>
        </property>
-       <item>
-        <property name="text">
-         <string>Google</string>
-        </property>
-       </item>
-       <item>
-        <property name="text">
-         <string>Yandex</string>
-        </property>
-       </item>
-       <item>
-        <property name="text">
-         <string>Ручной ввод в Настройках</string>
-        </property>
-       </item>
-       <item>
-        <property name="text">
-         <string>Загрузка файла</string>
-        </property>
-       </item>
+       <property name="toolTip">
+        <string notr="true"/>
+       </property>
       </widget>
       <widget class="QLineEdit" name="line_login">
        <property name="geometry">
@@ -197,7 +180,7 @@
        <property name="geometry">
         <rect>
          <x>380</x>
-         <y>430</y>
+         <y>425</y>
          <width>226</width>
          <height>31</height>
         </rect>
@@ -210,39 +193,13 @@
        <property name="geometry">
         <rect>
          <x>15</x>
-         <y>430</y>
+         <y>425</y>
          <width>71</width>
          <height>31</height>
         </rect>
        </property>
        <property name="text">
         <string>Delete</string>
-       </property>
-      </widget>
-      <widget class="QLineEdit" name="input_TIF">
-       <property name="geometry">
-        <rect>
-         <x>325</x>
-         <y>175</y>
-         <width>151</width>
-         <height>21</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string/>
-       </property>
-      </widget>
-      <widget class="QPushButton" name="but_inputTIF">
-       <property name="geometry">
-        <rect>
-         <x>475</x>
-         <y>175</y>
-         <width>31</width>
-         <height>23</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>...</string>
        </property>
       </widget>
       <widget class="QComboBox" name="comboBoxTypeProc">
@@ -279,19 +236,6 @@
        </property>
        <property name="text">
         <string>Password:</string>
-       </property>
-      </widget>
-      <widget class="QLabel" name="label_7">
-       <property name="geometry">
-        <rect>
-         <x>245</x>
-         <y>175</y>
-         <width>81</width>
-         <height>16</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Load TIF-image:</string>
        </property>
       </widget>
       <widget class="QLabel" name="label_22">
@@ -378,6 +322,9 @@
          <width>151</width>
          <height>21</height>
         </rect>
+       </property>
+       <property name="toolTip">
+        <string notr="true"/>
        </property>
        <item>
         <property name="text">
@@ -497,7 +444,7 @@ imagery provider</string>
         </rect>
        </property>
        <property name="text">
-        <string>https://services.digitalglobe.com/earthservice/tmsaccess/tms/1.0.0/DigitalGlobe:ImageryTileService@EPSG:3857@jpg/{z}/{x}/{y}.jpg?connectId=71a837e4-2609-4496-b5ea-5f0e4fdb020d</string>
+        <string>https://securewatch.digitalglobe.com/earthservice/wmtsaccess?SERVICE=WMTS&amp;VERSION=1.0.0&amp;STYLE=&amp;REQUEST=GetTile&amp;CONNECTID=31fdd556-4c57-4c6e-937f-3deff1987415&amp;LAYER=DigitalGlobe:ImageryTileService&amp;FORMAT=image/jpeg&amp;TileRow=%7By%7D&amp;TileCol=%7Bx%7D&amp;TileMatrixSet=EPSG:3857&amp;TileMatrix=EPSG:3857:%7Bz%7D</string>
        </property>
       </widget>
       <widget class="QCheckBox" name="checkSatelitPass">
@@ -513,7 +460,10 @@ imagery provider</string>
         <string>Save Login/Password</string>
        </property>
       </widget>
-      <widget class="QCheckBox" name="checkSatelitPass_2">
+      <widget class="QCheckBox" name="checkSatelit_Z14">
+       <property name="enabled">
+        <bool>true</bool>
+       </property>
        <property name="geometry">
         <rect>
          <x>440</x>
@@ -527,19 +477,6 @@ imagery provider</string>
        </property>
        <property name="checked">
         <bool>true</bool>
-       </property>
-      </widget>
-      <widget class="QLabel" name="label_24">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>100</y>
-         <width>441</width>
-         <height>16</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Add satellite imagery provider: (&lt;a href=&quot;https://securewatchdocs.maxar.com/en-us/Miscellaneous/DevGuides/MapsAPI/Examples/arcgisonline.htm?Highlight=TMS&quot;&gt;how to connect to Maxar Securewatch?&lt;/a&gt;)</string>
        </property>
       </widget>
       <widget class="QLabel" name="label_33">
@@ -608,6 +545,41 @@ imagery provider</string>
        </property>
        <property name="orientation">
         <enum>Qt::Vertical</enum>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_3">
+       <property name="geometry">
+        <rect>
+         <x>155</x>
+         <y>95</y>
+         <width>226</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://securewatchdocs.maxar.com/en-us/Miscellaneous/DevGuides/MapsAPI/Examples/arcgisonline.htm?Highlight=TMS&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;how to connect to Maxar Securewatch?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+       </property>
+       <property name="textFormat">
+        <enum>Qt::AutoText</enum>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+       <property name="openExternalLinks">
+        <bool>true</bool>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_34">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>95</y>
+         <width>156</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Add satellite imagery provider:</string>
        </property>
       </widget>
      </widget>

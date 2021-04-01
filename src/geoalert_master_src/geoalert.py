@@ -66,8 +66,6 @@ class Geoalert:
         self.dlg.ButtonUpload.clicked.connect(self.uploadOnServer)
         # кнопка удаления слоя
         self.dlg.ButtonDel.clicked.connect(self.DelLay)
-        # кнопка выбора TIF для загрузки
-        self.dlg.but_inputTIF.clicked.connect(self.select_tif)
         # Кнопка подключения снимков
         self.dlg.Button_view.clicked.connect(self.sart_view)
         # кнопка выбора папки через обзор
@@ -82,6 +80,10 @@ class Geoalert:
         self.dlg.savePass_serv.clicked.connect(self.storeSettings)
         # загрузка рабочей папки из настроек в интерфейс
         self.get_output_file()
+        # срабатывает при выборе источника снимков в комбобоксе
+        self.dlg.comboBox_satelit.activated.connect(self.comboClick)
+        #загрузка полей комбобокса
+        self.comboImageS()
 
 
 # ------------------------------
@@ -150,17 +152,19 @@ class Geoalert:
 
             return False#self.flag
 
-    # кнопка выбора tif для загрузки на сервер
+    # выбор tif для загрузки на сервер
     def select_tif(self):
         filename = QFileDialog.getOpenFileName(None, "Select .TIF File", './', 'Files (*.tif *.TIF *.Tif)')
         # запоминаем адрес в файл для автоматической подгрузки, если он не пустой
         print(filename)
         if len(filename[0]) > 0:
-            self.dlg.input_TIF.setText(filename[0])
+            return filename[0]
 
     # загрузка tif на сервер
     def up_tif(self, n):
-        file_in = self.dlg.input_TIF.text() #получаем адрес файла
+        #получаем адрес файла
+        file_in = self.listLay[n][1].dataProvider().dataSourceUri()
+
         headers = self.authorization # формируем заголовок для залогинивания
         files = {'file': open(file_in, 'rb')}
         ip = self.server
@@ -201,6 +205,74 @@ class Geoalert:
         #обновить список слоев
         self.button_connect()
 
+    #срабатывание от выбора в комбобоксе
+    def comboClick(self):
+        comId = self.dlg.comboBox_satelit.currentIndex()
+        # открытие tif файла
+        if comId == 2:
+            self.addres_tiff = self.select_tif() #выбрать tif на локальном компьютере
+            #print('comb:', self.addres_tiff)
+            #если адрес получен
+            if self.addres_tiff:
+                nameL = os.path.basename(self.addres_tiff)[:-4]
+                #добавление растра в QGIS
+                self.iface.addRasterLayer(self.addres_tiff, nameL)
+
+                #заполнение комбобокса
+                self.comboImageS()
+
+                # поиск слоя по адресу файла
+                for n, nameS in enumerate(self.listLay):
+                    # получение адреса файла
+                    adr = nameS[1].dataProvider().dataSourceUri()
+                    print(adr, self.addres_tiff)
+                    if adr == self.addres_tiff:
+                        # если нашли, устанавливаем на него выбор
+                        self.dlg.comboBox_satelit.setCurrentIndex(n+3)
+            else:
+                # обновляем весь список слоев
+                self.comboImageS()
+
+        elif comId > 2:
+            print(self.listLay[comId - 3][1].dataProvider().dataSourceUri())
+        #     self.dlg.comboBox_satelit.setCurrentIndex(comId)
+        # self.dlg.comboBox_satelit.setDisabled(True) # отключение элемента
+
+    # заполнение комбобокса
+    def comboImageS(self):
+        self.dlg.comboBox_satelit.clear()
+        ll = ['Mapbox Satellite', self.tr('Custom (in settings)'), 'Open new .tif']
+        # заполняем обязательные пункты
+        for idx, field in enumerate(ll):
+            self.dlg.comboBox_satelit.addItem(field, idx)
+
+        print('-----------------------------------')
+        # заполняем локальными подключенными растрами
+        #self.comboImageS()
+        self.listLay = []
+        layersAll = QgsProject.instance().mapLayers()
+        # print(layersAll)
+        id = 3
+        # перебор всех слоев и проверка их типа
+        for i in layersAll:
+            # тип слоя
+            nType = QgsProject.instance().mapLayers()[i].type()
+            if nType == 1:
+                # тип растра
+                rt = QgsProject.instance().mapLayers()[i].rasterType()
+                # если тип = локальному растру
+                if rt == 2:
+                    # добавляем название и растр в список
+                    name = QgsProject.instance().mapLayers()[i].name()
+                    lay = QgsProject.instance().mapLayers()[i]
+
+                    self.listLay.append([name, lay])
+                    # print(name)
+                    self.dlg.comboBox_satelit.addItem(name, id)
+                    id += 1
+        print(self.listLay)
+
+
     # Выгрузить слой на сервер для обработки
     def uploadOnServer(self, iface):
         NewLayName = self.dlg.NewLayName.text()
@@ -213,40 +285,30 @@ class Geoalert:
             cacheUP = str(self.dlg.checkUp.isChecked())
 
             print(cacheUP)
-            # Features_lay = Vlayer.getFeatures()
 
             #всплывающее сообщение
             self.iface.messageBar().pushMessage("Massage", "Please, wait. Uploading a file to the server...",
                                                 level=Qgis.Info,
                                                 duration=15)
 
-            if ph_satel == 0: #Google
-                url_xyz = 'http://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}&s=Ga'
-                proj_EPSG = 'epsg:3857' #'3857'
+            if ph_satel == 0: #Mapbox Satellite
+                url_xyz = ''
+                proj_EPSG = 'epsg:3857'
                 params = {"source_type": "xyz",
                           "url": "%s" % (url_xyz),
                           "cache_raster": "%s" % (cacheUP),
-                          "zoom": "18",  # }#,
+                          "zoom": "18",
                           "projection": "%s" % (proj_EPSG)}  # Проекция
                 self.upOnServ_proc(params)
-            elif ph_satel == 1: #Yandex
-                url_xyz = 'http://sat04.maps.yandex.net/tiles?l=sat&x={x}&y={y}&z={z}'
-                proj_EPSG = 'epsg:3395'
-                params = {"source_type": "xyz",
-                          "url": "%s" % (url_xyz),
-                          "cache_raster": "%s" % (cacheUP),
-                          "zoom": "18",  # }#,
-                          "projection": "%s" % (proj_EPSG)}  # Проекция
-                self.upOnServ_proc(params)
-            elif ph_satel == 2: # Ручной ввод - секьюр вотч
+            elif ph_satel == 1: #Custom
                 infoString = "Поставщиком космических снимков может взыматься плата за их использование!"
                 QMessageBox.information(self.dlg, "About", infoString)
                 login = self.dlg.line_login_3.text()
                 password = self.dlg.mLinePassword_3.text()
                 url_xyz = self.dlg.line_server_2.text()
-                #TypeURL = self.dlg.comboBoxURLType.currentIndex()  # выбран тип ссылки///
+                # TypeURL = self.dlg.comboBoxURLType.currentIndex()  # выбран тип ссылки///
 
-                TypeURL = self.dlg.comboBoxURLType.text()
+                TypeURL = self.dlg.comboBoxURLType.currentText()
 
                 params = {"source_type": TypeURL,
                           "url": "%s" % (url_xyz),
@@ -254,29 +316,12 @@ class Geoalert:
                           "cache_raster": "%s" % (cacheUP),
                           "raster_login": "%s" % (login),
                           "raster_password": "%s" % (password)}
-
-                # выбираем тип ссылки
-                # if TypeURL == 0:
-                #     params = {"source_type": "xyz",
-                #               "url": "%s" % (url_xyz),
-                #               "zoom": "18",
-                #               "cache_raster": "%s" % (cacheUP),
-                #               "raster_login": "%s" % (login),
-                #               "raster_password": "%s" % (password)}
-                # elif TypeURL == 1:
-                #     params = {"source_type": "tms",
-                #               "url": "%s" % (url_xyz),
-                #               "zoom": "18",
-                #               "cache_raster": "%s" % (cacheUP),
-                #               "raster_login": "%s" % (login),
-                #               "raster_password": "%s" % (password)}
-
-
                 self.upOnServ_proc(params)
 
-
-            elif ph_satel == 3: # Передача TIF файла для обработки
-                p = Thread(target=self.up_tif, args=(1,))
+            # загрузка выбранного .tif
+            elif ph_satel > 2: #
+                n = ph_satel - 3
+                p = Thread(target=self.up_tif, args=(n,))
                 p.start()
 
         else:
@@ -351,38 +396,33 @@ class Geoalert:
         # сохранение настроек логин/пароль
         self.storeSettingsMap()
 
+        # если чекбокс включен - ограничиваем зум предпросмотра до 14
+        if self.dlg.checkSatelit_Z14.isChecked():
+            z_max = '14'  # self.dlg.zmax.text()
+        # иначе ограничиваем до 18
+        else:
+            z_max = '18'
 
         z_min = '0'#self.dlg.zmin.text()
-        z_max = '14'#self.dlg.zmax.text()
         min_max = "&zmax=" + z_max + "&zmin=" + z_min
-        ind_preview = 2 #self.dlg.comBox_satelit_mon.currentIndex()#получаем индекс выбора в комбобоксе
+        preview_type = self.dlg.comboBoxURLType.currentText()#получаем
 
-        if ind_preview == 0: #Google
-            urlWithParams = 'crs=EPSG:3857&format&type=xyz&url=https://mt1.google.com/' \
-                            'vt/lyrs%3Ds%26x%3D%7Bx%7D%26y%3D%7By%7D%26z%3D%7Bz%7D' + min_max
-            rlayer = QgsRasterLayer(urlWithParams, 'Google Satelite ' + z_min + '-' + z_max, 'wms')
-            QgsProject.instance().addMapLayer(rlayer)
+        url = self.dlg.line_server_2.text()# получаем url из настроек
+        #замена символов в адресе для корректной работы
+        url = url.replace('=', '%3D')
+        url = url.replace('&', '%26')
+        url = '&url=' + url
 
-        elif ind_preview == 1: #Yandex
-            urlWithParams = 'crs=EPSG:3395&format&type=xyz&url=http://sat04.maps.yandex.net/' \
-                            'tiles?l%3Dsat%26x%3D%7Bx%7D%26y%3D%7By%7D%26z%3D%7Bz%7D' + min_max
-            rlayer = QgsRasterLayer(urlWithParams, 'Yandex Satelite ' + z_min + '-' + z_max, 'wms')
-            QgsProject.instance().addMapLayer(rlayer)
-        elif ind_preview == 2: #User input
+        typeXYZ = 'type='+ preview_type
+        login = '&username=' + self.dlg.line_login_3.text()
+        password = '&password=' + self.dlg.mLinePassword_3.text()
+        urlWithParams = typeXYZ + url + min_max + login + password
+        rlayer = QgsRasterLayer(urlWithParams, self.tr('User_servise ') + z_min + '-' + z_max, 'wms')
+        QgsProject.instance().addMapLayer(rlayer)
+        #print('Загрузка пользовательских снимков')
 
-            url = self.dlg.line_server_2.text()# получаем url из настроек
-            #замена символов в адресе для корректной работы
-            url = url.replace('=', '%3D')
-            url = url.replace('&', '%26')
-            url = '&url=' + url
+        # self.dlg.comboBox_satelit.setDisabled(False) # активация элемента
 
-            typeXYZ = 'type=xyz'
-            login = '&username=' +  self.dlg.line_login_3.text()
-            password = '&password=' + self.dlg.mLinePassword_3.text()
-            urlWithParams = typeXYZ + url + min_max + login + password
-            rlayer = QgsRasterLayer(urlWithParams, self.tr('User_servise ') + z_min + '-' + z_max, 'wms')
-            QgsProject.instance().addMapLayer(rlayer)
-            #print('Загрузка пользовательских снимков')
     # загрузка слоя с сервера
     def addSucces(self):
         # получить номер выбранной строки в таблице!
@@ -536,7 +576,7 @@ class Geoalert:
                 if self.dictData[i]['status'] == "IN_PROGRESS": #если хоть одна задача в процессе выполнения
                     self.flag = True #добавляем значение для обновления статуса
 
-                #вывод всех значений
+                # вывод всех значений
                 # spisok_znachen = ['id',
                 #                   'name',
                 #                   'projectId',
@@ -551,6 +591,7 @@ class Geoalert:
                 #                   'meta',
                 #                   'created',
                 #                   'updated']
+                #
                 # for x in spisok_znachen:
                 #     print(x + ': ', self.dictData[i][x], )
                 # print('-'*12)
