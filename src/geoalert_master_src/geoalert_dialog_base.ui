@@ -20,7 +20,7 @@
    <item>
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
-      <number>0</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="tab_2">
       <attribute name="title">
@@ -49,7 +49,7 @@
         </rect>
        </property>
        <property name="text">
-        <string>AOI layer:</string>
+        <string>AOI polygon:</string>
        </property>
       </widget>
       <widget class="QgsMapLayerComboBox" name="mMapLayerComboBox">
@@ -66,9 +66,9 @@
        <property name="geometry">
         <rect>
          <x>10</x>
-         <y>175</y>
+         <y>200</y>
          <width>601</width>
-         <height>246</height>
+         <height>221</height>
         </rect>
        </property>
       </widget>
@@ -82,7 +82,7 @@
         </rect>
        </property>
        <property name="text">
-        <string>AI model:</string>
+        <string>AI-mapping model:</string>
        </property>
       </widget>
       <widget class="QLabel" name="label_9">
@@ -166,10 +166,10 @@
       <widget class="QCheckBox" name="checkUp">
        <property name="geometry">
         <rect>
-         <x>305</x>
-         <y>125</y>
-         <width>151</width>
-         <height>21</height>
+         <x>310</x>
+         <y>110</y>
+         <width>171</width>
+         <height>31</height>
         </rect>
        </property>
        <property name="text">
@@ -267,8 +267,8 @@
       <widget class="QPushButton" name="ButtonUpload">
        <property name="geometry">
         <rect>
-         <x>455</x>
-         <y>120</y>
+         <x>420</x>
+         <y>150</y>
          <width>146</width>
          <height>36</height>
         </rect>
@@ -358,14 +358,14 @@
       <widget class="QLabel" name="label_28">
        <property name="geometry">
         <rect>
-         <x>15</x>
+         <x>20</x>
          <y>10</y>
          <width>156</width>
          <height>16</height>
         </rect>
        </property>
        <property name="text">
-        <string>Work directory on PC:</string>
+        <string>Destination folder:</string>
        </property>
       </widget>
       <widget class="QLineEdit" name="input_directory">
@@ -400,12 +400,12 @@
          <x>435</x>
          <y>180</y>
          <width>151</width>
-         <height>41</height>
+         <height>51</height>
         </rect>
        </property>
        <property name="text">
-        <string>Connect to satellite
-imagery provider</string>
+        <string>Preview
+ imagery</string>
        </property>
       </widget>
       <widget class="QPushButton" name="but_dir">
@@ -444,7 +444,7 @@ imagery provider</string>
         </rect>
        </property>
        <property name="text">
-        <string>https://securewatch.digitalglobe.com/earthservice/wmtsaccess?SERVICE=WMTS&amp;VERSION=1.0.0&amp;STYLE=&amp;REQUEST=GetTile&amp;CONNECTID=31fdd556-4c57-4c6e-937f-3deff1987415&amp;LAYER=DigitalGlobe:ImageryTileService&amp;FORMAT=image/jpeg&amp;TileRow=%7By%7D&amp;TileCol=%7Bx%7D&amp;TileMatrixSet=EPSG:3857&amp;TileMatrix=EPSG:3857:%7Bz%7D</string>
+        <string>https://securewatch.digitalglobe.com/earthservice/wmtsaccess?SERVICE=WMTS&amp;VERSION=1.0.0&amp;STYLE=&amp;REQUEST=GetTile&amp;CONNECTID=9bb32bea-702d-4326-882b-38d11f505ed1&amp;LAYER=DigitalGlobe:ImageryTileService&amp;FORMAT=image/jpeg&amp;TileRow={y}&amp;TileCol={x}&amp;TileMatrixSet=EPSG:3857&amp;TileMatrix=EPSG:3857:{z}</string>
        </property>
       </widget>
       <widget class="QCheckBox" name="checkSatelitPass">
@@ -482,14 +482,14 @@ imagery provider</string>
       <widget class="QLabel" name="label_33">
        <property name="geometry">
         <rect>
-         <x>15</x>
-         <y>55</y>
+         <x>20</x>
+         <y>50</y>
          <width>161</width>
          <height>21</height>
         </rect>
        </property>
        <property name="text">
-        <string>Geoalert server link:</string>
+        <string>Geoalert server:</string>
        </property>
       </widget>
       <widget class="QLineEdit" name="line_server">
@@ -550,9 +550,9 @@ imagery provider</string>
       <widget class="QLabel" name="label_3">
        <property name="geometry">
         <rect>
-         <x>155</x>
-         <y>95</y>
-         <width>226</width>
+         <x>270</x>
+         <y>100</y>
+         <width>251</width>
          <height>21</height>
         </rect>
        </property>
@@ -572,14 +572,14 @@ imagery provider</string>
       <widget class="QLabel" name="label_34">
        <property name="geometry">
         <rect>
-         <x>10</x>
-         <y>95</y>
-         <width>156</width>
+         <x>20</x>
+         <y>90</y>
+         <width>171</width>
          <height>21</height>
         </rect>
        </property>
        <property name="text">
-        <string>Add satellite imagery provider:</string>
+        <string>Imagery connection link:</string>
        </property>
       </widget>
      </widget>
