@@ -58,7 +58,7 @@ class Geoalert:
 ####################################################################
         # создание и настройка таблицы
         self.makeTable()
-        # Нажатие кнопки "Подключить"
+        # Нажатие кнопки "Подключить".
         self.dlg.ButtonConnect.clicked.connect( self.button_connect )
         # загрузить выбраный результат
         self.dlg.ButtonDownload.clicked.connect(self.addSucces)
@@ -70,8 +70,26 @@ class Geoalert:
         self.dlg.Button_view.clicked.connect(self.sart_view)
         # кнопка выбора папки через обзор
         self.dlg.but_dir.clicked.connect(self.select_output_file)
+        # ввести стандартную максаровскую ссылку
+        self.dlg.maxarStandartURL.clicked.connect(self.maxarStandatr)
+
+
+        self.dlg.butWMSurl.clicked.connect(self.wms_sec)
+
+
         # чтение настроек логин/пароль
-        self.readSettings()
+        self.readSet()
+
+        #чтение connect ID
+        connectID = self.readSettings('connectID')
+        self.dlg.connectID.setText(connectID)
+        # чтение настроек URL
+        surl = self.readSettings('urlImageProvider')
+        self.dlg.line_server_2.setText(surl)
+
+
+
+
         # чтение настроек логин/пароль для сервиса космоснимков
         self.readSettingsMap()
         # чекбокс сохранения логин и пароль для сервиса космоснимков
@@ -86,7 +104,132 @@ class Geoalert:
         self.comboImageS()
 
 
+        # подключение слоя WFS
+        self.dlg.ButWFS.clicked.connect(self.ButWFS)
+        #self.dlg.ButExtent.clicked.connect(self.extent)
+
+
+        # радиокнопки
+        self.dlg.frame.setEnabled(False)
+        self.dlg.radioButton.toggled.connect(self.con)
 # ------------------------------
+    def con(self):
+        # срабатывание радиокнопок
+        ch = self.dlg.radioButton.isChecked()
+        self.dlg.frame.setEnabled(ch)  # включение/отключение элемента
+        #обраное значение для второго элемента
+        if ch == True:
+            ch = False
+        else:
+            ch = True
+        self.dlg.frame_2.setEnabled(ch)
+
+    def ButWFS(self):
+        # получаем введенный логин и праоль
+        self.loginW = self.dlg.line_login_3.text()
+        self.passwordW = self.dlg.mLinePassword_3.text()
+        coordin = self.extent()
+        #self.serverW = self.dlg.line_server_2.text()
+
+        connectID = self.dlg.connectID.text() # "31fdd556-4c57-4c6e-937f-3deff1987415"
+
+        # сохрангить ID
+        self.saveSettings('connectID', connectID)
+
+        URL = "https://securewatch.digitalglobe.com/catalogservice/wfsaccess?" \
+              "REQUEST=GetFeature&TYPENAME=DigitalGlobe:FinishedFeature&" \
+              "SERVICE=WFS&VERSION=2.0.0&" \
+              "CONNECTID=%s&" \
+              "BBOX=%s&" \
+              "SRSNAME=EPSG:4326&" \
+              "FEATUREPROFILE=Default_Profile&" \
+              "WIDTH=3000&HEIGHT=3000" % (connectID, coordin)
+
+        # шифруем логин и пароль (переводим строки в байты)
+        userAndPass = b64encode(str.encode(self.loginW) + b":" + str.encode(self.passwordW)).decode("ascii")
+        # составляем хеадер для запроса
+        authorization = {'Authorization': 'Basic %s' % userAndPass}
+        r = requests.get(URL, headers=authorization)
+        print(r.text)
+
+        # временный файл
+        file_temp = self.dlg.input_directory.text() + 'WFS' + '_temp.geojson'
+        # print(file_temp)
+        with open(file_temp, "wb") as f:
+            f.write(str.encode(r.text))
+        vlayer_temp = QgsVectorLayer(file_temp, 'WFS_temp', "ogr")
+        QgsProject.instance().addMapLayer(vlayer_temp)
+
+    # вставляем стандартную ссылку максар в поле адреса
+    def maxarStandatr(self):
+        connectID = self.dlg.connectID.text()
+        print(connectID)
+        url = "https://securewatch.digitalglobe.com/earthservice/wmtsaccess?" \
+              "SERVICE=WMTS&VERSION=1.0.0&STYLE=&REQUEST=GetTile&" \
+              "CONNECTID=" + connectID + "&LAYER=DigitalGlobe:ImageryTileService&FORMAT=image/jpeg&" \
+              "TileRow=%7By%7D&TileCol=%7Bx%7D&" \
+              "TileMatrixSet=EPSG:3857&TileMatrix=EPSG:3857:%7Bz%7D"
+
+        self.dlg.line_server_2.setText(url)
+        self.dlg.comboBoxURLType.setCurrentIndex(0)
+
+        self.dlg.radioButton_2.setChecked(True)
+
+        # сохрангить ID
+        self.saveSettings('connectID', connectID)
+
+        # использование WMS
+    def wms_sec(self):
+        # https://securewatch.digitalglobe.com/mapservice/wmsaccess?connectid=
+        connectID = self.dlg.connectID.text()
+        url = 'https://securewatch.digitalglobe.com/mapservice/wmsaccess?' \
+              'VERSION=1.3.0&LAYERS=DigitalGlobe:Imagery&' \
+              'STYLES=&TRANSPARENT=true&' \
+              'HEIGHT=256&WIDTH=256&' \
+              'BGCOLOR=0xFFFFFF&' \
+              'CONNECTID=%s' \
+              '&FEATUREPROFILE=Default_Profile&' \
+              'FEATURECOLLECTION=50e566ce5459bd63588f4325c86b3c4a' \
+              '&USECLOUDLESSGEOMETRY=false&' \
+              'CRS=EPSG:3857' % (connectID)
+
+        self.dlg.line_server_2.setText(url)
+        self.dlg.comboBoxURLType.setCurrentIndex(2)
+
+        self.dlg.radioButton_2.setChecked(True)
+
+    #получить координаты охвата слоя
+    def extent(self):
+        vLayer = self.dlg.VMapLayerComboBox.currentLayer()  # векторный слой
+        srs_ext = str(vLayer.crs()).split(' ')[1][:-1] #получение проекции слоя
+        print(srs_ext)
+        vLayer.updateExtents()
+        e = vLayer.extent()  # .toString()
+        x = e.toString().split(' : ')
+        coordStr = ''
+        #перебор координат
+        for i in x:
+            z = i.split(',')
+            print(z)
+            #если проекции отличаются, то перепроицировать
+            if srs_ext != "EPSG:4326":
+                #перепроицирование
+                crsSrc = QgsCoordinateReferenceSystem(srs_ext)  # Исходная crs
+                crsDest = QgsCoordinateReferenceSystem("EPSG:4326")  # Целевая crs
+                transformContext = QgsProject.instance().transformContext()
+                xform = QgsCoordinateTransform(crsSrc, crsDest, transformContext)
+
+                # forward transformation: src -> dest
+                pt1 = xform.transform(QgsPointXY(float(z[0]), float(z[1])))
+                # собираем координаты в строку с правильным порядком и разделителями - запятыми
+                coordStr += str(pt1.y()) + ',' + str(pt1.x()) + ','
+
+            else:
+                coordStr += z[1] + ',' + z[0] + ','
+
+        print("Transformed point:", coordStr[:-1]) # отсекаем лишнюю запятую в конце строки.
+        return coordStr[:-1]
+# --------------------------
     # создание и настройка таблицы
     def makeTable(self):
         self.dlg.tableWidget.clear()
@@ -107,7 +250,7 @@ class Geoalert:
         # запретить редактировать таблицу пользователю
         self.dlg.tableWidget.setEditTriggers(QAbstractItemView.NoEditTriggers)
         # включить сортировку в таблице
-        self.dlg.tableWidget.setSortingEnabled(True)
+        # self.dlg.tableWidget.setSortingEnabled(True)
     # загрузка рабочей папки из настроек в интерфейс
     def get_output_file(self):
         s = QgsSettings()
@@ -217,10 +360,8 @@ class Geoalert:
                 nameL = os.path.basename(self.addres_tiff)[:-4]
                 #добавление растра в QGIS
                 self.iface.addRasterLayer(self.addres_tiff, nameL)
-
                 #заполнение комбобокса
                 self.comboImageS()
-
                 # поиск слоя по адресу файла
                 for n, nameS in enumerate(self.listLay):
                     # получение адреса файла
@@ -232,7 +373,6 @@ class Geoalert:
             else:
                 # обновляем весь список слоев
                 self.comboImageS()
-
         elif comId > 2:
             print(self.listLay[comId - 3][1].dataProvider().dataSourceUri())
         #     self.dlg.comboBox_satelit.setCurrentIndex(comId)
@@ -270,7 +410,7 @@ class Geoalert:
                     # print(name)
                     self.dlg.comboBox_satelit.addItem(name, id)
                     id += 1
-        print(self.listLay)
+        # print(self.listLay)
 
 
     # Выгрузить слой на сервер для обработки
@@ -356,7 +496,8 @@ class Geoalert:
         URL_up = self.server + "/rest/processings"
 
         meta = {"EPSG": "%s" % (projection_text),
-                "CACHE": "%s" % (cacheUP)}
+                "CACHE": "%s" % (cacheUP),
+                "source-app": "qgis"}
         # print(params)
         # print(meta)
         with open(file_adrG, "r") as read_file:
@@ -419,9 +560,11 @@ class Geoalert:
         urlWithParams = typeXYZ + url + min_max + login + password
         rlayer = QgsRasterLayer(urlWithParams, self.tr('User_servise ') + z_min + '-' + z_max, 'wms')
         QgsProject.instance().addMapLayer(rlayer)
-        #print('Загрузка пользовательских снимков')
 
-        # self.dlg.comboBox_satelit.setDisabled(False) # активация элемента
+        # сохраняем используемый адрес в настройки QGIS
+        surl = self.dlg.line_server_2.text()
+        self.saveSettings('urlImageProvider', surl)
+
 
     # загрузка слоя с сервера
     def addSucces(self):
@@ -541,6 +684,7 @@ class Geoalert:
                 #запуск потока
                 proc = Thread(target=self.button_con, args=(URL,))
                 proc.start()
+
     # циклическое переподключение к серверу для получения статусов обработок
     def button_con(self, URL):
         while self.flag == True:
@@ -558,23 +702,26 @@ class Geoalert:
             self.kol_tab = len(self.dictData) #количество элементов
             self.dlg.tableWidget.setRowCount(self.kol_tab)  # создаем строки таблицы
             # перебор в цикле элементов списка и ключей
-            nx = 0 #счетчик
+            #nx = 0 #счетчик
             self.flag = False
             self.listNameProc = []  # список названий обработок
-            for i in reversed(range(self.kol_tab)):
+            listProc = [] # список обработок в таблице
+            for i in range(self.kol_tab):
                 self.listNameProc.append(self.dictData[i]['name'])  # заполняем список названий обработок
-                #print(self.dictData[i]['projectId'])
-                statf = QTableWidgetItem(str(self.dictData[i]['percentCompleted'])+'%')
-                namef = QTableWidgetItem(self.dictData[i]['name'])
-                Status = QTableWidgetItem(self.dictData[i]['status'])
-                ids = QTableWidgetItem(self.dictData[i]['id'])
-                #дата и время создания
-                cre = self.dictData[i]['created']
-                cre2 = cre.split('T')
-                createf = QTableWidgetItem(cre2[0] + ' ' + cre2[1][:8])
+                    # #print(self.dictData[i]['projectId'])
+                    # statf = QTableWidgetItem(str(self.dictData[i]['percentCompleted'])+'%')
+                    # namef = QTableWidgetItem(self.dictData[i]['name'])
+                    # Status = QTableWidgetItem(self.dictData[i]['status'])
+                    # ids = QTableWidgetItem(self.dictData[i]['id'])
+                    # #дата и время создания
+                    # cre = self.dictData[i]['created']
+                    # cre2 = cre.split('T')
+                    # createf = QTableWidgetItem(cre2[0] + ' ' + cre2[1][:8])
 
-                if self.dictData[i]['status'] == "IN_PROGRESS": #если хоть одна задача в процессе выполнения
+                if self.dictData[i]['status'] == "IN_PROGRESS" or self.dictData[i]['status'] == "UNPROCESSED": #если хоть одна задача в процессе выполнения
                     self.flag = True #добавляем значение для обновления статуса
+                #print('-'*18)
+                #print(self.dictData[i])
 
                 # вывод всех значений
                 # spisok_znachen = ['id',
@@ -597,18 +744,36 @@ class Geoalert:
                 # print('-'*12)
 
                 # вписываем значения в соответствующие ячейки
+
+                listProc.append([self.dictData[i]['created'], self.dictData[i]['percentCompleted'], self.dictData[i]['name'], self.dictData[i]['status'], self.dictData[i]['id']]) # заполняем список параметров обработок
+
+            # сортировка обработок в в списке по дате в обратном порядке
+            listProc.sort(reverse = True)
+            # print(listProc)
+            for nx in range(len(listProc)):
+                statf = QTableWidgetItem(str(listProc[nx][1]) + '%')
+                namef = QTableWidgetItem(listProc[nx][2])
+                Status = QTableWidgetItem(listProc[nx][3])
+                ids = QTableWidgetItem(listProc[nx][4])
+                #дата и время создания
+                cre2 = listProc[nx][0].split('T')
+                createf = QTableWidgetItem(cre2[0] + ' ' + cre2[1][:8])
+                # построчная запись в таблицу
                 self.dlg.tableWidget.setItem(nx, 0, statf)
                 self.dlg.tableWidget.setItem(nx, 1, namef)
                 self.dlg.tableWidget.setItem(nx, 2, Status)
                 self.dlg.tableWidget.setItem(nx, 3, createf)
                 self.dlg.tableWidget.setItem(nx, 4, ids)
 
-                nx += 1
+            # print(listProc)
+            # print('------------------')
+            # print(sorted(listProc))
 
             if self.flag == True:
                 secn = 5 # задержка обновления в секундах
                 print('Обновление через', secn, 'секунд')
                 time.sleep(secn) # ожидание следующей итеррации
+
     # запись переменных в хранилилище настроек
     def storeSettings(self):
         print('сохранение настроек Geoalert')
@@ -625,11 +790,11 @@ class Geoalert:
             password = ''
             # сохраняем настройку чекбокса
             s.setValue("geoalert/checkPas_serv", False)
-        #кодируем в base64 и записываем в настройки
+        # и записываем в настройки
         s.setValue("geoalert/log", login)#unicode(b64encode(str.encode(login))))
         s.setValue("geoalert/pas", password)#unicode(b64encode(str.encode(password))))
     # чтение переменных из хранилища настроек
-    def readSettings(self):
+    def readSet(self):
         # доступ к настройкам
         s = QgsSettings()
         # если в настройках включен чекбокс,
@@ -657,7 +822,7 @@ class Geoalert:
             password = ''
             # сохраняем настройку чекбокса
             s.setValue("geoalert/checkSatelitPass", False)
-        # кодируем в base64 и записываем в настройки
+        # записываем в настройки
         s.setValue("geoalert/logMap", login)  # unicode(b64encode(str.encode(login))))
         s.setValue("geoalert/pasMap", password)  # unicode(b64encode(str.encode(password))))
     # чтение переменных из хранилища настроек
@@ -674,8 +839,27 @@ class Geoalert:
             self.dlg.line_login_3.setText(loginB64)  # b64decode(loginB64))
             self.dlg.mLinePassword_3.setText(passwordB64)  # b64decode(passwordB64))
 
-#############################################################
-#############################################################
+
+##############-----------------------------------------------------
+    # Запись и чтение настроек
+    def saveSettings(self, sVarName, sValue):
+        print('сохранение настроек')
+        # доступ к настройкам
+        s = QgsSettings()
+        # записываем в настройки (имя переменной и ее значение)
+        s.setValue("geoalert/" + sVarName, sValue)
+
+    # чтение переменных из хранилища настроек
+    def readSettings(self, sVarName):
+        # доступ к настройкам
+        s = QgsSettings()
+        # Возврат значения из настроек
+        sValue = s.value("geoalert/" + sVarName)
+        # если переменная существует и не пустая, то возвращаем ее значение
+        if sValue == None:
+            sValue = ''
+        return sValue
+
 #############################################################
     def tr(self, message):
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass

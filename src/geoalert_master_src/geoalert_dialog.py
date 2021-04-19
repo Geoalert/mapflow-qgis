@@ -16,5 +16,5 @@ class GeoalertDialog(QtWidgets.QDialog, FORM_CLASS):
 
         # комбобокс с выбором слоев
         self.mMapLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer) #фильтр полигональных полей
-        #self.mMapLayerComboBox.setFilters(QgsMapLayerProxyModel.HasGeometry) #фильтр векторных слоев
+        self.VMapLayerComboBox.setFilters(QgsMapLayerProxyModel.HasGeometry) #фильтр векторных слоев
         # self.vectorComboBox.setFilters(QgsMapLayerProxyModel.PointLayer) #фильтр точечных слоев
