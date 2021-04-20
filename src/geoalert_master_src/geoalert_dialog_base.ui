@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>649</width>
-    <height>512</height>
+    <height>519</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -20,7 +20,7 @@
    <item>
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
-      <number>1</number>
+      <number>0</number>
      </property>
      <widget class="QWidget" name="tab_2">
       <attribute name="title">
@@ -166,14 +166,15 @@
       <widget class="QCheckBox" name="checkUp">
        <property name="geometry">
         <rect>
-         <x>305</x>
-         <y>125</y>
-         <width>151</width>
-         <height>21</height>
+         <x>310</x>
+         <y>110</y>
+         <width>131</width>
+         <height>41</height>
         </rect>
        </property>
        <property name="text">
-        <string>Update image in cahe</string>
+        <string>Update image
+in cahe</string>
        </property>
       </widget>
       <widget class="QPushButton" name="ButtonDownload">
@@ -347,7 +348,7 @@
         <rect>
          <x>15</x>
          <y>160</y>
-         <width>46</width>
+         <width>51</width>
          <height>16</height>
         </rect>
        </property>
@@ -438,7 +439,7 @@
         <rect>
          <x>430</x>
          <y>155</y>
-         <width>151</width>
+         <width>166</width>
          <height>20</height>
         </rect>
        </property>
@@ -492,9 +493,9 @@
        <property name="geometry">
         <rect>
          <x>500</x>
-         <y>105</y>
+         <y>100</y>
          <width>96</width>
-         <height>16</height>
+         <height>21</height>
         </rect>
        </property>
        <property name="text">
@@ -504,9 +505,9 @@
       <widget class="QLabel" name="label_3">
        <property name="geometry">
         <rect>
-         <x>170</x>
+         <x>235</x>
          <y>95</y>
-         <width>226</width>
+         <width>286</width>
          <height>21</height>
         </rect>
        </property>
@@ -528,7 +529,7 @@
         <rect>
          <x>10</x>
          <y>95</y>
-         <width>156</width>
+         <width>191</width>
          <height>21</height>
         </rect>
        </property>
@@ -583,16 +584,6 @@
        <property name="frameShadow">
         <enum>QFrame::Raised</enum>
        </property>
-       <widget class="QgsMapLayerComboBox" name="VMapLayerComboBox">
-        <property name="geometry">
-         <rect>
-          <x>100</x>
-          <y>140</y>
-          <width>161</width>
-          <height>21</height>
-         </rect>
-        </property>
-       </widget>
        <widget class="QLabel" name="label_50">
         <property name="geometry">
          <rect>
@@ -619,33 +610,6 @@
          <string/>
         </property>
        </widget>
-       <widget class="QLabel" name="label_53">
-        <property name="geometry">
-         <rect>
-          <x>20</x>
-          <y>140</y>
-          <width>76</width>
-          <height>16</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Extent layer:</string>
-        </property>
-       </widget>
-       <widget class="QPushButton" name="ButWFS">
-        <property name="geometry">
-         <rect>
-          <x>100</x>
-          <y>165</y>
-          <width>161</width>
-          <height>46</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Загрузить границы снимков
-для охвата слоя</string>
-        </property>
-       </widget>
        <widget class="QPushButton" name="maxarStandartURL">
         <property name="geometry">
          <rect>
@@ -658,46 +622,6 @@
         <property name="text">
          <string>Get standart 
 layer Maxar</string>
-        </property>
-       </widget>
-       <widget class="QPushButton" name="butWMSurl">
-        <property name="geometry">
-         <rect>
-          <x>290</x>
-          <y>175</y>
-          <width>93</width>
-          <height>28</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>get wms url</string>
-        </property>
-       </widget>
-       <widget class="Line" name="line">
-        <property name="geometry">
-         <rect>
-          <x>5</x>
-          <y>75</y>
-          <width>391</width>
-          <height>16</height>
-         </rect>
-        </property>
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-       </widget>
-       <widget class="QLabel" name="label_51">
-        <property name="geometry">
-         <rect>
-          <x>25</x>
-          <y>85</y>
-          <width>311</width>
-          <height>51</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Эта часть не полностью работает. 
-Предполагается ее пока не включать в релиз</string>
         </property>
        </widget>
       </widget>
@@ -749,6 +673,56 @@ layer Maxar</string>
 imagery provider</string>
         </property>
        </widget>
+      </widget>
+      <widget class="QPushButton" name="butWMSurl">
+       <property name="geometry">
+        <rect>
+         <x>500</x>
+         <y>585</y>
+         <width>93</width>
+         <height>28</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>get wms url</string>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="ButWFS">
+       <property name="geometry">
+        <rect>
+         <x>310</x>
+         <y>575</y>
+         <width>161</width>
+         <height>46</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Загрузить границы снимков
+для охвата слоя</string>
+       </property>
+      </widget>
+      <widget class="QgsMapLayerComboBox" name="VMapLayerComboBox">
+       <property name="geometry">
+        <rect>
+         <x>310</x>
+         <y>550</y>
+         <width>161</width>
+         <height>21</height>
+        </rect>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_53">
+       <property name="geometry">
+        <rect>
+         <x>230</x>
+         <y>550</y>
+         <width>76</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Extent layer:</string>
+       </property>
       </widget>
      </widget>
     </widget>
