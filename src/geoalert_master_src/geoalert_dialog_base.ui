@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>649</width>
-    <height>519</height>
+    <width>654</width>
+    <height>521</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -614,14 +614,50 @@ in cahe</string>
         <property name="geometry">
          <rect>
           <x>275</x>
-          <y>10</y>
+          <y>5</y>
           <width>116</width>
-          <height>36</height>
+          <height>41</height>
          </rect>
         </property>
         <property name="text">
          <string>Get standart 
 layer Maxar</string>
+        </property>
+       </widget>
+       <widget class="QgsMapLayerComboBox" name="VMapLayerComboBox">
+        <property name="geometry">
+         <rect>
+          <x>90</x>
+          <y>90</y>
+          <width>161</width>
+          <height>21</height>
+         </rect>
+        </property>
+       </widget>
+       <widget class="QLabel" name="label_53">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>90</y>
+          <width>76</width>
+          <height>16</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Extent layer:</string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="ButWFS">
+        <property name="geometry">
+         <rect>
+          <x>105</x>
+          <y>115</y>
+          <width>146</width>
+          <height>36</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Get image boundaries</string>
         </property>
        </widget>
       </widget>
@@ -677,51 +713,14 @@ imagery provider</string>
       <widget class="QPushButton" name="butWMSurl">
        <property name="geometry">
         <rect>
-         <x>500</x>
-         <y>585</y>
+         <x>295</x>
+         <y>635</y>
          <width>93</width>
          <height>28</height>
         </rect>
        </property>
        <property name="text">
         <string>get wms url</string>
-       </property>
-      </widget>
-      <widget class="QPushButton" name="ButWFS">
-       <property name="geometry">
-        <rect>
-         <x>310</x>
-         <y>575</y>
-         <width>161</width>
-         <height>46</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Загрузить границы снимков
-для охвата слоя</string>
-       </property>
-      </widget>
-      <widget class="QgsMapLayerComboBox" name="VMapLayerComboBox">
-       <property name="geometry">
-        <rect>
-         <x>310</x>
-         <y>550</y>
-         <width>161</width>
-         <height>21</height>
-        </rect>
-       </property>
-      </widget>
-      <widget class="QLabel" name="label_53">
-       <property name="geometry">
-        <rect>
-         <x>230</x>
-         <y>550</y>
-         <width>76</width>
-         <height>16</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Extent layer:</string>
        </property>
       </widget>
      </widget>

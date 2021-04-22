@@ -72,10 +72,10 @@ class Geoalert:
         self.dlg.but_dir.clicked.connect(self.select_output_file)
         # ввести стандартную максаровскую ссылку
         self.dlg.maxarStandartURL.clicked.connect(self.maxarStandatr)
-
+        # всплывающие подсказки
+        self.tips()
 
         self.dlg.butWMSurl.clicked.connect(self.wms_sec)
-
 
         # чтение настроек логин/пароль
         self.readSet()
@@ -86,9 +86,6 @@ class Geoalert:
         # чтение настроек URL
         surl = self.readSettings('urlImageProvider')
         self.dlg.line_server_2.setText(surl)
-
-
-
 
         # чтение настроек логин/пароль для сервиса космоснимков
         self.readSettingsMap()
@@ -103,16 +100,40 @@ class Geoalert:
         #загрузка полей комбобокса
         self.comboImageS()
 
-
         # подключение слоя WFS
         self.dlg.ButWFS.clicked.connect(self.ButWFS)
         #self.dlg.ButExtent.clicked.connect(self.extent)
 
-
         # радиокнопки
         self.dlg.frame.setEnabled(False)
         self.dlg.radioButton.toggled.connect(self.con)
-# ------------------------------
+
+        # обновление списка слоев для выбора источника растра
+        upLayers = Thread(target=self.update_layer_list)
+        upLayers.start()
+
+    # ------------------------------
+        #Всплывающие подсказки
+    def tips(self):
+        self.dlg.line_login.setToolTip('Insert login for Mapflow')
+        self.dlg.mLinePassword.setToolTip('Insert password for Mapflow')
+
+    # обновление списка растров
+    # запускаем при старте
+    def update_layer_list(self ):
+        print('Старт потока-------------')
+        lenL = 0
+        while True:
+            #print('Старт проверки')
+            lenLayers = len(QgsProject.instance().mapLayers())
+            #print(lenL, lenLayers)
+            if lenL != lenLayers:
+                lenL = lenLayers #запоминаем значение для проверки в следующий раз
+                # обновление списков комбобокса
+                self.comboImageS()
+            # пауза перед повторной проверкой
+            time.sleep(6)
+
     def con(self):
         # срабатывание радиокнопок
         ch = self.dlg.radioButton.isChecked()
@@ -412,7 +433,6 @@ class Geoalert:
                     id += 1
         # print(self.listLay)
 
-
     # Выгрузить слой на сервер для обработки
     def uploadOnServer(self, iface):
         NewLayName = self.dlg.NewLayName.text()
@@ -564,7 +584,6 @@ class Geoalert:
         # сохраняем используемый адрес в настройки QGIS
         surl = self.dlg.line_server_2.text()
         self.saveSettings('urlImageProvider', surl)
-
 
     # загрузка слоя с сервера
     def addSucces(self):
@@ -838,7 +857,6 @@ class Geoalert:
             passwordB64 = s.value("geoalert/pasMap", "", type=str)
             self.dlg.line_login_3.setText(loginB64)  # b64decode(loginB64))
             self.dlg.mLinePassword_3.setText(passwordB64)  # b64decode(passwordB64))
-
 
 ##############-----------------------------------------------------
     # Запись и чтение настроек
