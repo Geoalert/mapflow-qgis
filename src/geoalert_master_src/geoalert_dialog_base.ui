@@ -366,7 +366,7 @@ in cahe</string>
         </rect>
        </property>
        <property name="text">
-        <string>Work directory on PC:</string>
+        <string>Destination folder:</string>
        </property>
       </widget>
       <widget class="QLineEdit" name="input_directory">
@@ -457,7 +457,7 @@ in cahe</string>
         </rect>
        </property>
        <property name="text">
-        <string>Geoalert server link:</string>
+        <string>Geoalert platform url:</string>
        </property>
       </widget>
       <widget class="QLineEdit" name="line_server">
@@ -505,14 +505,14 @@ in cahe</string>
       <widget class="QLabel" name="label_3">
        <property name="geometry">
         <rect>
-         <x>235</x>
-         <y>95</y>
-         <width>286</width>
+         <x>375</x>
+         <y>190</y>
+         <width>291</width>
          <height>21</height>
         </rect>
        </property>
        <property name="text">
-        <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://securewatchdocs.maxar.com/en-us/Miscellaneous/DevGuides/MapsAPI/Examples/arcgisonline.htm?Highlight=TMS&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;how to connect to Maxar Securewatch?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
        </property>
        <property name="textFormat">
         <enum>Qt::AutoText</enum>
@@ -534,7 +534,7 @@ in cahe</string>
         </rect>
        </property>
        <property name="text">
-        <string>Add satellite imagery provider:</string>
+        <string>Imagery provider URL:</string>
        </property>
       </widget>
       <widget class="QRadioButton" name="radioButton">
@@ -542,7 +542,7 @@ in cahe</string>
         <rect>
          <x>200</x>
          <y>190</y>
-         <width>141</width>
+         <width>161</width>
          <height>20</height>
         </rect>
        </property>
@@ -610,25 +610,11 @@ in cahe</string>
          <string/>
         </property>
        </widget>
-       <widget class="QPushButton" name="maxarStandartURL">
-        <property name="geometry">
-         <rect>
-          <x>275</x>
-          <y>5</y>
-          <width>116</width>
-          <height>41</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Get standart 
-layer Maxar</string>
-        </property>
-       </widget>
        <widget class="QgsMapLayerComboBox" name="VMapLayerComboBox">
         <property name="geometry">
          <rect>
           <x>90</x>
-          <y>90</y>
+          <y>100</y>
           <width>161</width>
           <height>21</height>
          </rect>
@@ -638,26 +624,59 @@ layer Maxar</string>
         <property name="geometry">
          <rect>
           <x>10</x>
-          <y>90</y>
+          <y>100</y>
           <width>76</width>
           <height>16</height>
          </rect>
         </property>
         <property name="text">
-         <string>Extent layer:</string>
+         <string>AOI layer:</string>
         </property>
        </widget>
        <widget class="QPushButton" name="ButWFS">
         <property name="geometry">
          <rect>
-          <x>105</x>
-          <y>115</y>
-          <width>146</width>
-          <height>36</height>
+          <x>280</x>
+          <y>90</y>
+          <width>111</width>
+          <height>51</height>
          </rect>
         </property>
         <property name="text">
-         <string>Get image boundaries</string>
+         <string>Get image 
+metadata</string>
+        </property>
+       </widget>
+       <widget class="QCheckBox" name="checkSatelit_Z14">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>50</y>
+          <width>136</width>
+          <height>20</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>max zoom 14</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="Button_view">
+        <property name="geometry">
+         <rect>
+          <x>280</x>
+          <y>10</y>
+          <width>111</width>
+          <height>41</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Preview</string>
         </property>
        </widget>
       </widget>
@@ -676,37 +695,17 @@ layer Maxar</string>
        <property name="frameShadow">
         <enum>QFrame::Raised</enum>
        </property>
-       <widget class="QCheckBox" name="checkSatelit_Z14">
-        <property name="enabled">
-         <bool>true</bool>
-        </property>
+       <widget class="QPushButton" name="maxarStandartURL">
         <property name="geometry">
          <rect>
-          <x>10</x>
-          <y>20</y>
-          <width>136</width>
-          <height>20</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>use z0-z14</string>
-        </property>
-        <property name="checked">
-         <bool>true</bool>
-        </property>
-       </widget>
-       <widget class="QPushButton" name="Button_view">
-        <property name="geometry">
-         <rect>
-          <x>5</x>
-          <y>45</y>
-          <width>151</width>
+          <x>20</x>
+          <y>10</y>
+          <width>116</width>
           <height>41</height>
          </rect>
         </property>
         <property name="text">
-         <string>Connect to satellite
-imagery provider</string>
+         <string>Preview</string>
         </property>
        </widget>
       </widget>
