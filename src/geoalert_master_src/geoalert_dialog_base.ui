@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>654</width>
-    <height>521</height>
+    <height>529</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -305,8 +305,8 @@ in cahe</string>
       <widget class="QLabel" name="label_45">
        <property name="geometry">
         <rect>
-         <x>215</x>
-         <y>160</y>
+         <x>205</x>
+         <y>185</y>
          <width>71</width>
          <height>16</height>
         </rect>
@@ -318,7 +318,7 @@ in cahe</string>
       <widget class="QComboBox" name="comboBoxURLType">
        <property name="geometry">
         <rect>
-         <x>500</x>
+         <x>380</x>
          <y>120</y>
          <width>91</width>
          <height>21</height>
@@ -346,9 +346,9 @@ in cahe</string>
       <widget class="QLabel" name="label_46">
        <property name="geometry">
         <rect>
-         <x>15</x>
-         <y>160</y>
-         <width>51</width>
+         <x>10</x>
+         <y>185</y>
+         <width>56</width>
          <height>16</height>
         </rect>
        </property>
@@ -366,7 +366,7 @@ in cahe</string>
         </rect>
        </property>
        <property name="text">
-        <string>Work directory on PC:</string>
+        <string>Destination folder:</string>
        </property>
       </widget>
       <widget class="QLineEdit" name="input_directory">
@@ -385,8 +385,8 @@ in cahe</string>
       <widget class="QgsPasswordLineEdit" name="mLinePassword_3">
        <property name="geometry">
         <rect>
-         <x>285</x>
-         <y>155</y>
+         <x>275</x>
+         <y>180</y>
          <width>126</width>
          <height>21</height>
         </rect>
@@ -411,8 +411,8 @@ in cahe</string>
       <widget class="QLineEdit" name="line_login_3">
        <property name="geometry">
         <rect>
-         <x>80</x>
-         <y>155</y>
+         <x>70</x>
+         <y>180</y>
          <width>126</width>
          <height>21</height>
         </rect>
@@ -426,7 +426,7 @@ in cahe</string>
         <rect>
          <x>10</x>
          <y>120</y>
-         <width>481</width>
+         <width>361</width>
          <height>21</height>
         </rect>
        </property>
@@ -437,8 +437,8 @@ in cahe</string>
       <widget class="QCheckBox" name="checkSatelitPass">
        <property name="geometry">
         <rect>
-         <x>430</x>
-         <y>155</y>
+         <x>410</x>
+         <y>180</y>
          <width>166</width>
          <height>20</height>
         </rect>
@@ -457,7 +457,7 @@ in cahe</string>
         </rect>
        </property>
        <property name="text">
-        <string>Geoalert server link:</string>
+        <string>Geoalert platform url:</string>
        </property>
       </widget>
       <widget class="QLineEdit" name="line_server">
@@ -492,8 +492,8 @@ in cahe</string>
       <widget class="QLabel" name="label_29">
        <property name="geometry">
         <rect>
-         <x>500</x>
-         <y>100</y>
+         <x>380</x>
+         <y>95</y>
          <width>96</width>
          <height>21</height>
         </rect>
@@ -502,68 +502,17 @@ in cahe</string>
         <string>Raster tile type:</string>
        </property>
       </widget>
-      <widget class="QLabel" name="label_3">
-       <property name="geometry">
-        <rect>
-         <x>235</x>
-         <y>95</y>
-         <width>286</width>
-         <height>21</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://securewatchdocs.maxar.com/en-us/Miscellaneous/DevGuides/MapsAPI/Examples/arcgisonline.htm?Highlight=TMS&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;how to connect to Maxar Securewatch?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-       </property>
-       <property name="textFormat">
-        <enum>Qt::AutoText</enum>
-       </property>
-       <property name="wordWrap">
-        <bool>true</bool>
-       </property>
-       <property name="openExternalLinks">
-        <bool>true</bool>
-       </property>
-      </widget>
       <widget class="QLabel" name="label_34">
        <property name="geometry">
         <rect>
          <x>10</x>
          <y>95</y>
-         <width>191</width>
+         <width>251</width>
          <height>21</height>
         </rect>
        </property>
        <property name="text">
-        <string>Add satellite imagery provider:</string>
-       </property>
-      </widget>
-      <widget class="QRadioButton" name="radioButton">
-       <property name="geometry">
-        <rect>
-         <x>200</x>
-         <y>190</y>
-         <width>141</width>
-         <height>20</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Maxar  Securewatch:</string>
-       </property>
-      </widget>
-      <widget class="QRadioButton" name="radioButton_2">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>190</y>
-         <width>95</width>
-         <height>20</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Custom</string>
-       </property>
-       <property name="checked">
-        <bool>true</bool>
+        <string>Custom Imagery provider URL:*</string>
        </property>
       </widget>
       <widget class="QFrame" name="frame">
@@ -572,10 +521,10 @@ in cahe</string>
        </property>
        <property name="geometry">
         <rect>
-         <x>200</x>
-         <y>215</y>
-         <width>411</width>
-         <height>221</height>
+         <x>10</x>
+         <y>270</y>
+         <width>491</width>
+         <height>126</height>
         </rect>
        </property>
        <property name="frameShape">
@@ -589,12 +538,12 @@ in cahe</string>
          <rect>
           <x>10</x>
           <y>15</y>
-          <width>76</width>
+          <width>81</width>
           <height>16</height>
          </rect>
         </property>
         <property name="text">
-         <string>Connect ID:</string>
+         <string>Connect ID:*</string>
         </property>
        </widget>
        <widget class="QLineEdit" name="connectID">
@@ -602,7 +551,7 @@ in cahe</string>
          <rect>
           <x>90</x>
           <y>15</y>
-          <width>161</width>
+          <width>201</width>
           <height>21</height>
          </rect>
         </property>
@@ -610,26 +559,12 @@ in cahe</string>
          <string/>
         </property>
        </widget>
-       <widget class="QPushButton" name="maxarStandartURL">
-        <property name="geometry">
-         <rect>
-          <x>275</x>
-          <y>5</y>
-          <width>116</width>
-          <height>41</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Get standart 
-layer Maxar</string>
-        </property>
-       </widget>
        <widget class="QgsMapLayerComboBox" name="VMapLayerComboBox">
         <property name="geometry">
          <rect>
           <x>90</x>
-          <y>90</y>
-          <width>161</width>
+          <y>75</y>
+          <width>201</width>
           <height>21</height>
          </rect>
         </property>
@@ -638,75 +573,40 @@ layer Maxar</string>
         <property name="geometry">
          <rect>
           <x>10</x>
-          <y>90</y>
+          <y>75</y>
           <width>76</width>
           <height>16</height>
          </rect>
         </property>
         <property name="text">
-         <string>Extent layer:</string>
+         <string>AOI layer:</string>
         </property>
        </widget>
        <widget class="QPushButton" name="ButWFS">
         <property name="geometry">
          <rect>
-          <x>105</x>
-          <y>115</y>
-          <width>146</width>
-          <height>36</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Get image boundaries</string>
-        </property>
-       </widget>
-      </widget>
-      <widget class="QFrame" name="frame_2">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>215</y>
-         <width>171</width>
-         <height>221</height>
-        </rect>
-       </property>
-       <property name="frameShape">
-        <enum>QFrame::StyledPanel</enum>
-       </property>
-       <property name="frameShadow">
-        <enum>QFrame::Raised</enum>
-       </property>
-       <widget class="QCheckBox" name="checkSatelit_Z14">
-        <property name="enabled">
-         <bool>true</bool>
-        </property>
-        <property name="geometry">
-         <rect>
-          <x>10</x>
-          <y>20</y>
-          <width>136</width>
-          <height>20</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>use z0-z14</string>
-        </property>
-        <property name="checked">
-         <bool>true</bool>
-        </property>
-       </widget>
-       <widget class="QPushButton" name="Button_view">
-        <property name="geometry">
-         <rect>
-          <x>5</x>
-          <y>45</y>
-          <width>151</width>
+          <x>330</x>
+          <y>65</y>
+          <width>116</width>
           <height>41</height>
          </rect>
         </property>
         <property name="text">
-         <string>Connect to satellite
-imagery provider</string>
+         <string>Get image 
+metadata</string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="maxarStandartURL">
+        <property name="geometry">
+         <rect>
+          <x>330</x>
+          <y>10</y>
+          <width>116</width>
+          <height>31</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Get URL</string>
         </property>
        </widget>
       </widget>
@@ -723,6 +623,84 @@ imagery provider</string>
         <string>get wms url</string>
        </property>
       </widget>
+      <widget class="QCheckBox" name="checkSatelit_Z14">
+       <property name="enabled">
+        <bool>true</bool>
+       </property>
+       <property name="geometry">
+        <rect>
+         <x>485</x>
+         <y>150</y>
+         <width>121</width>
+         <height>20</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>max zoom 14</string>
+       </property>
+       <property name="checked">
+        <bool>true</bool>
+       </property>
+      </widget>
+      <widget class="QCheckBox" name="checkMaxar">
+       <property name="enabled">
+        <bool>true</bool>
+       </property>
+       <property name="geometry">
+        <rect>
+         <x>15</x>
+         <y>240</y>
+         <width>176</width>
+         <height>20</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Maxar Securewatch:</string>
+       </property>
+       <property name="checked">
+        <bool>false</bool>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_3">
+       <property name="geometry">
+        <rect>
+         <x>190</x>
+         <y>240</y>
+         <width>186</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+       </property>
+       <property name="textFormat">
+        <enum>Qt::AutoText</enum>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+       <property name="openExternalLinks">
+        <bool>true</bool>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="Button_view">
+       <property name="geometry">
+        <rect>
+         <x>485</x>
+         <y>115</y>
+         <width>111</width>
+         <height>31</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Preview</string>
+       </property>
+      </widget>
+     </widget>
+     <widget class="QWidget" name="tab">
+      <attribute name="title">
+       <string>Help</string>
+      </attribute>
      </widget>
     </widget>
    </item>

@@ -79,16 +79,20 @@ class Geoalert:
 
         # чтение настроек логин/пароль
         self.readSet()
-
         #чтение connect ID
         connectID = self.readSettings('connectID')
         self.dlg.connectID.setText(connectID)
         # чтение настроек URL
         surl = self.readSettings('urlImageProvider')
         self.dlg.line_server_2.setText(surl)
-
         # чтение настроек логин/пароль для сервиса космоснимков
         self.readSettingsMap()
+
+        # чекбокс максар
+        self.dlg.checkMaxar.clicked.connect(self.con)
+        # дизейблим фрейм на старте
+        self.dlg.frame.setEnabled(False)
+
         # чекбокс сохранения логин и пароль для сервиса космоснимков
         self.dlg.checkSatelitPass.clicked.connect(self.storeSettingsMap)
         # чекбокс сохранения логин и пароль для Geoalert
@@ -103,10 +107,6 @@ class Geoalert:
         # подключение слоя WFS
         self.dlg.ButWFS.clicked.connect(self.ButWFS)
         #self.dlg.ButExtent.clicked.connect(self.extent)
-
-        # радиокнопки
-        self.dlg.frame.setEnabled(False)
-        self.dlg.radioButton.toggled.connect(self.con)
 
         # обновление списка слоев для выбора источника растра
         upLayers = Thread(target=self.update_layer_list)
@@ -135,15 +135,9 @@ class Geoalert:
             time.sleep(6)
 
     def con(self):
-        # срабатывание радиокнопок
-        ch = self.dlg.radioButton.isChecked()
+        # срабатывание чекбокса
+        ch = self.dlg.checkMaxar.isChecked()
         self.dlg.frame.setEnabled(ch)  # включение/отключение элемента
-        #обраное значение для второго элемента
-        if ch == True:
-            ch = False
-        else:
-            ch = True
-        self.dlg.frame_2.setEnabled(ch)
 
     def ButWFS(self):
         # получаем введенный логин и праоль
@@ -181,6 +175,28 @@ class Geoalert:
         vlayer_temp = QgsVectorLayer(file_temp, 'WFS_temp', "ogr")
         QgsProject.instance().addMapLayer(vlayer_temp)
 
+        # подключаем стиль!!!!!!!!!!!!!!!!!!
+        style = '/styles/style_defoult.qml'
+
+        qml_path = self.plugin_dir + style
+        print(qml_path)
+        layer = self.iface.activeLayer()#активный слой
+        style_manager = layer.styleManager()
+        # read valid style from layer
+        style = QgsMapLayerStyle()
+        style.readFromLayer(layer)
+        # get style name from file
+        style_name = os.path.basename(qml_path).strip('.qml')
+        # add style with new name
+        style_manager.addStyle(style_name, style)
+        # set new style as current
+        style_manager.setCurrentStyle(style_name)
+        # load qml to current style
+        (message, success) = layer.loadNamedStyle(qml_path)
+        print(message)
+        if not success:  # if style not loaded remove it
+            style_manager.removeStyle(style_name)
+
     # вставляем стандартную ссылку максар в поле адреса
     def maxarStandatr(self):
         connectID = self.dlg.connectID.text()
@@ -194,7 +210,7 @@ class Geoalert:
         self.dlg.line_server_2.setText(url)
         self.dlg.comboBoxURLType.setCurrentIndex(0)
 
-        self.dlg.radioButton_2.setChecked(True)
+        #self.dlg.radioButton_2.setChecked(True)
 
         # сохрангить ID
         self.saveSettings('connectID', connectID)
@@ -254,7 +270,7 @@ class Geoalert:
     # создание и настройка таблицы
     def makeTable(self):
         self.dlg.tableWidget.clear()
-        stolbci = [u" Processing", u"Name", u"Status", u"Сreated", u"ID"]
+        stolbci = [u" Processing", u"Name", u"Status", u"Сreated", u"ID", u"AI model"]
         StolbKol = len(stolbci)  # 4#количество столбцов
         self.dlg.tableWidget.setColumnCount(StolbKol)  # создаем столбцы
         self.dlg.tableWidget.setHorizontalHeaderLabels(stolbci)  # даем названия столбцам
@@ -264,7 +280,8 @@ class Geoalert:
             self.dlg.tableWidget.horizontalHeaderItem(nom).setTextAlignment(Qt.AlignCenter)
         # указываем ширину столбцов
         self.dlg.tableWidget.setColumnWidth(0, 80)
-        self.dlg.tableWidget.setColumnWidth(1, 200)
+        self.dlg.tableWidget.setColumnWidth(1, 150)
+        self.dlg.tableWidget.setColumnWidth(2, 80)
         self.dlg.tableWidget.setColumnWidth(4, 50)
         # выделять всю строку при нажатии
         self.dlg.tableWidget.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -304,6 +321,7 @@ class Geoalert:
                 # print(wfd)
                 try:
                     self.dlg.comboBoxTypeProc.addItem(wfd[1]['name'])
+                    print(wfd[1]['name'])
                     # if wfd[0] == 0: #устанавливаем выбранным первый пункт в списке
                     #     self.dlg.comboBoxTypeProc.setText(wfd[1]['name'])
                 except:
@@ -655,6 +673,42 @@ class Geoalert:
                 print("Layer failed to load!")
             # Загрузка файла в окно qgis
             QgsProject.instance().addMapLayer(vlayer)
+
+            #---- подключение стилей
+            # определяем какой стиль подключить к слою
+            WFDef = self.listProc[row][5] # название дефенишинса
+            if WFDef == 'Buildings Detection' or WFDef == 'Buildings Detection With Heights':
+                style = '/styles/style_buildings.qml'
+            elif WFDef == 'Forest Detection':
+                style = '/styles/style_forest.qml'
+            elif WFDef == 'Forest Detection With Heights':
+                style = '/styles/style_forest_with_heights.qml'
+            elif WFDef == 'Roads Detection':
+                style = '/styles/style_roads.qml'
+            else:
+                style = '/styles/style_defoult.qml'
+
+            # подключаем стиль!!!!!!!!!!!!!!!!!!
+            qml_path = self.plugin_dir + style
+            print(qml_path)
+            layer = self.iface.activeLayer()
+            style_manager = layer.styleManager()
+            # read valid style from layer
+            style = QgsMapLayerStyle()
+            style.readFromLayer(layer)
+            # get style name from file
+            style_name = os.path.basename(qml_path).strip('.qml')
+            # add style with new name
+            style_manager.addStyle(style_name, style)
+            # set new style as current
+            style_manager.setCurrentStyle(style_name)
+            # load qml to current style
+            (message, success) = layer.loadNamedStyle(qml_path)
+            print(message)
+            if not success:  # if style not loaded remove it
+                style_manager.removeStyle(style_name)
+
+            #----
             time.sleep(1)
             qgis.utils.iface.zoomToActiveLayer()  # приблизить к охвату активного слоя
             try:
@@ -673,7 +727,7 @@ class Geoalert:
     def button_connect(self): # подключение и обновление в отдельном процессе
         #проверка рабочей папки
         if os.path.exists(self.dlg.input_directory.text()) != True:
-            infoString = self.tr('The working direktory was not found. Specify the direktory folder.')
+            infoString = self.tr('The working direktory was not found. \nSpecify the direktory folder. (In settings)')
             self.messege(infoString)
         else:
             # сохранить/сбросить пароль
@@ -724,7 +778,7 @@ class Geoalert:
             #nx = 0 #счетчик
             self.flag = False
             self.listNameProc = []  # список названий обработок
-            listProc = [] # список обработок в таблице
+            self.listProc = [] # список обработок в таблице
             for i in range(self.kol_tab):
                 self.listNameProc.append(self.dictData[i]['name'])  # заполняем список названий обработок
                     # #print(self.dictData[i]['projectId'])
@@ -742,7 +796,7 @@ class Geoalert:
                 #print('-'*18)
                 #print(self.dictData[i])
 
-                # вывод всех значений
+                # # вывод всех значений
                 # spisok_znachen = ['id',
                 #                   'name',
                 #                   'projectId',
@@ -762,20 +816,29 @@ class Geoalert:
                 #     print(x + ': ', self.dictData[i][x], )
                 # print('-'*12)
 
-                # вписываем значения в соответствующие ячейки
+                #print(self.dictData[i]['workflowDef']['name'])
 
-                listProc.append([self.dictData[i]['created'], self.dictData[i]['percentCompleted'], self.dictData[i]['name'], self.dictData[i]['status'], self.dictData[i]['id']]) # заполняем список параметров обработок
+                # вписываем значения в список для сортировке по дате и времени
+                self.listProc.append([self.dictData[i]['created'],
+                                      self.dictData[i]['percentCompleted'],
+                                      self.dictData[i]['name'], self.dictData[i]['status'],
+                                      self.dictData[i]['id'],
+                                      self.dictData[i]['workflowDef']['name']])
 
             # сортировка обработок в в списке по дате в обратном порядке
-            listProc.sort(reverse = True)
+            self.listProc.sort(reverse = True)
             # print(listProc)
-            for nx in range(len(listProc)):
-                statf = QTableWidgetItem(str(listProc[nx][1]) + '%')
-                namef = QTableWidgetItem(listProc[nx][2])
-                Status = QTableWidgetItem(listProc[nx][3])
-                ids = QTableWidgetItem(listProc[nx][4])
+            # заполнение таблицы значениями
+            for nx in range(len(self.listProc)):
+                statf = QTableWidgetItem(str(self.listProc[nx][1]) + '%')
+                namef = QTableWidgetItem(self.listProc[nx][2])
+                Status = QTableWidgetItem(self.listProc[nx][3])
+                ids = QTableWidgetItem(self.listProc[nx][4])
+                #название сценария обработки
+                WFDef = QTableWidgetItem(self.listProc[nx][5])
+
                 #дата и время создания
-                cre2 = listProc[nx][0].split('T')
+                cre2 = self.listProc[nx][0].split('T')
                 createf = QTableWidgetItem(cre2[0] + ' ' + cre2[1][:8])
                 # построчная запись в таблицу
                 self.dlg.tableWidget.setItem(nx, 0, statf)
@@ -783,15 +846,14 @@ class Geoalert:
                 self.dlg.tableWidget.setItem(nx, 2, Status)
                 self.dlg.tableWidget.setItem(nx, 3, createf)
                 self.dlg.tableWidget.setItem(nx, 4, ids)
-
-            # print(listProc)
-            # print('------------------')
-            # print(sorted(listProc))
+                self.dlg.tableWidget.setItem(nx, 5, WFDef)
 
             if self.flag == True:
                 secn = 5 # задержка обновления в секундах
                 print('Обновление через', secn, 'секунд')
                 time.sleep(secn) # ожидание следующей итеррации
+            else:
+                print('Нет выполняющихся обработок')
 
     # запись переменных в хранилилище настроек
     def storeSettings(self):
