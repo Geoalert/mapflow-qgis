@@ -470,13 +470,14 @@ class Geoalert:
                                                 duration=15)
 
             if ph_satel == 0: #Mapbox Satellite
-                url_xyz = ''
+                # url_xyz = ''
                 proj_EPSG = 'epsg:3857'
-                params = {"source_type": "xyz",
-                          "url": "%s" % (url_xyz),
-                          "cache_raster": "%s" % (cacheUP),
-                          "zoom": "18",
-                          "projection": "%s" % (proj_EPSG)}  # Проекция
+                params = {#"source_type": "xyz",
+                          # "url": "%s" % (url_xyz), не передаем url
+                          #"cache_raster": "%s" % (cacheUP),
+                          #"zoom": "18",
+                          #"projection": "%s" % (proj_EPSG)
+                            }  # Проекция
                 self.upOnServ_proc(params)
             elif ph_satel == 1: #Custom
                 infoString = "Поставщиком космических снимков может взыматься плата за их использование!"
@@ -533,9 +534,16 @@ class Geoalert:
 
         URL_up = self.server + "/rest/processings"
 
-        meta = {"EPSG": "%s" % (projection_text),
-                "CACHE": "%s" % (cacheUP),
-                "source-app": "qgis"}
+        try:
+            urlt = params['url']
+            meta = {"EPSG": "%s" % (projection_text),
+                    "CACHE": "%s" % (cacheUP),
+                    "source": "mapbox",
+                    "source-app": "qgis"}
+        except:
+            meta = {"EPSG": "%s" % (projection_text),
+                    "CACHE": "%s" % (cacheUP),
+                    "source-app": "qgis"}
         # print(params)
         # print(meta)
         with open(file_adrG, "r") as read_file:
@@ -555,11 +563,13 @@ class Geoalert:
 
         bodyUp = '{ "name": "%s", "wdName": "%s", "geometry": %s, "params": %s, "meta": %s}' \
                  % (NewLayName, proc, GeomJ, params, meta)
+
+        print(bodyUp)
         bodyUp = bodyUp.encode('utf-8')
 
         rpost = requests.request("POST", url=URL_up, data=bodyUp, headers=self.headers)
         print(rpost.text)
-        print(rpost.status_code)
+        #print(rpost.status_code)
 
         self.dlg.NewLayName.clear()  # очистить поле имени
 
@@ -850,7 +860,7 @@ class Geoalert:
 
             if self.flag == True:
                 secn = 5 # задержка обновления в секундах
-                print('Обновление через', secn, 'секунд')
+                # print('Обновление через', secn, 'секунд')
                 time.sleep(secn) # ожидание следующей итеррации
             else:
                 print('Нет выполняющихся обработок')
