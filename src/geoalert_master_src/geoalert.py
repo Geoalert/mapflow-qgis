@@ -461,8 +461,7 @@ class Geoalert:
             #print(ph_satel)
             # чекбокс (обновить кеш)
             cacheUP = str(self.dlg.checkUp.isChecked())
-
-            print(cacheUP)
+            #print(cacheUP)
 
             #всплывающее сообщение
             self.iface.messageBar().pushMessage("Massage", "Please, wait. Uploading a file to the server...",
@@ -739,6 +738,9 @@ class Geoalert:
         if os.path.exists(self.dlg.input_directory.text()) != True:
             infoString = self.tr('The working direktory was not found. \nSpecify the direktory folder. (In settings)')
             self.messege(infoString)
+            # окно выбора рабочей папки
+            self.select_output_file()
+
         else:
             # сохранить/сбросить пароль
             self.storeSettings()
@@ -930,7 +932,6 @@ class Geoalert:
             self.dlg.line_login_3.setText(loginB64)  # b64decode(loginB64))
             self.dlg.mLinePassword_3.setText(passwordB64)  # b64decode(passwordB64))
 
-##############-----------------------------------------------------
     # Запись и чтение настроек
     def saveSettings(self, sVarName, sValue):
         print('сохранение настроек')
