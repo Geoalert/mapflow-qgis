@@ -176,7 +176,7 @@ class Geoalert:
         QgsProject.instance().addMapLayer(vlayer_temp)
 
         # подключаем стиль!!!!!!!!!!!!!!!!!!
-        style = '/styles/style_defoult.qml'
+        style = '/styles/style_default.qml'
 
         qml_path = self.plugin_dir + style
         print(qml_path)
