@@ -1,5 +1,5 @@
   <plugins>
-<pyqgis_plugin name="Geoalert QGIS">
+<pyqgis_plugin name="Geoalert QGIS" version="1.3" date="12.05.21" plugin_id="0">
 <description>
 <![CDATA[ Описание ]]>
 </description>
@@ -23,7 +23,7 @@
 <![CDATA[ -- ]]>
 </uploaded_by>
 <create_date>2020-08-22T20:00:00.000000</create_date>
-<update_date>2021-05-11T13:00:00.000000</update_date>
+<update_date>2020-05-12T13:00:00.000000</update_date>
 <experimental>False</experimental>
 <deprecated>False</deprecated>
 <tags>
