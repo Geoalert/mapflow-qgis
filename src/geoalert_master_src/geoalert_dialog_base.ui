@@ -147,7 +147,7 @@
         <rect>
          <x>142</x>
          <y>12</y>
-         <width>109</width>
+         <width>151</width>
          <height>21</height>
         </rect>
        </property>
@@ -208,7 +208,7 @@
         <rect>
          <x>142</x>
          <y>47</y>
-         <width>109</width>
+         <width>151</width>
          <height>21</height>
         </rect>
        </property>
@@ -321,7 +321,7 @@
       <widget class="QCheckBox" name="savePass_serv">
        <property name="geometry">
         <rect>
-         <x>280</x>
+         <x>300</x>
          <y>30</y>
          <width>155</width>
          <height>20</height>
