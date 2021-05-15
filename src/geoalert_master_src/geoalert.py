@@ -150,7 +150,7 @@ class Geoalert:
         # получить номер выбранной строки в таблице!
         row = self.dlg.tabListRast.currentIndex().row()
         print(row)
-        id_v = self.dlg.tabListRast.model().index(row, 5).data()
+        id_v = self.dlg.tabListRast.model().index(row, 4).data()
         print(id_v)
         self.dlg.featureID.setText(str(id_v))
 
@@ -203,11 +203,16 @@ class Geoalert:
             # проверка на векторность
             if nType == 0:
                 # получаем один объект из слоя для определения полигонального слоя
-                features = QgsProject.instance().mapLayers()[i].getFeatures()
-                for feature in features:
-                    # определяем тип геометрии по первому объекту
-                    geom = feature.geometry()
-                    break
+                try:
+                    features = QgsProject.instance().mapLayers()[i].getFeatures()
+                    for feature in features:
+                        # определяем тип геометрии по первому объекту
+                        geom = feature.geometry()
+                        break
+                # в случае если слой пустой, пропускаем его
+                except:
+                    print('пропуск пустого слоя')
+                    continue
                 # если тип = полигон
                 if geom.type() == QgsWkbTypes.PolygonGeometry:
                     # добавляем название и вектор в список
@@ -383,11 +388,22 @@ class Geoalert:
         # очистка таблицы
         self.dlg.tabListRast.clear()
         # названия столбцов
-        stolbci = []
+        stolbci = ['featureId', 'sourceUnit', 'productType', 'colorBandOrder', 'formattedDate']
+
+        listN = []
+        # ищем номера столбцов по названиям
+        for i in range(len(stolbci)):
+            for n in range(len(nameFields)):
+                if stolbci[i] == nameFields[n]:
+                    print(stolbci[i], n)
+                    listN.append(n)
+        #print(listN)
+
+        stolbci= []# обнуляем, дальше код заполнит их сам
         # содержимое столбцов
         attrStolb = []
         # список номерв столбцов, которые нужно добавить в таблицу
-        listN = [1,4,6,7,17,24]
+        #listN = [1,4,6,7,17,24]
         # выбираем только нужные столбцы и добавляем их в отдельные списки
         # перебор атрибутов всех объектов
         for fi in attrFields:
@@ -404,7 +420,7 @@ class Geoalert:
         # print(stolbci)
         # сортировка обработок в в списке по дате в обратном порядке
         attrStolb.sort(reverse=True)
-        print(attrStolb)
+        #print(attrStolb)
         # количество столбцов
         StolbKol = len(stolbci)
         self.dlg.tabListRast.setColumnCount(StolbKol)  # создаем столбцы
@@ -413,13 +429,8 @@ class Geoalert:
         for nom in range(StolbKol):
             # Устанавливаем выравнивание на заголовки
             self.dlg.tabListRast.horizontalHeaderItem(nom).setTextAlignment(Qt.AlignCenter)
-
         # указываем ширину столбцов
-        # self.dlg.tableWidget.setColumnWidth(0, 80)
-        # self.dlg.tableWidget.setColumnWidth(1, 150)
-        # self.dlg.tableWidget.setColumnWidth(2, 80)
-        # self.dlg.tableWidget.setColumnWidth(4, 50)
-
+        # self.dlg.tabListRast.setColumnWidth(0, 80)
         # выделять всю строку при нажатии
         self.dlg.tabListRast.setSelectionBehavior(QAbstractItemView.SelectRows)
         # запретить редактировать таблицу пользователю
