@@ -269,9 +269,10 @@ class Geoalert:
         QgsProject.instance().addMapLayer(vlayer_temp)
 
         # подключаем стиль!!!!!!!!!!!!!!!!!!
-        style = '/styles/style_defoult.qml'
+        style = '/styles/style_wfs.qml'
 
         qml_path = self.plugin_dir + style
+        print(qml_path)
         #print(qml_path)
         layer = self.iface.activeLayer()#активный слой
         style_manager = layer.styleManager()
@@ -328,7 +329,7 @@ class Geoalert:
                   "SERVICE=WMTS&VERSION=1.0.0&STYLE=&REQUEST=GetTile&" \
                   "CONNECTID=%s&LAYER=DigitalGlobe:ImageryTileService&FORMAT=image/jpeg&" \
                   "TileRow={y}&TileCol={x}&TileMatrixSet=EPSG:3857&TileMatrix=EPSG:3857:{z}&" \
-                  "CQL_FILTER=feature_id='%s'" % (connectID, featureID)
+                  "CQL_FILTER=feature_id='%s'&format=image/png" % (connectID, featureID)
             url = url.replace("'", "%27")
 
         else:
