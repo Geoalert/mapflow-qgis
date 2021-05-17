@@ -1,7 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="2a209b97-43b2-45fd-abf8-311bdafc4aba" name="Default Changelist" comment="" />
+    <list default="true" id="2a209b97-43b2-45fd-abf8-311bdafc4aba" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/files/mapflow.xml" beforeDir="false" afterPath="$PROJECT_DIR$/files/mapflow.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/geoalert_master_src/.idea/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/geoalert_master_src/.idea/geoalert_master_src.iml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/geoalert_master_src/.idea/inspectionProfiles/profiles_settings.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/geoalert_master_src/.idea/misc.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/geoalert_master_src/.idea/modules.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/geoalert_master_src/.idea/vcs.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/geoalert_master_src/geoalert.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/geoalert_master_src/geoalert.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -41,5 +51,6 @@
         </entry>
       </map>
     </option>
+    <option name="oldMeFiltersMigrated" value="true" />
   </component>
 </project>
