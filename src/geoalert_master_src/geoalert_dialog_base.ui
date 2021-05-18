@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>628</width>
-    <height>554</height>
+    <height>575</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -20,7 +20,7 @@
    <item row="0" column="0">
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
-      <number>0</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="tab_2">
       <attribute name="title">
@@ -337,468 +337,494 @@
       <attribute name="title">
        <string>Settings</string>
       </attribute>
-      <layout class="QVBoxLayout" name="verticalLayout_2">
-       <item>
-        <widget class="QWidget" name="widget_4" native="true">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
+      <widget class="QWidget" name="widget_4" native="true">
+       <property name="geometry">
+        <rect>
+         <x>20</x>
+         <y>12</y>
+         <width>571</width>
+         <height>190</height>
+        </rect>
+       </property>
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>190</height>
+        </size>
+       </property>
+       <widget class="QLineEdit" name="input_directory">
+        <property name="geometry">
+         <rect>
+          <x>175</x>
+          <y>5</y>
+          <width>216</width>
+          <height>21</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+       <widget class="QLabel" name="label_29">
+        <property name="geometry">
+         <rect>
+          <x>360</x>
+          <y>75</y>
+          <width>96</width>
+          <height>21</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Source type:</string>
+        </property>
+       </widget>
+       <widget class="QLabel" name="label_34">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>75</y>
+          <width>251</width>
+          <height>21</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Custom Imagery provider URL:*</string>
+        </property>
+       </widget>
+       <widget class="QLabel" name="label_46">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>160</y>
+          <width>56</width>
+          <height>16</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Login:</string>
+        </property>
+       </widget>
+       <widget class="QCheckBox" name="checkSatelit_Z14">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>450</x>
+          <y>130</y>
+          <width>101</width>
+          <height>20</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>max zoom 14</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+       <widget class="QgsPasswordLineEdit" name="mLinePassword_3">
+        <property name="geometry">
+         <rect>
+          <x>280</x>
+          <y>160</y>
+          <width>126</width>
+          <height>21</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="Button_view">
+        <property name="geometry">
+         <rect>
+          <x>460</x>
+          <y>90</y>
+          <width>91</width>
+          <height>41</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Preview</string>
+        </property>
+       </widget>
+       <widget class="QCheckBox" name="checkSatelitPass">
+        <property name="geometry">
+         <rect>
+          <x>410</x>
+          <y>160</y>
+          <width>161</width>
+          <height>20</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Save Login/Password</string>
+        </property>
+       </widget>
+       <widget class="QLineEdit" name="line_server">
+        <property name="geometry">
+         <rect>
+          <x>175</x>
+          <y>40</y>
+          <width>246</width>
+          <height>21</height>
+         </rect>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">background-color: rgb(240, 240, 240);</string>
+        </property>
+        <property name="text">
+         <string>https://platform.geoalert.io</string>
+        </property>
+       </widget>
+       <widget class="QLabel" name="label_33">
+        <property name="geometry">
+         <rect>
+          <x>15</x>
+          <y>40</y>
+          <width>161</width>
+          <height>21</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Geoalert platform url:</string>
+        </property>
+       </widget>
+       <widget class="QLabel" name="label_28">
+        <property name="geometry">
+         <rect>
+          <x>15</x>
+          <y>5</y>
+          <width>156</width>
+          <height>16</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Destination folder:</string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="but_dir">
+        <property name="geometry">
+         <rect>
+          <x>390</x>
+          <y>5</y>
+          <width>31</width>
+          <height>23</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>...</string>
+        </property>
+       </widget>
+       <widget class="QComboBox" name="comboBoxURLType">
+        <property name="geometry">
+         <rect>
+          <x>360</x>
+          <y>100</y>
+          <width>91</width>
+          <height>21</height>
+         </rect>
+        </property>
+        <property name="toolTip">
+         <string notr="true"/>
+        </property>
+        <item>
+         <property name="text">
+          <string notr="true">xyz</string>
          </property>
-         <property name="minimumSize">
-          <size>
-           <width>0</width>
-           <height>190</height>
-          </size>
+        </item>
+        <item>
+         <property name="text">
+          <string>tms</string>
          </property>
-         <widget class="QLineEdit" name="input_directory">
-          <property name="geometry">
-           <rect>
-            <x>175</x>
-            <y>5</y>
-            <width>216</width>
-            <height>21</height>
-           </rect>
-          </property>
-          <property name="text">
-           <string/>
-          </property>
-         </widget>
-         <widget class="QLabel" name="label_29">
-          <property name="geometry">
-           <rect>
-            <x>360</x>
-            <y>75</y>
-            <width>96</width>
-            <height>21</height>
-           </rect>
-          </property>
-          <property name="text">
-           <string>Raster tile type:</string>
-          </property>
-         </widget>
-         <widget class="QLabel" name="label_34">
-          <property name="geometry">
-           <rect>
-            <x>10</x>
-            <y>75</y>
-            <width>251</width>
-            <height>21</height>
-           </rect>
-          </property>
-          <property name="text">
-           <string>Custom Imagery provider URL:*</string>
-          </property>
-         </widget>
-         <widget class="QLabel" name="label_46">
-          <property name="geometry">
-           <rect>
-            <x>15</x>
-            <y>145</y>
-            <width>56</width>
-            <height>16</height>
-           </rect>
-          </property>
-          <property name="text">
-           <string>Login:</string>
-          </property>
-         </widget>
-         <widget class="QLabel" name="label_3">
-          <property name="geometry">
-           <rect>
-            <x>190</x>
-            <y>165</y>
-            <width>186</width>
-            <height>21</height>
-           </rect>
-          </property>
-          <property name="text">
-           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-          </property>
-          <property name="textFormat">
-           <enum>Qt::AutoText</enum>
-          </property>
-          <property name="wordWrap">
-           <bool>true</bool>
-          </property>
-          <property name="openExternalLinks">
-           <bool>true</bool>
-          </property>
-         </widget>
-         <widget class="QCheckBox" name="checkSatelit_Z14">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="geometry">
-           <rect>
-            <x>460</x>
-            <y>115</y>
-            <width>121</width>
-            <height>20</height>
-           </rect>
-          </property>
-          <property name="text">
-           <string>max zoom 14</string>
-          </property>
-          <property name="checked">
-           <bool>true</bool>
-          </property>
-         </widget>
-         <widget class="QgsPasswordLineEdit" name="mLinePassword_3">
-          <property name="geometry">
-           <rect>
-            <x>280</x>
-            <y>140</y>
-            <width>126</width>
-            <height>21</height>
-           </rect>
-          </property>
-          <property name="text">
-           <string/>
-          </property>
-         </widget>
-         <widget class="QPushButton" name="Button_view">
-          <property name="geometry">
-           <rect>
-            <x>460</x>
-            <y>80</y>
-            <width>111</width>
-            <height>31</height>
-           </rect>
-          </property>
-          <property name="text">
-           <string>Preview</string>
-          </property>
-         </widget>
-         <widget class="QCheckBox" name="checkSatelitPass">
-          <property name="geometry">
-           <rect>
-            <x>415</x>
-            <y>140</y>
-            <width>161</width>
-            <height>20</height>
-           </rect>
-          </property>
-          <property name="text">
-           <string>Save Login/Password</string>
-          </property>
-         </widget>
-         <widget class="QLineEdit" name="line_server">
-          <property name="geometry">
-           <rect>
-            <x>175</x>
-            <y>40</y>
-            <width>246</width>
-            <height>21</height>
-           </rect>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">background-color: rgb(240, 240, 240);</string>
-          </property>
-          <property name="text">
-           <string>https://platform.geoalert.io</string>
-          </property>
-         </widget>
-         <widget class="QLabel" name="label_33">
-          <property name="geometry">
-           <rect>
-            <x>15</x>
-            <y>40</y>
-            <width>161</width>
-            <height>21</height>
-           </rect>
-          </property>
-          <property name="text">
-           <string>Geoalert platform url:</string>
-          </property>
-         </widget>
-         <widget class="QCheckBox" name="checkMaxar">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="geometry">
-           <rect>
-            <x>15</x>
-            <y>165</y>
-            <width>176</width>
-            <height>20</height>
-           </rect>
-          </property>
-          <property name="text">
-           <string>Maxar Securewatch:</string>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-         </widget>
-         <widget class="QLabel" name="label_28">
-          <property name="geometry">
-           <rect>
-            <x>15</x>
-            <y>5</y>
-            <width>156</width>
-            <height>16</height>
-           </rect>
-          </property>
-          <property name="text">
-           <string>Destination folder:</string>
-          </property>
-         </widget>
-         <widget class="QPushButton" name="but_dir">
-          <property name="geometry">
-           <rect>
-            <x>390</x>
-            <y>5</y>
-            <width>31</width>
-            <height>23</height>
-           </rect>
-          </property>
-          <property name="text">
-           <string>...</string>
-          </property>
-         </widget>
-         <widget class="QComboBox" name="comboBoxURLType">
-          <property name="geometry">
-           <rect>
-            <x>360</x>
-            <y>100</y>
-            <width>91</width>
-            <height>21</height>
-           </rect>
-          </property>
-          <property name="toolTip">
-           <string notr="true"/>
-          </property>
-          <item>
-           <property name="text">
-            <string notr="true">xyz</string>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>tms</string>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>wms</string>
-           </property>
-          </item>
-         </widget>
-         <widget class="QLabel" name="label_45">
-          <property name="geometry">
-           <rect>
-            <x>210</x>
-            <y>145</y>
-            <width>71</width>
-            <height>16</height>
-           </rect>
-          </property>
-          <property name="text">
-           <string>Password:</string>
-          </property>
-         </widget>
-         <widget class="Line" name="line_6">
-          <property name="geometry">
-           <rect>
-            <x>5</x>
-            <y>25</y>
-            <width>566</width>
-            <height>16</height>
-           </rect>
-          </property>
-          <property name="orientation">
-           <enum>Qt::Horizontal</enum>
-          </property>
-         </widget>
-         <widget class="QLineEdit" name="line_server_2">
-          <property name="geometry">
-           <rect>
-            <x>10</x>
-            <y>100</y>
-            <width>346</width>
-            <height>21</height>
-           </rect>
-          </property>
-          <property name="text">
-           <string/>
-          </property>
-         </widget>
-         <widget class="QLineEdit" name="line_login_3">
-          <property name="geometry">
-           <rect>
-            <x>75</x>
-            <y>140</y>
-            <width>126</width>
-            <height>21</height>
-           </rect>
-          </property>
-          <property name="text">
-           <string/>
-          </property>
-         </widget>
-         <widget class="Line" name="line_5">
-          <property name="geometry">
-           <rect>
-            <x>5</x>
-            <y>60</y>
-            <width>566</width>
-            <height>16</height>
-           </rect>
-          </property>
-          <property name="orientation">
-           <enum>Qt::Horizontal</enum>
-          </property>
-         </widget>
+        </item>
+        <item>
+         <property name="text">
+          <string>wms</string>
+         </property>
+        </item>
+       </widget>
+       <widget class="QLabel" name="label_45">
+        <property name="geometry">
+         <rect>
+          <x>200</x>
+          <y>160</y>
+          <width>71</width>
+          <height>16</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Password:</string>
+        </property>
+       </widget>
+       <widget class="Line" name="line_6">
+        <property name="geometry">
+         <rect>
+          <x>5</x>
+          <y>25</y>
+          <width>566</width>
+          <height>16</height>
+         </rect>
+        </property>
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+       <widget class="QLineEdit" name="line_server_2">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>100</y>
+          <width>346</width>
+          <height>21</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+       <widget class="QLineEdit" name="line_login_3">
+        <property name="geometry">
+         <rect>
+          <x>60</x>
+          <y>160</y>
+          <width>126</width>
+          <height>21</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+       <widget class="Line" name="line_5">
+        <property name="geometry">
+         <rect>
+          <x>5</x>
+          <y>60</y>
+          <width>566</width>
+          <height>16</height>
+         </rect>
+        </property>
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </widget>
+      <widget class="QCheckBox" name="checkMaxar">
+       <property name="enabled">
+        <bool>true</bool>
+       </property>
+       <property name="geometry">
+        <rect>
+         <x>30</x>
+         <y>210</y>
+         <width>149</width>
+         <height>20</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Maxar Securewatch:</string>
+       </property>
+       <property name="checked">
+        <bool>false</bool>
+       </property>
+      </widget>
+      <widget class="QFrame" name="frame">
+       <property name="enabled">
+        <bool>true</bool>
+       </property>
+       <property name="geometry">
+        <rect>
+         <x>20</x>
+         <y>240</y>
+         <width>558</width>
+         <height>280</height>
+        </rect>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>280</height>
+        </size>
+       </property>
+       <property name="frameShape">
+        <enum>QFrame::StyledPanel</enum>
+       </property>
+       <property name="frameShadow">
+        <enum>QFrame::Raised</enum>
+       </property>
+       <widget class="QWidget" name="widget_3" native="true">
+        <property name="geometry">
+         <rect>
+          <x>13</x>
+          <y>13</y>
+          <width>532</width>
+          <height>110</height>
+         </rect>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>90</height>
+         </size>
+        </property>
+        <widget class="QPushButton" name="ButWFS">
+         <property name="geometry">
+          <rect>
+           <x>370</x>
+           <y>50</y>
+           <width>151</width>
+           <height>31</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>Get image metadata</string>
+         </property>
         </widget>
-       </item>
-       <item>
-        <widget class="QFrame" name="frame">
-         <property name="enabled">
-          <bool>true</bool>
+        <widget class="QLabel" name="label_50">
+         <property name="geometry">
+          <rect>
+           <x>10</x>
+           <y>5</y>
+           <width>81</width>
+           <height>16</height>
+          </rect>
          </property>
-         <property name="frameShape">
-          <enum>QFrame::StyledPanel</enum>
+         <property name="text">
+          <string>Connect ID:*</string>
          </property>
-         <property name="frameShadow">
-          <enum>QFrame::Raised</enum>
-         </property>
-         <layout class="QVBoxLayout" name="verticalLayout">
-          <item>
-           <widget class="QWidget" name="widget_3" native="true">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="minimumSize">
-             <size>
-              <width>0</width>
-              <height>90</height>
-             </size>
-            </property>
-            <widget class="QPushButton" name="ButWFS">
-             <property name="geometry">
-              <rect>
-               <x>375</x>
-               <y>60</y>
-               <width>151</width>
-               <height>26</height>
-              </rect>
-             </property>
-             <property name="text">
-              <string>Get image metadata</string>
-             </property>
-            </widget>
-            <widget class="QLabel" name="label_50">
-             <property name="geometry">
-              <rect>
-               <x>15</x>
-               <y>15</y>
-               <width>81</width>
-               <height>16</height>
-              </rect>
-             </property>
-             <property name="text">
-              <string>Connect ID:*</string>
-             </property>
-            </widget>
-            <widget class="QLabel" name="label_53">
-             <property name="geometry">
-              <rect>
-               <x>10</x>
-               <y>65</y>
-               <width>76</width>
-               <height>16</height>
-              </rect>
-             </property>
-             <property name="text">
-              <string>AOI layer:</string>
-             </property>
-            </widget>
-            <widget class="QgsMapLayerComboBox" name="VMapLayerComboBox">
-             <property name="geometry">
-              <rect>
-               <x>125</x>
-               <y>60</y>
-               <width>211</width>
-               <height>21</height>
-              </rect>
-             </property>
-            </widget>
-            <widget class="QLineEdit" name="connectID">
-             <property name="geometry">
-              <rect>
-               <x>125</x>
-               <y>10</y>
-               <width>211</width>
-               <height>21</height>
-              </rect>
-             </property>
-             <property name="text">
-              <string/>
-             </property>
-            </widget>
-            <widget class="QLineEdit" name="featureID">
-             <property name="geometry">
-              <rect>
-               <x>125</x>
-               <y>35</y>
-               <width>211</width>
-               <height>21</height>
-              </rect>
-             </property>
-             <property name="text">
-              <string/>
-             </property>
-            </widget>
-            <widget class="QPushButton" name="maxarStandartURL">
-             <property name="geometry">
-              <rect>
-               <x>390</x>
-               <y>15</y>
-               <width>121</width>
-               <height>36</height>
-              </rect>
-             </property>
-             <property name="text">
-              <string>Get URL</string>
-             </property>
-            </widget>
-            <widget class="QLabel" name="label_51">
-             <property name="geometry">
-              <rect>
-               <x>15</x>
-               <y>35</y>
-               <width>91</width>
-               <height>16</height>
-              </rect>
-             </property>
-             <property name="text">
-              <string>Feature ID: (?)</string>
-             </property>
-            </widget>
-           </widget>
-          </item>
-          <item>
-           <widget class="QTableWidget" name="tabListRast">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="mouseTracking">
-             <bool>false</bool>
-            </property>
-           </widget>
-          </item>
-         </layout>
         </widget>
-       </item>
-      </layout>
+        <widget class="QLabel" name="label_53">
+         <property name="geometry">
+          <rect>
+           <x>10</x>
+           <y>50</y>
+           <width>76</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>AOI layer:</string>
+         </property>
+        </widget>
+        <widget class="QgsMapLayerComboBox" name="VMapLayerComboBox">
+         <property name="geometry">
+          <rect>
+           <x>120</x>
+           <y>50</y>
+           <width>211</width>
+           <height>21</height>
+          </rect>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="connectID">
+         <property name="geometry">
+          <rect>
+           <x>120</x>
+           <y>0</y>
+           <width>211</width>
+           <height>21</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="featureID">
+         <property name="geometry">
+          <rect>
+           <x>120</x>
+           <y>25</y>
+           <width>211</width>
+           <height>21</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+        </widget>
+        <widget class="QPushButton" name="maxarStandartURL">
+         <property name="geometry">
+          <rect>
+           <x>380</x>
+           <y>10</y>
+           <width>121</width>
+           <height>31</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>Get URL</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_51">
+         <property name="geometry">
+          <rect>
+           <x>10</x>
+           <y>25</y>
+           <width>91</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>Feature ID: (?)</string>
+         </property>
+        </widget>
+       </widget>
+       <widget class="QTableWidget" name="tabListRast">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>102</y>
+          <width>532</width>
+          <height>171</height>
+         </rect>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="mouseTracking">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </widget>
+      <widget class="QLabel" name="label_3">
+       <property name="geometry">
+        <rect>
+         <x>220</x>
+         <y>210</y>
+         <width>103</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+       </property>
+       <property name="textFormat">
+        <enum>Qt::AutoText</enum>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+       <property name="openExternalLinks">
+        <bool>true</bool>
+       </property>
+      </widget>
      </widget>
      <widget class="QWidget" name="tab">
       <attribute name="title">
@@ -821,8 +847,8 @@
            <rect>
             <x>0</x>
             <y>0</y>
-            <width>576</width>
-            <height>483</height>
+            <width>556</width>
+            <height>494</height>
            </rect>
           </property>
           <widget class="QLabel" name="label_4">
@@ -830,16 +856,20 @@
             <rect>
              <x>20</x>
              <y>10</y>
-             <width>321</width>
-             <height>81</height>
+             <width>521</width>
+             <height>251</height>
             </rect>
            </property>
            <property name="text">
-            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;ul&gt;
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;
+&lt;div style=&quot;margin:30px; background-color: #e7f2fa&quot;&gt;&lt;p&gt;This application enables to use &lt;a href=&quot;http://mapflow.ai/&quot;&gt;Mapflow.ai&lt;/a&gt; processing capabilities in QGIS. To start using you need Processing API access, please, send us a request to help@geoalert.io&lt;/p&gt;&lt;/div&gt;
+&lt;h2 style=&quot;margin:30px;&quot;&gt;How to use plugin&lt;/h2&gt;
+&lt;ul&gt;
 &lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-install-the-plugin&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Install the plugin for QGIS&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
 &lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;User Interface&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
 &lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to use imagery sources&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
 &lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect to Maxar SercureWatch&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-process-your-own-imagery-data&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to process your own imagery data&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
 &lt;/ul&gt;
 &lt;/body&gt;&lt;/html&gt;</string>
            </property>
