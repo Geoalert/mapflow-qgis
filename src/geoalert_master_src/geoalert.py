@@ -203,25 +203,26 @@ class Geoalert:
             # проверка на векторность
             if nType == 0:
                 # получаем один объект из слоя для определения полигонального слоя
+                # в случае если слой пустой, пропускаем его
                 try:
                     features = QgsProject.instance().mapLayers()[i].getFeatures()
                     for feature in features:
                         # определяем тип геометрии по первому объекту
                         geom = feature.geometry()
                         break
-                # в случае если слой пустой, пропускаем его
+
+                    # если тип = полигон
+                    if geom.type() == QgsWkbTypes.PolygonGeometry:
+                        # добавляем название и вектор в список
+                        nameV = QgsProject.instance().mapLayers()[i].name()
+                        layV = QgsProject.instance().mapLayers()[i]
+                        self.listPolyLay.append([nameV, layV])
+                        # print(name)
+                        self.dlg.polygonLayerComboBox.addItem(nameV, id)
+                        id += 1
                 except:
                     print('пропуск пустого слоя')
                     continue
-                # если тип = полигон
-                if geom.type() == QgsWkbTypes.PolygonGeometry:
-                    # добавляем название и вектор в список
-                    nameV = QgsProject.instance().mapLayers()[i].name()
-                    layV = QgsProject.instance().mapLayers()[i]
-                    self.listPolyLay.append([nameV, layV])
-                    # print(name)
-                    self.dlg.polygonLayerComboBox.addItem(nameV, id)
-                    id += 1
         # print(self.listPolyLay)
 
     def con(self):
@@ -327,9 +328,9 @@ class Geoalert:
         if len(featureID) > 0:
             url = "https://securewatch.digitalglobe.com/earthservice/wmtsaccess?" \
                   "SERVICE=WMTS&VERSION=1.0.0&STYLE=&REQUEST=GetTile&" \
-                  "CONNECTID=%s&LAYER=DigitalGlobe:ImageryTileService&FORMAT=image/jpeg&" \
+                  "CONNECTID=%s&LAYER=DigitalGlobe:ImageryTileService&FORMAT=image/png&" \
                   "TileRow={y}&TileCol={x}&TileMatrixSet=EPSG:3857&TileMatrix=EPSG:3857:{z}&" \
-                  "CQL_FILTER=feature_id='%s'&format=image/png" % (connectID, featureID)
+                  "CQL_FILTER=feature_id='%s'" % (connectID, featureID)
             url = url.replace("'", "%27")
 
         else:
