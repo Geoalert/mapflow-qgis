@@ -26,31 +26,26 @@ from .geoalert_dialog import GeoalertDialog
 
 
 class Geoalert:
+    """"""
 
     def __init__(self, iface):
         self.iface = iface
         self.project = QgsProject.instance()
         self.settings = QgsSettings()
-        # определяем папку в которой находится модуль
         self.plugin_dir = os.path.dirname(__file__)
-        # initialize locale
+        # Translation
         locale = QSettings().value('locale/userLocale')[0:2]
-        locale_path = os.path.join(
-            self.plugin_dir,
-            'i18n',
-            'Geoalert_{}.qm'.format(locale))
+        locale_path = os.path.join(self.plugin_dir, 'i18n', f'Geoalert_{locale}.qm')
         if os.path.exists(locale_path):
             self.translator = QTranslator()
             self.translator.load(locale_path)
             if qVersion() > '4.3.3':
                 QCoreApplication.installTranslator(self.translator)
-        # Создание диалога (после перевода) and keep reference
+        # Init dialog and keep reference
         self.dlg = GeoalertDialog()
-        # Declare instance attributes
         self.actions = []
         self.toolbar = self.iface.addToolBar('Geoalert')
         self.toolbar.setObjectName('Geoalert')
-        ##############################
         # создание и настройка таблицы
         self.makeTable()
         # Нажатие кнопки "Подключить".
