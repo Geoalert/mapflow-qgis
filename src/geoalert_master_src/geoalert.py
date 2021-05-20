@@ -1,38 +1,33 @@
-# -*- coding: utf-8 -*-
-from qgis.core import *
+import time
+import os.path
+import processing
+import glob
+import json
+import traceback
+from math import *
+from base64 import b64encode, b64decode
+from threading import Thread
+
+import gdal
+import ogr
+import osr
+import qgis
+import requests
 from PyQt5 import *  # Qt
 from PyQt5.QtGui import *  # QIcon
 from PyQt5.QtWidgets import *  # QAction, QMessageBox, QProgressBar
 from PyQt5.QtCore import *  # QSettings, QTranslator, qVersion, QCoreApplication, QVariant, Qt
+from qgis.core import *
 from qgis.gui import *
-# Импорт файла resources.py
-from .resources_rc import *
-# Импорт кода диалога
-# from .geo import geoa
-from .geoalert_dialog import GeoalertDialog
-import os.path
-# добавленные
 from qgis.PyQt.QtXml import QDomDocument
-import time
-import processing
-#from multiprocessing import Process
-import glob
-import qgis
-import gdal
-import ogr
-import osr
-import requests
-import json
-from math import *
-from base64 import b64encode, b64decode
-from threading import Thread  # работа с процессами
-import traceback
+
+from .resources_rc import *
+from .geoalert_dialog import GeoalertDialog
 
 
 class Geoalert:
 
     def __init__(self, iface):
-        # self.g = geoa
         self.iface = iface
         # определяем папку в которой находится модуль
         self.plugin_dir = os.path.dirname(__file__)
@@ -45,18 +40,15 @@ class Geoalert:
         if os.path.exists(locale_path):
             self.translator = QTranslator()
             self.translator.load(locale_path)
-
             if qVersion() > '4.3.3':
                 QCoreApplication.installTranslator(self.translator)
         # Создание диалога (после перевода) and keep reference
         self.dlg = GeoalertDialog()
         # Declare instance attributes
         self.actions = []
-        # TODO: We are going to let the user set this up in a future iteration
-        self.toolbar = self.iface.addToolBar(u'Geoalert')
-        self.toolbar.setObjectName(u'Geoaler')
-
-####################################################################
+        self.toolbar = self.iface.addToolBar('Geoalert')
+        self.toolbar.setObjectName('Geoalert')
+        ##############################
         # создание и настройка таблицы
         self.makeTable()
         # Нажатие кнопки "Подключить".
@@ -156,8 +148,8 @@ class Geoalert:
 
     # Всплывающие подсказки
     def tips(self):
-        self.dlg.line_login.setToolTip('Insert login for Mapflow')
-        self.dlg.mLinePassword.setToolTip('Insert password for Mapflow')
+        self.dlg.line_login.setToolTip('Your Mapflow login')
+        self.dlg.mLinePassword.setToolTip('Your Mapflow password')
 
     # обновление списка растров и полигонов
     # запускаем при старте
@@ -450,7 +442,7 @@ class Geoalert:
     # создание и настройка таблицы
     def makeTable(self):
         self.dlg.tableWidget.clear()
-        stolbci = [u" Processing", u"Name", u"Status", u"Сreated", u"ID", u"AI model"]
+        stolbci = ["Processing", "Name", "Status", "Сreated", "ID", "AI model"]
         StolbKol = len(stolbci)  # 4#количество столбцов
         self.dlg.tableWidget.setColumnCount(StolbKol)  # создаем столбцы
         self.dlg.tableWidget.setHorizontalHeaderLabels(stolbci)  # даем названия столбцам
@@ -546,8 +538,8 @@ class Geoalert:
         params = {"source_type": "tif", "url": "%s" % (url)}
         self.upOnServ_proc(params)
 
-    # Удалить слой
     def DelLay(self):
+        """Удаление слоя."""
         # получить номер выбранной строки в таблице!
         row = self.dlg.tableWidget.currentIndex().row()
         print(row)
@@ -570,8 +562,8 @@ class Geoalert:
         # обновить список слоев
         self.button_connect()
 
-    # срабатывание от выбора в комбобоксе
     def comboClick(self):
+        """Cрабатывание от выбора в комбобоксе."""
         comId = self.dlg.comboBox_satelit.currentIndex()
         # открытие tif файла
         if comId == 2:
@@ -638,8 +630,8 @@ class Geoalert:
                     id += 1
         # print(self.listLay)
 
-    # Выгрузить слой на сервер для обработки
     def uploadOnServer(self, iface):
+        """Выгрузить слой на сервер для обработки"""
         NewLayName = self.dlg.NewLayName.text()
         if len(NewLayName) > 0 and NewLayName not in self.listNameProc:  # если имя не пустое - начинаем загрузку
 
@@ -692,7 +684,7 @@ class Geoalert:
             QMessageBox.information(self.dlg, "About", infoString)
 
     def upOnServ_proc(self, params):
-        # название довой обработки
+        # название новой обработки
         NewLayName = self.dlg.NewLayName.text()
         # получение индекса векторного слоя из комбобокса
         idv = self.dlg.polygonLayerComboBox.currentIndex()
@@ -772,8 +764,8 @@ class Geoalert:
                     "source-app": "qgis"}
         # print(params)
         # print(meta)
-        with open(file_adrG, "r") as read_file:
-            GeomJ = json.load(read_file)
+        with open(file_adrG) as f:
+            GeomJ = json.load(f)
         # print(file_adrG)
         os.remove(file_adrG)  # удаление временного файла
         for i in GeomJ['features']:
@@ -800,29 +792,21 @@ class Geoalert:
 
         self.dlg.NewLayName.clear()  # очистить поле имени
 
-        # создать и показать сообщение//create a string and show it
+        # создать и показать сообщение
         infoString = "Слой загружен на сервер! \n Обработка может занять от 10 секунд до нескольких минут"
         print(infoString)
         # QMessageBox.information(self.dlg, "About", infoString)
         self.button_connect()
 
-    # предпросмотр снимков
     def sart_view(self):
-
+        """Предпросмотр снимков."""
         # сохранение настроек логин/пароль
         self.storeSettingsMap()
-
-        # если чекбокс включен - ограничиваем зум предпросмотра до 14
-        if self.dlg.checkSatelit_Z14.isChecked():
-            z_max = '14'  # self.dlg.zmax.text()
-        # иначе ограничиваем до 18
-        else:
-            z_max = '18'
-
-        z_min = '0'  # self.dlg.zmin.text()
+        # если чекбокс включен - ограничиваем зум предпросмотра до 14 иначе до 18
+        z_max = '14' if self.dlg.checkSatelit_Z14.isChecked() else '18'
+        z_min = '0'
         min_max = "&zmax=" + z_max + "&zmin=" + z_min
-        preview_type = self.dlg.comboBoxURLType.currentText()  # получаем
-
+        preview_type = self.dlg.comboBoxURLType.currentText()
         url = self.dlg.line_server_2.text()  # получаем url из настроек
         # замена символов в адресе для корректной работы
         url = url.replace('=', '%3D')
@@ -840,18 +824,17 @@ class Geoalert:
         surl = self.dlg.line_server_2.text()
         self.saveSettings('urlImageProvider', surl)
 
-    # загрузка слоя с сервера
     def addSucces(self):
+        """Загрузка слоя с сервера."""
         # получить номер выбранной строки в таблице!
         row = self.dlg.tableWidget.currentIndex().row()
         print(row)
-        # print(row)
         if row != -1:
-            # # Номер в dictData
+            # Номер в dictData
             # row_nom =  (self.kol_tab - row - 1)
             # #получаем данные о слое и его ID
             # id_v = self.dictData[row_nom]['id']
-            # #print(id_v)
+            # print(id_v)
 
             id_v = self.dlg.tableWidget.model().index(row, 4).data()
             print(id_v)
@@ -940,12 +923,11 @@ class Geoalert:
             # set new style as current
             style_manager.setCurrentStyle(style_name)
             # load qml to current style
-            (message, success) = layer.loadNamedStyle(qml_path)
+            message, success = layer.loadNamedStyle(qml_path)
             print(message)
             if not success:  # if style not loaded remove it
                 style_manager.removeStyle(style_name)
 
-            # ----
             time.sleep(1)
             qgis.utils.iface.zoomToActiveLayer()  # приблизить к охвату активного слоя
             try:
@@ -953,27 +935,24 @@ class Geoalert:
                 print('Временный файл удален:', file_temp)
             except:
                 print('Временный файл удалить не удалось, ну пусть будет, он никому не мешает и весит мало:', file_temp)
-
         else:
             print('Сначала выберите слой в таблице')
 
-    # всплывающее сообщение
-    def messege(self, infoString):  # Всплывающее сообщение
+    def message(self, infoString):
+        """всплывающее сообщение"""
         QMessageBox.information(self.dlg, self.tr('About'), infoString)
-    # подключение к серверу
 
-    def button_connect(self):  # подключение и обновление в отдельном процессе
+    def button_connect(self):
+        """Подключение к серверу."""
         # проверка рабочей папки
-        if os.path.exists(self.dlg.input_directory.text()) != True:
-            infoString = self.tr('The working direktory was not found. \nSpecify the direktory folder. (In settings)')
-            self.messege(infoString)
+        if not os.path.exists(self.dlg.input_directory.text()):
+            infoString = self.tr('Please, specify the working directory')
+            self.message(infoString)
             # окно выбора рабочей папки
             self.select_output_file()
-
         else:
             # сохранить/сбросить пароль
             self.storeSettings()
-
             # получаем введенный логин и праоль
             self.login = self.dlg.line_login.text()
             self.password = self.dlg.mLinePassword.text()
@@ -993,16 +972,15 @@ class Geoalert:
             # сообщение о неверном логине/пароле
             if self.flag == False:  # 'report error':  # Если была ощибка
                 infoString = self.tr('Wrong login or password! Please try again.')
-                self.messege(infoString)
+                self.message(infoString)
             else:
                 # запуск потока
                 proc = Thread(target=self.button_con, args=(URL,))
                 proc.start()
 
-    # циклическое переподключение к серверу для получения статусов обработок
     def button_con(self, URL):
-        while self.flag == True:
-
+        """Циклическое переподключение к серверу для получения статусов обработок."""
+        while self.flag:
             # выполняем запрос
             r = requests.get(url=URL, headers=self.headers)
             # print(r.text) # получаем ответ
@@ -1022,7 +1000,7 @@ class Geoalert:
             self.listProc = []  # список обработок в таблице
             for i in range(self.kol_tab):
                 self.listNameProc.append(self.dictData[i]['name'])  # заполняем список названий обработок
-                # #print(self.dictData[i]['projectId'])
+                # print(self.dictData[i]['projectId'])
                 # statf = QTableWidgetItem(str(self.dictData[i]['percentCompleted'])+'%')
                 # namef = QTableWidgetItem(self.dictData[i]['name'])
                 # Status = QTableWidgetItem(self.dictData[i]['status'])
@@ -1096,8 +1074,8 @@ class Geoalert:
             else:
                 print('Нет выполняющихся обработок')
 
-    # запись переменных в хранилилище настроек
     def storeSettings(self):
+        """Запись переменных в хранилилище настроек."""
         print('сохранение настроек Geoalert')
         # доступ к настройкам
         s = QgsSettings()
@@ -1115,9 +1093,9 @@ class Geoalert:
         # и записываем в настройки
         s.setValue("geoalert/log", login)  # unicode(b64encode(str.encode(login))))
         s.setValue("geoalert/pas", password)  # unicode(b64encode(str.encode(password))))
-    # чтение переменных из хранилища настроек
 
     def readSet(self):
+        """Чтение переменных из хранилища настроек."""
         # доступ к настройкам
         s = QgsSettings()
         # если в настройках включен чекбокс,
@@ -1129,9 +1107,9 @@ class Geoalert:
             passwordB64 = s.value("geoalert/pas", "", type=str)
             self.dlg.line_login.setText(loginB64)  # b64decode(loginB64))
             self.dlg.mLinePassword.setText(passwordB64)  # b64decode(passwordB64))
-    # запись переменных в хранилилище настроек
 
     def storeSettingsMap(self):
+        """Запись переменных в хранилилище настроек."""
         print('сохранение настроек сервиса космоснимков')
         # доступ к настройкам
         s = QgsSettings()
@@ -1149,9 +1127,9 @@ class Geoalert:
         # записываем в настройки
         s.setValue("geoalert/logMap", login)  # unicode(b64encode(str.encode(login))))
         s.setValue("geoalert/pasMap", password)  # unicode(b64encode(str.encode(password))))
-    # чтение переменных из хранилища настроек
 
     def readSettingsMap(self):
+        """Чтение переменных из хранилища настроек."""
         # доступ к настройкам
         s = QgsSettings()
         # если в настройках включен чекбокс,
@@ -1164,28 +1142,24 @@ class Geoalert:
             self.dlg.line_login_3.setText(loginB64)  # b64decode(loginB64))
             self.dlg.mLinePassword_3.setText(passwordB64)  # b64decode(passwordB64))
 
-    # Запись и чтение настроек
     def saveSettings(self, sVarName, sValue):
+        """Запись и чтение настроек."""
         print('сохранение настроек')
         # доступ к настройкам
         s = QgsSettings()
         # записываем в настройки (имя переменной и ее значение)
         s.setValue("geoalert/" + sVarName, sValue)
 
-    # чтение переменных из хранилища настроек
     def readSettings(self, sVarName):
+        """Чтение переменных из хранилища настроек."""
         # доступ к настройкам
         s = QgsSettings()
         # Возврат значения из настроек
         sValue = s.value("geoalert/" + sVarName)
         # если переменная существует и не пустая, то возвращаем ее значение
-        if sValue == None:
-            sValue = ''
-        return sValue
+        return '' if sValue is None else sValue
 
-#############################################################
     def tr(self, message):
-        # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
         return QCoreApplication.translate('Geoalert', message)
 
     def add_action(self, icon_path, text, callback, enabled_flag=True, add_to_menu=False,
@@ -1195,50 +1169,35 @@ class Geoalert:
         action = QAction(icon, text, parent)
         action.triggered.connect(callback)
         action.setEnabled(enabled_flag)
-
-        if status_tip is not None:
+        if status_tip:
             action.setStatusTip(status_tip)
-
-        if whats_this is not None:
+        if whats_this:
             action.setWhatsThis(whats_this)
-
         if add_to_toolbar:
             self.toolbar.addAction(action)
-
         if add_to_menu:
-            self.iface.addPluginToVectorMenu(
-                self.menu,
-                action)
-
+            self.iface.addPluginToVectorMenu(self.menu, action)
         self.actions.append(action)
-
         return action
 
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
-
         icon_path = self.plugin_dir + '/icon.png'
-
         self.add_action(
             icon_path,
-            text=self.tr(u'Geoalert'),
+            text='Geoalert',
             callback=self.run,
             parent=self.iface.mainWindow())
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
-
         for action in self.actions:
-            self.iface.removePluginVectorMenu(
-                self.tr(u'&Geoalert'),
-                action)
+            self.iface.removePluginVectorMenu('&Geoalert', action)
             self.iface.removeToolBarIcon(action)
-        # remove the toolbar
         del self.toolbar
 
     def run(self):
-
-        # обновление списка слоев для выбора источника растра
+        """Обновление списка слоев для выбора источника растра."""
         # запускаем отдельным потоком
         self.potok = True
         upLayers = Thread(target=self.update_layer_list)
