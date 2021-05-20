@@ -1,17 +1,14 @@
 import time
-import os.path
-import processing
-import glob
 import json
 import traceback
+import os.path
 from math import *
-from base64 import b64encode, b64decode
+from base64 import b64encode
 from threading import Thread
 
 import gdal
 import ogr
 import osr
-import qgis
 import requests
 from PyQt5 import *  # Qt
 from PyQt5.QtGui import *  # QIcon
@@ -19,10 +16,26 @@ from PyQt5.QtWidgets import *  # QAction, QMessageBox, QProgressBar
 from PyQt5.QtCore import *  # QSettings, QTranslator, qVersion, QCoreApplication, QVariant, Qt
 from qgis.core import *
 from qgis.gui import *
+from qgis.utils import iface
 from qgis.PyQt.QtXml import QDomDocument
 
 from .resources_rc import *
 from .geoalert_dialog import GeoalertDialog
+
+
+SW_ENDPOINT = 'https://securewatch.digitalglobe.com/earthservice/wmtsaccess'
+SW_PARAMS = {
+    'SERVICE': 'WMTS',
+    'VERSION': '1.0.0',
+    'STYLE': '',
+    'REQUEST': 'GetTile',
+    'LAYER': 'DigitalGlobe:ImageryTileService',
+    'FORMAT': 'image/jpeg',
+    'TileRow': r'{y}',
+    'TileCol': r'{x}',
+    'TileMatrixSet': 'EPSG:3857',
+    'TileMatrix': r'EPSG:3857:{z}'
+}
 
 
 class Geoalert:
@@ -306,40 +319,21 @@ class Geoalert:
         # Заполняем таблицу из слоя
         self.mTableListRastr(nameFields, attrFields)
 
-    # вставляем стандартную ссылку максар в поле адреса
-
     def maxarStandard(self):
+        """Fill out the imagery provider URL field with the Maxar Secure Watch URL."""
         connectID = self.dlg.connectID.text()
         featureID = self.dlg.featureID.text()
-        print(connectID)
-
-        # выбор типа сслыки в зависимости от того указан featId или нет
-        if len(featureID) > 0:
-            url = "https://securewatch.digitalglobe.com/earthservice/wmtsaccess?" \
-                  "SERVICE=WMTS&VERSION=1.0.0&STYLE=&REQUEST=GetTile&" \
-                  "CONNECTID=%s&LAYER=DigitalGlobe:ImageryTileService&FORMAT=image/png&" \
-                  "TileRow={y}&TileCol={x}&TileMatrixSet=EPSG:3857&TileMatrix=EPSG:3857:{z}&" \
-                  "CQL_FILTER=feature_id='%s'" % (connectID, featureID)
-            url = url.replace("'", "%27")
-
-        else:
-            url = "https://securewatch.digitalglobe.com/earthservice/wmtsaccess?" \
-                  "SERVICE=WMTS&VERSION=1.0.0&STYLE=&REQUEST=GetTile&" \
-                  "CONNECTID=" + connectID + "&LAYER=DigitalGlobe:ImageryTileService&FORMAT=image/jpeg&" \
-                  "TileRow=%7By%7D&TileCol=%7Bx%7D&" \
-                  "TileMatrixSet=EPSG:3857&TileMatrix=EPSG:3857:%7Bz%7D"
-
-        self.dlg.line_server_2.setText(url)
+        SW_PARAMS['CONNECTID'] = connectID
+        if featureID:
+            SW_PARAMS['CQL_FILTER'] = f"feature_id='{featureID}'"
+            SW_PARAMS['FORMAT'] = 'image/png'
+        request = requests.Request('GET', SW_ENDPOINT, params=SW_PARAMS).prepare()
+        self.dlg.line_server_2.setText(request.url)
         self.dlg.comboBoxURLType.setCurrentIndex(0)
-        # сохрангить ID
         self.saveSettings('connectID', connectID)
 
-        # использование WMS
-
-    # получить координаты охвата слоя
-
     def extent(self, vLayer):
-
+        """Получить координаты охвата слоя."""
         srs_ext = str(vLayer.crs()).split(' ')[1][:-1]  # получение проекции слоя
         print(srs_ext)
         try:
@@ -923,7 +917,7 @@ class Geoalert:
                 style_manager.removeStyle(style_name)
 
             time.sleep(1)
-            qgis.utils.iface.zoomToActiveLayer()  # приблизить к охвату активного слоя
+            iface.zoomToActiveLayer()  # приблизить к охвату активного слоя
             try:
                 os.remove(file_temp)  # удаление временного файла
                 print('Временный файл удален:', file_temp)
