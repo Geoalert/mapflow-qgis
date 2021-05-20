@@ -74,21 +74,25 @@ class Geoalert:
         self.dlg.maxarStandartURL.clicked.connect(self.maxarStandatr)
         # всплывающие подсказки
         self.tips()
-
-        self.dlg.butWMSurl.clicked.connect(self.wms_sec)
-
         # чтение настроек логин/пароль
         self.readSet()
-
         #чтение connect ID
         connectID = self.readSettings('connectID')
         self.dlg.connectID.setText(connectID)
         # чтение настроек URL
         surl = self.readSettings('urlImageProvider')
         self.dlg.line_server_2.setText(surl)
-
         # чтение настроек логин/пароль для сервиса космоснимков
         self.readSettingsMap()
+
+        # чекбокс максар
+        self.dlg.checkMaxar.clicked.connect(self.con)
+        # дизейблим фрейм на старте
+        self.dlg.frame.setEnabled(False)
+
+        # чекбокс экстент растра вместо полигонального слоя
+        #self.dlg.checkRasterExtent.clicked.connect(self.rasterExtentSand())
+
         # чекбокс сохранения логин и пароль для сервиса космоснимков
         self.dlg.checkSatelitPass.clicked.connect(self.storeSettingsMap)
         # чекбокс сохранения логин и пароль для Geoalert
@@ -102,57 +106,141 @@ class Geoalert:
 
         # подключение слоя WFS
         self.dlg.ButWFS.clicked.connect(self.ButWFS)
+
+        self.dlg.tabListRast.clicked.connect(self.feID)
         #self.dlg.ButExtent.clicked.connect(self.extent)
 
-        # радиокнопки
-        self.dlg.frame.setEnabled(False)
-        self.dlg.radioButton.toggled.connect(self.con)
 
-        # обновление списка слоев для выбора источника растра
-        upLayers = Thread(target=self.update_layer_list)
-        upLayers.start()
-
+        # тестовая кнопка
+        # self.dlg.pushButton.clicked.connect(self.test)
     # ------------------------------
-        #Всплывающие подсказки
+
+
+    # тест экстента
+    # def test(self):
+    #     n = self.dlg.comboBox_satelit.currentIndex()-3
+    #     rLayer = self.listLay[n][1]
+    #     print(rLayer.crs())
+    #     coord = self.extent(rLayer).split(',')
+    #     print(coord)
+    #     # создание текста для файла .geojson
+    #     text = '{"type": "FeatureCollection", "name": "extent", ' \
+    #            '"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } }, ' \
+    #            '"features": [{ "type": "Feature", "properties": { }, ' \
+    #            '"geometry": { "type": "Polygon", "coordinates":[[' \
+    #            '[ %s, %s ],[ %s, %s ],[ %s, %s ],[ %s, %s ],[ %s, %s ]' \
+    #            ']] } }]}' % (coord[1], coord[0],
+    #                          coord[1], coord[2],
+    #                          coord[3], coord[2],
+    #                          coord[3], coord[0],
+    #                          coord[1], coord[0])
+    #     print(text)
+    #     # временный файл создание и запись
+    #     name_temp = self.dlg.input_directory.text() + 'extent_raster_temp.geojson'
+    #     file_temp = open(name_temp, 'w')
+    #     file_temp.write(text)
+    #     file_temp.close()
+    #     print(name_temp)
+    #     Vlayer = QgsVectorLayer(name_temp, 'extent_temp', "ogr")
+    #
+    #     QgsProject.instance().addMapLayer(Vlayer)
+
+# Вписываем feature ID из таблицы в поле
+    def feID(self):
+        # получить номер выбранной строки в таблице!
+        row = self.dlg.tabListRast.currentIndex().row()
+        print(row)
+        id_v = self.dlg.tabListRast.model().index(row, 4).data()
+        print(id_v)
+        self.dlg.featureID.setText(str(id_v))
+
+    # Всплывающие подсказки
     def tips(self):
         self.dlg.line_login.setToolTip('Insert login for Mapflow')
         self.dlg.mLinePassword.setToolTip('Insert password for Mapflow')
 
-    # обновление списка растров
+    # обновление списка растров и полигонов
     # запускаем при старте
     def update_layer_list(self ):
         print('Старт потока-------------')
         lenL = 0
-        while True:
+
+        # выполняется пока окно открыто
+        while self.potok:
             #print('Старт проверки')
             lenLayers = len(QgsProject.instance().mapLayers())
-            #print(lenL, lenLayers)
+            # print(lenL, lenLayers)
             if lenL != lenLayers:
                 lenL = lenLayers #запоминаем значение для проверки в следующий раз
                 # обновление списков комбобокса
+                # растры
                 self.comboImageS()
+                # полигоны
+                self.comboPolygons()
             # пауза перед повторной проверкой
             time.sleep(6)
 
+    # заполнение комбобокса полигональных слоев
+    def comboPolygons(self):
+        self.dlg.polygonLayerComboBox.clear()
+        ll = ['Raster extent (.tif)']
+        # заполняем обязательные пункты
+        for idx, field in enumerate(ll):
+            self.dlg.polygonLayerComboBox.addItem(field, idx)
+
+        print('-----------------------------------')
+        # заполняем полигональными слоями
+
+        self.listPolyLay = []
+        layersAll = QgsProject.instance().mapLayers()
+        # print(layersAll)
+        id = len(ll)
+        # перебор всех слоев и проверка их типа
+        for i in layersAll:
+            # тип слоя
+            nType = QgsProject.instance().mapLayers()[i].type()
+            #print(nType)
+            # проверка на векторность
+            if nType == 0:
+                # получаем один объект из слоя для определения полигонального слоя
+                # в случае если слой пустой, пропускаем его
+                try:
+                    features = QgsProject.instance().mapLayers()[i].getFeatures()
+                    for feature in features:
+                        # определяем тип геометрии по первому объекту
+                        geom = feature.geometry()
+                        break
+
+                    # если тип = полигон
+                    if geom.type() == QgsWkbTypes.PolygonGeometry:
+                        # добавляем название и вектор в список
+                        nameV = QgsProject.instance().mapLayers()[i].name()
+                        layV = QgsProject.instance().mapLayers()[i]
+                        self.listPolyLay.append([nameV, layV])
+                        # print(name)
+                        self.dlg.polygonLayerComboBox.addItem(nameV, id)
+                        id += 1
+                except:
+                    print('пропуск пустого слоя')
+                    continue
+        # print(self.listPolyLay)
+
     def con(self):
-        # срабатывание радиокнопок
-        ch = self.dlg.radioButton.isChecked()
+        # срабатывание чекбокса
+        ch = self.dlg.checkMaxar.isChecked()
         self.dlg.frame.setEnabled(ch)  # включение/отключение элемента
-        #обраное значение для второго элемента
-        if ch == True:
-            ch = False
-        else:
-            ch = True
-        self.dlg.frame_2.setEnabled(ch)
 
     def ButWFS(self):
         # получаем введенный логин и праоль
         self.loginW = self.dlg.line_login_3.text()
         self.passwordW = self.dlg.mLinePassword_3.text()
-        coordin = self.extent()
+        # векторный слой
+        vLayer = self.dlg.VMapLayerComboBox.currentLayer()
+        # получаем координаты охвата в EPSG:4326
+        coordin = self.extent(vLayer)
         #self.serverW = self.dlg.line_server_2.text()
 
-        connectID = self.dlg.connectID.text() # "31fdd556-4c57-4c6e-937f-3deff1987415"
+        connectID = self.dlg.connectID.text() #
 
         # сохрангить ID
         self.saveSettings('connectID', connectID)
@@ -171,7 +259,7 @@ class Geoalert:
         # составляем хеадер для запроса
         authorization = {'Authorization': 'Basic %s' % userAndPass}
         r = requests.get(URL, headers=authorization)
-        print(r.text)
+        #print(r.text)
 
         # временный файл
         file_temp = self.dlg.input_directory.text() + 'WFS' + '_temp.geojson'
@@ -181,50 +269,95 @@ class Geoalert:
         vlayer_temp = QgsVectorLayer(file_temp, 'WFS_temp', "ogr")
         QgsProject.instance().addMapLayer(vlayer_temp)
 
+        # подключаем стиль!!!!!!!!!!!!!!!!!!
+        style = '/styles/style_wfs.qml'
+
+        qml_path = self.plugin_dir + style
+        print(qml_path)
+        #print(qml_path)
+        layer = self.iface.activeLayer()#активный слой
+        style_manager = layer.styleManager()
+        # read valid style from layer
+        style = QgsMapLayerStyle()
+        style.readFromLayer(layer)
+        # get style name from file
+        style_name = os.path.basename(qml_path).strip('.qml')
+        # add style with new name
+        style_manager.addStyle(style_name, style)
+        # set new style as current
+        style_manager.setCurrentStyle(style_name)
+        # load qml to current style
+        (message, success) = layer.loadNamedStyle(qml_path)
+        print(message)
+        if not success:  # if style not loaded remove it
+            style_manager.removeStyle(style_name)
+
+        # список названий полей
+        nameFields = []
+        # перебор названий полей слоя
+        for field in vlayer_temp.fields():
+            #print(field.name())
+            nameFields.append(field.name())
+
+        # список значей атрибутов
+        attrFields = []
+        features = vlayer_temp.getFeatures()
+        for feature in features:
+            # retrieve every feature with its geometry and attributes
+            #print("Feature ID: ", feature.id())
+
+            attrs = feature.attributes()
+            # attrs is a list. It contains all the attribute values of this feature
+            #print(attrs)
+            attrFields.append(attrs)
+
+        # print(nameFields)
+        # print(attrFields)
+
+        # Заполняем таблицу из слоя
+        self.mTableListRastr(nameFields, attrFields)
+
+
     # вставляем стандартную ссылку максар в поле адреса
     def maxarStandatr(self):
         connectID = self.dlg.connectID.text()
+        featureID = self.dlg.featureID.text()
         print(connectID)
-        url = "https://securewatch.digitalglobe.com/earthservice/wmtsaccess?" \
-              "SERVICE=WMTS&VERSION=1.0.0&STYLE=&REQUEST=GetTile&" \
-              "CONNECTID=" + connectID + "&LAYER=DigitalGlobe:ImageryTileService&FORMAT=image/jpeg&" \
-              "TileRow=%7By%7D&TileCol=%7Bx%7D&" \
-              "TileMatrixSet=EPSG:3857&TileMatrix=EPSG:3857:%7Bz%7D"
+
+        # выбор типа сслыки в зависимости от того указан featId или нет
+        if len(featureID) > 0:
+            url = "https://securewatch.digitalglobe.com/earthservice/wmtsaccess?" \
+                  "SERVICE=WMTS&VERSION=1.0.0&STYLE=&REQUEST=GetTile&" \
+                  "CONNECTID=%s&LAYER=DigitalGlobe:ImageryTileService&FORMAT=image/png&" \
+                  "TileRow={y}&TileCol={x}&TileMatrixSet=EPSG:3857&TileMatrix=EPSG:3857:{z}&" \
+                  "CQL_FILTER=feature_id='%s'" % (connectID, featureID)
+            url = url.replace("'", "%27")
+
+        else:
+            url = "https://securewatch.digitalglobe.com/earthservice/wmtsaccess?" \
+                  "SERVICE=WMTS&VERSION=1.0.0&STYLE=&REQUEST=GetTile&" \
+                  "CONNECTID=" + connectID + "&LAYER=DigitalGlobe:ImageryTileService&FORMAT=image/jpeg&" \
+                  "TileRow=%7By%7D&TileCol=%7Bx%7D&" \
+                  "TileMatrixSet=EPSG:3857&TileMatrix=EPSG:3857:%7Bz%7D"
 
         self.dlg.line_server_2.setText(url)
         self.dlg.comboBoxURLType.setCurrentIndex(0)
-
-        self.dlg.radioButton_2.setChecked(True)
-
         # сохрангить ID
         self.saveSettings('connectID', connectID)
 
         # использование WMS
-    def wms_sec(self):
-        # https://securewatch.digitalglobe.com/mapservice/wmsaccess?connectid=
-        connectID = self.dlg.connectID.text()
-        url = 'https://securewatch.digitalglobe.com/mapservice/wmsaccess?' \
-              'VERSION=1.3.0&LAYERS=DigitalGlobe:Imagery&' \
-              'STYLES=&TRANSPARENT=true&' \
-              'HEIGHT=256&WIDTH=256&' \
-              'BGCOLOR=0xFFFFFF&' \
-              'CONNECTID=%s' \
-              '&FEATUREPROFILE=Default_Profile&' \
-              'FEATURECOLLECTION=50e566ce5459bd63588f4325c86b3c4a' \
-              '&USECLOUDLESSGEOMETRY=false&' \
-              'CRS=EPSG:3857' % (connectID)
 
-        self.dlg.line_server_2.setText(url)
-        self.dlg.comboBoxURLType.setCurrentIndex(2)
-
-        self.dlg.radioButton_2.setChecked(True)
 
     #получить координаты охвата слоя
-    def extent(self):
-        vLayer = self.dlg.VMapLayerComboBox.currentLayer()  # векторный слой
+    def extent(self, vLayer):
+
         srs_ext = str(vLayer.crs()).split(' ')[1][:-1] #получение проекции слоя
         print(srs_ext)
-        vLayer.updateExtents()
+        try:
+            #выполняется только для векторных слоев
+            vLayer.updateExtents()
+        except:
+            None
         e = vLayer.extent()  # .toString()
         x = e.toString().split(' : ')
         coordStr = ''
@@ -251,10 +384,73 @@ class Geoalert:
         print("Transformed point:", coordStr[:-1]) # отсекаем лишнюю запятую в конце строки.
         return coordStr[:-1]
 # --------------------------
+
+        # создание и настройка таблицы
+    def mTableListRastr(self, nameFields, attrFields):
+        # очистка таблицы
+        self.dlg.tabListRast.clear()
+        # названия столбцов
+        stolbci = ['featureId', 'sourceUnit', 'productType', 'colorBandOrder', 'formattedDate']
+
+        listN = []
+        # ищем номера столбцов по названиям
+        for i in range(len(stolbci)):
+            for n in range(len(nameFields)):
+                if stolbci[i] == nameFields[n]:
+                    print(stolbci[i], n)
+                    listN.append(n)
+        #print(listN)
+
+        stolbci= []# обнуляем, дальше код заполнит их сам
+        # содержимое столбцов
+        attrStolb = []
+        # список номерв столбцов, которые нужно добавить в таблицу
+        #listN = [1,4,6,7,17,24]
+        # выбираем только нужные столбцы и добавляем их в отдельные списки
+        # перебор атрибутов всех объектов
+        for fi in attrFields:
+            # промежуточный список атрибутов для одного объекта
+            at = []
+            for n in reversed(range(len(nameFields))):
+                if n in listN:
+                    # заполняем список названий (пока не достигним их максимального количества)
+                    if len(listN) > len(stolbci):
+                        stolbci.append(nameFields[n])
+                    at.append(fi[n])
+            attrStolb.append(at)
+        #     print(at)
+        # print(stolbci)
+        # сортировка обработок в в списке по дате в обратном порядке
+        attrStolb.sort(reverse=True)
+        #print(attrStolb)
+        # количество столбцов
+        StolbKol = len(stolbci)
+        self.dlg.tabListRast.setColumnCount(StolbKol)  # создаем столбцы
+        self.dlg.tabListRast.setHorizontalHeaderLabels(stolbci)  # даем названия столбцам
+        # перебор всех столбцов и настройка
+        for nom in range(StolbKol):
+            # Устанавливаем выравнивание на заголовки
+            self.dlg.tabListRast.horizontalHeaderItem(nom).setTextAlignment(Qt.AlignCenter)
+        # указываем ширину столбцов
+        # self.dlg.tabListRast.setColumnWidth(0, 80)
+        # выделять всю строку при нажатии
+        self.dlg.tabListRast.setSelectionBehavior(QAbstractItemView.SelectRows)
+        # запретить редактировать таблицу пользователю
+        self.dlg.tabListRast.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        # включить сортировку в таблице
+        # self.dlg.tabListRast.setSortingEnabled(True)
+        kol_tab = len(attrStolb)  # количество элементов
+        self.dlg.tabListRast.setRowCount(kol_tab)  # создаем строки таблицы
+        # заполнение таблицы значениями
+        for x in range(len(attrStolb)):
+            for y in range(len(attrStolb[x])):
+                container = QTableWidgetItem(str(attrStolb[x][y]))
+                self.dlg.tabListRast.setItem(x, y, container)
+
     # создание и настройка таблицы
     def makeTable(self):
         self.dlg.tableWidget.clear()
-        stolbci = [u" Processing", u"Name", u"Status", u"Сreated", u"ID"]
+        stolbci = [u" Processing", u"Name", u"Status", u"Сreated", u"ID", u"AI model"]
         StolbKol = len(stolbci)  # 4#количество столбцов
         self.dlg.tableWidget.setColumnCount(StolbKol)  # создаем столбцы
         self.dlg.tableWidget.setHorizontalHeaderLabels(stolbci)  # даем названия столбцам
@@ -264,7 +460,8 @@ class Geoalert:
             self.dlg.tableWidget.horizontalHeaderItem(nom).setTextAlignment(Qt.AlignCenter)
         # указываем ширину столбцов
         self.dlg.tableWidget.setColumnWidth(0, 80)
-        self.dlg.tableWidget.setColumnWidth(1, 200)
+        self.dlg.tableWidget.setColumnWidth(1, 150)
+        self.dlg.tableWidget.setColumnWidth(2, 80)
         self.dlg.tableWidget.setColumnWidth(4, 50)
         # выделять всю строку при нажатии
         self.dlg.tableWidget.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -304,6 +501,7 @@ class Geoalert:
                 # print(wfd)
                 try:
                     self.dlg.comboBoxTypeProc.addItem(wfd[1]['name'])
+                    print(wfd[1]['name'])
                     # if wfd[0] == 0: #устанавливаем выбранным первый пункт в списке
                     #     self.dlg.comboBoxTypeProc.setText(wfd[1]['name'])
                 except:
@@ -333,6 +531,7 @@ class Geoalert:
         files = {'file': open(file_in, 'rb')}
         ip = self.server
         URL_up = ip + '/rest/rasters'
+        print('Старт загрузки .tif на сервер...')
         r = requests.post(URL_up, headers=headers, files=files)
         print('Ответ сервера:', r.text)
 
@@ -399,7 +598,7 @@ class Geoalert:
         #     self.dlg.comboBox_satelit.setCurrentIndex(comId)
         # self.dlg.comboBox_satelit.setDisabled(True) # отключение элемента
 
-    # заполнение комбобокса
+    # заполнение комбобокса растров
     def comboImageS(self):
         self.dlg.comboBox_satelit.clear()
         ll = ['Mapbox Satellite', self.tr('Custom (in settings)'), 'Open new .tif']
@@ -419,16 +618,20 @@ class Geoalert:
             # тип слоя
             nType = QgsProject.instance().mapLayers()[i].type()
             if nType == 1:
-                # тип растра
-                rt = QgsProject.instance().mapLayers()[i].rasterType()
-                # если тип = локальному растру
-                if rt == 2:
-                    # добавляем название и растр в список
-                    name = QgsProject.instance().mapLayers()[i].name()
-                    lay = QgsProject.instance().mapLayers()[i]
+                # # тип растра
+                # rt = QgsProject.instance().mapLayers()[i].rasterType()
+                # # если тип = локальному растру
+                # if rt == 2:
+                # добавляем название и растр в список
+                name = QgsProject.instance().mapLayers()[i].name()
+                lay = QgsProject.instance().mapLayers()[i]
 
+                fN = lay.dataProvider().dataSourceUri()
+                # добавляем только файлы с расширением .tif и .tiff
+                if fN[-4:] in ['.tif', '.Tif', '.TIF'] or fN[-5:] in ['.tiff', '.Tiff', '.TIFF']:
                     self.listLay.append([name, lay])
                     # print(name)
+                    # print(fN)
                     self.dlg.comboBox_satelit.addItem(name, id)
                     id += 1
         # print(self.listLay)
@@ -443,22 +646,17 @@ class Geoalert:
             #print(ph_satel)
             # чекбокс (обновить кеш)
             cacheUP = str(self.dlg.checkUp.isChecked())
-
-            print(cacheUP)
+            #print(cacheUP)
 
             #всплывающее сообщение
             self.iface.messageBar().pushMessage("Massage", "Please, wait. Uploading a file to the server...",
                                                 level=Qgis.Info,
-                                                duration=15)
+                                                duration=10)
 
             if ph_satel == 0: #Mapbox Satellite
-                url_xyz = ''
-                proj_EPSG = 'epsg:3857'
-                params = {"source_type": "xyz",
-                          "url": "%s" % (url_xyz),
-                          "cache_raster": "%s" % (cacheUP),
-                          "zoom": "18",
-                          "projection": "%s" % (proj_EPSG)}  # Проекция
+                # url_xyz = ''
+                #proj_EPSG = 'epsg:3857'
+                params = {}
                 self.upOnServ_proc(params)
             elif ph_satel == 1: #Custom
                 infoString = "Поставщиком космических снимков может взыматься плата за их использование!"
@@ -492,36 +690,90 @@ class Geoalert:
             QMessageBox.information(self.dlg, "About", infoString)
 
     def upOnServ_proc(self, params):
+        # название довой обработки
         NewLayName = self.dlg.NewLayName.text()
-        # получение слоев из комбобокса
-        Vlayer = self.dlg.mMapLayerComboBox.currentLayer()
-        # сценарий обработки
-        proc = self.dlg.comboBoxTypeProc.currentText()
+        # получение индекса векторного слоя из комбобокса
+        idv = self.dlg.polygonLayerComboBox.currentIndex()
+        # получение индекса растрового слоя
+        ph_satel = self.dlg.comboBox_satelit.currentIndex()
+        # генерация охвата растра (если выбран локальный растр)
+        # если выбрана обработка по охвату растра
 
-        # чекбокс (обновить кеш)
-        cacheUP = str(self.dlg.checkUp.isChecked())
+
+        if idv == 0:
+            # проверяем выбран ли локальный растр (id из комбобокса > 2)
+            if ph_satel > 2:
+                n = self.dlg.comboBox_satelit.currentIndex() - 3
+                rLayer = self.listLay[n][1]
+                print(rLayer.crs())
+                coord = self.extent(rLayer).split(',')
+                print(coord)
+                # создание текста для файла .geojson
+                text = '{"type": "FeatureCollection", "name": "extent", ' \
+                       '"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } }, ' \
+                       '"features": [{ "type": "Feature", "properties": { }, ' \
+                       '"geometry": { "type": "Polygon", "coordinates":[[' \
+                       '[ %s, %s ],[ %s, %s ],[ %s, %s ],[ %s, %s ],[ %s, %s ]' \
+                       ']] } }]}' % (coord[1], coord[0],
+                                     coord[1], coord[2],
+                                     coord[3], coord[2],
+                                     coord[3], coord[0],
+                                     coord[1], coord[0])
+                print(text)
+                # временный файл создание и запись
+                name_temp = self.dlg.input_directory.text() + 'extent_raster_temp.geojson'
+                file_temp = open(name_temp, 'w')
+                file_temp.write(text)
+                file_temp.close()
+                print(name_temp)
+                Vlayer = QgsVectorLayer(name_temp, 'extent_temp', "ogr")
+
+            else:
+                infoString = 'Use local ".tif" file'
+
+                QMessageBox.information(self.dlg, "About", infoString)
+                print('сначала выберите локальный .tif')
+        # если выбран один из полигональных слоев, пеередаем его дальше
+        elif idv > 0:
+            # получаем слой из списка полигональных слоев
+            Vlayer = self.listPolyLay[idv-1][1]
+        #Vlayer = self.dlg.mMapLayerComboBox.currentLayer()
+
         # projection = Vlayer.crs() #получаем проекцию EPSG
         projection_text = str(Vlayer.crs()).split(' ')[1][:-1]  # текстовое значение проекции EPSG
         projection_text = projection_text.split(":")[1]
-        print('Проекция исходного файла:', projection_text)
+        #print('Проекция исходного файла:', projection_text)
+
+        # сценарий обработки
+        proc = self.dlg.comboBoxTypeProc.currentText()
+        # чекбокс (обновить кеш)
+        cacheUP = str(self.dlg.checkUp.isChecked())
         # система координат для сервера
         crsDest = QgsCoordinateReferenceSystem(4326)
         # адрес хранения экспортного файла
-        file_adrG = self.plugin_dir + NewLayName + '.geojson'
+        file_adrG = self.plugin_dir +'/'+ NewLayName + '.geojson'
         # экспорт в GEOJSON
         error = QgsVectorFileWriter.writeAsVectorFormat(Vlayer, file_adrG, "utf-8", crsDest, "GeoJSON")
         if error == QgsVectorFileWriter.NoError:
-            print("success again!")
+            print("success!")
 
         URL_up = self.server + "/rest/processings"
 
-        meta = {"EPSG": "%s" % (projection_text),
-                "CACHE": "%s" % (cacheUP),
-                "source-app": "qgis"}
+        try:
+            urlt = params['url']
+            meta = {"EPSG": "%s" % (projection_text),
+                    "CACHE": "%s" % (cacheUP),
+                    "source": "mapbox",
+                    "source-app": "qgis"}
+        except:
+            meta = {"EPSG": "%s" % (projection_text),
+                    "CACHE": "%s" % (cacheUP),
+                    "source-app": "qgis"}
         # print(params)
         # print(meta)
         with open(file_adrG, "r") as read_file:
             GeomJ = json.load(read_file)
+        #print(file_adrG)
         os.remove(file_adrG)  # удаление временного файла
         for i in GeomJ['features']:
             # print(i)
@@ -537,11 +789,13 @@ class Geoalert:
 
         bodyUp = '{ "name": "%s", "wdName": "%s", "geometry": %s, "params": %s, "meta": %s}' \
                  % (NewLayName, proc, GeomJ, params, meta)
+
+        print(bodyUp)
         bodyUp = bodyUp.encode('utf-8')
 
         rpost = requests.request("POST", url=URL_up, data=bodyUp, headers=self.headers)
         print(rpost.text)
-        print(rpost.status_code)
+        #print(rpost.status_code)
 
         self.dlg.NewLayName.clear()  # очистить поле имени
 
@@ -655,6 +909,42 @@ class Geoalert:
                 print("Layer failed to load!")
             # Загрузка файла в окно qgis
             QgsProject.instance().addMapLayer(vlayer)
+
+            #---- подключение стилей
+            # определяем какой стиль подключить к слою
+            WFDef = self.listProc[row][5] # название дефенишинса
+            if WFDef == 'Buildings Detection' or WFDef == 'Buildings Detection With Heights':
+                style = '/styles/style_buildings.qml'
+            elif WFDef == 'Forest Detection':
+                style = '/styles/style_forest.qml'
+            elif WFDef == 'Forest Detection With Heights':
+                style = '/styles/style_forest_with_heights.qml'
+            elif WFDef == 'Roads Detection':
+                style = '/styles/style_roads.qml'
+            else:
+                style = '/styles/style_defoult.qml'
+
+            # подключаем стиль!!!!!!!!!!!!!!!!!!
+            qml_path = self.plugin_dir + style
+            print(qml_path)
+            layer = self.iface.activeLayer()
+            style_manager = layer.styleManager()
+            # read valid style from layer
+            style = QgsMapLayerStyle()
+            style.readFromLayer(layer)
+            # get style name from file
+            style_name = os.path.basename(qml_path).strip('.qml')
+            # add style with new name
+            style_manager.addStyle(style_name, style)
+            # set new style as current
+            style_manager.setCurrentStyle(style_name)
+            # load qml to current style
+            (message, success) = layer.loadNamedStyle(qml_path)
+            print(message)
+            if not success:  # if style not loaded remove it
+                style_manager.removeStyle(style_name)
+
+            #----
             time.sleep(1)
             qgis.utils.iface.zoomToActiveLayer()  # приблизить к охвату активного слоя
             try:
@@ -673,8 +963,11 @@ class Geoalert:
     def button_connect(self): # подключение и обновление в отдельном процессе
         #проверка рабочей папки
         if os.path.exists(self.dlg.input_directory.text()) != True:
-            infoString = self.tr('The working direktory was not found. Specify the direktory folder.')
+            infoString = self.tr('The working direktory was not found. \nSpecify the direktory folder. (In settings)')
             self.messege(infoString)
+            # окно выбора рабочей папки
+            self.select_output_file()
+
         else:
             # сохранить/сбросить пароль
             self.storeSettings()
@@ -724,7 +1017,7 @@ class Geoalert:
             #nx = 0 #счетчик
             self.flag = False
             self.listNameProc = []  # список названий обработок
-            listProc = [] # список обработок в таблице
+            self.listProc = [] # список обработок в таблице
             for i in range(self.kol_tab):
                 self.listNameProc.append(self.dictData[i]['name'])  # заполняем список названий обработок
                     # #print(self.dictData[i]['projectId'])
@@ -742,7 +1035,7 @@ class Geoalert:
                 #print('-'*18)
                 #print(self.dictData[i])
 
-                # вывод всех значений
+                # # вывод всех значений
                 # spisok_znachen = ['id',
                 #                   'name',
                 #                   'projectId',
@@ -762,20 +1055,29 @@ class Geoalert:
                 #     print(x + ': ', self.dictData[i][x], )
                 # print('-'*12)
 
-                # вписываем значения в соответствующие ячейки
+                #print(self.dictData[i]['workflowDef']['name'])
 
-                listProc.append([self.dictData[i]['created'], self.dictData[i]['percentCompleted'], self.dictData[i]['name'], self.dictData[i]['status'], self.dictData[i]['id']]) # заполняем список параметров обработок
+                # вписываем значения в список для сортировке по дате и времени
+                self.listProc.append([self.dictData[i]['created'],
+                                      self.dictData[i]['percentCompleted'],
+                                      self.dictData[i]['name'], self.dictData[i]['status'],
+                                      self.dictData[i]['id'],
+                                      self.dictData[i]['workflowDef']['name']])
 
             # сортировка обработок в в списке по дате в обратном порядке
-            listProc.sort(reverse = True)
+            self.listProc.sort(reverse = True)
             # print(listProc)
-            for nx in range(len(listProc)):
-                statf = QTableWidgetItem(str(listProc[nx][1]) + '%')
-                namef = QTableWidgetItem(listProc[nx][2])
-                Status = QTableWidgetItem(listProc[nx][3])
-                ids = QTableWidgetItem(listProc[nx][4])
+            # заполнение таблицы значениями
+            for nx in range(len(self.listProc)):
+                statf = QTableWidgetItem(str(self.listProc[nx][1]) + '%')
+                namef = QTableWidgetItem(self.listProc[nx][2])
+                Status = QTableWidgetItem(self.listProc[nx][3])
+                ids = QTableWidgetItem(self.listProc[nx][4])
+                #название сценария обработки
+                WFDef = QTableWidgetItem(self.listProc[nx][5])
+
                 #дата и время создания
-                cre2 = listProc[nx][0].split('T')
+                cre2 = self.listProc[nx][0].split('T')
                 createf = QTableWidgetItem(cre2[0] + ' ' + cre2[1][:8])
                 # построчная запись в таблицу
                 self.dlg.tableWidget.setItem(nx, 0, statf)
@@ -783,15 +1085,14 @@ class Geoalert:
                 self.dlg.tableWidget.setItem(nx, 2, Status)
                 self.dlg.tableWidget.setItem(nx, 3, createf)
                 self.dlg.tableWidget.setItem(nx, 4, ids)
-
-            # print(listProc)
-            # print('------------------')
-            # print(sorted(listProc))
+                self.dlg.tableWidget.setItem(nx, 5, WFDef)
 
             if self.flag == True:
                 secn = 5 # задержка обновления в секундах
-                print('Обновление через', secn, 'секунд')
+                # print('Обновление через', secn, 'секунд')
                 time.sleep(secn) # ожидание следующей итеррации
+            else:
+                print('Нет выполняющихся обработок')
 
     # запись переменных в хранилилище настроек
     def storeSettings(self):
@@ -858,7 +1159,6 @@ class Geoalert:
             self.dlg.line_login_3.setText(loginB64)  # b64decode(loginB64))
             self.dlg.mLinePassword_3.setText(passwordB64)  # b64decode(passwordB64))
 
-##############-----------------------------------------------------
     # Запись и чтение настроек
     def saveSettings(self, sVarName, sValue):
         print('сохранение настроек')
@@ -911,6 +1211,7 @@ class Geoalert:
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
         icon_path = self.plugin_dir + '/icon.png'
+
         self.add_action(
             icon_path,
             text=self.tr(u'Geoalert'),
@@ -918,6 +1219,7 @@ class Geoalert:
             parent=self.iface.mainWindow())
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
+
         for action in self.actions:
             self.iface.removePluginVectorMenu(
                 self.tr(u'&Geoalert'),
@@ -926,6 +1228,18 @@ class Geoalert:
         # remove the toolbar
         del self.toolbar
     def run(self):
+
+        # обновление списка слоев для выбора источника растра
+        # запускаем отдельным потоком
+        self.potok = True
+        upLayers = Thread(target=self.update_layer_list)
+        upLayers.start()
+
         # Открыть диалог
         self.dlg.show()
         self.dlg.exec_()
+
+        print("Закрытие окна, завершение потока")
+        # закрываем поток после закрытия окна плагина
+        self.potok = False
+        upLayers.join()
