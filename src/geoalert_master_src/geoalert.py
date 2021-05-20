@@ -433,7 +433,7 @@ class Geoalert:
     # создание и настройка таблицы
     def makeTable(self):
         self.dlg.tableWidget.clear()
-        stolbci = ["Processing", "Name", "Status", "Сreated", "ID", "AI model"]
+        stolbci = ["Progress", "Name", "Status", "Сreated", "ID", "AI model"]
         StolbKol = len(stolbci)  # 4#количество столбцов
         self.dlg.tableWidget.setColumnCount(StolbKol)  # создаем столбцы
         self.dlg.tableWidget.setHorizontalHeaderLabels(stolbci)  # даем названия столбцам

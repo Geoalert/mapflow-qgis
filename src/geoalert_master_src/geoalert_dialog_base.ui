@@ -313,7 +313,7 @@
            </rect>
           </property>
           <property name="text">
-           <string>Delete</string>
+           <string>Delete processing</string>
           </property>
          </widget>
          <widget class="QPushButton" name="ButtonDownload">
@@ -388,7 +388,7 @@
            </rect>
           </property>
           <property name="text">
-           <string>Custom Imagery provider URL:*</string>
+           <string>Custom imagery provider URL:*</string>
           </property>
          </widget>
          <widget class="QLabel" name="label_46">
@@ -417,7 +417,7 @@
            </rect>
           </property>
           <property name="text">
-           <string>max zoom 14</string>
+           <string>Max zoom 14</string>
           </property>
           <property name="checked">
            <bool>true</bool>
@@ -488,7 +488,7 @@
            </rect>
           </property>
           <property name="text">
-           <string>Geoalert platform url:</string>
+           <string>Geoalert platform URL:</string>
           </property>
          </widget>
          <widget class="QLabel" name="label_28">
@@ -501,7 +501,7 @@
            </rect>
           </property>
           <property name="text">
-           <string>Destination folder:</string>
+           <string>Output directory:</string>
           </property>
          </widget>
          <widget class="QPushButton" name="but_dir">
@@ -645,7 +645,7 @@
            </rect>
           </property>
           <property name="text">
-           <string>Maxar Securewatch:</string>
+           <string>Maxar SecureWatch:</string>
           </property>
           <property name="checked">
            <bool>false</bool>
@@ -842,14 +842,14 @@
            </property>
            <property name="text">
             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;
-&lt;div style=&quot;margin:30px; background-color: #e7f2fa&quot;&gt;&lt;p&gt;This application enables to use &lt;a href=&quot;http://mapflow.ai/&quot;&gt;Mapflow.ai&lt;/a&gt; processing capabilities in QGIS. To start using you need Processing API access, please, send us a request to help@geoalert.io&lt;/p&gt;&lt;/div&gt;
-&lt;h2 style=&quot;margin:30px;&quot;&gt;How to use plugin&lt;/h2&gt;
+&lt;div style=&quot;margin:30px; background-color: #e7f2fa&quot;&gt;&lt;p&gt;This application requires access to &lt;a href=&quot;http://mapflow.ai/&quot;&gt;Mapflow.ai&lt;/a&gt; Processing API. To obtain credentials, please, send us a request to help@geoalert.io&lt;/p&gt;&lt;/div&gt;
+&lt;h2 style=&quot;margin:30px;&quot;&gt;How to use the plugin&lt;/h2&gt;
 &lt;ul&gt;
-&lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-install-the-plugin&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Install the plugin for QGIS&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;User Interface&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to use imagery sources&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-install-the-plugin&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Installation guide&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;User Interface walkthrough&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to use a different imagery tileset&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
 &lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect to Maxar SercureWatch&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-process-your-own-imagery-data&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to process your own imagery data&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-process-your-own-imagery-data&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to process your own image&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
 &lt;/ul&gt;
 &lt;/body&gt;&lt;/html&gt;</string>
            </property>
