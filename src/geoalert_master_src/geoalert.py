@@ -29,6 +29,8 @@ class Geoalert:
 
     def __init__(self, iface):
         self.iface = iface
+        self.project = QgsProject.instance()
+        self.settings = QgsSettings()
         # определяем папку в которой находится модуль
         self.plugin_dir = os.path.dirname(__file__)
         # initialize locale
@@ -134,7 +136,7 @@ class Geoalert:
     #     print(name_temp)
     #     Vlayer = QgsVectorLayer(name_temp, 'extent_temp', "ogr")
     #
-    #     QgsProject.instance().addMapLayer(Vlayer)
+    #     self.project.addMapLayer(Vlayer)
 
 # Вписываем feature ID из таблицы в поле
 
@@ -160,7 +162,7 @@ class Geoalert:
         # выполняется пока окно открыто
         while self.potok:
             #print('Старт проверки')
-            lenLayers = len(QgsProject.instance().mapLayers())
+            lenLayers = len(self.project.mapLayers())
             # print(lenL, lenLayers)
             if lenL != lenLayers:
                 lenL = lenLayers  # запоминаем значение для проверки в следующий раз
@@ -184,20 +186,20 @@ class Geoalert:
         # заполняем полигональными слоями
 
         self.listPolyLay = []
-        layersAll = QgsProject.instance().mapLayers()
+        layersAll = self.project.mapLayers()
         # print(layersAll)
         id = len(ll)
         # перебор всех слоев и проверка их типа
         for i in layersAll:
             # тип слоя
-            nType = QgsProject.instance().mapLayers()[i].type()
+            nType = self.project.mapLayers()[i].type()
             # print(nType)
             # проверка на векторность
             if nType == 0:
                 # получаем один объект из слоя для определения полигонального слоя
                 # в случае если слой пустой, пропускаем его
                 try:
-                    features = QgsProject.instance().mapLayers()[i].getFeatures()
+                    features = self.project.mapLayers()[i].getFeatures()
                     for feature in features:
                         # определяем тип геометрии по первому объекту
                         geom = feature.geometry()
@@ -206,8 +208,8 @@ class Geoalert:
                     # если тип = полигон
                     if geom.type() == QgsWkbTypes.PolygonGeometry:
                         # добавляем название и вектор в список
-                        nameV = QgsProject.instance().mapLayers()[i].name()
-                        layV = QgsProject.instance().mapLayers()[i]
+                        nameV = self.project.mapLayers()[i].name()
+                        layV = self.project.mapLayers()[i]
                         self.listPolyLay.append([nameV, layV])
                         # print(name)
                         self.dlg.polygonLayerComboBox.addItem(nameV, id)
@@ -259,7 +261,7 @@ class Geoalert:
         with open(file_temp, "wb") as f:
             f.write(str.encode(r.text))
         vlayer_temp = QgsVectorLayer(file_temp, 'WFS_temp', "ogr")
-        QgsProject.instance().addMapLayer(vlayer_temp)
+        self.project.addMapLayer(vlayer_temp)
 
         # подключаем стиль!!!!!!!!!!!!!!!!!!
         style = '/styles/style_wfs.qml'
@@ -362,7 +364,7 @@ class Geoalert:
                 # перепроицирование
                 crsSrc = QgsCoordinateReferenceSystem(srs_ext)  # Исходная crs
                 crsDest = QgsCoordinateReferenceSystem("EPSG:4326")  # Целевая crs
-                transformContext = QgsProject.instance().transformContext()
+                transformContext = self.project.transformContext()
                 xform = QgsCoordinateTransform(crsSrc, crsDest, transformContext)
 
                 # forward transformation: src -> dest
@@ -464,21 +466,18 @@ class Geoalert:
     # загрузка рабочей папки из настроек в интерфейс
 
     def get_output_file(self):
-        s = QgsSettings()
-        name = s.value("geoalert/workDir", "", type=str)
+        name = self.settings.value("geoalert/workDir", "", type=str)
         self.dlg.input_directory.setText(name)  # вписываем адрес в поле
     # выбор рабочей папки
 
     def select_output_file(self):
-        # доступ к настройкам
-        s = QgsSettings()
         # адрес папки
         filename = QFileDialog.getExistingDirectory(None, "Select Folder") + '/'
         # запоминаем адрес в файл для автоматической подгрузки, если он не пустой
         if len(filename) > 1:
             self.dlg.input_directory.setText(filename)
             # записываем в настройки
-            s.setValue("geoalert/workDir", filename)
+            self.settings.setValue("geoalert/workDir", filename)
 
     # получаем список дефинишинсов
     def WFDefeni(self):
@@ -604,21 +603,21 @@ class Geoalert:
         # заполняем локальными подключенными растрами
         # self.comboImageS()
         self.listLay = []
-        layersAll = QgsProject.instance().mapLayers()
+        layersAll = self.project.mapLayers()
         # print(layersAll)
         id = 3
         # перебор всех слоев и проверка их типа
         for i in layersAll:
             # тип слоя
-            nType = QgsProject.instance().mapLayers()[i].type()
+            nType = self.project.mapLayers()[i].type()
             if nType == 1:
                 # # тип растра
-                # rt = QgsProject.instance().mapLayers()[i].rasterType()
+                # rt = self.project.mapLayers()[i].rasterType()
                 # # если тип = локальному растру
                 # if rt == 2:
                 # добавляем название и растр в список
-                name = QgsProject.instance().mapLayers()[i].name()
-                lay = QgsProject.instance().mapLayers()[i]
+                name = self.project.mapLayers()[i].name()
+                lay = self.project.mapLayers()[i]
 
                 fN = lay.dataProvider().dataSourceUri()
                 # добавляем только файлы с расширением .tif и .tiff
@@ -818,7 +817,7 @@ class Geoalert:
         password = '&password=' + self.dlg.mLinePassword_3.text()
         urlWithParams = typeXYZ + url + min_max + login + password
         rlayer = QgsRasterLayer(urlWithParams, self.tr('User_servise ') + z_min + '-' + z_max, 'wms')
-        QgsProject.instance().addMapLayer(rlayer)
+        self.project.addMapLayer(rlayer)
 
         # сохраняем используемый адрес в настройки QGIS
         surl = self.dlg.line_server_2.text()
@@ -861,7 +860,7 @@ class Geoalert:
             password = '&password=' + self.dlg.mLinePassword.text()
             urlWithParams = typeXYZ + url + min_max + login + password
             rlayer = QgsRasterLayer(urlWithParams, name_d + 'xyz', 'wms')
-            QgsProject.instance().addMapLayer(rlayer)
+            self.project.addMapLayer(rlayer)
 
             #x1 = name_d.rfind('_')
             # извлекаем проекцию из метаданных/перестали извлекать, задали фиксированную
@@ -892,7 +891,7 @@ class Geoalert:
             if not vlayer:
                 print("Layer failed to load!")
             # Загрузка файла в окно qgis
-            QgsProject.instance().addMapLayer(vlayer)
+            self.project.addMapLayer(vlayer)
 
             # ---- подключение стилей
             # определяем какой стиль подключить к слою
@@ -1077,85 +1076,72 @@ class Geoalert:
     def storeSettings(self):
         """Запись переменных в хранилилище настроек."""
         print('сохранение настроек Geoalert')
-        # доступ к настройкам
-        s = QgsSettings()
         # если включен чекбокс сохранять пароль
         if self.dlg.savePass_serv.isChecked():
             login = self.dlg.line_login.text()
             password = self.dlg.mLinePassword.text()
             # сохраняем настройку чекбокса
-            s.setValue("geoalert/checkPas_serv", True)
+            self.settings.setValue("geoalert/checkPas_serv", True)
         else:  # иначе сохранять пустые значения
             login = ''
             password = ''
             # сохраняем настройку чекбокса
-            s.setValue("geoalert/checkPas_serv", False)
+            self.settings.setValue("geoalert/checkPas_serv", False)
         # и записываем в настройки
-        s.setValue("geoalert/log", login)  # unicode(b64encode(str.encode(login))))
-        s.setValue("geoalert/pas", password)  # unicode(b64encode(str.encode(password))))
+        self.settings.setValue("geoalert/log", login)  # unicode(b64encode(str.encode(login))))
+        self.settings.setValue("geoalert/pas", password)  # unicode(b64encode(str.encode(password))))
 
     def readSet(self):
         """Чтение переменных из хранилища настроек."""
-        # доступ к настройкам
-        s = QgsSettings()
         # если в настройках включен чекбокс,
-        if s.value("geoalert/checkPas_serv"):
+        if self.settings.value("geoalert/checkPas_serv"):
             # включаем чекбокс в окне
             self.dlg.savePass_serv.setChecked(True)
             # загружаем логин/пароль и вставляем в поля
-            loginB64 = s.value("geoalert/log", "", type=str)
-            passwordB64 = s.value("geoalert/pas", "", type=str)
+            loginB64 = self.settings.value("geoalert/log", "", type=str)
+            passwordB64 = self.settings.value("geoalert/pas", "", type=str)
             self.dlg.line_login.setText(loginB64)  # b64decode(loginB64))
             self.dlg.mLinePassword.setText(passwordB64)  # b64decode(passwordB64))
 
     def storeSettingsMap(self):
         """Запись переменных в хранилилище настроек."""
         print('сохранение настроек сервиса космоснимков')
-        # доступ к настройкам
-        s = QgsSettings()
         # если включен чекбокс сохранять пароль
         if self.dlg.checkSatelitPass.isChecked():
             login = self.dlg.line_login_3.text()
             password = self.dlg.mLinePassword_3.text()
             # сохраняем настройку чекбокса
-            s.setValue("geoalert/checkSatelitPass", True)
+            self.settings.setValue("geoalert/checkSatelitPass", True)
         else:  # иначе сохранять пустые значения
             login = ''
             password = ''
             # сохраняем настройку чекбокса
-            s.setValue("geoalert/checkSatelitPass", False)
+            self.settings.setValue("geoalert/checkSatelitPass", False)
         # записываем в настройки
-        s.setValue("geoalert/logMap", login)  # unicode(b64encode(str.encode(login))))
-        s.setValue("geoalert/pasMap", password)  # unicode(b64encode(str.encode(password))))
+        self.settings.setValue("geoalert/logMap", login)  # unicode(b64encode(str.encode(login))))
+        self.settings.setValue("geoalert/pasMap", password)  # unicode(b64encode(str.encode(password))))
 
     def readSettingsMap(self):
         """Чтение переменных из хранилища настроек."""
-        # доступ к настройкам
-        s = QgsSettings()
         # если в настройках включен чекбокс,
-        if s.value("geoalert/checkSatelitPass"):
+        if self.settings.value("geoalert/checkSatelitPass"):
             # включаем чекбокс в окне
             self.dlg.checkSatelitPass.setChecked(True)
             # загружаем логин/пароль и вставляем в поля
-            loginB64 = s.value("geoalert/logMap", "", type=str)
-            passwordB64 = s.value("geoalert/pasMap", "", type=str)
+            loginB64 = self.settings.value("geoalert/logMap", "", type=str)
+            passwordB64 = self.settings.value("geoalert/pasMap", "", type=str)
             self.dlg.line_login_3.setText(loginB64)  # b64decode(loginB64))
             self.dlg.mLinePassword_3.setText(passwordB64)  # b64decode(passwordB64))
 
     def saveSettings(self, sVarName, sValue):
-        """Запись и чтение настроек."""
+        """Добавление или изменение записи в настройки."""
         print('сохранение настроек')
-        # доступ к настройкам
-        s = QgsSettings()
-        # записываем в настройки (имя переменной и ее значение)
-        s.setValue("geoalert/" + sVarName, sValue)
+        self.settings.setValue("geoalert/" + sVarName, sValue)
 
     def readSettings(self, sVarName):
         """Чтение переменных из хранилища настроек."""
-        # доступ к настройкам
-        s = QgsSettings()
         # Возврат значения из настроек
-        sValue = s.value("geoalert/" + sVarName)
+        sValue = self.settings.value("geoalert/" + sVarName)
         # если переменная существует и не пустая, то возвращаем ее значение
         return '' if sValue is None else sValue
 
