@@ -61,7 +61,7 @@ class Geoalert:
         # кнопка выбора папки через обзор
         self.dlg.but_dir.clicked.connect(self.select_output_file)
         # ввести стандартную максаровскую ссылку
-        self.dlg.maxarStandardURL.clicked.connect(self.maxarStandatr)
+        self.dlg.maxarStandardURL.clicked.connect(self.maxarStandard)
         # всплывающие подсказки
         self.tips()
         # чтение настроек логин/пароль
@@ -308,7 +308,7 @@ class Geoalert:
 
     # вставляем стандартную ссылку максар в поле адреса
 
-    def maxarStandatr(self):
+    def maxarStandard(self):
         connectID = self.dlg.connectID.text()
         featureID = self.dlg.featureID.text()
         print(connectID)
