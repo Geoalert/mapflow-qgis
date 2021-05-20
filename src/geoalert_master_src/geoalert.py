@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from qgis.core import *
-from PyQt5 import * # Qt
-from PyQt5.QtGui import *# QIcon
-from PyQt5.QtWidgets import * #QAction, QMessageBox, QProgressBar
-from PyQt5.QtCore import *# QSettings, QTranslator, qVersion, QCoreApplication, QVariant, Qt
+from PyQt5 import *  # Qt
+from PyQt5.QtGui import *  # QIcon
+from PyQt5.QtWidgets import *  # QAction, QMessageBox, QProgressBar
+from PyQt5.QtCore import *  # QSettings, QTranslator, qVersion, QCoreApplication, QVariant, Qt
 from qgis.gui import *
 # Импорт файла resources.py
 from .resources_rc import *
@@ -25,8 +25,9 @@ import requests
 import json
 from math import *
 from base64 import b64encode, b64decode
-from threading import Thread# работа с процессами
+from threading import Thread  # работа с процессами
 import traceback
+
 
 class Geoalert:
 
@@ -59,7 +60,7 @@ class Geoalert:
         # создание и настройка таблицы
         self.makeTable()
         # Нажатие кнопки "Подключить".
-        self.dlg.ButtonConnect.clicked.connect( self.button_connect )
+        self.dlg.ButtonConnect.clicked.connect(self.button_connect)
         # загрузить выбраный результат
         self.dlg.ButtonDownload.clicked.connect(self.addSucces)
         # Кнопка: Выгрузить слой на сервер для обработки
@@ -76,7 +77,7 @@ class Geoalert:
         self.tips()
         # чтение настроек логин/пароль
         self.readSet()
-        #чтение connect ID
+        # чтение connect ID
         connectID = self.readSettings('connectID')
         self.dlg.connectID.setText(connectID)
         # чтение настроек URL
@@ -91,7 +92,7 @@ class Geoalert:
         self.dlg.frame.setEnabled(False)
 
         # чекбокс экстент растра вместо полигонального слоя
-        #self.dlg.checkRasterExtent.clicked.connect(self.rasterExtentSand())
+        # self.dlg.checkRasterExtent.clicked.connect(self.rasterExtentSand())
 
         # чекбокс сохранения логин и пароль для сервиса космоснимков
         self.dlg.checkSatelitPass.clicked.connect(self.storeSettingsMap)
@@ -101,20 +102,18 @@ class Geoalert:
         self.get_output_file()
         # срабатывает при выборе источника снимков в комбобоксе
         self.dlg.comboBox_satelit.activated.connect(self.comboClick)
-        #загрузка полей комбобокса
+        # загрузка полей комбобокса
         self.comboImageS()
 
         # подключение слоя WFS
         self.dlg.ButWFS.clicked.connect(self.ButWFS)
 
         self.dlg.tabListRast.clicked.connect(self.feID)
-        #self.dlg.ButExtent.clicked.connect(self.extent)
-
+        # self.dlg.ButExtent.clicked.connect(self.extent)
 
         # тестовая кнопка
         # self.dlg.pushButton.clicked.connect(self.test)
     # ------------------------------
-
 
     # тест экстента
     # def test(self):
@@ -146,6 +145,7 @@ class Geoalert:
     #     QgsProject.instance().addMapLayer(Vlayer)
 
 # Вписываем feature ID из таблицы в поле
+
     def feID(self):
         # получить номер выбранной строки в таблице!
         row = self.dlg.tabListRast.currentIndex().row()
@@ -161,7 +161,7 @@ class Geoalert:
 
     # обновление списка растров и полигонов
     # запускаем при старте
-    def update_layer_list(self ):
+    def update_layer_list(self):
         print('Старт потока-------------')
         lenL = 0
 
@@ -171,7 +171,7 @@ class Geoalert:
             lenLayers = len(QgsProject.instance().mapLayers())
             # print(lenL, lenLayers)
             if lenL != lenLayers:
-                lenL = lenLayers #запоминаем значение для проверки в следующий раз
+                lenL = lenLayers  # запоминаем значение для проверки в следующий раз
                 # обновление списков комбобокса
                 # растры
                 self.comboImageS()
@@ -199,7 +199,7 @@ class Geoalert:
         for i in layersAll:
             # тип слоя
             nType = QgsProject.instance().mapLayers()[i].type()
-            #print(nType)
+            # print(nType)
             # проверка на векторность
             if nType == 0:
                 # получаем один объект из слоя для определения полигонального слоя
@@ -240,7 +240,7 @@ class Geoalert:
         coordin = self.extent(vLayer)
         #self.serverW = self.dlg.line_server_2.text()
 
-        connectID = self.dlg.connectID.text() #
+        connectID = self.dlg.connectID.text()
 
         # сохрангить ID
         self.saveSettings('connectID', connectID)
@@ -259,7 +259,7 @@ class Geoalert:
         # составляем хеадер для запроса
         authorization = {'Authorization': 'Basic %s' % userAndPass}
         r = requests.get(URL, headers=authorization)
-        #print(r.text)
+        # print(r.text)
 
         # временный файл
         file_temp = self.dlg.input_directory.text() + 'WFS' + '_temp.geojson'
@@ -274,8 +274,8 @@ class Geoalert:
 
         qml_path = self.plugin_dir + style
         print(qml_path)
-        #print(qml_path)
-        layer = self.iface.activeLayer()#активный слой
+        # print(qml_path)
+        layer = self.iface.activeLayer()  # активный слой
         style_manager = layer.styleManager()
         # read valid style from layer
         style = QgsMapLayerStyle()
@@ -296,7 +296,7 @@ class Geoalert:
         nameFields = []
         # перебор названий полей слоя
         for field in vlayer_temp.fields():
-            #print(field.name())
+            # print(field.name())
             nameFields.append(field.name())
 
         # список значей атрибутов
@@ -308,7 +308,7 @@ class Geoalert:
 
             attrs = feature.attributes()
             # attrs is a list. It contains all the attribute values of this feature
-            #print(attrs)
+            # print(attrs)
             attrFields.append(attrs)
 
         # print(nameFields)
@@ -317,8 +317,8 @@ class Geoalert:
         # Заполняем таблицу из слоя
         self.mTableListRastr(nameFields, attrFields)
 
-
     # вставляем стандартную ссылку максар в поле адреса
+
     def maxarStandatr(self):
         connectID = self.dlg.connectID.text()
         featureID = self.dlg.featureID.text()
@@ -347,27 +347,27 @@ class Geoalert:
 
         # использование WMS
 
+    # получить координаты охвата слоя
 
-    #получить координаты охвата слоя
     def extent(self, vLayer):
 
-        srs_ext = str(vLayer.crs()).split(' ')[1][:-1] #получение проекции слоя
+        srs_ext = str(vLayer.crs()).split(' ')[1][:-1]  # получение проекции слоя
         print(srs_ext)
         try:
-            #выполняется только для векторных слоев
+            # выполняется только для векторных слоев
             vLayer.updateExtents()
         except:
             None
         e = vLayer.extent()  # .toString()
         x = e.toString().split(' : ')
         coordStr = ''
-        #перебор координат
+        # перебор координат
         for i in x:
             z = i.split(',')
             print(z)
-            #если проекции отличаются, то перепроицировать
+            # если проекции отличаются, то перепроицировать
             if srs_ext != "EPSG:4326":
-                #перепроицирование
+                # перепроицирование
                 crsSrc = QgsCoordinateReferenceSystem(srs_ext)  # Исходная crs
                 crsDest = QgsCoordinateReferenceSystem("EPSG:4326")  # Целевая crs
                 transformContext = QgsProject.instance().transformContext()
@@ -381,7 +381,7 @@ class Geoalert:
             else:
                 coordStr += z[1] + ',' + z[0] + ','
 
-        print("Transformed point:", coordStr[:-1]) # отсекаем лишнюю запятую в конце строки.
+        print("Transformed point:", coordStr[:-1])  # отсекаем лишнюю запятую в конце строки.
         return coordStr[:-1]
 # --------------------------
 
@@ -399,9 +399,9 @@ class Geoalert:
                 if stolbci[i] == nameFields[n]:
                     print(stolbci[i], n)
                     listN.append(n)
-        #print(listN)
+        # print(listN)
 
-        stolbci= []# обнуляем, дальше код заполнит их сам
+        stolbci = []  # обнуляем, дальше код заполнит их сам
         # содержимое столбцов
         attrStolb = []
         # список номерв столбцов, которые нужно добавить в таблицу
@@ -422,7 +422,7 @@ class Geoalert:
         # print(stolbci)
         # сортировка обработок в в списке по дате в обратном порядке
         attrStolb.sort(reverse=True)
-        #print(attrStolb)
+        # print(attrStolb)
         # количество столбцов
         StolbKol = len(stolbci)
         self.dlg.tabListRast.setColumnCount(StolbKol)  # создаем столбцы
@@ -470,11 +470,13 @@ class Geoalert:
         # включить сортировку в таблице
         # self.dlg.tableWidget.setSortingEnabled(True)
     # загрузка рабочей папки из настроек в интерфейс
+
     def get_output_file(self):
         s = QgsSettings()
         name = s.value("geoalert/workDir", "", type=str)
         self.dlg.input_directory.setText(name)  # вписываем адрес в поле
     # выбор рабочей папки
+
     def select_output_file(self):
         # доступ к настройкам
         s = QgsSettings()
@@ -512,7 +514,7 @@ class Geoalert:
             self.flag = 'report error'
             print('Wrong login or password! Please try again.')
 
-            return False#self.flag
+            return False  # self.flag
 
     # выбор tif для загрузки на сервер
     def select_tif(self):
@@ -524,10 +526,10 @@ class Geoalert:
 
     # загрузка tif на сервер
     def up_tif(self, n):
-        #получаем адрес файла
+        # получаем адрес файла
         file_in = self.listLay[n][1].dataProvider().dataSourceUri()
 
-        headers = self.authorization # формируем заголовок для залогинивания
+        headers = self.authorization  # формируем заголовок для залогинивания
         files = {'file': open(file_in, 'rb')}
         ip = self.server
         URL_up = ip + '/rest/rasters'
@@ -536,7 +538,7 @@ class Geoalert:
         print('Ответ сервера:', r.text)
 
         if 'url' in r.text:
-            url = r.json()['url'] #получаем адрес для использования загруженного файла
+            url = r.json()['url']  # получаем адрес для использования загруженного файла
             print('Используется: URL')
         elif 'uri' in r.text:
             url = r.json()['uri']  # получаем адрес для использования загруженного файла
@@ -552,7 +554,7 @@ class Geoalert:
         if row != -1:
             # Номер в dictData
             row_nom = (self.kol_tab - row - 1)
-            #получаем данные о слое и его ID
+            # получаем данные о слое и его ID
             id_v = self.dictData[row_nom]['id']
             print(id_v, 'Удален')
             URL_f = self.server + "/rest/processings/" + id_v
@@ -565,22 +567,22 @@ class Geoalert:
         self.iface.messageBar().pushMessage("Massage", "Processing has been removed.",
                                             level=Qgis.Warning,
                                             duration=7)
-        #обновить список слоев
+        # обновить список слоев
         self.button_connect()
 
-    #срабатывание от выбора в комбобоксе
+    # срабатывание от выбора в комбобоксе
     def comboClick(self):
         comId = self.dlg.comboBox_satelit.currentIndex()
         # открытие tif файла
         if comId == 2:
-            self.addres_tiff = self.select_tif() #выбрать tif на локальном компьютере
+            self.addres_tiff = self.select_tif()  # выбрать tif на локальном компьютере
             #print('comb:', self.addres_tiff)
-            #если адрес получен
+            # если адрес получен
             if self.addres_tiff:
                 nameL = os.path.basename(self.addres_tiff)[:-4]
-                #добавление растра в QGIS
+                # добавление растра в QGIS
                 self.iface.addRasterLayer(self.addres_tiff, nameL)
-                #заполнение комбобокса
+                # заполнение комбобокса
                 self.comboImageS()
                 # поиск слоя по адресу файла
                 for n, nameS in enumerate(self.listLay):
@@ -608,7 +610,7 @@ class Geoalert:
 
         print('-----------------------------------')
         # заполняем локальными подключенными растрами
-        #self.comboImageS()
+        # self.comboImageS()
         self.listLay = []
         layersAll = QgsProject.instance().mapLayers()
         # print(layersAll)
@@ -639,26 +641,26 @@ class Geoalert:
     # Выгрузить слой на сервер для обработки
     def uploadOnServer(self, iface):
         NewLayName = self.dlg.NewLayName.text()
-        if len(NewLayName) > 0 and NewLayName not in self.listNameProc: #если имя не пустое - начинаем загрузку
+        if len(NewLayName) > 0 and NewLayName not in self.listNameProc:  # если имя не пустое - начинаем загрузку
 
             # Подложка для обработки
             ph_satel = self.dlg.comboBox_satelit.currentIndex()
-            #print(ph_satel)
+            # print(ph_satel)
             # чекбокс (обновить кеш)
             cacheUP = str(self.dlg.checkUp.isChecked())
-            #print(cacheUP)
+            # print(cacheUP)
 
-            #всплывающее сообщение
+            # всплывающее сообщение
             self.iface.messageBar().pushMessage("Massage", "Please, wait. Uploading a file to the server...",
                                                 level=Qgis.Info,
                                                 duration=10)
 
-            if ph_satel == 0: #Mapbox Satellite
+            if ph_satel == 0:  # Mapbox Satellite
                 # url_xyz = ''
                 #proj_EPSG = 'epsg:3857'
                 params = {}
                 self.upOnServ_proc(params)
-            elif ph_satel == 1: #Custom
+            elif ph_satel == 1:  # Custom
                 infoString = "Поставщиком космических снимков может взыматься плата за их использование!"
                 QMessageBox.information(self.dlg, "About", infoString)
                 login = self.dlg.line_login_3.text()
@@ -677,7 +679,7 @@ class Geoalert:
                 self.upOnServ_proc(params)
 
             # загрузка выбранного .tif
-            elif ph_satel > 2: #
+            elif ph_satel > 2:
                 n = ph_satel - 3
                 p = Thread(target=self.up_tif, args=(n,))
                 p.start()
@@ -698,7 +700,6 @@ class Geoalert:
         ph_satel = self.dlg.comboBox_satelit.currentIndex()
         # генерация охвата растра (если выбран локальный растр)
         # если выбрана обработка по охвату растра
-
 
         if idv == 0:
             # проверяем выбран ли локальный растр (id из комбобокса > 2)
@@ -751,7 +752,7 @@ class Geoalert:
         # система координат для сервера
         crsDest = QgsCoordinateReferenceSystem(4326)
         # адрес хранения экспортного файла
-        file_adrG = self.plugin_dir +'/'+ NewLayName + '.geojson'
+        file_adrG = self.plugin_dir + '/' + NewLayName + '.geojson'
         # экспорт в GEOJSON
         error = QgsVectorFileWriter.writeAsVectorFormat(Vlayer, file_adrG, "utf-8", crsDest, "GeoJSON")
         if error == QgsVectorFileWriter.NoError:
@@ -773,7 +774,7 @@ class Geoalert:
         # print(meta)
         with open(file_adrG, "r") as read_file:
             GeomJ = json.load(read_file)
-        #print(file_adrG)
+        # print(file_adrG)
         os.remove(file_adrG)  # удаление временного файла
         for i in GeomJ['features']:
             # print(i)
@@ -795,7 +796,7 @@ class Geoalert:
 
         rpost = requests.request("POST", url=URL_up, data=bodyUp, headers=self.headers)
         print(rpost.text)
-        #print(rpost.status_code)
+        # print(rpost.status_code)
 
         self.dlg.NewLayName.clear()  # очистить поле имени
 
@@ -818,17 +819,17 @@ class Geoalert:
         else:
             z_max = '18'
 
-        z_min = '0'#self.dlg.zmin.text()
+        z_min = '0'  # self.dlg.zmin.text()
         min_max = "&zmax=" + z_max + "&zmin=" + z_min
-        preview_type = self.dlg.comboBoxURLType.currentText()#получаем
+        preview_type = self.dlg.comboBoxURLType.currentText()  # получаем
 
-        url = self.dlg.line_server_2.text()# получаем url из настроек
-        #замена символов в адресе для корректной работы
+        url = self.dlg.line_server_2.text()  # получаем url из настроек
+        # замена символов в адресе для корректной работы
         url = url.replace('=', '%3D')
         url = url.replace('&', '%26')
         url = '&url=' + url
 
-        typeXYZ = 'type='+ preview_type
+        typeXYZ = 'type=' + preview_type
         login = '&username=' + self.dlg.line_login_3.text()
         password = '&password=' + self.dlg.mLinePassword_3.text()
         urlWithParams = typeXYZ + url + min_max + login + password
@@ -844,7 +845,7 @@ class Geoalert:
         # получить номер выбранной строки в таблице!
         row = self.dlg.tableWidget.currentIndex().row()
         print(row)
-        #print(row)
+        # print(row)
         if row != -1:
             # # Номер в dictData
             # row_nom =  (self.kol_tab - row - 1)
@@ -858,11 +859,11 @@ class Geoalert:
             r = requests.get(url=URL_f, headers=self.headers)
 
             # адрес для сохранения файла
-            name_d = self.dlg.tableWidget.model().index(row, 1).data() #self.dictData[row_nom]['name']
+            name_d = self.dlg.tableWidget.model().index(row, 1).data()  # self.dictData[row_nom]['name']
 
             # находим ссылку на растр по id
             for dD in self.dictData:
-                #print(dD)
+                # print(dD)
                 if dD['id'] == id_v:
 
                     rastrXYZ = dD['rasterLayer']['tileUrl']
@@ -870,7 +871,7 @@ class Geoalert:
                     break
 
             url = '&url=' + rastrXYZ
-            #print(rastrXYZ)
+            # print(rastrXYZ)
             min_max = "&zmax=18&zmin=0"
             typeXYZ = 'type=xyz'
             login = '&username=' + self.dlg.line_login.text()
@@ -883,24 +884,24 @@ class Geoalert:
             # извлекаем проекцию из метаданных/перестали извлекать, задали фиксированную
             Projection = 'EPSG:4326'  # self.dictData[row_nom]['meta']['EPSG'] #name_d[x1 + 1:]
 
-            #система координат для преобразования файла
+            # система координат для преобразования файла
             crs_EPSG = QgsCoordinateReferenceSystem(Projection)
 
-            #временный файл
+            # временный файл
             file_temp = self.dlg.input_directory.text() + name_d + '_temp.geojson'
-            #print(file_temp)
+            # print(file_temp)
             with open(file_temp, "wb") as f:
                 f.write(str.encode(r.text))
             vlayer_temp = QgsVectorLayer(file_temp, name_d+'_temp', "ogr")
 
-            #экспорт в shp
+            # экспорт в shp
             file_adr = self.dlg.input_directory.text() + name_d + '.shp'
             error = QgsVectorFileWriter.writeAsVectorFormat(vlayer_temp, file_adr, "utf-8", crs_EPSG, "ESRI Shapefile")
             if error == QgsVectorFileWriter.NoError:
                 print("success again!")
-            #-------------------------------------------------------------------
-            #print(file_adr)
-            #with open(file_adr, "wb") as f:
+            # -------------------------------------------------------------------
+            # print(file_adr)
+            # with open(file_adr, "wb") as f:
              #   f.write(str.encode(r.text))
 
             # Открытие файла
@@ -910,9 +911,9 @@ class Geoalert:
             # Загрузка файла в окно qgis
             QgsProject.instance().addMapLayer(vlayer)
 
-            #---- подключение стилей
+            # ---- подключение стилей
             # определяем какой стиль подключить к слою
-            WFDef = self.listProc[row][5] # название дефенишинса
+            WFDef = self.listProc[row][5]  # название дефенишинса
             if WFDef == 'Buildings Detection' or WFDef == 'Buildings Detection With Heights':
                 style = '/styles/style_buildings.qml'
             elif WFDef == 'Forest Detection':
@@ -944,7 +945,7 @@ class Geoalert:
             if not success:  # if style not loaded remove it
                 style_manager.removeStyle(style_name)
 
-            #----
+            # ----
             time.sleep(1)
             qgis.utils.iface.zoomToActiveLayer()  # приблизить к охвату активного слоя
             try:
@@ -957,11 +958,12 @@ class Geoalert:
             print('Сначала выберите слой в таблице')
 
     # всплывающее сообщение
-    def messege(self, infoString): # Всплывающее сообщение
+    def messege(self, infoString):  # Всплывающее сообщение
         QMessageBox.information(self.dlg, self.tr('About'), infoString)
     # подключение к серверу
-    def button_connect(self): # подключение и обновление в отдельном процессе
-        #проверка рабочей папки
+
+    def button_connect(self):  # подключение и обновление в отдельном процессе
+        # проверка рабочей папки
         if os.path.exists(self.dlg.input_directory.text()) != True:
             infoString = self.tr('The working direktory was not found. \nSpecify the direktory folder. (In settings)')
             self.messege(infoString)
@@ -993,7 +995,7 @@ class Geoalert:
                 infoString = self.tr('Wrong login or password! Please try again.')
                 self.messege(infoString)
             else:
-                #запуск потока
+                # запуск потока
                 proc = Thread(target=self.button_con, args=(URL,))
                 proc.start()
 
@@ -1003,37 +1005,37 @@ class Geoalert:
 
             # выполняем запрос
             r = requests.get(url=URL, headers=self.headers)
-            #print(r.text) # получаем ответ
-            #print(r.status_code) # код ответа
+            # print(r.text) # получаем ответ
+            # print(r.status_code) # код ответа
             # текст ответа от сервера распознаем как json и разбиваем на список со словарями
             self.dictData = json.loads(r.text)
-            #print(self.dictData)
+            # print(self.dictData)
             # получаем список ключей по которым можно получить знаечния
-            #print(self.dictData[0].keys())
+            # print(self.dictData[0].keys())
 
-            self.kol_tab = len(self.dictData) #количество элементов
+            self.kol_tab = len(self.dictData)  # количество элементов
             self.dlg.tableWidget.setRowCount(self.kol_tab)  # создаем строки таблицы
             # перебор в цикле элементов списка и ключей
-            #nx = 0 #счетчик
+            # nx = 0 #счетчик
             self.flag = False
             self.listNameProc = []  # список названий обработок
-            self.listProc = [] # список обработок в таблице
+            self.listProc = []  # список обработок в таблице
             for i in range(self.kol_tab):
                 self.listNameProc.append(self.dictData[i]['name'])  # заполняем список названий обработок
-                    # #print(self.dictData[i]['projectId'])
-                    # statf = QTableWidgetItem(str(self.dictData[i]['percentCompleted'])+'%')
-                    # namef = QTableWidgetItem(self.dictData[i]['name'])
-                    # Status = QTableWidgetItem(self.dictData[i]['status'])
-                    # ids = QTableWidgetItem(self.dictData[i]['id'])
-                    # #дата и время создания
-                    # cre = self.dictData[i]['created']
-                    # cre2 = cre.split('T')
-                    # createf = QTableWidgetItem(cre2[0] + ' ' + cre2[1][:8])
+                # #print(self.dictData[i]['projectId'])
+                # statf = QTableWidgetItem(str(self.dictData[i]['percentCompleted'])+'%')
+                # namef = QTableWidgetItem(self.dictData[i]['name'])
+                # Status = QTableWidgetItem(self.dictData[i]['status'])
+                # ids = QTableWidgetItem(self.dictData[i]['id'])
+                # #дата и время создания
+                # cre = self.dictData[i]['created']
+                # cre2 = cre.split('T')
+                # createf = QTableWidgetItem(cre2[0] + ' ' + cre2[1][:8])
 
-                if self.dictData[i]['status'] == "IN_PROGRESS" or self.dictData[i]['status'] == "UNPROCESSED": #если хоть одна задача в процессе выполнения
-                    self.flag = True #добавляем значение для обновления статуса
-                #print('-'*18)
-                #print(self.dictData[i])
+                if self.dictData[i]['status'] == "IN_PROGRESS" or self.dictData[i]['status'] == "UNPROCESSED":  # если хоть одна задача в процессе выполнения
+                    self.flag = True  # добавляем значение для обновления статуса
+                # print('-'*18)
+                # print(self.dictData[i])
 
                 # # вывод всех значений
                 # spisok_znachen = ['id',
@@ -1055,7 +1057,7 @@ class Geoalert:
                 #     print(x + ': ', self.dictData[i][x], )
                 # print('-'*12)
 
-                #print(self.dictData[i]['workflowDef']['name'])
+                # print(self.dictData[i]['workflowDef']['name'])
 
                 # вписываем значения в список для сортировке по дате и времени
                 self.listProc.append([self.dictData[i]['created'],
@@ -1065,7 +1067,7 @@ class Geoalert:
                                       self.dictData[i]['workflowDef']['name']])
 
             # сортировка обработок в в списке по дате в обратном порядке
-            self.listProc.sort(reverse = True)
+            self.listProc.sort(reverse=True)
             # print(listProc)
             # заполнение таблицы значениями
             for nx in range(len(self.listProc)):
@@ -1073,10 +1075,10 @@ class Geoalert:
                 namef = QTableWidgetItem(self.listProc[nx][2])
                 Status = QTableWidgetItem(self.listProc[nx][3])
                 ids = QTableWidgetItem(self.listProc[nx][4])
-                #название сценария обработки
+                # название сценария обработки
                 WFDef = QTableWidgetItem(self.listProc[nx][5])
 
-                #дата и время создания
+                # дата и время создания
                 cre2 = self.listProc[nx][0].split('T')
                 createf = QTableWidgetItem(cre2[0] + ' ' + cre2[1][:8])
                 # построчная запись в таблицу
@@ -1088,9 +1090,9 @@ class Geoalert:
                 self.dlg.tableWidget.setItem(nx, 5, WFDef)
 
             if self.flag == True:
-                secn = 5 # задержка обновления в секундах
+                secn = 5  # задержка обновления в секундах
                 # print('Обновление через', secn, 'секунд')
-                time.sleep(secn) # ожидание следующей итеррации
+                time.sleep(secn)  # ожидание следующей итеррации
             else:
                 print('Нет выполняющихся обработок')
 
@@ -1105,15 +1107,16 @@ class Geoalert:
             password = self.dlg.mLinePassword.text()
             # сохраняем настройку чекбокса
             s.setValue("geoalert/checkPas_serv", True)
-        else: # иначе сохранять пустые значения
+        else:  # иначе сохранять пустые значения
             login = ''
             password = ''
             # сохраняем настройку чекбокса
             s.setValue("geoalert/checkPas_serv", False)
         # и записываем в настройки
-        s.setValue("geoalert/log", login)#unicode(b64encode(str.encode(login))))
-        s.setValue("geoalert/pas", password)#unicode(b64encode(str.encode(password))))
+        s.setValue("geoalert/log", login)  # unicode(b64encode(str.encode(login))))
+        s.setValue("geoalert/pas", password)  # unicode(b64encode(str.encode(password))))
     # чтение переменных из хранилища настроек
+
     def readSet(self):
         # доступ к настройкам
         s = QgsSettings()
@@ -1124,9 +1127,10 @@ class Geoalert:
             # загружаем логин/пароль и вставляем в поля
             loginB64 = s.value("geoalert/log", "", type=str)
             passwordB64 = s.value("geoalert/pas", "", type=str)
-            self.dlg.line_login.setText(loginB64) #b64decode(loginB64))
-            self.dlg.mLinePassword.setText(passwordB64) #b64decode(passwordB64))
+            self.dlg.line_login.setText(loginB64)  # b64decode(loginB64))
+            self.dlg.mLinePassword.setText(passwordB64)  # b64decode(passwordB64))
     # запись переменных в хранилилище настроек
+
     def storeSettingsMap(self):
         print('сохранение настроек сервиса космоснимков')
         # доступ к настройкам
@@ -1146,6 +1150,7 @@ class Geoalert:
         s.setValue("geoalert/logMap", login)  # unicode(b64encode(str.encode(login))))
         s.setValue("geoalert/pasMap", password)  # unicode(b64encode(str.encode(password))))
     # чтение переменных из хранилища настроек
+
     def readSettingsMap(self):
         # доступ к настройкам
         s = QgsSettings()
@@ -1182,8 +1187,9 @@ class Geoalert:
     def tr(self, message):
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
         return QCoreApplication.translate('Geoalert', message)
+
     def add_action(self, icon_path, text, callback, enabled_flag=True, add_to_menu=False,
-                    add_to_toolbar=True, status_tip=None, whats_this=None, parent=None):
+                   add_to_toolbar=True, status_tip=None, whats_this=None, parent=None):
 
         icon = QIcon(icon_path)
         action = QAction(icon, text, parent)
@@ -1207,6 +1213,7 @@ class Geoalert:
         self.actions.append(action)
 
         return action
+
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
@@ -1217,6 +1224,7 @@ class Geoalert:
             text=self.tr(u'Geoalert'),
             callback=self.run,
             parent=self.iface.mainWindow())
+
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
 
@@ -1227,6 +1235,7 @@ class Geoalert:
             self.iface.removeToolBarIcon(action)
         # remove the toolbar
         del self.toolbar
+
     def run(self):
 
         # обновление списка слоев для выбора источника растра
