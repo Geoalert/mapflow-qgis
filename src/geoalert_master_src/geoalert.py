@@ -61,7 +61,7 @@ class Geoalert:
         # кнопка выбора папки через обзор
         self.dlg.but_dir.clicked.connect(self.select_output_file)
         # ввести стандартную максаровскую ссылку
-        self.dlg.maxarStandartURL.clicked.connect(self.maxarStandatr)
+        self.dlg.maxarStandardURL.clicked.connect(self.maxarStandatr)
         # всплывающие подсказки
         self.tips()
         # чтение настроек логин/пароль

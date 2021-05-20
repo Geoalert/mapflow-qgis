@@ -756,7 +756,7 @@
           <string/>
          </property>
         </widget>
-        <widget class="QPushButton" name="maxarStandartURL">
+        <widget class="QPushButton" name="maxarStandardURL">
          <property name="geometry">
           <rect>
            <x>380</x>
@@ -928,7 +928,7 @@
   <tabstop>checkSatelitPass</tabstop>
   <tabstop>checkMaxar</tabstop>
   <tabstop>connectID</tabstop>
-  <tabstop>maxarStandartURL</tabstop>
+  <tabstop>maxarStandardURL</tabstop>
   <tabstop>VMapLayerComboBox</tabstop>
   <tabstop>ButWFS</tabstop>
  </tabstops>
