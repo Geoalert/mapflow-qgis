@@ -352,7 +352,7 @@
            <height>205</height>
           </size>
          </property>
-         <widget class="QLineEdit" name="input_directory">
+         <widget class="QLineEdit" name="output_directory">
           <property name="geometry">
            <rect>
             <x>175</x>
@@ -896,7 +896,7 @@
   <tabstop>tableWidget</tabstop>
   <tabstop>ButtonDel</tabstop>
   <tabstop>ButtonDownload</tabstop>
-  <tabstop>input_directory</tabstop>
+  <tabstop>output_directory</tabstop>
   <tabstop>but_dir</tabstop>
   <tabstop>line_server</tabstop>
   <tabstop>line_server_2</tabstop>

@@ -59,6 +59,8 @@ class Geoalert:
         self.actions = []
         self.toolbar = self.iface.addToolBar('Geoalert')
         self.toolbar.setObjectName('Geoalert')
+        # Save ref to output dir (empty str if plugin loaded 1st time or cache cleaned manually)
+        self.output_dir = self.settings.value('geoalert/outputDir')
         # создание и настройка таблицы
         self.makeTable()
         # Нажатие кнопки "Подключить".
@@ -72,7 +74,7 @@ class Geoalert:
         # Кнопка подключения снимков
         self.dlg.Button_view.clicked.connect(self.sart_view)
         # кнопка выбора папки через обзор
-        self.dlg.but_dir.clicked.connect(self.select_output_file)
+        self.dlg.but_dir.clicked.connect(self.select_output_dir)
         # ввести стандартную максаровскую ссылку
         self.dlg.maxarStandardURL.clicked.connect(self.maxarStandard)
         # всплывающие подсказки
@@ -101,7 +103,7 @@ class Geoalert:
         # чекбокс сохранения логин и пароль для Geoalert
         self.dlg.savePass_serv.clicked.connect(self.storeSettings)
         # загрузка рабочей папки из настроек в интерфейс
-        self.get_output_file()
+        self.dlg.output_directory.setText(self.output_dir)
         # срабатывает при выборе источника снимков в комбобоксе
         self.dlg.comboBox_satelit.activated.connect(self.comboClick)
         # загрузка полей комбобокса
@@ -137,7 +139,7 @@ class Geoalert:
     #                          coord[1], coord[0])
     #     print(text)
     #     # временный файл создание и запись
-    #     name_temp = self.dlg.input_directory.text() + 'extent_raster_temp.geojson'
+    #     name_temp = self.dlg.output_directory.text() + 'extent_raster_temp.geojson'
     #     file_temp = open(name_temp, 'w')
     #     file_temp.write(text)
     #     file_temp.close()
@@ -264,8 +266,7 @@ class Geoalert:
         # print(r.text)
 
         # временный файл
-        file_temp = self.dlg.input_directory.text() + 'WFS' + '_temp.geojson'
-        # print(file_temp)
+        file_temp = os.path.join(self.output_dir, 'WFS_temp.geojson')
         with open(file_temp, "wb") as f:
             f.write(str.encode(r.text))
         vlayer_temp = QgsVectorLayer(file_temp, 'WFS_temp', "ogr")
@@ -452,21 +453,17 @@ class Geoalert:
         self.dlg.tableWidget.setEditTriggers(QAbstractItemView.NoEditTriggers)
         # включить сортировку в таблице
         # self.dlg.tableWidget.setSortingEnabled(True)
-    # загрузка рабочей папки из настроек в интерфейс
 
-    def get_output_file(self):
-        name = self.settings.value("geoalert/workDir", "", type=str)
-        self.dlg.input_directory.setText(name)  # вписываем адрес в поле
-    # выбор рабочей папки
-
-    def select_output_file(self):
-        # адрес папки
-        filename = QFileDialog.getExistingDirectory(None, "Select Folder") + '/'
-        # запоминаем адрес в файл для автоматической подгрузки, если он не пустой
-        if len(filename) > 1:
-            self.dlg.input_directory.setText(filename)
-            # записываем в настройки
-            self.settings.setValue("geoalert/workDir", filename)
+    def select_output_dir(self):
+        """Display dialog for user to select output directory."""
+        output_dir = QFileDialog.getExistingDirectory(caption="Select Folder")
+        if output_dir:
+            # fill out the dialog field
+            self.dlg.output_directory.setText(output_dir)
+            # save ref
+            self.output_dir = output_dir
+            # save to settings to load at plugin start
+            self.settings.setValue("geoalert/outputDir", output_dir+'/')
 
     # получаем список дефинишинсов
     def WFDefeni(self):
@@ -702,7 +699,7 @@ class Geoalert:
                                      coord[1], coord[0])
                 print(text)
                 # временный файл создание и запись
-                name_temp = self.dlg.input_directory.text() + 'extent_raster_temp.geojson'
+                name_temp = os.path.join(self.output_dir, 'extent_raster_temp.geojson')
                 file_temp = open(name_temp, 'w')
                 file_temp.write(text)
                 file_temp.close()
@@ -859,21 +856,16 @@ class Geoalert:
             crs_EPSG = QgsCoordinateReferenceSystem(Projection)
 
             # временный файл
-            file_temp = self.dlg.input_directory.text() + name_d + '_temp.geojson'
-            # print(file_temp)
+            file_temp = os.path.join(self.output_dir, f'{name_d}_temp.geojson')
             with open(file_temp, "wb") as f:
                 f.write(str.encode(r.text))
             vlayer_temp = QgsVectorLayer(file_temp, name_d+'_temp', "ogr")
 
             # экспорт в shp
-            file_adr = self.dlg.input_directory.text() + name_d + '.shp'
+            file_adr = os.path.join(self.output_dir, f'{name_d}.shp')
             error = QgsVectorFileWriter.writeAsVectorFormat(vlayer_temp, file_adr, "utf-8", crs_EPSG, "ESRI Shapefile")
             if error == QgsVectorFileWriter.NoError:
                 print("success again!")
-            # -------------------------------------------------------------------
-            # print(file_adr)
-            # with open(file_adr, "wb") as f:
-             #   f.write(str.encode(r.text))
 
             # Открытие файла
             vlayer = QgsVectorLayer(file_adr, name_d, "ogr")
@@ -932,12 +924,11 @@ class Geoalert:
 
     def button_connect(self):
         """Подключение к серверу."""
-        # проверка рабочей папки
-        if not os.path.exists(self.dlg.input_directory.text()):
-            infoString = self.tr('Please, specify the working directory')
-            self.message(infoString)
+        # Check if the user specified an existing output dir
+        if not os.path.exists(self.output_dir):
+            self.message(self.tr('Please, specify an existing output directory'))
             # окно выбора рабочей папки
-            self.select_output_file()
+            self.select_output_dir()
         else:
             # сохранить/сбросить пароль
             self.storeSettings()
