@@ -886,7 +886,7 @@ class Geoalert:
             elif WFDef == 'Roads Detection':
                 style = '/styles/style_roads.qml'
             else:
-                style = '/styles/style_defoult.qml'
+                style = '/styles/style_default.qml'
 
             # подключаем стиль!!!!!!!!!!!!!!!!!!
             qml_path = self.plugin_dir + style
