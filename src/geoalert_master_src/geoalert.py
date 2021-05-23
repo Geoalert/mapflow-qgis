@@ -56,13 +56,14 @@ class Geoalert:
                 QCoreApplication.installTranslator(self.translator)
         # Init dialog and keep reference
         self.dlg = GeoalertDialog()
+        self.table = self.table
         self.actions = []
         self.toolbar = self.iface.addToolBar('Geoalert')
         self.toolbar.setObjectName('Geoalert')
         # Save ref to output dir (empty str if plugin loaded 1st time or cache cleaned manually)
         self.output_dir = self.settings.value('geoalert/outputDir')
         # создание и настройка таблицы
-        self.makeTable()
+        self.make_table()
         # Нажатие кнопки "Подключить".
         self.dlg.ButtonConnect.clicked.connect(self.button_connect)
         # загрузить выбраный результат
@@ -171,7 +172,7 @@ class Geoalert:
 
         # выполняется пока окно открыто
         while self.potok:
-            #print('Старт проверки')
+            # print('Старт проверки')
             lenLayers = len(self.project.mapLayers())
             # print(lenL, lenLayers)
             if lenL != lenLayers:
@@ -242,7 +243,7 @@ class Geoalert:
         vLayer = self.dlg.VMapLayerComboBox.currentLayer()
         # получаем координаты охвата в EPSG:4326
         coordin = self.extent(vLayer)
-        #self.serverW = self.dlg.line_server_2.text()
+        # self.serverW = self.dlg.line_server_2.text()
 
         connectID = self.dlg.connectID.text()
 
@@ -307,15 +308,12 @@ class Geoalert:
         features = vlayer_temp.getFeatures()
         for feature in features:
             # retrieve every feature with its geometry and attributes
-            #print("Feature ID: ", feature.id())
+            # print("Feature ID: ", feature.id())
 
             attrs = feature.attributes()
             # attrs is a list. It contains all the attribute values of this feature
             # print(attrs)
             attrFields.append(attrs)
-
-        # print(nameFields)
-        # print(attrFields)
 
         # Заполняем таблицу из слоя
         self.mTableListRastr(nameFields, attrFields)
@@ -367,10 +365,9 @@ class Geoalert:
 
         print("Transformed point:", coordStr[:-1])  # отсекаем лишнюю запятую в конце строки.
         return coordStr[:-1]
-# --------------------------
 
-        # создание и настройка таблицы
     def mTableListRastr(self, nameFields, attrFields):
+        # создание и настройка таблицы
         # очистка таблицы
         self.dlg.tabListRast.clear()
         # названия столбцов
@@ -389,7 +386,7 @@ class Geoalert:
         # содержимое столбцов
         attrStolb = []
         # список номерв столбцов, которые нужно добавить в таблицу
-        #listN = [1,4,6,7,17,24]
+        # listN = [1,4,6,7,17,24]
         # выбираем только нужные столбцы и добавляем их в отдельные списки
         # перебор атрибутов всех объектов
         for fi in attrFields:
@@ -431,28 +428,32 @@ class Geoalert:
                 container = QTableWidgetItem(str(attrStolb[x][y]))
                 self.dlg.tabListRast.setItem(x, y, container)
 
-    # создание и настройка таблицы
-    def makeTable(self):
-        self.dlg.tableWidget.clear()
-        stolbci = ["Progress", "Name", "Status", "Сreated", "ID", "AI model"]
-        StolbKol = len(stolbci)  # 4#количество столбцов
-        self.dlg.tableWidget.setColumnCount(StolbKol)  # создаем столбцы
-        self.dlg.tableWidget.setHorizontalHeaderLabels(stolbci)  # даем названия столбцам
-        # перебор всех столбцов и настройка
-        for nom in range(StolbKol):
-            # Устанавливаем выравнивание на заголовки
-            self.dlg.tableWidget.horizontalHeaderItem(nom).setTextAlignment(Qt.AlignCenter)
-        # указываем ширину столбцов
-        self.dlg.tableWidget.setColumnWidth(0, 80)
-        self.dlg.tableWidget.setColumnWidth(1, 150)
-        self.dlg.tableWidget.setColumnWidth(2, 80)
-        self.dlg.tableWidget.setColumnWidth(4, 50)
-        # выделять всю строку при нажатии
-        self.dlg.tableWidget.setSelectionBehavior(QAbstractItemView.SelectRows)
-        # запретить редактировать таблицу пользователю
-        self.dlg.tableWidget.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        # включить сортировку в таблице
-        # self.dlg.tableWidget.setSortingEnabled(True)
+    def make_table(self):
+        """Create processings table.
+
+        The table is an instance of Qt TableWidget.
+        """
+        self.table.clear()
+        cols = (
+            ("Progress", 90),
+            ("Name", 130),
+            ("Status", 100),
+            ("Сreated", 90),
+            ("ID", 60),
+            ("AI model", 120)
+        )
+        # Inititalize header
+        self.table.setColumnCount(len(cols))
+        self.table.setHorizontalHeaderLabels([item[0] for item in cols])
+        # Set column width
+        for index, item in enumerate(cols):
+            self.table.setColumnWidth(index, item[1])
+        # Select row on click
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        # Make self.table read-only
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        # Enable sorting by clicking column header
+        self.table.setSortingEnabled(True)
 
     def select_output_dir(self):
         """Display dialog for user to select output directory."""
@@ -526,7 +527,7 @@ class Geoalert:
     def DelLay(self):
         """Удаление слоя."""
         # получить номер выбранной строки в таблице!
-        row = self.dlg.tableWidget.currentIndex().row()
+        row = self.table.currentIndex().row()
         print(row)
         if row != -1:
             # Номер в dictData
@@ -553,7 +554,7 @@ class Geoalert:
         # открытие tif файла
         if comId == 2:
             self.addres_tiff = self.select_tif()  # выбрать tif на локальном компьютере
-            #print('comb:', self.addres_tiff)
+            # print('comb:', self.addres_tiff)
             # если адрес получен
             if self.addres_tiff:
                 nameL = os.path.basename(self.addres_tiff)[:-4]
@@ -634,7 +635,7 @@ class Geoalert:
 
             if ph_satel == 0:  # Mapbox Satellite
                 # url_xyz = ''
-                #proj_EPSG = 'epsg:3857'
+                # proj_EPSG = 'epsg:3857'
                 params = {}
                 self.upOnServ_proc(params)
             elif ph_satel == 1:  # Custom
@@ -665,7 +666,7 @@ class Geoalert:
             print('Сначала укажите имя для обработки, выберите полигональный слой и тип обработки')
             # создать и показать сообщение//create a string and show it
             infoString = "Название обработки не задано или уже есть обработка с таким названием. " \
-                         "\n Введите другое название!"
+                "\n Введите другое название!"
             QMessageBox.information(self.dlg, "About", infoString)
 
     def upOnServ_proc(self, params):
@@ -688,8 +689,8 @@ class Geoalert:
                 print(coord)
                 # создание текста для файла .geojson
                 text = '{"type": "FeatureCollection", "name": "extent", ' \
-                       '"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } }, ' \
-                       '"features": [{ "type": "Feature", "properties": { }, ' \
+                    '"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } }, ' \
+                    '"features": [{ "type": "Feature", "properties": { }, ' \
                        '"geometry": { "type": "Polygon", "coordinates":[[' \
                        '[ %s, %s ],[ %s, %s ],[ %s, %s ],[ %s, %s ],[ %s, %s ]' \
                        ']] } }]}' % (coord[1], coord[0],
@@ -715,12 +716,12 @@ class Geoalert:
         elif idv > 0:
             # получаем слой из списка полигональных слоев
             Vlayer = self.listPolyLay[idv-1][1]
-        #Vlayer = self.dlg.mMapLayerComboBox.currentLayer()
+        # Vlayer = self.dlg.mMapLayerComboBox.currentLayer()
 
         # projection = Vlayer.crs() #получаем проекцию EPSG
         projection_text = str(Vlayer.crs()).split(' ')[1][:-1]  # текстовое значение проекции EPSG
         projection_text = projection_text.split(":")[1]
-        #print('Проекция исходного файла:', projection_text)
+        # print('Проекция исходного файла:', projection_text)
 
         # сценарий обработки
         proc = self.dlg.comboBoxTypeProc.currentText()
@@ -766,7 +767,7 @@ class Geoalert:
         NewLayName = str(NewLayName).replace("\'", "\\\"")
 
         bodyUp = '{ "name": "%s", "wdName": "%s", "geometry": %s, "params": %s, "meta": %s}' \
-                 % (NewLayName, proc, GeomJ, params, meta)
+            % (NewLayName, proc, GeomJ, params, meta)
 
         print(bodyUp)
         bodyUp = bodyUp.encode('utf-8')
@@ -812,7 +813,7 @@ class Geoalert:
     def addSucces(self):
         """Загрузка слоя с сервера."""
         # получить номер выбранной строки в таблице!
-        row = self.dlg.tableWidget.currentIndex().row()
+        row = self.table.currentIndex().row()
         print(row)
         if row != -1:
             # Номер в dictData
@@ -821,13 +822,13 @@ class Geoalert:
             # id_v = self.dictData[row_nom]['id']
             # print(id_v)
 
-            id_v = self.dlg.tableWidget.model().index(row, 4).data()
+            id_v = self.table.model().index(row, 4).data()
             print(id_v)
             URL_f = self.server + "/rest/processings/" + id_v + "/result"
             r = requests.get(url=URL_f, headers=self.headers)
 
             # адрес для сохранения файла
-            name_d = self.dlg.tableWidget.model().index(row, 1).data()  # self.dictData[row_nom]['name']
+            name_d = self.table.model().index(row, 1).data()  # self.dictData[row_nom]['name']
 
             # находим ссылку на растр по id
             for dD in self.dictData:
@@ -848,7 +849,7 @@ class Geoalert:
             rlayer = QgsRasterLayer(urlWithParams, name_d + 'xyz', 'wms')
             self.project.addMapLayer(rlayer)
 
-            #x1 = name_d.rfind('_')
+            # x1 = name_d.rfind('_')
             # извлекаем проекцию из метаданных/перестали извлекать, задали фиксированную
             Projection = 'EPSG:4326'  # self.dictData[row_nom]['meta']['EPSG'] #name_d[x1 + 1:]
 
@@ -969,7 +970,7 @@ class Geoalert:
             # print(self.dictData[0].keys())
 
             self.kol_tab = len(self.dictData)  # количество элементов
-            self.dlg.tableWidget.setRowCount(self.kol_tab)  # создаем строки таблицы
+            self.table.setRowCount(self.kol_tab)  # создаем строки таблицы
             # перебор в цикле элементов списка и ключей
             # nx = 0 #счетчик
             self.flag = False
@@ -1037,12 +1038,12 @@ class Geoalert:
                 cre2 = self.listProc[nx][0].split('T')
                 createf = QTableWidgetItem(cre2[0] + ' ' + cre2[1][:8])
                 # построчная запись в таблицу
-                self.dlg.tableWidget.setItem(nx, 0, statf)
-                self.dlg.tableWidget.setItem(nx, 1, namef)
-                self.dlg.tableWidget.setItem(nx, 2, Status)
-                self.dlg.tableWidget.setItem(nx, 3, createf)
-                self.dlg.tableWidget.setItem(nx, 4, ids)
-                self.dlg.tableWidget.setItem(nx, 5, WFDef)
+                self.table.setItem(nx, 0, statf)
+                self.table.setItem(nx, 1, namef)
+                self.table.setItem(nx, 2, Status)
+                self.table.setItem(nx, 3, createf)
+                self.table.setItem(nx, 4, ids)
+                self.table.setItem(nx, 5, WFDef)
 
             if self.flag == True:
                 secn = 5  # задержка обновления в секундах
