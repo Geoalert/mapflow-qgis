@@ -63,7 +63,7 @@ class Geoalert:
         # Save ref to output dir (empty str if plugin loaded 1st time or cache cleaned manually)
         self.output_dir = self.settings.value('geoalert/outputDir')
         # создание и настройка таблицы
-        self.make_table()
+        self.make_processings_table()
         # Нажатие кнопки "Подключить".
         self.dlg.ButtonConnect.clicked.connect(self.button_connect)
         # загрузить выбраный результат
@@ -428,7 +428,7 @@ class Geoalert:
                 container = QTableWidgetItem(str(attrStolb[x][y]))
                 self.dlg.tabListRast.setItem(x, y, container)
 
-    def make_table(self):
+    def make_processings_table(self):
         """Create processings table.
 
         The table is an instance of Qt TableWidget.
