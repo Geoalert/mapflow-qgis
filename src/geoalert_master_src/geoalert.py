@@ -918,15 +918,15 @@ class Geoalert:
         else:
             print('Сначала выберите слой в таблице')
 
-    def message(self, infoString):
-        """всплывающее сообщение"""
-        QMessageBox.information(self.dlg, self.tr('About'), infoString)
+    def message(self, message):
+        """Display an info message."""
+        QMessageBox.information(self.dlg, 'Geoalert', self.tr(message))
 
     def button_connect(self):
         """Подключение к серверу."""
         # Check if the user specified an existing output dir
         if not os.path.exists(self.output_dir):
-            self.message(self.tr('Please, specify an existing output directory'))
+            self.message('Please, specify an existing output directory')
             # окно выбора рабочей папки
             self.select_output_dir()
         else:
@@ -948,14 +948,12 @@ class Geoalert:
             # заполняем комбобокс доступными воркфлоудифинишинсами
             self.flag = self.WFDefeni()
 
-            # сообщение о неверном логине/пароле
-            if self.flag == False:  # 'report error':  # Если была ощибка
-                infoString = self.tr('Wrong login or password! Please try again.')
-                self.message(infoString)
-            else:
+            if self.flag:
                 # запуск потока
                 proc = Thread(target=self.button_con, args=(URL,))
                 proc.start()
+            else:
+                self.message('Invalid credentials! Please try again.')
 
     def button_con(self, URL):
         """Циклическое переподключение к серверу для получения статусов обработок."""
