@@ -1080,17 +1080,15 @@ class Geoalert:
             self.dlg.line_login_3.setText(loginB64)  # b64decode(loginB64))
             self.dlg.mLinePassword_3.setText(passwordB64)  # b64decode(passwordB64))
 
-    def saveSettings(self, sVarName, sValue):
-        """Добавление или изменение записи в настройки."""
-        print('сохранение настроек')
-        self.settings.setValue("geoalert/" + sVarName, sValue)
+    def saveSettings(self, key, val):
+        """Cache values for reuse."""
+        self.settings.setValue(f"geoalert/{key}", val)
 
-    def readSettings(self, sVarName):
-        """Чтение переменных из хранилища настроек."""
-        # Возврат значения из настроек
-        sValue = self.settings.value("geoalert/" + sVarName)
-        # если переменная существует и не пустая, то возвращаем ее значение
-        return '' if sValue is None else sValue
+    def readSettings(self, key):
+        """Read cached values."""
+        val = self.settings.value(f"geoalert/{key}")
+        # Returns None if undefined
+        return '' if val is None else val
 
     def tr(self, message):
         return QCoreApplication.translate('Geoalert', message)
@@ -1127,7 +1125,7 @@ class Geoalert:
         for action in self.actions:
             self.iface.removePluginVectorMenu('&Geoalert', action)
             self.iface.removeToolBarIcon(action)
-        del self.toolbar
+        # del self.toolbar
 
     def run(self):
         """Обновление списка слоев для выбора источника растра."""
