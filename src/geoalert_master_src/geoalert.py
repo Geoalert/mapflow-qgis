@@ -57,8 +57,7 @@ class Geoalert:
         # Init dialog and keep reference
         self.dlg = GeoalertDialog()
         self.actions = []
-        self.toolbar = self.iface.addToolBar('Geoalert')
-        self.toolbar.setObjectName('Geoalert')
+        self.toolbar = self.iface.pluginToolBar()
         # Save ref to output dir (empty str if plugin loaded 1st time or cache cleaned manually)
         self.output_dir = self.settings.value('geoalert/outputDir')
         # Нажатие кнопки "Подключить".
