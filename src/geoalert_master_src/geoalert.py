@@ -56,7 +56,7 @@ class Geoalert:
                 QCoreApplication.installTranslator(self.translator)
         # Init dialog and keep reference
         self.dlg = GeoalertDialog()
-        self.table = self.table
+        self.table = self.dlg.tableWidget
         self.actions = []
         self.toolbar = self.iface.addToolBar('Geoalert')
         self.toolbar.setObjectName('Geoalert')
@@ -925,23 +925,22 @@ class Geoalert:
 
     def button_connect(self):
         """Подключение к серверу."""
-        # Check if the user specified an existing output dir
+        # Check if user specified an existing output dir
         if not os.path.exists(self.output_dir):
             self.message('Please, specify an existing output directory')
-            # окно выбора рабочей папки
             self.select_output_dir()
         else:
             # сохранить/сбросить пароль
             self.storeSettings()
             # получаем введенный логин и праоль
-            self.login = self.dlg.line_login.text()
-            self.password = self.dlg.mLinePassword.text()
+            login = self.dlg.line_login.text()
+            password = self.dlg.mLinePassword.text()
             self.server = self.dlg.line_server.text()
-            URL = self.server + "/rest/processings"
+            url = self.server + "/rest/processings"
             # we need to base 64 encode it
             # and then decode it to acsii as python 3 stores it as a byte string
             # шифруем логин и пароль (переводим строки в байты)
-            userAndPass = b64encode(str.encode(self.login) + b":" + str.encode(self.password)).decode("ascii")
+            userAndPass = b64encode(str.encode(login) + b":" + str.encode(password)).decode("ascii")
             # составляем хеадер для запроса
             self.authorization = {'Authorization': 'Basic %s' % userAndPass}  # для авторизации при загрузке TIF
             self.headers = {'Authorization': 'Basic %s' % userAndPass, 'content-type': "application/json"}
@@ -951,7 +950,7 @@ class Geoalert:
 
             if self.flag:
                 # запуск потока
-                proc = Thread(target=self.button_con, args=(URL,))
+                proc = Thread(target=self.button_con, args=(url,))
                 proc.start()
             else:
                 self.message('Invalid credentials! Please try again.')
