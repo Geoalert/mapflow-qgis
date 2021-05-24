@@ -56,14 +56,15 @@ class Geoalert:
                 QCoreApplication.installTranslator(self.translator)
         # Init dialog and keep reference
         self.dlg = GeoalertDialog()
-        self.table = self.dlg.tableWidget
         self.actions = []
         self.toolbar = self.iface.addToolBar('Geoalert')
         self.toolbar.setObjectName('Geoalert')
         # Save ref to output dir (empty str if plugin loaded 1st time or cache cleaned manually)
         self.output_dir = self.settings.value('geoalert/outputDir')
-        # создание и настройка таблицы
-        self.make_processings_table()
+        # Adjust column width in processings table if needed
+        for index, width in enumerate((95, 145, 75, 140, 100, 120)):
+            self.dlg.processingsTable.setColumnWidth(index, width)
+        # self.dlg.processingsTable.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         # Нажатие кнопки "Подключить".
         self.dlg.ButtonConnect.clicked.connect(self.button_connect)
         # загрузить выбраный результат
@@ -426,33 +427,6 @@ class Geoalert:
                 container = QTableWidgetItem(str(attrStolb[x][y]))
                 self.dlg.tabListRast.setItem(x, y, container)
 
-    def make_processings_table(self):
-        """Create processings table.
-
-        The table is an instance of Qt TableWidget.
-        """
-        self.table.clear()
-        cols = (
-            ("Progress", 90),
-            ("Name", 130),
-            ("Status", 100),
-            ("Сreated", 90),
-            ("ID", 60),
-            ("AI model", 120)
-        )
-        # Inititalize header
-        self.table.setColumnCount(len(cols))
-        self.table.setHorizontalHeaderLabels([item[0] for item in cols])
-        # Set column width
-        for index, item in enumerate(cols):
-            self.table.setColumnWidth(index, item[1])
-        # Select row on click
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        # Make self.table read-only
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        # Enable sorting by clicking column header
-        self.table.setSortingEnabled(True)
-
     def select_output_dir(self):
         """Display dialog for user to select output directory."""
         output_dir = QFileDialog.getExistingDirectory(caption="Select Folder")
@@ -525,7 +499,7 @@ class Geoalert:
     def DelLay(self):
         """Удаление слоя."""
         # получить номер выбранной строки в таблице!
-        row = self.table.currentIndex().row()
+        row = self.dlg.processingsTable.currentIndex().row()
         print(row)
         if row != -1:
             # Номер в dictData
@@ -811,7 +785,7 @@ class Geoalert:
     def addSucces(self):
         """Загрузка слоя с сервера."""
         # получить номер выбранной строки в таблице!
-        row = self.table.currentIndex().row()
+        row = self.dlg.processingsTable.currentIndex().row()
         print(row)
         if row != -1:
             # Номер в dictData
@@ -820,13 +794,13 @@ class Geoalert:
             # id_v = self.dictData[row_nom]['id']
             # print(id_v)
 
-            id_v = self.table.model().index(row, 4).data()
+            id_v = self.dlg.processingsTable.model().index(row, 4).data()
             print(id_v)
             URL_f = self.server + "/rest/processings/" + id_v + "/result"
             r = requests.get(url=URL_f, headers=self.headers)
 
             # адрес для сохранения файла
-            name_d = self.table.model().index(row, 1).data()  # self.dictData[row_nom]['name']
+            name_d = self.dlg.processingsTable.model().index(row, 1).data()  # self.dictData[row_nom]['name']
 
             # находим ссылку на растр по id
             for dD in self.dictData:
@@ -865,6 +839,8 @@ class Geoalert:
             error = QgsVectorFileWriter.writeAsVectorFormat(vlayer_temp, file_adr, "utf-8", crs_EPSG, "ESRI Shapefile")
             if error == QgsVectorFileWriter.NoError:
                 print("success again!")
+            else:
+                print('ERROR WRITING SHP')
 
             # Открытие файла
             vlayer = QgsVectorLayer(file_adr, name_d, "ogr")
@@ -967,7 +943,7 @@ class Geoalert:
             # print(self.dictData[0].keys())
 
             self.kol_tab = len(self.dictData)  # количество элементов
-            self.table.setRowCount(self.kol_tab)  # создаем строки таблицы
+            self.dlg.processingsTable.setRowCount(self.kol_tab)  # создаем строки таблицы
             # перебор в цикле элементов списка и ключей
             # nx = 0 #счетчик
             self.flag = False
@@ -1035,12 +1011,12 @@ class Geoalert:
                 cre2 = self.listProc[nx][0].split('T')
                 createf = QTableWidgetItem(cre2[0] + ' ' + cre2[1][:8])
                 # построчная запись в таблицу
-                self.table.setItem(nx, 0, statf)
-                self.table.setItem(nx, 1, namef)
-                self.table.setItem(nx, 2, Status)
-                self.table.setItem(nx, 3, createf)
-                self.table.setItem(nx, 4, ids)
-                self.table.setItem(nx, 5, WFDef)
+                self.dlg.processingsTable.setItem(nx, 0, statf)
+                self.dlg.processingsTable.setItem(nx, 1, namef)
+                self.dlg.processingsTable.setItem(nx, 2, Status)
+                self.dlg.processingsTable.setItem(nx, 3, createf)
+                self.dlg.processingsTable.setItem(nx, 4, ids)
+                self.dlg.processingsTable.setItem(nx, 5, WFDef)
 
             if self.flag == True:
                 secn = 5  # задержка обновления в секундах
