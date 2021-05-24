@@ -69,21 +69,28 @@ class Geoalert:
         # кнопка удаления слоя
         self.dlg.ButtonDel.clicked.connect(self.DelLay)
         # Кнопка подключения снимков
-        self.dlg.Button_view.clicked.connect(self.sart_view)
+        self.dlg.button_preview.clicked.connect(self.sart_view)
         # кнопка выбора папки через обзор
         self.dlg.but_dir.clicked.connect(self.select_output_dir)
         # ввести стандартную максаровскую ссылку
         self.dlg.maxarStandardURL.clicked.connect(self.maxarStandard)
         # чтение настроек логин/пароль
-        self.readSet()
+        if self.read_settings("serverSaveAuth"):
+            self.dlg.server_save_auth.setChecked(True)
+            # загружаем логин/пароль платформы и вставляем в поля
+            self.dlg.server_login.setText(self.read_settings("serverLogin"))
+            self.dlg.server_password.setText(self.read_settings("serverPassword"))
+        if self.read_settings("customProviderSaveAuth"):
+            self.dlg.custom_provider_save_auth.setChecked(True)
+            # загружаем логин/пароль платформы и вставляем в поля
+            self.dlg.custom_provider_login.setText(self.read_settings("customProviderLogin"))
+            self.dlg.custom_provider_password.setText(self.read_settings("customProviderPassword"))
         # чтение connect ID
-        connectID = self.readSettings('connectID')
+        connectID = self.read_settings('connectID')
         self.dlg.connectID.setText(connectID)
         # чтение настроек URL
-        surl = self.readSettings('urlImageProvider')
-        self.dlg.line_server_2.setText(surl)
-        # чтение настроек логин/пароль для сервиса космоснимков
-        self.readSettingsMap()
+        surl = self.read_settings('customProviderURL')
+        self.dlg.custom_provider_url.setText(surl)
 
         # чекбокс максар
         self.dlg.checkMaxar.clicked.connect(self.con)
@@ -93,10 +100,6 @@ class Geoalert:
         # чекбокс экстент растра вместо полигонального слоя
         # self.dlg.checkRasterExtent.clicked.connect(self.rasterExtentSand())
 
-        # чекбокс сохранения логин и пароль для сервиса космоснимков
-        self.dlg.checkSatelitPass.clicked.connect(self.storeSettingsMap)
-        # чекбокс сохранения логин и пароль для Geoalert
-        self.dlg.savePass_serv.clicked.connect(self.storeSettings)
         # загрузка рабочей папки из настроек в интерфейс
         self.dlg.output_directory.setText(self.output_dir)
         # срабатывает при выборе источника снимков в комбобоксе
@@ -109,10 +112,6 @@ class Geoalert:
 
         self.dlg.tabListRast.clicked.connect(self.feID)
         # self.dlg.ButExtent.clicked.connect(self.extent)
-
-        # тестовая кнопка
-        # self.dlg.pushButton.clicked.connect(self.test)
-    # ------------------------------
 
     # тест экстента
     # def test(self):
@@ -153,22 +152,14 @@ class Geoalert:
         print(id_v)
         self.dlg.featureID.setText(str(id_v))
 
-    # Всплывающие подсказки
-    # def tips(self):
-    #     self.dlg.line_login.setToolTip('Your Mapflow login')
-    #     self.dlg.mLinePassword.setToolTip('Your Mapflow password')
-
-    # обновление списка растров и полигонов
-    # запускаем при старте
     def update_layer_list(self):
-        print('Старт потока-------------')
-        lenL = 0
+        """Update layer list at plugin start."""
 
         # выполняется пока окно открыто
+        lenL = 0
         while self.potok:
             # print('Старт проверки')
             lenLayers = len(self.project.mapLayers())
-            # print(lenL, lenLayers)
             if lenL != lenLayers:
                 lenL = lenLayers  # запоминаем значение для проверки в следующий раз
                 # обновление списков комбобокса
@@ -231,18 +222,18 @@ class Geoalert:
 
     def ButWFS(self):
         # получаем введенный логин и праоль
-        self.loginW = self.dlg.line_login_3.text()
-        self.passwordW = self.dlg.mLinePassword_3.text()
+        self.loginW = self.dlg.custom_provider_login.text()
+        self.passwordW = self.dlg.custom_provider_password.text()
         # векторный слой
         vLayer = self.dlg.VMapLayerComboBox.currentLayer()
         # получаем координаты охвата в EPSG:4326
         coordin = self.extent(vLayer)
-        # self.serverW = self.dlg.line_server_2.text()
+        # self.serverW = self.dlg.custom_provider_url.text()
 
         connectID = self.dlg.connectID.text()
 
         # сохрангить ID
-        self.saveSettings('connectID', connectID)
+        self.save_settings('connectID', connectID)
 
         URL = "https://securewatch.digitalglobe.com/catalogservice/wfsaccess?" \
               "REQUEST=GetFeature&TYPENAME=DigitalGlobe:FinishedFeature&" \
@@ -321,9 +312,9 @@ class Geoalert:
             SW_PARAMS['CQL_FILTER'] = f"feature_id='{featureID}'"
             SW_PARAMS['FORMAT'] = 'image/png'
         request = requests.Request('GET', SW_ENDPOINT, params=SW_PARAMS).prepare()
-        self.dlg.line_server_2.setText(request.url)
-        self.dlg.comboBoxURLType.setCurrentIndex(0)
-        self.saveSettings('connectID', connectID)
+        self.dlg.custom_provider_url.setText(request.url)
+        self.dlg.custom_provider_type.setCurrentIndex(0)
+        self.save_settings('connectID', connectID)
 
     def extent(self, vLayer):
         """Получить координаты охвата слоя."""
@@ -469,8 +460,8 @@ class Geoalert:
         if len(filename[0]) > 0:
             return filename[0]
 
-    # загрузка tif на сервер
     def up_tif(self, n):
+        # загрузка tif на сервер
         # получаем адрес файла
         file_in = self.listLay[n][1].dataProvider().dataSourceUri()
 
@@ -495,18 +486,13 @@ class Geoalert:
         """Удаление слоя."""
         # получить номер выбранной строки в таблице!
         row = self.dlg.processingsTable.currentIndex().row()
-        print(row)
         if row != -1:
             # Номер в dictData
             row_nom = (self.kol_tab - row - 1)
             # получаем данные о слое и его ID
             id_v = self.dictData[row_nom]['id']
-            print(id_v, 'Удален')
             URL_f = self.server + "/rest/processings/" + id_v
-            print(URL_f, self.headers)
             r = requests.delete(url=URL_f, headers=self.headers)
-            # получаем ответ
-            print(r.text)
 
         # всплывающее сообщение
         self.iface.messageBar().pushMessage("Massage", "Processing has been removed.",
@@ -608,12 +594,12 @@ class Geoalert:
             elif ph_satel == 1:  # Custom
                 infoString = "Поставщиком космических снимков может взыматься плата за их использование!"
                 QMessageBox.information(self.dlg, "About", infoString)
-                login = self.dlg.line_login_3.text()
-                password = self.dlg.mLinePassword_3.text()
-                url_xyz = self.dlg.line_server_2.text()
-                # TypeURL = self.dlg.comboBoxURLType.currentIndex()  # выбран тип ссылки///
+                login = self.dlg.custom_provider_login.text()
+                password = self.dlg.custom_provider_password.text()
+                url_xyz = self.dlg.custom_provider_url.text()
+                # TypeURL = self.dlg.custom_provider_type.currentIndex()  # выбран тип ссылки///
 
-                TypeURL = self.dlg.comboBoxURLType.currentText()
+                TypeURL = self.dlg.custom_provider_type.currentText()
 
                 params = {"source_type": TypeURL,
                           "url": "%s" % (url_xyz),
@@ -752,30 +738,31 @@ class Geoalert:
         self.button_connect()
 
     def sart_view(self):
-        """Предпросмотр снимков."""
-        # сохранение настроек логин/пароль
-        self.storeSettingsMap()
+        """Custom provider imagery preview."""
+        # Save the checkbox state itself
+        self.save_settings("custom_provider_save_auth", self.dlg.custom_provider_save_auth.isChecked())
+        # If checked, save the credentials
+        if self.dlg.custom_provider_save_auth.isChecked():
+            self.save_settings("customProviderLogin", self.dlg.custom_provider_login.text())
+            self.save_settings("customProviderPassword", self.dlg.custom_provider_password.text())
         # если чекбокс включен - ограничиваем зум предпросмотра до 14 иначе до 18
-        z_max = '14' if self.dlg.checkSatelit_Z14.isChecked() else '18'
+        z_max = '14' if self.dlg.custom_provider_limit_zoom.isChecked() else '18'
         z_min = '0'
         min_max = "&zmax=" + z_max + "&zmin=" + z_min
-        preview_type = self.dlg.comboBoxURLType.currentText()
-        url = self.dlg.line_server_2.text()  # получаем url из настроек
+        provider_type = self.dlg.custom_provider_type.currentText()
+        url = self.dlg.custom_provider_url.text()
+        self.save_settings('customProviderURL', url)
         # замена символов в адресе для корректной работы
         url = url.replace('=', '%3D')
         url = url.replace('&', '%26')
         url = '&url=' + url
 
-        typeXYZ = 'type=' + preview_type
-        login = '&username=' + self.dlg.line_login_3.text()
-        password = '&password=' + self.dlg.mLinePassword_3.text()
+        typeXYZ = 'type=' + provider_type
+        login = '&username=' + self.dlg.custom_provider_login.text()
+        password = '&password=' + self.dlg.custom_provider_password.text()
         urlWithParams = typeXYZ + url + min_max + login + password
         rlayer = QgsRasterLayer(urlWithParams, self.tr('User_servise ') + z_min + '-' + z_max, 'wms')
         self.project.addMapLayer(rlayer)
-
-        # сохраняем используемый адрес в настройки QGIS
-        surl = self.dlg.line_server_2.text()
-        self.saveSettings('urlImageProvider', surl)
 
     def addSucces(self):
         """Загрузка слоя с сервера."""
@@ -810,8 +797,8 @@ class Geoalert:
             # print(rastrXYZ)
             min_max = "&zmax=18&zmin=0"
             typeXYZ = 'type=xyz'
-            login = '&username=' + self.dlg.line_login.text()
-            password = '&password=' + self.dlg.mLinePassword.text()
+            login = '&username=' + self.dlg.server_login.text()
+            password = '&password=' + self.dlg.server_password.text()
             urlWithParams = typeXYZ + url + min_max + login + password
             rlayer = QgsRasterLayer(urlWithParams, name_d + 'xyz', 'wms')
             self.project.addMapLayer(rlayer)
@@ -899,12 +886,13 @@ class Geoalert:
             self.message('Please, specify an existing output directory')
             self.select_output_dir()
         else:
-            # сохранить/сбросить пароль
-            self.storeSettings()
-            # получаем введенный логин и праоль
-            login = self.dlg.line_login.text()
-            password = self.dlg.mLinePassword.text()
-            self.server = self.dlg.line_server.text()
+            self.save_settings("serverSaveAuth", self.dlg.server_save_auth.isChecked())
+            login = self.dlg.server_login.text()
+            password = self.dlg.server_password.text()
+            if self.dlg.server_save_auth.isChecked():
+                self.save_settings("serverLogin", login)
+                self.save_settings("serverPassword", password)
+            self.server = self.dlg.server_url.text()
             url = self.server + "/rest/processings"
             # we need to base 64 encode it
             # and then decode it to acsii as python 3 stores it as a byte string
@@ -1020,74 +1008,14 @@ class Geoalert:
             else:
                 print('Нет выполняющихся обработок')
 
-    def storeSettings(self):
-        """Запись переменных в хранилилище настроек."""
-        print('сохранение настроек Geoalert')
-        # если включен чекбокс сохранять пароль
-        if self.dlg.savePass_serv.isChecked():
-            login = self.dlg.line_login.text()
-            password = self.dlg.mLinePassword.text()
-            # сохраняем настройку чекбокса
-            self.settings.setValue("geoalert/checkPas_serv", True)
-        else:  # иначе сохранять пустые значения
-            login = ''
-            password = ''
-            # сохраняем настройку чекбокса
-            self.settings.setValue("geoalert/checkPas_serv", False)
-        # и записываем в настройки
-        self.settings.setValue("geoalert/log", login)  # unicode(b64encode(str.encode(login))))
-        self.settings.setValue("geoalert/pas", password)  # unicode(b64encode(str.encode(password))))
-
-    def readSet(self):
-        """Чтение переменных из хранилища настроек."""
-        # если в настройках включен чекбокс,
-        if self.settings.value("geoalert/checkPas_serv"):
-            # включаем чекбокс в окне
-            self.dlg.savePass_serv.setChecked(True)
-            # загружаем логин/пароль и вставляем в поля
-            loginB64 = self.settings.value("geoalert/log", "", type=str)
-            passwordB64 = self.settings.value("geoalert/pas", "", type=str)
-            self.dlg.line_login.setText(loginB64)  # b64decode(loginB64))
-            self.dlg.mLinePassword.setText(passwordB64)  # b64decode(passwordB64))
-
-    def storeSettingsMap(self):
-        """Запись переменных в хранилилище настроек."""
-        print('сохранение настроек сервиса космоснимков')
-        # если включен чекбокс сохранять пароль
-        if self.dlg.checkSatelitPass.isChecked():
-            login = self.dlg.line_login_3.text()
-            password = self.dlg.mLinePassword_3.text()
-            # сохраняем настройку чекбокса
-            self.settings.setValue("geoalert/checkSatelitPass", True)
-        else:  # иначе сохранять пустые значения
-            login = ''
-            password = ''
-            # сохраняем настройку чекбокса
-            self.settings.setValue("geoalert/checkSatelitPass", False)
-        # записываем в настройки
-        self.settings.setValue("geoalert/logMap", login)  # unicode(b64encode(str.encode(login))))
-        self.settings.setValue("geoalert/pasMap", password)  # unicode(b64encode(str.encode(password))))
-
-    def readSettingsMap(self):
-        """Чтение переменных из хранилища настроек."""
-        # если в настройках включен чекбокс,
-        if self.settings.value("geoalert/checkSatelitPass"):
-            # включаем чекбокс в окне
-            self.dlg.checkSatelitPass.setChecked(True)
-            # загружаем логин/пароль и вставляем в поля
-            loginB64 = self.settings.value("geoalert/logMap", "", type=str)
-            passwordB64 = self.settings.value("geoalert/pasMap", "", type=str)
-            self.dlg.line_login_3.setText(loginB64)  # b64decode(loginB64))
-            self.dlg.mLinePassword_3.setText(passwordB64)  # b64decode(passwordB64))
-
-    def saveSettings(self, key, val):
+    def save_settings(self, key, val):
         """Cache values for reuse."""
         self.settings.setValue(f"geoalert/{key}", val)
 
-    def readSettings(self, key):
+    def read_settings(self, key):
         """Read cached values."""
-        val = self.settings.value(f"geoalert/{key}")
         # Returns None if undefined
+        val = self.settings.value(f"geoalert/{key}")
         return '' if val is None else val
 
     def tr(self, message):
