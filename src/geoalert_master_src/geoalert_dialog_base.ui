@@ -95,6 +95,9 @@
             <height>20</height>
            </rect>
           </property>
+          <property name="toolTip">
+           <string>Your Geoalert login</string>
+          </property>
           <property name="text">
            <string/>
           </property>
@@ -133,6 +136,9 @@
             <width>166</width>
             <height>20</height>
            </rect>
+          </property>
+          <property name="toolTip">
+           <string>Your Geoalert password</string>
           </property>
           <property name="text">
            <string/>
@@ -847,8 +853,8 @@
            <rect>
             <x>0</x>
             <y>0</y>
-            <width>555</width>
-            <height>508</height>
+            <width>577</width>
+            <height>505</height>
            </rect>
           </property>
           <widget class="QLabel" name="label_4">
@@ -896,7 +902,7 @@
   <customwidget>
    <class>QgsMapLayerComboBox</class>
    <extends>QComboBox</extends>
-   <header>qgis.gui</header>
+   <header>qgsmaplayercombobox.h</header>
   </customwidget>
   <customwidget>
    <class>QgsPasswordLineEdit</class>

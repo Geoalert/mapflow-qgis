@@ -78,8 +78,6 @@ class Geoalert:
         self.dlg.but_dir.clicked.connect(self.select_output_dir)
         # ввести стандартную максаровскую ссылку
         self.dlg.maxarStandardURL.clicked.connect(self.maxarStandard)
-        # всплывающие подсказки
-        self.tips()
         # чтение настроек логин/пароль
         self.readSet()
         # чтение connect ID
@@ -160,9 +158,9 @@ class Geoalert:
         self.dlg.featureID.setText(str(id_v))
 
     # Всплывающие подсказки
-    def tips(self):
-        self.dlg.line_login.setToolTip('Your Mapflow login')
-        self.dlg.mLinePassword.setToolTip('Your Mapflow password')
+    # def tips(self):
+    #     self.dlg.line_login.setToolTip('Your Mapflow login')
+    #     self.dlg.mLinePassword.setToolTip('Your Mapflow password')
 
     # обновление списка растров и полигонов
     # запускаем при старте
