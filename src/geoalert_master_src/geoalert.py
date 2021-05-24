@@ -61,10 +61,6 @@ class Geoalert:
         self.toolbar.setObjectName('Geoalert')
         # Save ref to output dir (empty str if plugin loaded 1st time or cache cleaned manually)
         self.output_dir = self.settings.value('geoalert/outputDir')
-        # Adjust column width in processings table if needed
-        for index, width in enumerate((95, 145, 75, 140, 100, 120)):
-            self.dlg.processingsTable.setColumnWidth(index, width)
-        # self.dlg.processingsTable.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         # Нажатие кнопки "Подключить".
         self.dlg.ButtonConnect.clicked.connect(self.button_connect)
         # загрузить выбраный результат
