@@ -1,14 +1,10 @@
 import time
 import json
-import traceback
 import os.path
 from math import *
 from base64 import b64encode
 from threading import Thread
 
-import gdal
-import ogr
-import osr
 import requests
 from PyQt5 import *  # Qt
 from PyQt5.QtGui import *  # QIcon
@@ -61,7 +57,7 @@ class Geoalert:
         # Save ref to output dir (empty str if plugin loaded 1st time or cache cleaned manually)
         self.output_dir = self.settings.value('geoalert/outputDir')
         # Нажатие кнопки "Подключить".
-        self.dlg.ButtonConnect.clicked.connect(self.button_connect)
+        self.dlg.ButtonConnect.clicked.connect(self.connect_to_server)
         # загрузить выбраный результат
         self.dlg.ButtonDownload.clicked.connect(self.addSucces)
         # Кнопка: Выгрузить слой на сервер для обработки
@@ -69,7 +65,7 @@ class Geoalert:
         # кнопка удаления слоя
         self.dlg.ButtonDel.clicked.connect(self.DelLay)
         # Кнопка подключения снимков
-        self.dlg.button_preview.clicked.connect(self.sart_view)
+        self.dlg.button_preview.clicked.connect(self.load_custom_tileset)
         # кнопка выбора папки через обзор
         self.dlg.but_dir.clicked.connect(self.select_output_dir)
         # ввести стандартную максаровскую ссылку
@@ -424,34 +420,6 @@ class Geoalert:
             # save to settings to load at plugin start
             self.settings.setValue("geoalert/outputDir", output_dir+'/')
 
-    # получаем список дефинишинсов
-    def WFDefeni(self):
-        URL_up = self.server + '/rest/projects/default'  # url запроса
-        headers = self.authorization
-        r = requests.get(URL_up, headers=headers)
-        # print(r)
-        # Проверка логин/пароль
-        if str(r) == '<Response [200]>':  # пароль верный - подключение
-            # print('ОК')
-            wfds = r.json()['workflowDefs']
-            self.dlg.comboBoxTypeProc.clear()
-            for wfd in enumerate(wfds):
-                # print(wfd)
-                try:
-                    self.dlg.comboBoxTypeProc.addItem(wfd[1]['name'])
-                    print(wfd[1]['name'])
-                    # if wfd[0] == 0: #устанавливаем выбранным первый пункт в списке
-                    #     self.dlg.comboBoxTypeProc.setText(wfd[1]['name'])
-                except:
-                    print('Не добавлен дефенишенс:', wfd[1]['name'])
-                    None
-            return True  # разрешить дальнейшее выполнение
-        elif str(r) == '<Response [401]>':  # пароль НЕ верный, показать предупреждение!
-            self.flag = 'report error'
-            print('Wrong login or password! Please try again.')
-
-            return False  # self.flag
-
     # выбор tif для загрузки на сервер
     def select_tif(self):
         filename = QFileDialog.getOpenFileName(None, "Select .TIF File", './', 'Files (*.tif *.TIF *.Tif)')
@@ -492,14 +460,14 @@ class Geoalert:
             # получаем данные о слое и его ID
             id_v = self.dictData[row_nom]['id']
             URL_f = self.server + "/rest/processings/" + id_v
-            r = requests.delete(url=URL_f, headers=self.headers)
+            r = requests.delete(url=URL_f, headers=self.headers, auth=self.server_basic_auth)
 
         # всплывающее сообщение
         self.iface.messageBar().pushMessage("Massage", "Processing has been removed.",
                                             level=Qgis.Warning,
                                             duration=7)
         # обновить список слоев
-        self.button_connect()
+        self.connect_to_server()
 
     def comboClick(self):
         """Cрабатывание от выбора в комбобоксе."""
@@ -677,7 +645,7 @@ class Geoalert:
         # print('Проекция исходного файла:', projection_text)
 
         # сценарий обработки
-        proc = self.dlg.comboBoxTypeProc.currentText()
+        proc = self.dlg.ai_model.currentText()
         # чекбокс (обновить кеш)
         cacheUP = str(self.dlg.checkUp.isChecked())
         # система координат для сервера
@@ -722,11 +690,9 @@ class Geoalert:
         bodyUp = '{ "name": "%s", "wdName": "%s", "geometry": %s, "params": %s, "meta": %s}' \
             % (NewLayName, proc, GeomJ, params, meta)
 
-        print(bodyUp)
         bodyUp = bodyUp.encode('utf-8')
 
-        rpost = requests.request("POST", url=URL_up, data=bodyUp, headers=self.headers)
-        print(rpost.text)
+        rpost = requests.request("POST", url=URL_up, data=bodyUp, headers=self.headers, auth=self.server_basic_auth)
         # print(rpost.status_code)
 
         self.dlg.NewLayName.clear()  # очистить поле имени
@@ -735,9 +701,9 @@ class Geoalert:
         infoString = "Слой загружен на сервер! \n Обработка может занять от 10 секунд до нескольких минут"
         print(infoString)
         # QMessageBox.information(self.dlg, "About", infoString)
-        self.button_connect()
+        self.connect_to_server()
 
-    def sart_view(self):
+    def load_custom_tileset(self):
         """Custom provider imagery preview."""
         # Save the checkbox state itself
         self.save_settings("custom_provider_save_auth", self.dlg.custom_provider_save_auth.isChecked())
@@ -745,24 +711,23 @@ class Geoalert:
         if self.dlg.custom_provider_save_auth.isChecked():
             self.save_settings("customProviderLogin", self.dlg.custom_provider_login.text())
             self.save_settings("customProviderPassword", self.dlg.custom_provider_password.text())
-        # если чекбокс включен - ограничиваем зум предпросмотра до 14 иначе до 18
-        z_max = '14' if self.dlg.custom_provider_limit_zoom.isChecked() else '18'
-        z_min = '0'
-        min_max = "&zmax=" + z_max + "&zmin=" + z_min
-        provider_type = self.dlg.custom_provider_type.currentText()
         url = self.dlg.custom_provider_url.text()
         self.save_settings('customProviderURL', url)
-        # замена символов в адресе для корректной работы
-        url = url.replace('=', '%3D')
-        url = url.replace('&', '%26')
-        url = '&url=' + url
-
-        typeXYZ = 'type=' + provider_type
-        login = '&username=' + self.dlg.custom_provider_login.text()
-        password = '&password=' + self.dlg.custom_provider_password.text()
-        urlWithParams = typeXYZ + url + min_max + login + password
-        rlayer = QgsRasterLayer(urlWithParams, self.tr('User_servise ') + z_min + '-' + z_max, 'wms')
-        self.project.addMapLayer(rlayer)
+        url_escaped = url.replace('&', '%26').replace('=', '%3D')
+        params = {
+            'type': self.dlg.custom_provider_type.currentText(),
+            'url': url_escaped,
+            'zmax': 14 if self.dlg.custom_provider_limit_zoom.isChecked() else 18,
+            'zmin': 0,
+            'username': self.dlg.custom_provider_login.text(),
+            'password': self.dlg.custom_provider_password.text()
+        }
+        uri = '&'.join(f'{key}={val}' for key, val in params.items())
+        layer = QgsRasterLayer(uri, self.tr('Custom tileset'), 'wms')
+        if not layer.isValid():
+            self.message(f'Invalid custom imagery provider: {url_escaped}')
+        else:
+            self.project.addMapLayer(layer)
 
     def addSucces(self):
         """Загрузка слоя с сервера."""
@@ -779,7 +744,7 @@ class Geoalert:
             id_v = self.dlg.processingsTable.model().index(row, 4).data()
             print(id_v)
             URL_f = self.server + "/rest/processings/" + id_v + "/result"
-            r = requests.get(url=URL_f, headers=self.headers)
+            r = requests.get(url=URL_f, headers=self.headers, auth=self.server_basic_auth)
 
             # адрес для сохранения файла
             name_d = self.dlg.processingsTable.model().index(row, 1).data()  # self.dictData[row_nom]['name']
@@ -879,7 +844,7 @@ class Geoalert:
         """Display an info message."""
         QMessageBox.information(self.dlg, 'Geoalert', self.tr(message))
 
-    def button_connect(self):
+    def connect_to_server(self):
         """Подключение к серверу."""
         # Check if user specified an existing output dir
         if not os.path.exists(self.output_dir):
@@ -894,16 +859,19 @@ class Geoalert:
                 self.save_settings("serverPassword", password)
             self.server = self.dlg.server_url.text()
             url = self.server + "/rest/processings"
-            # we need to base 64 encode it
-            # and then decode it to acsii as python 3 stores it as a byte string
-            # шифруем логин и пароль (переводим строки в байты)
-            userAndPass = b64encode(str.encode(login) + b":" + str.encode(password)).decode("ascii")
-            # составляем хеадер для запроса
-            self.authorization = {'Authorization': 'Basic %s' % userAndPass}  # для авторизации при загрузке TIF
-            self.headers = {'Authorization': 'Basic %s' % userAndPass, 'content-type': "application/json"}
+            self.server_basic_auth = requests.auth.HTTPBasicAuth(login, password)
+            self.headers = {'Content-Type': "application/json"}
 
             # заполняем комбобокс доступными воркфлоудифинишинсами
-            self.flag = self.WFDefeni()
+            url = self.server + '/rest/projects/default'
+            res = requests.get(url, auth=self.server_basic_auth)
+            if not res.ok:  # пароль НЕ верный, показать предупреждение
+                self.flag = 'report error'
+                self.message('Wrong login or password! Please try again.')
+                return
+            wds = [wd['name'] for wd in res.json()['workflowDefs']]
+            self.dlg.ai_model.clear()
+            self.dlg.ai_model.addItems(wds)
 
             if self.flag:
                 # запуск потока
@@ -916,9 +884,7 @@ class Geoalert:
         """Циклическое переподключение к серверу для получения статусов обработок."""
         while self.flag:
             # выполняем запрос
-            r = requests.get(url=URL, headers=self.headers)
-            # print(r.text) # получаем ответ
-            # print(r.status_code) # код ответа
+            r = requests.get(url=URL, headers=self.headers, auth=self.server_basic_auth)
             # текст ответа от сервера распознаем как json и разбиваем на список со словарями
             self.dictData = json.loads(r.text)
             # print(self.dictData)

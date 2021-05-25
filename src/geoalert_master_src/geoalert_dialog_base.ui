@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="sizePolicy">
-   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+   <sizepolicy hsizetype="Fixed" vsizetype="Expanding">
     <horstretch>0</horstretch>
     <verstretch>0</verstretch>
    </sizepolicy>
@@ -50,7 +50,7 @@
       </size>
      </property>
      <property name="currentIndex">
-      <number>1</number>
+      <number>0</number>
      </property>
      <widget class="QWidget" name="processingsTab">
       <attribute name="title">
@@ -68,7 +68,13 @@
          <property name="minimumSize">
           <size>
            <width>762</width>
-           <height>0</height>
+           <height>300</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>16777215</width>
+           <height>300</height>
           </size>
          </property>
          <property name="baseSize">
@@ -212,7 +218,7 @@
            <enum>Qt::Horizontal</enum>
           </property>
          </widget>
-         <widget class="QCheckBox" name="savePass_serv">
+         <widget class="QCheckBox" name="server_save_auth">
           <property name="geometry">
            <rect>
             <x>310</x>
@@ -285,7 +291,7 @@
            <rect>
             <x>9</x>
             <y>74</y>
-            <width>351</width>
+            <width>381</width>
             <height>91</height>
            </rect>
           </property>
@@ -328,7 +334,7 @@
             </widget>
            </item>
            <item row="2" column="1">
-            <widget class="QComboBox" name="comboBoxTypeProc"/>
+            <widget class="QComboBox" name="ai_model"/>
            </item>
           </layout>
          </widget>
@@ -350,7 +356,7 @@
             </widget>
            </item>
            <item row="0" column="1">
-            <widget class="QLineEdit" name="line_login">
+            <widget class="QLineEdit" name="server_login">
              <property name="toolTip">
               <string>Your Geoalert login</string>
              </property>
@@ -367,7 +373,7 @@
             </widget>
            </item>
            <item row="1" column="1">
-            <widget class="QgsPasswordLineEdit" name="mLinePassword">
+            <widget class="QgsPasswordLineEdit" name="server_password">
              <property name="toolTip">
               <string>Your Geoalert password</string>
              </property>
@@ -435,9 +441,6 @@
         </widget>
        </item>
       </layout>
-      <zorder>widget</zorder>
-      <zorder>processingsTable</zorder>
-      <zorder>processingsController</zorder>
      </widget>
      <widget class="QWidget" name="tab_4">
       <attribute name="title">
@@ -464,14 +467,14 @@
          <height>205</height>
         </size>
        </property>
-       <widget class="QCheckBox" name="checkSatelit_Z14">
+       <widget class="QCheckBox" name="custom_provider_limit_zoom">
         <property name="enabled">
          <bool>true</bool>
         </property>
         <property name="geometry">
          <rect>
-          <x>620</x>
-          <y>158</y>
+          <x>610</x>
+          <y>130</y>
           <width>141</width>
           <height>20</height>
          </rect>
@@ -483,11 +486,11 @@
          <bool>true</bool>
         </property>
        </widget>
-       <widget class="QPushButton" name="Button_view">
+       <widget class="QPushButton" name="button_preview">
         <property name="geometry">
          <rect>
-          <x>660</x>
-          <y>90</y>
+          <x>630</x>
+          <y>80</y>
           <width>91</width>
           <height>41</height>
          </rect>
@@ -496,7 +499,7 @@
          <string>Preview</string>
         </property>
        </widget>
-       <widget class="QCheckBox" name="checkSatelitPass">
+       <widget class="QCheckBox" name="custom_provider_save_auth">
         <property name="geometry">
          <rect>
           <x>340</x>
@@ -512,7 +515,7 @@
        <widget class="QPushButton" name="but_dir">
         <property name="geometry">
          <rect>
-          <x>490</x>
+          <x>440</x>
           <y>1</y>
           <width>31</width>
           <height>31</height>
@@ -548,18 +551,21 @@
          <enum>Qt::Horizontal</enum>
         </property>
        </widget>
-       <widget class="QWidget" name="">
+       <widget class="QWidget" name="layoutWidget">
         <property name="geometry">
          <rect>
           <x>10</x>
           <y>80</y>
           <width>571</width>
-          <height>59</height>
+          <height>50</height>
          </rect>
         </property>
         <layout class="QGridLayout" name="gridLayout_2">
          <property name="horizontalSpacing">
           <number>30</number>
+         </property>
+         <property name="verticalSpacing">
+          <number>2</number>
          </property>
          <item row="0" column="0">
           <widget class="QLabel" name="label_34">
@@ -576,14 +582,14 @@
           </widget>
          </item>
          <item row="1" column="0">
-          <widget class="QLineEdit" name="line_server_2">
+          <widget class="QLineEdit" name="custom_provider_url">
            <property name="text">
             <string/>
            </property>
           </widget>
          </item>
          <item row="1" column="1">
-          <widget class="QComboBox" name="comboBoxURLType">
+          <widget class="QComboBox" name="custom_provider_type">
            <property name="toolTip">
             <string notr="true"/>
            </property>
@@ -606,13 +612,13 @@
          </item>
         </layout>
        </widget>
-       <widget class="QWidget" name="">
+       <widget class="QWidget" name="layoutWidget">
         <property name="geometry">
          <rect>
           <x>10</x>
-          <y>141</y>
-          <width>311</width>
-          <height>61</height>
+          <y>133</y>
+          <width>320</width>
+          <height>60</height>
          </rect>
         </property>
         <layout class="QFormLayout" name="formLayout_2">
@@ -624,7 +630,7 @@
           </widget>
          </item>
          <item row="0" column="1">
-          <widget class="QLineEdit" name="line_login_3">
+          <widget class="QLineEdit" name="custom_provider_login">
            <property name="text">
             <string/>
            </property>
@@ -638,7 +644,7 @@
           </widget>
          </item>
          <item row="1" column="1">
-          <widget class="QgsPasswordLineEdit" name="mLinePassword_3">
+          <widget class="QgsPasswordLineEdit" name="custom_provider_password">
            <property name="text">
             <string/>
            </property>
@@ -646,13 +652,13 @@
          </item>
         </layout>
        </widget>
-       <widget class="QWidget" name="">
+       <widget class="QWidget" name="layoutWidget">
         <property name="geometry">
          <rect>
           <x>10</x>
           <y>40</y>
           <width>441</width>
-          <height>31</height>
+          <height>30</height>
          </rect>
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_4">
@@ -664,7 +670,7 @@
           </widget>
          </item>
          <item>
-          <widget class="QLineEdit" name="line_server">
+          <widget class="QLineEdit" name="server_url">
            <property name="styleSheet">
             <string notr="true">background-color: rgb(240, 240, 240);</string>
            </property>
@@ -675,12 +681,12 @@
          </item>
         </layout>
        </widget>
-       <widget class="QWidget" name="">
+       <widget class="QWidget" name="layoutWidget">
         <property name="geometry">
          <rect>
           <x>11</x>
           <y>1</y>
-          <width>441</width>
+          <width>431</width>
           <height>31</height>
          </rect>
         </property>
@@ -773,16 +779,19 @@
           <string>Get URL</string>
          </property>
         </widget>
-        <widget class="QWidget" name="">
+        <widget class="QWidget" name="layoutWidget">
          <property name="geometry">
           <rect>
            <x>0</x>
-           <y>2</y>
-           <width>261</width>
+           <y>0</y>
+           <width>321</width>
            <height>81</height>
           </rect>
          </property>
          <layout class="QFormLayout" name="formLayout_3">
+          <property name="verticalSpacing">
+           <number>2</number>
+          </property>
           <item row="0" column="0">
            <widget class="QLabel" name="label_50">
             <property name="text">
@@ -822,6 +831,11 @@
            <widget class="QgsMapLayerComboBox" name="VMapLayerComboBox"/>
           </item>
          </layout>
+         <zorder>label_50</zorder>
+         <zorder>connectID</zorder>
+         <zorder>label_51</zorder>
+         <zorder>featureID</zorder>
+         <zorder>VMapLayerComboBox</zorder>
          <zorder>label_53</zorder>
         </widget>
        </widget>
@@ -829,7 +843,7 @@
         <property name="geometry">
          <rect>
           <x>13</x>
-          <y>103</y>
+          <y>105</y>
           <width>531</width>
           <height>181</height>
          </rect>
@@ -845,11 +859,11 @@
         </property>
        </widget>
       </widget>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
          <x>30</x>
-         <y>216</y>
+         <y>209</y>
          <width>351</width>
          <height>31</height>
         </rect>
@@ -966,9 +980,9 @@
   </customwidget>
  </customwidgets>
  <tabstops>
-  <tabstop>line_login</tabstop>
-  <tabstop>mLinePassword</tabstop>
-  <tabstop>savePass_serv</tabstop>
+  <tabstop>server_login</tabstop>
+  <tabstop>server_password</tabstop>
+  <tabstop>server_save_auth</tabstop>
   <tabstop>ButtonConnect</tabstop>
   <tabstop>comboBox_satelit</tabstop>
   <tabstop>checkUp</tabstop>
@@ -978,14 +992,14 @@
   <tabstop>ButtonDownload</tabstop>
   <tabstop>output_directory</tabstop>
   <tabstop>but_dir</tabstop>
-  <tabstop>line_server</tabstop>
-  <tabstop>line_server_2</tabstop>
-  <tabstop>comboBoxURLType</tabstop>
-  <tabstop>Button_view</tabstop>
-  <tabstop>checkSatelit_Z14</tabstop>
-  <tabstop>line_login_3</tabstop>
-  <tabstop>mLinePassword_3</tabstop>
-  <tabstop>checkSatelitPass</tabstop>
+  <tabstop>server_url</tabstop>
+  <tabstop>custom_provider_url</tabstop>
+  <tabstop>custom_provider_type</tabstop>
+  <tabstop>button_preview</tabstop>
+  <tabstop>custom_provider_limit_zoom</tabstop>
+  <tabstop>custom_provider_login</tabstop>
+  <tabstop>custom_provider_password</tabstop>
+  <tabstop>custom_provider_save_auth</tabstop>
   <tabstop>checkMaxar</tabstop>
   <tabstop>connectID</tabstop>
   <tabstop>maxarStandardURL</tabstop>
