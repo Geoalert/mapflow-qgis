@@ -6,7 +6,7 @@ from base64 import b64encode
 from threading import Thread
 
 import requests
-from requests.models import Response
+from dateutil.parser import parse as parse_datetime
 from PyQt5 import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
@@ -19,6 +19,8 @@ from qgis.PyQt.QtXml import QDomDocument
 from .resources_rc import *
 from .geoalert_dialog import MainDialog, LoginDialog
 
+
+PROCESSING_LIST_REFRESH_INTERVAL = 5  # in seconds
 
 SW_ENDPOINT = 'https://securewatch.digitalglobe.com/earthservice/wmtsaccess'
 SW_PARAMS = {
@@ -438,9 +440,9 @@ class Geoalert:
         row = self.dlg.processingsTable.currentIndex().row()
         if row != -1:
             # Номер в dictData
-            row_nom = (self.kol_tab - row - 1)
+            row_nom = (len(self.processing_names) - row - 1)
             # получаем данные о слое и его ID
-            id_v = self.dictData[row_nom]['id']
+            id_v = self.processings[row_nom]['id']
             URL_f = self.server + "/rest/processings/" + id_v
             r = requests.delete(url=URL_f, headers=self.headers, auth=self.server_basic_auth)
 
@@ -524,7 +526,7 @@ class Geoalert:
         processing_name = self.dlg.NewLayName.text()
         if not processing_name:
             self.alert(self.tr('Please, specify a name for your processing'))
-        elif processing_name in self.listNameProc:
+        elif processing_name in self.processing_names:
             self.alert(self.tr('Processing name taken. Please, choose a different name.'))
             # Подложка для обработки
             ph_satel = self.dlg.comboBox_satelit.currentIndex()
@@ -710,7 +712,7 @@ class Geoalert:
         name_d = self.dlg.processingsTable.model().index(row, 1).data()  # self.dictData[row_nom]['name']
 
         # находим ссылку на растр по id
-        for dD in self.dictData:
+        for dD in self.processings:
             # print(dD)
             if dD['id'] == id_v:
 
@@ -804,96 +806,37 @@ class Geoalert:
         """Display a translated message on the message bar."""
         self.iface.messageBar().pushMessage("Mapflow", text, level, duration)
 
-    def button_con(self, url):
-        """Циклическое переподключение к серверу для получения статусов обработок."""
-        while self.flag:
-            r = requests.get(url, auth=self.server_basic_auth)
-            self.dictData = r.json()
-            # получаем список ключей по которым можно получить знаечния
-            # print(self.dictData[0].keys())
-
-            self.kol_tab = len(self.dictData)  # количество элементов
-            self.dlg.processingsTable.setRowCount(self.kol_tab)  # создаем строки таблицы
-            # перебор в цикле элементов списка и ключей
-            # nx = 0 #счетчик
-            self.flag = False
-            self.listNameProc = []  # список названий обработок
-            self.listProc = []  # список обработок в таблице
-            for i in range(self.kol_tab):
-                self.listNameProc.append(self.dictData[i]['name'])  # заполняем список названий обработок
-                # print(self.dictData[i]['projectId'])
-                # statf = QTableWidgetItem(str(self.dictData[i]['percentCompleted'])+'%')
-                # namef = QTableWidgetItem(self.dictData[i]['name'])
-                # Status = QTableWidgetItem(self.dictData[i]['status'])
-                # ids = QTableWidgetItem(self.dictData[i]['id'])
-                # #дата и время создания
-                # cre = self.dictData[i]['created']
-                # cre2 = cre.split('T')
-                # createf = QTableWidgetItem(cre2[0] + ' ' + cre2[1][:8])
-
-                if self.dictData[i]['status'] == "IN_PROGRESS" or self.dictData[i]['status'] == "UNPROCESSED":  # если хоть одна задача в процессе выполнения
-                    self.flag = True  # добавляем значение для обновления статуса
-                # print('-'*18)
-                # print(self.dictData[i])
-
-                # # вывод всех значений
-                # spisok_znachen = ['id',
-                #                   'name',
-                #                   'projectId',
-                #                   'vectorLayer',
-                #                   'rasterLayer',
-                #                   'workflowDef',
-                #                   'aoiCount',
-                #                   'aoiArea',
-                #                   'status',
-                #                   'percentCompleted',
-                #                   'params',
-                #                   'meta',
-                #                   'created',
-                #                   'updated']
-                #
-                # for x in spisok_znachen:
-                #     print(x + ': ', self.dictData[i][x], )
-                # print('-'*12)
-
-                # print(self.dictData[i]['workflowDef']['name'])
-
-                # вписываем значения в список для сортировке по дате и времени
-                self.listProc.append([self.dictData[i]['created'],
-                                      self.dictData[i]['percentCompleted'],
-                                      self.dictData[i]['name'], self.dictData[i]['status'],
-                                      self.dictData[i]['id'],
-                                      self.dictData[i]['workflowDef']['name']])
-
-            # сортировка обработок в в списке по дате в обратном порядке
-            self.listProc.sort(reverse=True)
-            # print(listProc)
-            # заполнение таблицы значениями
-            for nx in range(len(self.listProc)):
-                statf = QTableWidgetItem(str(self.listProc[nx][1]) + '%')
-                namef = QTableWidgetItem(self.listProc[nx][2])
-                Status = QTableWidgetItem(self.listProc[nx][3])
-                ids = QTableWidgetItem(self.listProc[nx][4])
-                # название сценария обработки
-                WFDef = QTableWidgetItem(self.listProc[nx][5])
-
-                # дата и время создания
-                cre2 = self.listProc[nx][0].split('T')
-                createf = QTableWidgetItem(cre2[0] + ' ' + cre2[1][:8])
-                # построчная запись в таблицу
-                self.dlg.processingsTable.setItem(nx, 0, statf)
-                self.dlg.processingsTable.setItem(nx, 1, namef)
-                self.dlg.processingsTable.setItem(nx, 2, Status)
-                self.dlg.processingsTable.setItem(nx, 3, createf)
-                self.dlg.processingsTable.setItem(nx, 4, ids)
-                self.dlg.processingsTable.setItem(nx, 5, WFDef)
-
-            if self.flag == True:
-                secn = 5  # задержка обновления в секундах
-                # print('Обновление через', secn, 'секунд')
-                time.sleep(secn)  # ожидание следующей итеррации
-            else:
-                print('Нет выполняющихся обработок')
+    def refresh_processing_list(self, url):
+        """Repeatedly refresh processing list."""
+        while self.check_processings:
+            # fetch all user processings visible to the user
+            self.processings = requests.get(url, auth=self.server_basic_auth).json()
+            # save ref to check name uniqueness at processing creation
+            self.processing_names = [processing['name'] for processing in self.processings]
+            self.dlg.processingsTable.setRowCount(len(self.processings))
+            for processing in self.processings:
+                # Add % signs to progress column for clarity
+                processing['percentCompleted'] = f'{processing["percentCompleted"]}%'
+                # Localize creation datetime
+                local_datetime = parse_datetime(processing['created']).astimezone()
+                # Format as ISO without seconds to save a bit of space
+                processing['created'] = local_datetime.strftime('%Y-%m-%d %H:%m')
+                # Extract WD names from WD objects
+                processing['workflowDef'] = processing['workflowDef']['name']
+            # Check for active processings and set flag to keep polling
+            self.check_processings = bool([p for p in self.processings if p['status'] in ("IN_PROGRESS", "UNPROCESSED")])
+            # Turn sorting off while inserting
+            self.dlg.processingsTable.setSortingEnabled(False)
+            # Fill out the table
+            columns = ('name', 'workflowDef', 'status', 'percentCompleted', 'created')
+            for row, processing in enumerate(self.processings):
+                for col, attr in enumerate(columns):
+                    self.dlg.processingsTable.setItem(row, col, QTableWidgetItem(processing[attr]))
+            # Turn sorting on again
+            self.dlg.processingsTable.setSortingEnabled(False)
+            # Check on the running processings after some time
+            if self.check_processings:
+                time.sleep(PROCESSING_LIST_REFRESH_INTERVAL)
 
     def tr(self, message):
         return QCoreApplication.translate('Geoalert', message)
@@ -939,8 +882,6 @@ class Geoalert:
         #     self.alert(self.tr('Please, specify an existing output directory'))
         #     self.select_output_dir()
         # else:
-        # url = self.server + "/rest/processings"
-        self.server = f'https://whitemaps-{self.dlg_login.serverCombo.currentText()}.mapflow.ai'
         login = self.dlg_login.loginField.text().encode()
         password = self.dlg_login.passwordField.text().encode()
         remember_me = self.dlg_login.rememberMe.isChecked()
@@ -958,14 +899,8 @@ class Geoalert:
                 self.settings.setValue('serverLogin', login)
                 self.settings.setValue('serverPassword', password)
         except requests.exceptions.HTTPError:
-            # self.flag = 'report error'
             if res.status_code == 401:
                 self.dlg_login.invalidCredentialsMessage.setVisible(True)
-
-        # if self.flag:
-        #     # запуск потока
-        #     proc = Thread(target=self.button_con, args=(url,))
-        #     proc.start()
 
     def logout(self):
         """Close the plugin and clear credentials from cache."""
@@ -974,11 +909,13 @@ class Geoalert:
             self.settings.setValue(setting, '')
 
     def run(self):
-        """Обновление списка слоев для выбора источника растра."""
+        """Plugin entrypoint."""
         # Refresh the form
         self.dlg_login.loginField.clear()
         self.dlg_login.passwordField.clear()
         self.dlg_login.invalidCredentialsMessage.hide()
+        # Memorize the server
+        self.server = f'https://whitemaps-{self.dlg_login.serverCombo.currentText()}.mapflow.ai'
         # Check if credentials are in cache
         self.logged_in = self.settings.value("serverLogin") and self.settings.value("serverPassword")
         # Show login form if no cached credentials
@@ -988,9 +925,15 @@ class Geoalert:
                 return
             # otherwise try to log in
             self.connect_to_server()
+        # Start polling the server for a processing list
+        self.check_processings = True
+        url = f'{self.server}/rest/processings'
+        proc = Thread(target=self.refresh_processing_list, args=(url,))
+        proc.start()
         # Add project layers to combo boxes
         self.comboPolygons()
         self.comboImageS()
         # Show main dialog
         self.dlg.show()
-        self.dlg.exec()
+        # Stop refreshing the processing list once the dialog has been closed
+        self.check_processings = bool(self.dlg.exec())
