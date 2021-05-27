@@ -958,8 +958,8 @@ class Geoalert:
         # else:
         # url = self.server + "/rest/processings"
         self.server = f'https://whitemaps-{self.dlg_login.serverCombo.currentText()}.mapflow.ai'
-        login = self.dlg_login.loginField.text()
-        password = self.dlg_login.passwordField.text()
+        login = self.dlg_login.loginField.text().encode()
+        password = self.dlg_login.passwordField.text().encode()
         remember_me = self.dlg_login.rememberMe.isChecked()
         self.settings.setValue("serverRememberMe", remember_me)
         self.server_basic_auth = requests.auth.HTTPBasicAuth(login, password)
