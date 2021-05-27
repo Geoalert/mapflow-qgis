@@ -833,7 +833,9 @@ class Geoalert:
                 for col, attr in enumerate(columns):
                     self.dlg.processingsTable.setItem(row, col, QTableWidgetItem(processing[attr]))
             # Turn sorting on again
-            self.dlg.processingsTable.setSortingEnabled(False)
+            self.dlg.processingsTable.setSortingEnabled(True)
+            # Sort by creation date descending
+            self.dlg.processingsTable.sortItems(4, Qt.DescendingOrder)
             # Check on the running processings after some time
             if self.check_processings:
                 time.sleep(PROCESSING_LIST_REFRESH_INTERVAL)
