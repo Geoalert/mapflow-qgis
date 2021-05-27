@@ -6,17 +6,18 @@ from base64 import b64encode
 from threading import Thread
 
 import requests
-from PyQt5 import *  # Qt
-from PyQt5.QtGui import *  # QIcon
-from PyQt5.QtWidgets import *  # QAction, QMessageBox, QProgressBar
-from PyQt5.QtCore import *  # QSettings, QTranslator, qVersion, QCoreApplication, QVariant, Qt
+from requests.models import Response
+from PyQt5 import *
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import *
 from qgis.core import *
 from qgis.gui import *
 from qgis.utils import iface
 from qgis.PyQt.QtXml import QDomDocument
 
 from .resources_rc import *
-from .geoalert_dialog import GeoalertDialog
+from .geoalert_dialog import MainDialog, LoginDialog
 
 
 SW_ENDPOINT = 'https://securewatch.digitalglobe.com/earthservice/wmtsaccess'
@@ -35,13 +36,15 @@ SW_PARAMS = {
 
 
 class Geoalert:
-    """"""
+    """Initialize the plugin."""
 
     def __init__(self, iface):
         self.iface = iface
         self.project = QgsProject.instance()
-        self.settings = QgsSettings()
         self.plugin_dir = os.path.dirname(__file__)
+        self.settings = QgsSettings()
+        # Create a namespace for the plugin
+        self.settings.beginGroup('geoalert')
         # Translation
         locale = QSettings().value('locale/userLocale')[0:2]
         locale_path = os.path.join(self.plugin_dir, 'i18n', f'Geoalert_{locale}.qm')
@@ -50,14 +53,15 @@ class Geoalert:
             self.translator.load(locale_path)
             if qVersion() > '4.3.3':
                 QCoreApplication.installTranslator(self.translator)
-        # Init dialog and keep reference
-        self.dlg = GeoalertDialog()
+        # Init dialogs and keep references
+        self.dlg = MainDialog()
+        self.dlg.logoutButton.clicked.connect(self.logout)
+        self.dlg_login = LoginDialog()
         self.actions = []
-        self.toolbar = self.iface.pluginToolBar()
+        self.toolbar = self.iface.addToolBar('Geoalert')
+        self.toolbar.setObjectName('Geoalert')
         # Save ref to output dir (empty str if plugin loaded 1st time or cache cleaned manually)
-        self.output_dir = self.settings.value('geoalert/outputDir')
-        # Нажатие кнопки "Подключить".
-        self.dlg.ButtonConnect.clicked.connect(self.connect_to_server)
+        self.output_dir = self.settings.value('outputDir')
         # загрузить выбраный результат
         self.dlg.ButtonDownload.clicked.connect(self.addSucces)
         # Кнопка: Выгрузить слой на сервер для обработки
@@ -70,22 +74,16 @@ class Geoalert:
         self.dlg.but_dir.clicked.connect(self.select_output_dir)
         # ввести стандартную максаровскую ссылку
         self.dlg.maxarStandardURL.clicked.connect(self.maxarStandard)
-        # чтение настроек логин/пароль
-        if self.read_settings("serverSaveAuth"):
-            self.dlg.server_save_auth.setChecked(True)
-            # загружаем логин/пароль платформы и вставляем в поля
-            self.dlg.server_login.setText(self.read_settings("serverLogin"))
-            self.dlg.server_password.setText(self.read_settings("serverPassword"))
-        if self.read_settings("customProviderSaveAuth"):
+        if self.settings.value("customProviderRememberMe"):
             self.dlg.custom_provider_save_auth.setChecked(True)
             # загружаем логин/пароль платформы и вставляем в поля
-            self.dlg.custom_provider_login.setText(self.read_settings("customProviderLogin"))
-            self.dlg.custom_provider_password.setText(self.read_settings("customProviderPassword"))
+            self.dlg.custom_provider_login.setText(self.settings.value("customProviderLogin"))
+            self.dlg.custom_provider_password.setText(self.settings.value("customProviderPassword"))
         # чтение connect ID
-        connectID = self.read_settings('connectID')
+        connectID = self.settings.value('connectID')
         self.dlg.connectID.setText(connectID)
         # чтение настроек URL
-        surl = self.read_settings('customProviderURL')
+        surl = self.settings.value('customProviderURL')
         self.dlg.custom_provider_url.setText(surl)
 
         # чекбокс максар
@@ -174,7 +172,6 @@ class Geoalert:
         for idx, field in enumerate(ll):
             self.dlg.polygonLayerComboBox.addItem(field, idx)
 
-        print('-----------------------------------')
         # заполняем полигональными слоями
 
         self.listPolyLay = []
@@ -229,7 +226,7 @@ class Geoalert:
         connectID = self.dlg.connectID.text()
 
         # сохрангить ID
-        self.save_settings('connectID', connectID)
+        self.settings.setValue('connectID', connectID)
 
         URL = "https://securewatch.digitalglobe.com/catalogservice/wfsaccess?" \
               "REQUEST=GetFeature&TYPENAME=DigitalGlobe:FinishedFeature&" \
@@ -310,7 +307,7 @@ class Geoalert:
         request = requests.Request('GET', SW_ENDPOINT, params=SW_PARAMS).prepare()
         self.dlg.custom_provider_url.setText(request.url)
         self.dlg.custom_provider_type.setCurrentIndex(0)
-        self.save_settings('connectID', connectID)
+        self.settings.setValue('connectID', connectID)
 
     def extent(self, vLayer):
         """Получить координаты охвата слоя."""
@@ -418,7 +415,7 @@ class Geoalert:
             # save ref
             self.output_dir = output_dir
             # save to settings to load at plugin start
-            self.settings.setValue("geoalert/outputDir", output_dir+'/')
+            self.settings.setValue("outputDir", output_dir+'/')
 
     # выбор tif для загрузки на сервер
     def select_tif(self):
@@ -507,7 +504,6 @@ class Geoalert:
         for idx, field in enumerate(ll):
             self.dlg.comboBox_satelit.addItem(field, idx)
 
-        print('-----------------------------------')
         # заполняем локальными подключенными растрами
         # self.comboImageS()
         self.listLay = []
@@ -706,13 +702,13 @@ class Geoalert:
     def load_custom_tileset(self):
         """Custom provider imagery preview."""
         # Save the checkbox state itself
-        self.save_settings("custom_provider_save_auth", self.dlg.custom_provider_save_auth.isChecked())
+        self.settings.setValue("custom_provider_save_auth", self.dlg.custom_provider_save_auth.isChecked())
         # If checked, save the credentials
         if self.dlg.custom_provider_save_auth.isChecked():
-            self.save_settings("customProviderLogin", self.dlg.custom_provider_login.text())
-            self.save_settings("customProviderPassword", self.dlg.custom_provider_password.text())
+            self.settings.setValue("customProviderLogin", self.dlg.custom_provider_login.text())
+            self.settings.setValue("customProviderPassword", self.dlg.custom_provider_password.text())
         url = self.dlg.custom_provider_url.text()
-        self.save_settings('customProviderURL', url)
+        self.settings.setValue('customProviderURL', url)
         url_escaped = url.replace('&', '%26').replace('=', '%3D')
         params = {
             'type': self.dlg.custom_provider_type.currentText(),
@@ -844,42 +840,6 @@ class Geoalert:
         """Display an info message."""
         QMessageBox.information(self.dlg, 'Geoalert', self.tr(message))
 
-    def connect_to_server(self):
-        """Подключение к серверу."""
-        # Check if user specified an existing output dir
-        if not os.path.exists(self.output_dir):
-            self.message('Please, specify an existing output directory')
-            self.select_output_dir()
-        else:
-            self.save_settings("serverSaveAuth", self.dlg.server_save_auth.isChecked())
-            login = self.dlg.server_login.text()
-            password = self.dlg.server_password.text()
-            if self.dlg.server_save_auth.isChecked():
-                self.save_settings("serverLogin", login)
-                self.save_settings("serverPassword", password)
-            self.server = self.dlg.server_url.text()
-            url = self.server + "/rest/processings"
-            self.server_basic_auth = requests.auth.HTTPBasicAuth(login, password)
-            self.headers = {'Content-Type': "application/json"}
-
-            # заполняем комбобокс доступными воркфлоудифинишинсами
-            url = self.server + '/rest/projects/default'
-            res = requests.get(url, auth=self.server_basic_auth)
-            if not res.ok:  # пароль НЕ верный, показать предупреждение
-                self.flag = 'report error'
-                self.message('Wrong login or password! Please try again.')
-                return
-            wds = [wd['name'] for wd in res.json()['workflowDefs']]
-            self.dlg.ai_model.clear()
-            self.dlg.ai_model.addItems(wds)
-
-            if self.flag:
-                # запуск потока
-                proc = Thread(target=self.button_con, args=(url,))
-                proc.start()
-            else:
-                self.message('Invalid credentials! Please try again.')
-
     def button_con(self, URL):
         """Циклическое переподключение к серверу для получения статусов обработок."""
         while self.flag:
@@ -974,16 +934,6 @@ class Geoalert:
             else:
                 print('Нет выполняющихся обработок')
 
-    def save_settings(self, key, val):
-        """Cache values for reuse."""
-        self.settings.setValue(f"geoalert/{key}", val)
-
-    def read_settings(self, key):
-        """Read cached values."""
-        # Returns None if undefined
-        val = self.settings.value(f"geoalert/{key}")
-        return '' if val is None else val
-
     def tr(self, message):
         return QCoreApplication.translate('Geoalert', message)
 
@@ -1017,22 +967,74 @@ class Geoalert:
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
-            self.iface.removePluginVectorMenu('&Geoalert', action)
+            self.iface.removePluginVectorMenu('Geoalert', action)
             self.iface.removeToolBarIcon(action)
-        # del self.toolbar
+        del self.toolbar
+
+    def connect_to_server(self):
+        """Connect to Geoalert server."""
+        # Check if user specified an existing output dir
+        # if not os.path.exists(self.output_dir):
+        #     self.message('Please, specify an existing output directory')
+        #     self.select_output_dir()
+        # else:
+        # url = self.server + "/rest/processings"
+        self.server = f'https://whitemaps-{self.dlg_login.serverCombo.currentText()}.mapflow.ai'
+        login = self.dlg_login.loginField.text()
+        password = self.dlg_login.passwordField.text()
+        remember_me = self.dlg_login.rememberMe.isChecked()
+        self.settings.setValue("serverRememberMe", remember_me)
+        self.server_basic_auth = requests.auth.HTTPBasicAuth(login, password)
+        try:
+            res = requests.get(f'{self.server}/rest/projects/default', auth=self.server_basic_auth)
+            res.raise_for_status()
+            # Load the list of WDs in the default project
+            wds = [wd['name'] for wd in res.json()['workflowDefs']]
+            self.dlg.ai_model.clear()
+            self.dlg.ai_model.addItems(wds)
+            self.logged_in = True
+            if remember_me:
+                self.settings.setValue('serverLogin', login)
+                self.settings.setValue('serverPassword', password)
+        except requests.exceptions.HTTPError:
+            # self.flag = 'report error'
+            if res.status_code == 401:
+                self.dlg_login.invalidCredentialsMessage.setVisible(True)
+
+        # if self.flag:
+        #     # запуск потока
+        #     proc = Thread(target=self.button_con, args=(url,))
+        #     proc.start()
+
+    def logout(self):
+        """Close the plugin and clear credentials from cache."""
+        self.dlg.close()
+        for setting in ('serverLogin', 'serverPassword', 'serverRememberMe'):
+            self.settings.setValue(setting, '')
 
     def run(self):
         """Обновление списка слоев для выбора источника растра."""
+        self.dlg_login.loginField.clear()
+        self.dlg_login.passwordField.clear()
+        self.dlg_login.invalidCredentialsMessage.hide()
+        # Check if credentials are in cache
+        self.logged_in = self.settings.value("serverLogin") and self.settings.value("serverPassword")
+        # Show login form if no cached credentials
+        while not self.logged_in:
+            # if user quits dialog - quit plugin
+            if not self.dlg_login.exec():
+                return
+            self.connect_to_server()
+
         # запускаем отдельным потоком
         self.potok = True
         upLayers = Thread(target=self.update_layer_list)
         upLayers.start()
 
-        # Открыть диалог
+        # Show main dialog
         self.dlg.show()
-        self.dlg.exec_()
+        self.dlg.exec()
 
-        print("Закрытие окна, завершение потока")
         # закрываем поток после закрытия окна плагина
         self.potok = False
         upLayers.join()

@@ -6,13 +6,15 @@ from qgis.core import QgsMapLayerProxyModel
 from qgis.utils import iface
 
 
-FORM_CLASS = uic.loadUiType(Path(__file__).parent/'geoalert_dialog_base.ui')[0]
+mainWindow = iface.mainWindow()
+MainDialogForm = uic.loadUiType(Path(__file__).parent/'main_dialog.ui')[0]
+LoginDialogForm = uic.loadUiType(Path(__file__).parent/'login_dialog.ui')[0]
 
 
-class GeoalertDialog(QDialog, FORM_CLASS):
-    def __init__(self, parent=iface.mainWindow()):
+class MainDialog(QDialog, MainDialogForm):
+    def __init__(self, parent=mainWindow):
         """Constructor."""
-        super(GeoalertDialog, self).__init__(parent)
+        super(MainDialog, self).__init__(parent)
         self.setupUi(self)
         # Adjust column width in processings table
         for index, width in enumerate((95, 145, 75, 140, 100, 120)):
@@ -23,3 +25,12 @@ class GeoalertDialog(QDialog, FORM_CLASS):
         # self.mMapLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer) #фильтр полигональных слоев
         self.VMapLayerComboBox.setFilters(QgsMapLayerProxyModel.HasGeometry)  # фильтр векторных слоев
         # self.vectorComboBox.setFilters(QgsMapLayerProxyModel.PointLayer) #фильтр точечных слоев
+
+
+class LoginDialog(QDialog, LoginDialogForm):
+    def __init__(self, parent=mainWindow):
+        """Constructor."""
+        super(LoginDialog, self).__init__(parent)
+        self.setupUi(self)
+        self.cancelButton.clicked.connect(self.reject)
+        self.loginButton.clicked.connect(self.accept)
