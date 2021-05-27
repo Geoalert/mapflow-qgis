@@ -136,9 +136,8 @@ class Geoalert:
     #
     #     self.project.addMapLayer(Vlayer)
 
-# Вписываем feature ID из таблицы в поле
-
     def feID(self):
+        # Вписываем feature ID из таблицы в поле
         # получить номер выбранной строки в таблице!
         row = self.dlg.tabListRast.currentIndex().row()
         print(row)
@@ -419,7 +418,7 @@ class Geoalert:
 
     # выбор tif для загрузки на сервер
     def select_tif(self):
-        filename = QFileDialog.getOpenFileName(None, "Select .TIF File", './', 'Files (*.tif *.TIF *.Tif)')
+        filename = QFileDialog.getOpenFileName(None, "Select GeoTIFF", './', 'Files (*.tif *.TIF *.Tif)')
         # запоминаем адрес в файл для автоматической подгрузки, если он не пустой
         print(filename)
         if len(filename[0]) > 0:
@@ -459,10 +458,7 @@ class Geoalert:
             URL_f = self.server + "/rest/processings/" + id_v
             r = requests.delete(url=URL_f, headers=self.headers, auth=self.server_basic_auth)
 
-        # всплывающее сообщение
-        self.iface.messageBar().pushMessage("Massage", "Processing has been removed.",
-                                            level=Qgis.Warning,
-                                            duration=7)
+        self.push_message("Processing has been removed", level=Qgis.Warning, duration=7)
         # обновить список слоев
         self.connect_to_server()
 
@@ -535,29 +531,23 @@ class Geoalert:
 
     def uploadOnServer(self, iface):
         """Выгрузить слой на сервер для обработки"""
-        NewLayName = self.dlg.NewLayName.text()
-        if len(NewLayName) > 0 and NewLayName not in self.listNameProc:  # если имя не пустое - начинаем загрузку
-
+        processing_name = self.dlg.NewLayName.text()
+        if not processing_name:
+            self.alert('Please, specify a name for your processing')
+        elif processing_name in self.listNameProc:
+            self.alert('Processing name taken. Please, choose a different name.')
             # Подложка для обработки
             ph_satel = self.dlg.comboBox_satelit.currentIndex()
-            # print(ph_satel)
             # чекбокс (обновить кеш)
             cacheUP = str(self.dlg.checkUp.isChecked())
-            # print(cacheUP)
-
-            # всплывающее сообщение
-            self.iface.messageBar().pushMessage("Massage", "Please, wait. Uploading a file to the server...",
-                                                level=Qgis.Info,
-                                                duration=10)
-
+            self.push_message("Please, wait. Uploading the file to the server...")
             if ph_satel == 0:  # Mapbox Satellite
                 # url_xyz = ''
                 # proj_EPSG = 'epsg:3857'
                 params = {}
                 self.upOnServ_proc(params)
             elif ph_satel == 1:  # Custom
-                infoString = "Поставщиком космических снимков может взыматься плата за их использование!"
-                QMessageBox.information(self.dlg, "About", infoString)
+                self.alert("Поставщиком космических снимков может взыматься плата за их использование!")
                 login = self.dlg.custom_provider_login.text()
                 password = self.dlg.custom_provider_password.text()
                 url_xyz = self.dlg.custom_provider_url.text()
@@ -578,13 +568,6 @@ class Geoalert:
                 n = ph_satel - 3
                 p = Thread(target=self.up_tif, args=(n,))
                 p.start()
-
-        else:
-            print('Сначала укажите имя для обработки, выберите полигональный слой и тип обработки')
-            # создать и показать сообщение//create a string and show it
-            infoString = "Название обработки не задано или уже есть обработка с таким названием. " \
-                "\n Введите другое название!"
-            QMessageBox.information(self.dlg, "About", infoString)
 
     def upOnServ_proc(self, params):
         # название новой обработки
@@ -625,10 +608,7 @@ class Geoalert:
                 Vlayer = QgsVectorLayer(name_temp, 'extent_temp', "ogr")
 
             else:
-                infoString = 'Use local ".tif" file'
-
-                QMessageBox.information(self.dlg, "About", infoString)
-                print('сначала выберите локальный .tif')
+                self.alert('Please, select a GeoTIFF file')
         # если выбран один из полигональных слоев, пеередаем его дальше
         elif idv > 0:
             # получаем слой из списка полигональных слоев
@@ -692,11 +672,7 @@ class Geoalert:
         # print(rpost.status_code)
 
         self.dlg.NewLayName.clear()  # очистить поле имени
-
-        # создать и показать сообщение
-        infoString = "Слой загружен на сервер! \n Обработка может занять от 10 секунд до нескольких минут"
-        print(infoString)
-        # QMessageBox.information(self.dlg, "About", infoString)
+        self.alert("Success! Processing may take up to several minutes")
         self.connect_to_server()
 
     def load_custom_tileset(self):
@@ -721,7 +697,7 @@ class Geoalert:
         uri = '&'.join(f'{key}={val}' for key, val in params.items())
         layer = QgsRasterLayer(uri, self.tr('Custom tileset'), 'wms')
         if not layer.isValid():
-            self.message(f'Invalid custom imagery provider: {url_escaped}')
+            self.alert(f'Invalid custom imagery provider: {url_escaped}')
         else:
             self.project.addMapLayer(layer)
 
@@ -729,116 +705,114 @@ class Geoalert:
         """Загрузка слоя с сервера."""
         # получить номер выбранной строки в таблице!
         row = self.dlg.processingsTable.currentIndex().row()
-        print(row)
-        if row != -1:
-            # Номер в dictData
-            # row_nom =  (self.kol_tab - row - 1)
-            # #получаем данные о слое и его ID
-            # id_v = self.dictData[row_nom]['id']
-            # print(id_v)
+        if row == -1:
+            self.alert('Please, select a processing')
+        # Номер в dictData
+        # row_nom =  (self.kol_tab - row - 1)
+        # #получаем данные о слое и его ID
+        # id_v = self.dictData[row_nom]['id']
 
-            id_v = self.dlg.processingsTable.model().index(row, 4).data()
-            print(id_v)
-            URL_f = self.server + "/rest/processings/" + id_v + "/result"
-            r = requests.get(url=URL_f, headers=self.headers, auth=self.server_basic_auth)
+        id_v = self.dlg.processingsTable.model().index(row, 4).data()
+        URL_f = self.server + "/rest/processings/" + id_v + "/result"
+        r = requests.get(url=URL_f, headers=self.headers, auth=self.server_basic_auth)
 
-            # адрес для сохранения файла
-            name_d = self.dlg.processingsTable.model().index(row, 1).data()  # self.dictData[row_nom]['name']
+        # адрес для сохранения файла
+        name_d = self.dlg.processingsTable.model().index(row, 1).data()  # self.dictData[row_nom]['name']
 
-            # находим ссылку на растр по id
-            for dD in self.dictData:
-                # print(dD)
-                if dD['id'] == id_v:
+        # находим ссылку на растр по id
+        for dD in self.dictData:
+            # print(dD)
+            if dD['id'] == id_v:
 
-                    rastrXYZ = dD['rasterLayer']['tileUrl']
-                    print(rastrXYZ)
-                    break
+                rastrXYZ = dD['rasterLayer']['tileUrl']
+                print(rastrXYZ)
+                break
 
-            url = '&url=' + rastrXYZ
-            # print(rastrXYZ)
-            min_max = "&zmax=18&zmin=0"
-            typeXYZ = 'type=xyz'
-            login = '&username=' + self.dlg.server_login.text()
-            password = '&password=' + self.dlg.server_password.text()
-            urlWithParams = typeXYZ + url + min_max + login + password
-            rlayer = QgsRasterLayer(urlWithParams, name_d + 'xyz', 'wms')
-            self.project.addMapLayer(rlayer)
+        url = '&url=' + rastrXYZ
+        # print(rastrXYZ)
+        min_max = "&zmax=18&zmin=0"
+        typeXYZ = 'type=xyz'
+        login = '&username=' + self.dlg.server_login.text()
+        password = '&password=' + self.dlg.server_password.text()
+        urlWithParams = typeXYZ + url + min_max + login + password
+        rlayer = QgsRasterLayer(urlWithParams, name_d + 'xyz', 'wms')
+        self.project.addMapLayer(rlayer)
 
-            # x1 = name_d.rfind('_')
-            # извлекаем проекцию из метаданных/перестали извлекать, задали фиксированную
-            Projection = 'EPSG:4326'  # self.dictData[row_nom]['meta']['EPSG'] #name_d[x1 + 1:]
+        # x1 = name_d.rfind('_')
+        # извлекаем проекцию из метаданных/перестали извлекать, задали фиксированную
+        Projection = 'EPSG:4326'  # self.dictData[row_nom]['meta']['EPSG'] #name_d[x1 + 1:]
 
-            # система координат для преобразования файла
-            crs_EPSG = QgsCoordinateReferenceSystem(Projection)
+        # система координат для преобразования файла
+        crs_EPSG = QgsCoordinateReferenceSystem(Projection)
 
-            # временный файл
-            file_temp = os.path.join(self.output_dir, f'{name_d}_temp.geojson')
-            with open(file_temp, "wb") as f:
-                f.write(str.encode(r.text))
-            vlayer_temp = QgsVectorLayer(file_temp, name_d+'_temp', "ogr")
+        # временный файл
+        file_temp = os.path.join(self.output_dir, f'{name_d}_temp.geojson')
+        with open(file_temp, "wb") as f:
+            f.write(str.encode(r.text))
+        vlayer_temp = QgsVectorLayer(file_temp, name_d+'_temp', "ogr")
 
-            # экспорт в shp
-            file_adr = os.path.join(self.output_dir, f'{name_d}.shp')
-            error = QgsVectorFileWriter.writeAsVectorFormat(vlayer_temp, file_adr, "utf-8", crs_EPSG, "ESRI Shapefile")
-            if error == QgsVectorFileWriter.NoError:
-                print("success again!")
-            else:
-                print('ERROR WRITING SHP')
+        # экспорт в shp
+        file_adr = os.path.join(self.output_dir, f'{name_d}.shp')
+        error = QgsVectorFileWriter.writeAsVectorFormat(vlayer_temp, file_adr, "utf-8", crs_EPSG, "ESRI Shapefile")
+        if error != QgsVectorFileWriter.NoError:
+            self.push_message('There was an error writing the Shapefile!', Qgis.Warning)
 
-            # Открытие файла
-            vlayer = QgsVectorLayer(file_adr, name_d, "ogr")
-            if not vlayer:
-                print("Layer failed to load!")
-            # Загрузка файла в окно qgis
-            self.project.addMapLayer(vlayer)
+        # Открытие файла
+        vlayer = QgsVectorLayer(file_adr, name_d, "ogr")
+        if not vlayer:
+            self.push_message("Could not load the layer!", Qgis.Warning)
+        # Загрузка файла в окно qgis
+        self.project.addMapLayer(vlayer)
 
-            # ---- подключение стилей
-            # определяем какой стиль подключить к слою
-            WFDef = self.listProc[row][5]  # название дефенишинса
-            if WFDef == 'Buildings Detection' or WFDef == 'Buildings Detection With Heights':
-                style = '/styles/style_buildings.qml'
-            elif WFDef == 'Forest Detection':
-                style = '/styles/style_forest.qml'
-            elif WFDef == 'Forest Detection With Heights':
-                style = '/styles/style_forest_with_heights.qml'
-            elif WFDef == 'Roads Detection':
-                style = '/styles/style_roads.qml'
-            else:
-                style = '/styles/style_default.qml'
-
-            # подключаем стиль!!!!!!!!!!!!!!!!!!
-            qml_path = self.plugin_dir + style
-            print(qml_path)
-            layer = self.iface.activeLayer()
-            style_manager = layer.styleManager()
-            # read valid style from layer
-            style = QgsMapLayerStyle()
-            style.readFromLayer(layer)
-            # get style name from file
-            style_name = os.path.basename(qml_path).strip('.qml')
-            # add style with new name
-            style_manager.addStyle(style_name, style)
-            # set new style as current
-            style_manager.setCurrentStyle(style_name)
-            # load qml to current style
-            message, success = layer.loadNamedStyle(qml_path)
-            print(message)
-            if not success:  # if style not loaded remove it
-                style_manager.removeStyle(style_name)
-
-            time.sleep(1)
-            iface.zoomToActiveLayer()  # приблизить к охвату активного слоя
-            try:
-                os.remove(file_temp)  # удаление временного файла
-                print('Временный файл удален:', file_temp)
-            except:
-                print('Временный файл удалить не удалось, ну пусть будет, он никому не мешает и весит мало:', file_temp)
+        # ---- подключение стилей
+        # определяем какой стиль подключить к слою
+        WFDef = self.listProc[row][5]  # название дефенишинса
+        if WFDef == 'Buildings Detection' or WFDef == 'Buildings Detection With Heights':
+            style = '/styles/style_buildings.qml'
+        elif WFDef == 'Forest Detection':
+            style = '/styles/style_forest.qml'
+        elif WFDef == 'Forest Detection With Heights':
+            style = '/styles/style_forest_with_heights.qml'
+        elif WFDef == 'Roads Detection':
+            style = '/styles/style_roads.qml'
         else:
-            print('Сначала выберите слой в таблице')
+            style = '/styles/style_default.qml'
 
-    def message(self, message):
+        # подключаем стиль!!!!!!!!!!!!!!!!!!
+        qml_path = self.plugin_dir + style
+        print(qml_path)
+        layer = self.iface.activeLayer()
+        style_manager = layer.styleManager()
+        # read valid style from layer
+        style = QgsMapLayerStyle()
+        style.readFromLayer(layer)
+        # get style name from file
+        style_name = os.path.basename(qml_path).strip('.qml')
+        # add style with new name
+        style_manager.addStyle(style_name, style)
+        # set new style as current
+        style_manager.setCurrentStyle(style_name)
+        # load qml to current style
+        message, success = layer.loadNamedStyle(qml_path)
+        print(message)
+        if not success:  # if style not loaded remove it
+            style_manager.removeStyle(style_name)
+
+        time.sleep(1)
+        iface.zoomToActiveLayer()  # приблизить к охвату активного слоя
+        try:
+            os.remove(file_temp)  # удаление временного файла
+            print('Временный файл удален:', file_temp)
+        except:
+            print('Временный файл удалить не удалось, ну пусть будет, он никому не мешает и весит мало:', file_temp)
+
+    def alert(self, message):
         """Display an info message."""
-        QMessageBox.information(self.dlg, 'Geoalert', self.tr(message))
+        QMessageBox.information(self.dlg, 'Mapflow', self.tr(message))
+
+    def push_message(self, text, level=Qgis.Info, duration=5):
+        """Display a translated message on the message bar."""
+        self.iface.messageBar().pushMessage("Mapflow", self.tr(text), level, duration)
 
     def button_con(self, URL):
         """Циклическое переподключение к серверу для получения статусов обработок."""
@@ -975,7 +949,7 @@ class Geoalert:
         """Connect to Geoalert server."""
         # Check if user specified an existing output dir
         # if not os.path.exists(self.output_dir):
-        #     self.message('Please, specify an existing output directory')
+        #     self.alert('Please, specify an existing output directory')
         #     self.select_output_dir()
         # else:
         # url = self.server + "/rest/processings"
