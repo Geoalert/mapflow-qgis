@@ -41,6 +41,10 @@ class Geoalert:
     def __init__(self, iface):
         self.iface = iface
         self.project = QgsProject.instance()
+        self.project.layersAdded.connect(self.comboPolygons)
+        self.project.layersAdded.connect(self.comboImageS)
+        self.project.layersRemoved.connect(self.comboPolygons)
+        self.project.layersRemoved.connect(self.comboImageS)
         self.plugin_dir = os.path.dirname(__file__)
         self.settings = QgsSettings()
         # Create a namespace for the plugin
@@ -144,24 +148,6 @@ class Geoalert:
         id_v = self.dlg.tabListRast.model().index(row, 4).data()
         print(id_v)
         self.dlg.featureID.setText(str(id_v))
-
-    def update_layer_list(self):
-        """Update layer list at plugin start."""
-
-        # выполняется пока окно открыто
-        lenL = 0
-        while self.potok:
-            # print('Старт проверки')
-            lenLayers = len(self.project.mapLayers())
-            if lenL != lenLayers:
-                lenL = lenLayers  # запоминаем значение для проверки в следующий раз
-                # обновление списков комбобокса
-                # растры
-                self.comboImageS()
-                # полигоны
-                self.comboPolygons()
-            # пауза перед повторной проверкой
-            time.sleep(6)
 
     # заполнение комбобокса полигональных слоев
     def comboPolygons(self):
@@ -818,14 +804,11 @@ class Geoalert:
         """Display a translated message on the message bar."""
         self.iface.messageBar().pushMessage("Mapflow", text, level, duration)
 
-    def button_con(self, URL):
+    def button_con(self, url):
         """Циклическое переподключение к серверу для получения статусов обработок."""
         while self.flag:
-            # выполняем запрос
-            r = requests.get(url=URL, headers=self.headers, auth=self.server_basic_auth)
-            # текст ответа от сервера распознаем как json и разбиваем на список со словарями
-            self.dictData = json.loads(r.text)
-            # print(self.dictData)
+            r = requests.get(url, auth=self.server_basic_auth)
+            self.dictData = r.json()
             # получаем список ключей по которым можно получить знаечния
             # print(self.dictData[0].keys())
 
@@ -992,6 +975,7 @@ class Geoalert:
 
     def run(self):
         """Обновление списка слоев для выбора источника растра."""
+        # Refresh the form
         self.dlg_login.loginField.clear()
         self.dlg_login.passwordField.clear()
         self.dlg_login.invalidCredentialsMessage.hide()
@@ -1002,17 +986,11 @@ class Geoalert:
             # if user quits dialog - quit plugin
             if not self.dlg_login.exec():
                 return
+            # otherwise try to log in
             self.connect_to_server()
-
-        # запускаем отдельным потоком
-        self.potok = True
-        upLayers = Thread(target=self.update_layer_list)
-        upLayers.start()
-
+        # Add project layers to combo boxes
+        self.comboPolygons()
+        self.comboImageS()
         # Show main dialog
         self.dlg.show()
         self.dlg.exec()
-
-        # закрываем поток после закрытия окна плагина
-        self.potok = False
-        upLayers.join()
