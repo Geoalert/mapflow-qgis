@@ -47,7 +47,7 @@ class Geoalert:
         self.settings.beginGroup('geoalert')
         # Translation
         locale = QSettings().value('locale/userLocale')[0:2]
-        locale_path = os.path.join(self.plugin_dir, 'i18n', f'Geoalert_{locale}.qm')
+        locale_path = os.path.join(self.plugin_dir, 'i18n', f'geoalert_{locale}.qm')
         if os.path.exists(locale_path):
             self.translator = QTranslator()
             self.translator.load(locale_path)
@@ -458,7 +458,7 @@ class Geoalert:
             URL_f = self.server + "/rest/processings/" + id_v
             r = requests.delete(url=URL_f, headers=self.headers, auth=self.server_basic_auth)
 
-        self.push_message("Processing has been removed", level=Qgis.Warning, duration=7)
+        self.push_message(self.tr("Processing has been removed"), level=Qgis.Warning, duration=7)
         # обновить список слоев
         self.connect_to_server()
 
@@ -533,21 +533,21 @@ class Geoalert:
         """Выгрузить слой на сервер для обработки"""
         processing_name = self.dlg.NewLayName.text()
         if not processing_name:
-            self.alert('Please, specify a name for your processing')
+            self.alert(self.tr('Please, specify a name for your processing'))
         elif processing_name in self.listNameProc:
-            self.alert('Processing name taken. Please, choose a different name.')
+            self.alert(self.tr('Processing name taken. Please, choose a different name.'))
             # Подложка для обработки
             ph_satel = self.dlg.comboBox_satelit.currentIndex()
             # чекбокс (обновить кеш)
             cacheUP = str(self.dlg.checkUp.isChecked())
-            self.push_message("Please, wait. Uploading the file to the server...")
+            self.push_message(self.tr("Please, wait. Uploading the file to the server..."))
             if ph_satel == 0:  # Mapbox Satellite
                 # url_xyz = ''
                 # proj_EPSG = 'epsg:3857'
                 params = {}
                 self.upOnServ_proc(params)
             elif ph_satel == 1:  # Custom
-                self.alert("Поставщиком космических снимков может взыматься плата за их использование!")
+                self.alert(self.tr("Please, be aware that you may be charged by the imagery provider!"))
                 login = self.dlg.custom_provider_login.text()
                 password = self.dlg.custom_provider_password.text()
                 url_xyz = self.dlg.custom_provider_url.text()
@@ -608,7 +608,7 @@ class Geoalert:
                 Vlayer = QgsVectorLayer(name_temp, 'extent_temp', "ogr")
 
             else:
-                self.alert('Please, select a GeoTIFF file')
+                self.alert(self.tr('Please, select a GeoTIFF file'))
         # если выбран один из полигональных слоев, пеередаем его дальше
         elif idv > 0:
             # получаем слой из списка полигональных слоев
@@ -672,7 +672,7 @@ class Geoalert:
         # print(rpost.status_code)
 
         self.dlg.NewLayName.clear()  # очистить поле имени
-        self.alert("Success! Processing may take up to several minutes")
+        self.alert(self.tr("Success! Processing may take up to several minutes"))
         self.connect_to_server()
 
     def load_custom_tileset(self):
@@ -697,7 +697,7 @@ class Geoalert:
         uri = '&'.join(f'{key}={val}' for key, val in params.items())
         layer = QgsRasterLayer(uri, self.tr('Custom tileset'), 'wms')
         if not layer.isValid():
-            self.alert(f'Invalid custom imagery provider: {url_escaped}')
+            self.alert(self.tr('Invalid custom imagery provider:') + url_escaped)
         else:
             self.project.addMapLayer(layer)
 
@@ -706,7 +706,7 @@ class Geoalert:
         # получить номер выбранной строки в таблице!
         row = self.dlg.processingsTable.currentIndex().row()
         if row == -1:
-            self.alert('Please, select a processing')
+            self.alert(self.tr('Please, select a processing'))
         # Номер в dictData
         # row_nom =  (self.kol_tab - row - 1)
         # #получаем данные о слое и его ID
@@ -755,12 +755,12 @@ class Geoalert:
         file_adr = os.path.join(self.output_dir, f'{name_d}.shp')
         error = QgsVectorFileWriter.writeAsVectorFormat(vlayer_temp, file_adr, "utf-8", crs_EPSG, "ESRI Shapefile")
         if error != QgsVectorFileWriter.NoError:
-            self.push_message('There was an error writing the Shapefile!', Qgis.Warning)
+            self.push_message(self.tr('There was an error writing the Shapefile!'), Qgis.Warning)
 
         # Открытие файла
         vlayer = QgsVectorLayer(file_adr, name_d, "ogr")
         if not vlayer:
-            self.push_message("Could not load the layer!", Qgis.Warning)
+            self.push_message(self.tr("Could not load the layer!"), Qgis.Warning)
         # Загрузка файла в окно qgis
         self.project.addMapLayer(vlayer)
 
@@ -808,11 +808,11 @@ class Geoalert:
 
     def alert(self, message):
         """Display an info message."""
-        QMessageBox.information(self.dlg, 'Mapflow', self.tr(message))
+        QMessageBox.information(self.dlg, 'Mapflow', message)
 
     def push_message(self, text, level=Qgis.Info, duration=5):
         """Display a translated message on the message bar."""
-        self.iface.messageBar().pushMessage("Mapflow", self.tr(text), level, duration)
+        self.iface.messageBar().pushMessage("Mapflow", text, level, duration)
 
     def button_con(self, URL):
         """Циклическое переподключение к серверу для получения статусов обработок."""
@@ -949,7 +949,7 @@ class Geoalert:
         """Connect to Geoalert server."""
         # Check if user specified an existing output dir
         # if not os.path.exists(self.output_dir):
-        #     self.alert('Please, specify an existing output directory')
+        #     self.alert(self.tr('Please, specify an existing output directory'))
         #     self.select_output_dir()
         # else:
         # url = self.server + "/rest/processings"
