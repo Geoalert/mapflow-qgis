@@ -9,47 +9,47 @@
         <translation>Mapflow - Авторизация</translation>
     </message>
     <message>
-        <location filename="../login_dialog.ui" line="160"/>
+        <location filename="../login_dialog.ui" line="369"/>
         <source>Invalid credentials</source>
         <translation>Ошибка авторизации</translation>
     </message>
     <message>
-        <location filename="../login_dialog.ui" line="187"/>
+        <location filename="../login_dialog.ui" line="133"/>
         <source>Login</source>
         <translation>Логин</translation>
     </message>
     <message>
-        <location filename="../login_dialog.ui" line="207"/>
+        <location filename="../login_dialog.ui" line="153"/>
         <source>Password</source>
         <translation>Пароль</translation>
     </message>
     <message>
-        <location filename="../login_dialog.ui" line="224"/>
+        <location filename="../login_dialog.ui" line="170"/>
         <source>Server</source>
         <translation>Сервер</translation>
     </message>
     <message>
-        <location filename="../login_dialog.ui" line="232"/>
+        <location filename="../login_dialog.ui" line="178"/>
         <source>production</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../login_dialog.ui" line="237"/>
+        <location filename="../login_dialog.ui" line="183"/>
         <source>staging</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../login_dialog.ui" line="245"/>
+        <location filename="../login_dialog.ui" line="191"/>
         <source>Remember me</source>
         <translation>Запомнить меня</translation>
     </message>
     <message>
-        <location filename="../login_dialog.ui" line="274"/>
+        <location filename="../login_dialog.ui" line="78"/>
         <source>Cancel</source>
         <translation>Отмена</translation>
     </message>
     <message>
-        <location filename="../login_dialog.ui" line="293"/>
+        <location filename="../login_dialog.ui" line="97"/>
         <source>Log in</source>
         <translation>Вход</translation>
     </message>
@@ -86,7 +86,7 @@
     <message>
         <location filename="../main_dialog.ui" line="168"/>
         <source>Update cache</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Обновить кэш</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="187"/>
@@ -166,7 +166,7 @@
     <message>
         <location filename="../main_dialog.ui" line="507"/>
         <source>Source type:</source>
-        <translation type="unfinished">Тип источника</translation>
+        <translation type="unfinished">Тип источника:</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="530"/>
@@ -181,17 +181,17 @@
     <message>
         <location filename="../main_dialog.ui" line="555"/>
         <source>Login:</source>
-        <translation type="unfinished">Логин</translation>
+        <translation type="unfinished">Логин:</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="569"/>
         <source>Password:</source>
-        <translation type="unfinished">Пароль</translation>
+        <translation type="unfinished">Пароль:</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="598"/>
         <source>Output directory:</source>
-        <translation type="unfinished">Рабочая папка</translation>
+        <translation type="unfinished">Рабочая папка:</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="608"/>
@@ -257,64 +257,69 @@
         <translation>Обработка удалена</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="498"/>
+        <location filename="../geoalert.py" line="500"/>
         <source>Custom (in settings)</source>
         <translation>Иной (в настройках)</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="536"/>
+        <location filename="../geoalert.py" line="540"/>
         <source>Please, specify a name for your processing</source>
         <translation>Пожалуйста, выберите название обработки</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="538"/>
+        <location filename="../geoalert.py" line="542"/>
         <source>Processing name taken. Please, choose a different name.</source>
         <translation>Обработка с таким названием уже существует. Пожалуйста, выберите другое название.</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="543"/>
+        <location filename="../geoalert.py" line="547"/>
         <source>Please, wait. Uploading the file to the server...</source>
         <translation>Загружаем снимок в Mapflow. Пожалуйста, подождите...</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="611"/>
+        <location filename="../geoalert.py" line="615"/>
         <source>Please, select a GeoTIFF file</source>
         <translation>Пожалуйста, выберите снимок в формате GeoTIFF</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="675"/>
+        <location filename="../geoalert.py" line="679"/>
         <source>Success! Processing may take up to several minutes</source>
         <translation>Пожалуйста, подождите пока обработка выполняется. Это может занять несколько минут</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="698"/>
+        <location filename="../geoalert.py" line="702"/>
         <source>Custom tileset</source>
         <translation>Снимки</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="700"/>
+        <location filename="../geoalert.py" line="704"/>
         <source>Invalid custom imagery provider:</source>
         <translation>Мы не смогли подключиться к:</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="709"/>
+        <location filename="../geoalert.py" line="713"/>
         <source>Please, select a processing</source>
         <translation>Пожалуйста, выберите интересующую вас обработку</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="758"/>
+        <location filename="../geoalert.py" line="762"/>
         <source>There was an error writing the Shapefile!</source>
         <translation>Ошибка во время создания Shapefile!</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="763"/>
+        <location filename="../geoalert.py" line="767"/>
         <source>Could not load the layer!</source>
         <translation>Ошибка загрузки слоя!</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="550"/>
+        <location filename="../geoalert.py" line="554"/>
         <source>Please, be aware that you may be charged by the imagery provider!</source>
         <translation>Будьте осторожны: за просмотр снимков провайдер может взымать с вас плату!</translation>
+    </message>
+    <message>
+        <location filename="../geoalert.py" line="501"/>
+        <source>Open new .tif</source>
+        <translation>Открыть новый .tif</translation>
     </message>
 </context>
 </TS>

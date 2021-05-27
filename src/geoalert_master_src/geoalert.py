@@ -495,7 +495,11 @@ class Geoalert:
     # заполнение комбобокса растров
     def comboImageS(self):
         self.dlg.comboBox_satelit.clear()
-        ll = ['Mapbox Satellite', self.tr('Custom (in settings)'), 'Open new .tif']
+        ll = [
+            'Mapbox Satellite',
+            self.tr('Custom (in settings)'),
+            self.tr('Open new .tif')
+        ]
         # заполняем обязательные пункты
         for idx, field in enumerate(ll):
             self.dlg.comboBox_satelit.addItem(field, idx)
