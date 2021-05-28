@@ -702,6 +702,7 @@ class Geoalert:
         row = self.dlg.processingsTable.currentIndex().row()
         if row == -1:
             self.alert(self.tr('Please, select a processing'))
+            return
         # Номер в dictData
         # row_nom =  (self.kol_tab - row - 1)
         # #получаем данные о слое и его ID
