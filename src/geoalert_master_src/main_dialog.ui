@@ -150,7 +150,7 @@
           </widget>
          </item>
          <item row="1" column="1">
-          <widget class="QComboBox" name="comboBox_satelit">
+          <widget class="QComboBox" name="rasterCombo">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
              <horstretch>0</horstretch>
@@ -160,6 +160,11 @@
            <property name="toolTip">
             <string notr="true"/>
            </property>
+           <item>
+            <property name="text">
+             <string/>
+            </property>
+           </item>
           </widget>
          </item>
          <item row="2" column="0">
@@ -209,7 +214,13 @@
           </widget>
          </item>
          <item row="1" column="1">
-          <widget class="QComboBox" name="polygonLayerComboBox"/>
+          <widget class="QComboBox" name="polygonCombo">
+           <item>
+            <property name="text">
+             <string/>
+            </property>
+           </item>
+          </widget>
          </item>
         </layout>
        </widget>
@@ -885,7 +896,7 @@
   </customwidget>
  </customwidgets>
  <tabstops>
-  <tabstop>comboBox_satelit</tabstop>
+  <tabstop>rasterCombo</tabstop>
   <tabstop>processingsTable</tabstop>
   <tabstop>custom_provider_url</tabstop>
   <tabstop>custom_provider_type</tabstop>

@@ -4,6 +4,7 @@ import os.path
 from math import *
 from base64 import b64encode
 from threading import Thread
+from pathlib import Path
 
 import requests
 from dateutil.parser import parse as parse_datetime
@@ -99,44 +100,13 @@ class Geoalert:
         # загрузка рабочей папки из настроек в интерфейс
         self.dlg.output_directory.setText(self.output_dir)
         # срабатывает при выборе источника снимков в комбобоксе
-        self.dlg.comboBox_satelit.activated.connect(self.comboClick)
-        # загрузка полей комбобокса
-        self.comboImageS()
+        self.dlg.rasterCombo.activated.connect(self.comboClick)
 
         # подключение слоя WFS
         self.dlg.ButWFS.clicked.connect(self.ButWFS)
 
         self.dlg.tabListRast.clicked.connect(self.feID)
         # self.dlg.ButExtent.clicked.connect(self.extent)
-
-    # тест экстента
-    # def test(self):
-    #     n = self.dlg.comboBox_satelit.currentIndex()-3
-    #     rLayer = self.listLay[n][1]
-    #     print(rLayer.crs())
-    #     coord = self.extent(rLayer).split(',')
-    #     print(coord)
-    #     # создание текста для файла .geojson
-    #     text = '{"type": "FeatureCollection", "name": "extent", ' \
-    #            '"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } }, ' \
-    #            '"features": [{ "type": "Feature", "properties": { }, ' \
-    #            '"geometry": { "type": "Polygon", "coordinates":[[' \
-    #            '[ %s, %s ],[ %s, %s ],[ %s, %s ],[ %s, %s ],[ %s, %s ]' \
-    #            ']] } }]}' % (coord[1], coord[0],
-    #                          coord[1], coord[2],
-    #                          coord[3], coord[2],
-    #                          coord[3], coord[0],
-    #                          coord[1], coord[0])
-    #     print(text)
-    #     # временный файл создание и запись
-    #     name_temp = self.dlg.output_directory.text() + 'extent_raster_temp.geojson'
-    #     file_temp = open(name_temp, 'w')
-    #     file_temp.write(text)
-    #     file_temp.close()
-    #     print(name_temp)
-    #     Vlayer = QgsVectorLayer(name_temp, 'extent_temp', "ogr")
-    #
-    #     self.project.addMapLayer(Vlayer)
 
     def feID(self):
         # Вписываем feature ID из таблицы в поле
@@ -147,56 +117,46 @@ class Geoalert:
         print(id_v)
         self.dlg.featureID.setText(str(id_v))
 
-    def refresh_layers(self):
-        """Refresh project layers."""
-        for layer in self.project.mapLayers().values():
-            layer.nameChanged.connect(self.refresh_layers)
-        self.comboPolygons()
-        self.comboImageS()
+    def is_geotiff_layer(self, layer):
+        """"""
+        uri = layer.dataProvider().dataSourceUri()
+        return Path(uri).suffix.lower() in ('.tif', '.tiff')
 
-    def comboPolygons(self):
-        """заполнение комбобокса полигональных слоев."""
-        self.dlg.polygonLayerComboBox.clear()
-        ll = ['Raster extent (.tif)']
-        # заполняем обязательные пункты
-        for idx, field in enumerate(ll):
-            self.dlg.polygonLayerComboBox.addItem(field, idx)
+    def is_polygon_layer(self, layer):
+        """"""
+        return (
+            layer.type() == QgsMapLayerType.VectorLayer and
+            layer.geometryType() == QgsWkbTypes.PolygonGeometry
+        )
 
-        # заполняем полигональными слоями
+    def add_layers(self, layers):
+        """Add layer_ids to combo boxes and memory."""
+        for layer in layers:
+            if self.is_geotiff_layer(layer):
+                self.dlg.rasterCombo.addItem(layer.name())
+                self.raster_layer_ids.append(layer.id())
+                layer.nameChanged.connect(self.rename_layer)
+            elif self.is_polygon_layer(layer):
+                self.dlg.polygonCombo.addItem(layer.name())
+                self.polygon_layer_ids.append(layer.id())
+                layer.nameChanged.connect(self.rename_layer)
 
-        self.listPolyLay = []
-        layersAll = self.project.mapLayers()
-        # print(layersAll)
-        id = len(ll)
-        # перебор всех слоев и проверка их типа
-        for i in layersAll:
-            # тип слоя
-            nType = self.project.mapLayers()[i].type()
-            # print(nType)
-            # проверка на векторность
-            if nType == 0:
-                # получаем один объект из слоя для определения полигонального слоя
-                # в случае если слой пустой, пропускаем его
-                try:
-                    features = self.project.mapLayers()[i].getFeatures()
-                    for feature in features:
-                        # определяем тип геометрии по первому объекту
-                        geom = feature.geometry()
-                        break
+    def remove_layers(self, layer_ids):
+        """Remove layer_ids from combo boxes and memory."""
+        for lid in layer_ids:
+            if lid in self.raster_layer_ids:
+                self.dlg.rasterCombo.removeItem(self.raster_layer_ids.index(lid))
+                self.raster_layer_ids.remove(lid)
+            elif lid in self.polygon_layer_ids:
+                print('POLYGON_LAYER_IDS', self.polygon_layer_ids)
+                print('REMOVING VECTOR AT', self.polygon_layer_ids.index(lid))
+                self.dlg.polygonCombo.removeItem(self.polygon_layer_ids.index(lid))
+                self.polygon_layer_ids.remove(lid)
+            else:
+                print('SKIPPING REMOVAL')
 
-                    # если тип = полигон
-                    if geom.type() == QgsWkbTypes.PolygonGeometry:
-                        # добавляем название и вектор в список
-                        nameV = self.project.mapLayers()[i].name()
-                        layV = self.project.mapLayers()[i]
-                        self.listPolyLay.append([nameV, layV])
-                        # print(name)
-                        self.dlg.polygonLayerComboBox.addItem(nameV, id)
-                        id += 1
-                except:
-                    print('пропуск пустого слоя')
-                    continue
-        # print(self.listPolyLay)
+    def rename_layer(self):
+        """"""
 
     def con(self):
         # срабатывание чекбокса
@@ -455,11 +415,10 @@ class Geoalert:
 
     def comboClick(self):
         """Cрабатывание от выбора в комбобоксе."""
-        comId = self.dlg.comboBox_satelit.currentIndex()
+        comId = self.dlg.rasterCombo.currentIndex()
         # открытие tif файла
         if comId == 2:
             self.addres_tiff = self.select_tif()  # выбрать tif на локальном компьютере
-            # print('comb:', self.addres_tiff)
             # если адрес получен
             if self.addres_tiff:
                 nameL = os.path.basename(self.addres_tiff)[:-4]
@@ -474,55 +433,14 @@ class Geoalert:
                     print(adr, self.addres_tiff)
                     if adr == self.addres_tiff:
                         # если нашли, устанавливаем на него выбор
-                        self.dlg.comboBox_satelit.setCurrentIndex(n+3)
+                        self.dlg.rasterCombo.setCurrentIndex(n+3)
             else:
                 # обновляем весь список слоев
                 self.comboImageS()
         elif comId > 2:
             print(self.listLay[comId - 3][1].dataProvider().dataSourceUri())
-        #     self.dlg.comboBox_satelit.setCurrentIndex(comId)
-        # self.dlg.comboBox_satelit.setDisabled(True) # отключение элемента
-
-    # заполнение комбобокса растров
-    def comboImageS(self):
-        self.dlg.comboBox_satelit.clear()
-        ll = [
-            'Mapbox Satellite',
-            self.tr('Custom (in settings)'),
-            self.tr('Open new .tif')
-        ]
-        # заполняем обязательные пункты
-        for idx, field in enumerate(ll):
-            self.dlg.comboBox_satelit.addItem(field, idx)
-
-        # заполняем локальными подключенными растрами
-        # self.comboImageS()
-        self.listLay = []
-        layersAll = self.project.mapLayers()
-        # print(layersAll)
-        id = 3
-        # перебор всех слоев и проверка их типа
-        for i in layersAll:
-            # тип слоя
-            nType = self.project.mapLayers()[i].type()
-            if nType == 1:
-                # # тип растра
-                # rt = self.project.mapLayers()[i].rasterType()
-                # # если тип = локальному растру
-                # if rt == 2:
-                # добавляем название и растр в список
-                name = self.project.mapLayers()[i].name()
-                lay = self.project.mapLayers()[i]
-
-                fN = lay.dataProvider().dataSourceUri()
-                # добавляем только файлы с расширением .tif и .tiff
-                if fN[-4:] in ['.tif', '.Tif', '.TIF'] or fN[-5:] in ['.tiff', '.Tiff', '.TIFF']:
-                    self.listLay.append([name, lay])
-                    # print(name)
-                    # print(fN)
-                    self.dlg.comboBox_satelit.addItem(name, id)
-                    id += 1
-        # print(self.listLay)
+        #     self.dlg.rasterCombo.setCurrentIndex(comId)
+        # self.dlg.rasterCombo.setDisabled(True) # отключение элемента
 
     def uploadOnServer(self, iface):
         """Выгрузить слой на сервер для обработки"""
@@ -532,7 +450,7 @@ class Geoalert:
         elif processing_name in self.processing_names:
             self.alert(self.tr('Processing name taken. Please, choose a different name.'))
             # Подложка для обработки
-            ph_satel = self.dlg.comboBox_satelit.currentIndex()
+            ph_satel = self.dlg.rasterCombo.currentIndex()
             # чекбокс (обновить кеш)
             cacheUP = str(self.dlg.checkUp.isChecked())
             self.push_message(self.tr("Please, wait. Uploading the file to the server..."))
@@ -568,16 +486,16 @@ class Geoalert:
         # название новой обработки
         NewLayName = self.dlg.NewLayName.text()
         # получение индекса векторного слоя из комбобокса
-        idv = self.dlg.polygonLayerComboBox.currentIndex()
+        idv = self.dlg.polygonCombo.currentIndex()
         # получение индекса растрового слоя
-        ph_satel = self.dlg.comboBox_satelit.currentIndex()
+        ph_satel = self.dlg.rasterCombo.currentIndex()
         # генерация охвата растра (если выбран локальный растр)
         # если выбрана обработка по охвату растра
 
         if idv == 0:
             # проверяем выбран ли локальный растр (id из комбобокса > 2)
             if ph_satel > 2:
-                n = self.dlg.comboBox_satelit.currentIndex() - 3
+                n = self.dlg.rasterCombo.currentIndex() - 3
                 rLayer = self.listLay[n][1]
                 print(rLayer.crs())
                 coord = self.extent(rLayer).split(',')
@@ -921,25 +839,41 @@ class Geoalert:
         self.dlg_login.invalidCredentialsMessage.hide()
         # Memorize the server
         self.server = f'https://whitemaps-{self.dlg_login.serverCombo.currentText()}.mapflow.ai'
-        # Check if credentials are in cache
+        # Check if there are stored credentials
         self.logged_in = self.settings.value("serverLogin") and self.settings.value("serverPassword")
-        # Show login form if no cached credentials
+        # If not, show the login form
         while not self.logged_in:
-            # if user quits dialog - quit plugin
+            # If the user closes the dialog - quit the plugin
             if not self.dlg_login.exec():
                 return
-            # otherwise try to log in
+            # Otherwise try to log in
             self.connect_to_server()
-        # Start polling the server for a processing list
+        # If logged in successfully, start polling the server for the list of processings
         self.check_processings = True
         url = f'{self.server}/rest/processings'
         proc = Thread(target=self.refresh_processing_list, args=(url,))
         proc.start()
         # Add project layers to combo boxes
-        self.refresh_layers()
-        # Watch layer changes FIX!
-        self.project.layersAdded.connect(self.refresh_layers)
-        self.project.layersRemoved.connect(self.refresh_layers)
+        # First, clear the old values
+        self.polygon_layer_ids = self.raster_layer_ids = []
+        self.dlg.polygonCombo.clear()
+        self.dlg.rasterCombo.clear()
+        # Enter our 'virtual' layers
+        virtual_polygon_layers = [self.tr('Raster extent (.tif)')]
+        virtual_raster_layers = ['Mapbox Satellite', self.tr('Custom (in settings)'), self.tr('Open new .tif')]
+        # Split 'real' project layers by type
+        all_layers = self.project.mapLayers()
+        polygon_layers = {lid: layer for lid, layer in all_layers.items() if self.is_polygon_layer(layer)}
+        tif_layers = {lid: layer for lid, layer in all_layers.items() if self.is_geotiff_layer(layer)}
+        # Fill out the combo boxes
+        self.dlg.polygonCombo.addItems(virtual_polygon_layers + [layer.name() for layer in polygon_layers.values()])
+        self.dlg.rasterCombo.addItems(virtual_raster_layers + [layer.name() for layer in tif_layers.values()])
+        # Make and store a list of layer ids for addition/removal/renaming triggers
+        self.polygon_layer_ids = virtual_polygon_layers + [layer.id() for layer in polygon_layers.values()]
+        self.raster_layer_ids = virtual_raster_layers + [layer.id() for layer in tif_layers.values()]
+        # Watch layer addition/removal
+        self.project.layersAdded.connect(self.add_layers)
+        self.project.layersRemoved.connect(self.remove_layers)
         # Show main dialog
         self.dlg.show()
         # Stop refreshing the processing list once the dialog has been closed
