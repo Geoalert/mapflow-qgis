@@ -43,10 +43,6 @@ class Geoalert:
     def __init__(self, iface):
         self.iface = iface
         self.project = QgsProject.instance()
-        self.project.layersAdded.connect(self.comboPolygons)
-        self.project.layersAdded.connect(self.comboImageS)
-        self.project.layersRemoved.connect(self.comboPolygons)
-        self.project.layersRemoved.connect(self.comboImageS)
         self.plugin_dir = os.path.dirname(__file__)
         self.settings = QgsSettings()
         # Create a namespace for the plugin
@@ -151,8 +147,15 @@ class Geoalert:
         print(id_v)
         self.dlg.featureID.setText(str(id_v))
 
-    # заполнение комбобокса полигональных слоев
+    def refresh_layers(self):
+        """Refresh project layers."""
+        for layer in self.project.mapLayers().values():
+            layer.nameChanged.connect(self.refresh_layers)
+        self.comboPolygons()
+        self.comboImageS()
+
     def comboPolygons(self):
+        """заполнение комбобокса полигональных слоев."""
         self.dlg.polygonLayerComboBox.clear()
         ll = ['Raster extent (.tif)']
         # заполняем обязательные пункты
@@ -933,8 +936,10 @@ class Geoalert:
         proc = Thread(target=self.refresh_processing_list, args=(url,))
         proc.start()
         # Add project layers to combo boxes
-        self.comboPolygons()
-        self.comboImageS()
+        self.refresh_layers()
+        # Watch layer changes FIX!
+        self.project.layersAdded.connect(self.refresh_layers)
+        self.project.layersRemoved.connect(self.refresh_layers)
         # Show main dialog
         self.dlg.show()
         # Stop refreshing the processing list once the dialog has been closed
