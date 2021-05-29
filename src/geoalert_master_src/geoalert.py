@@ -56,6 +56,10 @@ class Geoalert:
             self.translator.load(locale_path)
             if qVersion() > '4.3.3':
                 QCoreApplication.installTranslator(self.translator)
+        # Init toolbar and toolbar buttons
+        self.actions = []
+        self.toolbar = self.iface.addToolBar('Geoalert')
+        self.toolbar.setObjectName('Geoalert')
         # Init dialogs and keep references
         self.dlg = MainDialog()
         self.dlg_login = LoginDialog()
@@ -67,10 +71,9 @@ class Geoalert:
         self.project.layersAdded.connect(self.add_layers)
         self.project.layersRemoved.connect(self.remove_layers)
         self.dlg.logoutButton.clicked.connect(self.logout)
-        # Init toolbar and toolbar buttons
-        self.actions = []
-        self.toolbar = self.iface.addToolBar('Geoalert')
-        self.toolbar.setObjectName('Geoalert')
+        # (Dis)allow the user to use raster extent as AOI
+        self.dlg.rasterCombo.currentIndexChanged.connect(self.toggle_use_image_extent_as_aoi)
+        self.dlg.useImageExtentAsAOI.stateChanged.connect(self.toggle_polygon_combo)
         # Save ref to output dir (empty str if plugin loaded 1st time or cache cleaned manually)
         self.output_dir = self.settings.value('outputDir')
         # загрузить выбраный результат
@@ -101,9 +104,6 @@ class Geoalert:
         self.dlg.checkMaxar.clicked.connect(self.con)
         # дизейблим фрейм на старте
         self.dlg.frame.setEnabled(False)
-
-        # чекбокс экстент растра вместо полигонального слоя
-        # self.dlg.checkRasterExtent.clicked.connect(self.rasterExtentSand())
 
         # загрузка рабочей папки из настроек в интерфейс
         self.dlg.output_directory.setText(self.output_dir)
@@ -181,6 +181,16 @@ class Geoalert:
             self.dlg.rasterCombo.removeItem(i)
         # Now add all the relevant layer names to their combox again
         self.fill_out_combos_with_layers()
+
+    def toggle_use_image_extent_as_aoi(self, index):
+        """Toggle the checkbox depending on the item in the raster combo box."""
+        enabled = index >= self.rasterComboOffset
+        self.dlg.useImageExtentAsAOI.setEnabled(enabled)
+        self.dlg.useImageExtentAsAOI.setChecked(enabled)
+
+    def toggle_polygon_combo(self, is_checked):
+        """Enable/disable the polygon layer combo with reverse dependence on the use image extent as AOI checkbox."""
+        self.dlg.polygonCombo.setEnabled(not is_checked)
 
     def con(self):
         # срабатывание чекбокса
@@ -458,15 +468,8 @@ class Geoalert:
                     if adr == self.addres_tiff:
                         # если нашли, устанавливаем на него выбор
                         self.dlg.rasterCombo.setCurrentIndex(n+3)
-            else:
-                # обновляем весь список слоев
-                self.comboImageS()
-        elif comId > 2:
-            print(self.listLay[comId - 3][1].dataProvider().dataSourceUri())
-        #     self.dlg.rasterCombo.setCurrentIndex(comId)
-        # self.dlg.rasterCombo.setDisabled(True) # отключение элемента
 
-    def uploadOnServer(self, iface):
+    def uploadOnServer(self):
         """Выгрузить слой на сервер для обработки"""
         processing_name = self.dlg.NewLayName.text()
         if not processing_name:

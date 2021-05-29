@@ -63,170 +63,66 @@
      <string>Processing</string>
     </attribute>
     <layout class="QGridLayout" name="processingsTabGridLayout">
-     <item row="1" column="0">
-      <widget class="QWidget" name="widget" native="true">
+     <item row="3" column="0">
+      <widget class="QWidget" name="processingsController" native="true">
        <property name="sizePolicy">
-        <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+        <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
          <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
        </property>
        <property name="minimumSize">
         <size>
-         <width>300</width>
-         <height>165</height>
+         <width>0</width>
+         <height>34</height>
         </size>
        </property>
-       <widget class="QPushButton" name="ButtonUpload">
+       <property name="sizeIncrement">
+        <size>
+         <width>0</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="baseSize">
+        <size>
+         <width>0</width>
+         <height>0</height>
+        </size>
+       </property>
+       <widget class="QPushButton" name="ButtonDel">
         <property name="geometry">
          <rect>
-          <x>10</x>
-          <y>115</y>
-          <width>211</width>
-          <height>41</height>
+          <x>11</x>
+          <y>1</y>
+          <width>80</width>
+          <height>30</height>
          </rect>
-        </property>
-        <property name="font">
-         <font>
-          <weight>50</weight>
-          <bold>false</bold>
-         </font>
-        </property>
-        <property name="autoFillBackground">
-         <bool>false</bool>
         </property>
         <property name="styleSheet">
-         <string notr="true">border: 1px solid #888;</string>
+         <string notr="true"/>
         </property>
         <property name="text">
-         <string>Start processing</string>
+         <string>Delete</string>
         </property>
        </widget>
-       <widget class="QPushButton" name="ButtonDownload">
+       <widget class="QPushButton" name="logoutButton">
         <property name="geometry">
          <rect>
-          <x>410</x>
-          <y>120</y>
-          <width>291</width>
-          <height>31</height>
+          <x>662</x>
+          <y>0</y>
+          <width>91</width>
+          <height>30</height>
          </rect>
+        </property>
+        <property name="visible">
+         <bool>true</bool>
+        </property>
+        <property name="styleSheet">
+         <string notr="true"/>
         </property>
         <property name="text">
-         <string>Load processing results</string>
+         <string>Log out</string>
         </property>
-       </widget>
-       <widget class="QWidget" name="layoutWidget">
-        <property name="geometry">
-         <rect>
-          <x>410</x>
-          <y>10</y>
-          <width>341</width>
-          <height>101</height>
-         </rect>
-        </property>
-        <layout class="QFormLayout" name="formLayout_5">
-         <item row="0" column="0">
-          <widget class="QLabel" name="label_2">
-           <property name="text">
-            <string>AI model:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="1">
-          <widget class="QComboBox" name="ai_model">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="0">
-          <widget class="QLabel" name="label_22">
-           <property name="text">
-            <string>Imagery source:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="1">
-          <widget class="QComboBox" name="rasterCombo">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="toolTip">
-            <string notr="true"/>
-           </property>
-           <item>
-            <property name="text">
-             <string>Mapbox Satellite</string>
-            </property>
-           </item>
-           <item>
-            <property name="text">
-             <string>Custom (in settings)</string>
-            </property>
-           </item>
-           <item>
-            <property name="text">
-             <string>Open new .tif</string>
-            </property>
-           </item>
-          </widget>
-         </item>
-         <item row="2" column="0">
-          <widget class="QCheckBox" name="checkUp">
-           <property name="text">
-            <string>Update cache</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </widget>
-       <widget class="QWidget" name="layoutWidget_2">
-        <property name="geometry">
-         <rect>
-          <x>0</x>
-          <y>10</y>
-          <width>341</width>
-          <height>67</height>
-         </rect>
-        </property>
-        <layout class="QFormLayout" name="formLayout">
-         <item row="0" column="0">
-          <widget class="QLabel" name="label_9">
-           <property name="text">
-            <string>Processing name:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="1">
-          <widget class="QLineEdit" name="NewLayName">
-           <property name="minimumSize">
-            <size>
-             <width>129</width>
-             <height>0</height>
-            </size>
-           </property>
-           <property name="text">
-            <string/>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="0">
-          <widget class="QLabel" name="label_8">
-           <property name="text">
-            <string>AOI layer:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="1">
-          <widget class="QComboBox" name="polygonCombo"/>
-         </item>
-        </layout>
        </widget>
       </widget>
      </item>
@@ -337,66 +233,216 @@
        </column>
       </widget>
      </item>
-     <item row="3" column="0">
-      <widget class="QWidget" name="processingsController" native="true">
+     <item row="1" column="0">
+      <widget class="QWidget" name="widget" native="true">
        <property name="sizePolicy">
-        <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+        <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
          <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
        </property>
        <property name="minimumSize">
         <size>
-         <width>0</width>
-         <height>34</height>
+         <width>300</width>
+         <height>165</height>
         </size>
        </property>
-       <property name="sizeIncrement">
-        <size>
-         <width>0</width>
-         <height>0</height>
-        </size>
-       </property>
-       <property name="baseSize">
-        <size>
-         <width>0</width>
-         <height>0</height>
-        </size>
-       </property>
-       <widget class="QPushButton" name="ButtonDel">
+       <widget class="QWidget" name="">
         <property name="geometry">
          <rect>
-          <x>11</x>
-          <y>1</y>
-          <width>80</width>
-          <height>30</height>
+          <x>0</x>
+          <y>3</y>
+          <width>761</width>
+          <height>157</height>
          </rect>
         </property>
-        <property name="styleSheet">
-         <string notr="true"/>
-        </property>
-        <property name="text">
-         <string>Delete</string>
-        </property>
-       </widget>
-       <widget class="QPushButton" name="logoutButton">
-        <property name="geometry">
-         <rect>
-          <x>662</x>
-          <y>0</y>
-          <width>91</width>
-          <height>30</height>
-         </rect>
-        </property>
-        <property name="visible">
-         <bool>true</bool>
-        </property>
-        <property name="styleSheet">
-         <string notr="true"/>
-        </property>
-        <property name="text">
-         <string>Log out</string>
-        </property>
+        <layout class="QVBoxLayout" name="verticalLayout_5">
+         <item>
+          <layout class="QHBoxLayout" name="horizontalLayout_4">
+           <property name="spacing">
+            <number>10</number>
+           </property>
+           <item>
+            <layout class="QVBoxLayout" name="verticalLayout">
+             <item>
+              <layout class="QFormLayout" name="formLayout">
+               <item row="0" column="0">
+                <widget class="QLabel" name="label_9">
+                 <property name="text">
+                  <string>Processing name:</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="1">
+                <widget class="QLineEdit" name="NewLayName">
+                 <property name="minimumSize">
+                  <size>
+                   <width>129</width>
+                   <height>0</height>
+                  </size>
+                 </property>
+                 <property name="text">
+                  <string/>
+                 </property>
+                </widget>
+               </item>
+               <item row="1" column="0">
+                <widget class="QLabel" name="label_8">
+                 <property name="text">
+                  <string>AOI layer:</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="1" column="1">
+                <widget class="QComboBox" name="polygonCombo"/>
+               </item>
+              </layout>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="useImageExtentAsAOI">
+               <property name="enabled">
+                <bool>false</bool>
+               </property>
+               <property name="text">
+                <string>Use image extent as AOI</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QVBoxLayout" name="verticalLayout_4">
+             <item>
+              <layout class="QFormLayout" name="formLayout_4">
+               <item row="0" column="0">
+                <widget class="QLabel" name="label_2">
+                 <property name="text">
+                  <string>AI model:</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="1">
+                <widget class="QComboBox" name="ai_model">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                </widget>
+               </item>
+               <item row="1" column="0">
+                <widget class="QLabel" name="label_22">
+                 <property name="text">
+                  <string>Imagery source:</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="1" column="1">
+                <widget class="QComboBox" name="rasterCombo">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="toolTip">
+                  <string notr="true"/>
+                 </property>
+                 <item>
+                  <property name="text">
+                   <string>Mapbox Satellite</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>Custom (in settings)</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>Open new .tif</string>
+                  </property>
+                 </item>
+                </widget>
+               </item>
+              </layout>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="checkUp">
+               <property name="text">
+                <string>Update cache</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+          </layout>
+         </item>
+         <item>
+          <layout class="QHBoxLayout" name="horizontalLayout_3">
+           <property name="spacing">
+            <number>10</number>
+           </property>
+           <property name="leftMargin">
+            <number>140</number>
+           </property>
+           <property name="rightMargin">
+            <number>140</number>
+           </property>
+           <item>
+            <widget class="QPushButton" name="ButtonUpload">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>211</width>
+               <height>41</height>
+              </size>
+             </property>
+             <property name="font">
+              <font>
+               <weight>50</weight>
+               <bold>false</bold>
+              </font>
+             </property>
+             <property name="autoFillBackground">
+              <bool>false</bool>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">border: 1px solid #888;</string>
+             </property>
+             <property name="text">
+              <string>Start processing</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="ButtonDownload">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>211</width>
+               <height>41</height>
+              </size>
+             </property>
+             <property name="text">
+              <string>Load processing results</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+        </layout>
        </widget>
       </widget>
      </item>
