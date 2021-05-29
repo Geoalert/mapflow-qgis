@@ -46,6 +46,10 @@ class Geoalert:
         self.iface = iface
         self.project = QgsProject.instance()
         self.plugin_dir = os.path.dirname(__file__)
+        # Init toolbar and toolbar buttons
+        self.actions = []
+        self.toolbar = self.iface.addToolBar('Geoalert')
+        self.toolbar.setObjectName('Geoalert')
         self.settings = QgsSettings()
         # Create a namespace for the plugin settings
         self.settings.beginGroup('geoalert')
@@ -57,17 +61,24 @@ class Geoalert:
             self.translator.load(locale_path)
             if qVersion() > '4.3.3':
                 QCoreApplication.installTranslator(self.translator)
-        # Init toolbar and toolbar buttons
-        self.actions = []
-        self.toolbar = self.iface.addToolBar('Geoalert')
-        self.toolbar.setObjectName('Geoalert')
+        # Save ref to output dir ('' if plugin loaded 1st time or cache cleaned manually)
+        self.output_dir = self.settings.value('outputDir')
         # Init dialogs and keep references
         self.dlg = MainDialog()
         self.dlg_login = LoginDialog()
+        # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
+        self.dlg.output_directory.setText(self.output_dir)
+        self.dlg.connectID.setText(self.settings.value('connectID'))
+        self.dlg.custom_provider_url.setText(self.settings.value('customProviderURL'))
+        if self.settings.value("customProviderRememberMe"):
+            self.dlg.custom_provider_save_auth.setChecked(True)
+            self.dlg.custom_provider_login.setText(self.settings.value("customProviderLogin"))
+            self.dlg.custom_provider_password.setText(self.settings.value("customProviderPassword"))
         # Number of fixed 'virtual' layers in the raster combo box
         self.rasterComboOffset = 3
         # Fill out the combo boxes
         self.fill_out_combos_with_layers()
+        # SET UP SIGNALS & SLOTS
         # Watch layer addition/removal
         self.project.layersAdded.connect(self.add_layers)
         self.project.layersRemoved.connect(self.remove_layers)
@@ -75,8 +86,6 @@ class Geoalert:
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.rasterCombo.currentIndexChanged.connect(self.toggle_use_image_extent_as_aoi)
         self.dlg.useImageExtentAsAOI.stateChanged.connect(self.toggle_polygon_combo)
-        # Save ref to output dir (empty str if plugin loaded 1st time or cache cleaned manually)
-        self.output_dir = self.settings.value('outputDir')
         # загрузить выбраный результат
         self.dlg.ButtonDownload.clicked.connect(self.addSucces)
         # Кнопка: Выгрузить слой на сервер для обработки
@@ -89,19 +98,6 @@ class Geoalert:
         self.dlg.but_dir.clicked.connect(self.select_output_dir)
         # ввести стандартную максаровскую ссылку
         self.dlg.maxarStandardURL.clicked.connect(self.maxarStandard)
-        if self.settings.value("customProviderRememberMe"):
-            self.dlg.custom_provider_save_auth.setChecked(True)
-            # загружаем логин/пароль платформы и вставляем в поля
-            self.dlg.custom_provider_login.setText(self.settings.value("customProviderLogin"))
-            self.dlg.custom_provider_password.setText(self.settings.value("customProviderPassword"))
-        # чтение connect ID
-        connectID = self.settings.value('connectID')
-        self.dlg.connectID.setText(connectID)
-        # чтение настроек URL
-        surl = self.settings.value('customProviderURL')
-        self.dlg.custom_provider_url.setText(surl)
-        # загрузка рабочей папки из настроек в интерфейс
-        self.dlg.output_directory.setText(self.output_dir)
         # срабатывает при выборе источника снимков в комбобоксе
         self.dlg.rasterCombo.activated.connect(self.comboClick)
         # подключение слоя WFS
@@ -808,6 +804,7 @@ class Geoalert:
         #     self.alert(self.tr('Please, specify an existing output directory'))
         #     self.select_output_dir()
         # else:
+        self.server = f'https://whitemaps-{self.dlg_login.serverCombo.currentText()}.mapflow.ai'
         login = self.dlg_login.loginField.text().encode()
         password = self.dlg_login.passwordField.text().encode()
         remember_me = self.dlg_login.rememberMe.isChecked()
@@ -836,21 +833,19 @@ class Geoalert:
 
     def run(self):
         """Plugin entrypoint."""
-        # Refresh the form
-        self.dlg_login.loginField.clear()
-        self.dlg_login.passwordField.clear()
-        self.dlg_login.invalidCredentialsMessage.hide()
-        # Memorize the server
-        self.server = f'https://whitemaps-{self.dlg_login.serverCombo.currentText()}.mapflow.ai'
         # Check if there are stored credentials
         self.logged_in = self.settings.value("serverLogin") and self.settings.value("serverPassword")
         # If not, show the login form
         while not self.logged_in:
-            # If the user closes the dialog - quit the plugin
-            if not self.dlg_login.exec():
+            # If the user hits OK, - try to log in
+            if self.dlg_login.exec():
+                self.connect_to_server()
+            else:
+                # Refresh the form & quit
+                self.dlg_login.loginField.clear()
+                self.dlg_login.passwordField.clear()
+                self.dlg_login.invalidCredentialsMessage.hide()
                 return
-            # Otherwise try to log in
-            self.connect_to_server()
         # If logged in successfully, start polling the server for the list of processings
         self.check_processings = True
         url = f'{self.server}/rest/processings'
