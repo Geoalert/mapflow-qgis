@@ -46,7 +46,7 @@ class Geoalert:
         self.project = QgsProject.instance()
         self.plugin_dir = os.path.dirname(__file__)
         self.settings = QgsSettings()
-        # Create a namespace for the plugin
+        # Create a namespace for the plugin settings
         self.settings.beginGroup('geoalert')
         # Translation
         locale = QSettings().value('locale/userLocale')[0:2]
@@ -58,8 +58,16 @@ class Geoalert:
                 QCoreApplication.installTranslator(self.translator)
         # Init dialogs and keep references
         self.dlg = MainDialog()
-        self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg_login = LoginDialog()
+        # Number of fixed 'virtual' layers in the raster combo box
+        self.rasterComboOffset = 3
+        # Fill out the combo boxes
+        self.fill_out_combos_with_layers()
+        # Watch layer addition/removal
+        self.project.layersAdded.connect(self.add_layers)
+        self.project.layersRemoved.connect(self.remove_layers)
+        self.dlg.logoutButton.clicked.connect(self.logout)
+        # Init toolbar and toolbar buttons
         self.actions = []
         self.toolbar = self.iface.addToolBar('Geoalert')
         self.toolbar.setObjectName('Geoalert')
@@ -129,6 +137,19 @@ class Geoalert:
             layer.geometryType() == QgsWkbTypes.PolygonGeometry
         )
 
+    def fill_out_combos_with_layers(self):
+        """Add all relevant (polygon & GeoTIFF) layer names to their respective combo boxes."""
+        # Fetch the layers
+        all_layers = self.project.mapLayers()
+        # Split by type (only the relevant ones)
+        polygon_layers = [layer for lid, layer in all_layers.items() if self.is_polygon_layer(layer)]
+        tif_layers = [layer for lid, layer in all_layers.items() if self.is_geotiff_layer(layer)]
+        # Fill out the combos
+        self.dlg.polygonCombo.addItems([layer.name() for layer in polygon_layers])
+        # Make and store a list of layer ids for addition & removal triggers
+        self.polygon_layer_ids = [layer.id() for layer in polygon_layers]
+        self.raster_layer_ids = [layer.id() for layer in tif_layers]
+
     def add_layers(self, layers):
         """Add layer_ids to combo boxes and memory."""
         for layer in layers:
@@ -145,18 +166,21 @@ class Geoalert:
         """Remove layer_ids from combo boxes and memory."""
         for lid in layer_ids:
             if lid in self.raster_layer_ids:
-                self.dlg.rasterCombo.removeItem(self.raster_layer_ids.index(lid))
+                self.dlg.rasterCombo.removeItem(self.raster_layer_ids.index(lid) + self.rasterComboOffset)
                 self.raster_layer_ids.remove(lid)
             elif lid in self.polygon_layer_ids:
-                print('POLYGON_LAYER_IDS', self.polygon_layer_ids)
-                print('REMOVING VECTOR AT', self.polygon_layer_ids.index(lid))
                 self.dlg.polygonCombo.removeItem(self.polygon_layer_ids.index(lid))
                 self.polygon_layer_ids.remove(lid)
-            else:
-                print('SKIPPING REMOVAL')
 
     def rename_layer(self):
-        """"""
+        """Update combo box contents when a project layer gets renamed."""
+        # Remove all polygon combo entries
+        self.dlg.polygonCombo.clear()
+        # Remove all raster combo entries except 'virtual'
+        for i in range(self.rasterComboOffset, self.dlg.polygonCombo.count()):
+            self.dlg.rasterCombo.removeItem(i)
+        # Now add all the relevant layer names to their combox again
+        self.fill_out_combos_with_layers()
 
     def con(self):
         # срабатывание чекбокса
@@ -855,25 +879,9 @@ class Geoalert:
         proc.start()
         # Add project layers to combo boxes
         # First, clear the old values
-        self.polygon_layer_ids = self.raster_layer_ids = []
-        self.dlg.polygonCombo.clear()
-        self.dlg.rasterCombo.clear()
-        # Enter our 'virtual' layers
-        virtual_polygon_layers = [self.tr('Raster extent (.tif)')]
-        virtual_raster_layers = ['Mapbox Satellite', self.tr('Custom (in settings)'), self.tr('Open new .tif')]
-        # Split 'real' project layers by type
-        all_layers = self.project.mapLayers()
-        polygon_layers = {lid: layer for lid, layer in all_layers.items() if self.is_polygon_layer(layer)}
-        tif_layers = {lid: layer for lid, layer in all_layers.items() if self.is_geotiff_layer(layer)}
-        # Fill out the combo boxes
-        self.dlg.polygonCombo.addItems(virtual_polygon_layers + [layer.name() for layer in polygon_layers.values()])
-        self.dlg.rasterCombo.addItems(virtual_raster_layers + [layer.name() for layer in tif_layers.values()])
-        # Make and store a list of layer ids for addition/removal/renaming triggers
-        self.polygon_layer_ids = virtual_polygon_layers + [layer.id() for layer in polygon_layers.values()]
-        self.raster_layer_ids = virtual_raster_layers + [layer.id() for layer in tif_layers.values()]
-        # Watch layer addition/removal
-        self.project.layersAdded.connect(self.add_layers)
-        self.project.layersRemoved.connect(self.remove_layers)
+        # self.dlg.polygonCombo.clear()
+        # self.dlg.rasterCombo.clear()
+
         # Show main dialog
         self.dlg.show()
         # Stop refreshing the processing list once the dialog has been closed

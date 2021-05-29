@@ -162,7 +162,17 @@
            </property>
            <item>
             <property name="text">
-             <string/>
+             <string>Mapbox Satellite</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Custom (in settings)</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Open new .tif</string>
             </property>
            </item>
           </widget>
@@ -214,13 +224,7 @@
           </widget>
          </item>
          <item row="1" column="1">
-          <widget class="QComboBox" name="polygonCombo">
-           <item>
-            <property name="text">
-             <string/>
-            </property>
-           </item>
-          </widget>
+          <widget class="QComboBox" name="polygonCombo"/>
          </item>
         </layout>
        </widget>
