@@ -17,6 +17,7 @@ from qgis.gui import *
 from qgis.utils import iface
 from qgis.PyQt.QtXml import QDomDocument
 
+from . import helpers
 from .resources_rc import *
 from .geoalert_dialog import MainDialog, LoginDialog
 
@@ -116,25 +117,13 @@ class Geoalert:
         print(id_v)
         self.dlg.featureID.setText(str(id_v))
 
-    def is_geotiff_layer(self, layer):
-        """"""
-        uri = layer.dataProvider().dataSourceUri()
-        return Path(uri).suffix.lower() in ('.tif', '.tiff')
-
-    def is_polygon_layer(self, layer):
-        """"""
-        return (
-            layer.type() == QgsMapLayerType.VectorLayer and
-            layer.geometryType() == QgsWkbTypes.PolygonGeometry
-        )
-
     def fill_out_combos_with_layers(self):
         """Add all relevant (polygon & GeoTIFF) layer names to their respective combo boxes."""
         # Fetch the layers
         all_layers = self.project.mapLayers()
         # Split by type (only the relevant ones)
-        polygon_layers = [layer for lid, layer in all_layers.items() if self.is_polygon_layer(layer)]
-        tif_layers = [layer for lid, layer in all_layers.items() if self.is_geotiff_layer(layer)]
+        polygon_layers = [layer for lid, layer in all_layers.items() if helpers.is_polygon_layer(layer)]
+        tif_layers = [layer for lid, layer in all_layers.items() if helpers.is_geotiff_layer(layer)]
         # Fill out the combos
         self.dlg.polygonCombo.addItems([layer.name() for layer in polygon_layers])
         # Make and store a list of layer ids for addition & removal triggers
@@ -144,11 +133,11 @@ class Geoalert:
     def add_layers(self, layers):
         """Add layer_ids to combo boxes and memory."""
         for layer in layers:
-            if self.is_geotiff_layer(layer):
+            if helpers.is_geotiff_layer(layer):
                 self.dlg.rasterCombo.addItem(layer.name())
                 self.raster_layer_ids.append(layer.id())
                 layer.nameChanged.connect(self.rename_layer)
-            elif self.is_polygon_layer(layer):
+            elif helpers.is_polygon_layer(layer):
                 self.dlg.polygonCombo.addItem(layer.name())
                 self.polygon_layer_ids.append(layer.id())
                 layer.nameChanged.connect(self.rename_layer)
@@ -867,11 +856,6 @@ class Geoalert:
         url = f'{self.server}/rest/processings'
         proc = Thread(target=self.refresh_processing_list, args=(url,))
         proc.start()
-        # Add project layers to combo boxes
-        # First, clear the old values
-        # self.dlg.polygonCombo.clear()
-        # self.dlg.rasterCombo.clear()
-
         # Show main dialog
         self.dlg.show()
         # Stop refreshing the processing list once the dialog has been closed
