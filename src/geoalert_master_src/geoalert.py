@@ -67,7 +67,7 @@ class Geoalert:
         self.dlg = MainDialog()
         self.dlg_login = LoginDialog()
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
-        self.dlg.output_directory.setText(self.output_dir)
+        self.dlg.outputDirectory.setFilePath(self.output_dir)
         self.dlg.connectID.setText(self.settings.value('connectID'))
         self.dlg.custom_provider_url.setText(self.settings.value('customProviderURL'))
         if self.settings.value("customProviderRememberMe"):
@@ -95,7 +95,7 @@ class Geoalert:
         # Кнопка подключения снимков
         self.dlg.button_preview.clicked.connect(self.load_custom_tileset)
         # кнопка выбора папки через обзор
-        self.dlg.but_dir.clicked.connect(self.select_output_dir)
+        self.dlg.outputDirectory.fileChanged.connect(self.set_output_directory)
         # ввести стандартную максаровскую ссылку
         self.dlg.maxarStandardURL.clicked.connect(self.maxarStandard)
         # срабатывает при выборе источника снимков в комбобоксе
@@ -103,15 +103,6 @@ class Geoalert:
         # подключение слоя WFS
         self.dlg.ButWFS.clicked.connect(self.ButWFS)
         self.dlg.tabListRast.clicked.connect(self.feID)
-
-    def feID(self):
-        # Вписываем feature ID из таблицы в поле
-        # получить номер выбранной строки в таблице!
-        row = self.dlg.tabListRast.currentIndex().row()
-        print(row)
-        id_v = self.dlg.tabListRast.model().index(row, 4).data()
-        print(id_v)
-        self.dlg.featureID.setText(str(id_v))
 
     def fill_out_combos_with_layers(self):
         """Add all relevant (polygon & GeoTIFF) layer names to their respective combo boxes."""
@@ -167,6 +158,20 @@ class Geoalert:
     def toggle_polygon_combo(self, is_checked):
         """Enable/disable the polygon layer combo with reverse dependence on the use image extent as AOI checkbox."""
         self.dlg.polygonCombo.setEnabled(not is_checked)
+
+    def set_output_directory(self, path):
+        """Update the user's output directory."""
+        self.output_dir = path
+        self.settings.setValue("outputDir", path+'/')
+
+    def feID(self):
+        # Вписываем feature ID из таблицы в поле
+        # получить номер выбранной строки в таблице!
+        row = self.dlg.tabListRast.currentIndex().row()
+        print(row)
+        id_v = self.dlg.tabListRast.model().index(row, 4).data()
+        print(id_v)
+        self.dlg.featureID.setText(str(id_v))
 
     def ButWFS(self):
         # получаем введенный логин и праоль
@@ -361,18 +366,8 @@ class Geoalert:
                 container = QTableWidgetItem(str(attrStolb[x][y]))
                 self.dlg.tabListRast.setItem(x, y, container)
 
-    def select_output_dir(self):
-        """Display dialog for user to select output directory."""
-        output_dir = QFileDialog.getExistingDirectory(caption="Select Folder")
-        if output_dir:
-            # fill out the dialog field
-            self.dlg.output_directory.setText(output_dir)
-            # save ref
-            self.output_dir = output_dir
-            # save to settings to load at plugin start
-            self.settings.setValue("outputDir", output_dir+'/')
-
     # выбор tif для загрузки на сервер
+
     def select_tif(self):
         filename = QFileDialog.getOpenFileName(None, "Select GeoTIFF", './', 'Files (*.tif *.TIF *.Tif)')
         # запоминаем адрес в файл для автоматической подгрузки, если он не пустой
@@ -614,6 +609,11 @@ class Geoalert:
 
     def addSucces(self):
         """Загрузка слоя с сервера."""
+        # Check if user specified an existing output dir
+        # if not os.path.exists(self.output_dir):
+        #     self.alert(self.tr('Please, specify an existing output directory'))
+        #     self.select_output_dir()
+        # else:
         # получить номер выбранной строки в таблице!
         row = self.dlg.processingsTable.currentIndex().row()
         if row == -1:
@@ -799,11 +799,6 @@ class Geoalert:
 
     def connect_to_server(self):
         """Connect to Geoalert server."""
-        # Check if user specified an existing output dir
-        # if not os.path.exists(self.output_dir):
-        #     self.alert(self.tr('Please, specify an existing output directory'))
-        #     self.select_output_dir()
-        # else:
         self.server = f'https://whitemaps-{self.dlg_login.serverCombo.currentText()}.mapflow.ai'
         login = self.dlg_login.loginField.text().encode()
         password = self.dlg_login.passwordField.text().encode()
