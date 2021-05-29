@@ -99,22 +99,13 @@ class Geoalert:
         # чтение настроек URL
         surl = self.settings.value('customProviderURL')
         self.dlg.custom_provider_url.setText(surl)
-
-        # чекбокс максар
-        self.dlg.checkMaxar.clicked.connect(self.con)
-        # дизейблим фрейм на старте
-        self.dlg.frame.setEnabled(False)
-
         # загрузка рабочей папки из настроек в интерфейс
         self.dlg.output_directory.setText(self.output_dir)
         # срабатывает при выборе источника снимков в комбобоксе
         self.dlg.rasterCombo.activated.connect(self.comboClick)
-
         # подключение слоя WFS
         self.dlg.ButWFS.clicked.connect(self.ButWFS)
-
         self.dlg.tabListRast.clicked.connect(self.feID)
-        # self.dlg.ButExtent.clicked.connect(self.extent)
 
     def feID(self):
         # Вписываем feature ID из таблицы в поле
@@ -191,11 +182,6 @@ class Geoalert:
     def toggle_polygon_combo(self, is_checked):
         """Enable/disable the polygon layer combo with reverse dependence on the use image extent as AOI checkbox."""
         self.dlg.polygonCombo.setEnabled(not is_checked)
-
-    def con(self):
-        # срабатывание чекбокса
-        ch = self.dlg.checkMaxar.isChecked()
-        self.dlg.frame.setEnabled(ch)  # включение/отключение элемента
 
     def ButWFS(self):
         # получаем введенный логин и праоль
