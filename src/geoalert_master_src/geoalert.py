@@ -75,7 +75,7 @@ class Geoalert:
             self.dlg.custom_provider_login.setText(self.settings.value("customProviderLogin"))
             self.dlg.custom_provider_password.setText(self.settings.value("customProviderPassword"))
         # Number of fixed 'virtual' layers in the raster combo box
-        self.rasterComboOffset = 3
+        self.raster_combo_offset = 3
         # Fill out the combo boxes
         self.fill_out_combos_with_layers()
         # SET UP SIGNALS & SLOTS
@@ -86,10 +86,11 @@ class Geoalert:
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.rasterCombo.currentIndexChanged.connect(self.toggle_use_image_extent_as_aoi)
         self.dlg.useImageExtentAsAOI.stateChanged.connect(self.toggle_polygon_combo)
+        # Select a local GeoTIFF if user chooses the respective option
+        self.dlg.rasterCombo.currentTextChanged.connect(self.select_tif)
+        self.dlg.startProcessing.clicked.connect(self.create_processing)
         # загрузить выбраный результат
         self.dlg.ButtonDownload.clicked.connect(self.addSucces)
-        # Кнопка: Выгрузить слой на сервер для обработки
-        self.dlg.ButtonUpload.clicked.connect(self.uploadOnServer)
         # кнопка удаления слоя
         self.dlg.ButtonDel.clicked.connect(self.DelLay)
         # Кнопка подключения снимков
@@ -98,8 +99,6 @@ class Geoalert:
         self.dlg.outputDirectory.fileChanged.connect(self.set_output_directory)
         # ввести стандартную максаровскую ссылку
         self.dlg.maxarStandardURL.clicked.connect(self.maxarStandard)
-        # срабатывает при выборе источника снимков в комбобоксе
-        self.dlg.rasterCombo.activated.connect(self.comboClick)
         # подключение слоя WFS
         self.dlg.ButWFS.clicked.connect(self.ButWFS)
         self.dlg.tabListRast.clicked.connect(self.feID)
@@ -133,7 +132,7 @@ class Geoalert:
         """Remove layer_ids from combo boxes and memory."""
         for lid in layer_ids:
             if lid in self.raster_layer_ids:
-                self.dlg.rasterCombo.removeItem(self.raster_layer_ids.index(lid) + self.rasterComboOffset)
+                self.dlg.rasterCombo.removeItem(self.raster_layer_ids.index(lid) + self.raster_combo_offset)
                 self.raster_layer_ids.remove(lid)
             elif lid in self.polygon_layer_ids:
                 self.dlg.polygonCombo.removeItem(self.polygon_layer_ids.index(lid))
@@ -144,14 +143,14 @@ class Geoalert:
         # Remove all polygon combo entries
         self.dlg.polygonCombo.clear()
         # Remove all raster combo entries except 'virtual'
-        for i in range(self.rasterComboOffset, self.dlg.polygonCombo.count()):
+        for i in range(self.raster_combo_offset, self.dlg.polygonCombo.count()):
             self.dlg.rasterCombo.removeItem(i)
         # Now add all the relevant layer names to their combox again
         self.fill_out_combos_with_layers()
 
     def toggle_use_image_extent_as_aoi(self, index):
         """Toggle the checkbox depending on the item in the raster combo box."""
-        enabled = index >= self.rasterComboOffset
+        enabled = index >= self.raster_combo_offset
         self.dlg.useImageExtentAsAOI.setEnabled(enabled)
         self.dlg.useImageExtentAsAOI.setChecked(enabled)
 
@@ -269,41 +268,6 @@ class Geoalert:
         self.dlg.custom_provider_type.setCurrentIndex(0)
         self.settings.setValue('connectID', connectID)
 
-    def extent(self, vLayer):
-        """Получить координаты охвата слоя."""
-        srs_ext = str(vLayer.crs()).split(' ')[1][:-1]  # получение проекции слоя
-        print(srs_ext)
-        try:
-            # выполняется только для векторных слоев
-            vLayer.updateExtents()
-        except:
-            None
-        e = vLayer.extent()  # .toString()
-        x = e.toString().split(' : ')
-        coordStr = ''
-        # перебор координат
-        for i in x:
-            z = i.split(',')
-            print(z)
-            # если проекции отличаются, то перепроицировать
-            if srs_ext != "EPSG:4326":
-                # перепроицирование
-                crsSrc = QgsCoordinateReferenceSystem(srs_ext)  # Исходная crs
-                crsDest = QgsCoordinateReferenceSystem("EPSG:4326")  # Целевая crs
-                transformContext = self.project.transformContext()
-                xform = QgsCoordinateTransform(crsSrc, crsDest, transformContext)
-
-                # forward transformation: src -> dest
-                pt1 = xform.transform(QgsPointXY(float(z[0]), float(z[1])))
-                # собираем координаты в строку с правильным порядком и разделителями - запятыми
-                coordStr += str(pt1.y()) + ',' + str(pt1.x()) + ','
-
-            else:
-                coordStr += z[1] + ',' + z[0] + ','
-
-        print("Transformed point:", coordStr[:-1])  # отсекаем лишнюю запятую в конце строки.
-        return coordStr[:-1]
-
     def mTableListRastr(self, nameFields, attrFields):
         # создание и настройка таблицы
         # очистка таблицы
@@ -366,37 +330,6 @@ class Geoalert:
                 container = QTableWidgetItem(str(attrStolb[x][y]))
                 self.dlg.tabListRast.setItem(x, y, container)
 
-    # выбор tif для загрузки на сервер
-
-    def select_tif(self):
-        filename = QFileDialog.getOpenFileName(None, "Select GeoTIFF", './', 'Files (*.tif *.TIF *.Tif)')
-        # запоминаем адрес в файл для автоматической подгрузки, если он не пустой
-        print(filename)
-        if len(filename[0]) > 0:
-            return filename[0]
-
-    def up_tif(self, n):
-        # загрузка tif на сервер
-        # получаем адрес файла
-        file_in = self.listLay[n][1].dataProvider().dataSourceUri()
-
-        headers = self.authorization  # формируем заголовок для залогинивания
-        files = {'file': open(file_in, 'rb')}
-        ip = self.server
-        URL_up = ip + '/rest/rasters'
-        print('Старт загрузки .tif на сервер...')
-        r = requests.post(URL_up, headers=headers, files=files)
-        print('Ответ сервера:', r.text)
-
-        if 'url' in r.text:
-            url = r.json()['url']  # получаем адрес для использования загруженного файла
-            print('Используется: URL')
-        elif 'uri' in r.text:
-            url = r.json()['uri']  # получаем адрес для использования загруженного файла
-            print('Используется: URI')
-        params = {"source_type": "tif", "url": "%s" % (url)}
-        self.upOnServ_proc(params)
-
     def DelLay(self):
         """Удаление слоя."""
         # получить номер выбранной строки в таблице!
@@ -413,173 +346,89 @@ class Geoalert:
         # обновить список слоев
         self.connect_to_server()
 
-    def comboClick(self):
-        """Cрабатывание от выбора в комбобоксе."""
-        comId = self.dlg.rasterCombo.currentIndex()
-        # открытие tif файла
-        if comId == 2:
-            self.addres_tiff = self.select_tif()  # выбрать tif на локальном компьютере
-            # если адрес получен
-            if self.addres_tiff:
-                nameL = os.path.basename(self.addres_tiff)[:-4]
-                # добавление растра в QGIS
-                self.iface.addRasterLayer(self.addres_tiff, nameL)
-                # заполнение комбобокса
-                self.comboImageS()
-                # поиск слоя по адресу файла
-                for n, nameS in enumerate(self.listLay):
-                    # получение адреса файла
-                    adr = nameS[1].dataProvider().dataSourceUri()
-                    print(adr, self.addres_tiff)
-                    if adr == self.addres_tiff:
-                        # если нашли, устанавливаем на него выбор
-                        self.dlg.rasterCombo.setCurrentIndex(n+3)
+    def select_tif(self, text):
+        """Start a file selection dialog for a local GeoTIFF."""
+        if not text == self.tr('Open new .tif'):
+            return
+        dlg = QFileDialog(self.iface.mainWindow(), self.tr("Select GeoTIFF"))
+        dlg.setMimeTypeFilters(['image/tiff'])
+        if dlg.exec():
+            path = dlg.selectedFiles()[0]
+            layer_name = os.path.basename(path).split('.')[0]
+            self.iface.addRasterLayer(path, layer_name)
+            self.dlg.rasterCombo.setCurrentText(layer_name)
 
-    def uploadOnServer(self):
-        """Выгрузить слой на сервер для обработки"""
-        processing_name = self.dlg.NewLayName.text()
+    def start_processing(self):
+        """Spin up a thread to create a processing on the server."""
+        thread = Thread(target=self.create_processing)
+        thread.start()
+
+    def create_processing(self):
+        """Initiate a processing."""
+        processing_name = self.dlg.processingName.text().encode()
         if not processing_name:
             self.alert(self.tr('Please, specify a name for your processing'))
+            return
         elif processing_name in self.processing_names:
+            print(self.processing_names)
             self.alert(self.tr('Processing name taken. Please, choose a different name.'))
-            # Подложка для обработки
-            ph_satel = self.dlg.rasterCombo.currentIndex()
-            # чекбокс (обновить кеш)
-            cacheUP = str(self.dlg.checkUp.isChecked())
+            return
+        wd = self.dlg.ai_model.currentText()
+        update_cache = self.dlg.updateCache.isChecked()
+        aoi_layer = self.project.mapLayer(self.polygon_layer_ids[self.dlg.polygonCombo.currentIndex()])
+        # Workflow definition parameters
+        params = {"cache_raster": update_cache}
+        # Optional metadata, no scheme
+        meta = {"source-app": "qgis"}
+        # Imagery selection
+        raster_combo_index = self.dlg.rasterCombo.currentIndex()
+        # Mapbox
+        if raster_combo_index == 0:
+            params = {}
+            meta['source'] = 'mapbox'
+        # Custom provider
+        if raster_combo_index == 1:
+            self.alert(self.tr("Please, be aware that you may be charged by the imagery provider!"))
+            params["source_type"] = self.dlg.custom_provider_type.currentText()
+            params["url"] = self.dlg.custom_provider_url.text()
+            params["raster_login"] = self.dlg.custom_provider_login.text()
+            params["raster_password"] = self.dlg.custom_provider_password.text()
+        # Raster extent
+        elif raster_combo_index > 2:
+            # Upload user-selected GeoTIFF to the server
+            raster_layer_id = self.raster_layer_ids[self.dlg.rasterCombo.currentIndex() - self.raster_combo_offset]
+            raster_layer = self.project.mapLayer(raster_layer_id)
             self.push_message(self.tr("Please, wait. Uploading the file to the server..."))
-            if ph_satel == 0:  # Mapbox Satellite
-                # url_xyz = ''
-                # proj_EPSG = 'epsg:3857'
-                params = {}
-                self.upOnServ_proc(params)
-            elif ph_satel == 1:  # Custom
-                self.alert(self.tr("Please, be aware that you may be charged by the imagery provider!"))
-                login = self.dlg.custom_provider_login.text()
-                password = self.dlg.custom_provider_password.text()
-                url_xyz = self.dlg.custom_provider_url.text()
-                # TypeURL = self.dlg.custom_provider_type.currentIndex()  # выбран тип ссылки///
-
-                TypeURL = self.dlg.custom_provider_type.currentText()
-
-                params = {"source_type": TypeURL,
-                          "url": "%s" % (url_xyz),
-                          "zoom": "18",
-                          "cache_raster": "%s" % (cacheUP),
-                          "raster_login": "%s" % (login),
-                          "raster_password": "%s" % (password)}
-                self.upOnServ_proc(params)
-
-            # загрузка выбранного .tif
-            elif ph_satel > 2:
-                n = ph_satel - 3
-                p = Thread(target=self.up_tif, args=(n,))
-                p.start()
-
-    def upOnServ_proc(self, params):
-        # название новой обработки
-        NewLayName = self.dlg.NewLayName.text()
-        # получение индекса векторного слоя из комбобокса
-        idv = self.dlg.polygonCombo.currentIndex()
-        # получение индекса растрового слоя
-        ph_satel = self.dlg.rasterCombo.currentIndex()
-        # генерация охвата растра (если выбран локальный растр)
-        # если выбрана обработка по охвату растра
-
-        if idv == 0:
-            # проверяем выбран ли локальный растр (id из комбобокса > 2)
-            if ph_satel > 2:
-                n = self.dlg.rasterCombo.currentIndex() - 3
-                rLayer = self.listLay[n][1]
-                print(rLayer.crs())
-                coord = self.extent(rLayer).split(',')
-                print(coord)
-                # создание текста для файла .geojson
-                text = '{"type": "FeatureCollection", "name": "extent", ' \
-                    '"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } }, ' \
-                    '"features": [{ "type": "Feature", "properties": { }, ' \
-                       '"geometry": { "type": "Polygon", "coordinates":[[' \
-                       '[ %s, %s ],[ %s, %s ],[ %s, %s ],[ %s, %s ],[ %s, %s ]' \
-                       ']] } }]}' % (coord[1], coord[0],
-                                     coord[1], coord[2],
-                                     coord[3], coord[2],
-                                     coord[3], coord[0],
-                                     coord[1], coord[0])
-                print(text)
-                # временный файл создание и запись
-                name_temp = os.path.join(self.output_dir, 'extent_raster_temp.geojson')
-                file_temp = open(name_temp, 'w')
-                file_temp.write(text)
-                file_temp.close()
-                print(name_temp)
-                Vlayer = QgsVectorLayer(name_temp, 'extent_temp', "ogr")
-
-            else:
-                self.alert(self.tr('Please, select a GeoTIFF file'))
-        # если выбран один из полигональных слоев, пеередаем его дальше
-        elif idv > 0:
-            # получаем слой из списка полигональных слоев
-            Vlayer = self.listPolyLay[idv-1][1]
-        # Vlayer = self.dlg.mMapLayerComboBox.currentLayer()
-
-        # projection = Vlayer.crs() #получаем проекцию EPSG
-        projection_text = str(Vlayer.crs()).split(' ')[1][:-1]  # текстовое значение проекции EPSG
-        projection_text = projection_text.split(":")[1]
-        # print('Проекция исходного файла:', projection_text)
-
-        # сценарий обработки
-        proc = self.dlg.ai_model.currentText()
-        # чекбокс (обновить кеш)
-        cacheUP = str(self.dlg.checkUp.isChecked())
-        # система координат для сервера
-        crsDest = QgsCoordinateReferenceSystem(4326)
-        # адрес хранения экспортного файла
-        file_adrG = self.plugin_dir + '/' + NewLayName + '.geojson'
-        # экспорт в GEOJSON
-        error = QgsVectorFileWriter.writeAsVectorFormat(Vlayer, file_adrG, "utf-8", crsDest, "GeoJSON")
-        if error == QgsVectorFileWriter.NoError:
-            print("success!")
-
-        URL_up = self.server + "/rest/processings"
-
-        try:
-            urlt = params['url']
-            meta = {"EPSG": "%s" % (projection_text),
-                    "CACHE": "%s" % (cacheUP),
-                    "source": "mapbox",
-                    "source-app": "qgis"}
-        except:
-            meta = {"EPSG": "%s" % (projection_text),
-                    "CACHE": "%s" % (cacheUP),
-                    "source-app": "qgis"}
-        # print(params)
-        # print(meta)
-        with open(file_adrG) as f:
-            GeomJ = json.load(f)
-        # print(file_adrG)
-        os.remove(file_adrG)  # удаление временного файла
-        for i in GeomJ['features']:
-            # print(i)
-            GeomJ = i['geometry']
-
-        GeomJ = str(GeomJ).replace("\'", "\"")
-        params = str(params).replace("\'", "\"")
-        meta = str(meta).replace("\'", "\"")
-        # print(meta)
-        # название будущего слоя#тип обработки#геометрия из геоджейсона
-        NewLayName = NewLayName
-        NewLayName = str(NewLayName).replace("\'", "\\\"")
-
-        bodyUp = '{ "name": "%s", "wdName": "%s", "geometry": %s, "params": %s, "meta": %s}' \
-            % (NewLayName, proc, GeomJ, params, meta)
-
-        bodyUp = bodyUp.encode('utf-8')
-
-        rpost = requests.request("POST", url=URL_up, data=bodyUp, headers=self.headers, auth=self.server_basic_auth)
-        # print(rpost.status_code)
-
-        self.dlg.NewLayName.clear()  # очистить поле имени
+            with open(raster_layer.dataProvider().dataSourceUri(), 'rb') as f:
+                r = requests.post(f'{self.server}/rest/rasters', auth=self.server_basic_auth, files={'file': f})
+            params["source_type"] = "tif"
+            params["url"] = r.json()['url']
+            if self.dlg.useImageExtentAsAOI():
+                aoi_layer = raster_layer
+        # Get the AOI layer's extent
+        extent_geometry = QgsGeometry.fromRect(aoi_layer.extent())
+        extent_feature = QgsFeature()
+        extent_feature.setGeometry(extent_geometry)
+        # Make a temp layer out of it (for the user to see the extent)
+        extent_layer = QgsVectorLayer(f"Polygon?crs={aoi_layer.crs().authid()}", f"{aoi_layer.name()} extent", 'memory')
+        extent_layer.dataProvider().addFeature(extent_feature)
+        self.project.addMapLayer(extent_layer)
+        # Export the extent as GeoJSON
+        extent_geometry_4326 = json.loads(QgsJsonExporter(extent_layer).exportFeature(extent_feature))['geometry']
+        # Post the processing
+        r = requests.post(
+            url=f'{self.server}/rest/processings',
+            auth=self.server_basic_auth,
+            json={
+                "name": processing_name,
+                "wdName": wd,
+                "geometry": extent_geometry_4326,
+                "params": params,
+                "meta": meta
+            })
+        r.raise_for_status()
+        self.dlg.processingName.clear()
         self.alert(self.tr("Success! Processing may take up to several minutes"))
-        self.connect_to_server()
 
     def load_custom_tileset(self):
         """Custom provider imagery preview."""
