@@ -396,14 +396,14 @@ class Geoalert:
         # Raster extent
         elif raster_combo_index > 2:
             # Upload user-selected GeoTIFF to the server
+            self.push_message(self.tr("Please, wait. Uploading the file to the server..."))
             raster_layer_id = self.raster_layer_ids[self.dlg.rasterCombo.currentIndex() - self.raster_combo_offset]
             raster_layer = self.project.mapLayer(raster_layer_id)
-            self.push_message(self.tr("Please, wait. Uploading the file to the server..."))
             with open(raster_layer.dataProvider().dataSourceUri(), 'rb') as f:
                 r = requests.post(f'{self.server}/rest/rasters', auth=self.server_basic_auth, files={'file': f})
             params["source_type"] = "tif"
-            params["url"] = r.json()['url']
-            if self.dlg.useImageExtentAsAOI():
+            params["uri"] = r.json()['uri']
+            if self.dlg.useImageExtentAsAOI.isChecked():
                 aoi_layer = raster_layer
         # Get the AOI layer's extent
         extent_geometry = QgsGeometry.fromRect(aoi_layer.extent())
