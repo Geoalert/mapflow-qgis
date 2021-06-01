@@ -95,7 +95,7 @@ class Geoalert:
         self.dlg.useImageExtentAsAOI.stateChanged.connect(self.toggle_polygon_combo)
         # Select a local GeoTIFF if user chooses the respective option
         self.dlg.rasterCombo.currentTextChanged.connect(self.select_tif)
-        self.dlg.startProcessing.clicked.connect(self.create_processing)
+        self.dlg.startProcessing.clicked.connect(self.start_processing)
         # загрузить выбраный результат
         self.dlg.ButtonDownload.clicked.connect(self.addSucces)
         # кнопка удаления слоя
