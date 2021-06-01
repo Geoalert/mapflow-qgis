@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>807</width>
-    <height>556</height>
+    <height>576</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -40,7 +40,7 @@
      <x>10</x>
      <y>0</y>
      <width>791</width>
-     <height>551</height>
+     <height>571</height>
     </rect>
    </property>
    <property name="sizePolicy">
@@ -56,76 +56,13 @@
     </size>
    </property>
    <property name="currentIndex">
-    <number>1</number>
+    <number>0</number>
    </property>
    <widget class="QWidget" name="processingsTab">
     <attribute name="title">
      <string>Processing</string>
     </attribute>
     <layout class="QGridLayout" name="processingsTabGridLayout">
-     <item row="3" column="0">
-      <widget class="QWidget" name="processingsController" native="true">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>0</width>
-         <height>34</height>
-        </size>
-       </property>
-       <property name="sizeIncrement">
-        <size>
-         <width>0</width>
-         <height>0</height>
-        </size>
-       </property>
-       <property name="baseSize">
-        <size>
-         <width>0</width>
-         <height>0</height>
-        </size>
-       </property>
-       <widget class="QPushButton" name="deleteProcessings">
-        <property name="geometry">
-         <rect>
-          <x>11</x>
-          <y>1</y>
-          <width>80</width>
-          <height>30</height>
-         </rect>
-        </property>
-        <property name="styleSheet">
-         <string notr="true"/>
-        </property>
-        <property name="text">
-         <string>Delete</string>
-        </property>
-       </widget>
-       <widget class="QPushButton" name="logoutButton">
-        <property name="geometry">
-         <rect>
-          <x>662</x>
-          <y>0</y>
-          <width>91</width>
-          <height>30</height>
-         </rect>
-        </property>
-        <property name="visible">
-         <bool>false</bool>
-        </property>
-        <property name="styleSheet">
-         <string notr="true"/>
-        </property>
-        <property name="text">
-         <string>Log out</string>
-        </property>
-       </widget>
-      </widget>
-     </item>
      <item row="2" column="0">
       <widget class="QTableWidget" name="processingsTable">
        <property name="sizePolicy">
@@ -454,6 +391,72 @@
        </widget>
       </widget>
      </item>
+     <item row="3" column="0">
+      <widget class="QWidget" name="processingsController" native="true">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>34</height>
+        </size>
+       </property>
+       <property name="sizeIncrement">
+        <size>
+         <width>0</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="baseSize">
+        <size>
+         <width>0</width>
+         <height>0</height>
+        </size>
+       </property>
+       <widget class="QWidget" name="">
+        <property name="geometry">
+         <rect>
+          <x>0</x>
+          <y>0</y>
+          <width>761</width>
+          <height>31</height>
+         </rect>
+        </property>
+        <layout class="QHBoxLayout" name="horizontalLayout_6">
+         <property name="spacing">
+          <number>600</number>
+         </property>
+         <item>
+          <widget class="QPushButton" name="deleteProcessings">
+           <property name="styleSheet">
+            <string notr="true"/>
+           </property>
+           <property name="text">
+            <string>Delete</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="logoutButton">
+           <property name="visible">
+            <bool>true</bool>
+           </property>
+           <property name="styleSheet">
+            <string notr="true"/>
+           </property>
+           <property name="text">
+            <string>Log out</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </widget>
+     </item>
     </layout>
    </widget>
    <widget class="QWidget" name="tab_4">
@@ -658,7 +661,7 @@
        <string/>
       </property>
      </widget>
-     <widget class="QWidget" name="">
+     <widget class="QWidget" name="layoutWidget">
       <property name="geometry">
        <rect>
         <x>10</x>
@@ -937,7 +940,7 @@
           <x>0</x>
           <y>0</y>
           <width>763</width>
-          <height>489</height>
+          <height>509</height>
          </rect>
         </property>
         <widget class="QLabel" name="label_4">
@@ -988,6 +991,17 @@
     </rect>
    </property>
    <layout class="QFormLayout" name="formLayout_6"/>
+  </widget>
+  <widget class="QWidget" name="">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>2</width>
+     <height>2</height>
+    </rect>
+   </property>
+   <layout class="QHBoxLayout" name="horizontalLayout_5"/>
   </widget>
  </widget>
  <customwidgets>
