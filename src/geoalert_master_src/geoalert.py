@@ -183,6 +183,10 @@ class Geoalert:
         self.dlg.featureID.setText(str(id_v))
 
     def ButWFS(self):
+        # Check if user specified an existing output dir
+        if not os.path.exists(self.dlg.outputDirectory.text()):
+            self.alert(self.tr('Please, specify an existing output directory'))
+            return
         # получаем введенный логин и праоль
         self.loginW = self.dlg.custom_provider_login.text()
         self.passwordW = self.dlg.custom_provider_password.text()
