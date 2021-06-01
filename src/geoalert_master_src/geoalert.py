@@ -96,8 +96,8 @@ class Geoalert:
         # Select a local GeoTIFF if user chooses the respective option
         self.dlg.rasterCombo.currentTextChanged.connect(self.select_tif)
         self.dlg.startProcessing.clicked.connect(self.start_processing)
-        # загрузить выбраный результат
-        self.dlg.ButtonDownload.clicked.connect(self.addSucces)
+        # Download processing results
+        self.dlg.loadProcessingResults.clicked.connect(self.download_processing_results)
         # кнопка удаления слоя
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Кнопка подключения снимков
@@ -161,6 +161,8 @@ class Geoalert:
         enabled = index >= self.raster_combo_offset
         self.dlg.useImageExtentAsAOI.setEnabled(enabled)
         self.dlg.useImageExtentAsAOI.setChecked(enabled)
+        self.dlg.updateCache.setEnabled(not enabled)
+        self.dlg.updateCache.setChecked(not enabled)
 
     def toggle_polygon_combo(self, is_checked):
         """Enable/disable the polygon layer combo with reverse dependence on the use image extent as AOI checkbox."""
@@ -469,92 +471,73 @@ class Geoalert:
         else:
             self.project.addMapLayer(layer)
 
-    def addSucces(self):
-        """Загрузка слоя с сервера."""
+    def download_processing_results(self):
+        """Download the resulting features and open them in QGIS."""
         # Check if user specified an existing output dir
-        # if not os.path.exists(self.output_dir):
-        #     self.alert(self.tr('Please, specify an existing output directory'))
-        #     self.select_output_dir()
-        # else:
-        # получить номер выбранной строки в таблице!
-        row = self.dlg.processingsTable.currentIndex().row()
-        if row == -1:
-            self.alert(self.tr('Please, select a processing'))
+        if not os.path.exists(self.output_dir):
+            self.alert(self.tr('Please, specify an existing output directory'))
+            self.select_output_dir()
             return
-        # Номер в dictData
-        # row_nom =  (self.kol_tab - row - 1)
-        # #получаем данные о слое и его ID
-        # id_v = self.dictData[row_nom]['id']
 
-        id_v = self.dlg.processingsTable.model().index(row, 4).data()
-        URL_f = self.server + "/rest/processings/" + id_v + "/result"
-        r = requests.get(url=URL_f, headers=self.headers, auth=self.server_basic_auth)
-
-        # адрес для сохранения файла
-        name_d = self.dlg.processingsTable.model().index(row, 1).data()  # self.dictData[row_nom]['name']
-
-        # находим ссылку на растр по id
-        for dD in self.processings:
-            # print(dD)
-            if dD['id'] == id_v:
-
-                rastrXYZ = dD['rasterLayer']['tileUrl']
-                print(rastrXYZ)
-                break
-
-        url = '&url=' + rastrXYZ
-        # print(rastrXYZ)
-        min_max = "&zmax=18&zmin=0"
-        typeXYZ = 'type=xyz'
-        login = '&username=' + self.dlg.server_login.text()
-        password = '&password=' + self.dlg.server_password.text()
-        urlWithParams = typeXYZ + url + min_max + login + password
-        rlayer = QgsRasterLayer(urlWithParams, name_d + 'xyz', 'wms')
-        self.project.addMapLayer(rlayer)
-
-        # x1 = name_d.rfind('_')
-        # извлекаем проекцию из метаданных/перестали извлекать, задали фиксированную
-        Projection = 'EPSG:4326'  # self.dictData[row_nom]['meta']['EPSG'] #name_d[x1 + 1:]
-
-        # система координат для преобразования файла
-        crs_EPSG = QgsCoordinateReferenceSystem(Projection)
-
+        for pid, row_number in self.selected_processings.items():
+            r = requests.get(f'{self.server}/rest/processings/{pid}/result', auth=self.server_basic_auth)
+            output_file_name = self.dlg.processingsTable.item(row_number, 0).text()  # 0th column is Name
+            # Add GeoTIFF that was used in the processing
+            tif_url = [processing['rasterLayer']['tileUrl'] for processing in self.processings if processing['id'] == pid][0]
+            params = {
+                'type': 'xyz',
+                'url': tif_url,
+                'zmin': 0,
+                'zmax': 18,
+                'username': self.dlg_login.loginField.text(),
+                'password': self.dlg_login.passwordField.text()
+            }
+            uri = '&'.join(f'{key}={val}' for key, val in params.items())
+            tif_layer = QgsRasterLayer(uri, f'{output_file_name}_image', 'wms')
+            self.project.addMapLayer(tif_layer)
         # временный файл
-        file_temp = os.path.join(self.output_dir, f'{name_d}_temp.geojson')
+        file_temp = os.path.join(self.output_dir, f'{output_file_name}_temp.geojson')
         with open(file_temp, "wb") as f:
-            f.write(str.encode(r.text))
-        vlayer_temp = QgsVectorLayer(file_temp, name_d+'_temp', "ogr")
+            f.write(r.content)
+        feature_layer = QgsVectorLayer(file_temp, output_file_name+'_temp', "ogr")
 
         # экспорт в shp
-        file_adr = os.path.join(self.output_dir, f'{name_d}.shp')
-        error = QgsVectorFileWriter.writeAsVectorFormat(vlayer_temp, file_adr, "utf-8", crs_EPSG, "ESRI Shapefile")
-        if error != QgsVectorFileWriter.NoError:
+        file_adr = os.path.join(self.output_dir, f'{output_file_name}.shp')
+        error, msg = QgsVectorFileWriter.writeAsVectorFormat(
+            feature_layer,
+            file_adr,
+            "utf-8",
+            QgsCoordinateReferenceSystem('EPSG:4326'),
+            "ESRI Shapefile"
+        )
+        print('ERROR', type(error), error)
+        print('MSG', type(msg), msg)
+        if error:
             self.push_message(self.tr('There was an error writing the Shapefile!'), Qgis.Warning)
+            return
 
         # Открытие файла
-        vlayer = QgsVectorLayer(file_adr, name_d, "ogr")
+        vlayer = QgsVectorLayer(file_adr, output_file_name, "ogr")
         if not vlayer:
             self.push_message(self.tr("Could not load the layer!"), Qgis.Warning)
         # Загрузка файла в окно qgis
         self.project.addMapLayer(vlayer)
 
         # ---- подключение стилей
-        # определяем какой стиль подключить к слою
-        WFDef = self.listProc[row][1]  # название дефенишинса
-        if WFDef == 'Buildings Detection' or WFDef == 'Buildings Detection With Heights':
+        wd = self.dlg.processingsTable.item(row_number, 1).text()
+        if wd in ('Buildings Detection', 'Buildings Detection With Heights'):
             style = '/styles/style_buildings.qml'
-        elif WFDef == 'Forest Detection':
+        elif wd == 'Forest Detection':
             style = '/styles/style_forest.qml'
-        elif WFDef == 'Forest Detection With Heights':
+        elif wd == 'Forest Detection With Heights':
             style = '/styles/style_forest_with_heights.qml'
-        elif WFDef == 'Roads Detection':
+        elif wd == 'Roads Detection':
             style = '/styles/style_roads.qml'
         else:
             style = '/styles/style_default.qml'
 
         # подключаем стиль!!!!!!!!!!!!!!!!!!
         qml_path = self.plugin_dir + style
-        print(qml_path)
         layer = self.iface.activeLayer()
         style_manager = layer.styleManager()
         # read valid style from layer
@@ -568,7 +551,6 @@ class Geoalert:
         style_manager.setCurrentStyle(style_name)
         # load qml to current style
         message, success = layer.loadNamedStyle(qml_path)
-        print(message)
         if not success:  # if style not loaded remove it
             style_manager.removeStyle(style_name)
 
