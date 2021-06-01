@@ -476,7 +476,6 @@ class Geoalert:
         # Check if user specified an existing output dir
         if not os.path.exists(self.output_dir):
             self.alert(self.tr('Please, specify an existing output directory'))
-            self.select_output_dir()
             return
 
         for pid, row_number in self.selected_processings.items():
@@ -510,8 +509,6 @@ class Geoalert:
             QgsCoordinateReferenceSystem('EPSG:4326'),
             "ESRI Shapefile"
         )
-        print('ERROR', type(error), error)
-        print('MSG', type(msg), msg)
         if error:
             self.push_message(self.tr('There was an error writing the Shapefile!'), Qgis.Warning)
             return

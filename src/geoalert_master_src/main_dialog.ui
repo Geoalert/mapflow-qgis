@@ -7,11 +7,11 @@
     <x>0</x>
     <y>0</y>
     <width>807</width>
-    <height>559</height>
+    <height>556</height>
    </rect>
   </property>
   <property name="sizePolicy">
-   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+   <sizepolicy hsizetype="Fixed" vsizetype="Expanding">
     <horstretch>0</horstretch>
     <verstretch>0</verstretch>
    </sizepolicy>
@@ -129,7 +129,7 @@
      <item row="2" column="0">
       <widget class="QTableWidget" name="processingsTable">
        <property name="sizePolicy">
-        <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
+        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
          <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
@@ -161,14 +161,8 @@
        <property name="sizeAdjustPolicy">
         <enum>QAbstractScrollArea::AdjustIgnored</enum>
        </property>
-       <property name="autoScroll">
-        <bool>false</bool>
-       </property>
        <property name="editTriggers">
         <set>QAbstractItemView::NoEditTriggers</set>
-       </property>
-       <property name="showDropIndicator" stdset="0">
-        <bool>true</bool>
        </property>
        <property name="alternatingRowColors">
         <bool>true</bool>
@@ -239,7 +233,7 @@
        </column>
        <column>
         <property name="text">
-         <string notr="true">ID</string>
+         <string>ID</string>
         </property>
         <property name="textAlignment">
          <set>AlignCenter</set>
@@ -370,12 +364,12 @@
                  </item>
                  <item>
                   <property name="text">
-                   <string>Open new .tif</string>
+                   <string>Custom (in settings)</string>
                   </property>
                  </item>
                  <item>
                   <property name="text">
-                   <string>Custom (in settings)</string>
+                   <string>Open new .tif</string>
                   </property>
                  </item>
                 </widget>
@@ -436,7 +430,7 @@
             </widget>
            </item>
            <item>
-            <widget class="QPushButton" name="loadProcessingResults">
+            <widget class="QPushButton" name="ButtonDownload">
              <property name="sizePolicy">
               <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                <horstretch>0</horstretch>
