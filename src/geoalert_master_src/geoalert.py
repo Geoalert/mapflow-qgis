@@ -62,13 +62,11 @@ class Geoalert:
             self.translator.load(locale_path)
             if qVersion() > '4.3.3':
                 QCoreApplication.installTranslator(self.translator)
-        # Save ref to output dir ('' if plugin loaded 1st time or cache cleaned manually)
-        self.output_dir = self.settings.value('outputDir')
         # Init dialogs and keep references
         self.dlg = MainDialog()
         self.dlg_login = LoginDialog()
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
-        self.dlg.outputDirectory.setFilePath(self.output_dir)
+        self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
         self.dlg.connectID.setText(self.settings.value('connectID'))
         self.dlg.custom_provider_url.setText(self.settings.value('customProviderURL'))
         if self.settings.value("customProviderRememberMe"):
@@ -103,7 +101,7 @@ class Geoalert:
         # Кнопка подключения снимков
         self.dlg.button_preview.clicked.connect(self.load_custom_tileset)
         # кнопка выбора папки через обзор
-        self.dlg.outputDirectory.fileChanged.connect(self.set_output_directory)
+        self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         # ввести стандартную максаровскую ссылку
         self.dlg.maxarStandardURL.clicked.connect(self.maxarStandard)
         # подключение слоя WFS
@@ -168,10 +166,12 @@ class Geoalert:
         """Enable/disable the polygon layer combo with reverse dependence on the use image extent as AOI checkbox."""
         self.dlg.polygonCombo.setEnabled(not is_checked)
 
-    def set_output_directory(self, path):
+    def select_output_directory(self):
         """Update the user's output directory."""
-        self.output_dir = path
-        self.settings.setValue("outputDir", path+'/')
+        path = QFileDialog.getExistingDirectory(self.iface.mainWindow())
+        if path:
+            self.dlg.outputDirectory.setText(path)
+            self.settings.setValue("outputDir", path)
 
     def feID(self):
         # Вписываем feature ID из таблицы в поле
@@ -214,7 +214,7 @@ class Geoalert:
         # print(r.text)
 
         # временный файл
-        file_temp = os.path.join(self.output_dir, 'WFS_temp.geojson')
+        file_temp = os.path.join(self.dlg.outputDirectory.text(), 'WFS_temp.geojson')
         with open(file_temp, "wb") as f:
             f.write(str.encode(r.text))
         vlayer_temp = QgsVectorLayer(file_temp, 'WFS_temp', "ogr")
@@ -477,7 +477,7 @@ class Geoalert:
     def download_processing_results(self):
         """Download the resulting features and open them in QGIS."""
         # Check if user specified an existing output dir
-        if not os.path.exists(self.output_dir):
+        if not os.path.exists(self.dlg.outputDirectory.text()):
             self.alert(self.tr('Please, specify an existing output directory'))
             return
 
@@ -498,13 +498,13 @@ class Geoalert:
             tif_layer = QgsRasterLayer(uri, f'{output_file_name}_image', 'wms')
             self.project.addMapLayer(tif_layer)
         # временный файл
-        file_temp = os.path.join(self.output_dir, f'{output_file_name}_temp.geojson')
+        file_temp = os.path.join(self.dlg.outputDirectory.text(), f'{output_file_name}_temp.geojson')
         with open(file_temp, "wb") as f:
             f.write(r.content)
         feature_layer = QgsVectorLayer(file_temp, output_file_name+'_temp', "ogr")
 
         # экспорт в shp
-        file_adr = os.path.join(self.output_dir, f'{output_file_name}.shp')
+        file_adr = os.path.join(self.dlg.outputDirectory.text(), f'{output_file_name}.shp')
         error, msg = QgsVectorFileWriter.writeAsVectorFormat(
             feature_layer,
             file_adr,
