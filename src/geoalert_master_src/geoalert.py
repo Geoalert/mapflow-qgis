@@ -23,6 +23,7 @@ from .geoalert_dialog import MainDialog, LoginDialog
 
 
 PROCESSING_LIST_REFRESH_INTERVAL = 5  # in seconds
+ID_COLUMN_INDEX = 5
 
 SW_ENDPOINT = 'https://securewatch.digitalglobe.com/earthservice/wmtsaccess'
 SW_PARAMS = {
@@ -76,9 +77,15 @@ class Geoalert:
             self.dlg.custom_provider_password.setText(self.settings.value("customProviderPassword"))
         # Number of fixed 'virtual' layers in the raster combo box
         self.raster_combo_offset = 3
+        # Store processings selected in the table as dict(id=row_number)
+        self.selected_processings = {}
         # Fill out the combo boxes
         self.fill_out_combos_with_layers()
         # SET UP SIGNALS & SLOTS
+        # Watch processing table row selection
+        self.dlg.processingsTable.itemSelectionChanged.connect(self.memorize_selected_processings)
+        # Hide the ID column since it's only needed for table operations, not the user
+        # self.dlg.processingsTable.setColumnHidden(ID_COLUMN_INDEX, True)
         # Watch layer addition/removal
         self.project.layersAdded.connect(self.add_layers)
         self.project.layersRemoved.connect(self.remove_layers)
@@ -88,11 +95,11 @@ class Geoalert:
         self.dlg.useImageExtentAsAOI.stateChanged.connect(self.toggle_polygon_combo)
         # Select a local GeoTIFF if user chooses the respective option
         self.dlg.rasterCombo.currentTextChanged.connect(self.select_tif)
-        self.dlg.startProcessing.clicked.connect(self.start_processing)
+        self.dlg.startProcessing.clicked.connect(self.create_processing)
         # загрузить выбраный результат
         self.dlg.ButtonDownload.clicked.connect(self.addSucces)
         # кнопка удаления слоя
-        self.dlg.ButtonDel.clicked.connect(self.DelLay)
+        self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Кнопка подключения снимков
         self.dlg.button_preview.clicked.connect(self.load_custom_tileset)
         # кнопка выбора папки через обзор
@@ -112,6 +119,7 @@ class Geoalert:
         tif_layers = [layer for lid, layer in all_layers.items() if helpers.is_geotiff_layer(layer)]
         # Fill out the combos
         self.dlg.polygonCombo.addItems([layer.name() for layer in polygon_layers])
+        self.dlg.rasterCombo.addItems([layer.name() for layer in tif_layers])
         # Make and store a list of layer ids for addition & removal triggers
         self.polygon_layer_ids = [layer.id() for layer in polygon_layers]
         self.raster_layer_ids = [layer.id() for layer in tif_layers]
@@ -143,9 +151,9 @@ class Geoalert:
         # Remove all polygon combo entries
         self.dlg.polygonCombo.clear()
         # Remove all raster combo entries except 'virtual'
-        for i in range(self.raster_combo_offset, self.dlg.polygonCombo.count()):
+        for i in range(self.raster_combo_offset, self.dlg.rasterCombo.count()):
             self.dlg.rasterCombo.removeItem(i)
-        # Now add all the relevant layer names to their combox again
+        # Now add all the relevant layer names to their combos again
         self.fill_out_combos_with_layers()
 
     def toggle_use_image_extent_as_aoi(self, index):
@@ -330,21 +338,24 @@ class Geoalert:
                 container = QTableWidgetItem(str(attrStolb[x][y]))
                 self.dlg.tabListRast.setItem(x, y, container)
 
-    def DelLay(self):
-        """Удаление слоя."""
-        # получить номер выбранной строки в таблице!
-        row = self.dlg.processingsTable.currentIndex().row()
-        if row != -1:
-            # Номер в dictData
-            row_nom = (len(self.processing_names) - row - 1)
-            # получаем данные о слое и его ID
-            id_v = self.processings[row_nom]['id']
-            URL_f = self.server + "/rest/processings/" + id_v
-            r = requests.delete(url=URL_f, headers=self.headers, auth=self.server_basic_auth)
+    def memorize_selected_processings(self):
+        """Memorize the currently selected processing by its ID."""
+        self.selected_processings = {
+            cell.text(): cell.row()
+            for cell in self.dlg.processingsTable.selectedItems()
+            if cell.column() == ID_COLUMN_INDEX
+        }
 
-        self.push_message(self.tr("Processing has been removed"), level=Qgis.Warning, duration=7)
-        # обновить список слоев
-        self.connect_to_server()
+    def delete_processings(self):
+        """Delete one or more processings on the server."""
+        for pid, row_number in self.selected_processings.items():
+            r = requests.delete(
+                url=f'{self.server}/rest/processings/{pid}',
+                auth=self.server_basic_auth
+            )
+            r.raise_for_status()
+            self.dlg.processingsTable.removeRow(row_number)
+            self.push_message(self.tr("Processing deletion succeeded!"))
 
     def select_tif(self, text):
         """Start a file selection dialog for a local GeoTIFF."""
@@ -365,29 +376,26 @@ class Geoalert:
 
     def create_processing(self):
         """Initiate a processing."""
-        processing_name = self.dlg.processingName.text().encode()
+        processing_name = self.dlg.processingName.text()
         if not processing_name:
             self.alert(self.tr('Please, specify a name for your processing'))
             return
         elif processing_name in self.processing_names:
-            print(self.processing_names)
             self.alert(self.tr('Processing name taken. Please, choose a different name.'))
             return
         wd = self.dlg.ai_model.currentText()
-        update_cache = self.dlg.updateCache.isChecked()
+        update_cache = str(not self.dlg.updateCache.isChecked())
         aoi_layer = self.project.mapLayer(self.polygon_layer_ids[self.dlg.polygonCombo.currentIndex()])
         # Workflow definition parameters
-        params = {
-            # params["cache_raster"] = update_cache
-        }
-        # Optional metadata, no scheme
+        params = {}
+        # Optional metadata
         meta = {"source-app": "qgis"}
         # Imagery selection
         raster_combo_index = self.dlg.rasterCombo.currentIndex()
         # Mapbox
         if raster_combo_index == 0:
-            params = {}
             meta['source'] = 'mapbox'
+            params["use_cache"] = update_cache
         # Custom provider
         if raster_combo_index == 1:
             self.alert(self.tr("Please, be aware that you may be charged by the imagery provider!"))
@@ -395,6 +403,7 @@ class Geoalert:
             params["url"] = self.dlg.custom_provider_url.text()
             params["raster_login"] = self.dlg.custom_provider_login.text()
             params["raster_password"] = self.dlg.custom_provider_password.text()
+            params["use_cache"] = update_cache
         # Raster extent
         elif raster_combo_index > 2:
             # Upload user-selected GeoTIFF to the server
@@ -404,7 +413,7 @@ class Geoalert:
             with open(raster_layer.dataProvider().dataSourceUri(), 'rb') as f:
                 r = requests.post(f'{self.server}/rest/rasters', auth=self.server_basic_auth, files={'file': f})
             params["source_type"] = "tif"
-            params["uri"] = r.json()['uri']
+            params["url"] = r.json()['uri']
             if self.dlg.useImageExtentAsAOI.isChecked():
                 aoi_layer = raster_layer
         # Get the AOI layer's extent
@@ -422,13 +431,15 @@ class Geoalert:
             url=f'{self.server}/rest/processings',
             auth=self.server_basic_auth,
             json={
-                "name": processing_name,
+                "name": processing_name.encode(),
                 "wdName": wd,
                 "geometry": extent_geometry_4326,
                 "params": params,
                 "meta": meta
             })
         r.raise_for_status()
+        self.check_processings = True
+        self.refresh_processing_list(f'{self.server}/rest/processings')
         self.dlg.processingName.clear()
         self.alert(self.tr("Success! Processing may take up to several minutes"))
 
@@ -529,7 +540,7 @@ class Geoalert:
 
         # ---- подключение стилей
         # определяем какой стиль подключить к слою
-        WFDef = self.listProc[row][5]  # название дефенишинса
+        WFDef = self.listProc[row][1]  # название дефенишинса
         if WFDef == 'Buildings Detection' or WFDef == 'Buildings Detection With Heights':
             style = '/styles/style_buildings.qml'
         elif WFDef == 'Forest Detection':
@@ -578,12 +589,15 @@ class Geoalert:
         self.iface.messageBar().pushMessage("Mapflow", text, level, duration)
 
     def refresh_processing_list(self, url):
-        """Repeatedly refresh processing list."""
+        """Repeatedly refresh the list of processings."""
         while self.check_processings:
-            # fetch all user processings visible to the user
-            self.processings = requests.get(url, auth=self.server_basic_auth).json()
-            # save ref to check name uniqueness at processing creation
+            # Fetch all user processings visible to the user
+            r = requests.get(url, auth=self.server_basic_auth)
+            r.raise_for_status()
+            self.processings = r.json()
+            # Save ref to check name uniqueness at processing creation
             self.processing_names = [processing['name'] for processing in self.processings]
+            processing = [processing['id'] for processing in self.processings]
             self.dlg.processingsTable.setRowCount(len(self.processings))
             for processing in self.processings:
                 # Add % signs to progress column for clarity
@@ -599,13 +613,17 @@ class Geoalert:
             # Turn sorting off while inserting
             self.dlg.processingsTable.setSortingEnabled(False)
             # Fill out the table
-            columns = ('name', 'workflowDef', 'status', 'percentCompleted', 'created')
+            columns = ('name', 'workflowDef', 'status', 'percentCompleted', 'created', 'id')
             for row, processing in enumerate(self.processings):
                 for col, attr in enumerate(columns):
                     self.dlg.processingsTable.setItem(row, col, QTableWidgetItem(processing[attr]))
+                # Restore selection
+                row_number = self.selected_processings.get(processing['id'])
+                if row_number:
+                    self.dlg.processingsTable.selectRow(row_number)
             # Turn sorting on again
             self.dlg.processingsTable.setSortingEnabled(True)
-            # Sort by creation date descending
+            # Sort by creation date (5th column) descending
             self.dlg.processingsTable.sortItems(4, Qt.DescendingOrder)
             # Check on the running processings after some time
             if self.check_processings:
