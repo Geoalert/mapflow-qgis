@@ -64,6 +64,8 @@ class Geoalert:
         self.dlg = MainDialog()
         self.dlg_login = LoginDialog()
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
+        if self.settings.value('serverRememberMe'):
+            self.server = self.settings.value('server')
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
         self.dlg.connectID.setText(self.settings.value('connectID'))
         self.dlg.custom_provider_url.setText(self.settings.value('customProviderURL'))
@@ -624,6 +626,8 @@ class Geoalert:
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
+        self.dlg.close()
+        self.dlg_login.close()
         for action in self.actions:
             self.iface.removePluginVectorMenu('Geoalert', action)
             self.iface.removeToolBarIcon(action)
@@ -648,6 +652,7 @@ class Geoalert:
             if remember_me:
                 self.settings.setValue('serverLogin', login)
                 self.settings.setValue('serverPassword', password)
+                self.settings.setValue('server', self.server)
         except requests.exceptions.HTTPError:
             if res.status_code == 401:
                 self.dlg_login.invalidCredentialsMessage.setVisible(True)
