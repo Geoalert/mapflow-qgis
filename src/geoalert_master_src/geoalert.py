@@ -105,7 +105,7 @@ class Geoalert:
         # ввести стандартную максаровскую ссылку
         self.dlg.maxarStandardURL.clicked.connect(self.maxarStandard)
         # подключение слоя WFS
-        self.dlg.ButWFS.clicked.connect(self.ButWFS)
+        self.dlg.ButWFS.clicked.connect(self.maxar_wfs)
         self.dlg.tabListRast.clicked.connect(self.feID)
 
     def fill_out_combos_with_layers(self):
@@ -177,97 +177,68 @@ class Geoalert:
         # Вписываем feature ID из таблицы в поле
         # получить номер выбранной строки в таблице!
         row = self.dlg.tabListRast.currentIndex().row()
-        print(row)
         id_v = self.dlg.tabListRast.model().index(row, 4).data()
-        print(id_v)
         self.dlg.featureID.setText(str(id_v))
 
-    def ButWFS(self):
+    def maxar_wfs(self):
+        """Get SecureWatch image footprints."""
         # Check if user specified an existing output dir
         if not os.path.exists(self.dlg.outputDirectory.text()):
             self.alert(self.tr('Please, specify an existing output directory'))
             return
-        # получаем введенный логин и праоль
-        self.loginW = self.dlg.custom_provider_login.text()
-        self.passwordW = self.dlg.custom_provider_password.text()
-        # векторный слой
-        vLayer = self.dlg.VMapLayerComboBox.currentLayer()
-        # получаем координаты охвата в EPSG:4326
-        coordin = self.extent(vLayer)
-        # self.serverW = self.dlg.custom_provider_url.text()
-
+        aoi_layer = self.dlg.VMapLayerComboBox.currentLayer()
         connectID = self.dlg.connectID.text()
-
-        # сохрангить ID
         self.settings.setValue('connectID', connectID)
-
-        URL = "https://securewatch.digitalglobe.com/catalogservice/wfsaccess?" \
-              "REQUEST=GetFeature&TYPENAME=DigitalGlobe:FinishedFeature&" \
-              "SERVICE=WFS&VERSION=2.0.0&" \
-              "CONNECTID=%s&" \
-              "BBOX=%s&" \
-              "SRSNAME=EPSG:4326&" \
-              "FEATUREPROFILE=Default_Profile&" \
-              "WIDTH=3000&HEIGHT=3000" % (connectID, coordin)
-
-        # шифруем логин и пароль (переводим строки в байты)
-        userAndPass = b64encode(str.encode(self.loginW) + b":" + str.encode(self.passwordW)).decode("ascii")
-        # составляем хеадер для запроса
-        authorization = {'Authorization': 'Basic %s' % userAndPass}
-        r = requests.get(URL, headers=authorization)
-        # print(r.text)
-
-        # временный файл
+        extent = self.get_layer_extent(aoi_layer).boundingBox().toString()
+        # Change lon,lat to lat,lon for Maxar
+        coords = [reversed(position.split(',')) for position in extent.split(':')]
+        bbox = ','.join([coord.strip() for position in coords for coord in position])
+        url = "https://securewatch.digitalglobe.com/catalogservice/wfsaccess"
+        params = {
+            "REQUEST": "GetFeature",
+            "TYPENAME": "DigitalGlobe:FinishedFeature",
+            "SERVICE": "WFS",
+            "VERSION": "2.0.0",
+            "CONNECTID": connectID,
+            "BBOX": bbox,
+            "SRSNAME": "EPSG:4326",
+            "FEATUREPROFILE": "Default_Profile",
+            "WIDTH": 3000,
+            "HEIGHT": 3000
+        }
+        auth = requests.auth.HTTPBasicAuth(
+            self.dlg.custom_provider_login.text(),
+            self.dlg.custom_provider_password.text()
+        )
+        r = requests.get(url, params=params, auth=auth)
+        r.raise_for_status()
         file_temp = os.path.join(self.dlg.outputDirectory.text(), 'WFS_temp.geojson')
         with open(file_temp, "wb") as f:
-            f.write(str.encode(r.text))
-        vlayer_temp = QgsVectorLayer(file_temp, 'WFS_temp', "ogr")
-        self.project.addMapLayer(vlayer_temp)
-
-        # подключаем стиль!!!!!!!!!!!!!!!!!!
-        style = '/styles/style_wfs.qml'
-
-        qml_path = self.plugin_dir + style
-        print(qml_path)
-        # print(qml_path)
-        layer = self.iface.activeLayer()  # активный слой
-        style_manager = layer.styleManager()
+            f.write(r.content)
+        layer_name = 'WFS extent'
+        metadata_layer = QgsVectorLayer(file_temp, layer_name, "ogr")
+        self.project.addMapLayer(metadata_layer)
+        # Add style
+        style_path = os.path.join(self.plugin_dir, 'styles/style_wfs.qml')
+        style_manager = metadata_layer.styleManager()
         # read valid style from layer
         style = QgsMapLayerStyle()
-        style.readFromLayer(layer)
+        style.readFromLayer(metadata_layer)
         # get style name from file
-        style_name = os.path.basename(qml_path).strip('.qml')
+        style_name = os.path.basename(style_path).strip('.qml')
         # add style with new name
         style_manager.addStyle(style_name, style)
         # set new style as current
         style_manager.setCurrentStyle(style_name)
         # load qml to current style
-        (message, success) = layer.loadNamedStyle(qml_path)
-        print(message)
+        message, success = metadata_layer.loadNamedStyle(style_path)
         if not success:  # if style not loaded remove it
             style_manager.removeStyle(style_name)
-
-        # список названий полей
-        nameFields = []
-        # перебор названий полей слоя
-        for field in vlayer_temp.fields():
-            # print(field.name())
-            nameFields.append(field.name())
-
-        # список значей атрибутов
-        attrFields = []
-        features = vlayer_temp.getFeatures()
-        for feature in features:
-            # retrieve every feature with its geometry and attributes
-            # print("Feature ID: ", feature.id())
-
-            attrs = feature.attributes()
-            # attrs is a list. It contains all the attribute values of this feature
-            # print(attrs)
-            attrFields.append(attrs)
-
-        # Заполняем таблицу из слоя
-        self.mTableListRastr(nameFields, attrFields)
+            self.alert(message)
+        # Fill out the imagery table
+        fields_names = [field.name() for field in metadata_layer.fields()]
+        attributes = [feature.attributes() for feature in metadata_layer.getFeatures()]
+        self.mTableListRastr(fields_names, attributes)
 
     def maxarStandard(self):
         """Fill out the imagery provider URL field with the Maxar Secure Watch URL."""
@@ -425,16 +396,10 @@ class Geoalert:
             params["url"] = url
             if self.dlg.useImageExtentAsAOI.isChecked():
                 aoi_layer = raster_layer
-        # Get the AOI layer's extent
-        extent_geometry = QgsGeometry.fromRect(aoi_layer.extent())
-        extent_feature = QgsFeature()
-        extent_feature.setGeometry(extent_geometry)
-        # Make a temp layer out of it (for the user to see the extent)
-        extent_layer = QgsVectorLayer(f"Polygon?crs={aoi_layer.crs().authid()}", f"{aoi_layer.name()} extent", 'memory')
-        extent_layer.dataProvider().addFeature(extent_feature)
-        self.project.addMapLayer(extent_layer)
-        # Export the extent as GeoJSON
-        extent_geometry_4326 = json.loads(QgsJsonExporter(extent_layer).exportFeature(extent_feature))['geometry']
+        # Get processing extent
+        extent = self.get_layer_extent(aoi_layer)
+        # extent_geojson = QgsJsonExporter(extent_layer).exportFeature(extent_feature)
+        # extent_geometry = json.loads(extent_geojson)['geometry']
         # Post the processing
         r = requests.post(
             url=f'{self.server}/rest/processings',
@@ -442,7 +407,7 @@ class Geoalert:
             json={
                 "name": processing_name.encode(),
                 "wdName": wd,
-                "geometry": extent_geometry_4326,
+                "geometry": json.loads(extent.asJson()),
                 "params": params,
                 "meta": meta
             })
@@ -573,6 +538,24 @@ class Geoalert:
     def push_message(self, text, level=Qgis.Info, duration=5):
         """Display a translated message on the message bar."""
         self.iface.messageBar().pushMessage("Mapflow", text, level, duration)
+
+    def get_layer_extent(self, layer):
+        """Get a layer's bounding box (extent)."""
+        # Create a geometry from the layer's extent
+        extent_geometry = QgsGeometry.fromRect(layer.extent())
+        # Reproject it to WGS84 if the layer has another CRS
+        layer_crs = QgsCoordinateReferenceSystem(layer.crs().authid())
+        wgs84 = QgsCoordinateReferenceSystem('EPSG:4326')
+        if layer_crs != wgs84:
+            extent_geometry.transform(QgsCoordinateTransform(layer_crs, wgs84))
+        # Create a feature with the resulting geometry
+        extent_feature = QgsFeature()
+        extent_feature.setGeometry(extent_geometry)
+        # Make a temp layer out of it (for the user to see the extent)
+        extent_layer = QgsVectorLayer(f"Polygon?crs=EPSG:4326", f"{layer.name()} extent", 'memory')
+        extent_layer.dataProvider().addFeature(extent_feature)
+        self.project.addMapLayer(extent_layer)
+        return extent_geometry
 
     def refresh_processing_list(self, url):
         """Repeatedly refresh the list of processings."""
