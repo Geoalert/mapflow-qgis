@@ -2,9 +2,7 @@ import time
 import json
 import os.path
 from math import *
-from base64 import b64encode
 from threading import Thread
-from pathlib import Path
 
 import requests
 from dateutil.parser import parse as parse_datetime
@@ -118,6 +116,9 @@ class Geoalert:
         # Fill out the combos
         self.dlg.polygonCombo.addItems([layer.name() for layer in polygon_layers])
         self.dlg.rasterCombo.addItems([layer.name() for layer in tif_layers])
+        # Watch layer renaming
+        for layer in polygon_layers + tif_layers:
+            layer.nameChanged.connect(self.rename_layer)
         # Make and store a list of layer ids for addition & removal triggers
         self.polygon_layer_ids = [layer.id() for layer in polygon_layers]
         self.raster_layer_ids = [layer.id() for layer in tif_layers]
