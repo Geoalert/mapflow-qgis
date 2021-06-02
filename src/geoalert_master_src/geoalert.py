@@ -544,13 +544,13 @@ class Geoalert:
         transform = QgsCoordinateTransform(layer_crs, wgs84, self.project.transformContext())
         if layer_crs != wgs84:
             extent_geometry.transform(transform)
-        # Create a feature with the resulting geometry
-        extent_feature = QgsFeature()
-        extent_feature.setGeometry(extent_geometry)
-        # Make a temp layer out of it (for the user to see the extent)
-        extent_layer = QgsVectorLayer(f"Polygon?crs=EPSG:4326", f"{layer.name()} extent", 'memory')
-        extent_layer.dataProvider().addFeature(extent_feature)
-        self.project.addMapLayer(extent_layer)
+        # # Create a feature with the resulting geometry
+        # extent_feature = QgsFeature()
+        # extent_feature.setGeometry(extent_geometry)
+        # # Make a temp layer out of it (for the user to see the extent)
+        # extent_layer = QgsVectorLayer(f"Polygon?crs=EPSG:4326", f"{layer.name()} extent", 'memory')
+        # extent_layer.dataProvider().addFeature(extent_feature)
+        # self.project.addMapLayer(extent_layer)
         return extent_geometry
 
     def refresh_processing_list(self, url):
