@@ -398,8 +398,6 @@ class Geoalert:
                 aoi_layer = raster_layer
         # Get processing extent
         extent = self.get_layer_extent(aoi_layer)
-        # extent_geojson = QgsJsonExporter(extent_layer).exportFeature(extent_feature)
-        # extent_geometry = json.loads(extent_geojson)['geometry']
         # Post the processing
         r = requests.post(
             url=f'{self.server}/rest/processings',
@@ -485,14 +483,12 @@ class Geoalert:
             self.push_message(self.tr('There was an error writing the Shapefile!'), Qgis.Warning)
             return
 
-        # Открытие файла
-        vlayer = QgsVectorLayer(file_adr, output_file_name, "ogr")
-        if not vlayer:
+        # Load the results into QGSI
+        results_layer = QgsVectorLayer(file_adr, output_file_name, "ogr")
+        if not results_layer:
             self.push_message(self.tr("Could not load the layer!"), Qgis.Warning)
-        # Загрузка файла в окно qgis
-        self.project.addMapLayer(vlayer)
-
-        # ---- подключение стилей
+        self.project.addMapLayer(results_layer)
+        # Add style
         wd = self.dlg.processingsTable.item(row_number, 1).text()
         if wd in ('Buildings Detection', 'Buildings Detection With Heights'):
             style = '/styles/style_buildings.qml'
@@ -524,12 +520,8 @@ class Geoalert:
             style_manager.removeStyle(style_name)
 
         time.sleep(1)
-        iface.zoomToActiveLayer()  # приблизить к охвату активного слоя
-        try:
-            os.remove(file_temp)  # удаление временного файла
-            print('Временный файл удален:', file_temp)
-        except:
-            print('Временный файл удалить не удалось, ну пусть будет, он никому не мешает и весит мало:', file_temp)
+        iface.zoomToActiveLayer()
+        os.remove(file_temp)
 
     def alert(self, message):
         """Display an info message."""
@@ -546,8 +538,9 @@ class Geoalert:
         # Reproject it to WGS84 if the layer has another CRS
         layer_crs = QgsCoordinateReferenceSystem(layer.crs().authid())
         wgs84 = QgsCoordinateReferenceSystem('EPSG:4326')
+        transform = QgsCoordinateTransform(layer_crs, wgs84, self.project.transformContext())
         if layer_crs != wgs84:
-            extent_geometry.transform(QgsCoordinateTransform(layer_crs, wgs84))
+            extent_geometry.transform(transform)
         # Create a feature with the resulting geometry
         extent_feature = QgsFeature()
         extent_feature.setGeometry(extent_geometry)
