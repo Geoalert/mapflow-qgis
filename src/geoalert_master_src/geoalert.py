@@ -93,7 +93,7 @@ class Geoalert:
         self.dlg.useImageExtentAsAOI.stateChanged.connect(self.toggle_polygon_combo)
         # Select a local GeoTIFF if user chooses the respective option
         self.dlg.rasterCombo.currentTextChanged.connect(self.select_tif)
-        self.dlg.startProcessing.clicked.connect(self.create_processing)
+        self.dlg.startProcessing.clicked.connect(self.start_processing)
         # Download processing results
         self.dlg.loadProcessingResults.clicked.connect(self.download_processing_results)
         # кнопка удаления слоя
@@ -335,7 +335,7 @@ class Geoalert:
             )
             r.raise_for_status()
             self.dlg.processingsTable.removeRow(row_number)
-            self.push_message(self.tr("Processing deletion succeeded!"))
+            self.push_message(self.tr("Processing successfully deleted!"))
 
     def select_tif(self, text):
         """Start a file selection dialog for a local GeoTIFF."""
@@ -351,11 +351,6 @@ class Geoalert:
 
     def start_processing(self):
         """Spin up a thread to create a processing on the server."""
-        thread = Thread(target=self.create_processing)
-        thread.start()
-
-    def create_processing(self):
-        """Initiate a processing."""
         processing_name = self.dlg.processingName.text()
         if not processing_name:
             self.alert(self.tr('Please, specify a name for your processing'))
@@ -363,6 +358,25 @@ class Geoalert:
         elif processing_name in self.processing_names:
             self.alert(self.tr('Processing name taken. Please, choose a different name.'))
             return
+        raster_combo_index = self.dlg.rasterCombo.currentIndex()
+        if raster_combo_index == 1:
+            self.alert(self.tr("Please, be aware that you may be charged by the imagery provider!"))
+        elif raster_combo_index > 2:
+            self.push_message(self.tr("Please, wait. Uploading the file to the server..."))
+        thread = Thread(target=self.create_processing)
+        thread.start()
+        # self.refresh_processing_list(f'{self.server}/rest/processings')
+        self.dlg.processingName.clear()
+        self.alert(self.tr("Success! Processing may take up to several minutes"))
+        # print('STARTING TASK')
+        # task = QgsTask.fromFunction(
+        #     'Create processing', self.create_processing, on_finished=self.after_create_processing)
+        # QgsApplication.taskManager().addTask(task)
+
+    def create_processing(self):
+        """Initiate a processing."""
+        # QgsMessageLog.logMessage(self.tr(f'TASK STARTED'), 'Mapflow', Qgis.Info)
+        processing_name = self.dlg.processingName.text()
         wd = self.dlg.ai_model.currentText()
         update_cache = str(not self.dlg.updateCache.isChecked())
         aoi_layer = self.project.mapLayer(self.polygon_layer_ids[self.dlg.polygonCombo.currentIndex()])
@@ -378,23 +392,20 @@ class Geoalert:
             params["use_cache"] = update_cache
         # Custom provider
         if raster_combo_index == 1:
-            self.alert(self.tr("Please, be aware that you may be charged by the imagery provider!"))
             params["source_type"] = self.dlg.custom_provider_type.currentText()
             params["url"] = self.dlg.custom_provider_url.text()
             params["raster_login"] = self.dlg.custom_provider_login.text()
             params["raster_password"] = self.dlg.custom_provider_password.text()
             params["use_cache"] = update_cache
-        # Raster extent
         elif raster_combo_index > 2:
             # Upload user-selected GeoTIFF to the server
-            self.push_message(self.tr("Please, wait. Uploading the file to the server..."))
             raster_layer_id = self.raster_layer_ids[self.dlg.rasterCombo.currentIndex() - self.raster_combo_offset]
             raster_layer = self.project.mapLayer(raster_layer_id)
             with open(raster_layer.dataProvider().dataSourceUri(), 'rb') as f:
                 r = requests.post(f'{self.server}/rest/rasters', auth=self.server_basic_auth, files={'file': f})
             r.raise_for_status()
             url = r.json()['uri']
-            self.alert(self.tr(f'Your image was uploaded to ') + url)
+            # QgsMessageLog.logMessage(self.tr(f'Your image was uploaded to ') + url, 'Mapflow', Qgis.Info)
             params["source_type"] = "tif"
             params["url"] = url
             if self.dlg.useImageExtentAsAOI.isChecked():
@@ -413,10 +424,14 @@ class Geoalert:
                 "meta": meta
             })
         r.raise_for_status()
-        self.check_processings = True
-        self.refresh_processing_list(f'{self.server}/rest/processings')
-        self.dlg.processingName.clear()
-        self.alert(self.tr("Success! Processing may take up to several minutes"))
+
+    # def after_create_processing(self, result=None):
+    #     """"""
+    #     print(result)
+    #     self.refresh_processing_list(f'{self.server}/rest/processings')
+    #     self.check_processings = True
+    #     self.dlg.processingName.clear()
+    #     self.alert(self.tr("Success! Processing may take up to several minutes"))
 
     def load_custom_tileset(self):
         """Custom provider imagery preview."""
