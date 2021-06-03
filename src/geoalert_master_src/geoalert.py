@@ -173,11 +173,10 @@ class Geoalert:
             self.settings.setValue("outputDir", path)
 
     def set_maxar_feature_id(self):
-        # Вписываем feature ID из таблицы в поле
-        # получить номер выбранной строки в таблице!
-        row = self.dlg.maxarMetadataTable.currentIndex().row()
-        id_v = self.dlg.maxarMetadataTable.model().index(row, 4).data()
-        self.dlg.maxarFeatureID.setText(str(id_v))
+        """Fill the Maxar FeatureID field out with the currently selecte feature ID."""
+        row = self.dlg.maxarMetadataTable.currentRow()
+        feature_id = self.dlg.maxarMetadataTable.model().index(row, 4).data()
+        self.dlg.maxarFeatureID.setText(str(feature_id))
 
     def get_maxar_metadata(self):
         """Get SecureWatch image footprints."""
