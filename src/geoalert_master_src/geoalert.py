@@ -372,7 +372,7 @@ class Geoalert:
         """Initiate a processing."""
         # QgsMessageLog.logMessage(self.tr(f'TASK STARTED'), 'Mapflow', Qgis.Info)
         processing_name = self.dlg.processingName.text()
-        wd = self.dlg.workflowDefinition.currentText()
+        wd = self.dlg.workflowDefinitionCombo.currentText()
         update_cache = str(not self.dlg.updateCache.isChecked())
         aoi_layer = self.project.mapLayer(self.polygon_layer_ids[self.dlg.polygonCombo.currentIndex()])
         # Workflow definition parameters
@@ -642,12 +642,13 @@ class Geoalert:
             self.iface.removePluginVectorMenu('Geoalert', action)
             self.iface.removeToolBarIcon(action)
         del self.toolbar
+        self.settings.sync()
 
     def connect_to_server(self):
         """Connect to Geoalert server."""
         self.server = f'https://whitemaps-{self.dlg_login.serverCombo.currentText()}.mapflow.ai'
-        login = self.dlg_login.loginField.text().encode()
-        password = self.dlg_login.passwordField.text().encode()
+        login = self.dlg_login.loginField.text()
+        password = self.dlg_login.passwordField.text()
         remember_me = self.dlg_login.rememberMe.isChecked()
         self.settings.setValue("serverRememberMe", remember_me)
         self.server_basic_auth = requests.auth.HTTPBasicAuth(login, password)
@@ -656,8 +657,8 @@ class Geoalert:
             res.raise_for_status()
             # Load the list of WDs in the default project
             wds = [wd['name'] for wd in res.json()['workflowDefs']]
-            self.dlg.workflowDefinition.clear()
-            self.dlg.workflowDefinition.addItems(wds)
+            self.dlg.workflowDefinitionCombo.clear()
+            self.dlg.workflowDefinitionCombo.addItems(wds)
             self.logged_in = True
             self.dlg_login.invalidCredentialsMessage.hide()
             if remember_me:
