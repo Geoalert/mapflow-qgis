@@ -64,6 +64,8 @@ class Geoalert:
         self.dlg = MainDialog()
         self.dlg_login = LoginDialog()
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
+        # Check if there are stored credentials
+        self.logged_in = self.settings.value("serverLogin") and self.settings.value("serverPassword")
         if self.settings.value('serverRememberMe'):
             self.server = self.settings.value('server')
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
@@ -480,9 +482,10 @@ class Geoalert:
             tif_layer = QgsRasterLayer(uri, f'{output_file_name}_image', 'wms')
             self.project.addMapLayer(tif_layer)
         # временный файл
-        file_temp = os.path.join(self.dlg.outputDirectory.text(), f'{output_file_name}_temp.geojson')
-        with open(file_temp, "wb") as f:
+        with tempfile.TemporaryFile("wb", ) as f:
             f.write(r.content)
+        # file_temp = os.path.join(self.dlg.outputDirectory.text(), f'{output_file_name}_temp.geojson')
+        # with open(file_temp, "wb") as f:
         feature_layer = QgsVectorLayer(file_temp, output_file_name+'_temp', "ogr")
 
         # экспорт в shp
@@ -533,10 +536,8 @@ class Geoalert:
         message, success = layer.loadNamedStyle(qml_path)
         if not success:  # if style not loaded remove it
             style_manager.removeStyle(style_name)
-
         time.sleep(1)
         iface.zoomToActiveLayer()
-        os.remove(file_temp)
 
     def alert(self, message):
         """Display an info message."""
@@ -672,26 +673,24 @@ class Geoalert:
     def logout(self):
         """Close the plugin and clear credentials from cache."""
         self.dlg.close()
-        for setting in ('serverLogin', 'serverPassword', 'serverRememberMe'):
-            self.settings.setValue(setting, '')
-        for field in (self.dlg_login.loginField, self.dlg_login.passwordField):
-            field.clear()
-        self.dlg_login.rememberMe.setChecked(False)
+        if not self.settings.value('serverRememberMe'):
+            for setting in ('serverLogin', 'serverPassword', 'serverRememberMe'):
+                self.settings.remove(setting)
+            for field in (self.dlg_login.loginField, self.dlg_login.passwordField):
+                field.clear()
+        self.logged_in = False
         self.run()
 
     def run(self):
         """Plugin entrypoint."""
-        # Check if there are stored credentials
-        self.logged_in = self.settings.value("serverLogin") and self.settings.value("serverPassword")
-        # If not, show the login form
+        self.check_processings = True
+        # If not logged in, show the login form
         while not self.logged_in:
             # If the user closes the dialog
             if self.dlg_login.exec():
                 self.connect_to_server()
             else:
                 # Refresh the form & quit
-                self.dlg_login.loginField.clear()
-                self.dlg_login.passwordField.clear()
                 self.dlg_login.invalidCredentialsMessage.hide()
                 return
         # Refresh the list of workflow definitions
@@ -712,5 +711,3 @@ class Geoalert:
         thread.start()
         # Show main dialog
         self.dlg.show()
-        # Stop refreshing the processing list once the dialog has been closed
-        self.check_processings = bool(self.dlg.exec())
