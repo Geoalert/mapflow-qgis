@@ -56,7 +56,7 @@
     </size>
    </property>
    <property name="currentIndex">
-    <number>1</number>
+    <number>0</number>
    </property>
    <widget class="QWidget" name="processingsTab">
     <attribute name="title">
@@ -433,7 +433,7 @@
          <item>
           <widget class="QPushButton" name="logoutButton">
            <property name="visible">
-            <bool>false</bool>
+            <bool>true</bool>
            </property>
            <property name="styleSheet">
             <string notr="true"/>
