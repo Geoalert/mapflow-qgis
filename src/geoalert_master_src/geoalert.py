@@ -673,6 +673,9 @@ class Geoalert:
         self.dlg.close()
         for setting in ('serverLogin', 'serverPassword', 'serverRememberMe'):
             self.settings.setValue(setting, '')
+        for field in (self.dlg_login.loginField, self.dlg_login.passwordField):
+            field.clear()
+        self.dlg_login.rememberMe.setChecked(False)
 
     def run(self):
         """Plugin entrypoint."""
