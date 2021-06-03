@@ -352,6 +352,9 @@ class Geoalert:
         elif processing_name in self.processing_names:
             self.alert(self.tr('Processing name taken. Please, choose a different name.'))
             return
+        if self.dlg.polygonCombo.currentIndex() == -1:
+            self.alert(self.tr('Please, select an area of interest'))
+            return
         raster_combo_index = self.dlg.rasterCombo.currentIndex()
         if raster_combo_index == 1:
             self.alert(self.tr("Please, be aware that you may be charged by the imagery provider!"))
