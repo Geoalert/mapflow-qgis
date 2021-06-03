@@ -67,46 +67,42 @@ class Geoalert:
         if self.settings.value('serverRememberMe'):
             self.server = self.settings.value('server')
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
-        self.dlg.connectID.setText(self.settings.value('connectID'))
-        self.dlg.custom_provider_url.setText(self.settings.value('customProviderURL'))
+        self.dlg.maxarConnectID.setText(self.settings.value('connectID'))
+        self.dlg.customProviderURL.setText(self.settings.value('customProviderURL'))
         if self.settings.value("customProviderRememberMe"):
-            self.dlg.custom_provider_save_auth.setChecked(True)
-            self.dlg.custom_provider_login.setText(self.settings.value("customProviderLogin"))
-            self.dlg.custom_provider_password.setText(self.settings.value("customProviderPassword"))
+            self.dlg.customProviderSaveAuth.setChecked(True)
+            self.dlg.customProviderLogin.setText(self.settings.value("customProviderLogin"))
+            self.dlg.customProviderPassword.setText(self.settings.value("customProviderPassword"))
         # Number of fixed 'virtual' layers in the raster combo box
         self.raster_combo_offset = 3
         # Store processings selected in the table as dict(id=row_number)
         self.selected_processings = {}
         # Fill out the combo boxes
         self.fill_out_combos_with_layers()
-        # SET UP SIGNALS & SLOTS
-        # Watch processing table row selection
-        self.dlg.processingsTable.itemSelectionChanged.connect(self.memorize_selected_processings)
         # Hide the ID column since it's only needed for table operations, not the user
         # self.dlg.processingsTable.setColumnHidden(ID_COLUMN_INDEX, True)
+        # SET UP SIGNALS & SLOTS
+        self.dlg.logoutButton.clicked.connect(self.logout)
+        self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         # Watch layer addition/removal
         self.project.layersAdded.connect(self.add_layers)
         self.project.layersRemoved.connect(self.remove_layers)
-        self.dlg.logoutButton.clicked.connect(self.logout)
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.rasterCombo.currentIndexChanged.connect(self.toggle_use_image_extent_as_aoi)
         self.dlg.useImageExtentAsAOI.stateChanged.connect(self.toggle_polygon_combo)
         # Select a local GeoTIFF if user chooses the respective option
         self.dlg.rasterCombo.currentTextChanged.connect(self.select_tif)
         self.dlg.startProcessing.clicked.connect(self.start_processing)
-        # Download processing results
+        # Processings
+        self.dlg.processingsTable.itemSelectionChanged.connect(self.memorize_selected_processings)
         self.dlg.loadProcessingResults.clicked.connect(self.download_processing_results)
-        # кнопка удаления слоя
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
-        # Кнопка подключения снимков
-        self.dlg.button_preview.clicked.connect(self.load_custom_tileset)
-        # кнопка выбора папки через обзор
-        self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
-        # ввести стандартную максаровскую ссылку
-        self.dlg.maxarStandardURL.clicked.connect(self.maxarStandard)
-        # подключение слоя WFS
-        self.dlg.ButWFS.clicked.connect(self.maxar_wfs)
-        self.dlg.tabListRast.clicked.connect(self.feID)
+        # Custom provider
+        self.dlg.preview.clicked.connect(self.load_custom_tileset)
+        # Maxar
+        self.dlg.getMaxarURL.clicked.connect(self.get_maxar_url)
+        self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
+        self.dlg.maxarMetadataTable.clicked.connect(self.set_maxar_feature_id)
 
     def fill_out_combos_with_layers(self):
         """Add all relevant (polygon & GeoTIFF) layer names to their respective combo boxes."""
@@ -176,21 +172,21 @@ class Geoalert:
             self.dlg.outputDirectory.setText(path)
             self.settings.setValue("outputDir", path)
 
-    def feID(self):
+    def set_maxar_feature_id(self):
         # Вписываем feature ID из таблицы в поле
         # получить номер выбранной строки в таблице!
-        row = self.dlg.tabListRast.currentIndex().row()
-        id_v = self.dlg.tabListRast.model().index(row, 4).data()
-        self.dlg.featureID.setText(str(id_v))
+        row = self.dlg.maxarMetadataTable.currentIndex().row()
+        id_v = self.dlg.maxarMetadataTable.model().index(row, 4).data()
+        self.dlg.maxarFeatureID.setText(str(id_v))
 
-    def maxar_wfs(self):
+    def get_maxar_metadata(self):
         """Get SecureWatch image footprints."""
         # Check if user specified an existing output dir
         if not os.path.exists(self.dlg.outputDirectory.text()):
             self.alert(self.tr('Please, specify an existing output directory'))
             return
-        aoi_layer = self.dlg.VMapLayerComboBox.currentLayer()
-        connectID = self.dlg.connectID.text()
+        aoi_layer = self.dlg.maxarAOICombo.currentLayer()
+        connectID = self.dlg.maxarConnectID.text()
         self.settings.setValue('connectID', connectID)
         extent = self.get_layer_extent(aoi_layer).boundingBox().toString()
         # Change lon,lat to lat,lon for Maxar
@@ -210,8 +206,8 @@ class Geoalert:
             "HEIGHT": 3000
         }
         auth = requests.auth.HTTPBasicAuth(
-            self.dlg.custom_provider_login.text(),
-            self.dlg.custom_provider_password.text()
+            self.dlg.customProviderLogin.text(),
+            self.dlg.customProviderPassword.text()
         )
         r = requests.get(url, params=params, auth=auth)
         r.raise_for_status()
@@ -241,25 +237,24 @@ class Geoalert:
         # Fill out the imagery table
         fields_names = [field.name() for field in metadata_layer.fields()]
         attributes = [feature.attributes() for feature in metadata_layer.getFeatures()]
-        self.mTableListRastr(fields_names, attributes)
+        self.fill_out_maxar_metadata_table(fields_names, attributes)
 
-    def maxarStandard(self):
+    def get_maxar_url(self):
         """Fill out the imagery provider URL field with the Maxar Secure Watch URL."""
-        connectID = self.dlg.connectID.text()
-        featureID = self.dlg.featureID.text()
+        connectID = self.dlg.maxarConnectID.text()
+        featureID = self.dlg.maxarFeatureID.text()
         SW_PARAMS['CONNECTID'] = connectID
         if featureID:
             SW_PARAMS['CQL_FILTER'] = f"feature_id='{featureID}'"
             SW_PARAMS['FORMAT'] = 'image/png'
         request = requests.Request('GET', SW_ENDPOINT, params=SW_PARAMS).prepare()
-        self.dlg.custom_provider_url.setText(request.url)
-        self.dlg.custom_provider_type.setCurrentIndex(0)
+        self.dlg.customProviderURL.setText(request.url)
+        self.dlg.customProviderType.setCurrentIndex(0)
         self.settings.setValue('connectID', connectID)
 
-    def mTableListRastr(self, nameFields, attrFields):
-        # создание и настройка таблицы
+    def fill_out_maxar_metadata_table(self, nameFields, attrFields):
         # очистка таблицы
-        self.dlg.tabListRast.clear()
+        self.dlg.maxarMetadataTable.clear()
         # названия столбцов
         stolbci = ['featureId', 'sourceUnit', 'productType', 'colorBandOrder', 'formattedDate']
 
@@ -296,27 +291,27 @@ class Geoalert:
         # print(attrStolb)
         # количество столбцов
         StolbKol = len(stolbci)
-        self.dlg.tabListRast.setColumnCount(StolbKol)  # создаем столбцы
-        self.dlg.tabListRast.setHorizontalHeaderLabels(stolbci)  # даем названия столбцам
+        self.dlg.maxarMetadataTable.setColumnCount(StolbKol)  # создаем столбцы
+        self.dlg.maxarMetadataTable.setHorizontalHeaderLabels(stolbci)  # даем названия столбцам
         # перебор всех столбцов и настройка
         for nom in range(StolbKol):
             # Устанавливаем выравнивание на заголовки
-            self.dlg.tabListRast.horizontalHeaderItem(nom).setTextAlignment(Qt.AlignCenter)
+            self.dlg.maxarMetadataTable.horizontalHeaderItem(nom).setTextAlignment(Qt.AlignCenter)
         # указываем ширину столбцов
-        # self.dlg.tabListRast.setColumnWidth(0, 80)
+        # self.dlg.maxarMetadataTable.setColumnWidth(0, 80)
         # выделять всю строку при нажатии
-        self.dlg.tabListRast.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.dlg.maxarMetadataTable.setSelectionBehavior(QAbstractItemView.SelectRows)
         # запретить редактировать таблицу пользователю
-        self.dlg.tabListRast.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.dlg.maxarMetadataTable.setEditTriggers(QAbstractItemView.NoEditTriggers)
         # включить сортировку в таблице
-        # self.dlg.tabListRast.setSortingEnabled(True)
+        # self.dlg.maxarMetadataTable.setSortingEnabled(True)
         kol_tab = len(attrStolb)  # количество элементов
-        self.dlg.tabListRast.setRowCount(kol_tab)  # создаем строки таблицы
+        self.dlg.maxarMetadataTable.setRowCount(kol_tab)  # создаем строки таблицы
         # заполнение таблицы значениями
         for x in range(len(attrStolb)):
             for y in range(len(attrStolb[x])):
                 container = QTableWidgetItem(str(attrStolb[x][y]))
-                self.dlg.tabListRast.setItem(x, y, container)
+                self.dlg.maxarMetadataTable.setItem(x, y, container)
 
     def memorize_selected_processings(self):
         """Memorize the currently selected processing by its ID."""
@@ -377,7 +372,7 @@ class Geoalert:
         """Initiate a processing."""
         # QgsMessageLog.logMessage(self.tr(f'TASK STARTED'), 'Mapflow', Qgis.Info)
         processing_name = self.dlg.processingName.text()
-        wd = self.dlg.ai_model.currentText()
+        wd = self.dlg.workflowDefinition.currentText()
         update_cache = str(not self.dlg.updateCache.isChecked())
         aoi_layer = self.project.mapLayer(self.polygon_layer_ids[self.dlg.polygonCombo.currentIndex()])
         # Workflow definition parameters
@@ -392,10 +387,10 @@ class Geoalert:
             params["use_cache"] = update_cache
         # Custom provider
         if raster_combo_index == 1:
-            params["source_type"] = self.dlg.custom_provider_type.currentText()
-            params["url"] = self.dlg.custom_provider_url.text()
-            params["raster_login"] = self.dlg.custom_provider_login.text()
-            params["raster_password"] = self.dlg.custom_provider_password.text()
+            params["source_type"] = self.dlg.customProviderType.currentText()
+            params["url"] = self.dlg.customProviderURL.text()
+            params["raster_login"] = self.dlg.customProviderLogin.text()
+            params["raster_password"] = self.dlg.customProviderPassword.text()
             params["use_cache"] = update_cache
         elif raster_combo_index > 2:
             # Upload user-selected GeoTIFF to the server
@@ -436,21 +431,21 @@ class Geoalert:
     def load_custom_tileset(self):
         """Custom provider imagery preview."""
         # Save the checkbox state itself
-        self.settings.setValue("custom_provider_save_auth", self.dlg.custom_provider_save_auth.isChecked())
+        self.settings.setValue("customProviderSaveAuth", self.dlg.customProviderSaveAuth.isChecked())
         # If checked, save the credentials
-        if self.dlg.custom_provider_save_auth.isChecked():
-            self.settings.setValue("customProviderLogin", self.dlg.custom_provider_login.text())
-            self.settings.setValue("customProviderPassword", self.dlg.custom_provider_password.text())
-        url = self.dlg.custom_provider_url.text()
+        if self.dlg.customProviderSaveAuth.isChecked():
+            self.settings.setValue("customProviderLogin", self.dlg.customProviderLogin.text())
+            self.settings.setValue("customProviderPassword", self.dlg.customProviderPassword.text())
+        url = self.dlg.customProviderURL.text()
         self.settings.setValue('customProviderURL', url)
         url_escaped = url.replace('&', '%26').replace('=', '%3D')
         params = {
-            'type': self.dlg.custom_provider_type.currentText(),
+            'type': self.dlg.customProviderType.currentText(),
             'url': url_escaped,
-            'zmax': 14 if self.dlg.custom_provider_limit_zoom.isChecked() else 18,
+            'zmax': 14 if self.dlg.zoomLimit.isChecked() else 18,
             'zmin': 0,
-            'username': self.dlg.custom_provider_login.text(),
-            'password': self.dlg.custom_provider_password.text()
+            'username': self.dlg.customProviderLogin.text(),
+            'password': self.dlg.customProviderPassword.text()
         }
         uri = '&'.join(f'{key}={val}' for key, val in params.items())
         layer = QgsRasterLayer(uri, self.tr('Custom tileset'), 'wms')
@@ -661,8 +656,8 @@ class Geoalert:
             res.raise_for_status()
             # Load the list of WDs in the default project
             wds = [wd['name'] for wd in res.json()['workflowDefs']]
-            self.dlg.ai_model.clear()
-            self.dlg.ai_model.addItems(wds)
+            self.dlg.workflowDefinition.clear()
+            self.dlg.workflowDefinition.addItems(wds)
             self.logged_in = True
             self.dlg_login.invalidCredentialsMessage.hide()
             if remember_me:

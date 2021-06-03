@@ -179,7 +179,7 @@
       </widget>
      </item>
      <item row="1" column="0">
-      <widget class="QWidget" name="widget" native="true">
+      <widget class="QWidget" name="processingWidget" native="true">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
          <horstretch>0</horstretch>
@@ -201,18 +201,18 @@
           <height>157</height>
          </rect>
         </property>
-        <layout class="QVBoxLayout" name="verticalLayout_5">
+        <layout class="QVBoxLayout" name="processingLayout">
          <item>
-          <layout class="QHBoxLayout" name="horizontalLayout_4">
+          <layout class="QHBoxLayout" name="processingForm">
            <property name="spacing">
             <number>10</number>
            </property>
            <item>
-            <layout class="QVBoxLayout" name="verticalLayout">
+            <layout class="QVBoxLayout" name="processingOptionsLeft">
              <item>
-              <layout class="QFormLayout" name="formLayout">
+              <layout class="QFormLayout" name="processingFormLeft">
                <item row="0" column="0">
-                <widget class="QLabel" name="label_9">
+                <widget class="QLabel" name="labelProcessingName">
                  <property name="text">
                   <string>Processing name:</string>
                  </property>
@@ -232,7 +232,7 @@
                 </widget>
                </item>
                <item row="1" column="0">
-                <widget class="QLabel" name="label_8">
+                <widget class="QLabel" name="labelAOILayer">
                  <property name="text">
                   <string>AOI layer:</string>
                  </property>
@@ -256,18 +256,18 @@
             </layout>
            </item>
            <item>
-            <layout class="QVBoxLayout" name="verticalLayout_4">
+            <layout class="QVBoxLayout" name="processingOptionsRight">
              <item>
-              <layout class="QFormLayout" name="formLayout_4">
+              <layout class="QFormLayout" name="processingFormRight">
                <item row="0" column="0">
-                <widget class="QLabel" name="label_2">
+                <widget class="QLabel" name="labelAIModel">
                  <property name="text">
                   <string>AI model:</string>
                  </property>
                 </widget>
                </item>
                <item row="0" column="1">
-                <widget class="QComboBox" name="ai_model">
+                <widget class="QComboBox" name="workflowDefinition">
                  <property name="sizePolicy">
                   <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
                    <horstretch>0</horstretch>
@@ -277,7 +277,7 @@
                 </widget>
                </item>
                <item row="1" column="0">
-                <widget class="QLabel" name="label_22">
+                <widget class="QLabel" name="labelImagerySource">
                  <property name="text">
                   <string>Imagery source:</string>
                  </property>
@@ -417,7 +417,7 @@
          <height>0</height>
         </size>
        </property>
-       <widget class="QWidget" name="">
+       <widget class="QWidget" name="layoutWidget">
         <property name="geometry">
          <rect>
           <x>0</x>
@@ -459,11 +459,11 @@
      </item>
     </layout>
    </widget>
-   <widget class="QWidget" name="tab_4">
+   <widget class="QWidget" name="settingsTab">
     <attribute name="title">
      <string>Settings</string>
     </attribute>
-    <widget class="QWidget" name="widget_4" native="true">
+    <widget class="QWidget" name="settingsWidget" native="true">
      <property name="geometry">
       <rect>
        <x>20</x>
@@ -484,7 +484,7 @@
        <height>205</height>
       </size>
      </property>
-     <widget class="QCheckBox" name="custom_provider_limit_zoom">
+     <widget class="QCheckBox" name="zoomLimit">
       <property name="enabled">
        <bool>true</bool>
       </property>
@@ -503,7 +503,7 @@
        <bool>true</bool>
       </property>
      </widget>
-     <widget class="QPushButton" name="button_preview">
+     <widget class="QPushButton" name="preview">
       <property name="geometry">
        <rect>
         <x>460</x>
@@ -516,7 +516,7 @@
        <string>Preview</string>
       </property>
      </widget>
-     <widget class="QCheckBox" name="custom_provider_save_auth">
+     <widget class="QCheckBox" name="customProviderSaveAuth">
       <property name="geometry">
        <rect>
         <x>270</x>
@@ -529,7 +529,7 @@
        <string>Save Login/Password</string>
       </property>
      </widget>
-     <widget class="Line" name="line_5">
+     <widget class="Line" name="divider">
       <property name="geometry">
        <rect>
         <x>5</x>
@@ -542,7 +542,7 @@
        <enum>Qt::Horizontal</enum>
       </property>
      </widget>
-     <widget class="QLabel" name="label_34">
+     <widget class="QLabel" name="labelCustomProviderURL">
       <property name="geometry">
        <rect>
         <x>11</x>
@@ -555,7 +555,7 @@
        <string>Custom imagery provider URL:</string>
       </property>
      </widget>
-     <widget class="QLabel" name="label_29">
+     <widget class="QLabel" name="labelCustomProviderType">
       <property name="geometry">
        <rect>
         <x>371</x>
@@ -568,7 +568,7 @@
        <string>Source type:</string>
       </property>
      </widget>
-     <widget class="QLineEdit" name="custom_provider_url">
+     <widget class="QLineEdit" name="customProviderURL">
       <property name="geometry">
        <rect>
         <x>11</x>
@@ -581,7 +581,7 @@
        <string/>
       </property>
      </widget>
-     <widget class="QComboBox" name="custom_provider_type">
+     <widget class="QComboBox" name="customProviderType">
       <property name="geometry">
        <rect>
         <x>368</x>
@@ -609,7 +609,7 @@
        </property>
       </item>
      </widget>
-     <widget class="QLabel" name="label_46">
+     <widget class="QLabel" name="labelCustomProviderLogin">
       <property name="geometry">
        <rect>
         <x>11</x>
@@ -622,7 +622,7 @@
        <string>Login:</string>
       </property>
      </widget>
-     <widget class="QLineEdit" name="custom_provider_login">
+     <widget class="QLineEdit" name="customProviderLogin">
       <property name="geometry">
        <rect>
         <x>82</x>
@@ -635,7 +635,7 @@
        <string/>
       </property>
      </widget>
-     <widget class="QLabel" name="label_45">
+     <widget class="QLabel" name="labelCustomProviderPassword">
       <property name="geometry">
        <rect>
         <x>11</x>
@@ -648,7 +648,7 @@
        <string>Password:</string>
       </property>
      </widget>
-     <widget class="QgsPasswordLineEdit" name="custom_provider_password">
+     <widget class="QgsPasswordLineEdit" name="customProviderPassword">
       <property name="geometry">
        <rect>
         <x>82</x>
@@ -670,9 +670,9 @@
         <height>32</height>
        </rect>
       </property>
-      <layout class="QHBoxLayout" name="horizontalLayout">
+      <layout class="QHBoxLayout" name="layoutOutputDirectory">
        <item>
-        <widget class="QLabel" name="label_28">
+        <widget class="QLabel" name="labelOutputDirectory">
          <property name="text">
           <string>Output directory:</string>
          </property>
@@ -733,7 +733,7 @@
      <property name="frameShadow">
       <enum>QFrame::Raised</enum>
      </property>
-     <widget class="QWidget" name="widget_3" native="true">
+     <widget class="QWidget" name="maxarParams" native="true">
       <property name="geometry">
        <rect>
         <x>13</x>
@@ -754,7 +754,7 @@
         <height>90</height>
        </size>
       </property>
-      <widget class="QPushButton" name="ButWFS">
+      <widget class="QPushButton" name="getImageMetadata">
        <property name="geometry">
         <rect>
          <x>370</x>
@@ -767,7 +767,7 @@
         <string>Get image metadata</string>
        </property>
       </widget>
-      <widget class="QPushButton" name="maxarStandardURL">
+      <widget class="QPushButton" name="getMaxarURL">
        <property name="geometry">
         <rect>
          <x>370</x>
@@ -780,7 +780,7 @@
         <string>Get provider URL</string>
        </property>
       </widget>
-      <widget class="QLabel" name="label_50">
+      <widget class="QLabel" name="labelMaxarConnectID">
        <property name="geometry">
         <rect>
          <x>1</x>
@@ -793,7 +793,7 @@
         <string>Connect ID:</string>
        </property>
       </widget>
-      <widget class="QLineEdit" name="connectID">
+      <widget class="QLineEdit" name="maxarConnectID">
        <property name="geometry">
         <rect>
          <x>101</x>
@@ -806,7 +806,7 @@
         <string/>
        </property>
       </widget>
-      <widget class="QLabel" name="label_51">
+      <widget class="QLabel" name="labelMaxarFeatureID">
        <property name="geometry">
         <rect>
          <x>1</x>
@@ -819,7 +819,7 @@
         <string>Feature ID:</string>
        </property>
       </widget>
-      <widget class="QLineEdit" name="featureID">
+      <widget class="QLineEdit" name="maxarFeatureID">
        <property name="geometry">
         <rect>
          <x>101</x>
@@ -832,7 +832,7 @@
         <string/>
        </property>
       </widget>
-      <widget class="QLabel" name="label_53">
+      <widget class="QLabel" name="labelMaxarAOI">
        <property name="geometry">
         <rect>
          <x>0</x>
@@ -845,7 +845,7 @@
         <string>Area (polygon):</string>
        </property>
       </widget>
-      <widget class="QgsMapLayerComboBox" name="VMapLayerComboBox">
+      <widget class="QgsMapLayerComboBox" name="maxarAOICombo">
        <property name="geometry">
         <rect>
          <x>100</x>
@@ -856,7 +856,7 @@
        </property>
       </widget>
      </widget>
-     <widget class="QTableWidget" name="tabListRast">
+     <widget class="QTableWidget" name="maxarMetadataTable">
       <property name="geometry">
        <rect>
         <x>13</x>
@@ -885,7 +885,7 @@
        <height>31</height>
       </rect>
      </property>
-     <layout class="QHBoxLayout" name="horizontalLayout_2">
+     <layout class="QHBoxLayout" name="maxarSecureWatch">
       <item>
        <widget class="QCheckBox" name="checkMaxar">
         <property name="enabled">
@@ -900,7 +900,7 @@
        </widget>
       </item>
       <item>
-       <widget class="QLabel" name="label_3">
+       <widget class="QLabel" name="maxarHowToConnect">
         <property name="text">
          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
         </property>
@@ -918,7 +918,7 @@
      </layout>
     </widget>
    </widget>
-   <widget class="QWidget" name="tab">
+   <widget class="QWidget" name="helpTab">
     <attribute name="title">
      <string>Help</string>
     </attribute>
@@ -943,7 +943,7 @@
           <height>509</height>
          </rect>
         </property>
-        <widget class="QLabel" name="label_4">
+        <widget class="QLabel" name="text">
          <property name="geometry">
           <rect>
            <x>20</x>
@@ -981,28 +981,6 @@
     </layout>
    </widget>
   </widget>
-  <widget class="QWidget" name="layoutWidget">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>2</width>
-     <height>2</height>
-    </rect>
-   </property>
-   <layout class="QFormLayout" name="formLayout_6"/>
-  </widget>
-  <widget class="QWidget" name="layoutWidget">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>2</width>
-     <height>2</height>
-    </rect>
-   </property>
-   <layout class="QHBoxLayout" name="horizontalLayout_5"/>
-  </widget>
  </widget>
  <customwidgets>
   <customwidget>
@@ -1019,18 +997,18 @@
  <tabstops>
   <tabstop>rasterCombo</tabstop>
   <tabstop>processingsTable</tabstop>
-  <tabstop>custom_provider_url</tabstop>
-  <tabstop>custom_provider_type</tabstop>
-  <tabstop>button_preview</tabstop>
-  <tabstop>custom_provider_limit_zoom</tabstop>
-  <tabstop>custom_provider_login</tabstop>
-  <tabstop>custom_provider_password</tabstop>
-  <tabstop>custom_provider_save_auth</tabstop>
+  <tabstop>customProviderURL</tabstop>
+  <tabstop>customProviderType</tabstop>
+  <tabstop>preview</tabstop>
+  <tabstop>zoomLimit</tabstop>
+  <tabstop>customProviderLogin</tabstop>
+  <tabstop>customProviderPassword</tabstop>
+  <tabstop>customProviderSaveAuth</tabstop>
   <tabstop>checkMaxar</tabstop>
-  <tabstop>connectID</tabstop>
-  <tabstop>maxarStandardURL</tabstop>
-  <tabstop>VMapLayerComboBox</tabstop>
-  <tabstop>ButWFS</tabstop>
+  <tabstop>maxarConnectID</tabstop>
+  <tabstop>getMaxarURL</tabstop>
+  <tabstop>maxarAOICombo</tabstop>
+  <tabstop>getImageMetadata</tabstop>
  </tabstops>
  <resources/>
  <connections>

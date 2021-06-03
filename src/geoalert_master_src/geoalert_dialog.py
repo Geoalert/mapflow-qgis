@@ -21,10 +21,7 @@ class MainDialog(QDialog, MainDialogForm):
             self.processingsTable.setColumnWidth(index, width)
         # Or else let the widget resize the columns automatically
         # self.dlg.processingsTable.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        # комбобокс с выбором слоев
-        # self.mMapLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer) #фильтр полигональных слоев
-        self.VMapLayerComboBox.setFilters(QgsMapLayerProxyModel.HasGeometry)  # фильтр векторных слоев
-        # self.vectorComboBox.setFilters(QgsMapLayerProxyModel.PointLayer) #фильтр точечных слоев
+        self.maxarAOICombo.setFilters(QgsMapLayerProxyModel.HasGeometry)
 
 
 class LoginDialog(QDialog, LoginDialogForm):
