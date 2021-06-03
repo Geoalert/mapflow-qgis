@@ -664,6 +664,7 @@ class Geoalert:
             self.dlg.ai_model.clear()
             self.dlg.ai_model.addItems(wds)
             self.logged_in = True
+            self.dlg_login.invalidCredentialsMessage.hide()
             if remember_me:
                 self.settings.setValue('serverLogin', login)
                 self.settings.setValue('serverPassword', password)
