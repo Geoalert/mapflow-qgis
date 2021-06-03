@@ -359,7 +359,7 @@ class Geoalert:
             self.push_message(self.tr("Please, wait. Uploading the file to the server..."))
         thread = Thread(target=self.create_processing)
         thread.start()
-        # self.refresh_processing_list(f'{self.server}/rest/processings')
+        self.refresh_processing_list(f'{self.server}/rest/processings')
         self.dlg.processingName.clear()
         self.alert(self.tr("Success! Processing may take up to several minutes"))
         # print('STARTING TASK')
@@ -411,7 +411,7 @@ class Geoalert:
             url=f'{self.server}/rest/processings',
             auth=self.server_basic_auth,
             json={
-                "name": processing_name.encode(),
+                "name": processing_name,
                 "wdName": wd,
                 "geometry": json.loads(extent.asJson()),
                 "params": params,
@@ -645,7 +645,8 @@ class Geoalert:
 
     def connect_to_server(self):
         """Connect to Geoalert server."""
-        self.server = f'https://whitemaps-{self.dlg_login.serverCombo.currentText()}.mapflow.ai'
+        server_name = self.dlg_login.serverCombo.currentText()
+        self.server = f'https://whitemaps-{server_name}.mapflow.ai'
         login = self.dlg_login.loginField.text()
         password = self.dlg_login.passwordField.text()
         remember_me = self.dlg_login.rememberMe.isChecked()
@@ -654,16 +655,13 @@ class Geoalert:
         try:
             res = requests.get(f'{self.server}/rest/projects/default', auth=self.server_basic_auth)
             res.raise_for_status()
-            # Load the list of WDs in the default project
-            wds = [wd['name'] for wd in res.json()['workflowDefs']]
-            self.dlg.workflowDefinitionCombo.clear()
-            self.dlg.workflowDefinitionCombo.addItems(wds)
+            # Success!
             self.logged_in = True
             self.dlg_login.invalidCredentialsMessage.hide()
             if remember_me:
+                self.settings.setValue('server', self.server)
                 self.settings.setValue('serverLogin', login)
                 self.settings.setValue('serverPassword', password)
-                self.settings.setValue('server', self.server)
         except requests.exceptions.HTTPError:
             if res.status_code == 401:
                 self.dlg_login.invalidCredentialsMessage.setVisible(True)
@@ -676,6 +674,7 @@ class Geoalert:
         for field in (self.dlg_login.loginField, self.dlg_login.passwordField):
             field.clear()
         self.dlg_login.rememberMe.setChecked(False)
+        self.run()
 
     def run(self):
         """Plugin entrypoint."""
@@ -683,7 +682,7 @@ class Geoalert:
         self.logged_in = self.settings.value("serverLogin") and self.settings.value("serverPassword")
         # If not, show the login form
         while not self.logged_in:
-            # If the user hits OK, - try to log in
+            # If the user closes the dialog
             if self.dlg_login.exec():
                 self.connect_to_server()
             else:
@@ -692,11 +691,22 @@ class Geoalert:
                 self.dlg_login.passwordField.clear()
                 self.dlg_login.invalidCredentialsMessage.hide()
                 return
+        # Refresh the list of workflow definitions
+        login = self.settings.value('serverLogin') or self.dlg_login.loginField.text()
+        password = self.settings.value('serverPassword') or self.dlg_login.passwordField.text()
+        self.server_basic_auth = requests.auth.HTTPBasicAuth(login, password)
+        res = requests.get(f'{self.server}/rest/projects/default', auth=self.server_basic_auth)
+        res.raise_for_status()
+        wds = [wd['name'] for wd in res.json()['workflowDefs']]
+        self.dlg.workflowDefinitionCombo.clear()
+        self.dlg.workflowDefinitionCombo.addItems(wds)
         # If logged in successfully, start polling the server for the list of processings
         self.check_processings = True
-        url = f'{self.server}/rest/processings'
-        proc = Thread(target=self.refresh_processing_list, args=(url,))
-        proc.start()
+        thread = Thread(
+            target=self.refresh_processing_list,
+            args=(f'{self.server}/rest/processings',)
+        )
+        thread.start()
         # Show main dialog
         self.dlg.show()
         # Stop refreshing the processing list once the dialog has been closed
