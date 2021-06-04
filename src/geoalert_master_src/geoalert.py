@@ -364,7 +364,6 @@ class Geoalert:
             self.push_message(self.tr("Please, wait. Uploading the file to the server..."))
         # thread = Thread(target=self.create_processing)
         # thread.start()
-        self.dlg.processingName.clear()
         # self.alert(self.tr("Success! Processing may take up to several minutes"))
         globals()['create_processing'] = QgsTask.fromFunction(
             'Create processing',
@@ -380,7 +379,6 @@ class Geoalert:
         # processing_name = self.dlg.processingName.text()
         wd = self.dlg.workflowDefinitionCombo.currentText()
         update_cache = str(not self.dlg.updateCache.isChecked())
-        aoi_layer = self.project.mapLayer(self.polygon_layer_ids[self.dlg.polygonCombo.currentIndex()])
         # Workflow definition parameters
         params = {}
         # Optional metadata
@@ -409,10 +407,13 @@ class Geoalert:
             QgsMessageLog.logMessage(self.tr(f'Your image was uploaded to ') + url, 'Mapflow', Qgis.Info)
             params["source_type"] = "tif"
             params["url"] = url
-            if self.dlg.useImageExtentAsAOI.isChecked():
-                aoi_layer = raster_layer
-        # Get processing extent
-        extent = self.get_layer_extent(aoi_layer)
+        if self.dlg.useImageExtentAsAOI.isChecked():
+            # Get processing extent
+            aoi = self.get_layer_extent(raster_layer)
+        else:
+            aoi_layer = self.project.mapLayer(self.polygon_layer_ids[self.dlg.polygonCombo.currentIndex()])
+            aoi = next(aoi_layer.getFeatures()).geometry()
+
         # Post the processing
         return requests.post(
             url=f'{self.server}/rest/processings',
@@ -420,7 +421,7 @@ class Geoalert:
             json={
                 "name": processing_name,
                 "wdName": wd,
-                "geometry": json.loads(extent.asJson()),
+                "geometry": json.loads(aoi.asJson()),
                 "params": params,
                 "meta": meta
             })
@@ -429,7 +430,6 @@ class Geoalert:
         """"""
         response.raise_for_status()
         self.check_processings = True
-        # self.refresh_processing_list()
         self.dlg.processingName.clear()
         self.alert(self.tr("Success! Processing may take up to several minutes"))
 
@@ -501,7 +501,7 @@ class Geoalert:
             self.push_message(self.tr('There was an error writing the Shapefile!'), Qgis.Warning)
             return
 
-        # Load the results into QGSI
+        # Load the results into QGIS
         results_layer = QgsVectorLayer(file_adr, output_file_name, "ogr")
         if not results_layer:
             self.push_message(self.tr("Could not load the layer!"), Qgis.Warning)
