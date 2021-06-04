@@ -13,5 +13,6 @@ def is_polygon_layer(layer):
     """"""
     return (
         layer.type() == QgsMapLayerType.VectorLayer and
-        layer.geometryType() == QgsWkbTypes.PolygonGeometry
+        layer.geometryType() == QgsWkbTypes.PolygonGeometry and
+        layer.featureCount() == 1
     )
