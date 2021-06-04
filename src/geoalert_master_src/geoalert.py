@@ -64,6 +64,8 @@ class Geoalert:
         self.dlg = MainDialog()
         self.dlg_login = LoginDialog()
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
+        # Check if there are stored credentials
+        self.logged_in = self.settings.value("serverLogin") and self.settings.value("serverPassword")
         if self.settings.value('serverRememberMe'):
             self.server = self.settings.value('server')
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
@@ -352,6 +354,9 @@ class Geoalert:
         elif processing_name in self.processing_names:
             self.alert(self.tr('Processing name taken. Please, choose a different name.'))
             return
+        if self.dlg.polygonCombo.currentIndex() == -1:
+            self.alert(self.tr('Please, select an area of interest'))
+            return
         raster_combo_index = self.dlg.rasterCombo.currentIndex()
         if raster_combo_index == 1:
             self.alert(self.tr("Please, be aware that you may be charged by the imagery provider!"))
@@ -359,7 +364,7 @@ class Geoalert:
             self.push_message(self.tr("Please, wait. Uploading the file to the server..."))
         thread = Thread(target=self.create_processing)
         thread.start()
-        # self.refresh_processing_list(f'{self.server}/rest/processings')
+        self.refresh_processing_list(f'{self.server}/rest/processings')
         self.dlg.processingName.clear()
         self.alert(self.tr("Success! Processing may take up to several minutes"))
         # print('STARTING TASK')
@@ -411,7 +416,7 @@ class Geoalert:
             url=f'{self.server}/rest/processings',
             auth=self.server_basic_auth,
             json={
-                "name": processing_name.encode(),
+                "name": processing_name,
                 "wdName": wd,
                 "geometry": json.loads(extent.asJson()),
                 "params": params,
@@ -477,9 +482,10 @@ class Geoalert:
             tif_layer = QgsRasterLayer(uri, f'{output_file_name}_image', 'wms')
             self.project.addMapLayer(tif_layer)
         # временный файл
-        file_temp = os.path.join(self.dlg.outputDirectory.text(), f'{output_file_name}_temp.geojson')
-        with open(file_temp, "wb") as f:
+        with tempfile.TemporaryFile("wb", ) as f:
             f.write(r.content)
+        # file_temp = os.path.join(self.dlg.outputDirectory.text(), f'{output_file_name}_temp.geojson')
+        # with open(file_temp, "wb") as f:
         feature_layer = QgsVectorLayer(file_temp, output_file_name+'_temp', "ogr")
 
         # экспорт в shp
@@ -530,7 +536,6 @@ class Geoalert:
         message, success = layer.loadNamedStyle(qml_path)
         if not success:  # if style not loaded remove it
             style_manager.removeStyle(style_name)
-
         time.sleep(1)
         iface.zoomToActiveLayer()
         try:
@@ -648,7 +653,8 @@ class Geoalert:
 
     def connect_to_server(self):
         """Connect to Geoalert server."""
-        self.server = f'https://whitemaps-{self.dlg_login.serverCombo.currentText()}.mapflow.ai'
+        server_name = self.dlg_login.serverCombo.currentText()
+        self.server = f'https://whitemaps-{server_name}.mapflow.ai'
         login = self.dlg_login.loginField.text()
         password = self.dlg_login.passwordField.text()
         remember_me = self.dlg_login.rememberMe.isChecked()
@@ -657,16 +663,13 @@ class Geoalert:
         try:
             res = requests.get(f'{self.server}/rest/projects/default', auth=self.server_basic_auth)
             res.raise_for_status()
-            # Load the list of WDs in the default project
-            wds = [wd['name'] for wd in res.json()['workflowDefs']]
-            self.dlg.workflowDefinitionCombo.clear()
-            self.dlg.workflowDefinitionCombo.addItems(wds)
+            # Success!
             self.logged_in = True
             self.dlg_login.invalidCredentialsMessage.hide()
             if remember_me:
+                self.settings.setValue('server', self.server)
                 self.settings.setValue('serverLogin', login)
                 self.settings.setValue('serverPassword', password)
-                self.settings.setValue('server', self.server)
         except requests.exceptions.HTTPError:
             if res.status_code == 401:
                 self.dlg_login.invalidCredentialsMessage.setVisible(True)
@@ -674,33 +677,41 @@ class Geoalert:
     def logout(self):
         """Close the plugin and clear credentials from cache."""
         self.dlg.close()
-        for setting in ('serverLogin', 'serverPassword', 'serverRememberMe'):
-            self.settings.setValue(setting, '')
-        for field in (self.dlg_login.loginField, self.dlg_login.passwordField):
-            field.clear()
-        self.dlg_login.rememberMe.setChecked(False)
+        if not self.settings.value('serverRememberMe'):
+            for setting in ('serverLogin', 'serverPassword', 'serverRememberMe'):
+                self.settings.remove(setting)
+            for field in (self.dlg_login.loginField, self.dlg_login.passwordField):
+                field.clear()
+        self.logged_in = False
+        self.run()
 
     def run(self):
         """Plugin entrypoint."""
-        # Check if there are stored credentials
-        self.logged_in = self.settings.value("serverLogin") and self.settings.value("serverPassword")
-        # If not, show the login form
+        self.check_processings = True
+        # If not logged in, show the login form
         while not self.logged_in:
-            # If the user hits OK, - try to log in
+            # If the user closes the dialog
             if self.dlg_login.exec():
                 self.connect_to_server()
             else:
                 # Refresh the form & quit
-                self.dlg_login.loginField.clear()
-                self.dlg_login.passwordField.clear()
                 self.dlg_login.invalidCredentialsMessage.hide()
                 return
+        # Refresh the list of workflow definitions
+        login = self.settings.value('serverLogin') or self.dlg_login.loginField.text()
+        password = self.settings.value('serverPassword') or self.dlg_login.passwordField.text()
+        self.server_basic_auth = requests.auth.HTTPBasicAuth(login, password)
+        res = requests.get(f'{self.server}/rest/projects/default', auth=self.server_basic_auth)
+        res.raise_for_status()
+        wds = [wd['name'] for wd in res.json()['workflowDefs']]
+        self.dlg.workflowDefinitionCombo.clear()
+        self.dlg.workflowDefinitionCombo.addItems(wds)
         # If logged in successfully, start polling the server for the list of processings
         self.check_processings = True
-        url = f'{self.server}/rest/processings'
-        proc = Thread(target=self.refresh_processing_list, args=(url,))
-        proc.start()
+        thread = Thread(
+            target=self.refresh_processing_list,
+            args=(f'{self.server}/rest/processings',)
+        )
+        thread.start()
         # Show main dialog
         self.dlg.show()
-        # Stop refreshing the processing list once the dialog has been closed
-        self.check_processings = bool(self.dlg.exec())
