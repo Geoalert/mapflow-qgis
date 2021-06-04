@@ -483,10 +483,9 @@ class Geoalert:
             tif_layer = QgsRasterLayer(uri, f'{output_file_name}_image', 'wms')
             self.project.addMapLayer(tif_layer)
         # временный файл
-        with tempfile.TemporaryFile("wb", ) as f:
+        file_temp = os.path.join(self.dlg.outputDirectory.text(), f'{output_file_name}_temp.geojson')
+        with open(file_temp, "wb") as f:
             f.write(r.content)
-        # file_temp = os.path.join(self.dlg.outputDirectory.text(), f'{output_file_name}_temp.geojson')
-        # with open(file_temp, "wb") as f:
         feature_layer = QgsVectorLayer(file_temp, output_file_name+'_temp', "ogr")
 
         # экспорт в shp
