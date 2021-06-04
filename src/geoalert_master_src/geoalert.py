@@ -362,20 +362,22 @@ class Geoalert:
             self.alert(self.tr("Please, be aware that you may be charged by the imagery provider!"))
         elif raster_combo_index > 2:
             self.push_message(self.tr("Please, wait. Uploading the file to the server..."))
-        thread = Thread(target=self.create_processing)
-        thread.start()
-        self.refresh_processing_list(f'{self.server}/rest/processings')
+        # thread = Thread(target=self.create_processing)
+        # thread.start()
         self.dlg.processingName.clear()
-        self.alert(self.tr("Success! Processing may take up to several minutes"))
-        # print('STARTING TASK')
-        # task = QgsTask.fromFunction(
-        #     'Create processing', self.create_processing, on_finished=self.after_create_processing)
-        # QgsApplication.taskManager().addTask(task)
+        # self.alert(self.tr("Success! Processing may take up to several minutes"))
+        globals()['create_processing'] = QgsTask.fromFunction(
+            'Create processing',
+            self.create_processing,
+            on_finished=self.after_create_processing,
+            processing_name=processing_name
+        )
+        QgsApplication.taskManager().addTask(globals()['create_processing'])
+        self.check_processings = True
 
-    def create_processing(self):
+    def create_processing(self, task, processing_name):
         """Initiate a processing."""
-        # QgsMessageLog.logMessage(self.tr(f'TASK STARTED'), 'Mapflow', Qgis.Info)
-        processing_name = self.dlg.processingName.text()
+        # processing_name = self.dlg.processingName.text()
         wd = self.dlg.workflowDefinitionCombo.currentText()
         update_cache = str(not self.dlg.updateCache.isChecked())
         aoi_layer = self.project.mapLayer(self.polygon_layer_ids[self.dlg.polygonCombo.currentIndex()])
@@ -404,7 +406,7 @@ class Geoalert:
                 r = requests.post(f'{self.server}/rest/rasters', auth=self.server_basic_auth, files={'file': f})
             r.raise_for_status()
             url = r.json()['uri']
-            # QgsMessageLog.logMessage(self.tr(f'Your image was uploaded to ') + url, 'Mapflow', Qgis.Info)
+            QgsMessageLog.logMessage(self.tr(f'Your image was uploaded to ') + url, 'Mapflow', Qgis.Info)
             params["source_type"] = "tif"
             params["url"] = url
             if self.dlg.useImageExtentAsAOI.isChecked():
@@ -412,7 +414,7 @@ class Geoalert:
         # Get processing extent
         extent = self.get_layer_extent(aoi_layer)
         # Post the processing
-        r = requests.post(
+        return requests.post(
             url=f'{self.server}/rest/processings',
             auth=self.server_basic_auth,
             json={
@@ -422,15 +424,14 @@ class Geoalert:
                 "params": params,
                 "meta": meta
             })
-        r.raise_for_status()
 
-    # def after_create_processing(self, result=None):
-    #     """"""
-    #     print(result)
-    #     self.refresh_processing_list(f'{self.server}/rest/processings')
-    #     self.check_processings = True
-    #     self.dlg.processingName.clear()
-    #     self.alert(self.tr("Success! Processing may take up to several minutes"))
+    def after_create_processing(self, exception, response=None):
+        """"""
+        response.raise_for_status()
+        self.check_processings = True
+        # self.refresh_processing_list()
+        self.dlg.processingName.clear()
+        self.alert(self.tr("Success! Processing may take up to several minutes"))
 
     def load_custom_tileset(self):
         """Custom provider imagery preview."""
@@ -570,11 +571,14 @@ class Geoalert:
         # self.project.addMapLayer(extent_layer)
         return extent_geometry
 
-    def refresh_processing_list(self, url):
+    def refresh_processing_list(self):
         """Repeatedly refresh the list of processings."""
-        while self.check_processings:
+        while True:
+            if not self.check_processings:
+                time.sleep(PROCESSING_LIST_REFRESH_INTERVAL)
+                continue
             # Fetch all user processings visible to the user
-            r = requests.get(url, auth=self.server_basic_auth)
+            r = requests.get(f'{self.server}/rest/processings', auth=self.server_basic_auth)
             r.raise_for_status()
             self.processings = r.json()
             # Save ref to check name uniqueness at processing creation
@@ -607,9 +611,7 @@ class Geoalert:
             self.dlg.processingsTable.setSortingEnabled(True)
             # Sort by creation date (5th column) descending
             self.dlg.processingsTable.sortItems(4, Qt.DescendingOrder)
-            # Check on the running processings after some time
-            if self.check_processings:
-                time.sleep(PROCESSING_LIST_REFRESH_INTERVAL)
+            time.sleep(PROCESSING_LIST_REFRESH_INTERVAL)
 
     def tr(self, message):
         return QCoreApplication.translate('Geoalert', message)
@@ -708,10 +710,10 @@ class Geoalert:
         self.dlg.workflowDefinitionCombo.addItems(wds)
         # If logged in successfully, start polling the server for the list of processings
         self.check_processings = True
-        thread = Thread(
-            target=self.refresh_processing_list,
-            args=(f'{self.server}/rest/processings',)
-        )
-        thread.start()
+        # task = QgsTask.fromFunction(
+        #     'Refresh processings',
+        #     self, on_finished=lambda: print(self.TASK))
+        # QgsApplication.taskManager().addTask(task)
+        Thread(target=self.refresh_processing_list).start()
         # Show main dialog
         self.dlg.show()
