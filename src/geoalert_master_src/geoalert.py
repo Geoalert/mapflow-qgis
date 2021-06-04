@@ -533,7 +533,10 @@ class Geoalert:
 
         time.sleep(1)
         iface.zoomToActiveLayer()
-        os.remove(file_temp)
+        try:
+            os.remove(file_temp)
+        except:
+            QgsMessageLog.logMessage('Could not delete temp file')
 
     def alert(self, message):
         """Display an info message."""
