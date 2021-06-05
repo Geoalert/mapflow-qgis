@@ -68,7 +68,7 @@
        <x>12</x>
        <y>176</y>
        <width>581</width>
-       <height>301</height>
+       <height>311</height>
       </rect>
      </property>
      <property name="sizePolicy">
@@ -188,7 +188,7 @@
       <rect>
        <x>12</x>
        <y>12</y>
-       <width>761</width>
+       <width>580</width>
        <height>165</height>
       </rect>
      </property>
@@ -200,7 +200,7 @@
      </property>
      <property name="minimumSize">
       <size>
-       <width>300</width>
+       <width>580</width>
        <height>165</height>
       </size>
      </property>
@@ -218,6 +218,11 @@
         <horstretch>0</horstretch>
         <verstretch>0</verstretch>
        </sizepolicy>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+       </font>
       </property>
       <property name="text">
        <string>Start processing</string>
@@ -238,178 +243,169 @@
         <verstretch>0</verstretch>
        </sizepolicy>
       </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+       </font>
+      </property>
       <property name="text">
        <string>Update</string>
       </property>
      </widget>
-     <widget class="QCheckBox" name="updateCache">
-      <property name="geometry">
-       <rect>
-        <x>277</x>
-        <y>65</y>
-        <width>171</width>
-        <height>20</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>Update image in cache</string>
-      </property>
-     </widget>
-     <widget class="QLabel" name="labelAIModel">
-      <property name="geometry">
-       <rect>
-        <x>284</x>
-        <y>7</y>
-        <width>97</width>
-        <height>16</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>Mapflow model:</string>
-      </property>
-     </widget>
-     <widget class="QLabel" name="labelImagerySource">
-      <property name="geometry">
-       <rect>
-        <x>284</x>
-        <y>37</y>
-        <width>98</width>
-        <height>16</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>Imagery source:</string>
-      </property>
-     </widget>
-     <widget class="QComboBox" name="rasterCombo">
-      <property name="geometry">
-       <rect>
-        <x>387</x>
-        <y>35</y>
-        <width>181</width>
-        <height>26</height>
-       </rect>
-      </property>
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-        <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-      <property name="toolTip">
-       <string notr="true"/>
-      </property>
-      <item>
-       <property name="text">
-        <string>Mapbox Satellite</string>
-       </property>
-      </item>
-      <item>
-       <property name="text">
-        <string>Open new .tif</string>
-       </property>
-      </item>
-      <item>
-       <property name="text">
-        <string>Custom (in settings)</string>
-       </property>
-      </item>
-     </widget>
-     <widget class="QComboBox" name="workflowDefinitionCombo">
-      <property name="geometry">
-       <rect>
-        <x>387</x>
-        <y>5</y>
-        <width>181</width>
-        <height>26</height>
-       </rect>
-      </property>
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-        <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-     </widget>
-     <widget class="QCheckBox" name="useImageExtentAsAOI">
-      <property name="enabled">
-       <bool>false</bool>
-      </property>
+     <widget class="QWidget" name="">
       <property name="geometry">
        <rect>
         <x>2</x>
-        <y>66</y>
-        <width>174</width>
-        <height>20</height>
+        <y>5</y>
+        <width>561</width>
+        <height>80</height>
        </rect>
       </property>
-      <property name="text">
-       <string>Use image extent as AOI</string>
-      </property>
-     </widget>
-     <widget class="QLabel" name="labelProcessingName">
-      <property name="geometry">
-       <rect>
-        <x>5</x>
-        <y>7</y>
-        <width>108</width>
-        <height>16</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>Processing name:</string>
-      </property>
-     </widget>
-     <widget class="QComboBox" name="polygonCombo">
-      <property name="geometry">
-       <rect>
-        <x>128</x>
-        <y>36</y>
-        <width>141</width>
-        <height>26</height>
-       </rect>
-      </property>
-     </widget>
-     <widget class="QLabel" name="labelAOILayer">
-      <property name="geometry">
-       <rect>
-        <x>5</x>
-        <y>38</y>
-        <width>111</width>
-        <height>16</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>Processing area:</string>
-      </property>
-     </widget>
-     <widget class="QLineEdit" name="processingName">
-      <property name="geometry">
-       <rect>
-        <x>121</x>
-        <y>7</y>
-        <width>151</width>
-        <height>21</height>
-       </rect>
-      </property>
-      <property name="minimumSize">
-       <size>
-        <width>129</width>
-        <height>0</height>
-       </size>
-      </property>
-      <property name="text">
-       <string/>
-      </property>
+      <layout class="QGridLayout" name="gridLayout">
+       <item row="0" column="0">
+        <widget class="QLabel" name="labelProcessingName">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Processing name:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QLineEdit" name="processingName">
+         <property name="minimumSize">
+          <size>
+           <width>129</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="2">
+        <widget class="QLabel" name="labelAIModel">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Mapflow model:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="3">
+        <widget class="QComboBox" name="workflowDefinitionCombo">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="0">
+        <widget class="QLabel" name="labelAOILayer">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Processing area:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QComboBox" name="polygonCombo"/>
+       </item>
+       <item row="1" column="2">
+        <widget class="QLabel" name="labelImagerySource">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Imagery source:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="3">
+        <widget class="QComboBox" name="rasterCombo">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string notr="true"/>
+         </property>
+         <item>
+          <property name="text">
+           <string>Mapbox Satellite</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Open new .tif</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Custom (in settings)</string>
+          </property>
+         </item>
+        </widget>
+       </item>
+       <item row="2" column="0" colspan="2">
+        <widget class="QCheckBox" name="useImageExtentAsAOI">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Use image extent as AOI</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="2" colspan="2">
+        <widget class="QCheckBox" name="updateCache">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Update image in cache</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </widget>
     </widget>
     <widget class="QWidget" name="processingsController" native="true">
      <property name="geometry">
       <rect>
        <x>12</x>
-       <y>496</y>
+       <y>489</y>
        <width>581</width>
-       <height>34</height>
+       <height>51</height>
       </rect>
      </property>
      <property name="sizePolicy">
@@ -439,11 +435,16 @@
      <widget class="QPushButton" name="deleteProcessings">
       <property name="geometry">
        <rect>
-        <x>490</x>
-        <y>0</y>
-        <width>82</width>
-        <height>21</height>
+        <x>486</x>
+        <y>10</y>
+        <width>84</width>
+        <height>32</height>
        </rect>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+       </font>
       </property>
       <property name="styleSheet">
        <string notr="true"/>
@@ -453,13 +454,27 @@
       </property>
      </widget>
      <widget class="QPushButton" name="logoutButton">
+      <property name="enabled">
+       <bool>true</bool>
+      </property>
       <property name="geometry">
        <rect>
-        <x>0</x>
-        <y>0</y>
+        <x>6</x>
+        <y>8</y>
         <width>89</width>
-        <height>21</height>
+        <height>32</height>
        </rect>
+      </property>
+      <property name="minimumSize">
+       <size>
+        <width>1</width>
+        <height>0</height>
+       </size>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+       </font>
       </property>
       <property name="visible">
        <bool>true</bool>
@@ -498,6 +513,12 @@
        <height>205</height>
       </size>
      </property>
+     <property name="font">
+      <font>
+       <pointsize>12</pointsize>
+       <kerning>true</kerning>
+      </font>
+     </property>
      <widget class="QCheckBox" name="zoomLimit">
       <property name="enabled">
        <bool>true</bool>
@@ -509,6 +530,12 @@
         <width>111</width>
         <height>20</height>
        </rect>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+        <kerning>true</kerning>
+       </font>
       </property>
       <property name="text">
        <string>Max zoom 14</string>
@@ -526,6 +553,12 @@
         <height>31</height>
        </rect>
       </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+        <kerning>true</kerning>
+       </font>
+      </property>
       <property name="text">
        <string>Preview</string>
       </property>
@@ -538,6 +571,12 @@
         <width>151</width>
         <height>20</height>
        </rect>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+        <kerning>true</kerning>
+       </font>
       </property>
       <property name="text">
        <string>Save Login/Password</string>
@@ -565,6 +604,12 @@
         <height>16</height>
        </rect>
       </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+        <kerning>true</kerning>
+       </font>
+      </property>
       <property name="text">
        <string>Custom imagery provider URL:</string>
       </property>
@@ -577,6 +622,12 @@
         <width>111</width>
         <height>16</height>
        </rect>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+        <kerning>true</kerning>
+       </font>
       </property>
       <property name="text">
        <string>Source type:</string>
@@ -632,6 +683,12 @@
         <height>16</height>
        </rect>
       </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+        <kerning>true</kerning>
+       </font>
+      </property>
       <property name="text">
        <string>Login:</string>
       </property>
@@ -657,6 +714,12 @@
         <width>63</width>
         <height>16</height>
        </rect>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+        <kerning>true</kerning>
+       </font>
       </property>
       <property name="text">
        <string>Password:</string>
@@ -687,6 +750,12 @@
       <layout class="QHBoxLayout" name="layoutOutputDirectory">
        <item>
         <widget class="QLabel" name="labelOutputDirectory">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+           <kerning>true</kerning>
+          </font>
+         </property>
          <property name="text">
           <string>Output directory:</string>
          </property>
@@ -777,6 +846,12 @@
          <height>31</height>
         </rect>
        </property>
+       <property name="font">
+        <font>
+         <pointsize>12</pointsize>
+         <kerning>true</kerning>
+        </font>
+       </property>
        <property name="text">
         <string>Get image metadata</string>
        </property>
@@ -790,6 +865,12 @@
          <height>31</height>
         </rect>
        </property>
+       <property name="font">
+        <font>
+         <pointsize>12</pointsize>
+         <kerning>true</kerning>
+        </font>
+       </property>
        <property name="text">
         <string>Get provider URL</string>
        </property>
@@ -802,6 +883,12 @@
          <width>72</width>
          <height>16</height>
         </rect>
+       </property>
+       <property name="font">
+        <font>
+         <pointsize>12</pointsize>
+         <kerning>true</kerning>
+        </font>
        </property>
        <property name="text">
         <string>Connect ID:</string>
@@ -829,6 +916,12 @@
          <height>16</height>
         </rect>
        </property>
+       <property name="font">
+        <font>
+         <pointsize>12</pointsize>
+         <kerning>true</kerning>
+        </font>
+       </property>
        <property name="text">
         <string>Feature ID:</string>
        </property>
@@ -854,6 +947,12 @@
          <width>101</width>
          <height>16</height>
         </rect>
+       </property>
+       <property name="font">
+        <font>
+         <pointsize>12</pointsize>
+         <kerning>true</kerning>
+        </font>
        </property>
        <property name="text">
         <string>Area (polygon):</string>
@@ -917,6 +1016,12 @@
         <property name="enabled">
          <bool>true</bool>
         </property>
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+          <kerning>true</kerning>
+         </font>
+        </property>
         <property name="text">
          <string>Maxar SecureWatch:</string>
         </property>
@@ -927,6 +1032,12 @@
       </item>
       <item>
        <widget class="QLabel" name="maxarHowToConnect">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+          <kerning>true</kerning>
+         </font>
+        </property>
         <property name="text">
          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
         </property>
