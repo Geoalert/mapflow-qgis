@@ -97,7 +97,7 @@ class Geoalert:
         self.dlg.startProcessing.clicked.connect(self.start_processing)
         # Processings
         self.dlg.processingsTable.itemSelectionChanged.connect(self.memorize_selected_processings)
-        self.dlg.loadProcessingResults.clicked.connect(self.download_processing_results)
+        self.dlg.processingsTable.cellDoubleClicked.connect(self.download_processing_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Custom provider
         self.dlg.preview.clicked.connect(self.load_custom_tileset)
@@ -459,29 +459,30 @@ class Geoalert:
         else:
             self.project.addMapLayer(layer)
 
-    def download_processing_results(self):
+    def download_processing_results(self, row):
         """Download the resulting features and open them in QGIS."""
         # Check if user specified an existing output dir
         if not os.path.exists(self.dlg.outputDirectory.text()):
             self.alert(self.tr('Please, specify an existing output directory'))
             return
-
-        for pid, row_number in self.selected_processings.items():
-            r = requests.get(f'{self.server}/rest/processings/{pid}/result', auth=self.server_basic_auth)
-            output_file_name = self.dlg.processingsTable.item(row_number, 0).text()  # 0th column is Name
-            # Add GeoTIFF that was used in the processing
-            tif_url = [processing['rasterLayer']['tileUrl'] for processing in self.processings if processing['id'] == pid][0]
-            params = {
-                'type': 'xyz',
-                'url': tif_url,
-                'zmin': 0,
-                'zmax': 18,
-                'username': self.dlg_login.loginField.text(),
-                'password': self.dlg_login.passwordField.text()
-            }
-            uri = '&'.join(f'{key}={val}' for key, val in params.items())
-            tif_layer = QgsRasterLayer(uri, f'{output_file_name}_image', 'wms')
-            self.project.addMapLayer(tif_layer)
+        pid = self.dlg.processingsTable.item(row, ID_COLUMN_INDEX).text()
+        r = requests.get(f'{self.server}/rest/processings/{pid}/result', auth=self.server_basic_auth)
+        r.raise_for_status()
+        output_file_name = self.dlg.processingsTable.item(row, 0).text()  # 0th column is Name
+        # Add GeoTIFF that was used in the processing
+        # tif_url = [processing['rasterLayer']['tileUrl'] for processing in self.processings if processing['id'] == pid]
+        # if tif_url:
+        #     params = {
+        #         'type': 'xyz',
+        #         'url': tif_url[0],
+        #         'zmin': 0,
+        #         'zmax': 18,
+        #         'username': self.dlg_login.loginField.text(),
+        #         'password': self.dlg_login.passwordField.text()
+        #     }
+        #     uri = '&'.join(f'{key}={val}' for key, val in params.items())
+        #     tif_layer = QgsRasterLayer(uri, f'{output_file_name}_image', 'wms')
+        #     self.project.addMapLayer(tif_layer)
         # временный файл
         file_temp = os.path.join(self.dlg.outputDirectory.text(), f'{output_file_name}_temp.geojson')
         with open(file_temp, "wb") as f:
@@ -507,7 +508,7 @@ class Geoalert:
             self.push_message(self.tr("Could not load the layer!"), Qgis.Warning)
         self.project.addMapLayer(results_layer)
         # Add style
-        wd = self.dlg.processingsTable.item(row_number, 1).text()
+        wd = self.dlg.processingsTable.item(row, 1).text()
         if wd in ('Buildings Detection', 'Buildings Detection With Heights'):
             style = '/styles/style_buildings.qml'
         elif wd == 'Forest Detection':
