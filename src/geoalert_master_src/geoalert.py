@@ -474,20 +474,21 @@ class Geoalert:
         r = requests.get(f'{self.server}/rest/processings/{pid}/result', auth=self.server_basic_auth)
         r.raise_for_status()
         output_file_name = self.dlg.processingsTable.item(row, 0).text()  # 0th column is Name
-        # Add GeoTIFF that was used in the processing
-        # tif_url = [processing['rasterLayer']['tileUrl'] for processing in self.processings if processing['id'] == pid]
-        # if tif_url:
-        #     params = {
-        #         'type': 'xyz',
-        #         'url': tif_url[0],
-        #         'zmin': 0,
-        #         'zmax': 18,
-        #         'username': self.dlg_login.loginField.text(),
-        #         'password': self.dlg_login.passwordField.text()
-        #     }
-        #     uri = '&'.join(f'{key}={val}' for key, val in params.items())
-        #     tif_layer = QgsRasterLayer(uri, f'{output_file_name}_image', 'wms')
-        #     self.project.addMapLayer(tif_layer)
+        # Add COG if it has been created
+        tif_url = [processing['rasterLayer']['tileUrl'] for processing in self.processings if processing['id'] == pid]
+        print(tif_url)
+        if tif_url:
+            params = {
+                'type': 'xyz',
+                'url': tif_url[0],
+                'zmin': 0,
+                'zmax': 18,
+                'username': self.dlg_login.loginField.text(),
+                'password': self.dlg_login.passwordField.text()
+            }
+            uri = '&'.join(f'{key}={val}' for key, val in params.items())
+            tif_layer = QgsRasterLayer(uri, f'{output_file_name}_image', 'wms')
+            self.project.addMapLayer(tif_layer)
         # временный файл
         file_temp = os.path.join(self.dlg.outputDirectory.text(), f'{output_file_name}_temp.geojson')
         with open(file_temp, "wb") as f:
@@ -600,10 +601,12 @@ class Geoalert:
 
     def cancel_fetch_processings_task(self):
         """Abort fetching processings from the server to let QGIS quit."""
-        task = self.task_manager.task(self.fetch_processings_task_id)
-        if task:
-            task.progressChanged.disconnect()
+        try:
+            task = self.task_manager.task(self.fetch_processings_task_id)
+            task.progressChanged.disconnect(self.fill_out_processings_table)
             task.cancel()
+        except:
+            pass
 
     def fill_out_processings_table(self, fetch_processings_task_progress):
         """Insert current processings in the table.
