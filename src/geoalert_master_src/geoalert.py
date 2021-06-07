@@ -385,7 +385,7 @@ class Geoalert:
         """Initiate a processing."""
         # processing_name = self.dlg.processingName.text()
         wd = self.dlg.workflowDefinitionCombo.currentText()
-        update_cache = str(not self.dlg.updateCache.isChecked())
+        update_cache = self.dlg.updateCache.isChecked()
         # Workflow definition parameters
         params = {}
         # Optional metadata
@@ -395,14 +395,14 @@ class Geoalert:
         # Mapbox
         if raster_combo_index == 0:
             meta['source'] = 'mapbox'
-            params["use_cache"] = update_cache
+            params["cache_raster_update"] = update_cache
         # Custom provider
         if raster_combo_index == 1:
             params["source_type"] = self.dlg.customProviderType.currentText()
             params["url"] = self.dlg.customProviderURL.text()
             params["raster_login"] = self.dlg.customProviderLogin.text()
             params["raster_password"] = self.dlg.customProviderPassword.text()
-            params["use_cache"] = update_cache
+            params["cache_raster_update"] = update_cache
         elif raster_combo_index > 2:
             # Upload user-selected GeoTIFF to the server
             raster_layer_id = self.raster_layer_ids[self.dlg.rasterCombo.currentIndex() - self.raster_combo_offset]
