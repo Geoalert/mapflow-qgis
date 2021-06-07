@@ -13,7 +13,6 @@ from PyQt5.QtCore import *
 from qgis.core import *
 from qgis.gui import *
 from qgis.utils import iface
-from qgis.PyQt.QtXml import QDomDocument
 
 from . import helpers
 from .resources_rc import *
@@ -63,6 +62,9 @@ class Geoalert:
         # Init dialogs and keep references
         self.dlg = MainDialog()
         self.dlg_login = LoginDialog()
+        # Manage Threads
+        self.task_manager = QgsApplication.taskManager()
+        self.fetch_processings_task_id = 10000000
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         # Check if there are stored credentials
         self.logged_in = self.settings.value("serverLogin") and self.settings.value("serverPassword")
@@ -84,6 +86,9 @@ class Geoalert:
         # Hide the ID column since it's only needed for table operations, not the user
         # self.dlg.processingsTable.setColumnHidden(ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
+        # Stop running tasks on exit
+        self.dlg.finished.connect(self.cancel_fetch_processings_task)
+        # Connect buttons
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         # Watch layer addition/removal
@@ -371,7 +376,7 @@ class Geoalert:
             on_finished=self.after_create_processing,
             processing_name=processing_name
         )
-        QgsApplication.taskManager().addTask(globals()['create_processing'])
+        self.task_manager.addTask(globals()['create_processing'])
         self.check_processings = True
 
     def create_processing(self, task, processing_name):
@@ -404,7 +409,7 @@ class Geoalert:
                 r = requests.post(f'{self.server}/rest/rasters', auth=self.server_basic_auth, files={'file': f})
             r.raise_for_status()
             url = r.json()['uri']
-            QgsMessageLog.logMessage(self.tr(f'Your image was uploaded to ') + url, 'Mapflow', Qgis.Info)
+            self.log(self.tr(f'Your image was uploaded to') + url)
             params["source_type"] = "tif"
             params["url"] = url
         if self.dlg.useImageExtentAsAOI.isChecked():
@@ -542,7 +547,7 @@ class Geoalert:
         try:
             os.remove(file_temp)
         except:
-            QgsMessageLog.logMessage('Could not delete temp file')
+            self.log('Could not delete temp file')
 
     def alert(self, message):
         """Display an info message."""
@@ -551,6 +556,10 @@ class Geoalert:
     def push_message(self, text, level=Qgis.Info, duration=5):
         """Display a translated message on the message bar."""
         self.iface.messageBar().pushMessage("Mapflow", text, level, duration)
+
+    def log(self, message):
+        """Log a message to the Mapflow tab in the QGIS Message Log."""
+        QgsMessageLog.logMessage(message, 'Mapflow')
 
     def get_layer_extent(self, layer):
         """Get a layer's bounding box (extent)."""
@@ -562,56 +571,76 @@ class Geoalert:
         transform = QgsCoordinateTransform(layer_crs, wgs84, self.project.transformContext())
         if layer_crs != wgs84:
             extent_geometry.transform(transform)
-        # # Create a feature with the resulting geometry
-        # extent_feature = QgsFeature()
-        # extent_feature.setGeometry(extent_geometry)
-        # # Make a temp layer out of it (for the user to see the extent)
-        # extent_layer = QgsVectorLayer(f"Polygon?crs=EPSG:4326", f"{layer.name()} extent", 'memory')
-        # extent_layer.dataProvider().addFeature(extent_feature)
-        # self.project.addMapLayer(extent_layer)
         return extent_geometry
 
-    def refresh_processing_list(self):
+    def fetch_processings(self, task):
         """Repeatedly refresh the list of processings."""
         while True:
+            task.setProgress(0)
             if not self.check_processings:
+                if task.isCanceled():
+                    return
                 time.sleep(PROCESSING_LIST_REFRESH_INTERVAL)
                 continue
-            # Fetch all user processings visible to the user
-            r = requests.get(f'{self.server}/rest/processings', auth=self.server_basic_auth)
-            r.raise_for_status()
-            self.processings = r.json()
-            # Save ref to check name uniqueness at processing creation
-            self.processing_names = [processing['name'] for processing in self.processings]
-            processing = [processing['id'] for processing in self.processings]
-            self.dlg.processingsTable.setRowCount(len(self.processings))
-            for processing in self.processings:
-                # Add % signs to progress column for clarity
-                processing['percentCompleted'] = f'{processing["percentCompleted"]}%'
-                # Localize creation datetime
-                local_datetime = parse_datetime(processing['created']).astimezone()
-                # Format as ISO without seconds to save a bit of space
-                processing['created'] = local_datetime.strftime('%Y-%m-%d %H:%m')
-                # Extract WD names from WD objects
-                processing['workflowDef'] = processing['workflowDef']['name']
-            # Check for active processings and set flag to keep polling
-            self.check_processings = bool([p for p in self.processings if p['status'] in ("IN_PROGRESS", "UNPROCESSED")])
-            # Turn sorting off while inserting
-            self.dlg.processingsTable.setSortingEnabled(False)
-            # Fill out the table
-            columns = ('name', 'workflowDef', 'status', 'percentCompleted', 'created', 'id')
-            for row, processing in enumerate(self.processings):
-                for col, attr in enumerate(columns):
-                    self.dlg.processingsTable.setItem(row, col, QTableWidgetItem(processing[attr]))
-                # Restore selection
-                row_number = self.selected_processings.get(processing['id'])
-                if row_number:
-                    self.dlg.processingsTable.selectRow(row_number)
-            # Turn sorting on again
-            self.dlg.processingsTable.setSortingEnabled(True)
-            # Sort by creation date (5th column) descending
-            self.dlg.processingsTable.sortItems(4, Qt.DescendingOrder)
+            # Fetch user processings
+            try:
+                r = requests.get(f'{self.server}/rest/processings', auth=self.server_basic_auth)
+                r.raise_for_status()
+                self.processings = r.json()
+                # Save ref to check name uniqueness at processing creation
+                self.processing_names = [processing['name'] for processing in self.processings]
+                task.setProgress(100)
+            except Exception as e:
+                self.log(e)
+            finally:
+                if task.isCanceled():
+                    task.setProgress(0)
+                    return
             time.sleep(PROCESSING_LIST_REFRESH_INTERVAL)
+
+    def cancel_fetch_processings_task(self):
+        """Abort fetching processings from the server to let QGIS quit."""
+        task = self.task_manager.task(self.fetch_processings_task_id)
+        if task:
+            task.progressChanged.disconnect()
+            task.cancel()
+
+    def fill_out_processings_table(self, fetch_processings_task_progress):
+        """Insert current processings in the table.
+
+        This function is called by daemon thread (QgsTask) that runs fetch_processings().
+        """
+        # Check if fetch worked successfully
+        if fetch_processings_task_progress == 0 or self.task_manager.task(self.fetch_processings_task_id).isCanceled():
+            return
+        processing = [processing['id'] for processing in self.processings]
+        self.dlg.processingsTable.setRowCount(len(self.processings))
+        for processing in self.processings:
+            # Add % signs to progress column for clarity
+            processing['percentCompleted'] = f'{processing["percentCompleted"]}%'
+            # Localize creation datetime
+            local_datetime = parse_datetime(processing['created']).astimezone()
+            # Format as ISO without seconds to save a bit of space
+            processing['created'] = local_datetime.strftime('%Y-%m-%d %H:%m')
+            # Extract WD names from WD objects
+            processing['workflowDef'] = processing['workflowDef']['name']
+        # Check for active processings and set flag to keep polling
+        self.check_processings = bool([p for p in self.processings if p['status'] in ("IN_PROGRESS", "UNPROCESSED")])
+        # Turn sorting off while inserting
+        self.dlg.processingsTable.setSortingEnabled(False)
+        # Fill out the table
+        columns = ('name', 'workflowDef', 'status', 'percentCompleted', 'created', 'id')
+        for row, processing in enumerate(self.processings):
+            for col, attr in enumerate(columns):
+                self.dlg.processingsTable.setItem(row, col, QTableWidgetItem(processing[attr]))
+            # Restore selection
+            row_number = self.selected_processings.get(processing['id'])
+            if row_number:
+                self.dlg.processingsTable.selectRow(row_number)
+        # Turn sorting on again
+        self.dlg.processingsTable.setSortingEnabled(True)
+        # Sort by creation date (5th column) descending
+        self.dlg.processingsTable.sortItems(4, Qt.DescendingOrder)
 
     def tr(self, message):
         return QCoreApplication.translate('Geoalert', message)
@@ -645,6 +674,7 @@ class Geoalert:
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
+        self.cancel_fetch_processings_task()
         self.dlg.close()
         self.dlg_login.close()
         for action in self.actions:
@@ -710,10 +740,9 @@ class Geoalert:
         self.dlg.workflowDefinitionCombo.addItems(wds)
         # If logged in successfully, start polling the server for the list of processings
         self.check_processings = True
-        # task = QgsTask.fromFunction(
-        #     'Refresh processings',
-        #     self, on_finished=lambda: print(self.TASK))
-        # QgsApplication.taskManager().addTask(task)
-        Thread(target=self.refresh_processing_list).start()
+        task = QgsTask.fromFunction('Fetch processings', self.fetch_processings)
+        task.progressChanged.connect(self.fill_out_processings_table)
+        self.task_manager.addTask(task)
+        self.fetch_processings_task_id = self.task_manager.taskId(task)
         # Show main dialog
         self.dlg.show()
