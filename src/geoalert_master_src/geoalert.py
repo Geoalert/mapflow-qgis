@@ -82,7 +82,7 @@ class Geoalert:
         # Number of fixed 'virtual' layers in the raster combo box
         self.raster_combo_offset = 3
         # Store processings selected in the table as dict(id=row_number)
-        self.selected_processings = {}
+        self.selected_processings = []
         # Fill out the combo boxes
         self.fill_out_combos_with_layers()
         # Hide the ID column since it's only needed for table operations, not the user
@@ -323,22 +323,27 @@ class Geoalert:
 
     def memorize_selected_processings(self):
         """Memorize the currently selected processing by its ID."""
-        self.selected_processings = {
-            cell.text(): cell.row()
-            for cell in self.dlg.processingsTable.selectedItems()
-            if cell.column() == ID_COLUMN_INDEX
-        }
+        selected_rows = [row.row() for row in self.dlg.processingsTable.selectionModel().selectedRows()]
+        self.selected_processings = [{
+            'id': self.dlg.processingsTable.item(row, ID_COLUMN_INDEX).text(),
+            'name': self.dlg.processingsTable.item(row, 0).text(),
+            'row': row
+        } for row in selected_rows]
 
     def delete_processings(self):
         """Delete one or more processings on the server."""
-        for pid, row_number in self.selected_processings.items():
+        self.dlg.processingsTable.setSortingEnabled(False)
+        for processing in self.selected_processings:
+            print(processing)
             r = requests.delete(
-                url=f'{self.server}/rest/processings/{pid}',
+                url=f'{self.server}/rest/processings/{processing["id"]}',
                 auth=self.server_basic_auth
             )
             r.raise_for_status()
-            self.dlg.processingsTable.removeRow(row_number)
-            self.push_message(self.tr("Processing successfully deleted!"))
+            self.dlg.processingsTable.removeRow(processing['row'])
+            self.processing_names.remove(processing['name'])
+        self.dlg.processingsTable.setSortingEnabled(True)
+        self.push_message(self.tr("Processings successfully deleted!"))
 
     def select_tif(self, text):
         """Start a file selection dialog for a local GeoTIFF."""
@@ -638,10 +643,6 @@ class Geoalert:
         for row, processing in enumerate(self.processings):
             for col, attr in enumerate(columns):
                 self.dlg.processingsTable.setItem(row, col, QTableWidgetItem(processing[attr]))
-            # Restore selection
-            row_number = self.selected_processings.get(processing['id'])
-            if row_number:
-                self.dlg.processingsTable.selectRow(row_number)
         # Turn sorting on again
         self.dlg.processingsTable.setSortingEnabled(True)
         # Sort by creation date (5th column) descending
