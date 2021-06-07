@@ -95,8 +95,8 @@
     </message>
     <message>
         <location filename="../main_dialog.ui" line="730"/>
-        <source>AOI layer:</source>
-        <translation type="unfinished">Область интереса:</translation>
+        <source>Processing area:</source>
+        <translation type="unfinished">Область обработки:</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="285"/>
@@ -125,8 +125,8 @@
     </message>
     <message>
         <location filename="../main_dialog.ui" line="325"/>
-        <source>AI Model</source>
-        <translation type="unfinished">ИИ Модель</translation>
+        <source>Mapflow Model</source>
+        <translation type="unfinished">Модель Mapflow</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="372"/>
@@ -314,7 +314,7 @@
     <message>
         <location filename="../geoalert.py" line="554"/>
         <source>Please, be aware that you may be charged by the imagery provider!</source>
-        <translation>Будьте осторожны: за просмотр снимков провайдер может взымать с вас плату!</translation>
+        <translation>За использование снимков в полном разрешении провайдер может взымать с вас плату!</translation>
     </message>
     <message>
         <location filename="../geoalert.py" line="501"/>
