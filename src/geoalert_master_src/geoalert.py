@@ -390,7 +390,7 @@ class Geoalert:
         """Initiate a processing."""
         # processing_name = self.dlg.processingName.text()
         wd = self.dlg.workflowDefinitionCombo.currentText()
-        update_cache = self.dlg.updateCache.isChecked()
+        update_cache = str(self.dlg.updateCache.isChecked())
         # Workflow definition parameters
         params = {}
         # Optional metadata
@@ -426,8 +426,15 @@ class Geoalert:
             aoi_layer = self.project.mapLayer(self.polygon_layer_ids[self.dlg.polygonCombo.currentIndex()])
             aoi = next(aoi_layer.getFeatures()).geometry()
 
+        self.log(str({
+            "name": processing_name,
+            "wdName": wd,
+            "geometry": json.loads(aoi.asJson()),
+            "params": params,
+            "meta": meta
+        }))
         # Post the processing
-        return requests.post(
+        r = requests.post(
             url=f'{self.server}/rest/processings',
             auth=self.server_basic_auth,
             json={
@@ -437,10 +444,14 @@ class Geoalert:
                 "params": params,
                 "meta": meta
             })
+        r.raise_for_status()
+        return r
 
     def after_create_processing(self, exception, response=None):
         """"""
-        response.raise_for_status()
+        if not response:
+            self.log(exception)
+            return
         self.check_processings = True
         self.dlg.processingName.clear()
         self.alert(self.tr("Success! Processing may take up to several minutes"))
