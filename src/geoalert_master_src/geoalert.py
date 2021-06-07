@@ -402,7 +402,7 @@ class Geoalert:
             meta['source'] = 'mapbox'
             params["cache_raster_update"] = update_cache
         # Custom provider
-        if raster_combo_index == 1:
+        if raster_combo_index == 2:
             params["source_type"] = self.dlg.customProviderType.currentText()
             params["url"] = self.dlg.customProviderURL.text()
             params["raster_login"] = self.dlg.customProviderLogin.text()
@@ -425,14 +425,6 @@ class Geoalert:
         else:
             aoi_layer = self.project.mapLayer(self.polygon_layer_ids[self.dlg.polygonCombo.currentIndex()])
             aoi = next(aoi_layer.getFeatures()).geometry()
-
-        self.log(str({
-            "name": processing_name,
-            "wdName": wd,
-            "geometry": json.loads(aoi.asJson()),
-            "params": params,
-            "meta": meta
-        }))
         # Post the processing
         r = requests.post(
             url=f'{self.server}/rest/processings',
