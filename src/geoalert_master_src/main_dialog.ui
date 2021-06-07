@@ -122,11 +122,11 @@
      <attribute name="horizontalHeaderCascadingSectionResizes">
       <bool>false</bool>
      </attribute>
-     <attribute name="horizontalHeaderMinimumSectionSize">
-      <number>67</number>
-     </attribute>
      <attribute name="horizontalHeaderDefaultSectionSize">
       <number>116</number>
+     </attribute>
+     <attribute name="horizontalHeaderMinimumSectionSize">
+      <number>67</number>
      </attribute>
      <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
       <bool>true</bool>
@@ -233,45 +233,20 @@
        <rect>
         <x>2</x>
         <y>5</y>
-        <width>668</width>
-        <height>105</height>
+        <width>571</width>
+        <height>79</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout">
-       <item row="0" column="0">
-        <widget class="QLabel" name="labelProcessingName">
+       <item row="1" column="0">
+        <widget class="QLabel" name="labelAOILayer">
          <property name="font">
           <font>
            <pointsize>12</pointsize>
           </font>
          </property>
          <property name="text">
-          <string>Processing name:</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="1">
-        <widget class="QLineEdit" name="processingName">
-         <property name="minimumSize">
-          <size>
-           <width>129</width>
-           <height>0</height>
-          </size>
-         </property>
-         <property name="text">
-          <string/>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="2">
-        <widget class="QLabel" name="labelAIModel">
-         <property name="font">
-          <font>
-           <pointsize>12</pointsize>
-          </font>
-         </property>
-         <property name="text">
-          <string>Mapflow model:</string>
+          <string>Processing area:</string>
          </property>
         </widget>
        </item>
@@ -285,30 +260,15 @@
          </property>
         </widget>
        </item>
-       <item row="1" column="0">
-        <widget class="QLabel" name="labelAOILayer">
+       <item row="2" column="2" colspan="2">
+        <widget class="QCheckBox" name="updateCache">
          <property name="font">
           <font>
            <pointsize>12</pointsize>
           </font>
          </property>
          <property name="text">
-          <string>Processing area:</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="1">
-        <widget class="QComboBox" name="polygonCombo"/>
-       </item>
-       <item row="1" column="2">
-        <widget class="QLabel" name="labelImagerySource">
-         <property name="font">
-          <font>
-           <pointsize>12</pointsize>
-          </font>
-         </property>
-         <property name="text">
-          <string>Imagery source:</string>
+          <string>Update image in cache</string>
          </property>
         </widget>
        </item>
@@ -345,6 +305,34 @@
          </item>
         </widget>
        </item>
+       <item row="0" column="1">
+        <widget class="QLineEdit" name="processingName">
+         <property name="minimumSize">
+          <size>
+           <width>129</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QComboBox" name="polygonCombo"/>
+       </item>
+       <item row="1" column="2">
+        <widget class="QLabel" name="labelImagerySource">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Imagery source:</string>
+         </property>
+        </widget>
+       </item>
        <item row="2" column="0" colspan="2">
         <widget class="QCheckBox" name="useImageExtentAsAOI">
          <property name="enabled">
@@ -360,15 +348,27 @@
          </property>
         </widget>
        </item>
-       <item row="2" column="2" colspan="2">
-        <widget class="QCheckBox" name="updateCache">
+       <item row="0" column="2">
+        <widget class="QLabel" name="labelAIModel">
          <property name="font">
           <font>
            <pointsize>12</pointsize>
           </font>
          </property>
          <property name="text">
-          <string>Update image in cache</string>
+          <string>Mapflow model:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="0">
+        <widget class="QLabel" name="labelProcessingName">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Processing name:</string>
          </property>
         </widget>
        </item>
@@ -1052,8 +1052,8 @@
          <rect>
           <x>0</x>
           <y>0</y>
-          <width>583</width>
-          <height>509</height>
+          <width>98</width>
+          <height>28</height>
          </rect>
         </property>
         <widget class="QLabel" name="text">
