@@ -70,6 +70,8 @@ class Geoalert:
         self.logged_in = self.settings.value("serverLogin") and self.settings.value("serverPassword")
         if self.settings.value('serverRememberMe'):
             self.server = self.settings.value('server')
+            self.dlg_login.loginField.setText(self.settings.value('serverLogin'))
+            self.dlg_login.passwordField.setText(self.settings.value('serverPassword'))
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
         self.dlg.maxarConnectID.setText(self.settings.value('connectID'))
         self.dlg.customProviderURL.setText(self.settings.value('customProviderURL'))
@@ -476,7 +478,6 @@ class Geoalert:
         output_file_name = self.dlg.processingsTable.item(row, 0).text()  # 0th column is Name
         # Add COG if it has been created
         tif_url = [processing['rasterLayer']['tileUrl'] for processing in self.processings if processing['id'] == pid]
-        print(tif_url)
         if tif_url:
             params = {
                 'type': 'xyz',
@@ -488,7 +489,8 @@ class Geoalert:
             }
             uri = '&'.join(f'{key}={val}' for key, val in params.items())
             tif_layer = QgsRasterLayer(uri, f'{output_file_name}_image', 'wms')
-            self.project.addMapLayer(tif_layer)
+            if tif_layer.isValid():
+                self.project.addMapLayer(tif_layer)
         # временный файл
         file_temp = os.path.join(self.dlg.outputDirectory.text(), f'{output_file_name}_temp.geojson')
         with open(file_temp, "wb") as f:
