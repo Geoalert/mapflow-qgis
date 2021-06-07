@@ -208,7 +208,7 @@
       <property name="geometry">
        <rect>
         <x>210</x>
-        <y>110</y>
+        <y>120</y>
         <width>181</width>
         <height>41</height>
        </rect>
@@ -234,7 +234,7 @@
         <x>2</x>
         <y>5</y>
         <width>571</width>
-        <height>79</height>
+        <height>115</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout">
@@ -257,6 +257,11 @@
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
          </property>
         </widget>
        </item>
@@ -313,13 +318,24 @@
            <height>0</height>
           </size>
          </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
          <property name="text">
           <string/>
          </property>
         </widget>
        </item>
        <item row="1" column="1">
-        <widget class="QComboBox" name="polygonCombo"/>
+        <widget class="QComboBox" name="polygonCombo">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+        </widget>
        </item>
        <item row="1" column="2">
         <widget class="QLabel" name="labelImagerySource">
@@ -495,50 +511,6 @@
        <kerning>true</kerning>
       </font>
      </property>
-     <widget class="QCheckBox" name="zoomLimit">
-      <property name="enabled">
-       <bool>true</bool>
-      </property>
-      <property name="geometry">
-       <rect>
-        <x>450</x>
-        <y>150</y>
-        <width>111</width>
-        <height>20</height>
-       </rect>
-      </property>
-      <property name="font">
-       <font>
-        <pointsize>12</pointsize>
-        <kerning>true</kerning>
-       </font>
-      </property>
-      <property name="text">
-       <string>Max zoom 14</string>
-      </property>
-      <property name="checked">
-       <bool>true</bool>
-      </property>
-     </widget>
-     <widget class="QPushButton" name="preview">
-      <property name="geometry">
-       <rect>
-        <x>460</x>
-        <y>100</y>
-        <width>91</width>
-        <height>31</height>
-       </rect>
-      </property>
-      <property name="font">
-       <font>
-        <pointsize>12</pointsize>
-        <kerning>true</kerning>
-       </font>
-      </property>
-      <property name="text">
-       <string>Preview</string>
-      </property>
-     </widget>
      <widget class="QCheckBox" name="customProviderSaveAuth">
       <property name="geometry">
        <rect>
@@ -570,85 +542,6 @@
       <property name="orientation">
        <enum>Qt::Horizontal</enum>
       </property>
-     </widget>
-     <widget class="QLabel" name="labelCustomProviderURL">
-      <property name="geometry">
-       <rect>
-        <x>11</x>
-        <y>71</y>
-        <width>261</width>
-        <height>16</height>
-       </rect>
-      </property>
-      <property name="font">
-       <font>
-        <pointsize>12</pointsize>
-        <kerning>true</kerning>
-       </font>
-      </property>
-      <property name="text">
-       <string>Custom imagery provider URL:</string>
-      </property>
-     </widget>
-     <widget class="QLabel" name="labelCustomProviderType">
-      <property name="geometry">
-       <rect>
-        <x>371</x>
-        <y>71</y>
-        <width>111</width>
-        <height>16</height>
-       </rect>
-      </property>
-      <property name="font">
-       <font>
-        <pointsize>12</pointsize>
-        <kerning>true</kerning>
-       </font>
-      </property>
-      <property name="text">
-       <string>Source type:</string>
-      </property>
-     </widget>
-     <widget class="QLineEdit" name="customProviderURL">
-      <property name="geometry">
-       <rect>
-        <x>11</x>
-        <y>99</y>
-        <width>351</width>
-        <height>21</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string/>
-      </property>
-     </widget>
-     <widget class="QComboBox" name="customProviderType">
-      <property name="geometry">
-       <rect>
-        <x>368</x>
-        <y>97</y>
-        <width>82</width>
-        <height>26</height>
-       </rect>
-      </property>
-      <property name="toolTip">
-       <string notr="true"/>
-      </property>
-      <item>
-       <property name="text">
-        <string notr="true">xyz</string>
-       </property>
-      </item>
-      <item>
-       <property name="text">
-        <string>tms</string>
-       </property>
-      </item>
-      <item>
-       <property name="text">
-        <string>wms</string>
-       </property>
-      </item>
      </widget>
      <widget class="QLabel" name="labelCustomProviderLogin">
       <property name="geometry">
@@ -767,6 +660,105 @@
        </item>
       </layout>
      </widget>
+     <widget class="QWidget" name="">
+      <property name="geometry">
+       <rect>
+        <x>11</x>
+        <y>71</y>
+        <width>561</width>
+        <height>81</height>
+       </rect>
+      </property>
+      <layout class="QGridLayout" name="gridLayout_2">
+       <item row="0" column="0">
+        <widget class="QLabel" name="labelCustomProviderURL">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+           <kerning>true</kerning>
+          </font>
+         </property>
+         <property name="text">
+          <string>Custom imagery provider URL:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1" colspan="2">
+        <widget class="QLabel" name="labelCustomProviderType">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+           <kerning>true</kerning>
+          </font>
+         </property>
+         <property name="text">
+          <string>Source type:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="0">
+        <widget class="QLineEdit" name="customProviderURL">
+         <property name="text">
+          <string/>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QComboBox" name="customProviderType">
+         <property name="toolTip">
+          <string notr="true"/>
+         </property>
+         <item>
+          <property name="text">
+           <string notr="true">xyz</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>tms</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>wms</string>
+          </property>
+         </item>
+        </widget>
+       </item>
+       <item row="1" column="2">
+        <widget class="QPushButton" name="preview">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+           <kerning>true</kerning>
+          </font>
+         </property>
+         <property name="text">
+          <string>Preview</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="2">
+        <widget class="QCheckBox" name="zoomLimit">
+         <property name="enabled">
+          <bool>true</bool>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+           <kerning>true</kerning>
+          </font>
+         </property>
+         <property name="text">
+          <string>Max zoom 14</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
     </widget>
     <widget class="QFrame" name="maxarFrame">
      <property name="enabled">
@@ -813,145 +805,115 @@
         <height>90</height>
        </size>
       </property>
-      <widget class="QPushButton" name="getImageMetadata">
-       <property name="geometry">
-        <rect>
-         <x>370</x>
-         <y>40</y>
-         <width>161</width>
-         <height>31</height>
-        </rect>
-       </property>
-       <property name="font">
-        <font>
-         <pointsize>12</pointsize>
-         <kerning>true</kerning>
-        </font>
-       </property>
-       <property name="text">
-        <string>Get image metadata</string>
-       </property>
-      </widget>
-      <widget class="QPushButton" name="getMaxarURL">
-       <property name="geometry">
-        <rect>
-         <x>370</x>
-         <y>0</y>
-         <width>161</width>
-         <height>31</height>
-        </rect>
-       </property>
-       <property name="font">
-        <font>
-         <pointsize>12</pointsize>
-         <kerning>true</kerning>
-        </font>
-       </property>
-       <property name="text">
-        <string>Get provider URL</string>
-       </property>
-      </widget>
-      <widget class="QLabel" name="labelMaxarConnectID">
-       <property name="geometry">
-        <rect>
-         <x>1</x>
-         <y>1</y>
-         <width>72</width>
-         <height>16</height>
-        </rect>
-       </property>
-       <property name="font">
-        <font>
-         <pointsize>12</pointsize>
-         <kerning>true</kerning>
-        </font>
-       </property>
-       <property name="text">
-        <string>Connect ID:</string>
-       </property>
-      </widget>
-      <widget class="QLineEdit" name="maxarConnectID">
-       <property name="geometry">
-        <rect>
-         <x>101</x>
-         <y>1</y>
-         <width>231</width>
-         <height>21</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string/>
-       </property>
-      </widget>
-      <widget class="QLabel" name="labelMaxarFeatureID">
-       <property name="geometry">
-        <rect>
-         <x>1</x>
-         <y>24</y>
-         <width>67</width>
-         <height>16</height>
-        </rect>
-       </property>
-       <property name="font">
-        <font>
-         <pointsize>12</pointsize>
-         <kerning>true</kerning>
-        </font>
-       </property>
-       <property name="text">
-        <string>Feature ID:</string>
-       </property>
-      </widget>
-      <widget class="QLineEdit" name="maxarFeatureID">
-       <property name="geometry">
-        <rect>
-         <x>101</x>
-         <y>24</y>
-         <width>231</width>
-         <height>21</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string/>
-       </property>
-      </widget>
-      <widget class="QLabel" name="labelMaxarAOI">
+      <widget class="QSplitter" name="splitter">
        <property name="geometry">
         <rect>
          <x>0</x>
-         <y>50</y>
-         <width>101</width>
-         <height>16</height>
+         <y>60</y>
+         <width>511</width>
+         <height>32</height>
         </rect>
        </property>
-       <property name="font">
-        <font>
-         <pointsize>12</pointsize>
-         <kerning>true</kerning>
-        </font>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
        </property>
-       <property name="text">
-        <string>Area (polygon):</string>
-       </property>
+       <widget class="QLabel" name="labelMaxarAOI">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+          <kerning>true</kerning>
+         </font>
+        </property>
+        <property name="text">
+         <string>Processing area:</string>
+        </property>
+       </widget>
+       <widget class="QgsMapLayerComboBox" name="maxarAOICombo"/>
+       <widget class="QPushButton" name="getImageMetadata">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+          <kerning>true</kerning>
+         </font>
+        </property>
+        <property name="text">
+         <string>Get image metadata</string>
+        </property>
+       </widget>
       </widget>
-      <widget class="QgsMapLayerComboBox" name="maxarAOICombo">
+      <widget class="QWidget" name="">
        <property name="geometry">
         <rect>
-         <x>100</x>
-         <y>50</y>
-         <width>151</width>
-         <height>26</height>
+         <x>0</x>
+         <y>0</y>
+         <width>511</width>
+         <height>61</height>
         </rect>
        </property>
+       <layout class="QGridLayout" name="gridLayout_4">
+        <item row="0" column="1">
+         <widget class="QLineEdit" name="maxarConnectID">
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="labelMaxarFeatureID">
+          <property name="font">
+           <font>
+            <pointsize>12</pointsize>
+            <kerning>true</kerning>
+           </font>
+          </property>
+          <property name="text">
+           <string>Feature ID:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QLineEdit" name="maxarFeatureID">
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="2" rowspan="2">
+         <widget class="QPushButton" name="getMaxarURL">
+          <property name="font">
+           <font>
+            <pointsize>12</pointsize>
+            <kerning>true</kerning>
+           </font>
+          </property>
+          <property name="text">
+           <string>Get provider URL</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="0">
+         <widget class="QLabel" name="labelMaxarConnectID">
+          <property name="font">
+           <font>
+            <pointsize>12</pointsize>
+            <kerning>true</kerning>
+           </font>
+          </property>
+          <property name="text">
+           <string>Connect ID:</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </widget>
      </widget>
      <widget class="QTableWidget" name="maxarMetadataTable">
       <property name="geometry">
        <rect>
         <x>13</x>
-        <y>99</y>
+        <y>109</y>
         <width>531</width>
-        <height>171</height>
+        <height>161</height>
        </rect>
       </property>
       <property name="sizePolicy">
@@ -1052,8 +1014,8 @@
          <rect>
           <x>0</x>
           <y>0</y>
-          <width>98</width>
-          <height>28</height>
+          <width>579</width>
+          <height>516</height>
          </rect>
         </property>
         <widget class="QLabel" name="text">
