@@ -122,11 +122,11 @@
      <attribute name="horizontalHeaderCascadingSectionResizes">
       <bool>false</bool>
      </attribute>
-     <attribute name="horizontalHeaderDefaultSectionSize">
-      <number>116</number>
-     </attribute>
      <attribute name="horizontalHeaderMinimumSectionSize">
       <number>67</number>
+     </attribute>
+     <attribute name="horizontalHeaderDefaultSectionSize">
+      <number>116</number>
      </attribute>
      <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
       <bool>true</bool>
@@ -207,8 +207,8 @@
      <widget class="QPushButton" name="startProcessing">
       <property name="geometry">
        <rect>
-        <x>0</x>
-        <y>100</y>
+        <x>210</x>
+        <y>110</y>
         <width>181</width>
         <height>41</height>
        </rect>
@@ -228,37 +228,13 @@
        <string>Start processing</string>
       </property>
      </widget>
-     <widget class="QPushButton" name="loadProcessingResults">
-      <property name="geometry">
-       <rect>
-        <x>420</x>
-        <y>110</y>
-        <width>131</width>
-        <height>21</height>
-       </rect>
-      </property>
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-        <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-      <property name="font">
-       <font>
-        <pointsize>12</pointsize>
-       </font>
-      </property>
-      <property name="text">
-       <string>Update</string>
-      </property>
-     </widget>
-     <widget class="QWidget" name="">
+     <widget class="QWidget" name="layoutWidget">
       <property name="geometry">
        <rect>
         <x>2</x>
         <y>5</y>
-        <width>561</width>
-        <height>80</height>
+        <width>668</width>
+        <height>105</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout">
@@ -1076,8 +1052,8 @@
          <rect>
           <x>0</x>
           <y>0</y>
-          <width>579</width>
-          <height>516</height>
+          <width>583</width>
+          <height>509</height>
          </rect>
         </property>
         <widget class="QLabel" name="text">
