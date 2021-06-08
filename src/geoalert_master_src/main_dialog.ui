@@ -122,11 +122,11 @@
      <attribute name="horizontalHeaderCascadingSectionResizes">
       <bool>false</bool>
      </attribute>
-     <attribute name="horizontalHeaderDefaultSectionSize">
-      <number>116</number>
-     </attribute>
      <attribute name="horizontalHeaderMinimumSectionSize">
       <number>67</number>
+     </attribute>
+     <attribute name="horizontalHeaderDefaultSectionSize">
+      <number>116</number>
      </attribute>
      <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
       <bool>true</bool>
@@ -233,7 +233,7 @@
        <rect>
         <x>2</x>
         <y>5</y>
-        <width>571</width>
+        <width>668</width>
         <height>115</height>
        </rect>
       </property>
@@ -389,6 +389,24 @@
         </widget>
        </item>
       </layout>
+     </widget>
+     <widget class="QLabel" name="labelAOIArea">
+      <property name="geometry">
+       <rect>
+        <x>0</x>
+        <y>130</y>
+        <width>181</width>
+        <height>21</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <italic>true</italic>
+       </font>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
      </widget>
     </widget>
     <widget class="QWidget" name="processingsController" native="true">
@@ -570,7 +588,7 @@
         <x>10</x>
         <y>50</y>
         <width>561</width>
-        <height>85</height>
+        <height>100</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout_2">
@@ -663,13 +681,13 @@
        </item>
       </layout>
      </widget>
-     <widget class="QWidget" name="">
+     <widget class="QWidget" name="layoutWidget">
       <property name="geometry">
        <rect>
         <x>11</x>
         <y>134</y>
-        <width>408</width>
-        <height>62</height>
+        <width>431</width>
+        <height>71</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout_5">
@@ -774,13 +792,13 @@
         <height>90</height>
        </size>
       </property>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
          <x>0</x>
          <y>2</y>
          <width>521</width>
-         <height>81</height>
+         <height>108</height>
         </rect>
        </property>
        <layout class="QGridLayout" name="gridLayout_6">
@@ -986,8 +1004,8 @@
          <rect>
           <x>0</x>
           <y>0</y>
-          <width>587</width>
-          <height>520</height>
+          <width>583</width>
+          <height>509</height>
          </rect>
         </property>
         <widget class="QLabel" name="text">

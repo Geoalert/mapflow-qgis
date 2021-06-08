@@ -86,7 +86,7 @@ class Geoalert:
         # Fill out the combo boxes
         self.fill_out_combos_with_layers()
         # Hide the ID column since it's only needed for table operations, not the user
-        # self.dlg.processingsTable.setColumnHidden(ID_COLUMN_INDEX, True)
+        self.dlg.processingsTable.setColumnHidden(ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
         # Stop running tasks on exit
         self.dlg.finished.connect(self.cancel_fetch_processings_task)
@@ -102,6 +102,8 @@ class Geoalert:
         # Select a local GeoTIFF if user chooses the respective option
         self.dlg.rasterCombo.currentTextChanged.connect(self.select_tif)
         self.dlg.startProcessing.clicked.connect(self.start_processing)
+        # Calculate AOI area
+        self.dlg.polygonCombo.currentTextChanged.connect(self.calculateAOIArea)
         # Processings
         self.dlg.processingsTable.itemSelectionChanged.connect(self.memorize_selected_processings)
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_processing_results)
@@ -172,6 +174,7 @@ class Geoalert:
     def toggle_polygon_combo(self, is_checked):
         """Enable/disable the polygon layer combo with reverse dependence on the use image extent as AOI checkbox."""
         self.dlg.polygonCombo.setEnabled(not is_checked)
+        self.dlg.labelAOIArea.setVisible(not is_checked)
 
     def select_output_directory(self):
         """Update the user's output directory."""
@@ -319,6 +322,18 @@ class Geoalert:
             for y in range(len(attrStolb[x])):
                 container = QTableWidgetItem(str(attrStolb[x][y]))
                 self.dlg.maxarMetadataTable.setItem(x, y, container)
+
+    def calculateAOIArea(self, text):
+        aoi_layers = self.project.mapLayersByName(text)
+        if aoi_layers:
+            aoi = next(aoi_layers[0].getFeatures()).geometry()
+            area_calculator = QgsDistanceArea()
+            area_calculator.setEllipsoid('EPSG:7030')  # WGS84
+            area = area_calculator.measureArea(aoi) / 10**6  # sq m to sq km
+            label = self.tr('AOI area: ') + str(round(area, 2)) + self.tr(' sq km')
+        else:
+            label = ''
+        self.dlg.labelAOIArea.setText(label)
 
     def memorize_selected_processings(self):
         """Memorize the currently selected processing by its ID."""
