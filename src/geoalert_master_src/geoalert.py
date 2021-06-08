@@ -168,7 +168,6 @@ class Geoalert:
         self.dlg.useImageExtentAsAOI.setEnabled(enabled)
         self.dlg.useImageExtentAsAOI.setChecked(enabled)
         self.dlg.updateCache.setEnabled(not enabled)
-        self.dlg.updateCache.setChecked(not enabled)
 
     def toggle_polygon_combo(self, is_checked):
         """Enable/disable the polygon layer combo with reverse dependence on the use image extent as AOI checkbox."""
