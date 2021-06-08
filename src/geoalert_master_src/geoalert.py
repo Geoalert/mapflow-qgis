@@ -408,8 +408,9 @@ class Geoalert:
             params["raster_login"] = self.dlg.customProviderLogin.text()
             params["raster_password"] = self.dlg.customProviderPassword.text()
             params["cache_raster_update"] = update_cache
+        # Local GeoTIFF
         elif raster_combo_index > 2:
-            # Upload user-selected GeoTIFF to the server
+            # Upload the image to the server
             raster_layer_id = self.raster_layer_ids[self.dlg.rasterCombo.currentIndex() - self.raster_combo_offset]
             raster_layer = self.project.mapLayer(raster_layer_id)
             with open(raster_layer.dataProvider().dataSourceUri(), 'rb') as f:
@@ -420,22 +421,29 @@ class Geoalert:
             params["source_type"] = "tif"
             params["url"] = url
         if self.dlg.useImageExtentAsAOI.isChecked():
-            # Get processing extent
             aoi = self.get_layer_extent(raster_layer)
         else:
             aoi_layer = self.project.mapLayer(self.polygon_layer_ids[self.dlg.polygonCombo.currentIndex()])
             aoi = next(aoi_layer.getFeatures()).geometry()
+        # If we pass it as JSON, the URL in params will be urlencoded: e.g. ? -> %3F and the creation will fail
+        # To avoid it, we have to convert the body to a string and pass it to the 'data' param instead of 'json'
+        # However, Python serializes a dict with single quotes, so the server will see it as invalid JSON
+        # To fix this, we have to replace '' in the string with ""
+        body = str({
+            "name": processing_name,
+            "wdName": wd,
+            "geometry": json.loads(aoi.asJson()),
+            "params": params,
+            "meta": meta
+        }).replace('\'', '"')
+        self.log(f'REQUEST BODY:\n{body}')
         # Post the processing
         r = requests.post(
             url=f'{self.server}/rest/processings',
+            headers={'Content-Type': 'application/json'},
             auth=self.server_basic_auth,
-            json={
-                "name": processing_name,
-                "wdName": wd,
-                "geometry": json.loads(aoi.asJson()),
-                "params": params,
-                "meta": meta
-            })
+            data=body)
+        self.log(f'RESPONSE:\n{r.text}')
         r.raise_for_status()
         return r
 
