@@ -86,7 +86,7 @@ class Geoalert:
         # Fill out the combo boxes
         self.fill_out_combos_with_layers()
         # Hide the ID column since it's only needed for table operations, not the user
-        # self.dlg.processingsTable.setColumnHidden(ID_COLUMN_INDEX, True)
+        self.dlg.processingsTable.setColumnHidden(ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
         # Stop running tasks on exit
         self.dlg.finished.connect(self.cancel_fetch_processings_task)
