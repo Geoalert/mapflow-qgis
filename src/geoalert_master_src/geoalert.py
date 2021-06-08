@@ -380,7 +380,7 @@ class Geoalert:
         elif processing_name in self.processing_names:
             self.alert(self.tr('Processing name taken. Please, choose a different name.'))
             return
-        if self.dlg.polygonCombo.currentIndex() == -1:
+        if self.dlg.polygonCombo.currentIndex() == -1 and not self.dlg.UseImagExtentAsAOI.isChecked():
             self.alert(self.tr('Please, select an area of interest'))
             return
         raster_combo_index = self.dlg.rasterCombo.currentIndex()
