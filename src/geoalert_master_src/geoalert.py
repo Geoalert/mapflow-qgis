@@ -75,6 +75,7 @@ class Geoalert:
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
         self.dlg.maxarConnectID.setText(self.settings.value('connectID'))
         self.dlg.customProviderURL.setText(self.settings.value('customProviderURL'))
+        self.dlg.customProviderType.setCurrentIndex(self.settings.value('customProviderType') or 0)
         if self.settings.value("customProviderRememberMe"):
             self.dlg.customProviderSaveAuth.setChecked(True)
             self.dlg.customProviderLogin.setText(self.settings.value("customProviderLogin"))
@@ -109,6 +110,8 @@ class Geoalert:
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_processing_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Custom provider
+        self.dlg.customProviderURL.textChanged.connect(lambda text: self.settings.setValue('customProviderURL', text))
+        self.dlg.customProviderType.currentIndexChanged.connect(lambda index: self.settings.setValue('customProviderType', index))
         self.dlg.preview.clicked.connect(self.load_custom_tileset)
         # Maxar
         self.dlg.getMaxarURL.clicked.connect(self.get_maxar_url)
@@ -479,7 +482,6 @@ class Geoalert:
             self.settings.setValue("customProviderLogin", self.dlg.customProviderLogin.text())
             self.settings.setValue("customProviderPassword", self.dlg.customProviderPassword.text())
         url = self.dlg.customProviderURL.text()
-        self.settings.setValue('customProviderURL', url)
         url_escaped = url.replace('&', '%26').replace('=', '%3D')
         params = {
             'type': self.dlg.customProviderType.currentText(),
