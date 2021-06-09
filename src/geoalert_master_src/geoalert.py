@@ -75,7 +75,7 @@ class Geoalert:
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
         self.dlg.maxarConnectID.setText(self.settings.value('connectID'))
         self.dlg.customProviderURL.setText(self.settings.value('customProviderURL'))
-        self.dlg.customProviderType.setCurrentIndex(self.settings.value('customProviderType') or 0)
+        self.dlg.customProviderType.setCurrentText(self.settings.value('customProviderType') or 'xyz')
         if self.settings.value("customProviderRememberMe"):
             self.dlg.customProviderSaveAuth.setChecked(True)
             self.dlg.customProviderLogin.setText(self.settings.value("customProviderLogin"))
@@ -101,7 +101,7 @@ class Geoalert:
         self.dlg.rasterCombo.currentIndexChanged.connect(self.toggle_use_image_extent_as_aoi)
         self.dlg.useImageExtentAsAOI.stateChanged.connect(self.toggle_polygon_combo)
         # Select a local GeoTIFF if user chooses the respective option
-        self.dlg.rasterCombo.currentTextChanged.connect(self.select_tif)
+        self.dlg.rasterCombo.currentIndexChanged.connect(self.select_tif)
         self.dlg.startProcessing.clicked.connect(self.start_processing)
         # Calculate AOI area
         self.dlg.polygonCombo.currentTextChanged.connect(self.calculateAOIArea)
@@ -111,7 +111,7 @@ class Geoalert:
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Custom provider
         self.dlg.customProviderURL.textChanged.connect(lambda text: self.settings.setValue('customProviderURL', text))
-        self.dlg.customProviderType.currentIndexChanged.connect(lambda index: self.settings.setValue('customProviderType', index))
+        self.dlg.customProviderType.currentTextChanged.connect(lambda text: self.settings.setValue('customProviderType', text))
         self.dlg.preview.clicked.connect(self.load_custom_tileset)
         # Maxar
         self.dlg.getMaxarURL.clicked.connect(self.get_maxar_url)
@@ -362,9 +362,9 @@ class Geoalert:
         self.dlg.processingsTable.setSortingEnabled(True)
         self.push_message(self.tr("Processings successfully deleted!"))
 
-    def select_tif(self, text):
+    def select_tif(self, index):
         """Start a file selection dialog for a local GeoTIFF."""
-        if not text == self.tr('Open new .tif'):
+        if index != 1:
             return
         dlg = QFileDialog(self.iface.mainWindow(), self.tr("Select GeoTIFF"))
         dlg.setMimeTypeFilters(['image/tiff'])
