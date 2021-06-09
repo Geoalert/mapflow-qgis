@@ -2,7 +2,7 @@ import time
 import json
 import os.path
 from math import *
-from threading import Thread
+from tempfile import NamedTemporaryFile
 
 import requests
 from dateutil.parser import parse as parse_datetime
@@ -225,11 +225,9 @@ class Geoalert:
         }
         r = requests.get(url, params=params, auth=(login, password))
         r.raise_for_status()
-        file_temp = os.path.join(self.dlg.outputDirectory.text(), 'WFS_temp.geojson')
-        with open(file_temp, "wb") as f:
-            f.write(r.content)
-        layer_name = 'WFS extent'
-        metadata_layer = QgsVectorLayer(file_temp, layer_name, "ogr")
+        f = NamedTemporaryFile()
+        f.write(r.content)
+        metadata_layer = QgsVectorLayer(f.name, 'WFS extent', "ogr")
         self.project.addMapLayer(metadata_layer)
         # Add style
         style_path = os.path.join(self.plugin_dir, 'styles/style_wfs.qml')
@@ -536,13 +534,11 @@ class Geoalert:
             tif_layer = QgsRasterLayer(uri, f'{output_file_name}_image', 'wms')
             if tif_layer.isValid():
                 self.project.addMapLayer(tif_layer)
-        # временный файл
-        file_temp = os.path.join(self.dlg.outputDirectory.text(), f'{output_file_name}_temp.geojson')
-        with open(file_temp, "wb") as f:
-            f.write(r.content)
-        feature_layer = QgsVectorLayer(file_temp, output_file_name+'_temp', "ogr")
-
-        # экспорт в shp
+        # First, save to GeoJSON
+        f = NamedTemporaryFile()
+        f.write(r.content)
+        feature_layer = QgsVectorLayer(f.name, 'temp', "ogr")
+        # Export to Shapefile to avoid QGIS hanging if GeoJSON is very large
         file_adr = os.path.join(self.dlg.outputDirectory.text(), f'{output_file_name}.shp')
         error, msg = QgsVectorFileWriter.writeAsVectorFormat(
             feature_layer,
