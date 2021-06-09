@@ -428,6 +428,8 @@ class Geoalert:
             params["raster_login"] = self.dlg.customProviderLogin.text()
             params["raster_password"] = self.dlg.customProviderPassword.text()
             params["cache_raster_update"] = update_cache
+            if params["source_type"] == 'wms':
+                params['target_resolution'] = 0.000005  # for the 18th zoom
         # Local GeoTIFF
         elif raster_combo_index > 2:
             # Upload the image to the server
