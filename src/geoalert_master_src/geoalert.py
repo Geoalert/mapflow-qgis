@@ -373,6 +373,9 @@ class Geoalert:
             layer_name = os.path.basename(path).split('.')[0]
             self.iface.addRasterLayer(path, layer_name)
             self.dlg.rasterCombo.setCurrentText(layer_name)
+        else:
+            # If the user quits the dialog - reset the combo to another option
+            self.dlg.rasterCombo.setCurrentIndex(0)
 
     def start_processing(self):
         """Spin up a thread to create a processing on the server."""
