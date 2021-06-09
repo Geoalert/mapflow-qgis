@@ -76,7 +76,7 @@ class Geoalert:
         self.dlg.maxarConnectID.setText(self.settings.value('connectID'))
         self.dlg.customProviderURL.setText(self.settings.value('customProviderURL'))
         self.dlg.customProviderType.setCurrentText(self.settings.value('customProviderType') or 'xyz')
-        if self.settings.value("customProviderRememberMe"):
+        if self.settings.value("customProviderSaveAuth"):
             self.dlg.customProviderSaveAuth.setChecked(True)
             self.dlg.customProviderLogin.setText(self.settings.value("customProviderLogin"))
             self.dlg.customProviderPassword.setText(self.settings.value("customProviderPassword"))
@@ -198,6 +198,11 @@ class Geoalert:
         if not os.path.exists(self.dlg.outputDirectory.text()):
             self.alert(self.tr('Please, specify an existing output directory'))
             return
+        login = self.dlg.customProviderLogin.text(),
+        password = self.dlg.customProviderPassword.text()
+        if not (login and password):
+            self.alert(self.tr('Please, enter your SecureWatch login and password'))
+            return
         aoi_layer = self.dlg.maxarAOICombo.currentLayer()
         connectID = self.dlg.maxarConnectID.text()
         self.settings.setValue('connectID', connectID)
@@ -218,11 +223,7 @@ class Geoalert:
             "WIDTH": 3000,
             "HEIGHT": 3000
         }
-        auth = requests.auth.HTTPBasicAuth(
-            self.dlg.customProviderLogin.text(),
-            self.dlg.customProviderPassword.text()
-        )
-        r = requests.get(url, params=params, auth=auth)
+        r = requests.get(url, params=params, auth=(login, password))
         r.raise_for_status()
         file_temp = os.path.join(self.dlg.outputDirectory.text(), 'WFS_temp.geojson')
         with open(file_temp, "wb") as f:
@@ -251,6 +252,13 @@ class Geoalert:
         fields_names = [field.name() for field in metadata_layer.fields()]
         attributes = [feature.attributes() for feature in metadata_layer.getFeatures()]
         self.fill_out_maxar_metadata_table(fields_names, attributes)
+        # MAXAR SAVE AUTH - DUPED IN load_custom_tileset() -> factor out
+        # Save the checkbox state itself
+        self.settings.setValue("customProviderSaveAuth", self.dlg.customProviderSaveAuth.isChecked())
+        # If checked, save the credentials
+        if self.dlg.customProviderSaveAuth.isChecked():
+            self.settings.setValue("customProviderLogin", self.dlg.customProviderLogin.text())
+            self.settings.setValue("customProviderPassword", self.dlg.customProviderPassword.text())
 
     def get_maxar_url(self):
         """Fill out the imagery provider URL field with the Maxar Secure Watch URL."""
