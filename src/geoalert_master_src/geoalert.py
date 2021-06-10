@@ -1,8 +1,9 @@
+from os import write
 import time
 import json
 import os.path
 from math import *
-from threading import Thread
+from tempfile import NamedTemporaryFile
 
 import requests
 from dateutil.parser import parse as parse_datetime
@@ -225,11 +226,9 @@ class Geoalert:
         }
         r = requests.get(url, params=params, auth=(login, password))
         r.raise_for_status()
-        file_temp = os.path.join(self.dlg.outputDirectory.text(), 'WFS_temp.geojson')
-        with open(file_temp, "wb") as f:
-            f.write(r.content)
-        layer_name = 'WFS extent'
-        metadata_layer = QgsVectorLayer(file_temp, layer_name, "ogr")
+        f = NamedTemporaryFile()
+        f.write(r.content)
+        metadata_layer = QgsVectorLayer(f.name, 'WFS extent', "ogr")
         self.project.addMapLayer(metadata_layer)
         # Add style
         style_path = os.path.join(self.plugin_dir, 'styles/style_wfs.qml')
@@ -517,10 +516,10 @@ class Geoalert:
         if not os.path.exists(self.dlg.outputDirectory.text()):
             self.alert(self.tr('Please, specify an existing output directory'))
             return
+        processing_name = self.dlg.processingsTable.item(row, 0).text()  # 0th column is Name
         pid = self.dlg.processingsTable.item(row, ID_COLUMN_INDEX).text()
         r = requests.get(f'{self.server}/rest/processings/{pid}/result', auth=self.server_basic_auth)
         r.raise_for_status()
-        output_file_name = self.dlg.processingsTable.item(row, 0).text()  # 0th column is Name
         # Add COG if it has been created
         tif_url = [processing['rasterLayer']['tileUrl'] for processing in self.processings if processing['id'] == pid]
         if tif_url:
@@ -533,69 +532,51 @@ class Geoalert:
                 'password': self.dlg_login.passwordField.text()
             }
             uri = '&'.join(f'{key}={val}' for key, val in params.items())
-            tif_layer = QgsRasterLayer(uri, f'{output_file_name}_image', 'wms')
-            if tif_layer.isValid():
-                self.project.addMapLayer(tif_layer)
-        # временный файл
-        file_temp = os.path.join(self.dlg.outputDirectory.text(), f'{output_file_name}_temp.geojson')
-        with open(file_temp, "wb") as f:
-            f.write(r.content)
-        feature_layer = QgsVectorLayer(file_temp, output_file_name+'_temp', "ogr")
-
-        # экспорт в shp
-        file_adr = os.path.join(self.dlg.outputDirectory.text(), f'{output_file_name}.shp')
-        error, msg = QgsVectorFileWriter.writeAsVectorFormat(
-            feature_layer,
-            file_adr,
-            "utf-8",
-            QgsCoordinateReferenceSystem('EPSG:4326'),
-            "ESRI Shapefile"
+            tif_layer = QgsRasterLayer(uri, f'{processing_name}_image', 'wms')
+        # First, save to GeoJSON
+        f = NamedTemporaryFile()
+        f.write(r.content)
+        # If processing results are empty, it leads to an obscure error at file writing, so stop there
+        if not r.json()['features']:
+            self.push_message(self.tr('Selected processing produced no results'))
+            return
+        # Export to Geopackage to avoid QGIS hanging if GeoJSON is very large
+        output_path = os.path.join(self.dlg.outputDirectory.text(), f'{processing_name}.gpkg')
+        write_options = QgsVectorFileWriter.SaveVectorOptions()
+        write_options.layerOptions = ['fid=id']
+        error, msg = QgsVectorFileWriter.writeAsVectorFormatV2(
+            QgsVectorLayer(f.name, 'temp', "ogr"),
+            output_path,
+            self.project.transformContext(),
+            write_options
         )
         if error:
-            self.push_message(self.tr('There was an error writing the Shapefile!'), Qgis.Warning)
+            self.push_message(self.tr('Error saving results! See QGIS logs.'), Qgis.Warning)
+            self.log(msg)
             return
-
         # Load the results into QGIS
-        results_layer = QgsVectorLayer(file_adr, output_file_name, "ogr")
+        results_layer = QgsVectorLayer(output_path, processing_name, "ogr")
         if not results_layer:
-            self.push_message(self.tr("Could not load the layer!"), Qgis.Warning)
-        self.project.addMapLayer(results_layer)
+            self.push_message(self.tr("Could not load the results"), Qgis.Warning)
+            return
         # Add style
         wd = self.dlg.processingsTable.item(row, 1).text()
         if wd in ('Buildings Detection', 'Buildings Detection With Heights'):
-            style = '/styles/style_buildings.qml'
+            style = 'buildings'
         elif wd == 'Forest Detection':
-            style = '/styles/style_forest.qml'
+            style = 'forest'
         elif wd == 'Forest Detection With Heights':
-            style = '/styles/style_forest_with_heights.qml'
+            style = 'forest_with_heights'
         elif wd == 'Roads Detection':
-            style = '/styles/style_roads.qml'
+            style = 'roads'
         else:
-            style = '/styles/style_default.qml'
-
-        # подключаем стиль!!!!!!!!!!!!!!!!!!
-        qml_path = self.plugin_dir + style
-        layer = self.iface.activeLayer()
-        style_manager = layer.styleManager()
-        # read valid style from layer
-        style = QgsMapLayerStyle()
-        style.readFromLayer(layer)
-        # get style name from file
-        style_name = os.path.basename(qml_path).strip('.qml')
-        # add style with new name
-        style_manager.addStyle(style_name, style)
-        # set new style as current
-        style_manager.setCurrentStyle(style_name)
-        # load qml to current style
-        message, success = layer.loadNamedStyle(qml_path)
-        if not success:  # if style not loaded remove it
-            style_manager.removeStyle(style_name)
-        time.sleep(1)
+            style = 'default'
+        style_path = os.path.join(self.plugin_dir, 'styles', f'style_{style}.qml')
+        results_layer.loadNamedStyle(style_path)
+        if tif_layer.isValid():
+            self.project.addMapLayer(tif_layer)
+        self.project.addMapLayer(results_layer)
         iface.zoomToActiveLayer()
-        try:
-            os.remove(file_temp)
-        except:
-            self.log('Could not delete temp file')
 
     def alert(self, message):
         """Display an info message."""
