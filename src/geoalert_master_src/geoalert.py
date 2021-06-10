@@ -71,8 +71,6 @@ class Geoalert:
         self.raster_combo_offset = 3
         # Store processings selected in the table as dict(id=row_number)
         self.selected_processings = []
-        # Fill out the combo boxes
-        self.fill_out_combos_with_layers()
         # Hide the ID column since it's only needed for table operations, not the user
         self.dlg.processingsTable.setColumnHidden(ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
@@ -104,6 +102,8 @@ class Geoalert:
         self.dlg.getMaxarURL.clicked.connect(self.get_maxar_url)
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
         self.dlg.maxarMetadataTable.clicked.connect(self.set_maxar_feature_id)
+        # Fill out the combo boxes
+        self.fill_out_combos_with_layers()
 
     def fill_out_combos_with_layers(self):
         """Add all relevant (polygon & GeoTIFF) layer names to their respective combo boxes."""
@@ -768,5 +768,7 @@ class Geoalert:
         task.progressChanged.connect(self.fill_out_processings_table)
         self.task_manager.addTask(task)
         self.fetch_processings_task_id = self.task_manager.taskId(task)
+        # Display area of the current AOI layer, if present
+        self.calculateAOIArea(self.dlg.polygonCombo.currentText())
         # Show main dialog
         self.dlg.show()
