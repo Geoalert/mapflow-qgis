@@ -23,20 +23,6 @@ from .geoalert_dialog import MainDialog, LoginDialog
 PROCESSING_LIST_REFRESH_INTERVAL = 5  # in seconds
 ID_COLUMN_INDEX = 5
 
-SW_ENDPOINT = 'https://securewatch.digitalglobe.com/earthservice/wmtsaccess'
-SW_PARAMS = {
-    'SERVICE': 'WMTS',
-    'VERSION': '1.0.0',
-    'STYLE': '',
-    'REQUEST': 'GetTile',
-    'LAYER': 'DigitalGlobe:ImageryTileService',
-    'FORMAT': 'image/jpeg',
-    'TileRow': r'{y}',
-    'TileCol': r'{x}',
-    'TileMatrixSet': 'EPSG:3857',
-    'TileMatrix': r'EPSG:3857:{z}'
-}
-
 
 class Geoalert:
     """Initialize the plugin."""
@@ -201,6 +187,8 @@ class Geoalert:
             return
         aoi_layer = self.dlg.maxarAOICombo.currentLayer()
         connectID = self.dlg.maxarConnectID.text()
+        login = self.dlg.customProviderLogin.text()
+        password = self.dlg.customProviderPassword.text()
         self.settings.setValue('connectID', connectID)
         extent = self.get_layer_extent(aoi_layer).boundingBox().toString()
         # Change lon,lat to lat,lon for Maxar
@@ -219,7 +207,7 @@ class Geoalert:
             "WIDTH": 3000,
             "HEIGHT": 3000
         }
-        r = requests.get(url, params=params)
+        r = requests.get(url, params=params, auth=(login, password))
         r.raise_for_status()
         f = NamedTemporaryFile()
         f.write(r.content)
@@ -251,11 +239,22 @@ class Geoalert:
         """Fill out the imagery provider URL field with the Maxar Secure Watch URL."""
         connectID = self.dlg.maxarConnectID.text()
         featureID = self.dlg.maxarFeatureID.text()
-        SW_PARAMS['CONNECTID'] = connectID
-        if featureID:
-            SW_PARAMS['CQL_FILTER'] = f"feature_id='{featureID}'"
-            SW_PARAMS['FORMAT'] = 'image/png'
-        request = requests.Request('GET', SW_ENDPOINT, params=SW_PARAMS).prepare()
+        url = 'https://securewatch.digitalglobe.com/earthservice/wmtsaccess'
+        params = {
+            'CONNECTID': connectID,
+            'SERVICE': 'WMTS',
+            'VERSION': '1.0.0',
+            'STYLE': '',
+            'REQUEST': 'GetTile',
+            'LAYER': 'DigitalGlobe:ImageryTileService',
+            'FORMAT': 'image/png' if featureID else 'image/jpeg',
+            'TileRow': r'{y}',
+            'TileCol': r'{x}',
+            'TileMatrixSet': 'EPSG:3857',
+            'TileMatrix': r'EPSG:3857:{z}',
+            'CQL_FILTER': f"feature_id = '{featureID}'" if featureID else ''
+        }
+        request = requests.Request('GET', url, params=params).prepare()
         self.dlg.customProviderURL.setText(request.url)
         self.dlg.customProviderType.setCurrentIndex(0)
         self.settings.setValue('connectID', connectID)
