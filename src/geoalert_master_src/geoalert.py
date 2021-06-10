@@ -1,4 +1,3 @@
-from os import write
 import time
 import json
 import os.path
@@ -20,6 +19,7 @@ from .resources_rc import *
 from .geoalert_dialog import MainDialog, LoginDialog
 
 
+WGS84 = QgsCoordinateReferenceSystem('EPSG:4326')
 PROCESSING_LIST_REFRESH_INTERVAL = 5  # in seconds
 ID_COLUMN_INDEX = 5
 
@@ -345,7 +345,6 @@ class Geoalert:
         """Delete one or more processings on the server."""
         self.dlg.processingsTable.setSortingEnabled(False)
         for processing in self.selected_processings:
-            print(processing)
             r = requests.delete(
                 url=f'{self.server}/rest/processings/{processing["id"]}',
                 auth=self.server_basic_auth
@@ -441,6 +440,10 @@ class Geoalert:
         else:
             aoi_layer = self.project.mapLayer(self.polygon_layer_ids[self.dlg.polygonCombo.currentIndex()])
             aoi = next(aoi_layer.getFeatures()).geometry()
+            # Reproject it to WGS84 if the layer has another CRS
+            layer_crs = aoi_layer.crs()
+            if layer_crs != WGS84:
+                aoi = self.to_wgs84(aoi, layer_crs)
         # If we pass it as JSON, the URL in params will be urlencoded: e.g. ? -> %3F and the creation will fail
         # To avoid it, we have to convert the body to a string and pass it to the 'data' param instead of 'json'
         # However, Python serializes a dict with single quotes, so the server will see it as invalid JSON
@@ -582,12 +585,16 @@ class Geoalert:
         # Create a geometry from the layer's extent
         extent_geometry = QgsGeometry.fromRect(layer.extent())
         # Reproject it to WGS84 if the layer has another CRS
-        layer_crs = QgsCoordinateReferenceSystem(layer.crs().authid())
-        wgs84 = QgsCoordinateReferenceSystem('EPSG:4326')
-        transform = QgsCoordinateTransform(layer_crs, wgs84, self.project.transformContext())
-        if layer_crs != wgs84:
-            extent_geometry.transform(transform)
+        layer_crs = layer.crs()
+        if layer_crs != WGS84:
+            extent_geometry = self.to_wgs84(extent_geometry, layer_crs)
         return extent_geometry
+
+    def to_wgs84(self, geometry, source_crs):
+        """"""
+        transform = QgsCoordinateTransform(source_crs, WGS84, self.project.transformContext())
+        geometry.transform(transform)
+        return geometry
 
     def fetch_processings(self, task):
         """Repeatedly refresh the list of processings."""
