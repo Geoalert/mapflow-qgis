@@ -321,11 +321,14 @@ class Geoalert:
                 self.dlg.maxarMetadataTable.setItem(x, y, container)
 
     def calculateAOIArea(self, text):
-        aoi_layers = self.project.mapLayersByName(text)
-        if aoi_layers:
-            aoi = next(aoi_layers[0].getFeatures()).geometry()
+        layers = self.project.mapLayersByName(text)
+        if layers:
+            layer = layers[0]
+            layer_crs = layer.crs()
+            aoi = next(layer.getFeatures()).geometry()
             area_calculator = QgsDistanceArea()
-            area_calculator.setEllipsoid('EPSG:7030')  # WGS84
+            area_calculator.setEllipsoid(layer_crs.ellipsoidAcronym() or 'EPSG:7030')
+            area_calculator.setSourceCrs(layer_crs, self.project.transformContext())
             area = area_calculator.measureArea(aoi) / 10**6  # sq m to sq km
             label = self.tr('AOI area: ') + str(round(area, 2)) + self.tr(' sq km')
         else:
