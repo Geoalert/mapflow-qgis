@@ -56,7 +56,7 @@
     </size>
    </property>
    <property name="currentIndex">
-    <number>0</number>
+    <number>1</number>
    </property>
    <widget class="QWidget" name="processingsTab">
     <attribute name="title">
@@ -122,11 +122,11 @@
      <attribute name="horizontalHeaderCascadingSectionResizes">
       <bool>false</bool>
      </attribute>
-     <attribute name="horizontalHeaderMinimumSectionSize">
-      <number>67</number>
-     </attribute>
      <attribute name="horizontalHeaderDefaultSectionSize">
       <number>116</number>
+     </attribute>
+     <attribute name="horizontalHeaderMinimumSectionSize">
+      <number>67</number>
      </attribute>
      <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
       <bool>true</bool>
@@ -250,6 +250,57 @@
          </property>
         </widget>
        </item>
+       <item row="0" column="2">
+        <widget class="QLabel" name="labelAIModel">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Mapflow model:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="2">
+        <widget class="QLabel" name="labelImagerySource">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Imagery source:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="0" colspan="2">
+        <widget class="QCheckBox" name="useImageExtentAsAOI">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Use image extent as AOI</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="0">
+        <widget class="QLabel" name="labelProcessingName">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Processing name:</string>
+         </property>
+        </widget>
+       </item>
        <item row="0" column="3">
         <widget class="QComboBox" name="workflowDefinitionCombo">
          <property name="sizePolicy">
@@ -334,57 +385,6 @@
           <font>
            <pointsize>12</pointsize>
           </font>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="2">
-        <widget class="QLabel" name="labelImagerySource">
-         <property name="font">
-          <font>
-           <pointsize>12</pointsize>
-          </font>
-         </property>
-         <property name="text">
-          <string>Imagery source:</string>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="0" colspan="2">
-        <widget class="QCheckBox" name="useImageExtentAsAOI">
-         <property name="enabled">
-          <bool>false</bool>
-         </property>
-         <property name="font">
-          <font>
-           <pointsize>12</pointsize>
-          </font>
-         </property>
-         <property name="text">
-          <string>Use image extent as AOI</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="2">
-        <widget class="QLabel" name="labelAIModel">
-         <property name="font">
-          <font>
-           <pointsize>12</pointsize>
-          </font>
-         </property>
-         <property name="text">
-          <string>Mapflow model:</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="0">
-        <widget class="QLabel" name="labelProcessingName">
-         <property name="font">
-          <font>
-           <pointsize>12</pointsize>
-          </font>
-         </property>
-         <property name="text">
-          <string>Processing name:</string>
          </property>
         </widget>
        </item>
@@ -487,7 +487,7 @@
        </font>
       </property>
       <property name="visible">
-       <bool>true</bool>
+       <bool>false</bool>
       </property>
       <property name="styleSheet">
        <string notr="true"/>
@@ -508,7 +508,7 @@
        <x>20</x>
        <y>12</y>
        <width>591</width>
-       <height>205</height>
+       <height>221</height>
       </rect>
      </property>
      <property name="sizePolicy">
@@ -553,6 +553,19 @@
         </widget>
        </item>
        <item>
+        <spacer name="verticalSpacer_3">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
         <widget class="QLineEdit" name="outputDirectory"/>
        </item>
        <item>
@@ -586,9 +599,9 @@
       <property name="geometry">
        <rect>
         <x>10</x>
-        <y>50</y>
+        <y>40</y>
         <width>561</width>
-        <height>85</height>
+        <height>91</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout_2">
@@ -679,20 +692,39 @@
          </property>
         </widget>
        </item>
+       <item row="2" column="0">
+        <spacer name="verticalSpacer">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
       </layout>
      </widget>
      <widget class="QWidget" name="layoutWidget">
       <property name="geometry">
        <rect>
-        <x>11</x>
-        <y>134</y>
-        <width>408</width>
+        <x>10</x>
+        <y>110</y>
+        <width>431</width>
         <height>62</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout_5">
        <item row="2" column="1">
         <widget class="QgsPasswordLineEdit" name="customProviderPassword">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>21</height>
+          </size>
+         </property>
          <property name="text">
           <string/>
          </property>
@@ -726,6 +758,12 @@
        </item>
        <item row="0" column="1" rowspan="2">
         <widget class="QLineEdit" name="customProviderLogin">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>21</height>
+          </size>
+         </property>
          <property name="text">
           <string/>
          </property>
@@ -746,6 +784,63 @@
        </item>
       </layout>
      </widget>
+     <widget class="QWidget" name="">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>180</y>
+        <width>571</width>
+        <height>41</height>
+       </rect>
+      </property>
+      <layout class="QHBoxLayout" name="horizontalLayout">
+       <item>
+        <layout class="QHBoxLayout" name="maxarSecureWatch">
+         <item>
+          <widget class="QCheckBox" name="checkMaxar">
+           <property name="enabled">
+            <bool>true</bool>
+           </property>
+           <property name="font">
+            <font>
+             <pointsize>12</pointsize>
+             <kerning>true</kerning>
+            </font>
+           </property>
+           <property name="text">
+            <string>Maxar SecureWatch:</string>
+           </property>
+           <property name="checked">
+            <bool>false</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QLabel" name="maxarHowToConnect">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+           <kerning>true</kerning>
+          </font>
+         </property>
+         <property name="text">
+          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&amp;nbsp;&amp;nbsp;&lt;a href=&quot;https://www.maxar.com/legal/securewatch-license&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Terms of Service&lt;/span&gt;&lt;/a&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         </property>
+         <property name="textFormat">
+          <enum>Qt::AutoText</enum>
+         </property>
+         <property name="wordWrap">
+          <bool>true</bool>
+         </property>
+         <property name="openExternalLinks">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
     </widget>
     <widget class="QFrame" name="maxarFrame">
      <property name="enabled">
@@ -754,9 +849,9 @@
      <property name="geometry">
       <rect>
        <x>30</x>
-       <y>245</y>
+       <y>235</y>
        <width>571</width>
-       <height>301</height>
+       <height>311</height>
       </rect>
      </property>
      <property name="minimumSize">
@@ -775,9 +870,9 @@
       <property name="geometry">
        <rect>
         <x>13</x>
-        <y>13</y>
+        <y>8</y>
         <width>531</width>
-        <height>90</height>
+        <height>121</height>
        </rect>
       </property>
       <property name="sizePolicy">
@@ -798,7 +893,7 @@
          <x>0</x>
          <y>2</y>
          <width>521</width>
-         <height>81</height>
+         <height>117</height>
         </rect>
        </property>
        <layout class="QGridLayout" name="gridLayout_6">
@@ -806,6 +901,12 @@
          <layout class="QGridLayout" name="gridLayout_4">
           <item row="0" column="1">
            <widget class="QLineEdit" name="maxarConnectID">
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>21</height>
+             </size>
+            </property>
             <property name="text">
              <string/>
             </property>
@@ -826,6 +927,12 @@
           </item>
           <item row="1" column="1">
            <widget class="QLineEdit" name="maxarFeatureID">
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>21</height>
+             </size>
+            </property>
             <property name="text">
              <string/>
             </property>
@@ -895,9 +1002,9 @@
       <property name="geometry">
        <rect>
         <x>13</x>
-        <y>109</y>
+        <y>129</y>
         <width>531</width>
-        <height>181</height>
+        <height>171</height>
        </rect>
       </property>
       <property name="sizePolicy">
@@ -923,65 +1030,6 @@
       </property>
      </widget>
     </widget>
-    <widget class="QWidget" name="layoutWidget">
-     <property name="geometry">
-      <rect>
-       <x>30</x>
-       <y>209</y>
-       <width>351</width>
-       <height>31</height>
-      </rect>
-     </property>
-     <layout class="QHBoxLayout" name="maxarSecureWatch">
-      <item>
-       <widget class="QCheckBox" name="checkMaxar">
-        <property name="enabled">
-         <bool>true</bool>
-        </property>
-        <property name="font">
-         <font>
-          <pointsize>12</pointsize>
-          <kerning>true</kerning>
-         </font>
-        </property>
-        <property name="text">
-         <string>Maxar SecureWatch:</string>
-        </property>
-        <property name="checked">
-         <bool>false</bool>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-    <widget class="QLabel" name="maxarHowToConnect">
-     <property name="geometry">
-      <rect>
-       <x>420</x>
-       <y>210</y>
-       <width>141</width>
-       <height>29</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>12</pointsize>
-       <kerning>true</kerning>
-      </font>
-     </property>
-     <property name="text">
-      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-     </property>
-     <property name="textFormat">
-      <enum>Qt::AutoText</enum>
-     </property>
-     <property name="wordWrap">
-      <bool>true</bool>
-     </property>
-     <property name="openExternalLinks">
-      <bool>true</bool>
-     </property>
-    </widget>
    </widget>
    <widget class="QWidget" name="helpTab">
     <attribute name="title">
@@ -1004,8 +1052,8 @@
          <rect>
           <x>0</x>
           <y>0</y>
-          <width>587</width>
-          <height>520</height>
+          <width>579</width>
+          <height>516</height>
          </rect>
         </property>
         <widget class="QLabel" name="text">
