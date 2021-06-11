@@ -209,9 +209,10 @@ class Geoalert:
         }
         r = requests.get(url, params=params, auth=(login, password))
         r.raise_for_status()
-        f = NamedTemporaryFile()
-        f.write(r.content)
-        metadata_layer = QgsVectorLayer(f.name, 'WFS extent', "ogr")
+        output_file_name = os.path.join(self.dlg.outputDirectory.text(), 'maxar_metadata.geojson')
+        with open(output_file_name, 'wb') as f:
+            f.write(r.content)
+        metadata_layer = QgsVectorLayer(output_file_name, 'Maxar metadata', 'ogr')
         self.project.addMapLayer(metadata_layer)
         # Add style
         style_path = os.path.join(self.plugin_dir, 'styles/style_wfs.qml')
