@@ -11,7 +11,6 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from qgis.core import *
 from qgis.gui import *
-from qgis.utils import iface
 
 from . import helpers
 from .workers import ProcessingFetcher
@@ -74,8 +73,6 @@ class Geoalert:
         # Hide the ID column since it's only needed for table operations, not the user
         self.dlg.processingsTable.setColumnHidden(ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
-        if getattr(self, 'worker', None):
-            self.dlg.finished.connect(self.worker.thread().quit)
         # Connect buttons
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
@@ -401,7 +398,6 @@ class Geoalert:
             processing_name=processing_name
         )
         self.task_manager.addTask(globals()['create_processing'])
-        self.check_processings = True
 
     def create_processing(self, task, processing_name):
         """Initiate a processing."""
@@ -459,14 +455,12 @@ class Geoalert:
             "params": params,
             "meta": meta
         }).replace('\'', '"')
-        self.log(f'REQUEST BODY:\n{body}')
         # Post the processing
         r = requests.post(
             url=f'{self.server}/rest/processings',
             headers={'Content-Type': 'application/json'},
             auth=self.server_basic_auth,
             data=body)
-        self.log(f'RESPONSE:\n{r.text}')
         r.raise_for_status()
         return r
 
@@ -475,10 +469,9 @@ class Geoalert:
         if not response:
             self.log(exception)
             return
-        self.check_processings = True
         self.dlg.processingName.clear()
         self.alert(self.tr("Success! Processing may take up to several minutes"))
-        self.fetch_processings()
+        self.worker.thread().start()
 
     def load_custom_tileset(self):
         """Custom provider imagery preview."""
@@ -672,7 +665,7 @@ class Geoalert:
         del self.toolbar
         self.settings.sync()
 
-    def fetch_processings(self, wait=0):
+    def fetch_processings(self):
         """"""
         thread = QThread(self.mainWindow)
         self.worker = ProcessingFetcher(f'{self.server}/rest/processings', (self.login, self.password))
@@ -680,10 +673,8 @@ class Geoalert:
         thread.started.connect(self.worker.fetch_processings)
         self.worker.finished.connect(thread.quit)
         self.worker.fetched.connect(self.fill_out_processings_table)
-        thread.finished.connect(thread.deleteLater)
-        thread.sleep(wait)
+        self.dlg.finished.connect(thread.requestInterruption)
         thread.start()
-        print('THREAD STARTED')
 
     def connect_to_server(self):
         """Connect to Geoalert server."""
@@ -721,7 +712,6 @@ class Geoalert:
 
     def run(self):
         """Plugin entrypoint."""
-        self.check_processings = True
         # If not logged in, show the login form
         while not self.logged_in:
             # If the user closes the dialog

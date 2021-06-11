@@ -15,6 +15,9 @@ class ProcessingFetcher(QObject):
 
     def fetch_processings(self):
         while True:
+            if self.thread().isInterruptionRequested():
+                self.finished.emit()
+                return
             try:
                 QgsMessageLog.logMessage('FETCHING', 'Mapflow')
                 r = requests.get(self.url, auth=self.auth)
@@ -23,6 +26,7 @@ class ProcessingFetcher(QObject):
                 self.fetched.emit(processings)
                 # If there are ongoing processings, spin up a thread again to fetch their state
                 if not [p for p in processings if p['status'] in ("IN_PROGRESS", "UNPROCESSED")]:
+                    self.finished.emit()
                     break
                 else:
                     self.thread().sleep(5)
