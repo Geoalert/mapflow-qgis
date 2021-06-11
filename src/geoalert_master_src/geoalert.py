@@ -1,4 +1,3 @@
-import time
 import json
 import os.path
 from math import *
@@ -15,6 +14,7 @@ from qgis.gui import *
 from qgis.utils import iface
 
 from . import helpers
+from .workers import ProcessingFetcher
 from .resources_rc import *
 from .geoalert_dialog import MainDialog, LoginDialog
 
@@ -29,6 +29,7 @@ class Geoalert:
 
     def __init__(self, iface):
         self.iface = iface
+        self.mainWindow = iface.mainWindow()
         self.project = QgsProject.instance()
         self.plugin_dir = os.path.dirname(__file__)
         # Init toolbar and toolbar buttons
@@ -51,7 +52,6 @@ class Geoalert:
         self.dlg_login = LoginDialog()
         # Manage Threads
         self.task_manager = QgsApplication.taskManager()
-        self.fetch_processings_task_id = 10000000
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         # Check if there are stored credentials
         self.logged_in = self.settings.value("serverLogin") and self.settings.value("serverPassword")
@@ -74,8 +74,8 @@ class Geoalert:
         # Hide the ID column since it's only needed for table operations, not the user
         self.dlg.processingsTable.setColumnHidden(ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
-        # Stop running tasks on exit
-        self.dlg.finished.connect(self.cancel_fetch_processings_task)
+        if getattr(self, 'worker', None):
+            self.dlg.finished.connect(self.worker.thread().quit)
         # Connect buttons
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
@@ -168,7 +168,7 @@ class Geoalert:
 
     def select_output_directory(self):
         """Update the user's output directory."""
-        path = QFileDialog.getExistingDirectory(self.iface.mainWindow())
+        path = QFileDialog.getExistingDirectory(self.mainWindow)
         if path:
             self.dlg.outputDirectory.setText(path)
             self.settings.setValue("outputDir", path)
@@ -363,7 +363,7 @@ class Geoalert:
         """Start a file selection dialog for a local GeoTIFF."""
         if index != 1:
             return
-        dlg = QFileDialog(self.iface.mainWindow(), self.tr("Select GeoTIFF"))
+        dlg = QFileDialog(self.mainWindow, self.tr("Select GeoTIFF"))
         dlg.setMimeTypeFilters(['image/tiff'])
         if dlg.exec():
             path = dlg.selectedFiles()[0]
@@ -478,6 +478,7 @@ class Geoalert:
         self.check_processings = True
         self.dlg.processingName.clear()
         self.alert(self.tr("Success! Processing may take up to several minutes"))
+        self.fetch_processings()
 
     def load_custom_tileset(self):
         """Custom provider imagery preview."""
@@ -600,48 +601,14 @@ class Geoalert:
         geometry.transform(transform)
         return geometry
 
-    def fetch_processings(self, task):
-        """Repeatedly refresh the list of processings."""
-        while True:
-            task.setProgress(0)
-            if not self.check_processings:
-                if task.isCanceled():
-                    return
-                time.sleep(PROCESSING_LIST_REFRESH_INTERVAL)
-                continue
-            # Fetch user processings
-            try:
-                r = requests.get(f'{self.server}/rest/processings', auth=self.server_basic_auth)
-                r.raise_for_status()
-                self.processings = r.json()
-                # Save ref to check name uniqueness at processing creation
-                self.processing_names = [processing['name'] for processing in self.processings]
-                task.setProgress(100)
-            except Exception as e:
-                self.log(e)
-            finally:
-                if task.isCanceled():
-                    task.setProgress(0)
-                    return
-            time.sleep(PROCESSING_LIST_REFRESH_INTERVAL)
-
-    def cancel_fetch_processings_task(self):
-        """Abort fetching processings from the server to let QGIS quit."""
-        try:
-            task = self.task_manager.task(self.fetch_processings_task_id)
-            task.progressChanged.disconnect(self.fill_out_processings_table)
-            task.cancel()
-        except:
-            pass
-
-    def fill_out_processings_table(self, fetch_processings_task_progress):
+    def fill_out_processings_table(self, processings):
         """Insert current processings in the table.
 
         This function is called by daemon thread (QgsTask) that runs fetch_processings().
         """
-        # Check if fetch worked successfully
-        if fetch_processings_task_progress == 0 or self.task_manager.task(self.fetch_processings_task_id).isCanceled():
-            return
+        self.processings = processings
+        # Save ref to check name uniqueness at processing creation
+        self.processing_names = [processing['name'] for processing in self.processings]
         processing = [processing['id'] for processing in self.processings]
         self.dlg.processingsTable.setRowCount(len(self.processings))
         for processing in self.processings:
@@ -653,8 +620,6 @@ class Geoalert:
             processing['created'] = local_datetime.strftime('%Y-%m-%d %H:%m')
             # Extract WD names from WD objects
             processing['workflowDef'] = processing['workflowDef']['name']
-        # Check for active processings and set flag to keep polling
-        self.check_processings = bool([p for p in self.processings if p['status'] in ("IN_PROGRESS", "UNPROCESSED")])
         # Turn sorting off while inserting
         self.dlg.processingsTable.setSortingEnabled(False)
         # Fill out the table
@@ -695,11 +660,10 @@ class Geoalert:
             icon_path,
             text='Geoalert',
             callback=self.run,
-            parent=self.iface.mainWindow())
+            parent=self.mainWindow)
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
-        self.cancel_fetch_processings_task()
         self.dlg.close()
         self.dlg_login.close()
         for action in self.actions:
@@ -707,6 +671,19 @@ class Geoalert:
             self.iface.removeToolBarIcon(action)
         del self.toolbar
         self.settings.sync()
+
+    def fetch_processings(self, wait=0):
+        """"""
+        thread = QThread(self.mainWindow)
+        self.worker = ProcessingFetcher(f'{self.server}/rest/processings', (self.login, self.password))
+        self.worker.moveToThread(thread)
+        thread.started.connect(self.worker.fetch_processings)
+        self.worker.finished.connect(thread.quit)
+        self.worker.fetched.connect(self.fill_out_processings_table)
+        thread.finished.connect(thread.deleteLater)
+        thread.sleep(wait)
+        thread.start()
+        print('THREAD STARTED')
 
     def connect_to_server(self):
         """Connect to Geoalert server."""
@@ -755,20 +732,16 @@ class Geoalert:
                 self.dlg_login.invalidCredentialsMessage.hide()
                 return
         # Refresh the list of workflow definitions
-        login = self.settings.value('serverLogin') or self.dlg_login.loginField.text()
-        password = self.settings.value('serverPassword') or self.dlg_login.passwordField.text()
-        self.server_basic_auth = requests.auth.HTTPBasicAuth(login, password)
+        self.login = self.settings.value('serverLogin') or self.dlg_login.loginField.text()
+        self.password = self.settings.value('serverPassword') or self.dlg_login.passwordField.text()
+        self.server_basic_auth = requests.auth.HTTPBasicAuth(self.login, self.password)
         res = requests.get(f'{self.server}/rest/projects/default', auth=self.server_basic_auth)
         res.raise_for_status()
         wds = [wd['name'] for wd in res.json()['workflowDefs']]
         self.dlg.workflowDefinitionCombo.clear()
         self.dlg.workflowDefinitionCombo.addItems(wds)
         # If logged in successfully, start polling the server for the list of processings
-        self.check_processings = True
-        task = QgsTask.fromFunction('Fetch processings', self.fetch_processings)
-        task.progressChanged.connect(self.fill_out_processings_table)
-        self.task_manager.addTask(task)
-        self.fetch_processings_task_id = self.task_manager.taskId(task)
+        self.fetch_processings()
         # Display area of the current AOI layer, if present
         self.calculateAOIArea(self.dlg.polygonCombo.currentText())
         # Show main dialog
