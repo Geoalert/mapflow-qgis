@@ -56,7 +56,7 @@
     </size>
    </property>
    <property name="currentIndex">
-    <number>1</number>
+    <number>0</number>
    </property>
    <widget class="QWidget" name="processingsTab">
     <attribute name="title">
@@ -304,10 +304,16 @@
        <item row="0" column="3">
         <widget class="QComboBox" name="workflowDefinitionCombo">
          <property name="sizePolicy">
-          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>170</width>
+           <height>0</height>
+          </size>
          </property>
          <property name="font">
           <font>
@@ -331,10 +337,16 @@
        <item row="1" column="3">
         <widget class="QComboBox" name="rasterCombo">
          <property name="sizePolicy">
-          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>170</width>
+           <height>0</height>
+          </size>
          </property>
          <property name="font">
           <font>
@@ -363,9 +375,15 @@
        </item>
        <item row="0" column="1">
         <widget class="QLineEdit" name="processingName">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
          <property name="minimumSize">
           <size>
-           <width>129</width>
+           <width>160</width>
            <height>0</height>
           </size>
          </property>
@@ -381,6 +399,18 @@
        </item>
        <item row="1" column="1">
         <widget class="QComboBox" name="polygonCombo">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>170</width>
+           <height>0</height>
+          </size>
+         </property>
          <property name="font">
           <font>
            <pointsize>12</pointsize>
@@ -487,7 +517,7 @@
        </font>
       </property>
       <property name="visible">
-       <bool>false</bool>
+       <bool>true</bool>
       </property>
       <property name="styleSheet">
        <string notr="true"/>
@@ -719,9 +749,15 @@
       <layout class="QGridLayout" name="gridLayout_5">
        <item row="2" column="1">
         <widget class="QgsPasswordLineEdit" name="customProviderPassword">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
          <property name="minimumSize">
           <size>
-           <width>0</width>
+           <width>180</width>
            <height>21</height>
           </size>
          </property>
@@ -758,9 +794,15 @@
        </item>
        <item row="0" column="1" rowspan="2">
         <widget class="QLineEdit" name="customProviderLogin">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
          <property name="minimumSize">
           <size>
-           <width>0</width>
+           <width>180</width>
            <height>21</height>
           </size>
          </property>
@@ -1067,15 +1109,18 @@
          </property>
          <property name="text">
           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;
-&lt;div style=&quot;margin:30px; background-color: #e7f2fa&quot;&gt;&lt;p&gt;This application requires access to &lt;a href=&quot;http://mapflow.ai/&quot;&gt;Mapflow.ai&lt;/a&gt; Processing API. To obtain credentials, please, send us a request to help@geoalert.io&lt;/p&gt;&lt;/div&gt;
+&lt;div style=&quot;margin:30px; background-color: #e8e8e8&quot;&gt;
+&lt;p&gt;This application requires access to &lt;a href=&quot;http://mapflow.ai/&quot;&gt;Mapflow.ai&lt;/a&gt; Processing API service. To obtain credentials, please, send us a request to help@geoalert.io&lt;/p&gt;
+&lt;p&gt;
 &lt;h2 style=&quot;margin:30px;&quot;&gt;How to use the plugin&lt;/h2&gt;
-&lt;ul&gt;
+&lt;ul style=&quot;margin:10px; background-color: #e8e8e8&quot;&gt;
 &lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-install-the-plugin&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Installation guide&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
 &lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;User Interface walkthrough&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
 &lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to use a different imagery tileset&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
 &lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect to Maxar SercureWatch&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
 &lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-process-your-own-imagery-data&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to process your own image&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
+&lt;/ul&gt;&lt;/p&gt;
+&lt;/div&gt;
 &lt;/body&gt;&lt;/html&gt;</string>
          </property>
          <property name="textFormat">
