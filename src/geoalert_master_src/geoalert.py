@@ -84,7 +84,8 @@ class Geoalert:
         self.dlg.rasterCombo.currentIndexChanged.connect(self.select_tif)
         self.dlg.startProcessing.clicked.connect(self.create_processing)
         # Calculate AOI area
-        self.dlg.polygonCombo.currentTextChanged.connect(self.calculateAOIArea)
+        self.dlg.polygonCombo.currentTextChanged.connect(self.calculate_aoi_area)
+        self.dlg.useImageExtentAsAOI.stateChanged.connect(self.calculate_aoi_area)
         # Processings
         self.dlg.processingsTable.itemSelectionChanged.connect(self.memorize_selected_processings)
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_processing_results)
@@ -159,7 +160,6 @@ class Geoalert:
     def toggle_polygon_combo(self, is_checked):
         """Enable/disable the polygon layer combo with reverse dependence on the use image extent as AOI checkbox."""
         self.dlg.polygonCombo.setEnabled(not is_checked)
-        self.dlg.labelAOIArea.setVisible(not is_checked)
 
     def select_output_directory(self):
         """Update the user's output directory."""
@@ -316,12 +316,13 @@ class Geoalert:
                 container = QTableWidgetItem(str(attrStolb[x][y]))
                 self.dlg.maxarMetadataTable.setItem(x, y, container)
 
-    def calculateAOIArea(self, text):
+    def calculate_aoi_area(self, arg):
+        text = arg if isinstance(arg, str) else self.dlg.rasterCombo.currentText()
         layers = self.project.mapLayersByName(text)
         if layers:
             layer = layers[0]
             layer_crs = layer.crs()
-            aoi = next(layer.getFeatures()).geometry()
+            aoi = next(layer.getFeatures()).geometry() if isinstance(arg, str) else QgsGeometry.fromRect(layer.extent())
             area_calculator = QgsDistanceArea()
             area_calculator.setEllipsoid(layer_crs.ellipsoidAcronym() or 'EPSG:7030')
             area_calculator.setSourceCrs(layer_crs, self.project.transformContext())
@@ -679,6 +680,6 @@ class Geoalert:
         self.dlg.finished.connect(thread.requestInterruption)
         thread.start()
         # Display area of the current AOI layer, if present
-        self.calculateAOIArea(self.dlg.polygonCombo.currentText())
+        self.calculate_aoi_area(self.dlg.polygonCombo.currentText())
         # Show main dialog
         self.dlg.show()
