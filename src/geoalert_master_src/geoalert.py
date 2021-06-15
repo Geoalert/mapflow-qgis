@@ -384,8 +384,6 @@ class Geoalert:
         raster_combo_index = self.dlg.rasterCombo.currentIndex()
         if raster_combo_index == 1:
             self.alert(self.tr("Please, be aware that you may be charged by the imagery provider!"))
-        elif raster_combo_index > 2:
-            self.push_message(self.tr("Please, wait. Uploading the file to the server..."))
         update_cache = str(self.dlg.updateCache.isChecked())
         worker_kwargs = {
             'processing_name': processing_name,
@@ -427,7 +425,7 @@ class Geoalert:
         thread.started.connect(worker.create_processing)
         worker.finished.connect(thread.quit)
         worker.finished.connect(self.processing_created)
-        worker.tif_uploaded.connect(lambda url: self.log(self.tr(f'Your image was uploaded to: ') + url))
+        worker.tif_uploaded.connect(lambda url: self.log(self.tr(f'Your image was uploaded to: ') + url, Qgis.Success))
         worker.error.connect(lambda error: self.log(error))
         worker.error.connect(lambda: self.alert(self.tr('Processing creation failed, see the QGIS log for details')))
         self.dlg.finished.connect(thread.requestInterruption)
@@ -542,9 +540,9 @@ class Geoalert:
         """Display a translated message on the message bar."""
         self.iface.messageBar().pushMessage("Mapflow", text, level, duration)
 
-    def log(self, message):
+    def log(self, message, level=Qgis.Warning):
         """Log a message to the Mapflow tab in the QGIS Message Log."""
-        QgsMessageLog.logMessage(message, 'Mapflow')
+        QgsMessageLog.logMessage(message, 'Mapflow', level=level)
 
     def fill_out_processings_table(self, processings):
         """Insert current processings in the table.
