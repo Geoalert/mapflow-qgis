@@ -562,7 +562,7 @@ class Geoalert:
             # Localize creation datetime
             local_datetime = parse_datetime(processing['created']).astimezone()
             # Format as ISO without seconds to save a bit of space
-            processing['created'] = local_datetime.strftime('%Y-%m-%d %H:%m')
+            processing['created'] = local_datetime.strftime('%Y-%m-%d %H:%M')
             # Extract WD names from WD objects
             processing['workflowDef'] = processing['workflowDef']['name']
         # Turn sorting off while inserting
