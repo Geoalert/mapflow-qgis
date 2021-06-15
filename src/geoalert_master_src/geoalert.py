@@ -1,5 +1,3 @@
-import time
-import json
 import os.path
 from math import *
 from tempfile import NamedTemporaryFile
@@ -12,14 +10,13 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from qgis.core import *
 from qgis.gui import *
-from qgis.utils import iface
 
 from . import helpers
+from .workers import ProcessingFetcher, ProcessingCreator
 from .resources_rc import *
 from .geoalert_dialog import MainDialog, LoginDialog
 
 
-WGS84 = QgsCoordinateReferenceSystem('EPSG:4326')
 PROCESSING_LIST_REFRESH_INTERVAL = 5  # in seconds
 ID_COLUMN_INDEX = 5
 
@@ -29,6 +26,7 @@ class Geoalert:
 
     def __init__(self, iface):
         self.iface = iface
+        self.mainWindow = iface.mainWindow()
         self.project = QgsProject.instance()
         self.plugin_dir = os.path.dirname(__file__)
         # Init toolbar and toolbar buttons
@@ -51,7 +49,6 @@ class Geoalert:
         self.dlg_login = LoginDialog()
         # Manage Threads
         self.task_manager = QgsApplication.taskManager()
-        self.fetch_processings_task_id = 10000000
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         # Check if there are stored credentials
         self.logged_in = self.settings.value("serverLogin") and self.settings.value("serverPassword")
@@ -74,8 +71,6 @@ class Geoalert:
         # Hide the ID column since it's only needed for table operations, not the user
         self.dlg.processingsTable.setColumnHidden(ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
-        # Stop running tasks on exit
-        self.dlg.finished.connect(self.cancel_fetch_processings_task)
         # Connect buttons
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
@@ -87,7 +82,7 @@ class Geoalert:
         self.dlg.useImageExtentAsAOI.stateChanged.connect(self.toggle_polygon_combo)
         # Select a local GeoTIFF if user chooses the respective option
         self.dlg.rasterCombo.currentIndexChanged.connect(self.select_tif)
-        self.dlg.startProcessing.clicked.connect(self.start_processing)
+        self.dlg.startProcessing.clicked.connect(self.create_processing)
         # Calculate AOI area
         self.dlg.polygonCombo.currentTextChanged.connect(self.calculateAOIArea)
         # Processings
@@ -168,7 +163,7 @@ class Geoalert:
 
     def select_output_directory(self):
         """Update the user's output directory."""
-        path = QFileDialog.getExistingDirectory(self.iface.mainWindow())
+        path = QFileDialog.getExistingDirectory(self.mainWindow)
         if path:
             self.dlg.outputDirectory.setText(path)
             self.settings.setValue("outputDir", path)
@@ -190,7 +185,7 @@ class Geoalert:
         login = self.dlg.customProviderLogin.text()
         password = self.dlg.customProviderPassword.text()
         self.settings.setValue('connectID', connectID)
-        extent = self.get_layer_extent(aoi_layer).boundingBox().toString()
+        extent = helpers.get_layer_extent(aoi_layer, self.project.transformContext()).boundingBox().toString()
         # Change lon,lat to lat,lon for Maxar
         coords = [reversed(position.split(',')) for position in extent.split(':')]
         bbox = ','.join([coord.strip() for position in coords for coord in position])
@@ -363,7 +358,7 @@ class Geoalert:
         """Start a file selection dialog for a local GeoTIFF."""
         if index != 1:
             return
-        dlg = QFileDialog(self.iface.mainWindow(), self.tr("Select GeoTIFF"))
+        dlg = QFileDialog(self.mainWindow, self.tr("Select GeoTIFF"))
         dlg.setMimeTypeFilters(['image/tiff'])
         if dlg.exec():
             path = dlg.selectedFiles()[0]
@@ -374,7 +369,7 @@ class Geoalert:
             # If the user quits the dialog - reset the combo to another option
             self.dlg.rasterCombo.setCurrentIndex(0)
 
-    def start_processing(self):
+    def create_processing(self):
         """Spin up a thread to create a processing on the server."""
         processing_name = self.dlg.processingName.text()
         if not processing_name:
@@ -389,95 +384,60 @@ class Geoalert:
         raster_combo_index = self.dlg.rasterCombo.currentIndex()
         if raster_combo_index == 1:
             self.alert(self.tr("Please, be aware that you may be charged by the imagery provider!"))
-        elif raster_combo_index > 2:
-            self.push_message(self.tr("Please, wait. Uploading the file to the server..."))
-        # thread = Thread(target=self.create_processing)
-        # thread.start()
-        # self.alert(self.tr("Success! Processing may take up to several minutes"))
-        globals()['create_processing'] = QgsTask.fromFunction(
-            'Create processing',
-            self.create_processing,
-            on_finished=self.after_create_processing,
-            processing_name=processing_name
-        )
-        self.task_manager.addTask(globals()['create_processing'])
-        self.check_processings = True
-
-    def create_processing(self, task, processing_name):
-        """Initiate a processing."""
-        # processing_name = self.dlg.processingName.text()
-        wd = self.dlg.workflowDefinitionCombo.currentText()
         update_cache = str(self.dlg.updateCache.isChecked())
-        # Workflow definition parameters
-        params = {}
-        # Optional metadata
-        meta = {"source-app": "qgis"}
+        worker_kwargs = {
+            'processing_name': processing_name,
+            'server': self.server,
+            'auth': self.server_basic_auth,
+            'wd': self.dlg.workflowDefinitionCombo.currentText(),
+            # Workflow definition parameters
+            'params': {},
+            'transform_context': self.project.transformContext(),
+            # Optional metadata
+            'meta': {'source-app': 'qgis'}
+        }
         # Imagery selection
         raster_combo_index = self.dlg.rasterCombo.currentIndex()
         # Mapbox
         if raster_combo_index == 0:
-            meta['source'] = 'mapbox'
-            params["cache_raster_update"] = update_cache
+            worker_kwargs['meta']['source'] = 'mapbox'
+            worker_kwargs['params']["cache_raster_update"] = update_cache
         # Custom provider
         if raster_combo_index == 2:
-            params["source_type"] = self.dlg.customProviderType.currentText()
-            params["url"] = self.dlg.customProviderURL.text()
-            params["raster_login"] = self.dlg.customProviderLogin.text()
-            params["raster_password"] = self.dlg.customProviderPassword.text()
-            params["cache_raster_update"] = update_cache
-            if params["source_type"] == 'wms':
-                params['target_resolution'] = 0.000005  # for the 18th zoom
+            worker_kwargs['params']["source_type"] = self.dlg.customProviderType.currentText()
+            worker_kwargs['params']["url"] = self.dlg.customProviderURL.text()
+            worker_kwargs['params']["raster_login"] = self.dlg.customProviderLogin.text()
+            worker_kwargs['params']["raster_password"] = self.dlg.customProviderPassword.text()
+            worker_kwargs['params']["cache_raster_update"] = update_cache
+            if worker_kwargs['params']["source_type"] == 'wms':
+                worker_kwargs['params']['target_resolution'] = 0.000005  # for the 18th zoom
         # Local GeoTIFF
         elif raster_combo_index > 2:
             # Upload the image to the server
             raster_layer_id = self.raster_layer_ids[self.dlg.rasterCombo.currentIndex() - self.raster_combo_offset]
-            raster_layer = self.project.mapLayer(raster_layer_id)
-            with open(raster_layer.dataProvider().dataSourceUri(), 'rb') as f:
-                r = requests.post(f'{self.server}/rest/rasters', auth=self.server_basic_auth, files={'file': f})
-            r.raise_for_status()
-            url = r.json()['uri']
-            self.log(self.tr(f'Your image was uploaded to') + url)
-            params["source_type"] = "tif"
-            params["url"] = url
-        if self.dlg.useImageExtentAsAOI.isChecked():
-            aoi = self.get_layer_extent(raster_layer)
-        else:
-            aoi_layer = self.project.mapLayer(self.polygon_layer_ids[self.dlg.polygonCombo.currentIndex()])
-            aoi = next(aoi_layer.getFeatures()).geometry()
-            # Reproject it to WGS84 if the layer has another CRS
-            layer_crs = aoi_layer.crs()
-            if layer_crs != WGS84:
-                aoi = self.to_wgs84(aoi, layer_crs)
-        # If we pass it as JSON, the URL in params will be urlencoded: e.g. ? -> %3F and the creation will fail
-        # To avoid it, we have to convert the body to a string and pass it to the 'data' param instead of 'json'
-        # However, Python serializes a dict with single quotes, so the server will see it as invalid JSON
-        # To fix this, we have to replace '' in the string with ""
-        body = str({
-            "name": processing_name,
-            "wdName": wd,
-            "geometry": json.loads(aoi.asJson()),
-            "params": params,
-            "meta": meta
-        }).replace('\'', '"')
-        self.log(f'REQUEST BODY:\n{body}')
-        # Post the processing
-        r = requests.post(
-            url=f'{self.server}/rest/processings',
-            headers={'Content-Type': 'application/json'},
-            auth=self.server_basic_auth,
-            data=body)
-        self.log(f'RESPONSE:\n{r.text}')
-        r.raise_for_status()
-        return r
+            worker_kwargs['tif'] = self.project.mapLayer(raster_layer_id)
+            worker_kwargs['params']["source_type"] = "tif"
+        if not self.dlg.useImageExtentAsAOI.isChecked():
+            worker_kwargs['aoi_layer'] = self.project.mapLayer(self.polygon_layer_ids[self.dlg.polygonCombo.currentIndex()])
+        thread = QThread(self.mainWindow)
+        worker = ProcessingCreator(**worker_kwargs)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.create_processing)
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(self.processing_created)
+        worker.tif_uploaded.connect(lambda url: self.log(self.tr(f'Your image was uploaded to: ') + url, Qgis.Success))
+        worker.error.connect(lambda error: self.log(error))
+        worker.error.connect(lambda: self.alert(self.tr('Processing creation failed, see the QGIS log for details')))
+        self.dlg.finished.connect(thread.requestInterruption)
+        thread.start()
+        self.push_message(self.tr('Starting the processing...'))
 
-    def after_create_processing(self, exception, response=None):
+    def processing_created(self):
         """"""
-        if not response:
-            self.log(exception)
-            return
-        self.check_processings = True
-        self.dlg.processingName.clear()
+        # self.worker.set_processing_created(True)
         self.alert(self.tr("Success! Processing may take up to several minutes"))
+        self.worker.thread().start()
+        self.dlg.processingName.clear()
 
     def load_custom_tileset(self):
         """Custom provider imagery preview."""
@@ -580,68 +540,18 @@ class Geoalert:
         """Display a translated message on the message bar."""
         self.iface.messageBar().pushMessage("Mapflow", text, level, duration)
 
-    def log(self, message):
+    def log(self, message, level=Qgis.Warning):
         """Log a message to the Mapflow tab in the QGIS Message Log."""
-        QgsMessageLog.logMessage(message, 'Mapflow')
+        QgsMessageLog.logMessage(message, 'Mapflow', level=level)
 
-    def get_layer_extent(self, layer):
-        """Get a layer's bounding box (extent)."""
-        # Create a geometry from the layer's extent
-        extent_geometry = QgsGeometry.fromRect(layer.extent())
-        # Reproject it to WGS84 if the layer has another CRS
-        layer_crs = layer.crs()
-        if layer_crs != WGS84:
-            extent_geometry = self.to_wgs84(extent_geometry, layer_crs)
-        return extent_geometry
-
-    def to_wgs84(self, geometry, source_crs):
-        """"""
-        transform = QgsCoordinateTransform(source_crs, WGS84, self.project.transformContext())
-        geometry.transform(transform)
-        return geometry
-
-    def fetch_processings(self, task):
-        """Repeatedly refresh the list of processings."""
-        while True:
-            task.setProgress(0)
-            if not self.check_processings:
-                if task.isCanceled():
-                    return
-                time.sleep(PROCESSING_LIST_REFRESH_INTERVAL)
-                continue
-            # Fetch user processings
-            try:
-                r = requests.get(f'{self.server}/rest/processings', auth=self.server_basic_auth)
-                r.raise_for_status()
-                self.processings = r.json()
-                # Save ref to check name uniqueness at processing creation
-                self.processing_names = [processing['name'] for processing in self.processings]
-                task.setProgress(100)
-            except Exception as e:
-                self.log(e)
-            finally:
-                if task.isCanceled():
-                    task.setProgress(0)
-                    return
-            time.sleep(PROCESSING_LIST_REFRESH_INTERVAL)
-
-    def cancel_fetch_processings_task(self):
-        """Abort fetching processings from the server to let QGIS quit."""
-        try:
-            task = self.task_manager.task(self.fetch_processings_task_id)
-            task.progressChanged.disconnect(self.fill_out_processings_table)
-            task.cancel()
-        except:
-            pass
-
-    def fill_out_processings_table(self, fetch_processings_task_progress):
+    def fill_out_processings_table(self, processings):
         """Insert current processings in the table.
 
-        This function is called by daemon thread (QgsTask) that runs fetch_processings().
+        This function is called by a daemon thread that runs fetch_processings().
         """
-        # Check if fetch worked successfully
-        if fetch_processings_task_progress == 0 or self.task_manager.task(self.fetch_processings_task_id).isCanceled():
-            return
+        self.processings = processings
+        # Save ref to check name uniqueness at processing creation
+        self.processing_names = [processing['name'] for processing in self.processings]
         processing = [processing['id'] for processing in self.processings]
         self.dlg.processingsTable.setRowCount(len(self.processings))
         for processing in self.processings:
@@ -650,11 +560,9 @@ class Geoalert:
             # Localize creation datetime
             local_datetime = parse_datetime(processing['created']).astimezone()
             # Format as ISO without seconds to save a bit of space
-            processing['created'] = local_datetime.strftime('%Y-%m-%d %H:%m')
+            processing['created'] = local_datetime.strftime('%Y-%m-%d %H:%M')
             # Extract WD names from WD objects
             processing['workflowDef'] = processing['workflowDef']['name']
-        # Check for active processings and set flag to keep polling
-        self.check_processings = bool([p for p in self.processings if p['status'] in ("IN_PROGRESS", "UNPROCESSED")])
         # Turn sorting off while inserting
         self.dlg.processingsTable.setSortingEnabled(False)
         # Fill out the table
@@ -695,11 +603,10 @@ class Geoalert:
             icon_path,
             text='Geoalert',
             callback=self.run,
-            parent=self.iface.mainWindow())
+            parent=self.mainWindow)
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
-        self.cancel_fetch_processings_task()
         self.dlg.close()
         self.dlg_login.close()
         for action in self.actions:
@@ -744,7 +651,6 @@ class Geoalert:
 
     def run(self):
         """Plugin entrypoint."""
-        self.check_processings = True
         # If not logged in, show the login form
         while not self.logged_in:
             # If the user closes the dialog
@@ -755,20 +661,23 @@ class Geoalert:
                 self.dlg_login.invalidCredentialsMessage.hide()
                 return
         # Refresh the list of workflow definitions
-        login = self.settings.value('serverLogin') or self.dlg_login.loginField.text()
-        password = self.settings.value('serverPassword') or self.dlg_login.passwordField.text()
-        self.server_basic_auth = requests.auth.HTTPBasicAuth(login, password)
+        self.login = self.settings.value('serverLogin') or self.dlg_login.loginField.text()
+        self.password = self.settings.value('serverPassword') or self.dlg_login.passwordField.text()
+        self.server_basic_auth = requests.auth.HTTPBasicAuth(self.login, self.password)
         res = requests.get(f'{self.server}/rest/projects/default', auth=self.server_basic_auth)
         res.raise_for_status()
         wds = [wd['name'] for wd in res.json()['workflowDefs']]
         self.dlg.workflowDefinitionCombo.clear()
         self.dlg.workflowDefinitionCombo.addItems(wds)
-        # If logged in successfully, start polling the server for the list of processings
-        self.check_processings = True
-        task = QgsTask.fromFunction('Fetch processings', self.fetch_processings)
-        task.progressChanged.connect(self.fill_out_processings_table)
-        self.task_manager.addTask(task)
-        self.fetch_processings_task_id = self.task_manager.taskId(task)
+        # Fetch processings
+        thread = QThread(self.mainWindow)
+        self.worker = ProcessingFetcher(f'{self.server}/rest/processings', self.server_basic_auth)
+        self.worker.moveToThread(thread)
+        thread.started.connect(self.worker.fetch_processings)
+        self.worker.fetched.connect(self.fill_out_processings_table)
+        self.worker.finished.connect(thread.quit)
+        self.dlg.finished.connect(thread.requestInterruption)
+        thread.start()
         # Display area of the current AOI layer, if present
         self.calculateAOIArea(self.dlg.polygonCombo.currentText())
         # Show main dialog
