@@ -530,7 +530,7 @@ class Geoalert:
         if tif_layer.isValid():
             self.project.addMapLayer(tif_layer)
         self.project.addMapLayer(results_layer)
-        iface.zoomToActiveLayer()
+        self.iface.zoomToActiveLayer()
 
     def alert(self, message):
         """Display an info message."""
