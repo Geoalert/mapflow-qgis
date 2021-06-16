@@ -686,6 +686,7 @@ class Geoalert:
         self.worker.moveToThread(thread)
         thread.started.connect(self.worker.fetch_processings)
         self.worker.fetched.connect(self.fill_out_processings_table)
+        self.worker.error.connect(lambda error: self.log(error))
         self.worker.finished.connect(thread.quit)
         self.dlg.finished.connect(thread.requestInterruption)
         thread.start()

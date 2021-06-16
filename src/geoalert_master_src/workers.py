@@ -2,7 +2,6 @@ import json
 
 import requests
 from PyQt5.QtCore import QObject, pyqtSignal
-from qgis.core import QgsMessageLog
 
 from .helpers import get_layer_extent, to_wgs84, WGS84
 
@@ -11,6 +10,7 @@ class ProcessingFetcher(QObject):
     """"""
     fetched = pyqtSignal(list)
     finished = pyqtSignal()
+    error = pyqtSignal(str)
     processing_created = False
 
     def __init__(self, url, auth):
@@ -44,7 +44,8 @@ class ProcessingFetcher(QObject):
                     self.finished.emit()
                     break
             except Exception as e:
-                QgsMessageLog.logMessage(e, 'Mapflow')
+                self.error.emit(str(e))
+                return
 
 
 class ProcessingCreator(QObject):
