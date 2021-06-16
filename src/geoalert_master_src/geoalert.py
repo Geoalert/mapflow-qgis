@@ -346,6 +346,8 @@ class Geoalert:
         if not self.dlg.processingsTable.selectionModel().hasSelection():
             return
         selected_rows = self.dlg.processingsTable.selectionModel().selectedRows()
+        if self.alert(self.tr('Delete ') + str(len(selected_rows)) + self.tr(' processings?'), 'question') == QMessageBox.No:
+            return
         for index in [QPersistentModelIndex(row) for row in selected_rows]:
             row = index.row()
             pid = self.dlg.processingsTable.item(row, ID_COLUMN_INDEX).text()
