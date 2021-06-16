@@ -343,18 +343,21 @@ class Geoalert:
 
     def delete_processings(self):
         """Delete one or more processings on the server."""
-        self.dlg.processingsTable.setSortingEnabled(False)
-        self.selected_processings.sort(key=lambda x: x['row'], reverse=True)
-        for processing in self.selected_processings:
+        if not self.dlg.processingsTable.selectionModel().hasSelection():
+            return
+        selected_rows = self.dlg.processingsTable.selectionModel().selectedRows()
+        for index in [QPersistentModelIndex(row) for row in selected_rows]:
+            row = index.row()
+            pid = self.dlg.processingsTable.item(row, ID_COLUMN_INDEX).text()
+            name = self.dlg.processingsTable.item(row, 0).text()
             r = requests.delete(
-                url=f'{self.server}/rest/processings/{processing["id"]}',
+                url=f'{self.server}/rest/processings/{pid}',
                 auth=self.server_basic_auth
             )
             r.raise_for_status()
-            self.dlg.processingsTable.removeRow(processing['row'])
-            self.processing_names.remove(processing['name'])
-        self.dlg.processingsTable.setSortingEnabled(True)
-        self.push_message(self.tr("Processings successfully deleted!"))
+            self.dlg.processingsTable.removeRow(row)
+            self.processing_names.remove(name)
+        self.push_message(self.tr("Processing(s) successfully deleted!"))
 
     def select_tif(self, index):
         """Start a file selection dialog for a local GeoTIFF."""
@@ -569,9 +572,13 @@ class Geoalert:
         self.dlg.processingsTable.setSortingEnabled(False)
         # Fill out the table
         columns = ('name', 'workflowDef', 'status', 'percentCompleted', 'created', 'id')
+        selected_processing_names = [processing['name'] for processing in self.selected_processings]
         for row, processing in enumerate(self.processings):
             for col, attr in enumerate(columns):
                 self.dlg.processingsTable.setItem(row, col, QTableWidgetItem(processing[attr]))
+            if processing['name'] in selected_processing_names:
+                self.dlg.processingsTable.selectRow(row)
+
         # Turn sorting on again
         self.dlg.processingsTable.setSortingEnabled(True)
         # Sort by creation date (5th column) descending
