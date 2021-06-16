@@ -537,9 +537,9 @@ class Geoalert:
         self.project.addMapLayer(results_layer)
         self.iface.zoomToActiveLayer()
 
-    def alert(self, message):
-        """Display an info message."""
-        QMessageBox.information(self.dlg, 'Mapflow', message)
+    def alert(self, message, kind='information'):
+        """Display an interactive modal pop up."""
+        return getattr(QMessageBox, kind)(self.dlg, 'Mapflow', message)
 
     def push_message(self, text, level=Qgis.Info, duration=5):
         """Display a translated message on the message bar."""
