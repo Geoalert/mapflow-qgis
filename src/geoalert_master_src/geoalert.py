@@ -240,7 +240,7 @@ class Geoalert:
         connectID = self.dlg.maxarConnectID.text()
         featureID = self.dlg.maxarFeatureID.text()
         url = 'https://securewatch.digitalglobe.com/earthservice/wmtsaccess'
-        params = {
+        params = '&'.join(f'{key}={value}' for key, value in {
             'CONNECTID': connectID,
             'SERVICE': 'WMTS',
             'VERSION': '1.0.0',
@@ -252,10 +252,9 @@ class Geoalert:
             'TileCol': r'{x}',
             'TileMatrixSet': 'EPSG:3857',
             'TileMatrix': r'EPSG:3857:{z}',
-            'CQL_FILTER': f"feature_id = '{featureID}'" if featureID else ''
-        }
-        request = requests.Request('GET', url, params=params).prepare()
-        self.dlg.customProviderURL.setText(request.url)
+            'CQL_FILTER': f"feature_id='{featureID}'" if featureID else ''
+        }.items())
+        self.dlg.customProviderURL.setText(f'{url}?{params}')
         self.dlg.customProviderType.setCurrentIndex(0)
         self.settings.setValue('connectID', connectID)
 
@@ -270,16 +269,11 @@ class Geoalert:
         for i in range(len(stolbci)):
             for n in range(len(nameFields)):
                 if stolbci[i] == nameFields[n]:
-                    print(stolbci[i], n)
                     listN.append(n)
-        # print(listN)
 
         stolbci = []  # обнуляем, дальше код заполнит их сам
         # содержимое столбцов
         attrStolb = []
-        # список номерв столбцов, которые нужно добавить в таблицу
-        # listN = [1,4,6,7,17,24]
-        # выбираем только нужные столбцы и добавляем их в отдельные списки
         # перебор атрибутов всех объектов
         for fi in attrFields:
             # промежуточный список атрибутов для одного объекта
@@ -291,11 +285,8 @@ class Geoalert:
                         stolbci.append(nameFields[n])
                     at.append(fi[n])
             attrStolb.append(at)
-        #     print(at)
-        # print(stolbci)
         # сортировка обработок в в списке по дате в обратном порядке
         attrStolb.sort(reverse=True)
-        # print(attrStolb)
         # количество столбцов
         StolbKol = len(stolbci)
         self.dlg.maxarMetadataTable.setColumnCount(StolbKol)  # создаем столбцы
@@ -463,7 +454,7 @@ class Geoalert:
         worker.finished.connect(self.processing_created)
         worker.tif_uploaded.connect(lambda url: self.log(self.tr(f'Your image was uploaded to: ') + url, Qgis.Success))
         worker.error.connect(lambda error: self.log(error))
-        worker.error.connect(lambda: self.alert(self.tr('Processing creation failed, see the QGIS log for details')))
+        worker.error.connect(lambda: self.alert(self.tr('Processing creation failed, see the QGIS log for details'), kind='critical'))
         self.dlg.finished.connect(thread.requestInterruption)
         thread.start()
         self.push_message(self.tr('Starting the processing...'))
