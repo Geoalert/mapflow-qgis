@@ -115,6 +115,8 @@ class Geoalert:
         # Watch layer renaming
         for layer in polygon_layers + tif_layers:
             layer.nameChanged.connect(self.rename_layer)
+        for layer in polygon_layers:
+            layer.selectionChanged.connect(self.calculate_aoi_area)
         # Make and store a list of layer ids for addition & removal triggers
         self.polygon_layer_ids = [layer.id() for layer in polygon_layers]
         self.raster_layer_ids = [layer.id() for layer in tif_layers]
@@ -130,6 +132,7 @@ class Geoalert:
                 self.dlg.polygonCombo.addItem(layer.name())
                 self.polygon_layer_ids.append(layer.id())
                 layer.nameChanged.connect(self.rename_layer)
+                layer.selectionChanged.connect(self.calculate_aoi_area)
 
     def remove_layers(self, layer_ids):
         """Remove layer_ids from combo boxes and memory."""
@@ -323,8 +326,16 @@ class Geoalert:
         layers = self.project.mapLayersByName(combo.itemText(combo.currentIndex()))
         if layers:
             layer = layers[0]
+            if use_image_extent_as_aoi:
+                aoi = QgsGeometry.fromRect(layer.extent())
+            elif layer.featureCount() == 1:
+                aoi = next(layer.getFeatures()).geometry()
+            elif len(list(layer.getSelectedFeatures())) == 1:
+                aoi = next(layer.getFeatures()).geometry()
+            else:
+                self.dlg.labelAOIArea.setText('')
+                return
             layer_crs = layer.crs()
-            aoi = QgsGeometry.fromRect(layer.extent()) if use_image_extent_as_aoi else next(layer.getFeatures()).geometry()
             area_calculator = QgsDistanceArea()
             area_calculator.setEllipsoid(layer_crs.ellipsoidAcronym() or 'EPSG:7030')
             area_calculator.setSourceCrs(layer_crs, self.project.transformContext())
