@@ -344,6 +344,7 @@ class Geoalert:
     def delete_processings(self):
         """Delete one or more processings on the server."""
         self.dlg.processingsTable.setSortingEnabled(False)
+        self.selected_processings.sort(key=lambda x: x['row'], reverse=True)
         for processing in self.selected_processings:
             r = requests.delete(
                 url=f'{self.server}/rest/processings/{processing["id"]}',
