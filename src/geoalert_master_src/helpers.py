@@ -14,11 +14,7 @@ def is_geotiff_layer(layer):
 
 def is_polygon_layer(layer):
     """"""
-    return (
-        layer.type() == QgsMapLayerType.VectorLayer and
-        layer.geometryType() == QgsWkbTypes.PolygonGeometry and
-        layer.featureCount() == 1
-    )
+    return layer.type() == QgsMapLayerType.VectorLayer and layer.geometryType() == QgsWkbTypes.PolygonGeometry
 
 
 def to_wgs84(geometry, source_crs, transform_context):

@@ -115,6 +115,8 @@ class Geoalert:
         # Watch layer renaming
         for layer in polygon_layers + tif_layers:
             layer.nameChanged.connect(self.rename_layer)
+        for layer in polygon_layers:
+            layer.selectionChanged.connect(self.calculate_aoi_area)
         # Make and store a list of layer ids for addition & removal triggers
         self.polygon_layer_ids = [layer.id() for layer in polygon_layers]
         self.raster_layer_ids = [layer.id() for layer in tif_layers]
@@ -130,6 +132,7 @@ class Geoalert:
                 self.dlg.polygonCombo.addItem(layer.name())
                 self.polygon_layer_ids.append(layer.id())
                 layer.nameChanged.connect(self.rename_layer)
+                layer.selectionChanged.connect(self.calculate_aoi_area)
 
     def remove_layers(self, layer_ids):
         """Remove layer_ids from combo boxes and memory."""
@@ -237,7 +240,7 @@ class Geoalert:
         connectID = self.dlg.maxarConnectID.text()
         featureID = self.dlg.maxarFeatureID.text()
         url = 'https://securewatch.digitalglobe.com/earthservice/wmtsaccess'
-        params = {
+        params = '&'.join(f'{key}={value}' for key, value in {
             'CONNECTID': connectID,
             'SERVICE': 'WMTS',
             'VERSION': '1.0.0',
@@ -249,10 +252,9 @@ class Geoalert:
             'TileCol': r'{x}',
             'TileMatrixSet': 'EPSG:3857',
             'TileMatrix': r'EPSG:3857:{z}',
-            'CQL_FILTER': f"feature_id = '{featureID}'" if featureID else ''
-        }
-        request = requests.Request('GET', url, params=params).prepare()
-        self.dlg.customProviderURL.setText(request.url)
+            'CQL_FILTER': f"feature_id='{featureID}'" if featureID else ''
+        }.items())
+        self.dlg.customProviderURL.setText(f'{url}?{params}')
         self.dlg.customProviderType.setCurrentIndex(0)
         self.settings.setValue('connectID', connectID)
 
@@ -267,16 +269,11 @@ class Geoalert:
         for i in range(len(stolbci)):
             for n in range(len(nameFields)):
                 if stolbci[i] == nameFields[n]:
-                    print(stolbci[i], n)
                     listN.append(n)
-        # print(listN)
 
         stolbci = []  # обнуляем, дальше код заполнит их сам
         # содержимое столбцов
         attrStolb = []
-        # список номерв столбцов, которые нужно добавить в таблицу
-        # listN = [1,4,6,7,17,24]
-        # выбираем только нужные столбцы и добавляем их в отдельные списки
         # перебор атрибутов всех объектов
         for fi in attrFields:
             # промежуточный список атрибутов для одного объекта
@@ -288,11 +285,8 @@ class Geoalert:
                         stolbci.append(nameFields[n])
                     at.append(fi[n])
             attrStolb.append(at)
-        #     print(at)
-        # print(stolbci)
         # сортировка обработок в в списке по дате в обратном порядке
         attrStolb.sort(reverse=True)
-        # print(attrStolb)
         # количество столбцов
         StolbKol = len(stolbci)
         self.dlg.maxarMetadataTable.setColumnCount(StolbKol)  # создаем столбцы
@@ -323,8 +317,16 @@ class Geoalert:
         layers = self.project.mapLayersByName(combo.itemText(combo.currentIndex()))
         if layers:
             layer = layers[0]
+            if use_image_extent_as_aoi:
+                aoi = QgsGeometry.fromRect(layer.extent())
+            elif layer.featureCount() == 1:
+                aoi = next(layer.getFeatures()).geometry()
+            elif len(list(layer.getSelectedFeatures())) == 1:
+                aoi = next(layer.getFeatures()).geometry()
+            else:
+                self.dlg.labelAOIArea.setText('')
+                return
             layer_crs = layer.crs()
-            aoi = QgsGeometry.fromRect(layer.extent()) if use_image_extent_as_aoi else next(layer.getFeatures()).geometry()
             area_calculator = QgsDistanceArea()
             area_calculator.setEllipsoid(layer_crs.ellipsoidAcronym() or 'EPSG:7030')
             area_calculator.setSourceCrs(layer_crs, self.project.transformContext())
@@ -401,7 +403,6 @@ class Geoalert:
             'wd': self.dlg.workflowDefinitionCombo.currentText(),
             # Workflow definition parameters
             'params': {},
-            'transform_context': self.project.transformContext(),
             # Optional metadata
             'meta': {'source-app': 'qgis'}
         }
@@ -424,10 +425,27 @@ class Geoalert:
         elif raster_combo_index > 2:
             # Upload the image to the server
             raster_layer_id = self.raster_layer_ids[self.dlg.rasterCombo.currentIndex() - self.raster_combo_offset]
-            worker_kwargs['tif'] = self.project.mapLayer(raster_layer_id)
+            tif_layer = self.project.mapLayer(raster_layer_id)
+            worker_kwargs['tif'] = tif_layer
+            worker_kwargs['aoi'] = helpers.get_layer_extent(tif_layer, self.project.transformContext())
             worker_kwargs['params']["source_type"] = "tif"
         if not self.dlg.useImageExtentAsAOI.isChecked():
-            worker_kwargs['aoi_layer'] = self.project.mapLayer(self.polygon_layer_ids[self.dlg.polygonCombo.currentIndex()])
+            aoi_layer = self.project.mapLayer(self.polygon_layer_ids[self.dlg.polygonCombo.currentIndex()])
+            if aoi_layer.featureCount() == 1:
+                aoi_feature = next(aoi_layer.getFeatures())
+            elif len(list(aoi_layer.getSelectedFeatures())) == 1:
+                aoi_feature = next(aoi_layer.getSelectedFeatures())
+            elif aoi_layer.featureCount() == 0:
+                self.alert(self.tr('Please, select a single feature in your AOI layer'))
+                return
+            else:
+                self.alert(self.tr('Please, select a single feature in your AOI layer'))
+                return
+            # Reproject it to WGS84 if the layer has another CRS
+            layer_crs = aoi_layer.crs()
+            if layer_crs != helpers.WGS84:
+                worker_kwargs['aoi'] = helpers.to_wgs84(aoi_feature.geometry(), layer_crs, self.project.transformContext())
+            worker_kwargs['aoi'] = aoi_feature.geometry()
         thread = QThread(self.mainWindow)
         worker = ProcessingCreator(**worker_kwargs)
         worker.moveToThread(thread)
@@ -436,7 +454,7 @@ class Geoalert:
         worker.finished.connect(self.processing_created)
         worker.tif_uploaded.connect(lambda url: self.log(self.tr(f'Your image was uploaded to: ') + url, Qgis.Success))
         worker.error.connect(lambda error: self.log(error))
-        worker.error.connect(lambda: self.alert(self.tr('Processing creation failed, see the QGIS log for details')))
+        worker.error.connect(lambda: self.alert(self.tr('Processing creation failed, see the QGIS log for details'), kind='critical'))
         self.dlg.finished.connect(thread.requestInterruption)
         thread.start()
         self.push_message(self.tr('Starting the processing...'))
@@ -497,18 +515,15 @@ class Geoalert:
             uri = '&'.join(f'{key}={val}' for key, val in params.items())
             tif_layer = QgsRasterLayer(uri, f'{processing_name}_image', 'wms')
         # First, save to GeoJSON
-        f = NamedTemporaryFile()
-        f.write(r.content)
-        # If processing results are empty, it leads to an obscure error at file writing, so stop there
-        if not r.json()['features']:
-            self.push_message(self.tr('Selected processing produced no results'))
-            return
+        geojson_file_name = os.path.join(self.dlg.outputDirectory.text(), f'{processing_name}.geojson')
+        with open(geojson_file_name, 'wb') as f:
+            f.write(r.content)
         # Export to Geopackage to avoid QGIS hanging if GeoJSON is very large
         output_path = os.path.join(self.dlg.outputDirectory.text(), f'{processing_name}.gpkg')
         write_options = QgsVectorFileWriter.SaveVectorOptions()
         write_options.layerOptions = ['fid=id']
         error, msg = QgsVectorFileWriter.writeAsVectorFormatV2(
-            QgsVectorLayer(f.name, 'temp', "ogr"),
+            QgsVectorLayer(geojson_file_name, 'temp', "ogr"),
             output_path,
             self.project.transformContext(),
             write_options
@@ -517,6 +532,11 @@ class Geoalert:
             self.push_message(self.tr('Error saving results! See QGIS logs.'), Qgis.Warning)
             self.log(msg)
             return
+        # Try to delete the GeoJSON file
+        try:
+            os.remove(geojson_file_name)
+        except:
+            pass
         # Load the results into QGIS
         results_layer = QgsVectorLayer(output_path, processing_name, "ogr")
         if not results_layer:

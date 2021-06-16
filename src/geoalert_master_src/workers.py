@@ -3,8 +3,6 @@ import json
 import requests
 from PyQt5.QtCore import QObject, pyqtSignal
 
-from .helpers import get_layer_extent, to_wgs84, WGS84
-
 
 class ProcessingFetcher(QObject):
     """"""
@@ -54,17 +52,16 @@ class ProcessingCreator(QObject):
     error = pyqtSignal(str)
     tif_uploaded = pyqtSignal(str)
 
-    def __init__(self, processing_name, server, auth, wd, params, transform_context, meta={}, tif=None, aoi_layer=None) -> None:
+    def __init__(self, processing_name, server, auth, wd, params, aoi, tif=None, meta={}) -> None:
         super().__init__()
         self.processing_name = processing_name
         self.server = server
         self.auth = auth
+        self.aoi = aoi
         self.tif = tif
         self.wd = wd
         self.params = params
         self.meta = meta
-        self.aoi_layer = aoi_layer
-        self.transform_context = transform_context
 
     def create_processing(self):
         """Initiate a processing."""
@@ -83,14 +80,6 @@ class ProcessingCreator(QObject):
             url = r.json()['uri']
             self.params["url"] = url
             self.tif_uploaded.emit(url)
-        if self.aoi_layer:
-            aoi = next(self.aoi_layer.getFeatures()).geometry()
-            # Reproject it to WGS84 if the layer has another CRS
-            layer_crs = self.aoi_layer.crs()
-            if layer_crs != WGS84:
-                aoi = to_wgs84(aoi, layer_crs, self.transform_context)
-        else:
-            aoi = get_layer_extent(self.tif, self.transform_context)
         # If we pass it as JSON, the URL in params will be urlencoded: e.g. ? -> %3F and the creation will fail
         # To avoid it, we have to convert the body to a string and pass it to the 'data' param instead of 'json'
         # However, Python serializes a dict with single quotes, so the server will see it as invalid JSON
@@ -98,7 +87,7 @@ class ProcessingCreator(QObject):
         body = str({
             "name": self.processing_name,
             "wdName": self.wd,
-            "geometry": json.loads(aoi.asJson()),
+            "geometry": json.loads(self.aoi.asJson()),
             "params": self.params,
             "meta": self.meta
         }).replace('\'', '"').encode()
