@@ -412,7 +412,6 @@ class Geoalert:
             'wd': self.dlg.workflowDefinitionCombo.currentText(),
             # Workflow definition parameters
             'params': {},
-            'transform_context': self.project.transformContext(),
             # Optional metadata
             'meta': {'source-app': 'qgis'}
         }
@@ -435,10 +434,27 @@ class Geoalert:
         elif raster_combo_index > 2:
             # Upload the image to the server
             raster_layer_id = self.raster_layer_ids[self.dlg.rasterCombo.currentIndex() - self.raster_combo_offset]
-            worker_kwargs['tif'] = self.project.mapLayer(raster_layer_id)
+            tif_layer = self.project.mapLayer(raster_layer_id)
+            worker_kwargs['tif'] = tif_layer
+            worker_kwargs['aoi'] = helpers.get_layer_extent(tif_layer, self.project.transformContext())
             worker_kwargs['params']["source_type"] = "tif"
         if not self.dlg.useImageExtentAsAOI.isChecked():
-            worker_kwargs['aoi_layer'] = self.project.mapLayer(self.polygon_layer_ids[self.dlg.polygonCombo.currentIndex()])
+            aoi_layer = self.project.mapLayer(self.polygon_layer_ids[self.dlg.polygonCombo.currentIndex()])
+            if aoi_layer.featureCount() == 1:
+                aoi_feature = next(aoi_layer.getFeatures())
+            elif len(list(aoi_layer.getSelectedFeatures())) == 1:
+                aoi_feature = next(aoi_layer.getSelectedFeatures())
+            elif aoi_layer.featureCount() == 0:
+                self.alert(self.tr('Please, select a single feature in your AOI layer'))
+                return
+            else:
+                self.alert(self.tr('Please, select a single feature in your AOI layer'))
+                return
+            # Reproject it to WGS84 if the layer has another CRS
+            layer_crs = aoi_layer.crs()
+            if layer_crs != helpers.WGS84:
+                worker_kwargs['aoi'] = helpers.to_wgs84(aoi_feature.geometry(), layer_crs, self.project.transformContext())
+            worker_kwargs['aoi'] = aoi_feature.geometry()
         thread = QThread(self.mainWindow)
         worker = ProcessingCreator(**worker_kwargs)
         worker.moveToThread(thread)
