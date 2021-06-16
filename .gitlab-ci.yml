@@ -14,11 +14,35 @@ stages:
   paths:
   - cache
 
+zip-dev:
+  image: alpine
+  stage: zip
+  only:
+    refs:
+    - dev
+    changes:
+    - src/**/*
+    - files/**
+  artifacts:
+    paths:
+      - cache/
+  script: 
+    - apk add --no-cache zip
+    - mkdir -p cache
+    - cp files/mapflow.xml cache/
+    - cp files/techinspec.xml cache/
+    - cp files/power.xml cache/
+    - cd src
+    - for n in $(ls);do zip -r ../cache/${n}.zip ${n};done 
+
 zip:
   image: alpine
   stage: zip
   cache: *cache
   only: *only
+  artifacts:
+    paths:
+      - cache/
   script:
   - apk add --no-cache zip
   - mkdir -p cache
