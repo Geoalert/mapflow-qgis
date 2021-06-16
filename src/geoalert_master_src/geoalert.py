@@ -524,18 +524,15 @@ class Geoalert:
             uri = '&'.join(f'{key}={val}' for key, val in params.items())
             tif_layer = QgsRasterLayer(uri, f'{processing_name}_image', 'wms')
         # First, save to GeoJSON
-        f = NamedTemporaryFile()
-        f.write(r.content)
-        # If processing results are empty, it leads to an obscure error at file writing, so stop there
-        if not r.json()['features']:
-            self.push_message(self.tr('Selected processing produced no results'))
-            return
+        geojson_file_name = os.path.join(self.dlg.outputDirectory.text(), f'{processing_name}.geojson')
+        with open(geojson_file_name, 'wb') as f:
+            f.write(r.content)
         # Export to Geopackage to avoid QGIS hanging if GeoJSON is very large
         output_path = os.path.join(self.dlg.outputDirectory.text(), f'{processing_name}.gpkg')
         write_options = QgsVectorFileWriter.SaveVectorOptions()
         write_options.layerOptions = ['fid=id']
         error, msg = QgsVectorFileWriter.writeAsVectorFormatV2(
-            QgsVectorLayer(f.name, 'temp', "ogr"),
+            QgsVectorLayer(geojson_file_name, 'temp', "ogr"),
             output_path,
             self.project.transformContext(),
             write_options
@@ -544,6 +541,11 @@ class Geoalert:
             self.push_message(self.tr('Error saving results! See QGIS logs.'), Qgis.Warning)
             self.log(msg)
             return
+        # Try to delete the GeoJSON file
+        try:
+            os.remove(geojson_file_name)
+        except:
+            pass
         # Load the results into QGIS
         results_layer = QgsVectorLayer(output_path, processing_name, "ogr")
         if not results_layer:
