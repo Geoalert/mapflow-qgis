@@ -76,7 +76,7 @@
     <message>
         <location filename="../main_dialog.ui" line="131"/>
         <source>AI model:</source>
-        <translation type="obsolete">ИИ Модель:</translation>
+        <translation type="obsolete">Модель:</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="273"/>
