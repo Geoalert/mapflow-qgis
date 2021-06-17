@@ -450,7 +450,12 @@
     <message>
         <location filename="../geoalert.py" line="350"/>
         <source>Area of processing: </source>
-        <translation>Площадь обработки: </translation>
+        <translation type="obsolete">Площадь обработки: </translation>
+    </message>
+    <message>
+        <location filename="../geoalert.py" line="350"/>
+        <source>Area: </source>
+        <translation>Площадь: </translation>
     </message>
 </context>
 </TS>
