@@ -272,7 +272,7 @@
         <location filename="../main_dialog.ui" line="1111"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;
 &lt;div style=&quot;margin:30px; background-color: #e8e8e8&quot;&gt;
-&lt;p&gt;This application requires access to &lt;a href=&quot;http://mapflow.ai/&quot;&gt;Mapflow.ai&lt;/a&gt; Processing API service. To obtain credentials, please, send us a request to help@geoalert.io&lt;/p&gt;
+&lt;p&gt;This application requires access to &lt;a href=&quot;http://mapflow.ai/&quot;&gt;Mapflow.ai&lt;/a&gt; Processing API service. To obtain credentials, please, &lt;a href=&quot;mailto:help@geoalert.io?subject=Processing API access&amp;body=Hello, I&apos;d like to use your QGIS plugin.&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;send us a request.&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;
 &lt;p&gt;
 &lt;h2 style=&quot;margin:30px;&quot;&gt;How to use the plugin&lt;/h2&gt;
 &lt;ul style=&quot;margin:10px; background-color: #e8e8e8&quot;&gt;
@@ -286,7 +286,7 @@
 &lt;/body&gt;&lt;/html&gt;</source>
         <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;
 &lt;div style=&quot;margin:30px; background-color: #e8e8e8&quot;&gt;
-&lt;p&gt;Для работы плагина требуется доступ к API платформы &lt;a href=&quot;http://mapflow.ai/&quot;&gt;Mapflow.ai&lt;/a&gt;. Для получения доступа напишите нам на help@geoalert.io&lt;/p&gt;
+&lt;p&gt;Для работы плагина требуется доступ к API платформы &lt;a href=&quot;http://mapflow.ai/&quot;&gt;Mapflow.ai&lt;/a&gt;. Напишите нам на &lt;a href=&quot;mailto:help@geoalert.io?subject=Доступ к API&amp;body=Здравствуйте, я хотел бы использовать ваш QGIS плагин.&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;почту&lt;/span&gt;&lt;/a&gt; для получения доступа.&lt;/p&gt;
 &lt;p&gt;
 &lt;h2 style=&quot;margin:30px;&quot;&gt;Как пользоваться плагином&lt;/h2&gt;
 &lt;ul style=&quot;margin:10px; background-color: #e8e8e8&quot;&gt;
@@ -313,12 +313,12 @@
         <translation type="obsolete">Иной (в настройках)</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="387"/>
+        <location filename="../geoalert.py" line="386"/>
         <source>Please, specify a name for your processing</source>
         <translation>Пожалуйста, выберите название обработки</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="390"/>
+        <location filename="../geoalert.py" line="389"/>
         <source>Processing name taken. Please, choose a different name.</source>
         <translation>Обработка с таким названием уже существует. Пожалуйста, выберите другое название.</translation>
     </message>
@@ -363,7 +363,7 @@
         <translation type="obsolete">Ошибка загрузки слоя!</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="397"/>
+        <location filename="../geoalert.py" line="396"/>
         <source>Please, be aware that you may be charged by the imagery provider!</source>
         <translation>За использование снимков в полном разрешении провайдер может взымать с вас плату!</translation>
     </message>
@@ -398,37 +398,32 @@
         <translation> обработок?</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="366"/>
-        <source>Processing(s) successfully deleted!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="372"/>
+        <location filename="../geoalert.py" line="371"/>
         <source>Select GeoTIFF</source>
         <translation>Выберите GeoTIFF</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="393"/>
+        <location filename="../geoalert.py" line="392"/>
         <source>Please, select an area of interest</source>
         <translation>Пожалуйста, выберите слой с областью обработки</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="442"/>
+        <location filename="../geoalert.py" line="441"/>
         <source>Please, select a single feature in your AOI layer</source>
         <translation>Пожалуйста, выделите один объект в слое</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="455"/>
+        <location filename="../geoalert.py" line="454"/>
         <source>Your image was uploaded to: </source>
         <translation>Ваш локальный снимок был загружен в: </translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="457"/>
+        <location filename="../geoalert.py" line="456"/>
         <source>Processing creation failed, see the QGIS log for details</source>
         <translation>Мы не смогли создать обработку. Более подробная информация в логе QGIS.</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="460"/>
+        <location filename="../geoalert.py" line="459"/>
         <source>Starting the processing...</source>
         <translation>Создаем обработку...</translation>
     </message>
