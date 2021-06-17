@@ -231,7 +231,7 @@
     <message>
         <location filename="../main_dialog.ui" line="147"/>
         <source>AI Model</source>
-        <translation type="unfinished"></translation>
+        <translation>Модель</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="261"/>
