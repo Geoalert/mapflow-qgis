@@ -363,7 +363,6 @@ class Geoalert:
             r.raise_for_status()
             self.dlg.processingsTable.removeRow(row)
             self.processing_names.remove(name)
-        self.push_message(self.tr("Processing(s) successfully deleted!"))
 
     def select_tif(self, index):
         """Start a file selection dialog for a local GeoTIFF."""
