@@ -347,7 +347,7 @@ class Geoalert:
             area_calculator.setEllipsoid(layer_crs.ellipsoidAcronym() or 'EPSG:7030')
             area_calculator.setSourceCrs(layer_crs, self.project.transformContext())
             area = area_calculator.measureArea(aoi) / 10**6  # sq m to sq km
-            label = self.tr('AOI area: ') + str(round(area, 2)) + self.tr(' sq km')
+            label = self.tr('Area of processing: ') + str(round(area, 2)) + self.tr(' sq.km')
         else:
             label = ''
         self.dlg.labelAOIArea.setText(label)

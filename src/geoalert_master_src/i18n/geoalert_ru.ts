@@ -390,12 +390,12 @@
     <message>
         <location filename="../geoalert.py" line="350"/>
         <source>AOI area: </source>
-        <translation>Будет обработано: </translation>
+        <translation type="obsolete">Будет обработано: </translation>
     </message>
     <message>
         <location filename="../geoalert.py" line="350"/>
-        <source> sq km</source>
-        <translation> кв. км</translation>
+        <source> sq.km</source>
+        <translation> кв.км</translation>
     </message>
     <message>
         <location filename="../geoalert.py" line="369"/>
@@ -418,7 +418,7 @@
         <translation>Пожалуйста, выберите слой с областью обработки</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="458"/>
+        <location filename="../geoalert.py" line="461"/>
         <source>Please, select a single feature in your AOI layer</source>
         <translation>Пожалуйста, выделите один объект в слое</translation>
     </message>
@@ -438,7 +438,7 @@
         <translation>Создаем обработку...</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="461"/>
+        <location filename="../geoalert.py" line="458"/>
         <source>Your AOI layer is empty</source>
         <translation>Слой с областями обработки пуст</translation>
     </message>
@@ -446,6 +446,11 @@
         <location filename="../geoalert.py" line="434"/>
         <source>Please, specify the imagery provider URL in Settings</source>
         <translation>Пожалуйста, укажите ссылку на источник снимков во вкладке Настройки</translation>
+    </message>
+    <message>
+        <location filename="../geoalert.py" line="350"/>
+        <source>Area of processing: </source>
+        <translation>Площадь обработки: </translation>
     </message>
 </context>
 </TS>
