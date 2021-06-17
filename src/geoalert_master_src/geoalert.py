@@ -185,14 +185,30 @@ class Geoalert:
             self.alert(self.tr('Please, specify an existing output directory'))
             return
         aoi_layer = self.dlg.maxarAOICombo.currentLayer()
+        if aoi_layer.featureCount() == 1:
+            aoi_feature = next(aoi_layer.getFeatures())
+        elif len(list(aoi_layer.getSelectedFeatures())) == 1:
+            aoi_feature = next(aoi_layer.getSelectedFeatures())
+        elif aoi_layer.featureCount() == 0:
+            self.alert(self.tr('Your AOI layer is empty'))
+            return
+        else:
+            self.alert(self.tr('Please, select a single feature in your AOI layer'))
+            return
+        aoi = aoi_feature.geometry()
+        # Reproject to WGS84, if necessary
+        layer_crs = aoi_layer.crs()
+        if layer_crs != helpers.WGS84:
+            aoi = helpers.to_wgs84(aoi, layer_crs, self.project.transformContext())
+        extent = aoi.boundingBox().toString()
+        # Change lon,lat to lat,lon for Maxar
+        coords = [reversed(position.split(',')) for position in extent.split(':')]
+        bbox = ','.join([coord.strip() for position in coords for coord in position])
+        # Read other form inputs
         connectID = self.dlg.maxarConnectID.text()
         login = self.dlg.customProviderLogin.text()
         password = self.dlg.customProviderPassword.text()
         self.settings.setValue('connectID', connectID)
-        extent = helpers.get_layer_extent(aoi_layer, self.project.transformContext()).boundingBox().toString()
-        # Change lon,lat to lat,lon for Maxar
-        coords = [reversed(position.split(',')) for position in extent.split(':')]
-        bbox = ','.join([coord.strip() for position in coords for coord in position])
         url = "https://securewatch.digitalglobe.com/catalogservice/wfsaccess"
         params = {
             "REQUEST": "GetFeature",
@@ -438,7 +454,7 @@ class Geoalert:
                 self.alert(self.tr('Please, select a single feature in your AOI layer'))
                 return
             else:
-                self.alert(self.tr('Please, select a single feature in your AOI layer'))
+                self.alert(self.tr('Your AOI layer is empty'))
                 return
             # Reproject it to WGS84 if the layer has another CRS
             layer_crs = aoi_layer.crs()
