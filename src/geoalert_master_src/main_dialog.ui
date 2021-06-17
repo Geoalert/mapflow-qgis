@@ -989,7 +989,7 @@
              </font>
             </property>
             <property name="text">
-             <string>Get provider URL</string>
+             <string>Get URL</string>
             </property>
            </widget>
           </item>
