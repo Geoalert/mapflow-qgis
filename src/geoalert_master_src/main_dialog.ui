@@ -147,7 +147,7 @@
      </column>
      <column>
       <property name="text">
-       <string>AI Model</string>
+       <string>Model</string>
       </property>
       <property name="textAlignment">
        <set>AlignCenter</set>
@@ -249,7 +249,7 @@
           </font>
          </property>
          <property name="text">
-          <string>Processing area:</string>
+          <string>AOI layer:</string>
          </property>
         </widget>
        </item>
@@ -261,7 +261,7 @@
           </font>
          </property>
          <property name="text">
-          <string>Mapflow model:</string>
+          <string>Model:</string>
          </property>
         </widget>
        </item>
@@ -1053,7 +1053,7 @@
            </font>
           </property>
           <property name="text">
-           <string>Processing area:</string>
+           <string>AOI layer:</string>
           </property>
          </widget>
         </item>
