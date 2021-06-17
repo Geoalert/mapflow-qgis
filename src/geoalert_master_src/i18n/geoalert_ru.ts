@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.0" language="ru_RU" sourcelanguage="en">
+<TS version="2.1" language="ru_RU" sourcelanguage="en">
 <context>
     <name>Dialog</name>
     <message>
@@ -75,13 +75,13 @@
     </message>
     <message>
         <location filename="../main_dialog.ui" line="131"/>
-        <source>AI model:</source>
-        <translation type="obsolete">Модель:</translation>
+        <source>Mapflow model:</source>
+        <translation type="obsolete">Модель Mapflow:</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="276"/>
         <source>Imagery source:</source>
-        <translation type="unfinished">Снимки:</translation>
+        <translation type="unfinished">Данные ДЗЗ:</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="168"/>
@@ -230,13 +230,8 @@
     </message>
     <message>
         <location filename="../main_dialog.ui" line="150"/>
-        <source>Model</source>
-        <translation>Модель</translation>
-    </message>
-    <message>
-        <location filename="../main_dialog.ui" line="264"/>
-        <source>Model:</source>
-        <translation>Модель:</translation>
+        <source>Mapflow model</source>
+        <translation>Модель Mapflow</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="291"/>
