@@ -429,8 +429,12 @@ class Geoalert:
             worker_kwargs['params']["cache_raster_update"] = update_cache
         # Custom provider
         if raster_combo_index == 2:
+            url = self.dlg.customProviderURL.text()
+            if not url:
+                self.alert(self.tr('Please, specify the imagery provider URL in Settings'))
+                return
+            worker_kwargs['params']["url"] = url
             worker_kwargs['params']["source_type"] = self.dlg.customProviderType.currentText()
-            worker_kwargs['params']["url"] = self.dlg.customProviderURL.text()
             worker_kwargs['params']["raster_login"] = self.dlg.customProviderLogin.text()
             worker_kwargs['params']["raster_password"] = self.dlg.customProviderPassword.text()
             worker_kwargs['params']["cache_raster_update"] = update_cache
