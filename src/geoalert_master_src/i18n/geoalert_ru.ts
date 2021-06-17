@@ -418,29 +418,34 @@
         <translation>Пожалуйста, выберите слой с областью обработки</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="454"/>
+        <location filename="../geoalert.py" line="458"/>
         <source>Please, select a single feature in your AOI layer</source>
         <translation>Пожалуйста, выделите один объект в слое</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="470"/>
+        <location filename="../geoalert.py" line="474"/>
         <source>Your image was uploaded to: </source>
         <translation>Ваш локальный снимок был загружен в: </translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="472"/>
+        <location filename="../geoalert.py" line="476"/>
         <source>Processing creation failed, see the QGIS log for details</source>
         <translation>Мы не смогли создать обработку. Более подробная информация в логе QGIS.</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="475"/>
+        <location filename="../geoalert.py" line="479"/>
         <source>Starting the processing...</source>
         <translation>Создаем обработку...</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="457"/>
+        <location filename="../geoalert.py" line="461"/>
         <source>Your AOI layer is empty</source>
         <translation>Слой с областями обработки пуст</translation>
+    </message>
+    <message>
+        <location filename="../geoalert.py" line="434"/>
+        <source>Please, specify the imagery provider URL in Settings</source>
+        <translation>Пожалуйста, укажите ссылку на источник снимков во вкладке Настройки</translation>
     </message>
 </context>
 </TS>
