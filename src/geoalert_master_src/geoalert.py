@@ -455,10 +455,10 @@ class Geoalert:
             elif len(list(aoi_layer.getSelectedFeatures())) == 1:
                 aoi_feature = next(aoi_layer.getSelectedFeatures())
             elif aoi_layer.featureCount() == 0:
-                self.alert(self.tr('Please, select a single feature in your AOI layer'))
+                self.alert(self.tr('Your AOI layer is empty'))
                 return
             else:
-                self.alert(self.tr('Your AOI layer is empty'))
+                self.alert(self.tr('Please, select a single feature in your AOI layer'))
                 return
             # Reproject it to WGS84 if the layer has another CRS
             layer_crs = aoi_layer.crs()
