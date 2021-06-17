@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.1" language="ru_RU" sourcelanguage="en">
+<TS version="2.0" language="ru_RU" sourcelanguage="en">
 <context>
     <name>Dialog</name>
     <message>
@@ -246,7 +246,7 @@
     <message>
         <location filename="../main_dialog.ui" line="336"/>
         <source>Update image in cache</source>
-        <translation>Сохранить в кэш</translation>
+        <translation>Обновить данные в кэш</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="364"/>
@@ -301,8 +301,8 @@
     </message>
     <message>
         <location filename="../main_dialog.ui" line="1056"/>
-        <source>AOI layer:</source>
-        <translation>Область:</translation>
+        <source>Area of processing:</source>
+        <translation>Область обработки:</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="881"/>
@@ -390,7 +390,7 @@
     <message>
         <location filename="../geoalert.py" line="350"/>
         <source>AOI area: </source>
-        <translation type="obsolete">Будет обработано: </translation>
+        <translation type="obsolete">Область обработки: </translation>
     </message>
     <message>
         <location filename="../geoalert.py" line="350"/>

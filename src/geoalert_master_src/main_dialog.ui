@@ -63,9 +63,6 @@
      <string>Processing</string>
     </attribute>
     <widget class="QTableWidget" name="processingsTable">
-     <property name="autoScroll">
-      <bool>false</bool>
-     </property>
      <property name="geometry">
       <rect>
        <x>12</x>
@@ -106,6 +103,9 @@
      </property>
      <property name="sizeAdjustPolicy">
       <enum>QAbstractScrollArea::AdjustIgnored</enum>
+     </property>
+     <property name="autoScroll">
+      <bool>false</bool>
      </property>
      <property name="editTriggers">
       <set>QAbstractItemView::NoEditTriggers</set>
@@ -1053,7 +1053,7 @@
            </font>
           </property>
           <property name="text">
-           <string>AOI layer:</string>
+           <string>Area of processing:</string>
           </property>
          </widget>
         </item>
