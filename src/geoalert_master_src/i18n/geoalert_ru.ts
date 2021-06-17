@@ -131,7 +131,7 @@
     <message>
         <location filename="../main_dialog.ui" line="496"/>
         <source>Delete</source>
-        <translation type="unfinished">Удалить обработку</translation>
+        <translation type="unfinished">Удалить</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="529"/>
