@@ -502,7 +502,7 @@
       </property>
       <property name="geometry">
        <rect>
-        <x>10</x>
+        <x>0</x>
         <y>10</y>
         <width>89</width>
         <height>32</height>
@@ -520,7 +520,7 @@
        </font>
       </property>
       <property name="visible">
-       <bool>false</bool>
+       <bool>true</bool>
       </property>
       <property name="styleSheet">
        <string notr="true"/>
@@ -1156,8 +1156,8 @@
          <rect>
           <x>0</x>
           <y>0</y>
-          <width>579</width>
-          <height>516</height>
+          <width>98</width>
+          <height>28</height>
          </rect>
         </property>
         <widget class="QLabel" name="text">
