@@ -1110,7 +1110,7 @@
          <property name="text">
           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;
 &lt;div style=&quot;margin:30px; background-color: #e8e8e8&quot;&gt;
-&lt;p&gt;This application requires access to &lt;a href=&quot;http://mapflow.ai/&quot;&gt;Mapflow.ai&lt;/a&gt; Processing API service. To obtain credentials, please, send us a request to help@geoalert.io&lt;/p&gt;
+&lt;p&gt;This application requires access to &lt;a href=&quot;http://mapflow.ai/&quot;&gt;Mapflow.ai&lt;/a&gt; Processing API service. To obtain credentials, please, &lt;a href=&quot;mailto:help@geoalert.io?subject=Processing API access&amp;body=Hello, I'd like to use your QGIS plugin.&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;send us a request.&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;
 &lt;p&gt;
 &lt;h2 style=&quot;margin:30px;&quot;&gt;How to use the plugin&lt;/h2&gt;
 &lt;ul style=&quot;margin:10px; background-color: #e8e8e8&quot;&gt;
