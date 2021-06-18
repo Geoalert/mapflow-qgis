@@ -265,10 +265,10 @@ class Geoalert:
             'REQUEST': 'GetTile',
             'LAYER': 'DigitalGlobe:ImageryTileService',
             'FORMAT': 'image/png' if featureID else 'image/jpeg',
-            'TileRow': r'{y}',
-            'TileCol': r'{x}',
+            'TileRow': '{y}',
+            'TileCol': '{x}',
             'TileMatrixSet': 'EPSG:3857',
-            'TileMatrix': r'EPSG:3857:{z}',
+            'TileMatrix': 'EPSG:3857:{z}',
             'CQL_FILTER': f"feature_id='{featureID}'" if featureID else ''
         }.items())
         self.dlg.customProviderURL.setText(f'{url}?{params}')
