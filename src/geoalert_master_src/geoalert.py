@@ -180,6 +180,7 @@ class Geoalert:
 
     def get_maxar_metadata(self):
         """Get SecureWatch image footprints."""
+        self.save_custom_provider_auth()
         # Check if user specified an existing output dir
         if not os.path.exists(self.dlg.outputDirectory.text()):
             self.alert(self.tr('Please, specify an existing output directory'))
@@ -264,10 +265,10 @@ class Geoalert:
             'REQUEST': 'GetTile',
             'LAYER': 'DigitalGlobe:ImageryTileService',
             'FORMAT': 'image/png' if featureID else 'image/jpeg',
-            'TileRow': r'{y}',
-            'TileCol': r'{x}',
+            'TileRow': '{y}',
+            'TileCol': '{x}',
             'TileMatrixSet': 'EPSG:3857',
-            'TileMatrix': r'EPSG:3857:{z}',
+            'TileMatrix': 'EPSG:3857:{z}',
             'CQL_FILTER': f"feature_id='{featureID}'" if featureID else ''
         }.items())
         self.dlg.customProviderURL.setText(f'{url}?{params}')
@@ -429,6 +430,7 @@ class Geoalert:
             worker_kwargs['params']["cache_raster_update"] = update_cache
         # Custom provider
         if raster_combo_index == 2:
+            self.save_custom_provider_auth()
             url = self.dlg.customProviderURL.text()
             if not url:
                 self.alert(self.tr('Please, specify the imagery provider URL in Settings'))
@@ -485,14 +487,18 @@ class Geoalert:
         self.worker.thread().start()
         self.dlg.processingName.clear()
 
-    def load_custom_tileset(self):
-        """Custom provider imagery preview."""
+    def save_custom_provider_auth(self):
+        """"""
         # Save the checkbox state itself
         self.settings.setValue("customProviderSaveAuth", self.dlg.customProviderSaveAuth.isChecked())
         # If checked, save the credentials
         if self.dlg.customProviderSaveAuth.isChecked():
             self.settings.setValue("customProviderLogin", self.dlg.customProviderLogin.text())
             self.settings.setValue("customProviderPassword", self.dlg.customProviderPassword.text())
+
+    def load_custom_tileset(self):
+        """Custom provider imagery preview."""
+        self.save_custom_provider_auth()
         url = self.dlg.customProviderURL.text()
         url_escaped = url.replace('&', '%26').replace('=', '%3D')
         params = {
