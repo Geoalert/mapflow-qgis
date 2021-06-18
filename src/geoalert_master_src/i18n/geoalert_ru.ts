@@ -75,13 +75,13 @@
     </message>
     <message>
         <location filename="../main_dialog.ui" line="131"/>
-        <source>AI model:</source>
-        <translation type="obsolete">Модель:</translation>
+        <source>Mapflow model:</source>
+        <translation type="obsolete">Модель Mapflow:</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="276"/>
         <source>Imagery source:</source>
-        <translation type="unfinished">Снимки:</translation>
+        <translation type="unfinished">Данные ДЗЗ:</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="168"/>
@@ -230,13 +230,8 @@
     </message>
     <message>
         <location filename="../main_dialog.ui" line="150"/>
-        <source>Model</source>
-        <translation>Модель</translation>
-    </message>
-    <message>
-        <location filename="../main_dialog.ui" line="264"/>
-        <source>Model:</source>
-        <translation>Модель:</translation>
+        <source>Mapflow model</source>
+        <translation>Модель Mapflow</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="291"/>
@@ -246,7 +241,7 @@
     <message>
         <location filename="../main_dialog.ui" line="336"/>
         <source>Update image in cache</source>
-        <translation>Сохранить в кэш</translation>
+        <translation>Обновить данные в кэш</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="364"/>
@@ -301,8 +296,8 @@
     </message>
     <message>
         <location filename="../main_dialog.ui" line="1056"/>
-        <source>AOI layer:</source>
-        <translation>Область:</translation>
+        <source>Area of processing:</source>
+        <translation>Область обработки:</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="881"/>
@@ -390,7 +385,7 @@
     <message>
         <location filename="../geoalert.py" line="350"/>
         <source>AOI area: </source>
-        <translation type="obsolete">Будет обработано: </translation>
+        <translation type="obsolete">Область обработки: </translation>
     </message>
     <message>
         <location filename="../geoalert.py" line="350"/>
