@@ -264,12 +264,12 @@ class Geoalert:
             'STYLE': '',
             'REQUEST': 'GetTile',
             'LAYER': 'DigitalGlobe:ImageryTileService',
-            'FORMAT': 'image/png' if featureID else 'image/jpeg',
+            'FORMAT': 'image/jpeg' if featureID else 'image/png',
             'TileRow': '{y}',
             'TileCol': '{x}',
             'TileMatrixSet': 'EPSG:3857',
             'TileMatrix': 'EPSG:3857:{z}',
-            'CQL_FILTER': f"feature_id='{featureID}'" if featureID else ''
+            'CQL_FILTER': f"feature_id=%27{featureID}%27" if featureID else ''
         }.items())
         self.dlg.customProviderURL.setText(f'{url}?{params}')
         self.dlg.customProviderType.setCurrentIndex(0)
