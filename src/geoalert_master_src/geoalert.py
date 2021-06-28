@@ -466,7 +466,8 @@ class Geoalert:
             layer_crs = aoi_layer.crs()
             if layer_crs != helpers.WGS84:
                 worker_kwargs['aoi'] = helpers.to_wgs84(aoi_feature.geometry(), layer_crs, self.project.transformContext())
-            worker_kwargs['aoi'] = aoi_feature.geometry()
+            else:
+                worker_kwargs['aoi'] = aoi_feature.geometry()
         thread = QThread(self.mainWindow)
         worker = ProcessingCreator(**worker_kwargs)
         worker.moveToThread(thread)
