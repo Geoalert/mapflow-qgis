@@ -231,25 +231,76 @@
        <string>Start processing</string>
       </property>
      </widget>
+     <widget class="QLabel" name="labelAOIArea">
+      <property name="geometry">
+       <rect>
+        <x>0</x>
+        <y>130</y>
+        <width>181</width>
+        <height>21</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <italic>true</italic>
+       </font>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
      <widget class="QWidget" name="layoutWidget">
       <property name="geometry">
        <rect>
-        <x>2</x>
-        <y>5</y>
-        <width>571</width>
-        <height>115</height>
+        <x>3</x>
+        <y>11</y>
+        <width>664</width>
+        <height>62</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout">
-       <item row="1" column="0">
-        <widget class="QLabel" name="labelAOILayer">
+       <property name="rightMargin">
+        <number>90</number>
+       </property>
+       <item row="0" column="0">
+        <widget class="QLabel" name="labelProcessingName">
          <property name="font">
           <font>
            <pointsize>12</pointsize>
           </font>
          </property>
          <property name="text">
-          <string>Area of processing:</string>
+          <string>Processing name:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QLineEdit" name="processingName">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>150</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>150</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string/>
          </property>
         </widget>
        </item>
@@ -265,45 +316,6 @@
          </property>
         </widget>
        </item>
-       <item row="1" column="2">
-        <widget class="QLabel" name="labelImagerySource">
-         <property name="font">
-          <font>
-           <pointsize>12</pointsize>
-          </font>
-         </property>
-         <property name="text">
-          <string>Imagery source:</string>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="0" colspan="2">
-        <widget class="QCheckBox" name="useImageExtentAsAOI">
-         <property name="enabled">
-          <bool>false</bool>
-         </property>
-         <property name="font">
-          <font>
-           <pointsize>12</pointsize>
-          </font>
-         </property>
-         <property name="text">
-          <string>Use image extent</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="0">
-        <widget class="QLabel" name="labelProcessingName">
-         <property name="font">
-          <font>
-           <pointsize>12</pointsize>
-          </font>
-         </property>
-         <property name="text">
-          <string>Processing name:</string>
-         </property>
-        </widget>
-       </item>
        <item row="0" column="3">
         <widget class="QComboBox" name="workflowDefinitionCombo">
          <property name="sizePolicy">
@@ -314,7 +326,7 @@
          </property>
          <property name="minimumSize">
           <size>
-           <width>170</width>
+           <width>160</width>
            <height>0</height>
           </size>
          </property>
@@ -325,15 +337,54 @@
          </property>
         </widget>
        </item>
-       <item row="2" column="2" colspan="2">
-        <widget class="QCheckBox" name="updateCache">
+       <item row="1" column="0">
+        <widget class="QLabel" name="labelAOILayer">
          <property name="font">
           <font>
            <pointsize>12</pointsize>
           </font>
          </property>
          <property name="text">
-          <string>Update image in cache</string>
+          <string>Area:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QComboBox" name="polygonCombo">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>150</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>150</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="2">
+        <widget class="QLabel" name="labelImagerySource">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Imagery source:</string>
          </property>
         </widget>
        </item>
@@ -347,8 +398,14 @@
          </property>
          <property name="minimumSize">
           <size>
-           <width>170</width>
+           <width>160</width>
            <height>0</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>160</width>
+           <height>16777215</height>
           </size>
          </property>
          <property name="font">
@@ -376,19 +433,22 @@
          </item>
         </widget>
        </item>
-       <item row="0" column="1">
-        <widget class="QLineEdit" name="processingName">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="minimumSize">
-          <size>
-           <width>160</width>
-           <height>0</height>
-          </size>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="layoutWidget">
+      <property name="geometry">
+       <rect>
+        <x>3</x>
+        <y>87</y>
+        <width>571</width>
+        <height>27</height>
+       </rect>
+      </property>
+      <layout class="QHBoxLayout" name="horizontalLayout_2">
+       <item>
+        <widget class="QCheckBox" name="useImageExtentAsAOI">
+         <property name="enabled">
+          <bool>false</bool>
          </property>
          <property name="font">
           <font>
@@ -396,50 +456,23 @@
           </font>
          </property>
          <property name="text">
-          <string/>
+          <string>Use image extent</string>
          </property>
         </widget>
        </item>
-       <item row="1" column="1">
-        <widget class="QComboBox" name="polygonCombo">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="minimumSize">
-          <size>
-           <width>170</width>
-           <height>0</height>
-          </size>
-         </property>
+       <item>
+        <widget class="QCheckBox" name="updateCache">
          <property name="font">
           <font>
            <pointsize>12</pointsize>
           </font>
          </property>
+         <property name="text">
+          <string>Update image in cache</string>
+         </property>
         </widget>
        </item>
       </layout>
-     </widget>
-     <widget class="QLabel" name="labelAOIArea">
-      <property name="geometry">
-       <rect>
-        <x>0</x>
-        <y>130</y>
-        <width>181</width>
-        <height>21</height>
-       </rect>
-      </property>
-      <property name="font">
-       <font>
-        <italic>true</italic>
-       </font>
-      </property>
-      <property name="text">
-       <string/>
-      </property>
      </widget>
     </widget>
     <widget class="QWidget" name="processingsController" native="true">
@@ -752,7 +785,7 @@
        <rect>
         <x>10</x>
         <y>110</y>
-        <width>431</width>
+        <width>446</width>
         <height>62</height>
        </rect>
       </property>
@@ -848,10 +881,25 @@
       <layout class="QHBoxLayout" name="horizontalLayout">
        <item>
         <layout class="QHBoxLayout" name="maxarSecureWatch">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
          <item>
           <widget class="QCheckBox" name="checkMaxar">
            <property name="enabled">
             <bool>true</bool>
+           </property>
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>200</width>
+             <height>16777215</height>
+            </size>
            </property>
            <property name="font">
             <font>
@@ -1156,8 +1204,8 @@
          <rect>
           <x>0</x>
           <y>0</y>
-          <width>98</width>
-          <height>28</height>
+          <width>579</width>
+          <height>516</height>
          </rect>
         </property>
         <widget class="QLabel" name="text">

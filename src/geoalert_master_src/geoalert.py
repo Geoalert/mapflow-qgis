@@ -500,7 +500,7 @@ class Geoalert:
         """Custom provider imagery preview."""
         self.save_custom_provider_auth()
         url = self.dlg.customProviderURL.text()
-        url_escaped = url.replace('&', '%26').replace('=', '%3D')
+        url_escaped = url.replace('&', '%26').replace('=', '%3D').replace('jpeg', 'png')
         params = {
             'type': self.dlg.customProviderType.currentText(),
             'url': url_escaped,
