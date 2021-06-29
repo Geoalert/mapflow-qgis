@@ -264,7 +264,7 @@ class Geoalert:
             'STYLE': '',
             'REQUEST': 'GetTile',
             'LAYER': 'DigitalGlobe:ImageryTileService',
-            'FORMAT': 'image/jpeg' if featureID else 'image/png',
+            'FORMAT': 'image/jpeg',
             'TileRow': '{y}',
             'TileCol': '{x}',
             'TileMatrixSet': 'EPSG:3857',
