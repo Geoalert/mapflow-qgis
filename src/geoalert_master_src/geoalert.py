@@ -501,7 +501,7 @@ class Geoalert:
         if layer.isValid():
             self.project.addMapLayer(layer)
         else:
-            self.alert(self.tr('Invalid custom imagery provider:') + url_escaped)
+            self.alert(self.tr('Invalid custom imagery provider:') + uri.uri())
 
     def download_processing_results(self, row):
         """Download the resulting features and open them in QGIS."""
