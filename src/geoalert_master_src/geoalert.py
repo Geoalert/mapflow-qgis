@@ -34,6 +34,7 @@ class Geoalert:
         self.toolbar = self.iface.addToolBar('Geoalert')
         self.toolbar.setObjectName('Geoalert')
         self.settings = QgsSettings()
+        self.auth_manager = QgsApplication.authManager()
         # Create a namespace for the plugin settings
         self.settings.beginGroup('geoalert')
         # Translation
@@ -46,8 +47,6 @@ class Geoalert:
         # Init dialogs and keep references
         self.dlg = MainDialog()
         self.dlg_login = LoginDialog()
-        # Manage Threads
-        self.task_manager = QgsApplication.taskManager()
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         # Check if there are stored credentials
         self.logged_in = self.settings.value("serverLogin") and self.settings.value("serverPassword")
@@ -59,10 +58,7 @@ class Geoalert:
         self.dlg.maxarConnectID.setText(self.settings.value('connectID'))
         self.dlg.customProviderURL.setText(self.settings.value('customProviderURL'))
         self.dlg.customProviderType.setCurrentText(self.settings.value('customProviderType') or 'xyz')
-        if self.settings.value("customProviderSaveAuth"):
-            self.dlg.customProviderSaveAuth.setChecked(True)
-            self.dlg.customProviderLogin.setText(self.settings.value("customProviderLogin"))
-            self.dlg.customProviderPassword.setText(self.settings.value("customProviderPassword"))
+        self.dlg.customProviderAuth.setConfigId(self.settings.value('customProviderAuth'))
         # Number of fixed 'virtual' layers in the raster combo box
         self.raster_combo_offset = 3
         # Store processings selected in the table as dict(id=row_number)
@@ -93,6 +89,7 @@ class Geoalert:
         # Custom provider
         self.dlg.customProviderURL.textChanged.connect(lambda text: self.settings.setValue('customProviderURL', text))
         self.dlg.customProviderType.currentTextChanged.connect(lambda text: self.settings.setValue('customProviderType', text))
+        self.dlg.customProviderAuth.selectedConfigIdChanged.connect(lambda auth_id: self.settings.setValue('customProviderAuth', auth_id))
         self.dlg.preview.clicked.connect(self.load_custom_tileset)
         # Maxar
         self.dlg.getMaxarURL.clicked.connect(self.get_maxar_url)
@@ -177,9 +174,14 @@ class Geoalert:
         feature_id = self.dlg.maxarMetadataTable.model().index(row, 4).data()
         self.dlg.maxarFeatureID.setText(str(feature_id))
 
+    def get_custom_provider_credentials(self):
+        """"""
+        config = QgsAuthMethodConfig()
+        self.auth_manager.loadAuthenticationConfig(self.dlg.customProviderAuth.configId(), config, True)
+        return config.config('username'), config.config('password')
+
     def get_maxar_metadata(self):
         """Get SecureWatch image footprints."""
-        self.save_custom_provider_auth()
         # Check if user specified an existing output dir
         if not os.path.exists(self.dlg.outputDirectory.text()):
             self.alert(self.tr('Please, specify an existing output directory'))
@@ -206,8 +208,7 @@ class Geoalert:
         bbox = ','.join([coord.strip() for position in coords for coord in position])
         # Read other form inputs
         connectID = self.dlg.maxarConnectID.text()
-        login = self.dlg.customProviderLogin.text()
-        password = self.dlg.customProviderPassword.text()
+        login, password = self.get_custom_provider_credentials()
         self.settings.setValue('connectID', connectID)
         url = "https://securewatch.digitalglobe.com/catalogservice/wfsaccess"
         params = {
@@ -429,15 +430,15 @@ class Geoalert:
             worker_kwargs['params']["cache_raster_update"] = update_cache
         # Custom provider
         if raster_combo_index == 2:
-            self.save_custom_provider_auth()
             url = self.dlg.customProviderURL.text()
+            login, password = self.get_custom_provider_credentials()
             if not url:
                 self.alert(self.tr('Please, specify the imagery provider URL in Settings'))
                 return
             worker_kwargs['params']["url"] = url
             worker_kwargs['params']["source_type"] = self.dlg.customProviderType.currentText()
-            worker_kwargs['params']["raster_login"] = self.dlg.customProviderLogin.text()
-            worker_kwargs['params']["raster_password"] = self.dlg.customProviderPassword.text()
+            worker_kwargs['params']["raster_login"] = login
+            worker_kwargs['params']["raster_password"] = password
             worker_kwargs['params']["cache_raster_update"] = update_cache
             if worker_kwargs['params']["source_type"] == 'wms':
                 worker_kwargs['params']['target_resolution'] = 0.000005  # for the 18th zoom
@@ -487,34 +488,19 @@ class Geoalert:
         self.worker.thread().start()
         self.dlg.processingName.clear()
 
-    def save_custom_provider_auth(self):
-        """"""
-        # Save the checkbox state itself
-        self.settings.setValue("customProviderSaveAuth", self.dlg.customProviderSaveAuth.isChecked())
-        # If checked, save the credentials
-        if self.dlg.customProviderSaveAuth.isChecked():
-            self.settings.setValue("customProviderLogin", self.dlg.customProviderLogin.text())
-            self.settings.setValue("customProviderPassword", self.dlg.customProviderPassword.text())
-
     def load_custom_tileset(self):
         """Custom provider imagery preview."""
-        self.save_custom_provider_auth()
-        url = self.dlg.customProviderURL.text()
-        url_escaped = url.replace('&', '%26').replace('=', '%3D').replace('jpeg', 'png')
-        params = {
-            'type': self.dlg.customProviderType.currentText(),
-            'url': url_escaped,
-            'zmax': 14 if self.dlg.zoomLimit.isChecked() else 18,
-            'zmin': 0,
-            'username': self.dlg.customProviderLogin.text(),
-            'password': self.dlg.customProviderPassword.text()
-        }
-        uri = '&'.join(f'{key}={val}' for key, val in params.items())
-        layer = QgsRasterLayer(uri, self.tr('Custom tileset'), 'wms')
-        if not layer.isValid():
-            self.alert(self.tr('Invalid custom imagery provider:') + url_escaped)
-        else:
+        uri = QgsDataSourceUri()
+        uri.setParam('url', self.dlg.customProviderURL.text().replace('jpeg', 'png'))
+        uri.setParam('type', self.dlg.customProviderType.currentText())
+        uri.setParam('authcfg', self.dlg.customProviderAuth.configId())
+        uri.setParam('zmax', str(14 if self.dlg.zoomLimit.isChecked() else 18))
+        uri.setParam('zmin', '0')
+        layer = QgsRasterLayer(str(uri.encodedUri(), 'utf8'), self.tr('Custom tileset'), 'wms')
+        if layer.isValid():
             self.project.addMapLayer(layer)
+        else:
+            self.alert(self.tr('Invalid custom imagery provider:') + uri.uri())
 
     def download_processing_results(self, row):
         """Download the resulting features and open them in QGIS."""
