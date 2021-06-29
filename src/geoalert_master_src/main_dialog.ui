@@ -125,11 +125,11 @@
      <attribute name="horizontalHeaderCascadingSectionResizes">
       <bool>false</bool>
      </attribute>
-     <attribute name="horizontalHeaderDefaultSectionSize">
-      <number>116</number>
-     </attribute>
      <attribute name="horizontalHeaderMinimumSectionSize">
       <number>67</number>
+     </attribute>
+     <attribute name="horizontalHeaderDefaultSectionSize">
+      <number>116</number>
      </attribute>
      <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
       <bool>true</bool>
@@ -678,6 +678,25 @@
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout_2">
+       <item row="2" column="2">
+        <widget class="QCheckBox" name="zoomLimit">
+         <property name="enabled">
+          <bool>true</bool>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+           <kerning>true</kerning>
+          </font>
+         </property>
+         <property name="text">
+          <string>Max zoom 14</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
        <item row="0" column="0">
         <widget class="QLabel" name="labelCustomProviderURL">
          <property name="font">
@@ -691,25 +710,8 @@
          </property>
         </widget>
        </item>
-       <item row="0" column="1" colspan="2">
-        <widget class="QLabel" name="labelCustomProviderType">
-         <property name="font">
-          <font>
-           <pointsize>12</pointsize>
-           <kerning>true</kerning>
-          </font>
-         </property>
-         <property name="text">
-          <string>Source type:</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="0">
-        <widget class="QLineEdit" name="customProviderURL">
-         <property name="text">
-          <string/>
-         </property>
-        </widget>
+       <item row="2" column="0" colspan="2">
+        <widget class="QgsAuthConfigSelect" name="customProviderAuth"/>
        </item>
        <item row="1" column="1">
         <widget class="QComboBox" name="customProviderType">
@@ -746,11 +748,8 @@
          </property>
         </widget>
        </item>
-       <item row="2" column="2">
-        <widget class="QCheckBox" name="zoomLimit">
-         <property name="enabled">
-          <bool>true</bool>
-         </property>
+       <item row="0" column="1" colspan="2">
+        <widget class="QLabel" name="labelCustomProviderType">
          <property name="font">
           <font>
            <pointsize>12</pointsize>
@@ -758,112 +757,14 @@
           </font>
          </property>
          <property name="text">
-          <string>Max zoom 14</string>
-         </property>
-         <property name="checked">
-          <bool>true</bool>
+          <string>Source type:</string>
          </property>
         </widget>
        </item>
-       <item row="2" column="0">
-        <spacer name="verticalSpacer">
-         <property name="orientation">
-          <enum>Qt::Vertical</enum>
-         </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>20</width>
-           <height>40</height>
-          </size>
-         </property>
-        </spacer>
-       </item>
-      </layout>
-     </widget>
-     <widget class="QWidget" name="layoutWidget">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>110</y>
-        <width>446</width>
-        <height>62</height>
-       </rect>
-      </property>
-      <layout class="QGridLayout" name="gridLayout_5">
-       <item row="2" column="1">
-        <widget class="QgsPasswordLineEdit" name="customProviderPassword">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="minimumSize">
-          <size>
-           <width>180</width>
-           <height>21</height>
-          </size>
-         </property>
+       <item row="1" column="0">
+        <widget class="QLineEdit" name="customProviderURL">
          <property name="text">
           <string/>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="0">
-        <widget class="QLabel" name="labelCustomProviderPassword">
-         <property name="font">
-          <font>
-           <pointsize>12</pointsize>
-           <kerning>true</kerning>
-          </font>
-         </property>
-         <property name="text">
-          <string>Password:</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="0">
-        <widget class="QLabel" name="labelCustomProviderLogin">
-         <property name="font">
-          <font>
-           <pointsize>12</pointsize>
-           <kerning>true</kerning>
-          </font>
-         </property>
-         <property name="text">
-          <string>Login:</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="1" rowspan="2">
-        <widget class="QLineEdit" name="customProviderLogin">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="minimumSize">
-          <size>
-           <width>180</width>
-           <height>21</height>
-          </size>
-         </property>
-         <property name="text">
-          <string/>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="2" rowspan="2">
-        <widget class="QCheckBox" name="customProviderSaveAuth">
-         <property name="font">
-          <font>
-           <pointsize>12</pointsize>
-           <kerning>true</kerning>
-          </font>
-         </property>
-         <property name="text">
-          <string>Save Login/Password</string>
          </property>
         </widget>
        </item>
@@ -1252,14 +1153,14 @@
  </widget>
  <customwidgets>
   <customwidget>
+   <class>QgsAuthConfigSelect</class>
+   <extends>QWidget</extends>
+   <header>qgsauthconfigselect.h</header>
+  </customwidget>
+  <customwidget>
    <class>QgsMapLayerComboBox</class>
    <extends>QComboBox</extends>
    <header>qgsmaplayercombobox.h</header>
-  </customwidget>
-  <customwidget>
-   <class>QgsPasswordLineEdit</class>
-   <extends>QLineEdit</extends>
-   <header>qgspasswordlineedit.h</header>
   </customwidget>
  </customwidgets>
  <tabstops>
@@ -1268,10 +1169,6 @@
   <tabstop>customProviderURL</tabstop>
   <tabstop>customProviderType</tabstop>
   <tabstop>preview</tabstop>
-  <tabstop>zoomLimit</tabstop>
-  <tabstop>customProviderLogin</tabstop>
-  <tabstop>customProviderPassword</tabstop>
-  <tabstop>customProviderSaveAuth</tabstop>
   <tabstop>checkMaxar</tabstop>
   <tabstop>maxarConnectID</tabstop>
   <tabstop>getMaxarURL</tabstop>
