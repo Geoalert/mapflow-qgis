@@ -63,8 +63,9 @@ class Geoalert:
         self.raster_combo_offset = 3
         # Store processings selected in the table as dict(id=row_number)
         self.selected_processings = []
-        # Hide the ID column since it's only needed for table operations, not the user
+        # Hide the ID columns as only needed for table operations, not the user
         self.dlg.processingsTable.setColumnHidden(ID_COLUMN_INDEX, True)
+        self.dlg.maxarMetadataTable.setColumnHidden(0, True)
         # SET UP SIGNALS & SLOTS
         # Connect buttons
         self.dlg.logoutButton.clicked.connect(self.logout)
@@ -250,8 +251,12 @@ class Geoalert:
         # Fill out the table
         features = list(metadata_layer.getFeatures())
         self.dlg.maxarMetadataTable.setRowCount(len(features))
+        # Round up cloud cover to two decimal numbers
+        for feature in features:
+            # Use 'or 0' to handle NULL values that don't have a __round__ method
+            feature['cloudCover'] = round(feature['cloudCover'] or 0, 2)
         for row, feature in enumerate(features):
-            for col, field in enumerate(('featureId', 'sourceUnit', 'productType', 'colorBandOrder', 'formattedDate')):
+            for col, field in enumerate(('featureId', 'sourceUnit', 'productType', 'colorBandOrder', 'cloudCover', 'formattedDate')):
                 self.dlg.maxarMetadataTable.setItem(row, col, QTableWidgetItem(str(feature[field])))
 
     def get_maxar_url(self):
