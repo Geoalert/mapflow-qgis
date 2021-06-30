@@ -436,7 +436,6 @@ class Geoalert:
 
     def processing_created(self):
         """"""
-        # self.worker.set_processing_created(True)
         self.alert(self.tr("Success! Processing may take up to several minutes"))
         self.worker.thread().start()
         self.dlg.processingName.clear()
