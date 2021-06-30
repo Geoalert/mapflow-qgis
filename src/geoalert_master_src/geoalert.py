@@ -247,10 +247,12 @@ class Geoalert:
         if not success:  # if style not loaded remove it
             style_manager.removeStyle(style_name)
             self.alert(message)
-        # Fill out the imagery table
-        fields_names = [field.name() for field in metadata_layer.fields()]
-        attributes = [feature.attributes() for feature in metadata_layer.getFeatures()]
-        self.fill_out_maxar_metadata_table(fields_names, attributes)
+        # Fill out the table
+        features = list(metadata_layer.getFeatures())
+        self.dlg.maxarMetadataTable.setRowCount(len(features))
+        for row, feature in enumerate(features):
+            for col, field in enumerate(('featureId', 'sourceUnit', 'productType', 'colorBandOrder', 'formattedDate')):
+                self.dlg.maxarMetadataTable.setItem(row, col, QTableWidgetItem(str(feature[field])))
 
     def get_maxar_url(self):
         """Fill out the imagery provider URL field with the Maxar Secure Watch URL."""
@@ -274,59 +276,6 @@ class Geoalert:
         self.dlg.customProviderURL.setText(f'{url}?{params}')
         self.dlg.customProviderType.setCurrentIndex(0)
         self.settings.setValue('connectID', connectID)
-
-    def fill_out_maxar_metadata_table(self, nameFields, attrFields):
-        # очистка таблицы
-        self.dlg.maxarMetadataTable.clear()
-        # названия столбцов
-        stolbci = ['featureId', 'sourceUnit', 'productType', 'colorBandOrder', 'formattedDate']
-
-        listN = []
-        # ищем номера столбцов по названиям
-        for i in range(len(stolbci)):
-            for n in range(len(nameFields)):
-                if stolbci[i] == nameFields[n]:
-                    listN.append(n)
-
-        stolbci = []  # обнуляем, дальше код заполнит их сам
-        # содержимое столбцов
-        attrStolb = []
-        # перебор атрибутов всех объектов
-        for fi in attrFields:
-            # промежуточный список атрибутов для одного объекта
-            at = []
-            for n in reversed(range(len(nameFields))):
-                if n in listN:
-                    # заполняем список названий (пока не достигним их максимального количества)
-                    if len(listN) > len(stolbci):
-                        stolbci.append(nameFields[n])
-                    at.append(fi[n])
-            attrStolb.append(at)
-        # сортировка обработок в в списке по дате в обратном порядке
-        attrStolb.sort(reverse=True)
-        # количество столбцов
-        StolbKol = len(stolbci)
-        self.dlg.maxarMetadataTable.setColumnCount(StolbKol)  # создаем столбцы
-        self.dlg.maxarMetadataTable.setHorizontalHeaderLabels(stolbci)  # даем названия столбцам
-        # перебор всех столбцов и настройка
-        for nom in range(StolbKol):
-            # Устанавливаем выравнивание на заголовки
-            self.dlg.maxarMetadataTable.horizontalHeaderItem(nom).setTextAlignment(Qt.AlignCenter)
-        # указываем ширину столбцов
-        # self.dlg.maxarMetadataTable.setColumnWidth(0, 80)
-        # выделять всю строку при нажатии
-        self.dlg.maxarMetadataTable.setSelectionBehavior(QAbstractItemView.SelectRows)
-        # запретить редактировать таблицу пользователю
-        self.dlg.maxarMetadataTable.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        # включить сортировку в таблице
-        # self.dlg.maxarMetadataTable.setSortingEnabled(True)
-        kol_tab = len(attrStolb)  # количество элементов
-        self.dlg.maxarMetadataTable.setRowCount(kol_tab)  # создаем строки таблицы
-        # заполнение таблицы значениями
-        for x in range(len(attrStolb)):
-            for y in range(len(attrStolb[x])):
-                container = QTableWidgetItem(str(attrStolb[x][y]))
-                self.dlg.maxarMetadataTable.setItem(x, y, container)
 
     def calculate_aoi_area(self, arg):
         use_image_extent_as_aoi = self.dlg.useImageExtentAsAOI.isChecked()
