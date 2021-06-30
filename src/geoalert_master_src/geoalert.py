@@ -91,7 +91,7 @@ class Geoalert:
         self.dlg.customProviderURL.textChanged.connect(lambda text: self.settings.setValue('customProviderURL', text))
         self.dlg.customProviderType.currentTextChanged.connect(lambda text: self.settings.setValue('customProviderType', text))
         self.dlg.customProviderAuth.selectedConfigIdChanged.connect(lambda auth_id: self.settings.setValue('customProviderAuth', auth_id))
-        self.dlg.preview.clicked.connect(self.load_custom_tileset)
+        self.dlg.preview.clicked.connect(self.preview)
         # Maxar
         self.dlg.getMaxarURL.clicked.connect(self.get_maxar_url)
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
@@ -442,7 +442,7 @@ class Geoalert:
         self.worker.thread().start()
         self.dlg.processingName.clear()
 
-    def load_custom_tileset(self):
+    def preview(self):
         """Custom provider imagery preview."""
         uri = QgsDataSourceUri()
         uri.setParam('url', self.dlg.customProviderURL.text().replace('jpeg', 'png'))
