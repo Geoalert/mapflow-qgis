@@ -18,7 +18,8 @@ from .geoalert_dialog import MainDialog, LoginDialog
 
 
 PROCESSING_LIST_REFRESH_INTERVAL = 5  # in seconds
-ID_COLUMN_INDEX = 5
+RASTER_COMBO_VIRTUAL_LAYER_COUNT = 3  # Mapbox Satellite, Open new .tif, Custom provider
+ID_COLUMN_INDEX = 5  # processings table
 
 
 class Geoalert:
@@ -63,8 +64,6 @@ class Geoalert:
             self.dlg.customProviderSaveAuth.setChecked(True)
             self.dlg.customProviderLogin.setText(self.settings.value("customProviderLogin"))
             self.dlg.customProviderPassword.setText(self.settings.value("customProviderPassword"))
-        # Number of fixed 'virtual' layers in the raster combo box
-        self.raster_combo_offset = 3
         # Store processings selected in the table as dict(id=row_number)
         self.selected_processings = []
         # Hide the ID columns as only needed for table operations, not the user
@@ -100,26 +99,9 @@ class Geoalert:
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
         self.dlg.maxarMetadataTable.clicked.connect(self.set_maxar_feature_id)
         # Fill out the combo boxes
-        self.fill_out_combos_with_layers()
-
-    def fill_out_combos_with_layers(self):
-        """Add all relevant (polygon & GeoTIFF) layer names to their respective combo boxes."""
-        # Fetch the layers
-        all_layers = self.project.mapLayers()
-        # Split by type (only the relevant ones)
-        polygon_layers = [layer for lid, layer in all_layers.items() if helpers.is_polygon_layer(layer)]
-        tif_layers = [layer for lid, layer in all_layers.items() if helpers.is_geotiff_layer(layer)]
-        # Fill out the combos
-        self.dlg.polygonCombo.addItems([layer.name() for layer in polygon_layers])
-        self.dlg.rasterCombo.addItems([layer.name() for layer in tif_layers])
-        # Watch layer renaming
-        for layer in polygon_layers + tif_layers:
-            layer.nameChanged.connect(self.rename_layer)
-        for layer in polygon_layers:
-            layer.selectionChanged.connect(self.calculate_aoi_area)
-        # Make and store a list of layer ids for addition & removal triggers
-        self.polygon_layer_ids = [layer.id() for layer in polygon_layers]
-        self.raster_layer_ids = [layer.id() for layer in tif_layers]
+        self.polygon_layer_ids = []
+        self.raster_layer_ids = []
+        self.add_layers(self.project.mapLayers().values())
 
     def add_layers(self, layers):
         """Add layer_ids to combo boxes and memory."""
@@ -138,7 +120,7 @@ class Geoalert:
         """Remove layer_ids from combo boxes and memory."""
         for lid in layer_ids:
             if lid in self.raster_layer_ids:
-                self.dlg.rasterCombo.removeItem(self.raster_layer_ids.index(lid) + self.raster_combo_offset)
+                self.dlg.rasterCombo.removeItem(self.raster_layer_ids.index(lid) + RASTER_COMBO_VIRTUAL_LAYER_COUNT)
                 self.raster_layer_ids.remove(lid)
             elif lid in self.polygon_layer_ids:
                 self.dlg.polygonCombo.removeItem(self.polygon_layer_ids.index(lid))
@@ -146,17 +128,31 @@ class Geoalert:
 
     def rename_layer(self):
         """Update combo box contents when a project layer gets renamed."""
-        # Remove all polygon combo entries
-        self.dlg.polygonCombo.clear()
-        # Remove all raster combo entries except 'virtual'
-        for i in range(self.raster_combo_offset, self.dlg.rasterCombo.count()):
-            self.dlg.rasterCombo.removeItem(i)
-        # Now add all the relevant layer names to their combos again
-        self.fill_out_combos_with_layers()
+        # Memorize the current layers before they're temporarily removed
+        current_layers = self.raster_layer_ids + self.polygon_layer_ids
+        # Memorize the current combo box indexes
+        raster_combo_index = self.dlg.rasterCombo.currentIndex()
+        polygon_combo_index = self.dlg.polygonCombo.currentIndex()
+        # Tear down the signal-slot connections before layer re-adding
+        self.disconnect_layers()
+        # Remove layers from boxes and memory
+        self.remove_layers(current_layers)
+        # Now add them all over in the order they previously had
+        self.add_layers([self.project.mapLayer(_id) for _id in current_layers])
+        # Restore the combo box indexes
+        self.dlg.rasterCombo.setCurrentIndex(raster_combo_index)
+        self.dlg.polygonCombo.setCurrentIndex(polygon_combo_index)
+
+    def disconnect_layers(self):
+        """Disconnect the layers from nameChanged and selectionChanged signals to avoid connection duplication."""
+        for layer in [self.project.mapLayer(_id) for _id in self.polygon_layer_ids]:
+            layer.selectionChanged.disconnect(self.calculate_aoi_area)
+        for layer in [self.project.mapLayer(_id) for _id in self.polygon_layer_ids + self.raster_layer_ids]:
+            layer.nameChanged.disconnect(self.rename_layer)
 
     def toggle_use_image_extent_as_aoi(self, index):
         """Toggle the checkbox depending on the item in the raster combo box."""
-        enabled = index >= self.raster_combo_offset
+        enabled = index >= RASTER_COMBO_VIRTUAL_LAYER_COUNT
         self.dlg.useImageExtentAsAOI.setEnabled(enabled)
         self.dlg.useImageExtentAsAOI.setChecked(enabled)
         self.dlg.updateCache.setEnabled(not enabled)
@@ -281,7 +277,7 @@ class Geoalert:
         self.dlg.customProviderType.setCurrentIndex(0)
         self.settings.setValue('connectID', connectID)
 
-    def calculate_aoi_area(self, arg):
+    def calculate_aoi_area(self, _):
         use_image_extent_as_aoi = self.dlg.useImageExtentAsAOI.isChecked()
         combo = self.dlg.rasterCombo if use_image_extent_as_aoi else self.dlg.polygonCombo
         layers = self.project.mapLayersByName(combo.itemText(combo.currentIndex()))
@@ -398,7 +394,7 @@ class Geoalert:
         # Local GeoTIFF
         elif raster_combo_index > 2:
             # Upload the image to the server
-            raster_layer_id = self.raster_layer_ids[self.dlg.rasterCombo.currentIndex() - self.raster_combo_offset]
+            raster_layer_id = self.raster_layer_ids[self.dlg.rasterCombo.currentIndex() - RASTER_COMBO_VIRTUAL_LAYER_COUNT]
             tif_layer = self.project.mapLayer(raster_layer_id)
             worker_kwargs['tif'] = tif_layer
             worker_kwargs['aoi'] = helpers.get_layer_extent(tif_layer, self.project.transformContext())
@@ -624,7 +620,10 @@ class Geoalert:
             self.iface.removePluginVectorMenu('Geoalert', action)
             self.iface.removeToolBarIcon(action)
         del self.toolbar
-        self.settings.sync()
+        # Tear down the signal-slot connections to prevent them from doubling on reload
+        self.project.layersAdded.disconnect(self.add_layers)
+        self.project.layersRemoved.disconnect(self.remove_layers)
+        self.disconnect_layers()
 
     def connect_to_server(self):
         """Connect to Geoalert server."""
@@ -690,7 +689,5 @@ class Geoalert:
         self.worker.finished.connect(thread.quit)
         self.dlg.finished.connect(thread.requestInterruption)
         thread.start()
-        # Display area of the current AOI layer, if present
-        self.calculate_aoi_area(self.dlg.polygonCombo.currentIndex())
         # Show main dialog
         self.dlg.show()
