@@ -681,12 +681,17 @@
          </item>
          <item>
           <property name="text">
+           <string>wms</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
            <string>tms</string>
           </property>
          </item>
          <item>
           <property name="text">
-           <string>wms</string>
+           <string>quadkey</string>
           </property>
          </item>
         </widget>
