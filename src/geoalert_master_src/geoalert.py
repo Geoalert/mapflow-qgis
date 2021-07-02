@@ -1,20 +1,17 @@
 import os.path
-from math import *
-from tempfile import NamedTemporaryFile
 
 import requests
-from dateutil.parser import parse as parse_datetime
-from PyQt5 import *
+from dateutil.parser import parse as parse_datetime  # can't be imported otherwise
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from qgis.core import *
 from qgis.gui import *
 
-from . import helpers
-from .workers import ProcessingFetcher, ProcessingCreator
 from .resources_rc import *
 from .geoalert_dialog import MainDialog, LoginDialog
+from .workers import ProcessingFetcher, ProcessingCreator
+from . import helpers
 
 
 PROCESSING_LIST_REFRESH_INTERVAL = 5  # in seconds
