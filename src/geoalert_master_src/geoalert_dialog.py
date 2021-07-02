@@ -2,7 +2,7 @@ from pathlib import Path
 
 from PyQt5 import uic
 from PyQt5.QtWidgets import QDialog
-from qgis.core import QgsMapLayerProxyModel
+from qgis.core import QgsMapLayerProxyModel, QgsProviderRegistry
 from qgis.utils import iface
 
 
@@ -19,9 +19,17 @@ class MainDialog(QDialog, MainDialogForm):
         # Adjust column width in processings table
         for index, width in enumerate((95, 145, 75, 140, 100, 120)):
             self.processingsTable.setColumnWidth(index, width)
-        # Or else let the widget resize the columns automatically
-        # self.dlg.processingsTable.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.maxarAOICombo.setFilters(QgsMapLayerProxyModel.HasGeometry)
+        # Restrict the combo boxes to their relevant layer types
+        self.maxarAOICombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
+        self.polygonCombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
+        self.rasterCombo.setFilters(QgsMapLayerProxyModel.RasterLayer)
+        # Restrict the raster combo to GDAL. This won't itself narrow it down to GeoTIFF alone
+        # but it'll filter out other admittedly irrelevant providers
+        excluded_providers = QgsProviderRegistry.instance().providerList()
+        excluded_providers.remove('gdal')
+        self.rasterCombo.setExcludedProviders(excluded_providers)
+        # Add the 'virtual' raster layers
+        self.rasterCombo.setAdditionalItems(('Mapbox Satellite', 'Custom URL (in Settings)'))
 
 
 class LoginDialog(QDialog, LoginDialogForm):

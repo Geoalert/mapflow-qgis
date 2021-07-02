@@ -18,7 +18,7 @@ from .geoalert_dialog import MainDialog, LoginDialog
 
 
 PROCESSING_LIST_REFRESH_INTERVAL = 5  # in seconds
-RASTER_COMBO_VIRTUAL_LAYER_COUNT = 3  # Mapbox Satellite, Open new .tif, Custom provider
+RASTER_COMBO_VIRTUAL_LAYER_COUNT = 2  # Mapbox Satellite, Custom provider
 ID_COLUMN_INDEX = 5  # processings table
 
 
@@ -26,6 +26,7 @@ class Geoalert:
     """Initialize the plugin."""
 
     def __init__(self, iface):
+        # Save refs to key variables that'll be used throughout the plugin
         self.iface = iface
         self.mainWindow = iface.mainWindow()
         self.project = QgsProject.instance()
@@ -34,6 +35,7 @@ class Geoalert:
         self.actions = []
         self.toolbar = self.iface.addToolBar('Geoalert')
         self.toolbar.setObjectName('Geoalert')
+        # QGIS Settings will be used to store user credentials and various UI element state
         self.settings = QgsSettings()
         # Create a namespace for the plugin settings
         self.settings.beginGroup('geoalert')
@@ -44,11 +46,9 @@ class Geoalert:
             self.translator = QTranslator()
             self.translator.load(locale_path)
             QCoreApplication.installTranslator(self.translator)
-        # Init dialogs and keep references
+        # Init dialogs
         self.dlg = MainDialog()
         self.dlg_login = LoginDialog()
-        # Manage Threads
-        self.task_manager = QgsApplication.taskManager()
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         # Check if there are stored credentials
         self.logged_in = self.settings.value("serverLogin") and self.settings.value("serverPassword")
@@ -73,19 +73,16 @@ class Geoalert:
         # Connect buttons
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
-        # Watch layer addition/removal
-        self.project.layersAdded.connect(self.add_layers)
-        self.project.layersRemoved.connect(self.remove_layers)
+        self.dlg.selectTif.clicked.connect(self.select_tif)
         # (Dis)allow the user to use raster extent as AOI
-        self.dlg.rasterCombo.currentIndexChanged.connect(self.toggle_use_image_extent_as_aoi)
-        self.dlg.useImageExtentAsAOI.stateChanged.connect(self.toggle_polygon_combo)
-        # Select a local GeoTIFF if user chooses the respective option
-        self.dlg.rasterCombo.currentIndexChanged.connect(self.select_tif)
+        self.dlg.rasterCombo.layerChanged.connect(self.toggle_use_image_extent_as_aoi)
+        self.dlg.useImageExtentAsAOI.stateChanged.connect(lambda is_checked: self.dlg.polygonCombo.setEnabled(not is_checked))
         self.dlg.startProcessing.clicked.connect(self.create_processing)
         # Calculate AOI area
-        self.dlg.polygonCombo.currentIndexChanged.connect(self.calculate_aoi_area)
-        self.dlg.rasterCombo.currentIndexChanged.connect(self.calculate_aoi_area)
+        self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area)
+        self.dlg.rasterCombo.layerChanged.connect(self.calculate_aoi_area)
         self.dlg.useImageExtentAsAOI.toggled.connect(self.calculate_aoi_area)
+        self.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
         # Processings
         self.dlg.processingsTable.itemSelectionChanged.connect(self.memorize_selected_processings)
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_processing_results)
@@ -98,68 +95,18 @@ class Geoalert:
         self.dlg.getMaxarURL.clicked.connect(self.get_maxar_url)
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
         self.dlg.maxarMetadataTable.clicked.connect(self.set_maxar_feature_id)
-        # Fill out the combo boxes
-        self.polygon_layer_ids = []
-        self.raster_layer_ids = []
-        self.add_layers(self.project.mapLayers().values())
 
-    def add_layers(self, layers):
-        """Add layer_ids to combo boxes and memory."""
-        for layer in layers:
-            if helpers.is_geotiff_layer(layer):
-                self.dlg.rasterCombo.addItem(layer.name())
-                self.raster_layer_ids.append(layer.id())
-                layer.nameChanged.connect(self.rename_layer)
-            elif helpers.is_polygon_layer(layer):
-                self.dlg.polygonCombo.addItem(layer.name())
-                self.polygon_layer_ids.append(layer.id())
-                layer.nameChanged.connect(self.rename_layer)
-                layer.selectionChanged.connect(self.calculate_aoi_area)
+    def monitor_polygon_layer_feature_selection(self, layers):
+        """For every layer added to the project, monitor its feature selection to be able to calculate AOI area."""
+        for layer in [layer for layer in layers if helpers.is_polygon_layer(layer)]:
+            layer.selectionChanged.connect(self.calculate_aoi_area)
 
-    def remove_layers(self, layer_ids):
-        """Remove layer_ids from combo boxes and memory."""
-        for lid in layer_ids:
-            if lid in self.raster_layer_ids:
-                self.dlg.rasterCombo.removeItem(self.raster_layer_ids.index(lid) + RASTER_COMBO_VIRTUAL_LAYER_COUNT)
-                self.raster_layer_ids.remove(lid)
-            elif lid in self.polygon_layer_ids:
-                self.dlg.polygonCombo.removeItem(self.polygon_layer_ids.index(lid))
-                self.polygon_layer_ids.remove(lid)
-
-    def rename_layer(self):
-        """Update combo box contents when a project layer gets renamed."""
-        # Memorize the current layers before they're temporarily removed
-        current_layers = self.raster_layer_ids + self.polygon_layer_ids
-        # Memorize the current combo box indexes
-        raster_combo_index = self.dlg.rasterCombo.currentIndex()
-        polygon_combo_index = self.dlg.polygonCombo.currentIndex()
-        # Tear down the signal-slot connections before layer re-adding
-        self.disconnect_layers()
-        # Remove layers from boxes and memory
-        self.remove_layers(current_layers)
-        # Now add them all over in the order they previously had
-        self.add_layers([self.project.mapLayer(_id) for _id in current_layers])
-        # Restore the combo box indexes
-        self.dlg.rasterCombo.setCurrentIndex(raster_combo_index)
-        self.dlg.polygonCombo.setCurrentIndex(polygon_combo_index)
-
-    def disconnect_layers(self):
-        """Disconnect the layers from nameChanged and selectionChanged signals to avoid connection duplication."""
-        for layer in [self.project.mapLayer(_id) for _id in self.polygon_layer_ids]:
-            layer.selectionChanged.disconnect(self.calculate_aoi_area)
-        for layer in [self.project.mapLayer(_id) for _id in self.polygon_layer_ids + self.raster_layer_ids]:
-            layer.nameChanged.disconnect(self.rename_layer)
-
-    def toggle_use_image_extent_as_aoi(self, index):
+    def toggle_use_image_extent_as_aoi(self, _):
         """Toggle the checkbox depending on the item in the raster combo box."""
-        enabled = index >= RASTER_COMBO_VIRTUAL_LAYER_COUNT
+        enabled = bool(self.dlg.rasterCombo.currentLayer())
         self.dlg.useImageExtentAsAOI.setEnabled(enabled)
         self.dlg.useImageExtentAsAOI.setChecked(enabled)
         self.dlg.updateCache.setEnabled(not enabled)
-
-    def toggle_polygon_combo(self, is_checked):
-        """Enable/disable the polygon layer combo with reverse dependence on the use image extent as AOI checkbox."""
-        self.dlg.polygonCombo.setEnabled(not is_checked)
 
     def select_output_directory(self):
         """Update the user's output directory."""
@@ -167,6 +114,16 @@ class Geoalert:
         if path:
             self.dlg.outputDirectory.setText(path)
             self.settings.setValue("outputDir", path)
+
+    def select_tif(self):
+        """Start a file selection dialog for a local GeoTIFF."""
+        dlg = QFileDialog(self.mainWindow, self.tr("Select GeoTIFF"))
+        dlg.setMimeTypeFilters(['image/tiff'])
+        if dlg.exec():
+            path = dlg.selectedFiles()[0]
+            layer = QgsRasterLayer(path, os.path.basename(path).split('.')[0])
+            self.project.addMapLayer(layer)
+            self.dlg.rasterCombo.setLayer(layer)
 
     def set_maxar_feature_id(self):
         """Fill the Maxar FeatureID field out with the currently selecte feature ID."""
@@ -277,29 +234,37 @@ class Geoalert:
         self.dlg.customProviderType.setCurrentIndex(0)
         self.settings.setValue('connectID', connectID)
 
-    def calculate_aoi_area(self, _):
-        use_image_extent_as_aoi = self.dlg.useImageExtentAsAOI.isChecked()
-        combo = self.dlg.rasterCombo if use_image_extent_as_aoi else self.dlg.polygonCombo
-        layers = self.project.mapLayersByName(combo.itemText(combo.currentIndex()))
-        if layers:
-            layer = layers[0]
-            if use_image_extent_as_aoi:
-                aoi = QgsGeometry.fromRect(layer.extent())
-            elif layer.featureCount() == 1:
-                aoi = next(layer.getFeatures()).geometry()
-            elif len(list(layer.getSelectedFeatures())) == 1:
-                aoi = next(layer.getFeatures()).geometry()
-            else:
-                self.dlg.labelAOIArea.setText('')
+    def calculate_aoi_area(self, arg):
+        if arg is None:  # Mapbox Satellite or Custom provider
+            self.dlg.labelAOIArea.setText('')
+            return
+        elif isinstance(arg, list) and not self.dlg.useImageExtentAsAOI.isChecked():  # feature selection changed
+            layer = self.dlg.polygonCombo.currentLayer()
+            if (layer != self.iface.activeLayer()) or self.dlg.useImageExtentAsAOI.isChecked():
                 return
-            layer_crs = layer.crs()
-            area_calculator = QgsDistanceArea()
-            area_calculator.setEllipsoid(layer_crs.ellipsoidAcronym() or 'EPSG:7030')
-            area_calculator.setSourceCrs(layer_crs, self.project.transformContext())
-            area = area_calculator.measureArea(aoi) / 10**6  # sq m to sq km
-            label = self.tr('Area: ') + str(round(area, 2)) + self.tr(' sq.km')
+            layer = self.dlg.polygonCombo.currentLayer()
+        elif isinstance(arg, bool):  # checkbox state changed
+            combo = self.dlg.rasterCombo if arg else self.dlg.polygonCombo
+            layer = combo.currentLayer()
+        else:  # real layer
+            layer = arg
+        # Layer identified, now let's extract the geometry
+        if layer.type() == QgsMapLayerType.RasterLayer:
+            aoi = QgsGeometry.fromRect(layer.extent())
+        elif layer.featureCount() == 1:
+            aoi = next(layer.getFeatures()).geometry()
+        elif len(list(layer.getSelectedFeatures())) == 1:
+            aoi = next(layer.getSelectedFeatures()).geometry()
         else:
-            label = ''
+            self.dlg.labelAOIArea.setText('')
+            return
+        # Now, do the math
+        layer_crs = layer.crs()
+        area_calculator = QgsDistanceArea()
+        area_calculator.setEllipsoid(layer_crs.ellipsoidAcronym() or 'EPSG:7030')
+        area_calculator.setSourceCrs(layer_crs, self.project.transformContext())
+        area = area_calculator.measureArea(aoi) / 10**6  # sq m to sq km
+        label = self.tr('Area: ') + str(round(area, 2)) + self.tr(' sq.km')
         self.dlg.labelAOIArea.setText(label)
 
     def memorize_selected_processings(self):
@@ -330,21 +295,6 @@ class Geoalert:
             self.dlg.processingsTable.removeRow(row)
             self.processing_names.remove(name)
 
-    def select_tif(self, index):
-        """Start a file selection dialog for a local GeoTIFF."""
-        if index != 1:
-            return
-        dlg = QFileDialog(self.mainWindow, self.tr("Select GeoTIFF"))
-        dlg.setMimeTypeFilters(['image/tiff'])
-        if dlg.exec():
-            path = dlg.selectedFiles()[0]
-            layer_name = os.path.basename(path).split('.')[0]
-            self.iface.addRasterLayer(path, layer_name)
-            self.dlg.rasterCombo.setCurrentText(layer_name)
-        else:
-            # If the user quits the dialog - reset the combo to another option
-            self.dlg.rasterCombo.setCurrentIndex(0)
-
     def create_processing(self):
         """Spin up a thread to create a processing on the server."""
         processing_name = self.dlg.processingName.text()
@@ -357,50 +307,49 @@ class Geoalert:
         if self.dlg.polygonCombo.currentIndex() == -1 and not self.dlg.useImageExtentAsAOI.isChecked():
             self.alert(self.tr('Please, select an area of interest'))
             return
-        raster_combo_index = self.dlg.rasterCombo.currentIndex()
-        if raster_combo_index == 1:
-            self.alert(self.tr("Please, be aware that you may be charged by the imagery provider!"))
         update_cache = str(self.dlg.updateCache.isChecked())
         worker_kwargs = {
             'processing_name': processing_name,
             'server': self.server,
             'auth': self.server_basic_auth,
             'wd': self.dlg.workflowDefinitionCombo.currentText(),
-            # Workflow definition parameters
-            'params': {},
-            # Optional metadata
-            'meta': {'source-app': 'qgis'}
+            'params': {},  # workflow definition parameters
+            'meta': {'source-app': 'qgis'}  # optional metadata
         }
-        # Imagery selection
-        raster_combo_index = self.dlg.rasterCombo.currentIndex()
-        # Mapbox
-        if raster_combo_index == 0:
-            worker_kwargs['meta']['source'] = 'mapbox'
-            worker_kwargs['params']["cache_raster_update"] = update_cache
-        # Custom provider
-        if raster_combo_index == 2:
-            self.save_custom_provider_auth()
-            url = self.dlg.customProviderURL.text()
-            if not url:
-                self.alert(self.tr('Please, specify the imagery provider URL in Settings'))
-                return
-            worker_kwargs['params']["url"] = url
-            worker_kwargs['params']["source_type"] = self.dlg.customProviderType.currentText()
-            worker_kwargs['params']["raster_login"] = self.dlg.customProviderLogin.text()
-            worker_kwargs['params']["raster_password"] = self.dlg.customProviderPassword.text()
-            worker_kwargs['params']["cache_raster_update"] = update_cache
-            if worker_kwargs['params']["source_type"] == 'wms':
-                worker_kwargs['params']['target_resolution'] = 0.000005  # for the 18th zoom
+        current_raster_layer = self.dlg.rasterCombo.currentLayer()
         # Local GeoTIFF
-        elif raster_combo_index > 2:
+        if current_raster_layer:
+            # Can use dataProvider().htmlMetadata() instead but gotta parse it for GDAL Driver Metadata ('GeoTIFF')
+            if not os.path.splitext(current_raster_layer.dataProvider().dataSourceUri())[-1] in ('.tif', '.tiff'):
+                self.alert(self.tr('Please, select a GeoTIFF layer'))
+                return
             # Upload the image to the server
-            raster_layer_id = self.raster_layer_ids[self.dlg.rasterCombo.currentIndex() - RASTER_COMBO_VIRTUAL_LAYER_COUNT]
-            tif_layer = self.project.mapLayer(raster_layer_id)
-            worker_kwargs['tif'] = tif_layer
-            worker_kwargs['aoi'] = helpers.get_layer_extent(tif_layer, self.project.transformContext())
-            worker_kwargs['params']["source_type"] = "tif"
+            worker_kwargs['tif'] = current_raster_layer
+            worker_kwargs['aoi'] = helpers.get_layer_extent(current_raster_layer, self.project.transformContext())
+            worker_kwargs['params']['source_type'] = 'tif'
+        # Basemap
+        else:
+            raster_option = self.dlg.rasterCombo.currentText()
+            if raster_option == 'Mapbox Satellite':
+                worker_kwargs['meta']['source'] = 'mapbox'
+                worker_kwargs['params']["cache_raster_update"] = update_cache
+            # Custom provider
+            else:
+                url = self.dlg.customProviderURL.text()
+                if not url:
+                    self.alert(self.tr('Please, specify the imagery provider URL in Settings'))
+                    return
+                self.alert(self.tr("Please, be aware that you may be charged by the imagery provider!"))
+                self.save_custom_provider_auth()
+                worker_kwargs['params']["url"] = url
+                worker_kwargs['params']["source_type"] = self.dlg.customProviderType.currentText()
+                worker_kwargs['params']["raster_login"] = self.dlg.customProviderLogin.text()
+                worker_kwargs['params']["raster_password"] = self.dlg.customProviderPassword.text()
+                worker_kwargs['params']["cache_raster_update"] = update_cache
+                if worker_kwargs['params']["source_type"] == 'wms':
+                    worker_kwargs['params']['target_resolution'] = 0.000005  # for the 18th zoom
         if not self.dlg.useImageExtentAsAOI.isChecked():
-            aoi_layer = self.project.mapLayer(self.polygon_layer_ids[self.dlg.polygonCombo.currentIndex()])
+            aoi_layer = self.dlg.polygonCombo.currentLayer()
             if aoi_layer.featureCount() == 1:
                 aoi_feature = next(aoi_layer.getFeatures())
             elif len(list(aoi_layer.getSelectedFeatures())) == 1:
@@ -620,10 +569,6 @@ class Geoalert:
             self.iface.removePluginVectorMenu('Geoalert', action)
             self.iface.removeToolBarIcon(action)
         del self.toolbar
-        # Tear down the signal-slot connections to prevent them from doubling on reload
-        self.project.layersAdded.disconnect(self.add_layers)
-        self.project.layersRemoved.disconnect(self.remove_layers)
-        self.disconnect_layers()
 
     def connect_to_server(self):
         """Connect to Geoalert server."""
@@ -689,5 +634,10 @@ class Geoalert:
         self.worker.finished.connect(thread.quit)
         self.dlg.finished.connect(thread.requestInterruption)
         thread.start()
+        # Enable/disable the use of image extent as AOI based on the current raster combo layer
+        self.toggle_use_image_extent_as_aoi(self.dlg.rasterCombo.currentLayer())
+        # Calculate area of the current AOI layer or feature
+        combo = self.dlg.rasterCombo if self.dlg.useImageExtentAsAOI.isChecked() else self.dlg.polygonCombo
+        self.calculate_aoi_area(combo.currentLayer())
         # Show main dialog
         self.dlg.show()
