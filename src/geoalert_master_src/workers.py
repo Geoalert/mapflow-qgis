@@ -1,21 +1,38 @@
 import json
+from typing import Any, Dict, Tuple
 
 import requests
 from PyQt5.QtCore import QObject, pyqtSignal
+from qgis.core import QgsGeometry, QgsRasterLayer
 
 
 class ProcessingFetcher(QObject):
-    """"""
+    """A worker that continiously polls Mapflow to refresh the user's processings status."""
+
     fetched = pyqtSignal(list)
     finished = pyqtSignal()
     error = pyqtSignal(str)
 
-    def __init__(self, url, auth):
+    def __init__(self, url: str, auth: Tuple[str, str]) -> None:
+        """Initialize the worker with a URL and basic auth.
+
+        :param url: The Mapflow server URL
+        :param auth: A (login, password) tuple for user authentication
+        """
         super().__init__()
         self.url = url
         self.auth = auth
 
-    def fetch_processings(self):
+    def fetch_processings(self) -> None:
+        """Keep polling Mapflow to retrieve the current status for each of the user's processings.
+
+        Start an infinite loop that requests the user's processings and if any of those haven't finished,
+        waits for <PROCESSING_LIST_REFRESH_INTERVAL> and continues, or breaks otherwise. It also checks at
+        the start of iteration if interuption has been requested, and if so, breaks too.
+
+        After every successful processing fetch, it sends a signal to the main thread and supplies the fetched
+        processings in a JSON-formatted dict for the main thread to fill out the processings table.
+        """
         while True:
             if self.thread().isInterruptionRequested():
                 self.finished.emit()
@@ -37,12 +54,30 @@ class ProcessingFetcher(QObject):
 
 
 class ProcessingCreator(QObject):
-    """"""
+    """A worker that posts a 'create processing' request to Mapflow."""
+
     finished = pyqtSignal()
     error = pyqtSignal(str)
     tif_uploaded = pyqtSignal(str)
 
-    def __init__(self, processing_name, server, auth, wd, params, aoi, tif=None, meta={}) -> None:
+    def __init__(
+        self, processing_name: str, server: str, auth: Tuple[str, str], wd: str,
+        params: Dict[str, Any], aoi: QgsGeometry, tif: QgsRasterLayer = None, meta: Dict[str, str] = {}
+    ) -> None:
+        """Initialize the worker.
+
+        :param processing name: A name for the processing (can be in any language)
+        :param server: Mapflow URL
+        :param auth: A (login, password) tuple for user authentication
+        :param wd: The name of one of the workflow definitions present in the user's default project
+        :param params: A dictionary containing the various parameters for the processing;
+            contains the source imagery type ['wms', 'tms', 'xyz', 'quadkey', 'tif'],
+            the custom provider URL, login and password (if custom provider is used),
+            caching policy specification and the target imagery resolution in the case of WMS
+        :param aoi: A geometry within which the imagery will be processed
+        :param tif: A GeoTIFF-based raster layer that'll be used as source imagery
+        :param meta: Optional attributes that describe the processing
+        """
         super().__init__()
         self.processing_name = processing_name
         self.server = server
