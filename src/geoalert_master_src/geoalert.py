@@ -14,6 +14,7 @@ from .workers import ProcessingFetcher, ProcessingCreator
 from . import helpers
 
 
+PLUGIN_NAME = 'Geoalert'
 PROCESSING_LIST_REFRESH_INTERVAL = 5  # in seconds
 RASTER_COMBO_VIRTUAL_LAYER_COUNT = 2  # Mapbox Satellite, Custom provider
 ID_COLUMN_INDEX = 5  # processings table
@@ -23,19 +24,19 @@ class Geoalert:
     """Initialize the plugin."""
 
     def __init__(self, iface):
-        # Save refs to key variables that'll be used throughout the plugin
+        # Save refs to key variables used throughout the plugin
         self.iface = iface
         self.mainWindow = iface.mainWindow()
         self.project = QgsProject.instance()
         self.plugin_dir = os.path.dirname(__file__)
         # Init toolbar and toolbar buttons
         self.actions = []
-        self.toolbar = self.iface.addToolBar('Geoalert')
-        self.toolbar.setObjectName('Geoalert')
+        self.toolbar = self.iface.addToolBar(PLUGIN_NAME)
+        self.toolbar.setObjectName(PLUGIN_NAME)
         # QGIS Settings will be used to store user credentials and various UI element state
         self.settings = QgsSettings()
         # Create a namespace for the plugin settings
-        self.settings.beginGroup('geoalert')
+        self.settings.beginGroup(PLUGIN_NAME.lower())
         # Translation
         locale = QSettings().value('locale/userLocale')[0:2]
         locale_path = os.path.join(self.plugin_dir, 'i18n', f'geoalert_{locale}.qm')
@@ -529,7 +530,7 @@ class Geoalert:
         self.dlg.processingsTable.sortItems(4, Qt.DescendingOrder)
 
     def tr(self, message):
-        return QCoreApplication.translate('Geoalert', message)
+        return QCoreApplication.translate(PLUGIN_NAME, message)
 
     def add_action(self, icon_path, text, callback, enabled_flag=True, add_to_menu=False,
                    add_to_toolbar=True, status_tip=None, whats_this=None, parent=None):
@@ -554,7 +555,7 @@ class Geoalert:
         icon_path = self.plugin_dir + '/icon.png'
         self.add_action(
             icon_path,
-            text='Geoalert',
+            text=PLUGIN_NAME,
             callback=self.run,
             parent=self.mainWindow)
 
@@ -563,7 +564,7 @@ class Geoalert:
         self.dlg.close()
         self.dlg_login.close()
         for action in self.actions:
-            self.iface.removePluginVectorMenu('Geoalert', action)
+            self.iface.removePluginVectorMenu(PLUGIN_NAME, action)
             self.iface.removeToolBarIcon(action)
         del self.toolbar
 
