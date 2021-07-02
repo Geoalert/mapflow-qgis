@@ -86,6 +86,8 @@ class ProcessingCreator(QObject):
             "params": self.params,
             "meta": self.meta
         }).replace('\'', '"').encode()
+        if os.getenv('MAPFLOW_QGIS_ENV'):
+            QgsMessageLog.logMessage(body.decode(), PLUGIN_NAME, level=Qgis.Info)
         # Post the processing
         try:
             r = requests.post(
@@ -93,8 +95,6 @@ class ProcessingCreator(QObject):
                 headers={'Content-Type': 'application/json'},
                 auth=self.auth,
                 data=body)
-            if os.getenv('MAPFLOW_QGIS_ENV'):
-                QgsMessageLog.logMessage(r.request.body.decode(), PLUGIN_NAME, level=Qgis.Info)
             r.raise_for_status()
             self.finished.emit()
         except Exception as e:
