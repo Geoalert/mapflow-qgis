@@ -126,7 +126,7 @@ class Geoalert:
     def set_maxar_feature_id(self):
         """Fill the Maxar FeatureID field out with the currently selecte feature ID."""
         row = self.dlg.maxarMetadataTable.currentRow()
-        feature_id = self.dlg.maxarMetadataTable.model().index(row, 4).data()
+        feature_id = self.dlg.maxarMetadataTable.model().index(row, 0).data()
         self.dlg.maxarFeatureID.setText(str(feature_id))
 
     def get_maxar_metadata(self):
