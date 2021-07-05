@@ -664,11 +664,15 @@ class Geoalert:
         # Fill out the table and restore selection
         columns = ('name', 'workflowDef', 'status', 'percentCompleted', 'created', 'id')
         selected_processing_names = [processing['name'] for processing in self.selected_processings]
+        # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off while inserting
+        self.dlg.processingsTable.setSortingEnabled(False)
         for row, processing in enumerate(self.processings):
             for col, attr in enumerate(columns):
                 self.dlg.processingsTable.setItem(row, col, QTableWidgetItem(processing[attr]))
             if processing['name'] in selected_processing_names:
                 self.dlg.processingsTable.selectRow(row)
+        # Turn sorting on again
+        self.dlg.processingsTable.setSortingEnabled(True)
         # Sort by creation date (4th column) descending
         self.dlg.processingsTable.sortItems(4, Qt.DescendingOrder)
 
