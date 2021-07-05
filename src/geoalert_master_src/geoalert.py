@@ -337,6 +337,8 @@ class Geoalert:
         layer: QgsMapLayer
         if arg is None:  # Mapbox Satellite or Custom provider
             layer = self.dlg.polygonCombo.currentLayer()
+            if not layer:
+                return
         elif isinstance(arg, list) and not self.dlg.useImageExtentAsAOI.isChecked():  # feature selection changed
             layer = self.dlg.polygonCombo.currentLayer()
             # All project layers are monitored for selection, so have to check if it's the same layer as in the combo
