@@ -1,7 +1,12 @@
+import os
 import json
 
 import requests
 from PyQt5.QtCore import QObject, pyqtSignal
+from qgis.core import QgsMessageLog, Qgis
+
+
+PLUGIN_NAME = 'Geoalert'
 
 
 class ProcessingFetcher(QObject):
@@ -9,20 +14,15 @@ class ProcessingFetcher(QObject):
     fetched = pyqtSignal(list)
     finished = pyqtSignal()
     error = pyqtSignal(str)
-    processing_created = False
 
     def __init__(self, url, auth):
         super().__init__()
         self.url = url
         self.auth = auth
 
-    def set_processing_created(self, value):
-        self.processing_created = value
-
     def fetch_processings(self):
         while True:
             if self.thread().isInterruptionRequested():
-                self.processing_created = False
                 self.finished.emit()
                 return
             try:
@@ -30,17 +30,12 @@ class ProcessingFetcher(QObject):
                 r.raise_for_status()
                 processings = r.json()
                 self.fetched.emit(processings)
-                # If a processing was created during the execution, fetch one more time
-                if self.processing_created:
-                    self.processing_created = False
-                    continue
                 # If there are ongoing processings, keep polling
-                elif [p for p in processings if p['status'] in ("IN_PROGRESS", "UNPROCESSED")]:
+                if [p for p in processings if p['status'] in ("IN_PROGRESS", "UNPROCESSED")]:
                     self.thread().sleep(5)
                     continue
-                else:
-                    self.finished.emit()
-                    break
+                self.finished.emit()
+                break
             except Exception as e:
                 self.error.emit(str(e))
                 return
@@ -91,6 +86,8 @@ class ProcessingCreator(QObject):
             "params": self.params,
             "meta": self.meta
         }).replace('\'', '"').encode()
+        if os.getenv('MAPFLOW_QGIS_ENV'):
+            QgsMessageLog.logMessage(body.decode(), PLUGIN_NAME, level=Qgis.Info)
         # Post the processing
         try:
             r = requests.post(

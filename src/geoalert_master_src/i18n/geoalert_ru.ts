@@ -74,12 +74,12 @@
         <translation type="obsolete">Загрузить результаты</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="131"/>
+        <location filename="../main_dialog.ui" line="315"/>
         <source>Mapflow model:</source>
-        <translation type="obsolete">Модель Mapflow:</translation>
+        <translation type="unfinished">Модель Mapflow:</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="276"/>
+        <location filename="../main_dialog.ui" line="387"/>
         <source>Imagery source:</source>
         <translation type="unfinished">Данные ДЗЗ:</translation>
     </message>
@@ -89,7 +89,7 @@
         <translation type="obsolete">Обновить кэш</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="303"/>
+        <location filename="../main_dialog.ui" line="273"/>
         <source>Processing name:</source>
         <translation type="unfinished">Название:</translation>
     </message>
@@ -129,132 +129,132 @@
         <translation type="obsolete">Модель Mapflow</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="496"/>
+        <location filename="../main_dialog.ui" line="529"/>
         <source>Delete</source>
         <translation type="unfinished">Удалить</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="529"/>
+        <location filename="../main_dialog.ui" line="562"/>
         <source>Log out</source>
         <translation type="unfinished">Выйти</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="536"/>
+        <location filename="../main_dialog.ui" line="569"/>
         <source>Settings</source>
         <translation type="unfinished">Настройки</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="728"/>
+        <location filename="../main_dialog.ui" line="761"/>
         <source>Max zoom 14</source>
         <translation type="unfinished">Ограничить зум до 14</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="712"/>
+        <location filename="../main_dialog.ui" line="745"/>
         <source>Preview</source>
         <translation type="unfinished">Просмотр</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="833"/>
+        <location filename="../main_dialog.ui" line="866"/>
         <source>Save Login/Password</source>
         <translation type="unfinished">Запомнить</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="657"/>
+        <location filename="../main_dialog.ui" line="690"/>
         <source>Custom imagery provider URL:</source>
         <translation type="unfinished">Добавление источника снимков:</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="670"/>
+        <location filename="../main_dialog.ui" line="703"/>
         <source>Source type:</source>
         <translation type="unfinished">Тип источника:</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="693"/>
+        <location filename="../main_dialog.ui" line="726"/>
         <source>tms</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="698"/>
+        <location filename="../main_dialog.ui" line="731"/>
         <source>wms</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="801"/>
+        <location filename="../main_dialog.ui" line="834"/>
         <source>Login:</source>
         <translation type="unfinished">Логин:</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="788"/>
+        <location filename="../main_dialog.ui" line="821"/>
         <source>Password:</source>
         <translation type="unfinished">Пароль:</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="584"/>
+        <location filename="../main_dialog.ui" line="617"/>
         <source>Output directory:</source>
         <translation type="unfinished">Рабочая папка:</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="632"/>
+        <location filename="../main_dialog.ui" line="665"/>
         <source>...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="1079"/>
+        <location filename="../main_dialog.ui" line="1133"/>
         <source>Get image metadata</source>
         <translation type="unfinished">Загрузить метаданные</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="989"/>
+        <location filename="../main_dialog.ui" line="1037"/>
         <source>Get URL</source>
         <translation type="unfinished">Получить ссылку</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="1002"/>
+        <location filename="../main_dialog.ui" line="1050"/>
         <source>Connect ID:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="963"/>
+        <location filename="../main_dialog.ui" line="1011"/>
         <source>Feature ID:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="863"/>
+        <location filename="../main_dialog.ui" line="911"/>
         <source>Maxar SecureWatch:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="1121"/>
+        <location filename="../main_dialog.ui" line="1188"/>
         <source>Help</source>
         <translation type="unfinished">Помощь</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="150"/>
         <source>Mapflow model</source>
-        <translation>Модель Mapflow</translation>
+        <translation type="obsolete">Модель Mapflow</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="291"/>
+        <location filename="../main_dialog.ui" line="459"/>
         <source>Use image extent</source>
         <translation>Использовать экстент снимка</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="336"/>
+        <location filename="../main_dialog.ui" line="471"/>
         <source>Update image in cache</source>
         <translation>Обновить данные в кэш</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="364"/>
+        <location filename="../main_dialog.ui" line="421"/>
         <source>Mapbox Satellite</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="369"/>
+        <location filename="../main_dialog.ui" line="426"/>
         <source>Open new .tif</source>
         <translation>Открыть новый .tif</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="374"/>
+        <location filename="../main_dialog.ui" line="431"/>
         <source>Custom URL (in settings)</source>
         <translation>Иной источник (в настройках)</translation>
     </message>
@@ -264,7 +264,7 @@
         <translation type="obsolete">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Инструкция&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&amp;nbsp;&amp;nbsp;&lt;a href=&quot;https://www.maxar.com/legal/securewatch-license&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Условия использования&lt;/span&gt;&lt;/a&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="1154"/>
+        <location filename="../main_dialog.ui" line="1221"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;
 &lt;div style=&quot;margin:30px; background-color: #e8e8e8&quot;&gt;
 &lt;p&gt;This application requires access to &lt;a href=&quot;http://mapflow.ai/&quot;&gt;Mapflow.ai&lt;/a&gt; Processing API service. To obtain credentials, please, &lt;a href=&quot;mailto:help@geoalert.io?subject=Processing API access&amp;body=Hello, I&apos;d like to use your QGIS plugin.&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;send us a request.&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;
@@ -295,14 +295,24 @@
 &lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="1056"/>
+        <location filename="../main_dialog.ui" line="1110"/>
         <source>Area of processing:</source>
         <translation>Область обработки:</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="881"/>
+        <location filename="../main_dialog.ui" line="929"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&lt;a href=&quot;https://www.maxar.com/legal/securewatch-license&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Terms of Service&lt;/span&gt;&lt;/a&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Инструкция&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&lt;a href=&quot;https://www.maxar.com/legal/securewatch-license&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Условия использования&lt;/span&gt;&lt;/a&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+    </message>
+    <message>
+        <location filename="../main_dialog.ui" line="150"/>
+        <source>Model</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main_dialog.ui" line="348"/>
+        <source>Area:</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -338,9 +348,9 @@
         <translation type="obsolete">Пожалуйста, выберите снимок в формате GeoTIFF</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="679"/>
+        <location filename="../geoalert.py" line="486"/>
         <source>Success! Processing may take up to several minutes</source>
-        <translation type="obsolete">Пожалуйста, подождите пока обработка выполняется. Это может занять несколько минут</translation>
+        <translation type="unfinished">Пожалуйста, подождите пока обработка выполняется. Это может занять несколько минут.</translation>
     </message>
     <message>
         <location filename="../geoalert.py" line="702"/>
@@ -413,32 +423,32 @@
         <translation>Пожалуйста, выберите слой с областью обработки</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="461"/>
+        <location filename="../geoalert.py" line="462"/>
         <source>Please, select a single feature in your AOI layer</source>
         <translation>Пожалуйста, выделите один объект в слое</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="474"/>
+        <location filename="../geoalert.py" line="476"/>
         <source>Your image was uploaded to: </source>
         <translation>Ваш локальный снимок был загружен в: </translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="476"/>
+        <location filename="../geoalert.py" line="478"/>
         <source>Processing creation failed, see the QGIS log for details</source>
         <translation>Мы не смогли создать обработку. Более подробная информация в логе QGIS.</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="479"/>
+        <location filename="../geoalert.py" line="481"/>
         <source>Starting the processing...</source>
         <translation>Создаем обработку...</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="458"/>
+        <location filename="../geoalert.py" line="459"/>
         <source>Your AOI layer is empty</source>
         <translation>Слой с областями обработки пуст</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="434"/>
+        <location filename="../geoalert.py" line="435"/>
         <source>Please, specify the imagery provider URL in Settings</source>
         <translation>Пожалуйста, укажите ссылку на источник снимков во вкладке Настройки</translation>
     </message>
