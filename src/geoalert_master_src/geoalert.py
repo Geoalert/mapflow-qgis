@@ -71,6 +71,14 @@ class Geoalert:
         # Init dialogs
         self.dlg = MainDialog()
         self.dlg_login = LoginDialog()
+        self.timeout_alert = QMessageBox(
+            QMessageBox.Warning, PLUGIN_NAME,
+            self.tr("Sorry, we couldn't connect Mapflow. Please try again later."
+                    "If the problem remains, please, send us an email to help@geoalert.io."),
+            parent=self.main_window)
+        self.offline_alert = QMessageBox(
+            QMessageBox.Information, PLUGIN_NAME, self.tr("Mapflow requires an Internet connection"), parent=self.main_window
+        )
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         # Check if there are stored credentials
         self.logged_in = self.settings.value("serverLogin") and self.settings.value("serverPassword")
@@ -234,7 +242,11 @@ class Geoalert:
             "WIDTH": 3000,
             "HEIGHT": 3000
         }
-        r = requests.get(url, params=params, auth=(login, password))
+        try:
+            r = requests.get(url, params=params, auth=(login, password), timeout=5)
+        except requests.Timeout:
+            self.alert(self.tr("SecureWatch is not responding. Please, try again later."))
+            return
         r.raise_for_status()
         # Save metadata to a GeoJSON; I couldn't get WFS to work otherwise no file would be necessary
         output_file_name = os.path.join(self.dlg.outputDirectory.text(), 'maxar_metadata.geojson')
@@ -390,7 +402,14 @@ class Geoalert:
             row = index.row()
             pid = self.dlg.processingsTable.item(row, ID_COLUMN_INDEX).text()
             name = self.dlg.processingsTable.item(row, 0).text()
-            r = requests.delete(url=f'{self.server}/rest/processings/{pid}', auth=self.server_basic_auth)
+            try:
+                r = requests.delete(url=f'{self.server}/rest/processings/{pid}', auth=self.server_basic_auth, timeout=5)
+            except requests.ConnectionError:
+                self.offline_alert.show()
+                return
+            except requests.Timeout:
+                self.timeout_alert.show()
+                return
             r.raise_for_status()
             self.dlg.processingsTable.removeRow(row)
             self.processing_names.remove(name)
@@ -550,7 +569,11 @@ class Geoalert:
             return
         processing_name = self.dlg.processingsTable.item(row, 0).text()  # 0th column is Name
         pid = self.dlg.processingsTable.item(row, ID_COLUMN_INDEX).text()
-        r = requests.get(f'{self.server}/rest/processings/{pid}/result', auth=self.server_basic_auth)
+        try:
+            r = requests.get(f'{self.server}/rest/processings/{pid}/result', auth=self.server_basic_auth)
+        except requests.ConnectionError:
+            self.offline_alert.show()
+            return
         r.raise_for_status()
         # Add the source raster (COG) if it has been created
         tif_url = [processing['rasterLayer']['tileUrl'] for processing in self.processings if processing['id'] == pid]
@@ -740,19 +763,23 @@ class Geoalert:
         self.settings.setValue("serverRememberMe", remember_me)
         self.server_basic_auth = requests.auth.HTTPBasicAuth(login, password)
         try:
-            # Log in by requesting the user's default project
-            res = requests.get(f'{self.server}/rest/projects/default', auth=self.server_basic_auth)
+            # There's no separate auth endpoint so requesting the default project is the way to auth the user
+            res = requests.get(f'{self.server}/rest/projects/default', auth=self.server_basic_auth, timeout=5)
             res.raise_for_status()
-            # Success!
+        except requests.ConnectionError:
+            self.offline_alert.show()
+        except requests.Timeout:
+            self.timeout_alert.show()
+        except requests.HTTPError:
+            if res.status_code == 401:  # Unauthorized
+                self.dlg_login.invalidCredentialsMessage.setVisible(True)
+        else:  # Success!
             self.logged_in = True  # this var allows skipping auth if the user's remembered
             self.dlg_login.invalidCredentialsMessage.hide()
             if remember_me:
                 self.settings.setValue('server', self.server)
                 self.settings.setValue('serverLogin', login)
                 self.settings.setValue('serverPassword', password)
-        except requests.exceptions.HTTPError:
-            if res.status_code == 401:  # Unauthorized
-                self.dlg_login.invalidCredentialsMessage.setVisible(True)
 
     def logout(self) -> None:
         """Close the plugin and clear credentials from cache."""
@@ -786,7 +813,14 @@ class Geoalert:
         self.login = self.settings.value('serverLogin') or self.dlg_login.loginField.text()
         self.password = self.settings.value('serverPassword') or self.dlg_login.passwordField.text()
         self.server_basic_auth = requests.auth.HTTPBasicAuth(self.login, self.password)
-        res = requests.get(f'{self.server}/rest/projects/default', auth=self.server_basic_auth)
+        try:
+            res = requests.get(f'{self.server}/rest/projects/default', auth=self.server_basic_auth, timeout=5)
+        except requests.ConnectionError:
+            self.offline_alert.show()
+            return
+        except requests.Timeout:
+            self.timeout_alert.show()
+            return
         res.raise_for_status()
         wds: List[str] = [wd['name'] for wd in res.json()['workflowDefs']]
         self.dlg.workflowDefinitionCombo.clear()
