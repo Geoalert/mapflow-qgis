@@ -1,9 +1,13 @@
+import os
 import json
 from typing import Any, Dict, Tuple
 
 import requests
 from PyQt5.QtCore import QObject, pyqtSignal
-from qgis.core import QgsGeometry, QgsRasterLayer
+from qgis.core import QgsMessageLog, Qgis, QgsGeometry, QgsRasterLayer
+
+
+PLUGIN_NAME = 'Geoalert'
 
 
 class ProcessingFetcher(QObject):
@@ -116,6 +120,8 @@ class ProcessingCreator(QObject):
             "params": self.params,
             "meta": self.meta
         }).replace('\'', '"').encode()
+        if os.getenv('MAPFLOW_QGIS_ENV'):
+            QgsMessageLog.logMessage(body.decode(), PLUGIN_NAME, level=Qgis.Info)
         # Post the processing
         try:
             r = requests.post(
