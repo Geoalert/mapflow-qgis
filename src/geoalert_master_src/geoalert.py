@@ -175,8 +175,8 @@ class Geoalert:
         dlg = QFileDialog(self.main_window, self.tr("Select GeoTIFF"))
         dlg.setMimeTypeFilters(['image/tiff'])
         if dlg.exec():
-            path: List[str] = dlg.selectedFiles()
-            layer = QgsRasterLayer(path, os.path.splitext(path[0])[0])
+            path: str = dlg.selectedFiles()[0]
+            layer = QgsRasterLayer(path, os.path.splitext(os.path.basename(path))[0])
             self.project.addMapLayer(layer)
             self.dlg.rasterCombo.setLayer(layer)
 
