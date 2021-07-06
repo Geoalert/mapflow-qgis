@@ -106,7 +106,7 @@ class ProcessingCreator(QObject):
             except Exception as e:
                 self.error.emit(str(e))
                 return
-            url = r.json().get('url', 'uri')  # may depend on the Mapflow environment
+            url = r.json()['url' if 'url' in r.json() else 'uri']  # may depend on the Mapflow environment
             self.params["url"] = url
             self.tif_uploaded.emit(url)
         # If we pass it as JSON, the URL in params will be urlencoded: e.g. ? -> %3F and the creation will fail
