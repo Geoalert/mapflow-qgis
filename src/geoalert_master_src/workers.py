@@ -42,7 +42,7 @@ class ProcessingFetcher(QObject):
                 self.finished.emit()
                 return
             try:
-                r = requests.get(self.url, auth=self.auth)
+                r = requests.get(self.url, auth=self.auth, timeout=10)
                 r.raise_for_status()
                 processings = r.json()
                 self.fetched.emit(processings)
@@ -101,7 +101,7 @@ class ProcessingCreator(QObject):
             # Upload the image to the server
             try:
                 with open(self.tif.dataProvider().dataSourceUri(), 'rb') as f:
-                    r = requests.post(f'{self.server}/rest/rasters', auth=self.auth, files={'file': f})
+                    r = requests.post(f'{self.server}/rest/rasters', auth=self.auth, files={'file': f}, timeout=10)
                 r.raise_for_status()
             except Exception as e:
                 self.error.emit(str(e))
