@@ -12,15 +12,13 @@ author=Geoalert
 email=hello@geoalert.io
 
 # Optional items:
-
 changelog:
 	(09.10.20) remove mandatory 'xyz' for API params
 	(02.10.20) asynchronous requests for the processing status
 
-
 # Tags are comma separated with spaces allowed
 tags=remote sensing, satellite, artificial intelligence, machine learning, feature extraction, classification, digitizing, digitize, forest, forestry, roads, buildings
-category=Vector
+category=Web
 
 homepage=https://geoalert.io
 tracker=
