@@ -7,7 +7,7 @@ from PyQt5.QtCore import QObject, pyqtSignal
 from qgis.core import QgsMessageLog, Qgis, QgsGeometry, QgsRasterLayer
 
 
-PLUGIN_NAME = 'Geoalert'
+PLUGIN_NAME = 'Mapflow'
 
 
 class ProcessingFetcher(QObject):

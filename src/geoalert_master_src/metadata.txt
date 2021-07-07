@@ -1,5 +1,5 @@
 [general]
-name=Geoalert Mapflow
+name=Mapflow
 qgisMinimumVersion=3.0
 description=Extract features from satellite imagery with Geoalert
 about=The Geoalert Platform provides AI models for automatic feature extraction from satellite imagery. Choose a basemap or upload you own TIFF, select what type of features you want to extract and your area of interest, and we'll do the rest. At present, we can extract:

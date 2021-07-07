@@ -15,7 +15,7 @@ from .workers import ProcessingFetcher, ProcessingCreator
 from . import helpers
 
 
-PLUGIN_NAME: str = 'Geoalert'
+PLUGIN_NAME: str = 'Mapflow'
 PROCESSING_LIST_REFRESH_INTERVAL: int = 5  # in seconds
 RASTER_COMBO_VIRTUAL_LAYER_COUNT: int = 2  # Mapbox Satellite, Custom provider
 MAXAR_METADATA_ATTRIBUTES = ('featureId', 'sourceUnit', 'productType', 'colorBandOrder', 'cloudCover', 'formattedDate')
