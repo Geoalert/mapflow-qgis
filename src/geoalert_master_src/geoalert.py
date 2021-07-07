@@ -9,7 +9,7 @@ from PyQt5.QtCore import *
 from qgis.core import *
 from qgis.gui import *
 
-from .resources_rc import *
+# from .resources_rc import *
 from .geoalert_dialog import MainDialog, LoginDialog
 from .workers import ProcessingFetcher, ProcessingCreator
 from . import helpers
@@ -156,16 +156,36 @@ class Geoalert:
         # Raster can't be cached for user GeoTIFFs
         self.dlg.updateCache.setEnabled(not enabled)
 
-    def select_output_directory(self) -> None:
-        """Open a file dialog for the user to select a directory where all plugin files will be stored.
+    def select_output_directory(self) -> str:
+        """Open a file dialog for the user to select a directory where plugin files will be stored.
 
-        Is called by clicking the 'selectOutputDirectory' button in the main dialog.
+        Is called by clicking the 'selectOutputDirectory' button or when other functions that use file storage
+        are called (get_maxar_metadata(), download_processing_results()).
+
+        Returns the selected path, or None if the user closed the dialog.
         """
-        path: str = QFileDialog.getExistingDirectory(self.main_window)
+        path: str = QFileDialog.getExistingDirectory(self.main_window, self.tr('Select output directory'))
         if path:
             self.dlg.outputDirectory.setText(path)
             # Save to settings to set it automatically at next plugin start
             self.settings.setValue("outputDir", path)
+            return path
+
+    def check_if_output_directory_is_selected(self) -> bool:
+        """Check if the user specified an existing output dir.
+
+        The 'outputDirectory' field in the Settings tab is checked. If it doesn't contain a path to an
+        existing directory, prompt the user to select one by opening a modal file selection dialog.
+
+        Returns True if an existing directory is specified or a new directory has been selected, else False.
+        """
+        if os.path.exists(self.dlg.outputDirectory.text()):
+            return True
+        elif self.select_output_directory():
+            return True
+        else:
+            self.alert(self.tr('Please, specify an existing output directory'))
+            return False
 
     def select_tif(self) -> None:
         """Open a file selection dialog for the user to select a GeoTIFF for processing.
@@ -197,9 +217,7 @@ class Geoalert:
         Is called by clicking the 'getMaxarMetadata' button in the main dialog.
         """
         self.save_custom_provider_auth()
-        # Check if the user specified an existing output dir
-        if not os.path.exists(self.dlg.outputDirectory.text()):
-            self.alert(self.tr('Please, specify an existing output directory'))
+        if not self.check_if_output_directory_is_selected():
             return
         aoi_layer = self.dlg.maxarAOICombo.currentLayer()
         # Get the AOI feature within the layer
@@ -255,24 +273,7 @@ class Geoalert:
         metadata_layer = QgsVectorLayer(output_file_name, 'Maxar metadata', 'ogr')
         self.project.addMapLayer(metadata_layer)
         # Add style
-        style_path = os.path.join(self.plugin_dir, 'styles/style_wfs.qml')
-        style_manager = metadata_layer.styleManager()
-        # read valid style from layer
-        style = QgsMapLayerStyle()
-        style.readFromLayer(metadata_layer)
-        # get style name from file
-        style_name = os.path.basename(style_path).strip('.qml')
-        # add style with new name
-        style_manager.addStyle(style_name, style)
-        # set new style as current
-        style_manager.setCurrentStyle(style_name)
-        # load qml to current style
-        message: str
-        success: bool
-        message, success = metadata_layer.loadNamedStyle(style_path)
-        if not success:  # if style not loaded remove it
-            style_manager.removeStyle(style_name)
-            self.alert(message)
+        metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'styles', 'style_wfs.qml'))
         # Fill out the table
         features = list(metadata_layer.getFeatures())
         self.dlg.maxarMetadataTable.setRowCount(len(features))
@@ -565,9 +566,7 @@ class Geoalert:
 
         :param int: Row number in the processings table (0-based)
         """
-        # Check if user specified an existing output dir
-        if not os.path.exists(self.dlg.outputDirectory.text()):
-            self.alert(self.tr('Please, specify an existing output directory'))
+        if not self.check_if_output_directory_is_selected():
             return
         processing_name = self.dlg.processingsTable.item(row, 0).text()  # 0th column is Name
         pid = self.dlg.processingsTable.item(row, ID_COLUMN_INDEX).text()
@@ -620,18 +619,15 @@ class Geoalert:
             self.push_message(self.tr("Could not load the results"), Qgis.Warning)
             return
         # Add a style
+        styles = {
+            'Buildings Detection': 'buildings',
+            'Buildings Detection With Heights': 'buildings',
+            'Forest Detection': 'forest',
+            'Forest Detection With Heights': 'forest_with_heights',
+            'Roads Detection': 'roads'
+        }
         wd = self.dlg.processingsTable.item(row, 1).text()
-        if wd in ('Buildings Detection', 'Buildings Detection With Heights'):
-            style = 'buildings'
-        elif wd == 'Forest Detection':
-            style = 'forest'
-        elif wd == 'Forest Detection With Heights':
-            style = 'forest_with_heights'
-        elif wd == 'Roads Detection':
-            style = 'roads'
-        else:
-            style = 'default'
-        style_path = os.path.join(self.plugin_dir, 'styles', f'style_{style}.qml')
+        style_path = os.path.join(self.plugin_dir, 'styles', f'style_{styles.get(wd, "default")}.qml')
         results_layer.loadNamedStyle(style_path)
         if tif_layer.isValid():
             self.project.addMapLayer(tif_layer)

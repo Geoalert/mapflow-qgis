@@ -55,6 +55,9 @@
      <height>485</height>
     </size>
    </property>
+   <property name="focusPolicy">
+    <enum>Qt::ClickFocus</enum>
+   </property>
    <property name="currentIndex">
     <number>0</number>
    </property>
@@ -125,11 +128,11 @@
      <attribute name="horizontalHeaderCascadingSectionResizes">
       <bool>false</bool>
      </attribute>
-     <attribute name="horizontalHeaderDefaultSectionSize">
-      <number>116</number>
-     </attribute>
      <attribute name="horizontalHeaderMinimumSectionSize">
       <number>67</number>
+     </attribute>
+     <attribute name="horizontalHeaderDefaultSectionSize">
+      <number>116</number>
      </attribute>
      <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
       <bool>true</bool>
@@ -230,6 +233,9 @@
       <property name="text">
        <string>Start processing</string>
       </property>
+      <property name="default">
+       <bool>true</bool>
+      </property>
      </widget>
      <widget class="QLabel" name="labelAOIArea">
       <property name="geometry">
@@ -288,10 +294,10 @@
        </item>
        <item row="1" column="1">
         <widget class="QgsMapLayerComboBox" name="polygonCombo">
-         <property name="allowEmptyLayer" stdset="0">
+         <property name="allowEmptyLayer">
           <bool>false</bool>
          </property>
-         <property name="showCrs" stdset="0">
+         <property name="showCrs">
           <bool>true</bool>
          </property>
         </widget>
@@ -387,7 +393,7 @@
            <height>0</height>
           </size>
          </property>
-           <property name="showCrs" stdset="0">
+           <property name="showCrs">
             <bool>true</bool>
          </property>
         </widget>
@@ -416,6 +422,9 @@
                <pointsize>8</pointsize>
           </font>
          </property>
+             <property name="focusPolicy">
+              <enum>Qt::NoFocus</enum>
+             </property>
          <property name="text">
               <string>...</string>
              </property>
@@ -1129,10 +1138,10 @@
         </item>
         <item row="4" column="1">
          <widget class="QgsMapLayerComboBox" name="maxarAOICombo">
-          <property name="allowEmptyLayer" stdset="0">
+          <property name="allowEmptyLayer">
            <bool>false</bool>
           </property>
-          <property name="showCrs" stdset="0">
+          <property name="showCrs">
            <bool>true</bool>
           </property>
          </widget>
@@ -1157,6 +1166,9 @@
       </property>
       <property name="mouseTracking">
        <bool>false</bool>
+      </property>
+      <property name="focusPolicy">
+       <enum>Qt::NoFocus</enum>
       </property>
       <property name="autoScroll">
        <bool>false</bool>
@@ -1246,6 +1258,9 @@
          <verstretch>1</verstretch>
         </sizepolicy>
        </property>
+       <property name="focusPolicy">
+        <enum>Qt::NoFocus</enum>
+       </property>
        <property name="widgetResizable">
         <bool>true</bool>
        </property>
@@ -1313,7 +1328,18 @@
   </customwidget>
  </customwidgets>
  <tabstops>
-  <tabstop>processingsTable</tabstop>
+  <tabstop>processingName</tabstop>
+  <tabstop>workflowDefinitionCombo</tabstop>
+  <tabstop>polygonCombo</tabstop>
+  <tabstop>rasterCombo</tabstop>
+  <tabstop>selectTif</tabstop>
+  <tabstop>useImageExtentAsAOI</tabstop>
+  <tabstop>updateCache</tabstop>
+  <tabstop>startProcessing</tabstop>
+  <tabstop>logoutButton</tabstop>
+  <tabstop>deleteProcessings</tabstop>
+  <tabstop>outputDirectory</tabstop>
+  <tabstop>selectOutputDirectory</tabstop>
   <tabstop>customProviderURL</tabstop>
   <tabstop>customProviderType</tabstop>
   <tabstop>preview</tabstop>
@@ -1323,8 +1349,13 @@
   <tabstop>customProviderSaveAuth</tabstop>
   <tabstop>checkMaxar</tabstop>
   <tabstop>maxarConnectID</tabstop>
+  <tabstop>maxarFeatureID</tabstop>
   <tabstop>getMaxarURL</tabstop>
+  <tabstop>maxarAOICombo</tabstop>
   <tabstop>getImageMetadata</tabstop>
+  <tabstop>maxarMetadataTable</tabstop>
+  <tabstop>scrollArea</tabstop>
+  <tabstop>tabWidget</tabstop>
  </tabstops>
  <resources/>
  <connections>

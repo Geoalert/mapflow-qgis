@@ -19,7 +19,7 @@ changelog:
 
 
 # Tags are comma separated with spaces allowed
-tags=remote sensing, image, satellite, artificial intelligence, machine learning, feature extraction, classification, digitizing, digitize, forest, forestry, roads, buildings, urban planning
+tags=remote sensing, satellite, artificial intelligence, machine learning, feature extraction, classification, digitizing, digitize, forest, forestry, roads, buildings
 category=Vector
 
 homepage=https://geoalert.io
