@@ -1,11 +1,12 @@
 [general]
 name=Mapflow
 qgisMinimumVersion=3.16
-description=Extract features from satellite imagery with Geoalert
-about=The Geoalert Platform provides AI models for automatic feature extraction from satellite imagery. Choose a basemap or upload you own TIFF, select what type of features you want to extract and your area of interest, and we'll do the rest. At present, we can extract:
+description=Extract real-world objects from satellite imagery with Mapflow by Geoalert
+about=Mapflow provides AI models for automatic feature extraction from satellite imagery. Choose a basemap or upload you own GeoTIFF, select what type of features you want to extract and your area of interest, and we'll do the rest. At present, we can extract:
 		- buildings (optionally, with height)
 		- forest (optionally, with height)
 		- roads
+		- construction sites
 	For a step-by-step user guide, go to https://docs.mapflow.ai/docs_api/qgis_mapflow.html
 version=1.32
 author=Geoalert
@@ -13,14 +14,12 @@ email=hello@geoalert.io
 
 # Optional items:
 changelog:
-	(09.10.20) remove mandatory 'xyz' for API params
-	(02.10.20) asynchronous requests for the processing status
 
 # Tags are comma separated with spaces allowed
 tags=remote sensing, satellite, artificial intelligence, machine learning, feature extraction, classification, digitizing, digitize, forest, forestry, roads, buildings
 category=Web
 
-homepage=https://geoalert.io
+homepage=https://mapflow.ai
 tracker=
 repository=
 icon=icon.png
