@@ -620,18 +620,15 @@ class Geoalert:
             self.push_message(self.tr("Could not load the results"), Qgis.Warning)
             return
         # Add a style
+        styles = {
+            'Buildings Detection': 'buildings',
+            'Buildings Detection With Heights': 'buildings',
+            'Forest Detection': 'forest',
+            'Forest Detection With Heights': 'forest_with_heights',
+            'Roads Detection': 'roads'
+        }
         wd = self.dlg.processingsTable.item(row, 1).text()
-        if wd in ('Buildings Detection', 'Buildings Detection With Heights'):
-            style = 'buildings'
-        elif wd == 'Forest Detection':
-            style = 'forest'
-        elif wd == 'Forest Detection With Heights':
-            style = 'forest_with_heights'
-        elif wd == 'Roads Detection':
-            style = 'roads'
-        else:
-            style = 'default'
-        style_path = os.path.join(self.plugin_dir, 'styles', f'style_{style}.qml')
+        style_path = os.path.join(self.plugin_dir, 'styles', f'style_{styles.get(wd, "default")}.qml')
         results_layer.loadNamedStyle(style_path)
         if tif_layer.isValid():
             self.project.addMapLayer(tif_layer)
