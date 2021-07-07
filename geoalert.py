@@ -273,7 +273,7 @@ class Geoalert:
         metadata_layer = QgsVectorLayer(output_file_name, 'Maxar metadata', 'ogr')
         self.project.addMapLayer(metadata_layer)
         # Add style
-        metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'styles', 'style_wfs.qml'))
+        metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'styles', 'wfs.qml'))
         # Fill out the table
         features = list(metadata_layer.getFeatures())
         self.dlg.maxarMetadataTable.setRowCount(len(features))
@@ -627,7 +627,7 @@ class Geoalert:
             'Roads Detection': 'roads'
         }
         wd = self.dlg.processingsTable.item(row, 1).text()
-        style_path = os.path.join(self.plugin_dir, 'styles', f'style_{styles.get(wd, "default")}.qml')
+        style_path = os.path.join(self.plugin_dir, 'styles', f'{styles.get(wd, "default")}.qml')
         results_layer.loadNamedStyle(style_path)
         if tif_layer.isValid():
             self.project.addMapLayer(tif_layer)
