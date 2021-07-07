@@ -156,16 +156,19 @@ class Geoalert:
         # Raster can't be cached for user GeoTIFFs
         self.dlg.updateCache.setEnabled(not enabled)
 
-    def select_output_directory(self) -> None:
+    def select_output_directory(self) -> str:
         """Open a file dialog for the user to select a directory where all plugin files will be stored.
 
         Is called by clicking the 'selectOutputDirectory' button in the main dialog.
+
+        Returns the selected path, or None if the user closed the dialog.
         """
         path: str = QFileDialog.getExistingDirectory(self.main_window)
         if path:
             self.dlg.outputDirectory.setText(path)
             # Save to settings to set it automatically at next plugin start
             self.settings.setValue("outputDir", path)
+            return path
 
     def select_tif(self) -> None:
         """Open a file selection dialog for the user to select a GeoTIFF for processing.
