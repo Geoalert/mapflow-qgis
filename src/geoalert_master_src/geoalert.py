@@ -157,18 +157,35 @@ class Geoalert:
         self.dlg.updateCache.setEnabled(not enabled)
 
     def select_output_directory(self) -> str:
-        """Open a file dialog for the user to select a directory where all plugin files will be stored.
+        """Open a file dialog for the user to select a directory where plugin files will be stored.
 
-        Is called by clicking the 'selectOutputDirectory' button in the main dialog.
+        Is called by clicking the 'selectOutputDirectory' button or when other functions that use file storage
+        are called (get_maxar_metadata(), download_processing_results()).
 
         Returns the selected path, or None if the user closed the dialog.
         """
-        path: str = QFileDialog.getExistingDirectory(self.main_window)
+        path: str = QFileDialog.getExistingDirectory(self.main_window, self.tr('Select output directory'))
         if path:
             self.dlg.outputDirectory.setText(path)
             # Save to settings to set it automatically at next plugin start
             self.settings.setValue("outputDir", path)
             return path
+
+    def check_if_output_directory_is_selected(self) -> bool:
+        """Check if the user specified an existing output dir.
+
+        The 'outputDirectory' field in the Settings tab is checked. If it doesn't contain a path to an
+        existing directory, prompt the user to select one by opening a modal file selection dialog.
+
+        Returns True if an existing directory is specified or a new directory has been selected, else False.
+        """
+        if os.path.exists(self.dlg.outputDirectory.text()):
+            return True
+        elif self.select_output_directory():
+            return True
+        else:
+            self.alert(self.tr('Please, specify an existing output directory'))
+            return False
 
     def select_tif(self) -> None:
         """Open a file selection dialog for the user to select a GeoTIFF for processing.
@@ -200,9 +217,7 @@ class Geoalert:
         Is called by clicking the 'getMaxarMetadata' button in the main dialog.
         """
         self.save_custom_provider_auth()
-        # Check if the user specified an existing output dir
-        if not os.path.exists(self.dlg.outputDirectory.text()):
-            self.alert(self.tr('Please, specify an existing output directory'))
+        if not self.check_if_output_directory_is_selected():
             return
         aoi_layer = self.dlg.maxarAOICombo.currentLayer()
         # Get the AOI feature within the layer
@@ -551,9 +566,7 @@ class Geoalert:
 
         :param int: Row number in the processings table (0-based)
         """
-        # Check if user specified an existing output dir
-        if not os.path.exists(self.dlg.outputDirectory.text()):
-            self.alert(self.tr('Please, specify an existing output directory'))
+        if not self.check_if_output_directory_is_selected():
             return
         processing_name = self.dlg.processingsTable.item(row, 0).text()  # 0th column is Name
         pid = self.dlg.processingsTable.item(row, ID_COLUMN_INDEX).text()
