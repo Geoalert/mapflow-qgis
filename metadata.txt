@@ -20,8 +20,8 @@ tags=remote sensing, satellite, artificial intelligence, machine learning, featu
 category=Web
 
 homepage=https://mapflow.ai
-tracker=
-repository=
+tracker=https://github.com/Geoalert/mapflow-qgis/issues
+repository=https://github.com/Geoalert/mapflow-qgis
 icon=icon.png
 experimental=False
 deprecated=False
