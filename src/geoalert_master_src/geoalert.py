@@ -703,31 +703,19 @@ class Geoalert:
         """
         return QCoreApplication.translate(PLUGIN_NAME, message)
 
-    def add_action(
-        self, icon_path: str, text: str, callback: Callable, enabled_flag: bool = True, add_to_menu: bool = False,
-        add_to_toolbar: bool = True, whats_this: str = None, parent: QObject = None
-    ) -> QAction:
+    def add_action(self, icon_path: str, text: str, callback: Callable, enabled_flag: bool = True) -> QAction:
         """Adds actionable icons to the toolbar.
 
         :param icon_path: The path to an image file that 'll be used for the icon
         :param text: The name of the button (displayed on hover)
         :param callback: A function or method to run when the button's clicked
         :param enabled_flag: Whether the button is enabled by default
-        :param add_to_menu: Whether the button will be added to the Vector menu
-        :param add_to_toolbar: Whether to add the button to the toolbar referenced by self.toolbar
-        :param whats_this: A text describing the button when clicked on with the "What's this" tool
-        :param parent: An GUI element the button will belong to
         """
         icon = QIcon(icon_path)
-        action = QAction(icon, text, parent)
+        action = QAction(icon, text, self.main_window)
         action.triggered.connect(callback)
         action.setEnabled(enabled_flag)
-        if whats_this:
-            action.setWhatsThis(whats_this)
-        if add_to_toolbar:
-            self.toolbar.addAction(action)
-        if add_to_menu:
-            self.iface.addPluginToVectorMenu(self.menu, action)
+        self.toolbar.addAction(action)
         self.actions.append(action)
         return action
 
@@ -737,7 +725,7 @@ class Geoalert:
         This function is referenced by the QGIS plugin loading system, so it can't be renamed.
         """
         icon_path = os.path.join(self.plugin_dir, 'icon.png')
-        self.add_action(icon_path, text=PLUGIN_NAME, callback=self.run, parent=self.main_window)
+        self.add_action(icon_path, text=PLUGIN_NAME, callback=self.run)
 
     def unload(self) -> None:
         """Remove the plugin menu item and icon from QGIS GUI."""
