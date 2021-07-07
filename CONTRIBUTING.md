@@ -1,0 +1,12 @@
+# For external contributors
+This plugin is developed and maintained by [Geoalert LLC](https://www.geoalert.io).
+It's tightly connected with [Mapflow](https://mapflow.ai/), our AI platform, and as such requires the knowledge about it.
+
+The best way of contributing at the moment is to report bugs and make suggestions for improvement via [Issues](https://github.com/Geoalert/mapflow-qgis/issues). If you'd really like to contribute to the plugin directly, have a question about it or something else to discuss, please, feel free to send us an [email](mailto:help@geoalert.io?subject=QGIS plugin). 
+
+# For the fellow Geoalert developers
+This is a Python plugin, so the first and foremost request is to follow the Python standards and conventions. For code style, see [PEP8](https://www.python.org/dev/peps/pep-0008/). For the code itself, just try to use contemporary Python idioms e.g. comprehensions and f-strings. The current code is written for Python 3.6+ and QGIS 3.16+. At the same time, try not to use any recently added Python features. First, QGIS lags slightly behind Python, so the latest version of Python may not be compatible. Second, many users tend to stick to slightly older versions of QGIS.
+
+Note that QGIS lies at the junction of Python and C++. PyQGIS, for example, uses `camelCase` convention for naming API functions and variables. Although this isn't a strict requirement, try to use Python's `snake_case` when writing your code. At least, don't mix the two to keep the code clean. As for the UI elements, since they're closer to Qt itself, we use `camelCase` for them, e.g. `getUrl`. This also helps distinguish them from the related python functions, e.g. `get_url`.
+
+Remember that PyQGIS is a rather special Python framework that borrow a lot from Qt and hence C++. For example, there's support for function overloading, a signal-slot system and an own threading approach. In most cases, a developer can still stick with the Python's native approaches, but at times the 'local' Qt method may be more efficient and less error-prone. Don't be afraid to consult the [Qt C++ documentation](https://doc.qt.io/) especially since [PyQGIS docs](https://www.riverbankcomputing.com/static/Docs/PyQt5/) are pretty scarce. And of course don't forget to read the [QGIS developer docs](https://docs.qgis.org/3.16/en/docs/pyqgis_developer_cookbook/index.html), especially the [plugin section](https://docs.qgis.org/3.16/en/docs/pyqgis_developer_cookbook/plugins/index.html).
