@@ -255,24 +255,7 @@ class Geoalert:
         metadata_layer = QgsVectorLayer(output_file_name, 'Maxar metadata', 'ogr')
         self.project.addMapLayer(metadata_layer)
         # Add style
-        style_path = os.path.join(self.plugin_dir, 'styles/style_wfs.qml')
-        style_manager = metadata_layer.styleManager()
-        # read valid style from layer
-        style = QgsMapLayerStyle()
-        style.readFromLayer(metadata_layer)
-        # get style name from file
-        style_name = os.path.basename(style_path).strip('.qml')
-        # add style with new name
-        style_manager.addStyle(style_name, style)
-        # set new style as current
-        style_manager.setCurrentStyle(style_name)
-        # load qml to current style
-        message: str
-        success: bool
-        message, success = metadata_layer.loadNamedStyle(style_path)
-        if not success:  # if style not loaded remove it
-            style_manager.removeStyle(style_name)
-            self.alert(message)
+        metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'styles', 'style_wfs.qml'))
         # Fill out the table
         features = list(metadata_layer.getFeatures())
         self.dlg.maxarMetadataTable.setRowCount(len(features))
