@@ -1,0 +1,9 @@
+{
+"type": "FeatureCollection",
+"name": "aoi_all",
+"features": [
+{ "type": "Feature", "properties": { "model": "constructions" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ 37.6381144, 55.618175 ], [ 37.6373521, 55.5990851 ], [ 37.6679415, 55.5989892 ], [ 37.6687038, 55.6180792 ], [ 37.6381144, 55.618175 ] ] ] } },
+{ "type": "Feature", "properties": { "model": "buildings\/roads" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ 37.6076365, 55.5931631 ], [ 37.6094324, 55.6318194 ], [ 37.5714982, 55.6323813 ], [ 37.5697023, 55.5937255 ], [ 37.6076365, 55.5931631 ] ] ] } },
+{ "type": "Feature", "properties": { "model": "forest" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ 37.6724072, 55.6044558 ], [ 37.6724869, 55.5876472 ], [ 37.7163934, 55.5877138 ], [ 37.7163137, 55.6045223 ], [ 37.6724072, 55.6044558 ] ] ] } }
+]
+}

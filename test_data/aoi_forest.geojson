@@ -1,0 +1,7 @@
+{
+"type": "FeatureCollection",
+"name": "aoi_forest",
+"features": [
+{ "type": "Feature", "properties": { }, "geometry": { "type": "Polygon", "coordinates": [ [ [ 37.6724072, 55.6044558 ], [ 37.6724869, 55.5876472 ], [ 37.7163934, 55.5877138 ], [ 37.7163137, 55.6045223 ], [ 37.6724072, 55.6044558 ] ] ] } }
+]
+}
