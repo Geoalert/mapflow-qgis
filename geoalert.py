@@ -796,8 +796,8 @@ class Geoalert:
                 self.dlg_login.invalidCredentialsMessage.hide()
                 return
         # Refresh the list of workflow definitions
-        self.login = self.settings.value('serverLogin') or self.dlg_login.loginField.text()
-        self.password = self.settings.value('serverPassword') or self.dlg_login.passwordField.text()
+        self.login = self.dlg_login.loginField.text()
+        self.password = self.dlg_login.passwordField.text()
         self.server_basic_auth = requests.auth.HTTPBasicAuth(self.login, self.password)
         try:
             res = requests.get(f'{self.server}/rest/projects/default', auth=self.server_basic_auth, timeout=5)
