@@ -78,6 +78,11 @@ class Geoalert:
         self.offline_alert = QMessageBox(
             QMessageBox.Information, PLUGIN_NAME, self.tr("Mapflow requires an Internet connection"), parent=self.main_window
         )
+        # Tweak URL's considering the user's locale
+        if locale == 'ru':
+            help_text = self.dlg.text.text()
+            new_text = help_text.replace('docs.mapflow', 'ru.docs.mapflow').replace('http://mapflow.ai', 'http://mapflow.ai/ru')
+            self.dlg.text.setText(new_text)
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         # Check if there are stored credentials
         self.logged_in = self.settings.value("serverLogin") and self.settings.value("serverPassword")
