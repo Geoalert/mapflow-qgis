@@ -9,13 +9,12 @@ from PyQt5.QtCore import *
 from qgis.core import *
 from qgis.gui import *
 
-# from .resources_rc import *
 from .geoalert_dialog import MainDialog, LoginDialog
 from .workers import ProcessingFetcher, ProcessingCreator
 from . import helpers
 
 
-PLUGIN_NAME: str = 'Mapflow'
+PLUGIN_NAME = 'Mapflow'
 PROCESSING_LIST_REFRESH_INTERVAL: int = 5  # in seconds
 RASTER_COMBO_VIRTUAL_LAYER_COUNT: int = 2  # Mapbox Satellite, Custom provider
 MAXAR_METADATA_ATTRIBUTES = ('featureId', 'sourceUnit', 'productType', 'colorBandOrder', 'cloudCover', 'formattedDate')
@@ -596,14 +595,19 @@ class Geoalert:
             f.write(r.content)
         # Export to Geopackage to prevent QGIS from hanging if the GeoJSON is heavy
         output_path = os.path.join(self.dlg.outputDirectory.text(), f'{processing_name}.gpkg')
+        layer = QgsVectorLayer(geojson_file_name, 'temp', 'ogr')
+        transform = self.project.transformContext()
+        # Layer creation options for QGIS 3.10.3+
         write_options = QgsVectorFileWriter.SaveVectorOptions()
         write_options.layerOptions = ['fid=id']
-        error, msg = QgsVectorFileWriter.writeAsVectorFormatV2(
-            QgsVectorLayer(geojson_file_name, 'temp', 'ogr'),
-            output_path,
-            self.project.transformContext(),
-            write_options
-        )
+        # writeAsVectorFormat keeps changing between version so gotta check the version :-(
+        if Qgis.QGIS_VERSION_INT < 31003:
+            error, msg = QgsVectorFileWriter.writeAsVectorFormat(layer, output_path, 'utf8', layerOptions=['fid=id'])
+        elif Qgis.QGIS_VERSION_INT >= 32000:
+            # V3 returns two additional str values but they're not documented, so just discard them
+            error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(layer, output_path, transform, write_options)
+        else:
+            error, msg = QgsVectorFileWriter.writeAsVectorFormatV2(layer, output_path, transform, write_options)
         if error:
             self.push_message(self.tr('Error saving results! See QGIS logs.'), Qgis.Warning)
             self.log(msg)
