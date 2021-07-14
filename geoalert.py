@@ -710,7 +710,7 @@ class Geoalert:
 
         :param message: A text to translate
         """
-        return QCoreApplication.translate(PLUGIN_NAME, message)
+        return QCoreApplication.translate('Geoalert', message)
 
     def add_action(self, icon_path: str, text: str, callback: Callable, enabled_flag: bool = True) -> QAction:
         """Adds actionable icons to the toolbar.
