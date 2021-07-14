@@ -62,7 +62,7 @@ class Mapflow:
         self.settings.beginGroup(PLUGIN_NAME.lower())
         # Translation
         locale = QSettings().value('locale/userLocale')[0:2]
-        locale_path = os.path.join(self.plugin_dir, 'i18n', f'geoalert_{locale}.qm')
+        locale_path = os.path.join(self.plugin_dir, 'i18n', f'mapflow_{locale}.qm')
         if os.path.exists(locale_path):
             self.translator = QTranslator()
             self.translator.load(locale_path)
