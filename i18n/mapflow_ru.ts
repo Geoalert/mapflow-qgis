@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE TS>
-<TS version="2.1" language="ru_RU" sourcelanguage="en">
+<!DOCTYPE TS><TS version="2.0" language="ru_RU" sourcelanguage="en">
 <context>
     <name>Dialog</name>
     <message>
@@ -344,23 +343,13 @@
     </message>
     <message>
         <location filename="../mapflow.py" line="375"/>
-        <source>Area: </source>
-        <translation>Площадь: </translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="375"/>
-        <source> sq.km</source>
-        <translation> кв.км</translation>
+        <source>Area: {:.2f} sq.km</source>
+        <translation>Площадь: {:.2f} кв.км</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="405"/>
-        <source>Delete </source>
-        <translation>Удалить </translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="405"/>
-        <source> processings?</source>
-        <translation> обработок?</translation>
+        <source>Delete {} processing(s)?</source>
+        <translation>Удалить {} обработку?</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="434"/>

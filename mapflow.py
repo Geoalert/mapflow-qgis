@@ -372,7 +372,7 @@ class Mapflow:
         calculator.setEllipsoid(layer_crs.ellipsoidAcronym() or 'EPSG:7030')  # 7030=WGS84 => makes a sensible default
         calculator.setSourceCrs(layer_crs, self.project.transformContext())
         area = calculator.measureArea(aoi) / 10**6  # sq. m to sq. km
-        label = self.tr('Area: ') + str(round(area, 2)) + self.tr(' sq.km')
+        label = self.tr('Area: {:.2f} sq.km').format(area)
         self.dlg.labelAOIArea.setText(label)
 
     def memorize_selected_processings(self) -> None:
@@ -402,7 +402,7 @@ class Mapflow:
         if not selected_rows:
             return
         # Ask for confirmation
-        if self.alert(self.tr('Delete ') + str(len(selected_rows)) + self.tr(' processings?'), 'question') == QMessageBox.No:
+        if self.alert(self.tr('Delete {} processing(s)?').format(len(selected_rows)), 'question') == QMessageBox.No:
             return
         # QPersistentModel index allows deleting rows sequentially while preserving their original indexes
         for index in [QPersistentModelIndex(row) for row in selected_rows]:
