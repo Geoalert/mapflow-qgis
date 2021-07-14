@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from qgis.gui import QgisInterface
 
-from .geoalert import Geoalert
+from .geoalert import Mapflow
 
 
 """
@@ -17,6 +17,6 @@ Python modules:
 """
 
 
-def classFactory(iface: QgisInterface) -> Geoalert:
+def classFactory(iface: QgisInterface) -> Mapflow:
     """Initialize the plugin."""
-    return Geoalert(iface)
+    return Mapflow(iface)

@@ -22,7 +22,7 @@ MAXAR_METADATA_FEATURE_ID_COLUMN_INDEX = MAXAR_METADATA_ATTRIBUTES.index('featur
 ID_COLUMN_INDEX: int = 5  # processings table
 
 
-class Geoalert:
+class Mapflow:
     """This class represents the plugin.
 
     It is instantiated by QGIS and shouldn't be used directly.
@@ -710,7 +710,7 @@ class Geoalert:
 
         :param message: A text to translate
         """
-        return QCoreApplication.translate('Geoalert', message)
+        return QCoreApplication.translate(PLUGIN_NAME, message)
 
     def add_action(self, icon_path: str, text: str, callback: Callable, enabled_flag: bool = True) -> QAction:
         """Adds actionable icons to the toolbar.
