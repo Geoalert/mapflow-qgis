@@ -69,11 +69,6 @@
         <translation>Начать обработку</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="115"/>
-        <source>Load processing results</source>
-        <translation type="obsolete">Загрузить результаты</translation>
-    </message>
-    <message>
         <location filename="../main_dialog.ui" line="376"/>
         <source>Mapflow model:</source>
         <translation>Модель Mapflow:</translation>
@@ -84,19 +79,9 @@
         <translation>Данные ДЗЗ:</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="168"/>
-        <source>Update cache</source>
-        <translation type="obsolete">Обновить кэш</translation>
-    </message>
-    <message>
         <location filename="../main_dialog.ui" line="313"/>
         <source>Processing name:</source>
         <translation>Название:</translation>
-    </message>
-    <message>
-        <location filename="../main_dialog.ui" line="1023"/>
-        <source>Processing area:</source>
-        <translation type="obsolete">Область обработки:</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="169"/>
@@ -122,11 +107,6 @@
         <location filename="../main_dialog.ui" line="1199"/>
         <source>ID</source>
         <translation></translation>
-    </message>
-    <message>
-        <location filename="../main_dialog.ui" line="325"/>
-        <source>Mapflow Model</source>
-        <translation type="obsolete">Модель Mapflow</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="536"/>
@@ -229,11 +209,6 @@
         <translation>Помощь</translation>
     </message>
     <message>
-        <location filename="../main_dialog.ui" line="150"/>
-        <source>Mapflow model</source>
-        <translation type="obsolete">Модель Mapflow</translation>
-    </message>
-    <message>
         <location filename="../main_dialog.ui" line="466"/>
         <source>Use image extent</source>
         <translation>Использовать экстент снимка</translation>
@@ -242,21 +217,6 @@
         <location filename="../main_dialog.ui" line="478"/>
         <source>Update image in cache</source>
         <translation>Обновить данные в кэш</translation>
-    </message>
-    <message>
-        <location filename="../main_dialog.ui" line="426"/>
-        <source>Open new .tif</source>
-        <translation type="obsolete">Открыть новый .tif</translation>
-    </message>
-    <message>
-        <location filename="../main_dialog.ui" line="431"/>
-        <source>Custom URL (in settings)</source>
-        <translation type="obsolete">Иной источник (в настройках)</translation>
-    </message>
-    <message>
-        <location filename="../main_dialog.ui" line="874"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&amp;nbsp;&amp;nbsp;&lt;a href=&quot;https://www.maxar.com/legal/securewatch-license&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Terms of Service&lt;/span&gt;&lt;/a&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="obsolete">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Инструкция&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&amp;nbsp;&amp;nbsp;&lt;a href=&quot;https://www.maxar.com/legal/securewatch-license&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Условия использования&lt;/span&gt;&lt;/a&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
         <location filename="../main_dialog.ui" line="1286"/>
@@ -338,189 +298,6 @@
         <location filename="../main_dialog.ui" line="1239"/>
         <source>Date</source>
         <translation>Дата</translation>
-    </message>
-</context>
-<context>
-    <name>Geoalert</name>
-    <message>
-        <location filename="../geoalert.py" line="461"/>
-        <source>Processing has been removed</source>
-        <translation type="obsolete">Обработка удалена</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="500"/>
-        <source>Custom (in settings)</source>
-        <translation type="obsolete">Иной (в настройках)</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="434"/>
-        <source>Please, specify a name for your processing</source>
-        <translation type="obsolete">Пожалуйста, выберите название обработки</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="437"/>
-        <source>Processing name taken. Please, choose a different name.</source>
-        <translation type="obsolete">Обработка с таким названием уже существует. Пожалуйста, выберите другое название.</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="547"/>
-        <source>Please, wait. Uploading the file to the server...</source>
-        <translation type="obsolete">Загружаем снимок в Mapflow. Пожалуйста, подождите...</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="615"/>
-        <source>Please, select a GeoTIFF file</source>
-        <translation type="obsolete">Пожалуйста, выберите снимок в формате GeoTIFF</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="518"/>
-        <source>Success! Processing may take up to several minutes</source>
-        <translation type="obsolete">Пожалуйста, подождите пока обработка выполняется. Это может занять несколько минут</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="556"/>
-        <source>Custom tileset</source>
-        <translation type="obsolete">Снимки</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="558"/>
-        <source>Invalid custom imagery provider:</source>
-        <translation type="obsolete">Мы не смогли подключиться к:</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="713"/>
-        <source>Please, select a processing</source>
-        <translation type="obsolete">Пожалуйста, выберите интересующую вас обработку</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="762"/>
-        <source>There was an error writing the Shapefile!</source>
-        <translation type="obsolete">Ошибка во время создания Shapefile!</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="767"/>
-        <source>Could not load the layer!</source>
-        <translation type="obsolete">Ошибка загрузки слоя!</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="472"/>
-        <source>Please, be aware that you may be charged by the imagery provider!</source>
-        <translation type="obsolete">За использование снимков в полном разрешении провайдер может взымать с вас плату!</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="501"/>
-        <source>Open new .tif</source>
-        <translation type="obsolete">Открыть новый .tif</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="191"/>
-        <source>Please, specify an existing output directory</source>
-        <translation type="obsolete">Пожалуйста, выберите папку для сохранения данных</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="350"/>
-        <source>AOI area: </source>
-        <translation type="obsolete">Область обработки: </translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="375"/>
-        <source> sq.km</source>
-        <translation type="obsolete"> кв.км</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="405"/>
-        <source>Delete </source>
-        <translation type="obsolete">Удалить </translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="405"/>
-        <source> processings?</source>
-        <translation type="obsolete"> обработок?</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="199"/>
-        <source>Select GeoTIFF</source>
-        <translation type="obsolete">Выберите GeoTIFF</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="440"/>
-        <source>Please, select an area of interest</source>
-        <translation type="obsolete">Пожалуйста, выберите слой с областью обработки</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="491"/>
-        <source>Please, select a single feature in your AOI layer</source>
-        <translation type="obsolete">Пожалуйста, выделите один объект в слое</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="506"/>
-        <source>Your image was uploaded to: </source>
-        <translation type="obsolete">Ваш локальный снимок был загружен в: </translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="508"/>
-        <source>Processing creation failed, see the QGIS log for details</source>
-        <translation type="obsolete">Мы не смогли создать обработку. Более подробная информация в логе QGIS</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="511"/>
-        <source>Starting the processing...</source>
-        <translation type="obsolete">Создаем обработку...</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="488"/>
-        <source>Your AOI layer is empty</source>
-        <translation type="obsolete">Слой с областями обработки пуст</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="470"/>
-        <source>Please, specify the imagery provider URL in Settings</source>
-        <translation type="obsolete">Пожалуйста, укажите ссылку на источник снимков во вкладке Настройки</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="350"/>
-        <source>Area of processing: </source>
-        <translation type="obsolete">Площадь обработки: </translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="375"/>
-        <source>Area: </source>
-        <translation type="obsolete">Площадь: </translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="73"/>
-        <source>Sorry, we couldn&apos;t connect Mapflow. Please try again later.If the problem remains, please, send us an email to help@geoalert.io.</source>
-        <translation type="obsolete">Mapflow временно недоступен, пожалуйста, попробуйте позже. Если вы по-прежнему не сможете подключиться, напишите нам на help@geoalert.io.</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="78"/>
-        <source>Mapflow requires an Internet connection</source>
-        <translation type="obsolete">Для работы плагина требуется интеренет соединение</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="171"/>
-        <source>Select output directory</source>
-        <translation type="obsolete">Выберите папку для сохранения данных</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="270"/>
-        <source>SecureWatch is not responding. Please, try again later.</source>
-        <translation type="obsolete">SecureWatch не отвечает. Пожалуйста, попробуйте позже.</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="456"/>
-        <source>Please, select a GeoTIFF layer</source>
-        <translation type="obsolete">Пожалуйста, выберите слой GeoTIFF для обработки</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="617"/>
-        <source>Error saving results! See QGIS logs.</source>
-        <translation type="obsolete">Ошибка сохранения результатов обработки. Более подробная информация в логе QGIS.</translation>
-    </message>
-    <message>
-        <location filename="../geoalert.py" line="628"/>
-        <source>Could not load the results</source>
-        <translation type="obsolete">Мы скачали результаты обработки но не смогли загрузить их в QGIS</translation>
     </message>
 </context>
 <context>
