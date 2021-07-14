@@ -9,7 +9,7 @@ from PyQt5.QtCore import *
 from qgis.core import *
 from qgis.gui import *
 
-from .geoalert_dialog import MainDialog, LoginDialog
+from .dialogs import MainDialog, LoginDialog
 from .workers import ProcessingFetcher, ProcessingCreator
 from . import helpers
 

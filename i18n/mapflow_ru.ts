@@ -526,132 +526,132 @@
 <context>
     <name>Mapflow</name>
     <message>
-        <location filename="../geoalert.py" line="73"/>
+        <location filename="../mapflow.py" line="73"/>
         <source>Sorry, we couldn&apos;t connect Mapflow. Please try again later.If the problem remains, please, send us an email to help@geoalert.io.</source>
         <translation>Mapflow временно недоступен, пожалуйста, попробуйте позже. Если вы по-прежнему не сможете подключиться, напишите нам на help@geoalert.io.</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="78"/>
+        <location filename="../mapflow.py" line="78"/>
         <source>Mapflow requires an Internet connection</source>
         <translation>Для работы плагина требуется интеренет соединение</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="171"/>
+        <location filename="../mapflow.py" line="171"/>
         <source>Select output directory</source>
         <translation>Выберите папку для сохранения данных</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="191"/>
+        <location filename="../mapflow.py" line="191"/>
         <source>Please, specify an existing output directory</source>
         <translation>Пожалуйста, выберите папку для сохранения данных</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="199"/>
+        <location filename="../mapflow.py" line="199"/>
         <source>Select GeoTIFF</source>
         <translation>Выберите GeoTIFF</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="488"/>
+        <location filename="../mapflow.py" line="488"/>
         <source>Your AOI layer is empty</source>
         <translation>Слой с областями обработки пуст</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="491"/>
+        <location filename="../mapflow.py" line="491"/>
         <source>Please, select a single feature in your AOI layer</source>
         <translation>Пожалуйста, выделите один объект в слое</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="270"/>
+        <location filename="../mapflow.py" line="270"/>
         <source>SecureWatch is not responding. Please, try again later.</source>
         <translation>SecureWatch не отвечает. Пожалуйста, попробуйте позже.</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="375"/>
+        <location filename="../mapflow.py" line="375"/>
         <source>Area: </source>
         <translation>Площадь: </translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="375"/>
+        <location filename="../mapflow.py" line="375"/>
         <source> sq.km</source>
         <translation> кв.км</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="405"/>
+        <location filename="../mapflow.py" line="405"/>
         <source>Delete </source>
         <translation>Удалить </translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="405"/>
+        <location filename="../mapflow.py" line="405"/>
         <source> processings?</source>
         <translation> обработок?</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="434"/>
+        <location filename="../mapflow.py" line="434"/>
         <source>Please, specify a name for your processing</source>
         <translation>Пожалуйста, выберите название обработки</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="437"/>
+        <location filename="../mapflow.py" line="437"/>
         <source>Processing name taken. Please, choose a different name.</source>
         <translation>Обработка с таким названием уже существует. Пожалуйста, выберите другое название.</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="440"/>
+        <location filename="../mapflow.py" line="440"/>
         <source>Please, select an area of interest</source>
         <translation>Пожалуйста, выберите слой с областью обработки</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="456"/>
+        <location filename="../mapflow.py" line="456"/>
         <source>Please, select a GeoTIFF layer</source>
         <translation>Пожалуйста, выберите слой GeoTIFF для обработки</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="470"/>
+        <location filename="../mapflow.py" line="470"/>
         <source>Please, specify the imagery provider URL in Settings</source>
         <translation>Пожалуйста, укажите ссылку на источник снимков во вкладке Настройки</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="472"/>
+        <location filename="../mapflow.py" line="472"/>
         <source>Please, be aware that you may be charged by the imagery provider!</source>
         <translation>За использование снимков в полном разрешении провайдер может взымать с вас плату!</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="506"/>
+        <location filename="../mapflow.py" line="506"/>
         <source>Your image was uploaded to: </source>
         <translation>Ваш локальный снимок был загружен в: </translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="508"/>
+        <location filename="../mapflow.py" line="508"/>
         <source>Processing creation failed, see the QGIS log for details</source>
         <translation>Мы не смогли создать обработку. Более подробная информация в логе QGIS</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="511"/>
+        <location filename="../mapflow.py" line="511"/>
         <source>Starting the processing...</source>
         <translation>Создаем обработку...</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="518"/>
+        <location filename="../mapflow.py" line="518"/>
         <source>Success! Processing may take up to several minutes</source>
         <translation>Пожалуйста, подождите пока обработка выполняется. Это может занять несколько минут</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="556"/>
+        <location filename="../mapflow.py" line="556"/>
         <source>Custom tileset</source>
         <translation>Снимки</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="558"/>
+        <location filename="../mapflow.py" line="558"/>
         <source>Invalid custom imagery provider:</source>
         <translation>Мы не смогли подключиться к:</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="617"/>
+        <location filename="../mapflow.py" line="617"/>
         <source>Error saving results! See QGIS logs.</source>
         <translation>Ошибка сохранения результатов обработки. Более подробная информация в логе QGIS.</translation>
     </message>
     <message>
-        <location filename="../geoalert.py" line="628"/>
+        <location filename="../mapflow.py" line="628"/>
         <source>Could not load the results</source>
         <translation>Мы скачали результаты обработки но не смогли загрузить их в QGIS</translation>
     </message>
