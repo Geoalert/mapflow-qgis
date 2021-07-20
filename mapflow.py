@@ -11,12 +11,9 @@ from qgis.gui import *
 
 from .dialogs import MainDialog, LoginDialog
 from .workers import ProcessingFetcher, ProcessingCreator
-from . import helpers
+from . import helpers, config
 
 
-PLUGIN_NAME = 'Mapflow'
-PROCESSING_LIST_REFRESH_INTERVAL: int = 5  # in seconds
-RASTER_COMBO_VIRTUAL_LAYER_COUNT: int = 2  # Mapbox Satellite, Custom provider
 MAXAR_METADATA_ATTRIBUTES = ('featureId', 'sourceUnit', 'productType', 'colorBandOrder', 'cloudCover', 'formattedDate')
 MAXAR_METADATA_FEATURE_ID_COLUMN_INDEX = MAXAR_METADATA_ATTRIBUTES.index('featureId')
 ID_COLUMN_INDEX: int = 5  # processings table
@@ -54,12 +51,12 @@ class Mapflow:
         self.plugin_dir = os.path.dirname(__file__)
         # Init toolbar and toolbar buttons
         self.actions = []
-        self.toolbar = self.iface.addToolBar(PLUGIN_NAME)
-        self.toolbar.setObjectName(PLUGIN_NAME)
+        self.toolbar = self.iface.addToolBar(config.PLUGIN_NAME)
+        self.toolbar.setObjectName(config.PLUGIN_NAME)
         # QGIS Settings will be used to store user credentials and various UI element state
         self.settings = QgsSettings()
         # Create a namespace for the plugin settings
-        self.settings.beginGroup(PLUGIN_NAME.lower())
+        self.settings.beginGroup(config.PLUGIN_NAME.lower())
         # Translation
         locale = QSettings().value('locale/userLocale')[0:2]
         locale_path = os.path.join(self.plugin_dir, 'i18n', f'mapflow_{locale}.qm')
@@ -71,12 +68,16 @@ class Mapflow:
         self.dlg = MainDialog()
         self.dlg_login = LoginDialog()
         self.timeout_alert = QMessageBox(
-            QMessageBox.Warning, PLUGIN_NAME,
+            QMessageBox.Warning, config.PLUGIN_NAME,
             self.tr("Sorry, we couldn't connect Mapflow. Please try again later."
                     "If the problem remains, please, send us an email to help@geoalert.io."),
-            parent=self.main_window)
+            parent=self.main_window
+        )
         self.offline_alert = QMessageBox(
-            QMessageBox.Information, PLUGIN_NAME, self.tr("Mapflow requires an Internet connection"), parent=self.main_window
+            QMessageBox.Information,
+            config.PLUGIN_NAME,
+            self.tr("Mapflow requires Internet connection"),
+            parent=self.main_window
         )
         # Tweak URL's considering the user's locale
         if locale == 'ru':
@@ -650,7 +651,7 @@ class Mapflow:
         :param kind: The type of a pop-up to display; it is translated into a class method name of QMessageBox,
             so must be one of https://doc.qt.io/qt-5/qmessagebox.html#static-public-members
         """
-        return getattr(QMessageBox, kind)(self.dlg, PLUGIN_NAME, message)
+        return getattr(QMessageBox, kind)(self.dlg, config.PLUGIN_NAME, message)
 
     def push_message(self, message: str, level: Qgis.MessageLevel = Qgis.Info, duration: int = 5) -> None:
         """Display a message on the message bar.
@@ -659,7 +660,7 @@ class Mapflow:
         :param level: The type of a message to display
         :param duration: For how long the message will be displayed
         """
-        self.iface.messageBar().pushMessage(PLUGIN_NAME, message, level, duration)
+        self.iface.messageBar().pushMessage(config.PLUGIN_NAME, message, level, duration)
 
     def log(self, message: str, level: Qgis.MessageLevel = Qgis.Warning) -> None:
         """Log a message to the QGIS Message Log.
@@ -667,7 +668,7 @@ class Mapflow:
         :param message: A text to display
         :param level: The type of a message to display
         """
-        QgsMessageLog.logMessage(message, PLUGIN_NAME, level=level)
+        QgsMessageLog.logMessage(message, config.PLUGIN_NAME, level=level)
 
     def fill_out_processings_table(self, processings: List[Dict[str, Union[str, int]]]) -> None:
         """Fill out the processings table with the processings in the user's default project.
@@ -710,7 +711,7 @@ class Mapflow:
 
         :param message: A text to translate
         """
-        return QCoreApplication.translate(PLUGIN_NAME, message)
+        return QCoreApplication.translate(config.PLUGIN_NAME, message)
 
     def add_action(self, icon_path: str, text: str, callback: Callable, enabled_flag: bool = True) -> QAction:
         """Adds actionable icons to the toolbar.
@@ -734,14 +735,14 @@ class Mapflow:
         This function is referenced by the QGIS plugin loading system, so it can't be renamed.
         """
         icon_path = os.path.join(self.plugin_dir, 'icon.png')
-        self.add_action(icon_path, text=PLUGIN_NAME, callback=self.run)
+        self.add_action(icon_path, text=config.PLUGIN_NAME, callback=self.run)
 
     def unload(self) -> None:
         """Remove the plugin menu item and icon from QGIS GUI."""
         self.dlg.close()
         self.dlg_login.close()
         for action in self.actions:
-            self.iface.removePluginVectorMenu(PLUGIN_NAME, action)
+            self.iface.removePluginVectorMenu(config.PLUGIN_NAME, action)
             self.iface.removeToolBarIcon(action)
         del self.toolbar
 

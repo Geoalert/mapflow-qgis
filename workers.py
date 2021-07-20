@@ -6,8 +6,7 @@ import requests
 from PyQt5.QtCore import QObject, pyqtSignal
 from qgis.core import QgsMessageLog, Qgis, QgsGeometry, QgsRasterLayer
 
-
-PLUGIN_NAME = 'Mapflow'
+from . import config
 
 
 class ProcessingFetcher(QObject):
@@ -48,7 +47,7 @@ class ProcessingFetcher(QObject):
                 self.fetched.emit(processings)
                 # If there are ongoing processings, keep polling
                 if [p for p in processings if p['status'] in ("IN_PROGRESS", "UNPROCESSED")]:
-                    self.thread().sleep(5)
+                    self.thread().sleep(config.PROCESSING_LIST_REFRESH_INTERVAL)
                     continue
                 self.finished.emit()
                 break
@@ -121,7 +120,7 @@ class ProcessingCreator(QObject):
             "meta": self.meta
         }).replace('\'', '"').encode()
         if os.getenv('MAPFLOW_QGIS_ENV'):
-            QgsMessageLog.logMessage(body.decode(), PLUGIN_NAME, level=Qgis.Info)
+            QgsMessageLog.logMessage(body.decode(), config.PLUGIN_NAME, level=Qgis.Info)
         # Post the processing
         try:
             r = requests.post(

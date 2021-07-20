@@ -1,0 +1,2 @@
+PLUGIN_NAME = 'Mapflow'
+PROCESSING_LIST_REFRESH_INTERVAL = 5  # in seconds
