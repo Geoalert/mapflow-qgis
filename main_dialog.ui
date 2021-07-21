@@ -128,11 +128,11 @@
      <attribute name="horizontalHeaderCascadingSectionResizes">
       <bool>false</bool>
      </attribute>
-     <attribute name="horizontalHeaderDefaultSectionSize">
-      <number>116</number>
-     </attribute>
      <attribute name="horizontalHeaderMinimumSectionSize">
       <number>67</number>
+     </attribute>
+     <attribute name="horizontalHeaderDefaultSectionSize">
+      <number>116</number>
      </attribute>
      <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
       <bool>true</bool>
@@ -255,7 +255,7 @@
        <string/>
       </property>
      </widget>
-     <widget class="QWidget" name="">
+     <widget class="QWidget" name="layoutWidget">
       <property name="geometry">
        <rect>
         <x>3</x>
@@ -354,10 +354,10 @@
        </item>
        <item row="1" column="1">
         <widget class="QgsMapLayerComboBox" name="polygonCombo">
-         <property name="allowEmptyLayer" stdset="0">
+         <property name="allowEmptyLayer">
           <bool>false</bool>
          </property>
-         <property name="showCrs" stdset="0">
+         <property name="showCrs">
           <bool>true</bool>
          </property>
         </widget>
@@ -388,7 +388,7 @@
            <height>0</height>
           </size>
          </property>
-         <property name="showCrs" stdset="0">
+         <property name="showCrs">
           <bool>true</bool>
          </property>
         </widget>
@@ -1001,7 +1001,7 @@
            </font>
           </property>
           <property name="text">
-           <string>Area of processing:</string>
+           <string>Area:</string>
           </property>
          </widget>
         </item>
@@ -1115,10 +1115,10 @@
         </item>
         <item row="4" column="1">
          <widget class="QgsMapLayerComboBox" name="maxarAOICombo">
-          <property name="allowEmptyLayer" stdset="0">
+          <property name="allowEmptyLayer">
            <bool>false</bool>
           </property>
-          <property name="showCrs" stdset="0">
+          <property name="showCrs">
            <bool>true</bool>
           </property>
          </widget>
