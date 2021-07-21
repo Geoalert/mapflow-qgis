@@ -225,6 +225,9 @@ class Mapflow:
         if not self.check_if_output_directory_is_selected():
             return
         aoi_layer = self.dlg.maxarAOICombo.currentLayer()
+        if not aoi_layer:
+            self.alert(self.tr('Please, select an area of interest'))
+            return
         # Get the AOI feature within the layer
         if aoi_layer.featureCount() == 1:
             aoi_feature = next(aoi_layer.getFeatures())
