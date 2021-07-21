@@ -129,7 +129,6 @@ class Mapflow:
         # Maxar
         self.dlg.getMaxarURL.clicked.connect(self.get_maxar_url)
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
-        self.dlg.maxarMetadataTable.clicked.connect(self.set_maxar_feature_id)
 
     def monitor_polygon_layer_feature_selection(self, layers: List[QgsMapLayer]) -> None:
         """Set up connection between feature selection in polygon layers and AOI area calculation.
@@ -204,12 +203,6 @@ class Mapflow:
             layer = QgsRasterLayer(path, os.path.splitext(os.path.basename(path))[0])
             self.project.addMapLayer(layer)
             self.dlg.rasterCombo.setLayer(layer)
-
-    def set_maxar_feature_id(self) -> None:
-        """Fill the Maxar FeatureID field out with the currently selected feature ID."""
-        row = self.dlg.maxarMetadataTable.currentRow()
-        feature_id = self.dlg.maxarMetadataTable.model().index(row, MAXAR_METADATA_FEATURE_ID_COLUMN_INDEX).data()
-        self.dlg.maxarFeatureID.setText(str(feature_id))
 
     def get_maxar_metadata(self) -> None:
         """Get SecureWatch image footprints and metadata.
@@ -302,12 +295,15 @@ class Mapflow:
 
         Is called by clicking the getMaxarURL ('Get URL') button.
         """
-        connectID = self.dlg.maxarConnectID.text()
-        featureID = self.dlg.maxarFeatureID.text()
+        connect_id = self.dlg.maxarConnectID.text()
+        # Check if the user selected a specific image
+        selected_row = self.dlg.maxarMetadataTable.currentRow()
+        feature_id = '' if selected_row == -1 else self.dlg.maxarMetadataTable.item(selected_row, 0).text()
+        # Build the Maxar URL
         url = 'https://securewatch.digitalglobe.com/earthservice/wmtsaccess'
         # URL must be constructed manually to prevent URL-encoding which otherwise breaks the request
         params = '&'.join(f'{key}={value}' for key, value in {
-            'CONNECTID': connectID,
+            'CONNECTID': connect_id,
             'SERVICE': 'WMTS',
             'VERSION': '1.0.0',
             'STYLE': '',  # required even if empty
@@ -319,13 +315,13 @@ class Mapflow:
             'TileMatrixSet': 'EPSG:3857',
             'TileMatrix': 'EPSG:3857:{z}',
             # %27 instead of ' is mandatory for the URL to work
-            'CQL_FILTER': f"feature_id=%27{featureID}%27" if featureID else ''
+            'CQL_FILTER': f"feature_id=%27{feature_id}%27" if feature_id else ''
         }.items())
         self.dlg.customProviderURL.setText(f'{url}?{params}')
         # WMTS is converted to XYZ in Mapflow so set the provider type accordingly
         self.dlg.customProviderType.setCurrentIndex(0)
         # Memorize the connect ID to restore it when the plugin's next started
-        self.settings.setValue('connectID', connectID)
+        self.settings.setValue('connectID', connect_id)
 
     def calculate_aoi_area(self, arg: Optional[Union[bool, QgsMapLayer, List[QgsFeature]]]) -> None:
         """Display the area of the processing AOI in sq. km above the processings table.
@@ -463,7 +459,7 @@ class Mapflow:
             worker_kwargs['tif'] = current_raster_layer
             worker_kwargs['aoi'] = helpers.get_layer_extent(current_raster_layer, self.project.transformContext())
             worker_kwargs['params']['source_type'] = 'tif'
-        else:  # basemap
+        else:  # custom provider or Mapbox
             raster_option = self.dlg.rasterCombo.currentText()
             if raster_option == 'Mapbox Satellite':
                 worker_kwargs['meta']['source'] = 'mapbox'
