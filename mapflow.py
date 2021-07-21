@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from qgis.core import *
 from qgis.gui import *
+from qgis import processing
 
 from .dialogs import MainDialog, LoginDialog
 from .workers import ProcessingFetcher, ProcessingCreator
@@ -275,8 +276,11 @@ class Mapflow:
         self.project.addMapLayer(metadata_layer)
         # Add style
         metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'styles', 'wfs.qml'))
-        # Fill out the table
+        # Get the list of features (don't use the generator itself, otherwise it'll get exhausted)
         features = list(metadata_layer.getFeatures())
+        # Memorize IDs and extents to be able to clip the user's AOI to image on processing creation
+        self.maxar_metadata_extents: List[QgsFeature] = {feature['featureId']: feature for feature in features}
+        # Fill out the table
         self.dlg.maxarMetadataTable.setRowCount(len(features))
         # Round up cloud cover to two decimal numbers
         for feature in features:
@@ -496,6 +500,27 @@ class Mapflow:
                 worker_kwargs['aoi'] = helpers.to_wgs84(aoi_feature.geometry(), layer_crs, self.project.transformContext())
             else:
                 worker_kwargs['aoi'] = aoi_feature.geometry()
+            # Clip AOI to image if a single Maxar image is requested
+            selected_row = self.dlg.maxarMetadataTable.currentRow()
+            if self.dlg.checkMaxar.isChecked() and selected_row != -1:
+                # Recreate AOI layer; shall we change helpers.to_wgs84 to return layer, not geometry?
+                aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326', 'aoi', 'memory')
+                aoi = QgsFeature()
+                aoi.setGeometry(worker_kwargs['aoi'])
+                aoi_layer.dataProvider().addFeatures([aoi])
+                aoi_layer.updateExtents()
+                # Create a temp layer for the image extent
+                feature_id = self.dlg.maxarMetadataTable.item(selected_row, 0).text()
+                image_extent_layer = QgsVectorLayer('Polygon?crs=epsg:4326', 'image extent', 'memory')
+                extent = self.maxar_metadata_extents[feature_id]
+                image_extent_layer.dataProvider().addFeatures([extent])
+                aoi_layer.updateExtents()
+                # Find the intersection and pass it to the worker
+                intersection = processing.run(
+                    'qgis:intersection',
+                    {'INPUT': aoi_layer, 'OVERLAY': image_extent_layer, 'OUTPUT': 'memory:'}
+                )['OUTPUT']
+                worker_kwargs['aoi'] = next(intersection.getFeatures()).geometry()
         # Spin up a worker, a thread, and move the worker to the thread
         thread = QThread(self.main_window)
         worker = ProcessingCreator(**worker_kwargs)
