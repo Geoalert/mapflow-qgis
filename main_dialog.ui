@@ -29,7 +29,7 @@
    </size>
   </property>
   <property name="windowTitle">
-   <string>Geoalert</string>
+   <string>Mapflow</string>
   </property>
   <property name="sizeGripEnabled">
    <bool>false</bool>
@@ -955,7 +955,7 @@
      <property name="frameShadow">
       <enum>QFrame::Raised</enum>
      </property>
-     <widget class="QWidget" name="">
+     <widget class="QWidget" name="layoutWidget">
       <property name="geometry">
        <rect>
         <x>3</x>
