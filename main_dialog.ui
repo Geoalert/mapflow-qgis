@@ -1188,17 +1188,39 @@
           <height>516</height>
          </rect>
         </property>
-        <widget class="QLabel" name="text">
+        <widget class="QWidget" name="">
          <property name="geometry">
           <rect>
            <x>20</x>
-           <y>10</y>
-           <width>531</width>
-           <height>291</height>
+           <y>20</y>
+           <width>526</width>
+           <height>331</height>
           </rect>
          </property>
-         <property name="text">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;
+         <layout class="QVBoxLayout" name="layoutHelp">
+          <property name="spacing">
+           <number>20</number>
+          </property>
+          <item>
+           <widget class="QLabel" name="pluginVersion">
+            <property name="font">
+             <font>
+              <weight>75</weight>
+              <bold>true</bold>
+             </font>
+            </property>
+            <property name="text">
+             <string>You are using Mapflow for QGIS v</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="helpText">
+            <property name="text">
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;
 &lt;div style=&quot;margin:30px; background-color: #e8e8e8&quot;&gt;
 &lt;p&gt;This application requires access to &lt;a href=&quot;http://mapflow.ai/&quot;&gt;Mapflow.ai&lt;/a&gt; Processing API service. To obtain credentials, please, &lt;a href=&quot;mailto:help@geoalert.io?subject=Processing API access&amp;body=Hello, I'd like to use your QGIS plugin.&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;send us a request.&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;
 &lt;p&gt;
@@ -1212,16 +1234,19 @@
 &lt;/ul&gt;&lt;/p&gt;
 &lt;/div&gt;
 &lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-         <property name="textFormat">
-          <enum>Qt::AutoText</enum>
-         </property>
-         <property name="wordWrap">
-          <bool>true</bool>
-         </property>
-         <property name="openExternalLinks">
-          <bool>true</bool>
-         </property>
+            </property>
+            <property name="textFormat">
+             <enum>Qt::AutoText</enum>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+            <property name="openExternalLinks">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </widget>
        </widget>
       </widget>
@@ -1263,7 +1288,6 @@
   <tabstop>customProviderSaveAuth</tabstop>
   <tabstop>checkMaxar</tabstop>
   <tabstop>maxarMetadataTable</tabstop>
-  <tabstop>scrollArea</tabstop>
   <tabstop>tabWidget</tabstop>
  </tabstops>
  <resources/>

@@ -1,4 +1,5 @@
 import os.path
+from configparser import ConfigParser
 from typing import Callable, List, Dict, Optional, Union
 
 import requests
@@ -82,9 +83,14 @@ class Mapflow:
         )
         # Tweak URL's considering the user's locale
         if locale == 'ru':
-            help_text = self.dlg.text.text()
+            help_text = self.dlg.helpText.text()
             new_text = help_text.replace('docs.mapflow', 'ru.docs.mapflow').replace('http://mapflow.ai', 'http://mapflow.ai/ru')
-            self.dlg.text.setText(new_text)
+            self.dlg.helpText.setText(new_text)
+        # Display the plugin's version in the Help tab
+        metadata_parser = ConfigParser()
+        metadata_parser.read(os.path.join(self.plugin_dir, 'metadata.txt'))
+        plugin_version = metadata_parser.get('general', 'version')
+        self.dlg.pluginVersion.setText(self.dlg.pluginVersion.text() + plugin_version)
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         # Check if there are stored credentials
         self.logged_in = self.settings.value("serverLogin") and self.settings.value("serverPassword")
