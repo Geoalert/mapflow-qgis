@@ -128,11 +128,11 @@
      <attribute name="horizontalHeaderCascadingSectionResizes">
       <bool>false</bool>
      </attribute>
-     <attribute name="horizontalHeaderMinimumSectionSize">
-      <number>67</number>
-     </attribute>
      <attribute name="horizontalHeaderDefaultSectionSize">
       <number>116</number>
+     </attribute>
+     <attribute name="horizontalHeaderMinimumSectionSize">
+      <number>67</number>
      </attribute>
      <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
       <bool>true</bool>
@@ -255,13 +255,13 @@
        <string/>
       </property>
      </widget>
-     <widget class="QWidget" name="layoutWidget">
+     <widget class="QWidget" name="">
       <property name="geometry">
        <rect>
-        <x>3</x>
-        <y>11</y>
-        <width>668</width>
-        <height>105</height>
+        <x>0</x>
+        <y>10</y>
+        <width>571</width>
+        <height>79</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout">
@@ -277,7 +277,7 @@
          </property>
         </widget>
        </item>
-       <item row="0" column="1">
+       <item row="0" column="1" colspan="2">
         <widget class="QLineEdit" name="processingName">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -287,7 +287,7 @@
          </property>
          <property name="minimumSize">
           <size>
-           <width>150</width>
+           <width>160</width>
            <height>0</height>
           </size>
          </property>
@@ -307,7 +307,7 @@
          </property>
         </widget>
        </item>
-       <item row="0" column="2">
+       <item row="0" column="3">
         <widget class="QLabel" name="labelAIModel">
          <property name="font">
           <font>
@@ -319,7 +319,7 @@
          </property>
         </widget>
        </item>
-       <item row="0" column="3" colspan="2">
+       <item row="0" column="4" colspan="2">
         <widget class="QComboBox" name="workflowDefinitionCombo">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -331,6 +331,12 @@
           <size>
            <width>160</width>
            <height>0</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>160</width>
+           <height>16777215</height>
           </size>
          </property>
          <property name="font">
@@ -352,17 +358,7 @@
          </property>
         </widget>
        </item>
-       <item row="1" column="1">
-        <widget class="QgsMapLayerComboBox" name="polygonCombo">
-         <property name="allowEmptyLayer">
-          <bool>false</bool>
-         </property>
-         <property name="showCrs">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="2">
+       <item row="1" column="3">
         <widget class="QLabel" name="labelImagerySource">
          <property name="font">
           <font>
@@ -374,7 +370,7 @@
          </property>
         </widget>
        </item>
-       <item row="1" column="3">
+       <item row="1" column="4">
         <widget class="QgsMapLayerComboBox" name="rasterCombo">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
@@ -388,12 +384,12 @@
            <height>0</height>
           </size>
          </property>
-         <property name="showCrs">
+         <property name="showCrs" stdset="0">
           <bool>true</bool>
          </property>
         </widget>
        </item>
-       <item row="1" column="4">
+       <item row="1" column="5">
         <widget class="QPushButton" name="selectTif">
          <property name="enabled">
           <bool>true</bool>
@@ -407,7 +403,7 @@
          <property name="maximumSize">
           <size>
            <width>25</width>
-           <height>31</height>
+           <height>25</height>
           </size>
          </property>
          <property name="font">
@@ -429,7 +425,29 @@
          </property>
         </widget>
        </item>
-       <item row="2" column="0">
+       <item row="1" column="1" colspan="2">
+        <widget class="QgsMapLayerComboBox" name="polygonCombo">
+         <property name="minimumSize">
+          <size>
+           <width>160</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>160</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <property name="allowEmptyLayer" stdset="0">
+          <bool>false</bool>
+         </property>
+         <property name="showCrs" stdset="0">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="0" colspan="3">
         <widget class="QCheckBox" name="useImageExtentAsAOI">
          <property name="enabled">
           <bool>false</bool>
@@ -444,7 +462,7 @@
          </property>
         </widget>
        </item>
-       <item row="2" column="2" colspan="2">
+       <item row="2" column="3" colspan="2">
         <widget class="QCheckBox" name="updateCache">
          <property name="font">
           <font>
@@ -1040,10 +1058,10 @@
          </item>
          <item row="1" column="1" colspan="2">
           <widget class="QgsMapLayerComboBox" name="maxarAOICombo">
-           <property name="allowEmptyLayer">
+           <property name="allowEmptyLayer" stdset="0">
             <bool>false</bool>
            </property>
-           <property name="showCrs">
+           <property name="showCrs" stdset="0">
             <bool>true</bool>
            </property>
           </widget>
@@ -1166,8 +1184,8 @@
          <rect>
           <x>0</x>
           <y>0</y>
-          <width>583</width>
-          <height>509</height>
+          <width>579</width>
+          <height>516</height>
          </rect>
         </property>
         <widget class="QLabel" name="text">
@@ -1231,7 +1249,6 @@
   <tabstop>rasterCombo</tabstop>
   <tabstop>selectTif</tabstop>
   <tabstop>useImageExtentAsAOI</tabstop>
-  <tabstop>updateCache</tabstop>
   <tabstop>startProcessing</tabstop>
   <tabstop>logoutButton</tabstop>
   <tabstop>deleteProcessings</tabstop>
