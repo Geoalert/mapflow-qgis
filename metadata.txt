@@ -1,7 +1,7 @@
 [general]
 name=Mapflow
 qgisMinimumVersion=3.10
-description=Extract real-world objects from satellite imagery with Mapflow by Geoalert
+description=Extract real-world objects from satellite imagery with Mapflow by Geoalert. Apply AI mapping pipelines of builging footprints, roads, vegetation and more.
 about=Mapflow provides AI models for automatic feature extraction from satellite imagery. Choose a basemap or upload you own GeoTIFF, select what type of features you want to extract and your area of interest, and we'll do the rest. At present, we can extract:
 		- buildings (optionally, with height)
 		- forest (optionally, with height)
@@ -17,7 +17,7 @@ changelog:
 	1.1.1: Add missing translations.
 	1.1.0: Add support for QGIS 3.10, 3.12 and 3.14
 
-tags=remote sensing, satellite, artificial intelligence, machine learning, feature extraction, classification, digitizing, digitize, forest, forestry, roads, buildings
+tags=earth observation, remote sensing, satellite, artificial intelligence, machine learning, deepl earning, feature extraction, classification, digitizing, forest, forestry, roads, buildings detection, construction detection, agriculture fields detection
 category=Web
 homepage=https://mapflow.ai
 tracker=https://github.com/Geoalert/mapflow-qgis/issues
