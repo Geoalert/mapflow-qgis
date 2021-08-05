@@ -4,7 +4,7 @@ At [Geoalert](https://www.geoalert.io/en-US/), we employ Artificial Intelligence
 
 You choose what type of features you want to extract, where and from which imagery, and [Mapflow](https://mapflow.ai/) will do the work for you.
 
-Current we can detect:
+Currently we can detect:
 - building footprints (optionally, with height)
 - forest (optionally, with height)
 - construction sites
