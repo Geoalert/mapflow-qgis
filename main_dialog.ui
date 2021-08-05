@@ -128,11 +128,11 @@
      <attribute name="horizontalHeaderCascadingSectionResizes">
       <bool>false</bool>
      </attribute>
-     <attribute name="horizontalHeaderDefaultSectionSize">
-      <number>116</number>
-     </attribute>
      <attribute name="horizontalHeaderMinimumSectionSize">
       <number>67</number>
+     </attribute>
+     <attribute name="horizontalHeaderDefaultSectionSize">
+      <number>116</number>
      </attribute>
      <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
       <bool>true</bool>
@@ -384,7 +384,7 @@
            <height>0</height>
           </size>
          </property>
-         <property name="showCrs" stdset="0">
+         <property name="showCrs">
           <bool>true</bool>
          </property>
         </widget>
@@ -439,10 +439,10 @@
            <height>16777215</height>
           </size>
          </property>
-         <property name="allowEmptyLayer" stdset="0">
+         <property name="allowEmptyLayer">
           <bool>false</bool>
          </property>
-         <property name="showCrs" stdset="0">
+         <property name="showCrs">
           <bool>true</bool>
          </property>
         </widget>
@@ -1011,19 +1011,6 @@
            </property>
           </widget>
          </item>
-         <item row="0" column="3">
-          <widget class="QPushButton" name="getMaxarURL">
-           <property name="font">
-            <font>
-             <pointsize>12</pointsize>
-             <kerning>true</kerning>
-            </font>
-           </property>
-           <property name="text">
-            <string>Get URL</string>
-           </property>
-          </widget>
-         </item>
          <item row="1" column="0">
           <widget class="QLabel" name="labelMaxarAOI">
            <property name="minimumSize">
@@ -1058,10 +1045,10 @@
          </item>
          <item row="1" column="1" colspan="2">
           <widget class="QgsMapLayerComboBox" name="maxarAOICombo">
-           <property name="allowEmptyLayer" stdset="0">
+           <property name="allowEmptyLayer">
             <bool>false</bool>
            </property>
-           <property name="showCrs" stdset="0">
+           <property name="showCrs">
             <bool>true</bool>
            </property>
           </widget>
@@ -1188,7 +1175,7 @@
           <height>516</height>
          </rect>
         </property>
-        <widget class="QWidget" name="">
+        <widget class="QWidget" name="layoutWidget">
          <property name="geometry">
           <rect>
            <x>20</x>

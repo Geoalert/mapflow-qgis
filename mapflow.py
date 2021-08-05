@@ -134,7 +134,11 @@ class Mapflow:
         self.dlg.customProviderType.currentTextChanged.connect(lambda text: self.settings.setValue('customProviderType', text))
         self.dlg.preview.clicked.connect(self.preview)
         # Maxar
-        self.dlg.getMaxarURL.clicked.connect(self.get_maxar_url)
+        self.dlg.customProviderLogin.textChanged.connect(self.get_maxar_url)
+        self.dlg.customProviderPassword.textChanged.connect(self.get_maxar_url)
+        self.dlg.maxarConnectID.textChanged.connect(self.get_maxar_url)
+        self.dlg.checkMaxar.stateChanged.connect(self.get_maxar_url)
+        self.dlg.maxarMetadataTable.itemSelectionChanged.connect(self.get_maxar_url)
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
 
     def monitor_polygon_layer_feature_selection(self, layers: List[QgsMapLayer]) -> None:
@@ -303,8 +307,11 @@ class Mapflow:
         The user only needs to put the Connect ID in the corresponding field and to select a row in the metadata table,
         if they would like to preview or process a single image. 
 
-        Is called by clicking the getMaxarURL ('Get URL') button.
+        Is called by editing any of customProviderLogin, customProviderPassword, maxarConnectID if the Maxar frame is 
+        enabled, or by enabling the frame itself. 
         """
+        if not self.dlg.checkMaxar.isChecked():
+            return
         connect_id = self.dlg.maxarConnectID.text()
         # Check if the user selected a specific image
         selected_row = self.dlg.maxarMetadataTable.currentRow()
