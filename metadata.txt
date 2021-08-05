@@ -8,10 +8,15 @@ about=Mapflow provides AI models for automatic feature extraction from satellite
 		- roads
 		- construction sites
 	For a step-by-step user guide, go to https://docs.mapflow.ai/docs_api/qgis_mapflow.html
-version=1.2.0
+version=1.3.0
 author=Geoalert
 email=hello@geoalert.io
 changelog:
+	1.3.0: 
+		- Simplify Maxar URL forming: no 'Get URL' button anymore, just enter you credentials, and the link's there.
+		- The plugin's version is displayed in Help in case you need it for a support request.
+		- A registration link is added to the login dialog.
+		- UI improved.
 	1.2.0: Remove the Feature ID field as unnecessary. The FID is added to the URL based on the metadata table selection.
 	1.1.2: Display an alert if no AOI is selected when requesting Maxar metadata.
 	1.1.1: Add missing translations.
