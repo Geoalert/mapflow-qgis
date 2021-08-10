@@ -274,10 +274,14 @@ class Mapflow:
         }
         try:
             r = requests.get(url, params=params, auth=(login, password), timeout=5)
+            r.raise_for_status()
         except requests.Timeout:
             self.alert(self.tr("SecureWatch is not responding. Please, try again later."))
             return
-        r.raise_for_status()
+        except requests.HTTPError:
+            if r.status_code == 401:
+                self.alert(self.tr('Please, check your credentials'), kind='warning')
+                return
         # Save metadata to a GeoJSON; I couldn't get WFS to work otherwise no file would be necessary
         output_file_name = os.path.join(self.dlg.outputDirectory.text(), 'maxar_metadata.geojson')
         with open(output_file_name, 'wb') as f:

@@ -318,97 +318,97 @@
         <translation>Выберите GeoTIFF</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="505"/>
+        <location filename="../mapflow.py" line="509"/>
         <source>Your AOI layer is empty</source>
         <translation>Слой с областями обработки пуст</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="508"/>
+        <location filename="../mapflow.py" line="512"/>
         <source>Please, select a single feature in your AOI layer</source>
         <translation>Пожалуйста, выделите один объект в слое</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="278"/>
+        <location filename="../mapflow.py" line="279"/>
         <source>SecureWatch is not responding. Please, try again later.</source>
         <translation>SecureWatch не отвечает. Пожалуйста, попробуйте позже.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="392"/>
+        <location filename="../mapflow.py" line="396"/>
         <source>Area: {:.2f} sq.km</source>
         <translation>Площадь: {:.2f} кв.км</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="422"/>
+        <location filename="../mapflow.py" line="426"/>
         <source>Delete {} processing(s)?</source>
         <translation>Удалить {} обработку?</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="451"/>
+        <location filename="../mapflow.py" line="455"/>
         <source>Please, specify a name for your processing</source>
         <translation>Пожалуйста, выберите название обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="454"/>
+        <location filename="../mapflow.py" line="458"/>
         <source>Processing name taken. Please, choose a different name.</source>
         <translation>Обработка с таким названием уже существует. Пожалуйста, выберите другое название.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="457"/>
+        <location filename="../mapflow.py" line="461"/>
         <source>Please, select an area of interest</source>
         <translation>Пожалуйста, выберите слой с областью обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="473"/>
+        <location filename="../mapflow.py" line="477"/>
         <source>Please, select a GeoTIFF layer</source>
         <translation>Пожалуйста, выберите слой GeoTIFF для обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="487"/>
+        <location filename="../mapflow.py" line="491"/>
         <source>Please, specify the imagery provider URL in Settings</source>
         <translation>Пожалуйста, укажите ссылку на источник снимков во вкладке Настройки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="489"/>
+        <location filename="../mapflow.py" line="493"/>
         <source>Please, be aware that you may be charged by the imagery provider!</source>
         <translation>За использование снимков в полном разрешении провайдер может взымать с вас плату!</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="544"/>
+        <location filename="../mapflow.py" line="548"/>
         <source>Your image was uploaded to: </source>
         <translation>Ваш локальный снимок был загружен в: </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="546"/>
+        <location filename="../mapflow.py" line="550"/>
         <source>Processing creation failed, see the QGIS log for details</source>
         <translation>Мы не смогли создать обработку. Более подробная информация в логе QGIS</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="549"/>
+        <location filename="../mapflow.py" line="553"/>
         <source>Starting the processing...</source>
         <translation>Создаем обработку...</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="556"/>
+        <location filename="../mapflow.py" line="560"/>
         <source>Success! Processing may take up to several minutes</source>
         <translation>Пожалуйста, подождите пока обработка выполняется. Это может занять несколько минут</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="594"/>
+        <location filename="../mapflow.py" line="598"/>
         <source>Custom tileset</source>
         <translation>Снимки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="596"/>
+        <location filename="../mapflow.py" line="600"/>
         <source>Invalid custom imagery provider:</source>
         <translation>Мы не смогли подключиться к:</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="655"/>
+        <location filename="../mapflow.py" line="659"/>
         <source>Error saving results! See QGIS logs.</source>
         <translation>Ошибка сохранения результатов обработки. Более подробная информация в логе QGIS.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="666"/>
+        <location filename="../mapflow.py" line="670"/>
         <source>Could not load the results</source>
         <translation>Мы скачали результаты обработки но не смогли загрузить их в QGIS</translation>
     </message>
@@ -418,9 +418,14 @@
         <translation>Для работы с Mapflow требуется Интернет соединение</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="722"/>
+        <location filename="../mapflow.py" line="726"/>
         <source> finished. Double-click it in the table to download the results.</source>
-        <translation type="unfinished"> завершилась. Дважды кликните на нее в таблице чтобы загрузить результаты.</translation>
+        <translation> завершилась. Дважды кликните на нее в таблице чтобы загрузить результаты.</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="283"/>
+        <source>Please, check your credentials</source>
+        <translation type="unfinished">Пожалуйста, проверьте реквизиты</translation>
     </message>
 </context>
 </TS>
