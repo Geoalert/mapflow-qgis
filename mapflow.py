@@ -714,6 +714,14 @@ class Mapflow:
 
         :param processings: A list of JSON-like dictionaries containing information about the user's processings.
         """
+        # Inform the user about the finished processings
+        try:
+            finished_processings = [i['name'] for i in processings if i['percentCompleted'] == 100]
+            previously_finished_processings = [i['name'] for i in self.processings if i['percentCompleted'] == '100%']
+            for processing in set(finished_processings) - set(previously_finished_processings):
+                self.alert(processing + self.tr(' finished. Double-click it in the table to download the results.'))
+        except AttributeError:  # On plugin start, there's no self.processings, just ignore the exception
+            pass
         # Save as an instance attribute to reuse elsewhere
         self.processings = processings
         # Save ref to check name uniqueness at processing creation
