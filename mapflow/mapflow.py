@@ -519,7 +519,7 @@ class Mapflow:
                 worker_kwargs['aoi'] = aoi_feature.geometry()
             # Clip AOI to image if a single Maxar image is requested
             selected_row = self.dlg.maxarMetadataTable.currentRow()
-            if self.dlg.checkMaxar.isChecked() and selected_row != -1:
+            if raster_option != 'Mapbox Satellite' and self.dlg.checkMaxar.isChecked() and selected_row != -1:
                 # Recreate AOI layer; shall we change helpers.to_wgs84 to return layer, not geometry?
                 aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326', 'aoi', 'memory')
                 aoi = QgsFeature()
