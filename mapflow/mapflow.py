@@ -1,4 +1,5 @@
 import os.path
+from uuid import UUID
 from configparser import ConfigParser
 from typing import Callable, List, Dict, Optional, Union
 
@@ -226,6 +227,11 @@ class Mapflow:
         Is called by clicking the 'getMaxarMetadata' button in the main dialog.
         """
         self.save_custom_provider_auth()
+        # Check if ConnectID is valid, since a invalid one won't cause an HTTPError to check against
+        try:
+            UUID(self.dlg.maxarConnectID.text())
+        except ValueError:
+            self.alert(self.tr('Invalid ConnectID'), kind='warning')
         if not self.check_if_output_directory_is_selected():
             return
         aoi_layer = self.dlg.maxarAOICombo.currentLayer()
