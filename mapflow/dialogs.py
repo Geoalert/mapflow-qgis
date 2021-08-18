@@ -1,20 +1,14 @@
 from pathlib import Path
 
 from PyQt5 import uic
-from PyQt5.QtWidgets import QDialog, QWidget
+from PyQt5.QtWidgets import QWidget
 from qgis.core import QgsMapLayerProxyModel, QgsProviderRegistry
-from qgis.utils import iface
 
 
-MAIN_WINDOW = iface.mainWindow()
-MAIN_DIALOG_FORM = uic.loadUiType(Path(__file__).parent/'main_dialog.ui')[0]
-LOGIN_DIALOG_FORM = uic.loadUiType(Path(__file__).parent/'login_dialog.ui')[0]
-
-
-class MainDialog(QDialog, MAIN_DIALOG_FORM):
-    def __init__(self, parent: QWidget = MAIN_WINDOW):
+class MainDialog(*uic.loadUiType(Path(__file__).parent/'main_dialog.ui')):
+    def __init__(self, parent: QWidget) -> None:
         """Constructor."""
-        super(MainDialog, self).__init__(parent)
+        super().__init__(parent)
         self.setupUi(self)
         # Adjust column width in processings table
         for index, width in enumerate((95, 145, 75, 140, 100, 120)):
@@ -32,10 +26,10 @@ class MainDialog(QDialog, MAIN_DIALOG_FORM):
         self.rasterCombo.setAdditionalItems(('Mapbox Satellite', 'Custom URL (in Settings)'))
 
 
-class LoginDialog(QDialog, LOGIN_DIALOG_FORM):
-    def __init__(self, parent: QWidget = MAIN_WINDOW):
+class LoginDialog(*uic.loadUiType(Path(__file__).parent/'login_dialog.ui')):
+    def __init__(self, parent: QWidget) -> None:
         """Constructor."""
-        super(LoginDialog, self).__init__(parent)
+        super().__init__(parent)
         self.setupUi(self)
         self.cancelButton.clicked.connect(self.reject)
         self.loginButton.clicked.connect(self.accept)
