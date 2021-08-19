@@ -59,7 +59,7 @@
     <enum>Qt::ClickFocus</enum>
    </property>
    <property name="currentIndex">
-    <number>1</number>
+    <number>0</number>
    </property>
    <widget class="QWidget" name="processingsTab">
     <attribute name="title">
@@ -555,10 +555,7 @@
        </font>
       </property>
       <property name="visible">
-       <bool>false</bool>
-      </property>
-      <property name="styleSheet">
-       <string notr="true"/>
+       <bool>true</bool>
       </property>
       <property name="text">
        <string>Log out</string>
@@ -570,7 +567,7 @@
     <attribute name="title">
      <string>Settings</string>
     </attribute>
-    <widget class="QWidget" name="">
+    <widget class="QWidget" name="layoutWidget">
      <property name="geometry">
       <rect>
        <x>10</x>
@@ -795,14 +792,14 @@
          <property name="minimumSize">
           <size>
            <width>0</width>
-           <height>0</height>
+           <height>100</height>
           </size>
          </property>
          <property name="title">
           <string>Credentials</string>
          </property>
          <property name="flat">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
          <property name="checkable">
           <bool>false</bool>
@@ -907,6 +904,9 @@
       </item>
       <item>
        <layout class="QHBoxLayout" name="layoutMaxarHeader">
+        <property name="spacing">
+         <number>0</number>
+        </property>
         <item>
          <widget class="QCheckBox" name="checkMaxar">
           <property name="enabled">
@@ -1046,27 +1046,52 @@
               </property>
              </widget>
             </item>
-            <item row="0" column="1">
-             <widget class="QComboBox" name="comboBox">
+            <item row="0" column="1" colspan="2">
+             <widget class="QComboBox" name="maxarConnectID">
               <property name="editable">
                <bool>true</bool>
               </property>
               <item>
                <property name="text">
-                <string>SecureWatch</string>
+                <string>Mapflow - SecureWatch</string>
                </property>
               </item>
               <item>
                <property name="text">
-                <string>Vivid</string>
+                <string>Mapflow - Vivid</string>
                </property>
               </item>
               <item>
                <property name="text">
-                <string>Basemaps</string>
+                <string>Mapflow - Basemaps</string>
                </property>
               </item>
              </widget>
+            </item>
+            <item row="0" column="3">
+             <layout class="QHBoxLayout" name="horizontalLayout">
+              <item>
+               <widget class="QPushButton" name="pushButton_3">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButton_2">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButton">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+             </layout>
             </item>
            </layout>
           </item>
@@ -1189,8 +1214,8 @@
          <rect>
           <x>0</x>
           <y>0</y>
-          <width>583</width>
-          <height>509</height>
+          <width>98</width>
+          <height>28</height>
          </rect>
         </property>
         <widget class="QWidget" name="layoutWidget">
