@@ -884,6 +884,7 @@ class Mapflow:
         self.login = self.dlg_login.loginField.text()
         self.password = self.dlg_login.passwordField.text()
         self.server_basic_auth = requests.auth.HTTPBasicAuth(self.login, self.password)
+        self.dlg.username.setText(self.login)
         try:
             res = requests.get(f'{self.server}/rest/projects/default', auth=self.server_basic_auth, timeout=5)
             res.raise_for_status()
