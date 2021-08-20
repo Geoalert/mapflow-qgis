@@ -1053,17 +1053,17 @@
               </property>
               <item>
                <property name="text">
-                <string>Mapflow - SecureWatch</string>
+                <string notr="true">Mapflow - SecureWatch</string>
                </property>
               </item>
               <item>
                <property name="text">
-                <string>Mapflow - Vivid</string>
+                <string notr="true">Mapflow - Vivid</string>
                </property>
               </item>
               <item>
                <property name="text">
-                <string>Mapflow - Basemaps</string>
+                <string notr="true">Mapflow - Basemaps</string>
                </property>
               </item>
              </widget>

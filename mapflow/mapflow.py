@@ -52,7 +52,7 @@ class Mapflow:
         self.main_window = iface.mainWindow()
         self.project = QgsProject.instance()
         self.plugin_dir = os.path.dirname(__file__)
-        self.plugin_name = config.PLUGIN_NAME
+        self.plugin_name = config.PLUGIN_NAME  # aliased here to be overloaded in submodules
         # Init toolbar and toolbar buttons
         self.actions = []
         self.toolbar = self.iface.addToolBar(self.plugin_name)
@@ -73,7 +73,7 @@ class Mapflow:
         self.dlg_login = LoginDialog(self.main_window)
         self.timeout_alert = QMessageBox(
             QMessageBox.Warning, self.plugin_name,
-            self.tr("Sorry, we couldn't connect Mapflow. Please try again later."
+            self.tr("Sorry, we couldn't connect to Mapflow. Please try again later."
                     "If the problem remains, please, send us an email to help@geoalert.io."),
             parent=self.main_window
         )
@@ -782,7 +782,8 @@ class Mapflow:
 
         :param message: A text to translate
         """
-        return QCoreApplication.translate(self.plugin_name, message)
+        # From config, not self.plugin_name bc the latter is overloaded in submodules which break translation
+        return QCoreApplication.translate(config.PLUGIN_NAME, message)
 
     def add_action(self, icon_path: str, text: str, callback: Callable, enabled_flag: bool = True) -> QAction:
         """Adds actionable icons to the toolbar.
@@ -804,7 +805,10 @@ class Mapflow:
         """Create the menu entries and toolbar icons inside the QGIS GUI.
 
         This function is referenced by the QGIS plugin loading system, so it can't be renamed.
+        Since there are submodules, the various UI texts are set dynamically.
         """
+        self.dlg.setWindowTitle(self.plugin_name)
+        self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
         icon_path = os.path.join(self.plugin_dir, 'icon.png')
         self.add_action(icon_path, text=self.plugin_name, callback=self.run)
 
