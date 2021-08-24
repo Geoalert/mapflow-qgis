@@ -349,9 +349,11 @@ class Mapflow:
             'TileMatrix': 'EPSG:3857:{z}',
             'CQL_FILTER': f"feature_id=%27{feature_id}%27" if feature_id else ''  # must use %27 instead of '
         }.items())
-        self.dlg.customProviderURL.setText(f'{url}?{params}')
+        full_url = f'{url}?{params}'
+        self.dlg.customProviderURL.setText(full_url)
         # WMTS is converted to XYZ in Mapflow so set the provider type accordingly
         self.dlg.customProviderType.setCurrentIndex(0)
+        return full_url
 
     def calculate_aoi_area(self, arg: Optional[Union[bool, QgsMapLayer, List[QgsFeature]]]) -> None:
         """Display the area of the processing AOI in sq. km above the processings table.
@@ -600,11 +602,9 @@ class Mapflow:
         Is called by clicking the preview button.
         """
         self.save_custom_provider_auth()
-        if self.dlg.checkMaxar.isChecked():
-            url = self.get_maxar_url()
-            if not url:
-                return
-        url = self.dlg.customProviderURL.text()
+        url = self.get_maxar_url() if self.dlg.checkMaxar.isChecked() else self.dlg.customProviderURL.text()
+        if not url:
+            return
         # Complete escaping via libs like urllib3 or requests somehow invalidates the request
         # Requesting JPEG for Maxar won't work with some of their layers so use PNG instead
         url_escaped = url.replace('&', '%26').replace('=', '%3D').replace('jpeg', 'png')
