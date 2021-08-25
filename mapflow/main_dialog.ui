@@ -6,26 +6,26 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>632</width>
-    <height>578</height>
+    <width>630</width>
+    <height>590</height>
    </rect>
   </property>
   <property name="sizePolicy">
-   <sizepolicy hsizetype="Fixed" vsizetype="Expanding">
+   <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
     <horstretch>0</horstretch>
     <verstretch>0</verstretch>
    </sizepolicy>
   </property>
   <property name="minimumSize">
    <size>
-    <width>620</width>
-    <height>540</height>
+    <width>630</width>
+    <height>590</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
-    <width>807</width>
-    <height>800</height>
+    <width>630</width>
+    <height>590</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -40,7 +40,7 @@
      <x>10</x>
      <y>0</y>
      <width>611</width>
-     <height>571</height>
+     <height>581</height>
     </rect>
    </property>
    <property name="sizePolicy">
@@ -543,11 +543,11 @@
         <height>32</height>
        </rect>
       </property>
-      <property name="minimumSize">
-       <size>
-        <width>1</width>
-        <height>0</height>
-       </size>
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
       </property>
       <property name="font">
        <font>
@@ -584,43 +584,15 @@
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>12</y>
-       <width>601</width>
-       <height>562</height>
+       <y>7</y>
+       <width>591</width>
+       <height>541</height>
       </rect>
      </property>
-     <layout class="QVBoxLayout" name="verticalLayout_2">
+     <layout class="QVBoxLayout" name="layoutSettings" stretch="0,0,0,0,1">
       <item>
-       <widget class="QWidget" name="settingsWidget" native="true">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="minimumSize">
-         <size>
-          <width>0</width>
-          <height>205</height>
-         </size>
-        </property>
-        <property name="font">
-         <font>
-          <pointsize>12</pointsize>
-          <kerning>true</kerning>
-         </font>
-        </property>
-        <widget class="QWidget" name="layoutWidget">
-         <property name="geometry">
-          <rect>
-           <x>10</x>
-           <y>0</y>
-           <width>561</width>
-           <height>33</height>
-          </rect>
-         </property>
-         <layout class="QHBoxLayout" name="layoutOutputDirectory">
-          <item>
+       <layout class="QFormLayout" name="layoutOutputDirectory">
+        <item row="0" column="0">
            <widget class="QLabel" name="labelOutputDirectory">
             <property name="font">
              <font>
@@ -633,19 +605,11 @@
             </property>
            </widget>
           </item>
-          <item>
-           <spacer name="verticalSpacer_3">
-            <property name="orientation">
-             <enum>Qt::Vertical</enum>
+        <item row="0" column="1">
+         <layout class="QHBoxLayout" name="layoutOutputDirectoryInput">
+          <property name="spacing">
+           <number>2</number>
             </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>20</width>
-              <height>40</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
           <item>
            <widget class="QLineEdit" name="outputDirectory">
             <property name="minimumSize">
@@ -682,16 +646,10 @@
            </widget>
           </item>
          </layout>
-        </widget>
-        <widget class="QWidget" name="layoutWidget">
-         <property name="geometry">
-          <rect>
-           <x>10</x>
-           <y>40</y>
-           <width>561</width>
-           <height>71</height>
-          </rect>
-         </property>
+        </item>
+       </layout>
+      </item>
+      <item>
          <layout class="QGridLayout" name="layoutCustomProvider">
           <item row="0" column="0">
            <widget class="QLabel" name="labelCustomProviderURL">
@@ -715,6 +673,12 @@
           </item>
           <item row="1" column="2">
            <widget class="QPushButton" name="preview">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
             <property name="font">
              <font>
               <pointsize>12</pointsize>
@@ -786,27 +750,14 @@
            </widget>
           </item>
          </layout>
-        </widget>
-        <widget class="QgsCollapsibleGroupBox" name="mGroupBox">
-         <property name="geometry">
-          <rect>
-           <x>0</x>
-           <y>110</y>
-           <width>561</width>
-           <height>100</height>
-          </rect>
-         </property>
+      </item>
+      <item>
+       <widget class="QgsCollapsibleGroupBox" name="customProviderAuthGroup">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
-         </property>
-         <property name="minimumSize">
-          <size>
-           <width>0</width>
-           <height>100</height>
-          </size>
          </property>
          <property name="title">
           <string>Credentials</string>
@@ -818,41 +769,41 @@
           <bool>false</bool>
          </property>
          <property name="collapsed">
-          <bool>true</bool>
+         <bool>false</bool>
          </property>
          <property name="saveCollapsedState">
           <bool>true</bool>
          </property>
-         <widget class="QWidget" name="layoutWidget_2">
-          <property name="geometry">
-           <rect>
-            <x>20</x>
-            <y>30</y>
-            <width>518</width>
-            <height>71</height>
-           </rect>
+        <layout class="QGridLayout" name="gridLayout_2">
+         <item row="0" column="0">
+          <layout class="QFormLayout" name="customProviderAuth">
+           <item row="0" column="0">
+            <widget class="QLabel" name="labelCustomProviderLogin">
+             <property name="font">
+              <font>
+               <pointsize>12</pointsize>
+               <kerning>true</kerning>
+              </font>
           </property>
-          <layout class="QGridLayout" name="gridLayout_5">
-           <item row="2" column="1">
-            <widget class="QgsPasswordLineEdit" name="customProviderPassword">
+             <property name="text">
+              <string>Login:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="1">
+            <widget class="QLineEdit" name="customProviderLogin">
              <property name="sizePolicy">
-              <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+              <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
                <horstretch>0</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
-             </property>
-             <property name="minimumSize">
-              <size>
-               <width>180</width>
-               <height>21</height>
-              </size>
              </property>
              <property name="text">
               <string/>
              </property>
             </widget>
            </item>
-           <item row="2" column="0">
+           <item row="1" column="0">
             <widget class="QLabel" name="labelCustomProviderPassword">
              <property name="font">
               <font>
@@ -865,20 +816,22 @@
              </property>
             </widget>
            </item>
-           <item row="0" column="0">
-            <widget class="QLabel" name="labelCustomProviderLogin">
-             <property name="font">
-              <font>
-               <pointsize>12</pointsize>
-               <kerning>true</kerning>
-              </font>
+           <item row="1" column="1">
+            <widget class="QgsPasswordLineEdit" name="customProviderPassword">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
              </property>
              <property name="text">
-              <string>Login:</string>
+              <string/>
              </property>
             </widget>
            </item>
-           <item row="1" column="2" rowspan="2">
+          </layout>
+         </item>
+         <item row="0" column="1">
             <widget class="QCheckBox" name="customProviderSaveAuth">
              <property name="font">
               <font>
@@ -891,34 +844,13 @@
              </property>
             </widget>
            </item>
-           <item row="0" column="1" rowspan="2" colspan="2">
-            <widget class="QLineEdit" name="customProviderLogin">
-             <property name="sizePolicy">
-              <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-               <horstretch>0</horstretch>
-               <verstretch>0</verstretch>
-              </sizepolicy>
-             </property>
-             <property name="minimumSize">
-              <size>
-               <width>180</width>
-               <height>21</height>
-              </size>
-             </property>
-             <property name="text">
-              <string/>
-             </property>
-            </widget>
-           </item>
           </layout>
          </widget>
-        </widget>
-       </widget>
       </item>
       <item>
-       <layout class="QHBoxLayout" name="layoutMaxarHeader">
+       <layout class="QHBoxLayout" name="layoutMaxarHeader" stretch="0,0">
         <property name="spacing">
-         <number>0</number>
+         <number>7</number>
         </property>
         <item>
          <widget class="QCheckBox" name="checkMaxar">
@@ -930,12 +862,6 @@
             <horstretch>0</horstretch>
             <verstretch>0</verstretch>
            </sizepolicy>
-          </property>
-          <property name="maximumSize">
-           <size>
-            <width>200</width>
-            <height>16777215</height>
-           </size>
           </property>
           <property name="font">
            <font>
@@ -980,41 +906,35 @@
         <property name="enabled">
          <bool>false</bool>
         </property>
-        <property name="minimumSize">
-         <size>
-          <width>0</width>
-          <height>270</height>
-         </size>
-        </property>
         <property name="frameShape">
          <enum>QFrame::StyledPanel</enum>
         </property>
         <property name="frameShadow">
          <enum>QFrame::Raised</enum>
         </property>
-        <widget class="QWidget" name="layoutWidget">
-         <property name="geometry">
-          <rect>
-           <x>3</x>
-           <y>0</y>
-           <width>561</width>
-           <height>271</height>
-          </rect>
+        <layout class="QVBoxLayout" name="verticalLayout" stretch="0,1">
+         <item>
+          <layout class="QGridLayout" name="layoutMaxarOptions">
+           <item row="0" column="1" colspan="2">
+            <widget class="QComboBox" name="maxarConnectID">
+             <property name="editable">
+              <bool>true</bool>
          </property>
-         <layout class="QVBoxLayout" name="verticalLayout">
           <item>
-           <layout class="QGridLayout" name="gridLayout_4">
-            <item row="0" column="0">
-             <widget class="QLabel" name="labelMaxarConnectID">
-              <property name="font">
-               <font>
-                <pointsize>12</pointsize>
-                <kerning>true</kerning>
-               </font>
-              </property>
               <property name="text">
-               <string>Connect ID:</string>
+               <string notr="true">Mapflow - SecureWatch</string>
               </property>
+             </item>
+             <item>
+              <property name="text">
+               <string notr="true">Mapflow - Vivid</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string notr="true">Mapflow - Basemaps</string>
+              </property>
+             </item>
              </widget>
             </item>
             <item row="1" column="0">
@@ -1036,19 +956,6 @@
               </property>
              </widget>
             </item>
-            <item row="1" column="3">
-             <widget class="QPushButton" name="getImageMetadata">
-              <property name="font">
-               <font>
-                <pointsize>12</pointsize>
-                <kerning>true</kerning>
-               </font>
-              </property>
-              <property name="text">
-               <string>Get image metadata</string>
-              </property>
-             </widget>
-            </item>
             <item row="1" column="1" colspan="2">
              <widget class="QgsMapLayerComboBox" name="maxarAOICombo">
               <property name="allowEmptyLayer">
@@ -1059,30 +966,31 @@
               </property>
              </widget>
             </item>
-            <item row="0" column="1" colspan="2">
-             <widget class="QComboBox" name="maxarConnectID">
-              <property name="editable">
-               <bool>true</bool>
+           <item row="0" column="0">
+            <widget class="QLabel" name="labelMaxarConnectID">
+             <property name="font">
+              <font>
+               <pointsize>12</pointsize>
+               <kerning>true</kerning>
+              </font>
               </property>
-              <item>
                <property name="text">
-                <string notr="true">Mapflow - SecureWatch</string>
+              <string>Connect ID:</string>
                </property>
+            </widget>
               </item>
-              <item>
+           <item row="1" column="3">
+            <widget class="QPushButton" name="getImageMetadata">
+             <property name="font">
+              <font>
+               <pointsize>12</pointsize>
+               <kerning>true</kerning>
+              </font>
+               </property>
                <property name="text">
-                <string notr="true">Mapflow - Vivid</string>
+              <string>Get image metadata</string>
                </property>
-              </item>
-              <item>
-               <property name="text">
-                <string notr="true">Mapflow - Basemaps</string>
-               </property>
-              </item>
              </widget>
-            </item>
-            <item row="0" column="3">
-             <layout class="QHBoxLayout" name="horizontalLayout"/>
             </item>
            </layout>
           </item>
@@ -1175,7 +1083,6 @@
            </widget>
           </item>
          </layout>
-        </widget>
        </widget>
       </item>
      </layout>
@@ -1205,20 +1112,20 @@
          <rect>
           <x>0</x>
           <y>0</y>
-          <width>98</width>
-          <height>28</height>
+          <width>583</width>
+          <height>519</height>
          </rect>
         </property>
         <widget class="QWidget" name="layoutWidget">
          <property name="geometry">
           <rect>
-           <x>20</x>
+           <x>30</x>
            <y>20</y>
            <width>526</width>
-           <height>331</height>
+           <height>311</height>
           </rect>
          </property>
-         <layout class="QVBoxLayout" name="layoutHelp">
+         <layout class="QVBoxLayout" name="layoutHelp" stretch="0,0">
           <property name="spacing">
            <number>20</number>
           </property>
@@ -1304,11 +1211,6 @@
   <tabstop>startProcessing</tabstop>
   <tabstop>logoutButton</tabstop>
   <tabstop>deleteProcessings</tabstop>
-  <tabstop>outputDirectory</tabstop>
-  <tabstop>selectOutputDirectory</tabstop>
-  <tabstop>customProviderURL</tabstop>
-  <tabstop>customProviderType</tabstop>
-  <tabstop>preview</tabstop>
   <tabstop>checkMaxar</tabstop>
   <tabstop>maxarMetadataTable</tabstop>
   <tabstop>tabWidget</tabstop>
