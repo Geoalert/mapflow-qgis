@@ -913,26 +913,38 @@
          <enum>QFrame::Raised</enum>
         </property>
         <layout class="QVBoxLayout" name="verticalLayout" stretch="0,1">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
          <item>
-          <layout class="QGridLayout" name="layoutMaxarOptions">
+          <layout class="QGridLayout" name="layoutMaxarOptions" columnstretch="0,1,0,0">
            <item row="0" column="1" colspan="2">
-            <widget class="QComboBox" name="maxarConnectID">
+            <widget class="QComboBox" name="maxarProduct">
              <property name="editable">
-              <bool>true</bool>
+              <bool>false</bool>
          </property>
           <item>
               <property name="text">
-               <string notr="true">Mapflow - SecureWatch</string>
+               <string notr="true">SecureWatch</string>
               </property>
              </item>
              <item>
               <property name="text">
-               <string notr="true">Mapflow - Vivid</string>
+               <string notr="true">Vivid</string>
               </property>
              </item>
              <item>
               <property name="text">
-               <string notr="true">Mapflow - Basemaps</string>
+               <string notr="true">Basemaps</string>
               </property>
              </item>
              </widget>
@@ -967,7 +979,7 @@
              </widget>
             </item>
            <item row="0" column="0">
-            <widget class="QLabel" name="labelMaxarConnectID">
+            <widget class="QLabel" name="labelMaxarProduct">
              <property name="font">
               <font>
                <pointsize>12</pointsize>
@@ -975,7 +987,7 @@
               </font>
               </property>
                <property name="text">
-              <string>Connect ID:</string>
+              <string>Product:</string>
                </property>
             </widget>
               </item>
@@ -992,6 +1004,13 @@
                </property>
              </widget>
             </item>
+           <item row="0" column="3">
+            <widget class="QPushButton" name="editConnectID">
+             <property name="text">
+              <string>Edit Connect ID</string>
+             </property>
+            </widget>
+           </item>
            </layout>
           </item>
           <item>

@@ -12,7 +12,7 @@ from qgis.core import *
 from qgis.gui import *
 from qgis import processing
 
-from .dialogs import MainDialog, LoginDialog
+from .dialogs import MainDialog, LoginDialog, ConnectIdDialog
 from .workers import ProcessingFetcher, ProcessingCreator
 from . import helpers, config
 
@@ -28,10 +28,11 @@ class Mapflow:
     It is instantiated by QGIS and shouldn't be used directly.
 
     Instance attributes:
-    iface: an instance of the QGIS interface used for various UI ops 
+    iface: an instance of the QGIS interface used for various UI ops
     main_window: QGIS main window; all icons, widgets and threads will have it as their parent
     dlg: the main dialog
     dlg_login: the login dialog
+    dlg_connect_id: a tiny dialog for editing Maxar's connect IDs
     server: the Mapflow URL
     logged_in: a flag used to bypass the login dialog
     toolbar: the plugin uses its own toolbar
@@ -45,7 +46,7 @@ class Mapflow:
     def __init__(self, iface: QgisInterface) -> None:
         """Initialize the plugin.
 
-        :param iface: an instance of the QGIS interface. 
+        :param iface: an instance of the QGIS interface.
         """
         # Save refs to key variables used throughout the plugin
         self.iface = iface
@@ -71,6 +72,7 @@ class Mapflow:
         # Init dialogs
         self.dlg = MainDialog(self.main_window)
         self.dlg_login = LoginDialog(self.main_window)
+        self.dlg_connect_id = ConnectIdDialog(self.main_window)
         self.timeout_alert = QMessageBox(
             QMessageBox.Warning, self.plugin_name,
             self.tr("Sorry, we couldn't connect to Mapflow. Please try again later."
@@ -101,13 +103,17 @@ class Mapflow:
             self.dlg_login.loginField.setText(self.settings.value('serverLogin'))
             self.dlg_login.passwordField.setText(self.settings.value('serverPassword'))
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
-        self.dlg.maxarConnectID.setCurrentText(self.settings.value('connectID'))
+        self.dlg.maxarProduct.setCurrentText(self.settings.value('maxarProduct'))
         self.dlg.customProviderURL.setText(self.settings.value('customProviderURL'))
         self.dlg.customProviderType.setCurrentText(self.settings.value('customProviderType') or 'xyz')
         if self.settings.value("customProviderSaveAuth"):
             self.dlg.customProviderSaveAuth.setChecked(True)
             self.dlg.customProviderLogin.setText(self.settings.value("customProviderLogin"))
             self.dlg.customProviderPassword.setText(self.settings.value("customProviderPassword"))
+        # Restore Maxar Connect IDs
+        for product in config.CONNECT_IDS:
+            setting_key = f'connectId{product}'
+            self.settings.setValue(setting_key, self.settings.value(setting_key) or config.CONNECT_IDS[product])
         # Store processings selected in the table
         self.selected_processings: List[Dict[str, Union[str, int]]] = []
         # Hide the ID columns as only needed for table operations, not the user
@@ -135,7 +141,29 @@ class Mapflow:
         self.dlg.customProviderURL.textChanged.connect(lambda text: self.settings.setValue('customProviderURL', text))
         self.dlg.customProviderType.currentTextChanged.connect(lambda text: self.settings.setValue('customProviderType', text))
         self.dlg.preview.clicked.connect(self.preview)
+        # Maxar
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
+        self.dlg.editConnectID.clicked.connect(self.dlg_connect_id.show)
+        self.dlg_connect_id.buttonBox.accepted.connect(self.edit_connect_id)
+
+    def edit_connect_id(self) -> None:
+        """Open up a dialog to enter a new Maxar Connect ID.
+
+        Opens up self.dlg_connect_id with a single line edit to enter the value.
+        Validates the input and stores it in the settings if valid, otherwise keeps the dialog open
+        and outlines the input field with red to signal the error.
+
+        Is called by clicking the "Edit Connect ID" button.
+        """
+        product_name = self.dlg.maxarProduct.currentText()
+        try:
+            uuid_ = self.dlg_connect_id.connectID.text()
+            UUID(uuid_)
+            self.settings.setValue(f'connectId{product_name}', uuid_)
+            self.dlg_connect_id.connectID.setStyleSheet('')  # default
+            self.dlg_connect_id.close()
+        except ValueError:
+            self.dlg_connect_id.connectID.setStyleSheet('border-color: rgb(239, 41, 41);')  # red
 
     def monitor_polygon_layer_feature_selection(self, layers: List[QgsMapLayer]) -> None:
         """Set up connection between feature selection in polygon layers and AOI area calculation.
@@ -211,25 +239,6 @@ class Mapflow:
             self.project.addMapLayer(layer)
             self.dlg.rasterCombo.setLayer(layer)
 
-    def get_maxar_connect_id(self) -> str:
-        """Read the value of the maxarConnectID combo box.
-
-        Returns a UUID as str if the value is in predefined entries or makes a valid UUID, empty str otherwise.
-        """
-        connect_id = self.dlg.maxarConnectID.currentText()
-        # Try to match with the Geoalert IDs
-        connect_id_resolved = config.CONNECT_IDS.get(connect_id)
-        if not connect_id_resolved:  # user's own connectID
-            try:
-                UUID(connect_id)  # check validity
-                connect_id_resolved = connect_id
-            except ValueError:
-                self.alert(self.tr('Invalid ConnectID'), kind='warning')
-                return ''
-        # Save it to restore it at the next plugin startup
-        self.settings.setValue('connectID', connect_id)
-        return connect_id_resolved
-
     def get_maxar_metadata(self) -> None:
         """Get SecureWatch image footprints and metadata.
 
@@ -240,9 +249,6 @@ class Mapflow:
 
         Is called by clicking the 'getMaxarMetadata' button in the main dialog.
         """
-        connect_id = self.get_maxar_connect_id()
-        if not connect_id:  # a warning is already shown in get_maxar_connect_id
-            return
         self.save_custom_provider_auth()
         if not self.check_if_output_directory_is_selected():
             return
@@ -261,6 +267,7 @@ class Mapflow:
         else:
             self.alert(self.tr('Please, select a single feature in your AOI layer'))
             return
+        connect_id = self.settings.value(f'connectId{self.dlg.maxarProduct.currentText()}')
         aoi = aoi_feature.geometry()
         # Reproject to WGS84, if necessary
         layer_crs: QgsCoordinateReferenceSystem = aoi_layer.crs()
@@ -323,12 +330,10 @@ class Mapflow:
         """Construct a Maxar SecureWatch URL with the given connect ID and Feature ID, if present.
 
         To rid the user of the necessity to remember the URL, the fixed part of the URL is supplied by the plugin.
-        The user only needs to provide the ConnectID and select a row in the metadata table, if they'd like to 
+        The user only needs to select the Maxar product and select a row in the metadata table, if they'd like to 
         preview or process a single image. 
         """
-        connect_id = self.get_maxar_connect_id()
-        if not connect_id:
-            return ''
+        connect_id = self.settings.value(f'connectId{self.dlg.maxarProduct.currentText()}')
         # Check if the user selected a specific image
         selected_row = self.dlg.maxarMetadataTable.currentRow()
         feature_id = '' if selected_row == -1 else self.dlg.maxarMetadataTable.item(selected_row, 0).text()
@@ -516,7 +521,7 @@ class Mapflow:
                 params['raster_login'] = self.dlg.customProviderLogin.text()
                 params['raster_password'] = self.dlg.customProviderPassword.text()
                 params['cache_raster_update'] = update_cache
-                if params['source_type'] == 'wms':
+                if params.get('source_type') == 'wms':
                     params['target_resolution'] = 0.000005  # for the 18th zoom
         worker_kwargs['params'] = params
         if not self.dlg.useImageExtentAsAOI.isChecked():

@@ -33,3 +33,13 @@ class LoginDialog(*uic.loadUiType(Path(__file__).parent/'login_dialog.ui')):
         self.setupUi(self)
         self.cancelButton.clicked.connect(self.reject)
         self.loginButton.clicked.connect(self.accept)
+
+
+class ConnectIdDialog(*uic.loadUiType(Path(__file__).parent/'connect_id_dialog.ui')):
+    def __init__(self, parent: QWidget) -> None:
+        """Constructor."""
+        super().__init__(parent)
+        self.setupUi(self)
+        self.buttonBox.rejected.connect(self.reject)
+        self.buttonBox.rejected.connect(lambda: self.connectID.setStyleSheet(''))
+        self.buttonBox.rejected.connect(lambda: self.connectID.setText(''))
