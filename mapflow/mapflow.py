@@ -1,3 +1,4 @@
+import json
 import os.path
 from uuid import UUID
 from configparser import ConfigParser
@@ -12,7 +13,7 @@ from qgis.core import *
 from qgis.gui import *
 from qgis import processing
 
-from .dialogs import MainDialog, LoginDialog, ConnectIdDialog
+from .dialogs import MainDialog, LoginDialog, ConnectIdDialog, CustomProviderDialog
 from .workers import ProcessingFetcher, ProcessingCreator
 from . import helpers, config
 
@@ -73,6 +74,8 @@ class Mapflow:
         self.dlg = MainDialog(self.main_window)
         self.dlg_login = LoginDialog(self.main_window)
         self.dlg_connect_id = ConnectIdDialog(self.main_window)
+        self.dlg_custom_provider = CustomProviderDialog(self.main_window)
+        self.red_border_style = 'border-color: rgb(239, 41, 41);'  # used to highlight invalid inputs
         self.timeout_alert = QMessageBox(
             QMessageBox.Warning, self.plugin_name,
             self.tr("Sorry, we couldn't connect to Mapflow. Please try again later."
@@ -104,8 +107,6 @@ class Mapflow:
             self.dlg_login.passwordField.setText(self.settings.value('serverPassword'))
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
         self.dlg.maxarProduct.setCurrentText(self.settings.value('maxarProduct'))
-        self.dlg.customProviderURL.setText(self.settings.value('customProviderURL'))
-        self.dlg.customProviderType.setCurrentText(self.settings.value('customProviderType') or 'xyz')
         if self.settings.value("customProviderSaveAuth"):
             self.dlg.customProviderSaveAuth.setChecked(True)
             self.dlg.customProviderLogin.setText(self.settings.value("customProviderLogin"))
@@ -114,6 +115,12 @@ class Mapflow:
         for product in config.CONNECT_IDS:
             setting_key = f'connectId{product}'
             self.settings.setValue(setting_key, self.settings.value(setting_key) or config.CONNECT_IDS[product])
+        # Restore custom providers
+        self.custom_provider_config = os.path.join(self.plugin_dir, 'custom_providers.json')
+        with open(self.custom_provider_config) as f:
+            self.custom_providers = json.load(f)
+        self.dlg.rasterCombo.setAdditionalItems(self.custom_providers)
+        self.dlg.customProviderCombo.addItems(self.custom_providers)
         # Store processings selected in the table
         self.selected_processings: List[Dict[str, Union[str, int]]] = []
         # Hide the ID columns as only needed for table operations, not the user
@@ -138,13 +145,37 @@ class Mapflow:
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_processing_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Custom provider
-        self.dlg.customProviderURL.textChanged.connect(lambda text: self.settings.setValue('customProviderURL', text))
-        self.dlg.customProviderType.currentTextChanged.connect(lambda text: self.settings.setValue('customProviderType', text))
         self.dlg.preview.clicked.connect(self.preview)
+        self.dlg.addCustomProvider.clicked.connect(self.dlg_custom_provider.show)
+        self.dlg.removeCustomProvider.clicked.connect(self.remove_custom_provider)
+        self.dlg_custom_provider.buttonBox.accepted.connect(self.add_custom_provider)
         # Maxar
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
         self.dlg.editConnectID.clicked.connect(self.dlg_connect_id.show)
         self.dlg_connect_id.buttonBox.accepted.connect(self.edit_connect_id)
+
+    def remove_custom_provider(self) -> None:
+        """"""
+        del self.custom_providers[self.dlg.customProviderCombo.currentText()]
+        with open(self.custom_provider_config, 'w') as f:
+            json.dump(self.custom_providers, f)
+        self.dlg.customProviderCombo.removeItem(self.dlg.customProviderCombo.currentIndex())
+
+    def add_custom_provider(self) -> None:
+        """"""
+        name = self.dlg_custom_provider.name.text()
+        url = self.dlg_custom_provider.url.text()
+        if not name:
+            self.dlg_custom_provider.name.setStyleSheet(self.red_border_style)
+        elif not url:
+            self.dlg_custom_provider.url.setStyleSheet(self.red_border_style)
+        else:
+            self.custom_providers[name] = {"url": url, "type": self.dlg_custom_provider.type.currentText()}
+            with open(self.custom_provider_config, 'w') as f:
+                json.dump(self.custom_providers, f)
+            self.dlg.rasterCombo.setAdditionalItems(self.custom_providers)
+            self.dlg.customProviderCombo.addItem(name)
+            self.dlg_custom_provider.close()
 
     def edit_connect_id(self) -> None:
         """Open up a dialog to enter a new Maxar Connect ID.
@@ -163,7 +194,7 @@ class Mapflow:
             self.dlg_connect_id.connectID.setStyleSheet('')  # default
             self.dlg_connect_id.close()
         except ValueError:
-            self.dlg_connect_id.connectID.setStyleSheet('border-color: rgb(239, 41, 41);')  # red
+            self.dlg_connect_id.connectID.setStyleSheet(self.red_border_style)
 
     def monitor_polygon_layer_feature_selection(self, layers: List[QgsMapLayer]) -> None:
         """Set up connection between feature selection in polygon layers and AOI area calculation.
@@ -354,11 +385,7 @@ class Mapflow:
             'TileMatrix': 'EPSG:3857:{z}',
             'CQL_FILTER': f"feature_id=%27{feature_id}%27" if feature_id else ''  # must use %27 instead of '
         }.items())
-        full_url = f'{url}?{params}'
-        self.dlg.customProviderURL.setText(full_url)
-        # WMTS is converted to XYZ in Mapflow so set the provider type accordingly
-        self.dlg.customProviderType.setCurrentIndex(0)
-        return full_url
+        return f'{url}?{params}'
 
     def calculate_aoi_area(self, arg: Optional[Union[bool, QgsMapLayer, List[QgsFeature]]]) -> None:
         """Display the area of the processing AOI in sq. km above the processings table.
@@ -500,29 +527,24 @@ class Mapflow:
             params['source_type'] = 'tif'
         else:  # custom provider or Mapbox
             raster_option = self.dlg.rasterCombo.currentText()
-            if raster_option == 'Mapbox Satellite':
+            if raster_option == 'Mapbox':
                 worker_kwargs['meta']['source'] = 'mapbox'
                 params['cache_raster_update'] = update_cache
-            else:  # custom provider
-                if self.dlg.checkMaxar.isChecked():
-                    url = self.get_maxar_url()
-                    if not url:
-                        return
-                    worker_kwargs['meta']['source'] = 'maxar'
-                else:
-                    url = self.dlg.customProviderURL.text()
-                    if not url:
-                        self.alert(self.tr('Please, specify the imagery provider URL in Settings'))
-                        return
-                    params['source_type'] = self.dlg.customProviderType.currentText()
-                self.alert(self.tr('Please, be aware that you may be charged by the imagery provider!'))
-                self.save_custom_provider_auth()
-                params['url'] = url
-                params['raster_login'] = self.dlg.customProviderLogin.text()
-                params['raster_password'] = self.dlg.customProviderPassword.text()
-                params['cache_raster_update'] = update_cache
-                if params.get('source_type') == 'wms':
-                    params['target_resolution'] = 0.000005  # for the 18th zoom
+            elif raster_option == 'Maxar':
+                params['url'] = self.get_maxar_url()
+                if not params['url']:
+                    return
+                worker_kwargs['meta']['source'] = 'maxar'
+            else:
+                params['source_type'] = self.custom_providers[raster_option]['type']
+                params['url'] = self.custom_providers[raster_option]['url']
+            self.alert(self.tr('Please, be aware that you may be charged by the imagery provider!'))
+            self.save_custom_provider_auth()
+            params['raster_login'] = self.dlg.customProviderLogin.text()
+            params['raster_password'] = self.dlg.customProviderPassword.text()
+            params['cache_raster_update'] = update_cache
+            if params.get('source_type') == 'wms':
+                params['target_resolution'] = 0.000005  # for the 18th zoom
         worker_kwargs['params'] = params
         if not self.dlg.useImageExtentAsAOI.isChecked():
             aoi_layer = self.dlg.polygonCombo.currentLayer()
@@ -544,7 +566,7 @@ class Mapflow:
                 worker_kwargs['aoi'] = aoi_feature.geometry()
             # Clip AOI to image if a single Maxar image is requested
             selected_row = self.dlg.maxarMetadataTable.currentRow()
-            if raster_option != 'Mapbox Satellite' and self.dlg.checkMaxar.isChecked() and selected_row != -1:
+            if raster_option != 'Mapbox Satellite' and self.dlg.maxar.isChecked() and selected_row != -1:
                 # Recreate AOI layer; shall we change helpers.to_wgs84 to return layer, not geometry?
                 aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326', 'aoi', 'memory')
                 aoi = QgsFeature()
@@ -607,16 +629,17 @@ class Mapflow:
         Is called by clicking the preview button.
         """
         self.save_custom_provider_auth()
-        url = self.get_maxar_url() if self.dlg.checkMaxar.isChecked() else self.dlg.customProviderURL.text()
-        if not url:
+        raster_option = self.dlg.rasterCombo.currentText()
+        if raster_option == 'Mapbox':
             return
+        url = self.get_maxar_url() if raster_option == 'Maxar' else self.custom_providers[raster_option]['url']
         # Complete escaping via libs like urllib3 or requests somehow invalidates the request
         # Requesting JPEG for Maxar won't work with some of their layers so use PNG instead
         url_escaped = url.replace('&', '%26').replace('=', '%3D').replace('jpeg', 'png')
         params = {
-            'type': self.dlg.customProviderType.currentText(),
+            'type': self.custom_providers[raster_option]['type'],
             'url': url_escaped,
-            'zmax': 14 if self.dlg.zoomLimit.isChecked() else 18,
+            'zmax': self.dlg.zoomLimit.value(),
             'zmin': 0,
             'username': self.dlg.customProviderLogin.text(),
             'password': self.dlg.customProviderPassword.text()

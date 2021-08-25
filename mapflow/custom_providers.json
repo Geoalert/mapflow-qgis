@@ -1,0 +1,1 @@
+{"Mapbox": {"url": null, "type": "xyz"}, "Google": {"url": "http://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}&s=Ga", "type": "xyz"}, "Bing": {"url": "http://ecn.t3.tiles.virtualearth.net/tiles/a{q}.jpeg?g=1", "type": "quadkey"}, "Yandex": {"url": "https://core-sat.maps.yandex.net/tiles?l=sat&v=3.501.0&x={x}&y={y}&z={z}&scale=1&lang=ru_RU", "type": "xyz"}}

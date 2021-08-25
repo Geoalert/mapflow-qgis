@@ -22,8 +22,6 @@ class MainDialog(*uic.loadUiType(Path(__file__).parent/'main_dialog.ui')):
         excluded_providers = QgsProviderRegistry.instance().providerList()
         excluded_providers.remove('gdal')
         self.rasterCombo.setExcludedProviders(excluded_providers)
-        # Add the 'virtual' raster layers
-        self.rasterCombo.setAdditionalItems(('Mapbox Satellite', 'Custom URL (in Settings)'))
 
 
 class LoginDialog(*uic.loadUiType(Path(__file__).parent/'login_dialog.ui')):
@@ -43,3 +41,15 @@ class ConnectIdDialog(*uic.loadUiType(Path(__file__).parent/'connect_id_dialog.u
         self.buttonBox.rejected.connect(self.reject)
         self.buttonBox.rejected.connect(lambda: self.connectID.setStyleSheet(''))
         self.buttonBox.rejected.connect(lambda: self.connectID.setText(''))
+
+
+class CustomProviderDialog(*uic.loadUiType(Path(__file__).parent/'custom_provider_dialog.ui')):
+    def __init__(self, parent: QWidget) -> None:
+        """Constructor."""
+        super().__init__(parent)
+        self.setupUi(self)
+        self.buttonBox.rejected.connect(self.reject)
+        self.buttonBox.rejected.connect(lambda: self.name.setStyleSheet(''))
+        self.buttonBox.rejected.connect(lambda: self.url.setStyleSheet(''))
+        self.buttonBox.rejected.connect(lambda: self.name.setText(''))
+        self.buttonBox.rejected.connect(lambda: self.url.setText(''))
