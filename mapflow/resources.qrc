@@ -1,5 +1,5 @@
 <RCC>
     <qresource prefix="/plugins/mapflow" >
-        <file>icon.svg</file>
+        <file>edit_button.svg</file>
     </qresource>
 </RCC>
