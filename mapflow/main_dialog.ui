@@ -554,9 +554,6 @@
         <pointsize>12</pointsize>
        </font>
       </property>
-      <property name="visible">
-       <bool>false</bool>
-      </property>
       <property name="text">
        <string>Log out</string>
       </property>

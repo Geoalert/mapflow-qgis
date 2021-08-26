@@ -91,7 +91,7 @@ class Mapflow:
             self.dlg_login.loginField.setText(self.settings.value('serverLogin'))
             self.dlg_login.passwordField.setText(self.settings.value('serverPassword'))
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
-        self.dlg.zoomLimit.setValue(self.settings.value('zoomLimit') or 14)
+        self.dlg.zoomLimit.setValue(int(self.settings.value('zoomLimit')) or 14)
         self.dlg.maxarProduct.setCurrentText(self.settings.value('maxarProduct'))
         if self.settings.value("customProviderSaveAuth"):
             self.dlg.customProviderSaveAuth.setChecked(True)
@@ -154,10 +154,12 @@ class Mapflow:
 
     def remove_custom_provider(self) -> None:
         """"""
-        del self.custom_providers[self.dlg.customProviderCombo.currentText()]
+        provider_name = self.dlg.customProviderCombo.currentText()
+        del self.custom_providers[provider_name]
         with open(self.custom_provider_config, 'w') as f:
             json.dump(self.custom_providers, f)
         self.dlg.customProviderCombo.removeItem(self.dlg.customProviderCombo.currentIndex())
+        self.dlg.rasterCombo.setAdditionalItems((*self.custom_providers, 'Mapbox'))
 
     # def validate_custom_provider(self) -> None:
     #     """"""
@@ -180,9 +182,10 @@ class Mapflow:
             }
             with open(self.custom_provider_config, 'w') as f:
                 json.dump(self.custom_providers, f)
-            self.dlg.rasterCombo.setAdditionalItems(self.custom_providers)
+            self.dlg.rasterCombo.setAdditionalItems((*self.custom_providers, 'Mapbox'))
+            self.dlg.rasterCombo.setCurrentText(name)
             self.dlg.customProviderCombo.addItem(name)
-            # self.dlg_custom_provider.close()
+            self.dlg.customProviderCombo.setCurrentText(name)
 
     def edit_custom_provider(self) -> None:
         """"""
@@ -230,7 +233,7 @@ class Mapflow:
 
         :param layers: A list of layers of any type (all non-polygon layers will be skipped) 
         """
-        for layer in [layer for layer in layers if helpers.is_polygon_layer(layer)]:
+        for layer in filter(helpers.is_polygon_layer, layers):
             layer.selectionChanged.connect(self.calculate_aoi_area)
 
     def toggle_use_image_extent_as_aoi(self, layer: Optional[QgsRasterLayer]) -> None:
@@ -667,6 +670,7 @@ class Mapflow:
             'password': self.dlg.customProviderPassword.text()
         }
         uri = '&'.join(f'{key}={val}' for key, val in params.items())
+        print(url_escaped)
         layer = QgsRasterLayer(uri, self.tr('Custom tileset'), 'wms')
         if not layer.isValid():
             self.alert(self.tr('Invalid custom imagery provider:') + url_escaped)
