@@ -59,7 +59,7 @@
     <enum>Qt::ClickFocus</enum>
    </property>
    <property name="currentIndex">
-    <number>1</number>
+    <number>0</number>
    </property>
    <widget class="QWidget" name="processingsTab">
     <attribute name="title">
@@ -580,13 +580,13 @@
     <widget class="QWidget" name="layoutWidget">
      <property name="geometry">
       <rect>
-       <x>11</x>
-       <y>9</y>
-       <width>591</width>
-       <height>562</height>
+       <x>10</x>
+       <y>10</y>
+       <width>581</width>
+       <height>551</height>
       </rect>
      </property>
-     <layout class="QVBoxLayout" name="verticalLayout">
+     <layout class="QVBoxLayout" name="verticalLayout" stretch="0,0,0,1">
       <item>
        <layout class="QFormLayout" name="layoutOutputDirectory">
         <item row="0" column="0">
@@ -832,7 +832,7 @@
         <property name="saveCollapsedState">
          <bool>true</bool>
         </property>
-        <layout class="QGridLayout" name="gridLayout_2">
+        <layout class="QGridLayout" name="gridLayout_2" columnstretch="1,0">
          <item row="0" column="0">
           <layout class="QFormLayout" name="customProviderAuth">
            <item row="0" column="0">
@@ -908,7 +908,7 @@
       <item>
        <widget class="QGroupBox" name="maxar">
         <property name="title">
-         <string>Maxar SecureWatch</string>
+         <string>Maxar SecureWatch Metadata</string>
         </property>
         <property name="flat">
          <bool>true</bool>
@@ -919,15 +919,11 @@
         <property name="checked">
          <bool>false</bool>
         </property>
-        <layout class="QVBoxLayout" name="verticalLayout_2" stretch="0,0,1">
-         <property name="leftMargin">
-          <number>0</number>
-         </property>
-         <property name="rightMargin">
-          <number>0</number>
-         </property>
+        <layout class="QVBoxLayout" name="verticalLayout_2">
          <item>
-          <widget class="QLabel" name="maxarHowToConnect">
+          <layout class="QHBoxLayout" name="layoutMaxarHeader" stretch="1,1,0">
+           <item>
+            <widget class="QLabel" name="howToConnect">
            <property name="font">
             <font>
              <pointsize>12</pointsize>
@@ -935,7 +931,7 @@
             </font>
            </property>
            <property name="text">
-            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&lt;a href=&quot;https://www.maxar.com/legal/securewatch-license&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Terms of Service&lt;/span&gt;&lt;/a&gt;&lt;/body&gt;&lt;/html&gt;</string>
+              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
            </property>
            <property name="textFormat">
             <enum>Qt::AutoText</enum>
@@ -949,73 +945,33 @@
           </widget>
          </item>
          <item>
-          <layout class="QGridLayout" name="layoutMaxarOptions" columnstretch="0,1,0,0">
-           <item row="0" column="1" colspan="2">
-            <widget class="QComboBox" name="maxarProduct">
-             <property name="editable">
-              <bool>false</bool>
-             </property>
-             <item>
+            <widget class="QLabel" name="termsOfService">
               <property name="text">
-               <string notr="true">SecureWatch</string>
+              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;a href=&quot;https://www.maxar.com/legal/securewatch-license&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Terms of Service&lt;/span&gt;&lt;/a&gt;&lt;/body&gt;&lt;/html&gt;</string>
               </property>
-             </item>
-             <item>
-              <property name="text">
-               <string notr="true">Vivid</string>
+             <property name="textFormat">
+              <enum>Qt::RichText</enum>
               </property>
-             </item>
-             <item>
-              <property name="text">
-               <string notr="true">Basemaps</string>
+             <property name="openExternalLinks">
+              <bool>true</bool>
               </property>
-             </item>
             </widget>
            </item>
-           <item row="0" column="3">
-            <widget class="QPushButton" name="editConnectID">
+           <item>
+            <widget class="QCheckBox" name="zoomLimitMaxar">
              <property name="text">
-              <string>Edit Connect ID</string>
+              <string>Limit zoom to 14</string>
              </property>
-            </widget>
-           </item>
-           <item row="1" column="1" colspan="2">
-            <widget class="QgsMapLayerComboBox" name="maxarAOICombo">
-             <property name="allowEmptyLayer">
-              <bool>false</bool>
-             </property>
-             <property name="showCrs">
+             <property name="checked">
               <bool>true</bool>
              </property>
             </widget>
            </item>
-           <item row="0" column="0">
-            <widget class="QLabel" name="labelMaxarProduct">
-             <property name="font">
-              <font>
-               <pointsize>12</pointsize>
-               <kerning>true</kerning>
-              </font>
-             </property>
-             <property name="text">
-              <string>Product:</string>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="3">
-            <widget class="QPushButton" name="getImageMetadata">
-             <property name="font">
-              <font>
-               <pointsize>12</pointsize>
-               <kerning>true</kerning>
-              </font>
-             </property>
-             <property name="text">
-              <string>Get image metadata</string>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="0">
+          </layout>
+         </item>
+         <item>
+          <layout class="QHBoxLayout" name="layoutMaxarOptions" stretch="0,1,0">
+           <item>
             <widget class="QLabel" name="labelMaxarAOI">
              <property name="minimumSize">
               <size>
@@ -1031,6 +987,29 @@
              </property>
              <property name="text">
               <string>Area:</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QgsMapLayerComboBox" name="maxarAOICombo">
+             <property name="allowEmptyLayer">
+              <bool>false</bool>
+             </property>
+             <property name="showCrs">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="getImageMetadata">
+             <property name="font">
+              <font>
+               <pointsize>12</pointsize>
+               <kerning>true</kerning>
+              </font>
+             </property>
+             <property name="text">
+              <string>Get metadata</string>
              </property>
             </widget>
            </item>
@@ -1155,7 +1134,7 @@
           <x>0</x>
           <y>0</y>
           <width>583</width>
-          <height>529</height>
+          <height>539</height>
          </rect>
         </property>
         <widget class="QWidget" name="layoutWidget">
