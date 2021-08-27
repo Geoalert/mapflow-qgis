@@ -91,7 +91,7 @@ class Mapflow:
             self.dlg_login.loginField.setText(self.settings.value('serverLogin'))
             self.dlg_login.passwordField.setText(self.settings.value('serverPassword'))
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
-        self.dlg.zoomLimit.setValue(int(self.settings.value('zoomLimit')) or 14)
+        self.dlg.zoomLimit.setValue(int(self.settings.value('zoomLimit') or 14))
         self.dlg.maxarProduct.setCurrentText(self.settings.value('maxarProduct'))
         if self.settings.value("customProviderSaveAuth"):
             self.dlg.customProviderSaveAuth.setChecked(True)
@@ -191,12 +191,12 @@ class Mapflow:
         """"""
         if self.dlg_custom_provider.exec():
             name = self.dlg_custom_provider.name.text()
+            del self.custom_providers[self.dlg.customProviderCombo.currentText()]
             self.custom_providers[name] = {
                 "url": self.dlg_custom_provider.url.text(),
                 "type": self.dlg_custom_provider.type.currentText()
             }
             # check if name already exists
-            del self.custom_providers[self.dlg.customProviderCombo.currentText()]
             self.dlg.customProviderCombo.removeItem(self.dlg.customProviderCombo.currentIndex())
             with open(self.custom_provider_config, 'w') as f:
                 json.dump(self.custom_providers, f)
