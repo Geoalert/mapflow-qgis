@@ -23,7 +23,7 @@ changelog:
 	1.1.1: Add missing translations.
 	1.1.0: Add support for QGIS 3.10, 3.12 and 3.14
 
-tags=earth observation, remote sensing, satellite, artificial intelligence, machine learning, deepl earning, feature extraction, classification, digitizing, forest, forestry, roads, buildings detection, construction detection, agriculture fields detection
+tags=earth observation, remote sensing, satellite, artificial intelligence, machine learning, deep learning, feature extraction, classification, digitizing, forest, forestry, roads, building detection, construction detection, agricultural field detection
 category=Web
 homepage=https://mapflow.ai
 tracker=https://github.com/Geoalert/mapflow-qgis/issues
