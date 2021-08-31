@@ -1,5 +1,6 @@
+import json
+import urllib
 import os.path
-from uuid import UUID
 from configparser import ConfigParser
 from typing import Callable, List, Dict, Optional, Union
 
@@ -12,7 +13,7 @@ from qgis.core import *
 from qgis.gui import *
 from qgis import processing
 
-from .dialogs import MainDialog, LoginDialog, ConnectIdDialog
+from .dialogs import MainDialog, LoginDialog, CustomProviderDialog, ConnectIdDialog
 from .workers import ProcessingFetcher, ProcessingCreator
 from . import helpers, config
 
@@ -26,21 +27,6 @@ class Mapflow:
     """This class represents the plugin.
 
     It is instantiated by QGIS and shouldn't be used directly.
-
-    Instance attributes:
-    iface: an instance of the QGIS interface used for various UI ops
-    main_window: QGIS main window; all icons, widgets and threads will have it as their parent
-    dlg: the main dialog
-    dlg_login: the login dialog
-    dlg_connect_id: a tiny dialog for editing Maxar's connect IDs
-    server: the Mapflow URL
-    logged_in: a flag used to bypass the login dialog
-    toolbar: the plugin uses its own toolbar
-    project: current QGIS project
-    settings: QGIS settings used for storing credentials and user preferences
-    actions: the plugin's toolbar buttons
-    translator: a translator used to localize the UI
-    plugin_dir: the plugin's top-level directory
     """
 
     def __init__(self, iface: QgisInterface) -> None:
@@ -72,7 +58,9 @@ class Mapflow:
         # Init dialogs
         self.dlg = MainDialog(self.main_window)
         self.dlg_login = LoginDialog(self.main_window)
+        self.dlg_custom_provider = CustomProviderDialog(self.main_window)
         self.dlg_connect_id = ConnectIdDialog(self.main_window)
+        self.red_border_style = 'border-color: rgb(239, 41, 41);'  # used to highlight invalid inputs
         self.timeout_alert = QMessageBox(
             QMessageBox.Warning, self.plugin_name,
             self.tr("Sorry, we couldn't connect to Mapflow. Please try again later."
@@ -87,9 +75,11 @@ class Mapflow:
         )
         # Tweak URL's considering the user's locale
         if locale == 'ru':
-            help_text = self.dlg.helpText.text()
-            new_text = help_text.replace('docs.mapflow', 'ru.docs.mapflow').replace('http://mapflow.ai', 'http://mapflow.ai/ru')
-            self.dlg.helpText.setText(new_text)
+            self.dlg.howToConnect.setText(self.dlg.howToConnect.text().replace('docs.mapflow', 'ru.docs.mapflow'))
+            self.dlg.helpText.setText(self.dlg.helpText.text()
+                                      .replace('docs.mapflow', 'ru.docs.mapflow')
+                                      .replace('http://mapflow.ai', 'http://mapflow.ai/ru')
+                                      )
         # Display the plugin's version in the Help tab
         metadata_parser = ConfigParser()
         metadata_parser.read(os.path.join(self.plugin_dir, 'metadata.txt'))
@@ -103,17 +93,21 @@ class Mapflow:
             self.dlg_login.loginField.setText(self.settings.value('serverLogin'))
             self.dlg_login.passwordField.setText(self.settings.value('serverPassword'))
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
-        self.dlg.maxarProduct.setCurrentText(self.settings.value('maxarProduct'))
-        self.dlg.customProviderURL.setText(self.settings.value('customProviderURL'))
-        self.dlg.customProviderType.setCurrentText(self.settings.value('customProviderType') or 'xyz')
+        self.dlg.zoomLimit.setValue(int(self.settings.value('zoomLimit') or 14))
+        try:
+            self.dlg.zoomLimitMaxar.setChecked(self.settings.value('zoomLimitMaxar'))
+        except TypeError:  # if unset
+            self.dlg.zoomLimitMaxar.setChecked(True)
         if self.settings.value("customProviderSaveAuth"):
             self.dlg.customProviderSaveAuth.setChecked(True)
             self.dlg.customProviderLogin.setText(self.settings.value("customProviderLogin"))
             self.dlg.customProviderPassword.setText(self.settings.value("customProviderPassword"))
-        # Restore Maxar Connect IDs
-        for product in config.CONNECT_IDS:
-            setting_key = f'connectId{product}'
-            self.settings.setValue(setting_key, self.settings.value(setting_key) or config.CONNECT_IDS[product])
+        # Restore custom providers
+        self.custom_provider_config = os.path.join(self.plugin_dir, 'custom_providers.json')
+        with open(self.custom_provider_config) as f:
+            self.custom_providers = json.load(f)
+        self.dlg.rasterCombo.setAdditionalItems((*self.custom_providers, 'Mapbox'))
+        self.dlg.customProviderCombo.addItems(self.custom_providers)
         # Store processings selected in the table
         self.selected_processings: List[Dict[str, Union[str, int]]] = []
         # Hide the ID columns as only needed for table operations, not the user
@@ -138,32 +132,144 @@ class Mapflow:
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_processing_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Custom provider
-        self.dlg.customProviderURL.textChanged.connect(lambda text: self.settings.setValue('customProviderURL', text))
-        self.dlg.customProviderType.currentTextChanged.connect(lambda text: self.settings.setValue('customProviderType', text))
         self.dlg.preview.clicked.connect(self.preview)
+        self.dlg.addCustomProvider.clicked.connect(self.add_custom_provider)
+        self.dlg.editCustomProvider.clicked.connect(self.edit_provider)
+        self.dlg.removeCustomProvider.clicked.connect(self.remove_custom_provider)
+        self.dlg.zoomLimit.valueChanged.connect(lambda value: self.settings.setValue('zoomLimit', value))
         # Maxar
+        self.dlg.maxarMetadataTable.cellClicked.connect(self.highlight_maxar_image)
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
-        self.dlg.editConnectID.clicked.connect(self.dlg_connect_id.show)
-        self.dlg_connect_id.buttonBox.accepted.connect(self.edit_connect_id)
+        self.dlg.zoomLimitMaxar.toggled.connect(lambda state: self.settings.setValue('zoomLimitMaxar', state))
 
-    def edit_connect_id(self) -> None:
-        """Open up a dialog to enter a new Maxar Connect ID.
+    def highlight_maxar_image(self, row) -> None:
+        """Select an image footprint in Maxar metadata layer when it's selected in the table.
 
-        Opens up self.dlg_connect_id with a single line edit to enter the value.
-        Validates the input and stores it in the settings if valid, otherwise keeps the dialog open
-        and outlines the input field with red to signal the error.
-
-        Is called by clicking the "Edit Connect ID" button.
+        Is called by selecting (clicking on) a row in Maxar metadata table.
+        :param row: The index of the selected row (0-based).
         """
-        product_name = self.dlg.maxarProduct.currentText()
+        self.dlg.customProviderCombo.setCurrentText('Maxar')
+        self.dlg.rasterCombo.setCurrentText('Maxar')
         try:
-            uuid_ = self.dlg_connect_id.connectID.text()
-            UUID(uuid_)
-            self.settings.setValue(f'connectId{product_name}', uuid_)
-            self.dlg_connect_id.connectID.setStyleSheet('')  # default
-            self.dlg_connect_id.close()
-        except ValueError:
-            self.dlg_connect_id.connectID.setStyleSheet('border-color: rgb(239, 41, 41);')  # red
+            self.metadata_layer.removeSelection()
+            self.metadata_layer.select(row)
+        except RuntimeError:  # layer has been deleted
+            pass
+
+    def remove_custom_provider(self) -> None:
+        """Delete a an entry from the list of providers and custom_providers.json.
+
+        Is called by clicking the red minus button near the provider dropdown list.
+        """
+        provider = self.dlg.customProviderCombo.currentText()
+        # Ask for confirmation
+        if self.alert(self.tr('Permanently remove {}?').format(provider), 'question') == QMessageBox.No:
+            return
+        del self.custom_providers[provider]
+        self.update_custom_provider_config()
+        self.dlg.customProviderCombo.removeItem(self.dlg.customProviderCombo.currentIndex())
+        self.dlg.rasterCombo.setAdditionalItems((*self.custom_providers, 'Mapbox'))
+
+    def validate_custom_provider(self) -> None:
+        """Check if provider inputs are valid. If not, outline the invalid field with red."""
+        for attr in ('name', 'url'):
+            field = getattr(self.dlg_custom_provider, attr)
+            field_value = field.text()
+            if field_value:
+                field.setStyleSheet('')  # remove red outline if previously invalid
+            else:
+                field.setStyleSheet(self.red_border_style)
+                return False
+        return True
+
+    def update_custom_provider_config(self) -> None:
+        """Write changes to file after a provider has been added, removed or modified."""
+        with open(self.custom_provider_config, 'w') as f:
+            json.dump(self.custom_providers, f, indent=4)
+
+    def clear_fields(self, *args) -> None:
+        """Empty the fields and remove the red outline (invalid input signal), if any.
+
+        :param args: A list of fields to clear.
+        """
+        for field in args:
+            field.setStyleSheet('')
+            field.setText('')
+
+    def add_custom_provider(self) -> None:
+        """Add a web imagery provider.
+
+        Is called by the corresponding button.
+        """
+        while self.dlg_custom_provider.exec():
+            if not self.validate_custom_provider():
+                continue
+            name = self.dlg_custom_provider.name.text()
+            if name in self.custom_providers:
+                self.alert(name + self.tr(' already exists. Click edit button to update it.'))
+                break
+            self.custom_providers[name] = {
+                'url': self.dlg_custom_provider.url.text(),
+                'type': self.dlg_custom_provider.type.currentText()
+            }
+            self.update_custom_provider_config()
+            self.dlg.rasterCombo.setAdditionalItems((*self.custom_providers, 'Mapbox'))
+            self.dlg.rasterCombo.setCurrentText(name)
+            self.dlg.customProviderCombo.addItem(name)
+            self.dlg.customProviderCombo.setCurrentText(name)
+            break
+        self.clear_fields(self.dlg_custom_provider.name, self.dlg_custom_provider.url)
+
+    def edit_provider(self) -> None:
+        """Edit a web imagery provider.
+
+        Is called by the corresponding button.
+        """
+        provider = self.dlg.customProviderCombo.currentText()
+        edit_method = self.edit_connect_id if provider in config.MAXAR_PRODUCTS else self.edit_custom_provider
+        edit_method(provider)
+
+    def edit_custom_provider(self, provider) -> None:
+        """Change a provider's name, URL or type.
+
+        :param provider: Provider's name, as in the config and dropdown list.
+        """
+        self.dlg_custom_provider.setWindowTitle(provider)
+        while self.dlg_custom_provider.exec():
+            if not self.validate_custom_provider():
+                continue
+            name = self.dlg_custom_provider.name.text()
+            del self.custom_providers[provider]
+            self.custom_providers[name] = {
+                'url': self.dlg_custom_provider.url.text(),
+                'type': self.dlg_custom_provider.type.currentText()
+            }
+            self.dlg.customProviderCombo.removeItem(self.dlg.customProviderCombo.currentIndex())
+            self.update_custom_provider_config()
+            self.dlg.rasterCombo.setAdditionalItems(self.custom_providers)
+            self.dlg.customProviderCombo.addItem(name)
+            self.dlg.customProviderCombo.setCurrentText(name)
+            break
+        self.clear_fields(self.dlg_custom_provider.name, self.dlg_custom_provider.url)
+
+    def edit_connect_id(self, product) -> None:
+        """Change the Connect ID for the given Maxar product.
+
+        :param provider: Maxar product name, as in the config and dropdown list.
+        """
+        current_id = self.custom_providers[product]['connectId']
+        self.dlg_connect_id.connectId.setText(current_id)
+        # Specify the product being edited in the window title
+        self.dlg_connect_id.setWindowTitle(f'{product} - {self.dlg_connect_id.windowTitle()}')
+        while self.dlg_connect_id.exec():
+            if not self.dlg_connect_id.connectId.hasAcceptableInput():
+                self.dlg_connect_id.connectId.setStyleSheet(self.red_border_style)
+                continue
+            new_id = self.dlg_connect_id.connectId.text()
+            self.custom_providers[product]['connectId'] = new_id
+            self.update_custom_provider_config()
+            break
+        self.clear_fields(self.dlg_connect_id.connectId)
 
     def monitor_polygon_layer_feature_selection(self, layers: List[QgsMapLayer]) -> None:
         """Set up connection between feature selection in polygon layers and AOI area calculation.
@@ -175,7 +281,7 @@ class Mapflow:
 
         :param layers: A list of layers of any type (all non-polygon layers will be skipped) 
         """
-        for layer in [layer for layer in layers if helpers.is_polygon_layer(layer)]:
+        for layer in filter(helpers.is_polygon_layer, layers):
             layer.selectionChanged.connect(self.calculate_aoi_area)
 
     def toggle_use_image_extent_as_aoi(self, layer: Optional[QgsRasterLayer]) -> None:
@@ -242,13 +348,17 @@ class Mapflow:
     def get_maxar_metadata(self) -> None:
         """Get SecureWatch image footprints and metadata.
 
-        SecureWatch provides 'metadata': image footprints (polygonal boundaries of images) and the relevant attributes
-        such as capture date, cloud cover, etc. The data is requested via WFS, loaded as a layer named 'Maxar metadata'
-        and a selection of the attributes is further represented in the maxarMetadataTable. The user can select an image
-        of their interest in the table and click 'Get URL' to preview the image or submit it for processing.
+        SecureWatch 'metadata' is image footprints with such attributes as capture date or cloud cover. 
+        The data is requested via WFS, loaded as a 'Maxar metadata' layer and shown in the maxarMetadataTable.
 
-        Is called by clicking the 'getMaxarMetadata' button in the main dialog.
+        Is called by clicking the 'Get Image Metadata' button in the main dialog.
         """
+        params = config.MAXAR_METADATA_REQUEST_PARAMS.copy()
+        try:
+            params['CONNECTID'] = self.custom_providers[self.dlg.customProviderCombo.currentText()]['connectId']
+        except KeyError:
+            self.alert(self.tr('Select a Maxar product in the provider list'))
+            return
         self.save_custom_provider_auth()
         if not self.check_if_output_directory_is_selected():
             return
@@ -267,7 +377,6 @@ class Mapflow:
         else:
             self.alert(self.tr('Please, select a single feature in your AOI layer'))
             return
-        connect_id = self.settings.value(f'connectId{self.dlg.maxarProduct.currentText()}')
         aoi = aoi_feature.geometry()
         # Reproject to WGS84, if necessary
         layer_crs: QgsCoordinateReferenceSystem = aoi_layer.crs()
@@ -277,25 +386,12 @@ class Mapflow:
         extent = aoi.boundingBox().toString()
         # Change lon,lat to lat,lon for Maxar
         coords = [reversed(position.split(',')) for position in extent.split(':')]
-        bbox = ','.join([coord.strip() for position in coords for coord in position])
+        params['BBOX'] = ','.join([coord.strip() for position in coords for coord in position])
         # Read credentials
         login = self.dlg.customProviderLogin.text()
         password = self.dlg.customProviderPassword.text()
-        url = "https://securewatch.digitalglobe.com/catalogservice/wfsaccess"
-        params = {
-            "REQUEST": "GetFeature",
-            "TYPENAME": "DigitalGlobe:FinishedFeature",
-            "SERVICE": "WFS",
-            "VERSION": "2.0.0",
-            "CONNECTID": connect_id,
-            "BBOX": bbox,
-            "SRSNAME": "EPSG:4326",
-            "FEATUREPROFILE": "Default_Profile",
-            "WIDTH": 3000,
-            "HEIGHT": 3000
-        }
         try:
-            r = requests.get(url, params=params, auth=(login, password), timeout=5)
+            r = requests.get(config.MAXAR_METADATA_URL, params=params, auth=(login, password), timeout=5)
             r.raise_for_status()
         except requests.Timeout:
             self.alert(self.tr("SecureWatch is not responding. Please, try again later."))
@@ -304,16 +400,16 @@ class Mapflow:
             if r.status_code == 401:
                 self.alert(self.tr('Please, check your credentials'), kind='warning')
                 return
-        # Save metadata to a GeoJSON; I couldn't get WFS to work otherwise no file would be necessary
+        # Save metadata to a file; I couldn't get WFS to work, or else no file would be necessary
         output_file_name = os.path.join(self.dlg.outputDirectory.text(), 'maxar_metadata.geojson')
         with open(output_file_name, 'wb') as f:
             f.write(r.content)
-        metadata_layer = QgsVectorLayer(output_file_name, 'Maxar metadata', 'ogr')
-        self.project.addMapLayer(metadata_layer)
+        self.metadata_layer = QgsVectorLayer(output_file_name, 'Maxar metadata', 'ogr')
+        self.project.addMapLayer(self.metadata_layer)
         # Add style
-        metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'styles', 'wfs.qml'))
-        # Get the list of features (don't use the generator itself, otherwise it'll get exhausted)
-        features = list(metadata_layer.getFeatures())
+        self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'wfs.qml'))
+        # Get the list of features (don't use the generator itself, or it'll get exhausted)
+        features = list(self.metadata_layer.getFeatures())
         # Memorize IDs and extents to be able to clip the user's AOI to image on processing creation
         self.maxar_metadata_extents: List[QgsFeature] = {feature['featureId']: feature for feature in features}
         # Fill out the table
@@ -326,39 +422,17 @@ class Mapflow:
             for col, attr in enumerate(MAXAR_METADATA_ATTRIBUTES):
                 self.dlg.maxarMetadataTable.setItem(row, col, QTableWidgetItem(str(feature[attr])))
 
-    def get_maxar_url(self) -> str:
-        """Construct a Maxar SecureWatch URL with the given connect ID and Feature ID, if present.
+    def get_maxar_cql_filter(self) -> str:
+        """Construct a CQL Filter parameter for a Maxar URL. 
 
-        To rid the user of the necessity to remember the URL, the fixed part of the URL is supplied by the plugin.
-        The user only needs to select the Maxar product and select a row in the metadata table, if they'd like to 
-        preview or process a single image. 
+        If user wants to preview or process a single image, they select a row in the metadata table.
+        The image identified by that row will be specified in the query filter.
         """
-        connect_id = self.settings.value(f'connectId{self.dlg.maxarProduct.currentText()}')
-        # Check if the user selected a specific image
+        cql_filter = 'CQL_FILTER='
         selected_row = self.dlg.maxarMetadataTable.currentRow()
-        feature_id = '' if selected_row == -1 else self.dlg.maxarMetadataTable.item(selected_row, 0).text()
-        # Build the Maxar URL
-        url = 'https://securewatch.digitalglobe.com/earthservice/wmtsaccess'
-        # URL must be constructed manually to prevent URL-encoding which otherwise breaks the request
-        params = '&'.join(f'{key}={value}' for key, value in {
-            'CONNECTID': connect_id,
-            'SERVICE': 'WMTS',
-            'VERSION': '1.0.0',
-            'STYLE': '',  # required even if empty
-            'REQUEST': 'GetTile',
-            'LAYER': 'DigitalGlobe:ImageryTileService',
-            'FORMAT': 'image/jpeg',
-            'TileRow': '{y}',
-            'TileCol': '{x}',
-            'TileMatrixSet': 'EPSG:3857',
-            'TileMatrix': 'EPSG:3857:{z}',
-            'CQL_FILTER': f"feature_id=%27{feature_id}%27" if feature_id else ''  # must use %27 instead of '
-        }.items())
-        full_url = f'{url}?{params}'
-        self.dlg.customProviderURL.setText(full_url)
-        # WMTS is converted to XYZ in Mapflow so set the provider type accordingly
-        self.dlg.customProviderType.setCurrentIndex(0)
-        return full_url
+        if selected_row > -1:
+            cql_filter += f'feature_id=%27{self.dlg.maxarMetadataTable.item(selected_row, 0).text()}%27'
+        return cql_filter
 
     def calculate_aoi_area(self, arg: Optional[Union[bool, QgsMapLayer, List[QgsFeature]]]) -> None:
         """Display the area of the processing AOI in sq. km above the processings table.
@@ -464,7 +538,7 @@ class Mapflow:
         The UI inputs are read, validated, and if valid, passed to a worker in a separate thread.
         This worker then post a requests to Mapflow and executes a callback based on the request outcome.
 
-        Is called by clicking the 'createProcessing' ('Create processing') button.
+        Is called by clicking the 'Create processing' button.
         """
         processing_name = self.dlg.processingName.text()
         if not processing_name:
@@ -479,13 +553,17 @@ class Mapflow:
         auth_fields = (self.dlg.customProviderLogin.text(), self.dlg.customProviderPassword.text())
         if any(auth_fields) and not all(auth_fields):
             self.alert(self.tr('Invalid custom provider credentials'), kind='warning')
-        update_cache = str(self.dlg.updateCache.isChecked())  # server current fails if bool
+        update_cache = str(self.dlg.updateCache.isChecked())  # server currently fails if bool
+        raster_option = self.dlg.rasterCombo.currentText()
         worker_kwargs = {
             'processing_name': processing_name,
             'server': self.server,
             'auth': self.server_basic_auth,
             'wd': self.dlg.workflowDefinitionCombo.currentText(),
-            'meta': {'source-app': 'qgis'}  # optional metadata
+            'meta': {  # optional metadata
+                'source-app': 'qgis',
+                'source': 'maxar' if raster_option in config.MAXAR_PRODUCTS else raster_option.lower()
+            }
         }
         params = {}  # processing parameters
         current_raster_layer: QgsRasterLayer = self.dlg.rasterCombo.currentLayer()
@@ -498,31 +576,20 @@ class Mapflow:
             worker_kwargs['tif'] = current_raster_layer
             worker_kwargs['aoi'] = helpers.get_layer_extent(current_raster_layer, self.project.transformContext())
             params['source_type'] = 'tif'
-        else:  # custom provider or Mapbox
-            raster_option = self.dlg.rasterCombo.currentText()
-            if raster_option == 'Mapbox Satellite':
-                worker_kwargs['meta']['source'] = 'mapbox'
-                params['cache_raster_update'] = update_cache
-            else:  # custom provider
-                if self.dlg.checkMaxar.isChecked():
-                    url = self.get_maxar_url()
-                    if not url:
-                        return
-                    worker_kwargs['meta']['source'] = 'maxar'
-                else:
-                    url = self.dlg.customProviderURL.text()
-                    if not url:
-                        self.alert(self.tr('Please, specify the imagery provider URL in Settings'))
-                        return
-                    params['source_type'] = self.dlg.customProviderType.currentText()
-                self.alert(self.tr('Please, be aware that you may be charged by the imagery provider!'))
-                self.save_custom_provider_auth()
-                params['url'] = url
-                params['raster_login'] = self.dlg.customProviderLogin.text()
-                params['raster_password'] = self.dlg.customProviderPassword.text()
-                params['cache_raster_update'] = update_cache
-                if params.get('source_type') == 'wms':
-                    params['target_resolution'] = 0.000005  # for the 18th zoom
+            params['meta']['source'] = 'tif'
+        elif raster_option != 'Mapbox':  # non-default provider
+            params['url'] = self.custom_providers[raster_option]['url']
+            if raster_option in config.MAXAR_PRODUCTS:  # add the Connect ID and CQL Filter, if any
+                params['url'] += f'&CONNECTID={self.custom_providers[raster_option]["connectId"]}&'
+                params['url'] += self.get_maxar_cql_filter()
+            params['source_type'] = self.custom_providers[raster_option]['type']
+            if params['source_type'] == 'wms':
+                params['target_resolution'] = 0.000005  # for the 18th zoom
+            params['cache_raster_update'] = update_cache
+            params['raster_login'] = self.dlg.customProviderLogin.text()
+            params['raster_password'] = self.dlg.customProviderPassword.text()
+            self.save_custom_provider_auth()
+            #!!!! MOVE self.alert(self.tr('Please, be aware that you may be charged by the imagery provider!'))
         worker_kwargs['params'] = params
         if not self.dlg.useImageExtentAsAOI.isChecked():
             aoi_layer = self.dlg.polygonCombo.currentLayer()
@@ -544,7 +611,7 @@ class Mapflow:
                 worker_kwargs['aoi'] = aoi_feature.geometry()
             # Clip AOI to image if a single Maxar image is requested
             selected_row = self.dlg.maxarMetadataTable.currentRow()
-            if raster_option != 'Mapbox Satellite' and self.dlg.checkMaxar.isChecked() and selected_row != -1:
+            if raster_option in config.MAXAR_PRODUCTS and selected_row != -1:
                 # Recreate AOI layer; shall we change helpers.to_wgs84 to return layer, not geometry?
                 aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326', 'aoi', 'memory')
                 aoi = QgsFeature()
@@ -600,40 +667,41 @@ class Mapflow:
             self.settings.setValue("customProviderPassword", self.dlg.customProviderPassword.text())
 
     def preview(self) -> None:
-        """Download and display the custom provider raster data.
-
-        The data is defined by the custom imagery provider URL.
+        """Display raster tiles served over the Web.
 
         Is called by clicking the preview button.
         """
         self.save_custom_provider_auth()
-        url = self.get_maxar_url() if self.dlg.checkMaxar.isChecked() else self.dlg.customProviderURL.text()
-        if not url:
-            return
-        # Complete escaping via libs like urllib3 or requests somehow invalidates the request
-        # Requesting JPEG for Maxar won't work with some of their layers so use PNG instead
-        url_escaped = url.replace('&', '%26').replace('=', '%3D').replace('jpeg', 'png')
+        provider = self.dlg.customProviderCombo.currentText()
+        url = self.custom_providers[provider]['url']
+        if provider in config.MAXAR_PRODUCTS:  # add the Connect ID and CQL Filter, if any
+            url += f'&CONNECTID={self.custom_providers[provider]["connectId"]}&'
+            url += self.get_maxar_cql_filter()
+        url_escaped = urllib.parse.quote(url)
+        if provider in config.MAXAR_PRODUCTS:
+            max_zoom = 14 if self.dlg.zoomLimitMaxar.isChecked() else 18
+        else:
+            max_zoom = self.dlg.zoomLimit.value()
         params = {
-            'type': self.dlg.customProviderType.currentText(),
+            'type': self.custom_providers[provider]['type'],
             'url': url_escaped,
-            'zmax': 14 if self.dlg.zoomLimit.isChecked() else 18,
+            'zmax':  max_zoom,
             'zmin': 0,
             'username': self.dlg.customProviderLogin.text(),
             'password': self.dlg.customProviderPassword.text()
         }
-        uri = '&'.join(f'{key}={val}' for key, val in params.items())
+        uri = '&'.join(f'{key}={val}' for key, val in params.items())  # don't url-encode it
         layer = QgsRasterLayer(uri, self.tr('Custom tileset'), 'wms')
         if not layer.isValid():
-            self.alert(self.tr('Invalid custom imagery provider:') + url_escaped)
+            self.alert(self.tr("Sorry, we couldn't load: ") + url)
         else:
             self.project.addMapLayer(layer)
 
     def download_processing_results(self, row: int) -> None:
         """Download and display processing results along with the source raster, if available.
 
-        Features will be downloaded into the user's output directory. If it's not set, a prompt will appear
-        telling the user to select one. 
-        If the processing hasn't finished yet or has failed, the resulting feature layer will be empty (no geometry).
+        Results will be downloaded into the user's output directory. If unset, the user will be prompted to select one.
+        If the processing hasn't finished yet or has failed, the resulting feature layer will be empty.
 
         Is called by double-clicking on a row in the processings table.
 
@@ -692,20 +760,13 @@ class Mapflow:
         except:
             pass
         # Load the results into QGIS
-        results_layer = QgsVectorLayer(output_path, processing_name, "ogr")
+        results_layer = QgsVectorLayer(output_path, processing_name, 'ogr')
         if not results_layer:
-            self.push_message(self.tr("Could not load the results"), Qgis.Warning)
+            self.push_message(self.tr("Couldn't load the results"), Qgis.Warning)
             return
         # Add a style
-        styles = {
-            'Buildings Detection': 'buildings',
-            'Buildings Detection With Heights': 'buildings',
-            'Forest Detection': 'forest',
-            'Forest Detection With Heights': 'forest_with_heights',
-            'Roads Detection': 'roads'
-        }
         wd = self.dlg.processingsTable.item(row, 1).text()
-        style_path = os.path.join(self.plugin_dir, 'styles', f'{styles.get(wd, "default")}.qml')
+        style_path = os.path.join(self.plugin_dir, 'static', 'styles', f'{config.STYLES.get(wd, "default")}.qml')
         results_layer.loadNamedStyle(style_path)
         if tif_layer.isValid():
             self.project.addMapLayer(tif_layer)
@@ -814,7 +875,7 @@ class Mapflow:
         """
         self.dlg.setWindowTitle(self.plugin_name)
         self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
-        icon_path = os.path.join(self.plugin_dir, 'icon.png')
+        icon_path = os.path.join(self.plugin_dir, 'static', 'icons', 'mapflow.png')
         self.add_action(icon_path, text=self.plugin_name, callback=self.run)
 
     def unload(self) -> None:

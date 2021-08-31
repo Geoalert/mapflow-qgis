@@ -1,4 +1,7 @@
-FORMS = ../login_dialog.ui ../main_dialog.ui
+FORM_DIRECTORY = ../static/ui
+
+FORMS = $$FORM_DIRECTORY/login_dialog.ui $$FORM_DIRECTORY/main_dialog.ui\
+        $$FORM_DIRECTORY/custom_provider_dialog.ui $$FORM_DIRECTORY/connect_id_dialog.ui
 
 SOURCES = ../mapflow.py
 
