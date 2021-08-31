@@ -28,7 +28,7 @@ category=Web
 homepage=https://mapflow.ai
 tracker=https://github.com/Geoalert/mapflow-qgis/issues
 repository=https://github.com/Geoalert/mapflow-qgis
-icon=icon.png
+icon=static/icons/mapflow.png
 experimental=False
 deprecated=False
 

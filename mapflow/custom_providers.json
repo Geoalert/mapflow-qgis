@@ -13,17 +13,5 @@
         "url": "https://securewatch.digitalglobe.com/earthservice/wmtsaccess?SERVICE=WMTS&VERSION=1.0.0&STYLE=&REQUEST=GetTile&LAYER=DigitalGlobe:ImageryTileService&FORMAT=image/jpeg&TileRow={y}&TileCol={x}&TileMatrixSet=EPSG:3857&TileMatrix=EPSG:3857:{z}",
         "type": "xyz",
         "connectId": "18b01fb7-dcf1-410f-b550-619b9a4ff4e8"
-    },
-    "Google": {
-        "url": "http://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}&s=Ga",
-        "type": "xyz"
-    },
-    "Bing": {
-        "url": "http://ecn.t3.tiles.virtualearth.net/tiles/a{q}.jpeg?g=1",
-        "type": "quadkey"
-    },
-    "Yandex": {
-        "url": "https://core-sat.maps.yandex.net/tiles?l=sat&v=3.501.0&x={x}&y={y}&z={z}&scale=1&lang=ru_RU",
-        "type": "xyz"
     }
 }

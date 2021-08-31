@@ -5,7 +5,10 @@ from PyQt5.QtWidgets import QWidget
 from qgis.core import QgsMapLayerProxyModel, QgsProviderRegistry
 
 
-class MainDialog(*uic.loadUiType(Path(__file__).parent/'main_dialog.ui')):
+ui_path = Path(__file__).parent/'static'/'ui'
+
+
+class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     def __init__(self, parent: QWidget) -> None:
         """Constructor."""
         super().__init__(parent)
@@ -24,22 +27,22 @@ class MainDialog(*uic.loadUiType(Path(__file__).parent/'main_dialog.ui')):
         self.rasterCombo.setExcludedProviders(excluded_providers)
 
 
-class LoginDialog(*uic.loadUiType(Path(__file__).parent/'login_dialog.ui')):
+class LoginDialog(*uic.loadUiType(ui_path/'login_dialog.ui')):
     def __init__(self, parent: QWidget) -> None:
         """Constructor."""
         super().__init__(parent)
         self.setupUi(self)
-        self.cancelButton.clicked.connect(self.reject)
-        self.loginButton.clicked.connect(self.accept)
 
 
-class CustomProviderDialog(*uic.loadUiType(Path(__file__).parent/'custom_provider_dialog.ui')):
+class CustomProviderDialog(*uic.loadUiType(ui_path/'custom_provider_dialog.ui')):
     def __init__(self, parent: QWidget) -> None:
         """Constructor."""
         super().__init__(parent)
         self.setupUi(self)
-        self.buttonBox.rejected.connect(self.reject)
-        self.buttonBox.rejected.connect(lambda: self.name.setStyleSheet(''))
-        self.buttonBox.rejected.connect(lambda: self.url.setStyleSheet(''))
-        self.buttonBox.rejected.connect(lambda: self.name.setText(''))
-        self.buttonBox.rejected.connect(lambda: self.url.setText(''))
+
+
+class ConnectIdDialog(*uic.loadUiType(ui_path/'connect_id_dialog.ui')):
+    def __init__(self, parent: QWidget) -> None:
+        """Constructor."""
+        super().__init__(parent)
+        self.setupUi(self)

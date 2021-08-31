@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Dialog</string>
+   <string notr="true">Custom provider</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <item row="0" column="0">
@@ -33,7 +33,7 @@
      <item row="1" column="0">
       <widget class="QLabel" name="labelUrl">
        <property name="text">
-        <string>Url</string>
+        <string notr="true">URL</string>
        </property>
       </widget>
      </item>
