@@ -46,6 +46,10 @@ class Mapflow:
         self.toolbar.setObjectName(self.plugin_name)
         # QGIS Settings will be used to store user credentials and various UI element state
         self.settings = QgsSettings()
+        # Read Mapflow environment from global variables
+        self.mapflow_env = self.settings.value('variables/mapflow_env')
+        if self.mapflow_env not in ('production', 'staging', 'duty'):
+            self.mapflow_env = 'production'
         # Create a namespace for the plugin settings
         self.settings.beginGroup(self.plugin_name.lower())
         # Translation
@@ -892,12 +896,11 @@ class Mapflow:
 
         Is called at plugin startup.
         """
-        server_name = self.dlg_login.serverCombo.currentText()
-        self.server = f'https://whitemaps-{server_name}.mapflow.ai'
+        self.server = f'https://whitemaps-{self.mapflow_env}.mapflow.ai'
         login = self.dlg_login.loginField.text()
         password = self.dlg_login.passwordField.text()
         remember_me = self.dlg_login.rememberMe.isChecked()
-        self.settings.setValue("serverRememberMe", remember_me)
+        self.settings.setValue('serverRememberMe', remember_me)
         self.server_basic_auth = requests.auth.HTTPBasicAuth(login, password)
         try:
             # There's no separate auth endpoint so requesting the default project is the way to auth the user
@@ -914,7 +917,6 @@ class Mapflow:
             self.logged_in = True  # this var allows skipping auth if the user's remembered
             self.dlg_login.invalidCredentialsMessage.hide()
             if remember_me:
-                self.settings.setValue('server', self.server)
                 self.settings.setValue('serverLogin', login)
                 self.settings.setValue('serverPassword', password)
 

@@ -9,8 +9,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>359</width>
-    <height>240</height>
+    <width>332</width>
+    <height>208</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -18,18 +18,6 @@
     <horstretch>0</horstretch>
     <verstretch>0</verstretch>
    </sizepolicy>
-  </property>
-  <property name="minimumSize">
-   <size>
-    <width>359</width>
-    <height>240</height>
-   </size>
-  </property>
-  <property name="maximumSize">
-   <size>
-    <width>359</width>
-    <height>240</height>
-   </size>
   </property>
   <property name="windowTitle">
    <string>Mapflow - Log In</string>
@@ -47,19 +35,8 @@
   <property name="modal">
    <bool>true</bool>
   </property>
-  <widget class="QWidget" name="layoutWidget">
-   <property name="geometry">
-    <rect>
-     <x>10</x>
-     <y>19</y>
-     <width>333</width>
-     <height>214</height>
-    </rect>
-   </property>
-   <layout class="QVBoxLayout" name="verticalLayout_2">
-    <item>
-     <layout class="QVBoxLayout" name="verticalLayout">
-      <item>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="0">
        <layout class="QFormLayout" name="formLayout">
         <item row="0" column="0">
          <widget class="QLabel" name="loginLabel">
@@ -98,39 +75,42 @@
           </property>
          </widget>
         </item>
-        <item row="2" column="0">
-         <widget class="QLabel" name="serverLabel">
+    </layout>
+   </item>
+   <item row="1" column="0">
+    <layout class="QHBoxLayout" name="horizontalLayout">
+     <item>
+      <widget class="QCheckBox" name="rememberMe">
           <property name="text">
-           <string>Server</string>
+        <string>Remember me</string>
           </property>
          </widget>
         </item>
-        <item row="2" column="1">
-         <widget class="QComboBox" name="serverCombo">
           <item>
+      <widget class="QLabel" name="needAnAccount">
+       <property name="font">
+        <font>
+         <pointsize>11</pointsize>
+         <kerning>true</kerning>
+        </font>
+       </property>
            <property name="text">
-            <string>production</string>
+        <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://mapflow.ai&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Need an account?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
            </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>staging</string>
+       <property name="textFormat">
+        <enum>Qt::AutoText</enum>
            </property>
-          </item>
-         </widget>
-        </item>
-        <item row="3" column="0" colspan="2">
-         <widget class="QCheckBox" name="rememberMe">
-          <property name="text">
-           <string>Remember me</string>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+       <property name="openExternalLinks">
+        <bool>true</bool>
           </property>
          </widget>
         </item>
        </layout>
       </item>
-      <item>
-       <layout class="QHBoxLayout" name="layoutInfo">
-        <item>
+   <item row="2" column="0">
          <widget class="QLabel" name="invalidCredentialsMessage">
           <property name="font">
            <font>
@@ -147,9 +127,6 @@
           <property name="styleSheet">
            <string notr="true">color: rgb(239, 41, 41);</string>
           </property>
-          <property name="inputMethodHints">
-           <set>Qt::ImhNone</set>
-          </property>
           <property name="frameShape">
            <enum>QFrame::NoFrame</enum>
           </property>
@@ -164,34 +141,11 @@
           </property>
          </widget>
         </item>
-        <item>
-         <widget class="QLabel" name="needAnAccount">
-          <property name="font">
-           <font>
-            <pointsize>12</pointsize>
-            <kerning>true</kerning>
-           </font>
-          </property>
-          <property name="text">
-           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://mapflow.ai&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Need an account?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-          </property>
-          <property name="textFormat">
-           <enum>Qt::AutoText</enum>
-          </property>
-          <property name="wordWrap">
-           <bool>true</bool>
-          </property>
-          <property name="openExternalLinks">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </item>
-     </layout>
-    </item>
-    <item>
+   <item row="3" column="0">
      <layout class="QHBoxLayout" name="layoutButtons">
+     <property name="topMargin">
+      <number>15</number>
+     </property>
       <item>
        <spacer name="horizontalSpacer">
         <property name="orientation">
@@ -259,7 +213,6 @@
      </layout>
     </item>
    </layout>
-  </widget>
  </widget>
  <customwidgets>
   <customwidget>
