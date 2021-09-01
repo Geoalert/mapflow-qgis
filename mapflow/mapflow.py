@@ -6,12 +6,15 @@ from typing import Callable, List, Dict, Optional, Union
 
 import requests
 from dateutil.parser import parse as parse_datetime  # can't be imported otherwise
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import *
-from qgis.core import *
-from qgis.gui import *
+from PyQt5.QtCore import QSettings, QCoreApplication, QTranslator, QPersistentModelIndex, QModelIndex, QThread, Qt
+from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QMessageBox, QFileDialog, QTableWidgetItem, QAction
 from qgis import processing
+from qgis.core import (
+    QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, QgsCoordinateReferenceSystem,
+    QgsDistanceArea, QgsGeometry, QgsMapLayerType, Qgis, QgsVectorFileWriter, QgsMessageLog
+)
+from qgis.gui import QgisInterface
 
 from .dialogs import MainDialog, LoginDialog, CustomProviderDialog, ConnectIdDialog
 from .workers import ProcessingFetcher, ProcessingCreator
@@ -74,7 +77,7 @@ class Mapflow:
         self.offline_alert = QMessageBox(
             QMessageBox.Information,
             self.plugin_name,
-            self.tr("Mapflow requires Internet connection"),
+            self.tr('Mapflow requires Internet connection'),
             parent=self.main_window
         )
         # Tweak URL's considering the user's locale
@@ -643,7 +646,9 @@ class Mapflow:
         worker.finished.connect(self.processing_created)
         worker.tif_uploaded.connect(lambda url: self.log(self.tr(f'Your image was uploaded to: ') + url, Qgis.Success))
         worker.error.connect(lambda error: self.log(error))
-        worker.error.connect(lambda: self.alert(self.tr('Processing creation failed, see the QGIS log for details'), kind='critical'))
+        worker.error.connect(
+            lambda: self.alert(self.tr('Processing creation failed, see the QGIS log for details'), kind='critical')
+        )
         self.dlg.finished.connect(thread.requestInterruption)
         thread.start()
         self.push_message(self.tr('Starting the processing...'))
