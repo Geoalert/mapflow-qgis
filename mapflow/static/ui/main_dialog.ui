@@ -1251,5 +1251,21 @@
     </hint>
    </hints>
   </connection>
+  <connection>
+   <sender>rasterCombo</sender>
+   <signal>currentTextChanged(QString)</signal>
+   <receiver>customProviderCombo</receiver>
+   <slot>setCurrentText(QString)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>521</x>
+     <y>111</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>139</x>
+     <y>104</y>
+    </hint>
+   </hints>
+  </connection>
  </connections>
 </ui>

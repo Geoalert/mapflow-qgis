@@ -87,6 +87,7 @@ class Mapflow:
         metadata_parser.read(os.path.join(self.plugin_dir, 'metadata.txt'))
         plugin_version = metadata_parser.get('general', 'version')
         self.dlg.pluginVersion.setText(self.dlg.pluginVersion.text() + plugin_version)
+        self.current_maxar_metadata_product = ''  # used for previewing a Maxar image by double-clicking its row
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         # Check if there are stored credentials
         self.logged_in = self.settings.value("serverLogin") and self.settings.value("serverPassword")
@@ -143,12 +144,18 @@ class Mapflow:
         # Maxar
         self.dlg.maxarMetadataTable.cellClicked.connect(self.highlight_maxar_image)
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
-        self.dlg.zoomLimitMaxar.toggled.connect(self.sync_custom_provider_combo)
+        self.dlg.zoomLimitMaxar.toggled.connect(lambda state: self.settings.setValue('zoomLimitMaxar', state))
+        self.dlg.maxarMetadataTable.cellDoubleClicked.connect(self.maxar_double_click_preview)
 
-    def sync_custom_provider_combo(self, text) -> None:
+    def restore_maxar_metadata_product(self) -> None:
         """"""
-        if text in self.custom_providers:
-            self.dlg.customProviderCombo.setCurrentText(text)
+        if self.dlg.customProviderCombo.currentText() != self.current_maxar_metadata_product:
+            self.dlg.customProviderCombo.setCurrentText(self.current_maxar_metadata_product)
+
+    def maxar_double_click_preview(self) -> None:
+        """"""
+        self.restore_maxar_metadata_product()
+        self.preview()
 
     def highlight_maxar_image(self, row) -> None:
         """Select an image footprint in Maxar metadata layer when it's selected in the table.
@@ -156,8 +163,7 @@ class Mapflow:
         Is called by selecting (clicking on) a row in Maxar metadata table.
         :param row: The index of the selected row (0-based).
         """
-        self.dlg.customProviderCombo.setCurrentText('Maxar')
-        self.dlg.rasterCombo.setCurrentText('Maxar')
+        self.restore_maxar_metadata_product()
         try:
             self.metadata_layer.removeSelection()
             self.metadata_layer.select(row)
@@ -361,9 +367,11 @@ class Mapflow:
 
         Is called by clicking the 'Get Image Metadata' button in the main dialog.
         """
+        # Memorize the product to prevent further errors if user changes item in the dropdown list
+        self.current_maxar_metadata_product = self.dlg.customProviderCombo.currentText()
         params = config.MAXAR_METADATA_REQUEST_PARAMS.copy()
         try:
-            params['CONNECTID'] = self.custom_providers[self.dlg.customProviderCombo.currentText()]['connectId']
+            params['CONNECTID'] = self.custom_providers[self.current_maxar_metadata_product]['connectId']
         except KeyError:
             self.alert(self.tr('Select a Maxar product in the provider list'))
             return
@@ -684,15 +692,13 @@ class Mapflow:
         self.save_custom_provider_auth()
         provider = self.dlg.customProviderCombo.currentText()
         url = self.custom_providers[provider]['url']
+        max_zoom = self.dlg.zoomLimit.value()
         if provider in config.MAXAR_PRODUCTS:
             url = url.replace('jpeg', 'png')
             url += f'&CONNECTID={self.custom_providers[provider]["connectId"]}&'  # add product id
             url += self.get_maxar_cql_filter()  # request single image if selected in the table
-        url_escaped = urllib.parse.quote(url)
-        if provider in config.MAXAR_PRODUCTS:
             max_zoom = 14 if self.dlg.zoomLimitMaxar.isChecked() else 18
-        else:
-            max_zoom = self.dlg.zoomLimit.value()
+        url_escaped = urllib.parse.quote(url)
         params = {
             'type': self.custom_providers[provider]['type'],
             'url': url_escaped,
