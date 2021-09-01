@@ -139,10 +139,16 @@ class Mapflow:
         self.dlg.editCustomProvider.clicked.connect(self.edit_provider)
         self.dlg.removeCustomProvider.clicked.connect(self.remove_custom_provider)
         self.dlg.zoomLimit.valueChanged.connect(lambda value: self.settings.setValue('zoomLimit', value))
+        self.dlg.rasterCombo.currentTextChanged.connect(lambda text: self.dlg.customProviderCombo.setCurrentText(text))
         # Maxar
         self.dlg.maxarMetadataTable.cellClicked.connect(self.highlight_maxar_image)
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
-        self.dlg.zoomLimitMaxar.toggled.connect(lambda state: self.settings.setValue('zoomLimitMaxar', state))
+        self.dlg.zoomLimitMaxar.toggled.connect(self.sync_custom_provider_combo)
+
+    def sync_custom_provider_combo(self, text) -> None:
+        """"""
+        if text in self.custom_providers:
+            self.dlg.customProviderCombo.setCurrentText(text)
 
     def highlight_maxar_image(self, row) -> None:
         """Select an image footprint in Maxar metadata layer when it's selected in the table.
