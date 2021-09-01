@@ -418,7 +418,7 @@ class Mapflow:
         output_file_name = os.path.join(self.dlg.outputDirectory.text(), 'maxar_metadata.geojson')
         with open(output_file_name, 'wb') as f:
             f.write(r.content)
-        self.metadata_layer = QgsVectorLayer(output_file_name, 'Maxar metadata', 'ogr')
+        self.metadata_layer = QgsVectorLayer(output_file_name, f'{self.current_maxar_metadata_product} metadata', 'ogr')
         self.project.addMapLayer(self.metadata_layer)
         # Add style
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'wfs.qml'))
