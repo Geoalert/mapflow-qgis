@@ -44,10 +44,7 @@ class Mapflow:
         self.toolbar.setObjectName(self.plugin_name)
         # QGIS Settings will be used to store user credentials and various UI element state
         self.settings = QgsSettings()
-        # Read Mapflow environment from global variables
-        self.mapflow_env = self.settings.value('variables/mapflow_env')
-        if self.mapflow_env not in ('production', 'staging', 'duty'):
-            self.mapflow_env = 'production'
+        self.read_mapflow_env()  # get the server environment to connect to (for admins)
         # Create a namespace for the plugin settings
         self.settings.beginGroup(self.plugin_name.lower())
         # Translation
@@ -904,11 +901,20 @@ class Mapflow:
             self.iface.removeToolBarIcon(action)
         del self.toolbar
 
+    def read_mapflow_env(self) -> None:
+        """Read Mapflow environment from global variables."""
+        self.mapflow_env = self.settings.value('variables/mapflow_env')
+        if self.mapflow_env not in ('production', 'staging', 'duty'):
+            self.mapflow_env = 'production'
+
     def connect_to_server(self) -> None:
         """Log into Mapflow.
 
         Is called at plugin startup.
         """
+        self.settings.endGroup()  # gotta exit 'mapflow' setting group to access global settings
+        self.read_mapflow_env()  # get the server environment to connect to (for admins)
+        self.settings.beginGroup(self.plugin_name.lower())  # enter the 'mapflow setting group again
         self.server = f'https://whitemaps-{self.mapflow_env}.mapflow.ai'
         login = self.dlg_login.loginField.text()
         password = self.dlg_login.passwordField.text()
