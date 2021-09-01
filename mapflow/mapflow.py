@@ -341,7 +341,7 @@ class Mapflow:
 
         Is called by clicking the 'selectTif' button in the main dialog.
         """
-        dlg = QFileDialog(self.main_window, self.tr("Select GeoTIFF"))
+        dlg = QFileDialog(self.main_window, self.tr('Select GeoTIFF'))
         dlg.setMimeTypeFilters(['image/tiff'])
         if dlg.exec():
             path: str = dlg.selectedFiles()[0]
@@ -398,7 +398,7 @@ class Mapflow:
             r = requests.get(config.MAXAR_METADATA_URL, params=params, auth=(login, password), timeout=5)
             r.raise_for_status()
         except requests.Timeout:
-            self.alert(self.tr("SecureWatch is not responding. Please, try again later."))
+            self.alert(self.tr('SecureWatch is not responding. Please, try again later.'))
             return
         except requests.HTTPError:
             if r.status_code == 401:
@@ -879,7 +879,7 @@ class Mapflow:
         """
         self.dlg.setWindowTitle(self.plugin_name)
         self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
-        icon_path = os.path.join(self.plugin_dir, 'static', 'icons', 'mapflow.png')
+        icon_path = os.path.join(self.plugin_dir, 'icon.png')
         self.add_action(icon_path, text=self.plugin_name, callback=self.run)
 
     def unload(self) -> None:
