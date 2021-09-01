@@ -684,9 +684,10 @@ class Mapflow:
         self.save_custom_provider_auth()
         provider = self.dlg.customProviderCombo.currentText()
         url = self.custom_providers[provider]['url']
-        if provider in config.MAXAR_PRODUCTS:  # add the Connect ID and CQL Filter, if any
-            url += f'&CONNECTID={self.custom_providers[provider]["connectId"]}&'
-            url += self.get_maxar_cql_filter()
+        if provider in config.MAXAR_PRODUCTS:
+            url = url.replace('jpeg', 'png')
+            url += f'&CONNECTID={self.custom_providers[provider]["connectId"]}&'  # add product id
+            url += self.get_maxar_cql_filter()  # request single image if selected in the table
         url_escaped = urllib.parse.quote(url)
         if provider in config.MAXAR_PRODUCTS:
             max_zoom = 14 if self.dlg.zoomLimitMaxar.isChecked() else 18
