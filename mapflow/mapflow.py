@@ -1,11 +1,12 @@
 import json
 import urllib
 import os.path
+from datetime import datetime, timedelta, timezone
 from configparser import ConfigParser
 from typing import Callable, List, Dict, Optional, Union
 
 import requests
-from dateutil.parser import parse as parse_datetime  # can't be imported otherwise
+import dateutil
 from PyQt5.QtCore import QSettings, QCoreApplication, QTranslator, QPersistentModelIndex, QModelIndex, QThread, Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QMessageBox, QFileDialog, QTableWidgetItem, QAction
@@ -290,7 +291,7 @@ class Mapflow:
         For every polygon layer added to the project, this function sets up a signal-slot connection for
         monitoring its feature selection by passing the changes to calculate_aoi_area().
 
-        :param layers: A list of layers of any type (all non-polygon layers will be skipped) 
+        :param layers: A list of layers of any type (all non-polygon layers will be skipped)
         """
         for layer in filter(helpers.is_polygon_layer, layers):
             layer.selectionChanged.connect(self.calculate_aoi_area)
@@ -359,7 +360,7 @@ class Mapflow:
     def get_maxar_metadata(self) -> None:
         """Get SecureWatch image footprints and metadata.
 
-        SecureWatch 'metadata' is image footprints with such attributes as capture date or cloud cover. 
+        SecureWatch 'metadata' is image footprints with such attributes as capture date or cloud cover.
         The data is requested via WFS, loaded as a 'Maxar metadata' layer and shown in the maxarMetadataTable.
 
         Is called by clicking the 'Get Image Metadata' button in the main dialog.
@@ -436,7 +437,7 @@ class Mapflow:
                 self.dlg.maxarMetadataTable.setItem(row, col, QTableWidgetItem(str(feature[attr])))
 
     def get_maxar_cql_filter(self) -> str:
-        """Construct a CQL Filter parameter for a Maxar URL. 
+        """Construct a CQL Filter parameter for a Maxar URL.
 
         If user wants to preview or process a single image, they select a row in the metadata table.
         The image identified by that row will be specified in the query filter.
@@ -502,10 +503,10 @@ class Mapflow:
     def memorize_selected_processings(self) -> None:
         """Memorize the currently selected processings by ID.
 
-        Is used to restore selection in the processings table after refill. 
+        Is used to restore selection in the processings table after refill.
         IDs are saved to an instance attribute 'selected_processings'.
 
-        Is called when a row in processings table is selected/deselected. 
+        Is called when a row in processings table is selected/deselected.
         """
         selected_rows: List[int] = [row.row() for row in self.dlg.processingsTable.selectionModel().selectedRows()]
         self.selected_processings: List[Dict[str, Union[str, int]]] = [{
@@ -822,8 +823,16 @@ class Mapflow:
         """
         # Inform the user about the finished processings
         try:
-            finished_processings = [i['name'] for i in processings if i['percentCompleted'] == 100]
-            previously_finished_processings = [i['name'] for i in self.processings if i['percentCompleted'] == '100%']
+            utc_now = datetime.now(timezone.utc)
+            one_day = timedelta(1)
+            finished_processings = [
+                processing['name'] for processing in processings
+                if processing['percentCompleted'] == 100
+                and utc_now - dateutil.parser.parse(processing['created']) < one_day
+            ]
+            previously_finished_processings = [
+                processing['name'] for processing in self.processings if processing['percentCompleted'] == '100%'
+            ]
             for processing in set(finished_processings) - set(previously_finished_processings):
                 self.alert(processing + self.tr(' finished. Double-click it in the table to download the results.'))
         except AttributeError:  # On plugin start, there's no self.processings, just ignore the exception
@@ -837,7 +846,7 @@ class Mapflow:
             # Add % signs to progress column for clarity
             processing['percentCompleted'] = f'{processing["percentCompleted"]}%'
             # Localize creation datetime
-            local_datetime = parse_datetime(processing['created']).astimezone()
+            local_datetime = dateutil.parser.parse(processing['created']).astimezone()
             # Format as ISO without seconds to save a bit of space
             processing['created'] = local_datetime.strftime('%Y-%m-%d %H:%M')
             # Extract WD names from WD objects
