@@ -1,6 +1,8 @@
 PLUGIN_NAME = 'Mapflow'
 PROCESSING_LIST_REFRESH_INTERVAL = 5  # in seconds
+PROCESSING_TABLE_ID_COLUMN_INDEX = 5
 MAXAR_PRODUCTS = ('Maxar SecureWatch', 'Maxar Vivid', 'Maxar Basemaps')
+MAXAR_METADATA_ATTRIBUTES = ('featureId', 'sourceUnit', 'productType', 'colorBandOrder', 'cloudCover', 'formattedDate')
 MAXAR_METADATA_URL = 'https://securewatch.digitalglobe.com/catalogservice/wfsaccess'
 MAXAR_METADATA_REQUEST_PARAMS = {
     'REQUEST': 'GetFeature',

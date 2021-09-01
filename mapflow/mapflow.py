@@ -21,11 +21,6 @@ from .workers import ProcessingFetcher, ProcessingCreator
 from . import helpers, config
 
 
-MAXAR_METADATA_ATTRIBUTES = ('featureId', 'sourceUnit', 'productType', 'colorBandOrder', 'cloudCover', 'formattedDate')
-MAXAR_METADATA_FEATURE_ID_COLUMN_INDEX = MAXAR_METADATA_ATTRIBUTES.index('featureId')
-ID_COLUMN_INDEX: int = 5  # processings table
-
-
 class Mapflow:
     """This class represents the plugin.
 
@@ -118,8 +113,8 @@ class Mapflow:
         # Store processings selected in the table
         self.selected_processings: List[Dict[str, Union[str, int]]] = []
         # Hide the ID columns as only needed for table operations, not the user
-        self.dlg.processingsTable.setColumnHidden(ID_COLUMN_INDEX, True)
-        self.dlg.maxarMetadataTable.setColumnHidden(MAXAR_METADATA_FEATURE_ID_COLUMN_INDEX, True)
+        self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
+        self.dlg.maxarMetadataTable.setColumnHidden(config.MAXAR_METADATA_ATTRIBUTES.index('featureId'), True)
         # SET UP SIGNALS & SLOTS
         # Connect buttons
         self.dlg.logoutButton.clicked.connect(self.logout)
@@ -426,7 +421,7 @@ class Mapflow:
             # Use 'or 0' to handle NULL values that don't have a __round__ method
             feature['cloudCover'] = round(feature['cloudCover'] or 0, 2)
         for row, feature in enumerate(features):
-            for col, attr in enumerate(MAXAR_METADATA_ATTRIBUTES):
+            for col, attr in enumerate(config.MAXAR_METADATA_ATTRIBUTES):
                 self.dlg.maxarMetadataTable.setItem(row, col, QTableWidgetItem(str(feature[attr])))
 
     def get_maxar_cql_filter(self) -> str:
@@ -503,7 +498,7 @@ class Mapflow:
         """
         selected_rows: List[int] = [row.row() for row in self.dlg.processingsTable.selectionModel().selectedRows()]
         self.selected_processings: List[Dict[str, Union[str, int]]] = [{
-            'id': self.dlg.processingsTable.item(row, ID_COLUMN_INDEX).text(),
+            'id': self.dlg.processingsTable.item(row, config.PROCESSING_TABLE_ID_COLUMN_INDEX).text(),
             'name': self.dlg.processingsTable.item(row, 0).text(),
             'row': row
         } for row in selected_rows]
@@ -525,7 +520,7 @@ class Mapflow:
         # QPersistentModel index allows deleting rows sequentially while preserving their original indexes
         for index in [QPersistentModelIndex(row) for row in selected_rows]:
             row = index.row()
-            pid = self.dlg.processingsTable.item(row, ID_COLUMN_INDEX).text()
+            pid = self.dlg.processingsTable.item(row, config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
             name = self.dlg.processingsTable.item(row, 0).text()
             try:
                 r = requests.delete(url=f'{self.server}/rest/processings/{pid}', auth=self.server_basic_auth, timeout=5)
@@ -719,7 +714,7 @@ class Mapflow:
         if not self.check_if_output_directory_is_selected():
             return
         processing_name = self.dlg.processingsTable.item(row, 0).text()  # 0th column is Name
-        pid = self.dlg.processingsTable.item(row, ID_COLUMN_INDEX).text()
+        pid = self.dlg.processingsTable.item(row, config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
         try:
             r = requests.get(f'{self.server}/rest/processings/{pid}/result', auth=self.server_basic_auth)
         except requests.ConnectionError:
