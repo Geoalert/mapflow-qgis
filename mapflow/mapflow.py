@@ -447,8 +447,8 @@ class Mapflow:
         The image identified by that row will be specified in the query filter.
         """
         cql_filter = 'CQL_FILTER='
-        selected_row = self.dlg.maxarMetadataTable.currentRow()
-        if selected_row > -1:
+        if self.dlg.maxarMetadataTable.selectedItems():  # won't contain the id bc the column is hidden
+            selected_row = self.dlg.maxarMetadataTable.currentRow()
             cql_filter += f"feature_id='{self.dlg.maxarMetadataTable.item(selected_row, 0).text()}'"
         return cql_filter
 
@@ -709,9 +709,8 @@ class Mapflow:
             'username': self.dlg.customProviderLogin.text(),
             'password': self.dlg.customProviderPassword.text()
         }
-        maxar_selected_image = self.dlg.maxarMetadataTable.item(self.dlg.maxarMetadataTable.currentRow(), 0)
-        if maxar_selected_image:
-            provider += f' {str(maxar_selected_image.text())}'
+        if self.dlg.maxarMetadataTable.selectedItems():  # won't contain the id bc the column is hidden
+            provider += f' {self.dlg.maxarMetadataTable.item(self.dlg.maxarMetadataTable.currentRow(), 0).text()}'
         uri = '&'.join(f'{key}={val}' for key, val in params.items())  # don't url-encode it
         layer = QgsRasterLayer(uri, provider, 'wms')
         if not layer.isValid():
