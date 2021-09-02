@@ -1,3 +1,4 @@
+import sys
 import json
 import urllib
 import os.path
@@ -830,6 +831,9 @@ class Mapflow:
         # Inform the user about the finished processings
         now = datetime.now(timezone.utc)
         one_day = timedelta(1)
+        if sys.version_info.minor < 7:  # python 3.6
+            for processing in processings:
+                processing['created'] = processing['created'].replace('Z', '+0000')
         try:
             finished_processings = [
                 processing['name'] for processing in processings
