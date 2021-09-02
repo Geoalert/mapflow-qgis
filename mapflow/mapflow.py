@@ -449,7 +449,7 @@ class Mapflow:
         cql_filter = 'CQL_FILTER='
         selected_row = self.dlg.maxarMetadataTable.currentRow()
         if selected_row > -1:
-            cql_filter += f'feature_id=%27{self.dlg.maxarMetadataTable.item(selected_row, 0).text()}%27'
+            cql_filter += f"feature_id='{self.dlg.maxarMetadataTable.item(selected_row, 0).text()}'"
         return cql_filter
 
     def calculate_aoi_area(self, arg: Optional[Union[bool, QgsMapLayer, List[QgsFeature]]]) -> None:
