@@ -414,11 +414,14 @@ class Mapflow:
             if r.status_code == 401:
                 self.alert(self.tr('Please, check your credentials'), kind='warning')
                 return
+        layer_name = f'{self.current_maxar_metadata_product} metadata'
         # Save metadata to a file; I couldn't get WFS to work, or else no file would be necessary
-        output_file_name = os.path.join(self.dlg.outputDirectory.text(), 'maxar_metadata.geojson')
+        output_file_name = os.path.join(
+            self.dlg.outputDirectory.text(), f'{layer_name.lower().replace(" ", "_")}.geojson'
+        )
         with open(output_file_name, 'wb') as f:
             f.write(r.content)
-        self.metadata_layer = QgsVectorLayer(output_file_name, f'{self.current_maxar_metadata_product} metadata', 'ogr')
+        self.metadata_layer = QgsVectorLayer(output_file_name, layer_name, 'ogr')
         self.project.addMapLayer(self.metadata_layer)
         # Add style
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'wfs.qml'))
