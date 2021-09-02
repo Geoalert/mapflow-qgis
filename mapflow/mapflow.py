@@ -710,9 +710,10 @@ class Mapflow:
             'password': self.dlg.customProviderPassword.text()
         }
         maxar_selected_image = self.dlg.maxarMetadataTable.item(self.dlg.maxarMetadataTable.currentRow(), 0)
-        layer_name = f'{provider} {str(maxar_selected_image.text())}'
+        if maxar_selected_image:
+            provider += f' {str(maxar_selected_image.text())}'
         uri = '&'.join(f'{key}={val}' for key, val in params.items())  # don't url-encode it
-        layer = QgsRasterLayer(uri, layer_name, 'wms')
+        layer = QgsRasterLayer(uri, provider, 'wms')
         if not layer.isValid():
             self.alert(self.tr("Sorry, we couldn't load: ") + url)
         else:
