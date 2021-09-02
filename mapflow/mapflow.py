@@ -6,7 +6,7 @@ from configparser import ConfigParser
 from typing import Callable, List, Dict, Optional, Union
 
 import requests
-import dateutil
+import dateutil.parser
 from PyQt5.QtCore import QSettings, QCoreApplication, QTranslator, QPersistentModelIndex, QModelIndex, QThread, Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QMessageBox, QFileDialog, QTableWidgetItem, QAction
@@ -64,7 +64,7 @@ class Mapflow:
         self.timeout_alert = QMessageBox(
             QMessageBox.Warning, self.plugin_name,
             self.tr("Sorry, we couldn't connect to Mapflow. Please try again later."
-                    "If the problem remains, please, send us an email to help@geoalert.io."),
+                    'If the problem remains, please, send us an email to help@geoalert.io.'),
             parent=self.main_window
         )
         self.offline_alert = QMessageBox(
@@ -99,10 +99,10 @@ class Mapflow:
             self.dlg.zoomLimitMaxar.setChecked(self.settings.value('zoomLimitMaxar'))
         except TypeError:  # if unset
             self.dlg.zoomLimitMaxar.setChecked(True)
-        if self.settings.value("customProviderSaveAuth"):
+        if self.settings.value('customProviderSaveAuth'):
             self.dlg.customProviderSaveAuth.setChecked(True)
-            self.dlg.customProviderLogin.setText(self.settings.value("customProviderLogin"))
-            self.dlg.customProviderPassword.setText(self.settings.value("customProviderPassword"))
+            self.dlg.customProviderLogin.setText(self.settings.value('customProviderLogin'))
+            self.dlg.customProviderPassword.setText(self.settings.value('customProviderPassword'))
         # Restore custom providers
         self.custom_provider_config = os.path.join(self.plugin_dir, 'custom_providers.json')
         with open(self.custom_provider_config) as f:
