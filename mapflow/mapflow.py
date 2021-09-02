@@ -113,6 +113,7 @@ class Mapflow:
         # Hide the ID columns as only needed for table operations, not the user
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         self.dlg.maxarMetadataTable.setColumnHidden(config.MAXAR_METADATA_ATTRIBUTES.index('featureId'), True)
+        self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise, Maxar SW will be set due to cobo sync
         # SET UP SIGNALS & SLOTS
         # Connect buttons
         self.dlg.logoutButton.clicked.connect(self.logout)
