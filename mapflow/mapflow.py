@@ -1,21 +1,20 @@
 import json
 import urllib
 import os.path
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from configparser import ConfigParser
 from typing import Callable, List, Dict, Optional, Union
 
 import requests
-import dateutil.parser
 from PyQt5.QtCore import QSettings, QCoreApplication, QTranslator, QPersistentModelIndex, QModelIndex, QThread, Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QMessageBox, QFileDialog, QTableWidgetItem, QAction
 from qgis import processing
+from qgis.gui import QgisInterface
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, QgsCoordinateReferenceSystem,
     QgsDistanceArea, QgsGeometry, QgsMapLayerType, Qgis, QgsVectorFileWriter, QgsMessageLog
 )
-from qgis.gui import QgisInterface
 
 from .dialogs import MainDialog, LoginDialog, CustomProviderDialog, ConnectIdDialog
 from .workers import ProcessingFetcher, ProcessingCreator
@@ -824,16 +823,17 @@ class Mapflow:
         :param processings: A list of JSON-like dictionaries containing information about the user's processings.
         """
         # Inform the user about the finished processings
+        now = datetime.now()
+        one_day = timedelta(1)
         try:
-            utc_now = datetime.now(timezone.utc)
-            one_day = timedelta(1)
             finished_processings = [
                 processing['name'] for processing in processings
                 if processing['percentCompleted'] == 100
-                and utc_now - dateutil.parser.parse(processing['created']) < one_day
+                and now - datetime.strptime(processing['created'], config.PROCESSING_DATETIME_FORMAT) < one_day
             ]
             previously_finished_processings = [
-                processing['name'] for processing in self.processings if processing['percentCompleted'] == '100%'
+                processing['name'] for processing in self.processings
+                if processing['percentCompleted'] == '100%'
             ]
             for processing in set(finished_processings) - set(previously_finished_processings):
                 self.alert(processing + self.tr(' finished. Double-click it in the table to download the results.'))
@@ -848,7 +848,7 @@ class Mapflow:
             # Add % signs to progress column for clarity
             processing['percentCompleted'] = f'{processing["percentCompleted"]}%'
             # Localize creation datetime
-            local_datetime = dateutil.parser.parse(processing['created']).astimezone()
+            local_datetime = datetime.strptime(processing['created'], config.PROCESSING_DATETIME_FORMAT)
             # Format as ISO without seconds to save a bit of space
             processing['created'] = local_datetime.strftime('%Y-%m-%d %H:%M')
             # Extract WD names from WD objects
