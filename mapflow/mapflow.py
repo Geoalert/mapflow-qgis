@@ -1,7 +1,7 @@
 import json
 import urllib
 import os.path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from configparser import ConfigParser
 from typing import Callable, List, Dict, Optional, Union
 
@@ -823,7 +823,7 @@ class Mapflow:
         :param processings: A list of JSON-like dictionaries containing information about the user's processings.
         """
         # Inform the user about the finished processings
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         one_day = timedelta(1)
         try:
             finished_processings = [
