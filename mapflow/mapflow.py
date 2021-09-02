@@ -435,6 +435,7 @@ class Mapflow:
         for feature in features:
             # Use 'or 0' to handle NULL values that don't have a __round__ method
             feature['cloudCover'] = round(feature['cloudCover'] or 0, 2)
+            feature['acquisitionDate'] = feature['acquisitionDate'][:10]  # only date
         for row, feature in enumerate(features):
             for col, attr in enumerate(config.MAXAR_METADATA_ATTRIBUTES):
                 self.dlg.maxarMetadataTable.setItem(row, col, QTableWidgetItem(str(feature[attr])))
