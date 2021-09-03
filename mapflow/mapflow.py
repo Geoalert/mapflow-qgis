@@ -36,6 +36,8 @@ class Mapflow:
         self.iface = iface
         self.main_window = iface.mainWindow()
         self.project = QgsProject.instance()
+        self.layer_tree_root = self.project.layerTreeRoot()  # for adding layers
+        self.layer_group = None  # init as empty, will be set when first layer is added
         self.plugin_dir = os.path.dirname(__file__)
         self.plugin_name = config.PLUGIN_NAME  # aliased here to be overloaded in submodules
         # Init toolbar and toolbar buttons
@@ -87,7 +89,7 @@ class Mapflow:
         self.current_maxar_metadata_product = ''  # used for previewing a Maxar image by double-clicking its row
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         # Check if there are stored credentials
-        self.logged_in = self.settings.value("serverLogin") and self.settings.value("serverPassword")
+        self.logged_in = self.settings.value('serverLogin') and self.settings.value('serverPassword')
         if self.settings.value('serverRememberMe'):
             self.server = self.settings.value('server')
             self.dlg_login.loginField.setText(self.settings.value('serverLogin'))
@@ -144,6 +146,20 @@ class Mapflow:
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
         self.dlg.zoomLimitMaxar.toggled.connect(lambda state: self.settings.setValue('zoomLimitMaxar', state))
         self.dlg.maxarMetadataTable.cellDoubleClicked.connect(self.maxar_double_click_preview)
+
+    def add_layer(self, layer: QgsMapLayer) -> None:
+        """Add layers created by the plugin to the legend.
+
+        By default, layers are added to a group with the same name as the plugin. If the group has been
+        deleted by the user, assume they prefer to have the layers outside the group, and add them to root.
+        """
+        layer_group = self.layer_group or self.layer_tree_root.addGroup(self.plugin_name)
+        self.layer_group = layer_group  # update layer group
+        self.project.addMapLayer(layer, addToLegend=False)
+        try:  # add to the plugin group
+            layer_group.addLayer(layer)
+        except RuntimeError:  # the group has been deleted
+            self.layer_tree_root.addLayer(layer)
 
     def restore_maxar_metadata_product(self) -> None:
         """"""
@@ -354,7 +370,7 @@ class Mapflow:
         if dlg.exec():
             path: str = dlg.selectedFiles()[0]
             layer = QgsRasterLayer(path, os.path.splitext(os.path.basename(path))[0])
-            self.project.addMapLayer(layer)
+            self.add_layer(layer)
             self.dlg.rasterCombo.setLayer(layer)
 
     def get_maxar_metadata(self) -> None:
@@ -422,7 +438,7 @@ class Mapflow:
         with open(output_file_name, 'wb') as f:
             f.write(r.content)
         self.metadata_layer = QgsVectorLayer(output_file_name, layer_name, 'ogr')
-        self.project.addMapLayer(self.metadata_layer)
+        self.add_layer(self.metadata_layer)
         # Add style
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'wfs.qml'))
         # Get the list of features (don't use the generator itself, or it'll get exhausted)
@@ -714,10 +730,10 @@ class Mapflow:
             provider += f' {self.dlg.maxarMetadataTable.item(self.dlg.maxarMetadataTable.currentRow(), 0).text()}'
         uri = '&'.join(f'{key}={val}' for key, val in params.items())  # don't url-encode it
         layer = QgsRasterLayer(uri, provider, 'wms')
-        if not layer.isValid():
-            self.alert(self.tr("Sorry, we couldn't load: ") + url)
+        if layer.isValid():
+            self.add_layer(layer)
         else:
-            self.project.addMapLayer(layer)
+            self.alert(self.tr("Sorry, we couldn't load: ") + url)
 
     def download_processing_results(self, row: int) -> None:
         """Download and display processing results along with the source raster, if available.
@@ -790,9 +806,9 @@ class Mapflow:
         wd = self.dlg.processingsTable.item(row, 1).text()
         style_path = os.path.join(self.plugin_dir, 'static', 'styles', f'{config.STYLES.get(wd, "default")}.qml')
         results_layer.loadNamedStyle(style_path)
-        if tif_layer.isValid():
-            self.project.addMapLayer(tif_layer)
-        self.project.addMapLayer(results_layer)
+        # Add the layers to the project
+        self.add_layer(tif_layer)
+        self.add_layer(results_layer)
         self.iface.zoomToActiveLayer()
 
     def alert(self, message: str, kind: str = 'information') -> None:
