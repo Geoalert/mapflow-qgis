@@ -423,7 +423,7 @@ class Mapflow:
         try:
             r = requests.get(config.MAXAR_METADATA_URL, params=params, auth=(login, password), timeout=5)
             r.raise_for_status()
-        except requests.Timeout:
+        except (requests.ConnectionError, requests.Timeout):
             self.alert(self.tr('SecureWatch is not responding. Please, try again later.'))
             return
         except requests.HTTPError:
