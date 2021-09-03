@@ -153,13 +153,13 @@ class Mapflow:
         By default, layers are added to a group with the same name as the plugin. If the group has been
         deleted by the user, assume they prefer to have the layers outside the group, and add them to root.
         """
-        layer_group = self.layer_group or self.layer_tree_root.addGroup(self.plugin_name)
+        layer_group = self.layer_group or self.layer_tree_root.insertGroup(0, self.plugin_name)
         self.layer_group = layer_group  # update layer group
         self.project.addMapLayer(layer, addToLegend=False)
         try:  # add to the plugin group
             layer_group.addLayer(layer)
         except RuntimeError:  # the group has been deleted
-            self.layer_tree_root.addLayer(layer)
+            self.layer_tree_root.insertLayer(0, layer)
 
     def restore_maxar_metadata_product(self) -> None:
         """"""
