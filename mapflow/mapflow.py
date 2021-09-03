@@ -420,14 +420,34 @@ class Mapflow:
         # Read credentials
         login = self.dlg.customProviderLogin.text()
         password = self.dlg.customProviderPassword.text()
+        if login or password:  # user has their own account
+            service = 'SecureWatch'
+            method = 'get'
+            kwargs = {
+                'url': config.MAXAR_METADATA_URL,
+                'params': params,
+                'auth': (login, password),
+                'timeout': 5
+            }
+        else:  # assume user wants to use our account, proxy thru Mapflow
+            service = 'Mapflow'
+            method = 'post'
+            kwargs = {
+                'url': f'{self.server}/rest/meta',
+                'json': {
+                    'url': config.MAXAR_METADATA_URL + '?' + '&'.join(f'{key}={val}' for key, val in params.items())
+                },
+                'auth': (self.login, self.password),
+                'timeout': 10
+            }
+        r = getattr(requests, method)(**kwargs)
         try:
-            r = requests.get(config.MAXAR_METADATA_URL, params=params, auth=(login, password), timeout=5)
             r.raise_for_status()
         except (requests.ConnectionError, requests.Timeout):
-            self.alert(self.tr('SecureWatch is not responding. Please, try again later.'))
+            self.alert(service + self.tr(' is not responding. Please, try again later.'))
             return
         except requests.HTTPError:
-            if r.status_code == 401:
+            if r.status_code in (401, 403):
                 self.alert(self.tr('Please, check your credentials'), kind='warning')
                 return
         layer_name = f'{self.current_maxar_metadata_product} metadata'
