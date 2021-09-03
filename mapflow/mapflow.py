@@ -1,6 +1,5 @@
 import sys
 import json
-import urllib
 import os.path
 from datetime import datetime, timedelta, timezone
 from configparser import ConfigParser
@@ -450,7 +449,7 @@ class Mapflow:
         cql_filter = 'CQL_FILTER='
         if self.dlg.maxarMetadataTable.selectedItems():  # won't contain the id bc the column is hidden
             selected_row = self.dlg.maxarMetadataTable.currentRow()
-            cql_filter += f"feature_id='{self.dlg.maxarMetadataTable.item(selected_row, 0).text()}'"
+            cql_filter += f"feature_id=%27{self.dlg.maxarMetadataTable.item(selected_row, 0).text()}%27"
         return cql_filter
 
     def calculate_aoi_area(self, arg: Optional[Union[bool, QgsMapLayer, List[QgsFeature]]]) -> None:
@@ -656,7 +655,7 @@ class Mapflow:
         thread.started.connect(worker.create_processing)
         worker.finished.connect(thread.quit)
         worker.finished.connect(self.processing_created)
-        worker.tif_uploaded.connect(lambda url: self.log(self.tr(f'Your image was uploaded to: ') + url, Qgis.Success))
+        worker.tif_uploaded.connect(lambda url: self.log(self.tr('Your image was uploaded to: ') + url, Qgis.Success))
         worker.error.connect(lambda error: self.log(error))
         worker.error.connect(
             lambda: self.alert(self.tr('Processing creation failed, see the QGIS log for details'), kind='critical')
@@ -681,11 +680,11 @@ class Mapflow:
         Is called at three occasions: preview, processing creation and metadata request.
         """
         # Save the checkbox state itself
-        self.settings.setValue("customProviderSaveAuth", self.dlg.customProviderSaveAuth.isChecked())
+        self.settings.setValue('customProviderSaveAuth', self.dlg.customProviderSaveAuth.isChecked())
         # If checked, save the credentials
         if self.dlg.customProviderSaveAuth.isChecked():
-            self.settings.setValue("customProviderLogin", self.dlg.customProviderLogin.text())
-            self.settings.setValue("customProviderPassword", self.dlg.customProviderPassword.text())
+            self.settings.setValue('customProviderLogin', self.dlg.customProviderLogin.text())
+            self.settings.setValue('customProviderPassword', self.dlg.customProviderPassword.text())
 
     def preview(self) -> None:
         """Display raster tiles served over the Web.
@@ -701,7 +700,8 @@ class Mapflow:
             url += f'&CONNECTID={self.custom_providers[provider]["connectId"]}&'  # add product id
             url += self.get_maxar_cql_filter()  # request single image if selected in the table
             max_zoom = 14 if self.dlg.zoomLimitMaxar.isChecked() else 18
-        url_escaped = urllib.parse.quote(url)
+        # Can use urllib.parse but have to specify safe='/?:{}' which sort of defeats the purpose
+        url_escaped = url.replace('&', '%26').replace('=', '%3D')
         params = {
             'type': self.custom_providers[provider]['type'],
             'url': url_escaped,
