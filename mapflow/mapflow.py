@@ -152,6 +152,7 @@ class Mapflow:
 
         By default, layers are added to a group with the same name as the plugin. If the group has been
         deleted by the user, assume they prefer to have the layers outside the group, and add them to root.
+        :param layer: A vector or raster layer to be added.
         """
         layer_group = self.layer_group or self.layer_tree_root.insertGroup(0, self.plugin_name)
         self.layer_group = layer_group  # update layer group
@@ -162,13 +163,19 @@ class Mapflow:
             self.layer_tree_root.insertLayer(0, layer)
 
     def restore_maxar_metadata_product(self) -> None:
-        """"""
+        """Reset provider combo to match the current metadata table state.
+
+        SecureWatch single-image requests are constructed based on the current selection 
+        in the metadata table and with the current item in the provider list. The user may 
+        change list item after requesting metadata. To avoid ambiguity, this function set 
+        the provider combo to the current metadata product. 
+        """
         if self.dlg.customProviderCombo.currentText() != self.current_maxar_metadata_product:
             self.dlg.customProviderCombo.setCurrentText(self.current_maxar_metadata_product)
 
     def maxar_double_click_preview(self) -> None:
-        """"""
-        self.restore_maxar_metadata_product()
+        """Allow previewing SecureWatch images by double-clicking their rows in the table."""
+        self.restore_maxar_metadata_product()  # align the provider combo with the table
         self.preview()
 
     def highlight_maxar_image(self, row) -> None:
@@ -432,23 +439,26 @@ class Mapflow:
         else:  # assume user wants to use our account, proxy thru Mapflow
             service = 'Mapflow'
             method = 'post'
+            params = '&'.join(f'{key}={val}' for key, val in params.items())
             kwargs = {
                 'url': f'{self.server}/rest/meta',
-                'json': {
-                    'url': config.MAXAR_METADATA_URL + '?' + '&'.join(f'{key}={val}' for key, val in params.items())
-                },
+                'json': {'url': config.MAXAR_METADATA_URL + '?' + params},
                 'auth': (self.login, self.password),
                 'timeout': 10
             }
-        r = getattr(requests, method)(**kwargs)
         try:
-            r.raise_for_status()
-        except (requests.ConnectionError, requests.Timeout):
+            r = getattr(requests, method)(**kwargs)
+        except (requests.ConnectionError, requests.Timeout):  # check for network errors
             self.alert(service + self.tr(' is not responding. Please, try again later.'))
             return
+        try:
+            r.raise_for_status()  # check for HTTP errors
         except requests.HTTPError:
-            if r.status_code in (401, 403):
+            if r.status_code in (401, 403) and service == 'SecureWatch':
                 self.alert(self.tr('Please, check your credentials'), kind='warning')
+                return
+            elif r.status_code >= 500:
+                self.alert(service + self.tr(' is not responding. Please, try again later.'))
                 return
         layer_name = f'{self.current_maxar_metadata_product} metadata'
         # Save metadata to a file; I couldn't get WFS to work, or else no file would be necessary
