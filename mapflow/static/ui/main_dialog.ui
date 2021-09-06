@@ -684,8 +684,8 @@
              <string/>
             </property>
             <property name="icon">
-             <iconset>
-              <normaloff>../icons/add_provider.svg</normaloff>../icons/add_provider.svg</iconset>
+             <iconset resource="../resources.qrc">
+              <normaloff>:/plugins/mapflow/icons/add_provider.svg</normaloff>:/plugins/mapflow/icons/add_provider.svg</iconset>
             </property>
            </widget>
           </item>
@@ -722,8 +722,8 @@
              <string/>
             </property>
             <property name="icon">
-             <iconset>
-              <normaloff>../icons/remove_provider.svg</normaloff>../icons/remove_provider.svg</iconset>
+             <iconset resource="../resources.qrc">
+              <normaloff>:/plugins/mapflow/icons/remove_provider.svg</normaloff>:/plugins/mapflow/icons/remove_provider.svg</iconset>
             </property>
            </widget>
           </item>
@@ -751,8 +751,8 @@
              <string/>
             </property>
             <property name="icon">
-             <iconset>
-              <normaloff>../icons/edit_provider.svg</normaloff>../icons/edit_provider.svg</iconset>
+             <iconset resource="../resources.qrc">
+              <normaloff>:/plugins/mapflow/icons/edit_provider.svg</normaloff>:/plugins/mapflow/icons/edit_provider.svg</iconset>
             </property>
            </widget>
           </item>

@@ -19,6 +19,7 @@ from qgis.core import (
 from .dialogs import MainDialog, LoginDialog, CustomProviderDialog, ConnectIdDialog
 from .workers import ProcessingFetcher, ProcessingCreator
 from . import helpers, config
+from .resources_rc import *  # is somehow used implicitly by QGIS; if removed, icons may or may not show
 
 
 class Mapflow:
