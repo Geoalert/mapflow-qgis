@@ -155,11 +155,12 @@ class Mapflow:
         deleted by the user, assume they prefer to have the layers outside the group, and add them to root.
         :param layer: A vector or raster layer to be added.
         """
-        layer_group = self.layer_group or self.layer_tree_root.insertGroup(0, self.plugin_name)
-        self.layer_group = layer_group  # update layer group
+        # Update or create a layer group
+        self.layer_group = self.layer_group or self.layer_tree_root.insertGroup(0, self.plugin_name)
+        # To be added to the group, the layer has to be added to the project first
         self.project.addMapLayer(layer, addToLegend=False)
-        try:  # add to the plugin group
-            layer_group.addLayer(layer)
+        try:  # now add it to the group
+            self.layer_group.insertLayer(0, layer)  # specify 0 or else it adds it to the bottom
         except RuntimeError:  # the group has been deleted
             self.layer_tree_root.insertLayer(0, layer)
 
@@ -838,8 +839,8 @@ class Mapflow:
         style = os.path.join(self.plugin_dir, 'static', 'styles', f'{config.STYLES.get(wd, "default")}.qml')
         results_layer.loadNamedStyle(style)
         # Add the layers to the project
-        self.add_layer(results_layer)
         self.add_layer(tif_layer)
+        self.add_layer(results_layer)
         self.iface.zoomToActiveLayer()
 
     def alert(self, message: str, kind: str = 'information') -> None:
