@@ -640,8 +640,8 @@ class Mapflow:
             # Upload the image to the server
             worker_kwargs['tif'] = current_raster_layer
             worker_kwargs['aoi'] = helpers.get_layer_extent(current_raster_layer, self.project.transformContext())
+            worker_kwargs['meta']['source'] = 'tif'
             params['source_type'] = 'tif'
-            params['meta']['source'] = 'tif'
         elif raster_option != 'Mapbox':  # non-default provider
             params['url'] = self.custom_providers[raster_option]['url']
             if raster_option in config.MAXAR_PRODUCTS:  # add the Connect ID and CQL Filter, if any
