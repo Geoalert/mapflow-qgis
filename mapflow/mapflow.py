@@ -835,11 +835,11 @@ class Mapflow:
             return
         # Add a style
         wd = self.dlg.processingsTable.item(row, 1).text()
-        style_path = os.path.join(self.plugin_dir, 'static', 'styles', f'{config.STYLES.get(wd, "default")}.qml')
-        results_layer.loadNamedStyle(style_path)
+        style = os.path.join(self.plugin_dir, 'static', 'styles', f'{config.STYLES.get(wd, "default")}.qml')
+        results_layer.loadNamedStyle(style)
         # Add the layers to the project
-        self.add_layer(tif_layer)
         self.add_layer(results_layer)
+        self.add_layer(tif_layer)
         self.iface.zoomToActiveLayer()
 
     def alert(self, message: str, kind: str = 'information') -> None:
