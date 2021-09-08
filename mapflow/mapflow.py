@@ -474,7 +474,7 @@ class Mapflow:
         layer_name = f'{self.current_maxar_metadata_product} metadata'
         # Save metadata to a file; I couldn't get WFS to work, or else no file would be necessary
         output_file_name = os.path.join(
-            self.dlg.outputDirectory.text(), f'{layer_name.lower().replace(" ", "_")}.geojson'
+            self.dlg.outputDirectory.text(), f'{layer_name.lower().replace(" ", "_")}.gml'
         )
         with open(output_file_name, 'wb') as f:
             f.write(r.content)
