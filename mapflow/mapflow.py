@@ -680,8 +680,8 @@ class Mapflow:
             else:
                 worker_kwargs['aoi'] = aoi_feature.geometry()
             # Clip AOI to image if a single Maxar image is requested
-            selected_row = self.dlg.maxarMetadataTable.currentRow()
-            if raster_option in config.MAXAR_PRODUCTS and selected_row != -1:
+            selected_image = self.dlg.maxarMetadataTable.selectedItems()
+            if raster_option in config.MAXAR_PRODUCTS and selected_image:
                 # Recreate AOI layer; shall we change helpers.to_wgs84 to return layer, not geometry?
                 aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326', 'aoi', 'memory')
                 aoi = QgsFeature()
@@ -689,9 +689,7 @@ class Mapflow:
                 aoi_layer.dataProvider().addFeatures([aoi])
                 aoi_layer.updateExtents()
                 # Create a temp layer for the image extent
-                feature_id = self.dlg.maxarMetadataTable.item(
-                    selected_row, config.MAXAR_METADATA_ID_COLUMN_INDEX
-                ).text()
+                feature_id = selected_image[config.MAXAR_METADATA_ID_COLUMN_INDEX].text()
                 image_extent_layer = QgsVectorLayer('Polygon?crs=epsg:4326', 'image extent', 'memory')
                 extent = self.maxar_metadata_extents[feature_id]
                 image_extent_layer.dataProvider().addFeatures([extent])
