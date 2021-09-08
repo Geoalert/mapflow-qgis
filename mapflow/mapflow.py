@@ -200,6 +200,8 @@ class Mapflow:
             self.metadata_layer.selectByExpression(f"featureId='{image_id}'")
         except RuntimeError:  # layer has been deleted
             pass
+        # Sync the raster combo in the Processing tab so user doesn't forget to set Maxar there
+        self.dlg.rasterCombo.setCurrentText(self.dlg.customProviderCombo.currentText())
 
     def remove_custom_provider(self) -> None:
         """Delete a an entry from the list of providers and custom_providers.json.
@@ -650,7 +652,7 @@ class Mapflow:
                 params['url'] += f'&CONNECTID={self.custom_providers[raster_option]["connectId"]}&'
                 image_id = self.get_maxar_image_id()
                 if image_id:
-                    params['url'] += f'CQL_FILTER=feature_id%27{image_id}%27'
+                    params['url'] += f'CQL_FILTER=feature_id=%27{image_id}%27'
             params['source_type'] = self.custom_providers[raster_option]['type']
             if params['source_type'] == 'wms':
                 params['target_resolution'] = 0.000005  # for the 18th zoom
@@ -658,7 +660,6 @@ class Mapflow:
             params['raster_login'] = self.dlg.customProviderLogin.text()
             params['raster_password'] = self.dlg.customProviderPassword.text()
             self.save_custom_provider_auth()
-            #!!!! MOVE self.alert(self.tr('Please, be aware that you may be charged by the imagery provider!'))
         worker_kwargs['params'] = params
         if not self.dlg.useImageExtentAsAOI.isChecked():
             aoi_layer = self.dlg.polygonCombo.currentLayer()
