@@ -5,8 +5,9 @@ PROCESSING_TABLE_ID_COLUMN_INDEX = 5
 PROCESSING_DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S.%f%z'  # as returned by Mapflow
 # MAXAR
 MAXAR_PRODUCTS = ('Maxar SecureWatch', 'Maxar Vivid', 'Maxar Basemaps')
-MAXAR_METADATA_ATTRIBUTES = ('featureId', 'sourceUnit', 'productType', 'colorBandOrder', 'cloudCover', 'acquisitionDate')
 MAXAR_METADATA_URL = 'https://securewatch.digitalglobe.com/catalogservice/wfsaccess'
+MAXAR_METADATA_ATTRIBUTES = 'sourceUnit', 'productType', 'colorBandOrder', 'cloudCover', 'acquisitionDate', 'featureId'
+MAXAR_METADATA_ID_COLUMN_INDEX = MAXAR_METADATA_ATTRIBUTES.index('featureId')
 MAXAR_METADATA_REQUEST_PARAMS = {
     'REQUEST': 'GetFeature',
     'TYPENAME': 'DigitalGlobe:FinishedFeature',

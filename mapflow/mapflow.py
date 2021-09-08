@@ -116,8 +116,7 @@ class Mapflow:
         self.selected_processings: List[Dict[str, Union[str, int]]] = []
         # Hide the ID columns as only needed for table operations, not the user
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
-        self.dlg.maxarMetadataTable.setColumnHidden(config.MAXAR_METADATA_ATTRIBUTES.index('featureId'), True)
-        self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise, Maxar SW will be set due to cobo sync
+        self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
         # SET UP SIGNALS & SLOTS
         # Connect buttons
         self.dlg.logoutButton.clicked.connect(self.logout)
@@ -144,7 +143,7 @@ class Mapflow:
         self.dlg.zoomLimit.valueChanged.connect(lambda value: self.settings.setValue('zoomLimit', value))
         self.dlg.rasterCombo.currentTextChanged.connect(lambda text: self.dlg.customProviderCombo.setCurrentText(text))
         # Maxar
-        self.dlg.maxarMetadataTable.cellClicked.connect(self.highlight_maxar_image)
+        self.dlg.maxarMetadataTable.itemSelectionChanged.connect(self.highlight_maxar_image)
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
         self.dlg.zoomLimitMaxar.toggled.connect(lambda state: self.settings.setValue('zoomLimitMaxar', state))
         self.dlg.maxarMetadataTable.cellDoubleClicked.connect(self.maxar_double_click_preview)
@@ -189,16 +188,16 @@ class Mapflow:
         self.restore_maxar_metadata_product()  # align the provider combo with the table
         self.preview()
 
-    def highlight_maxar_image(self, row) -> None:
+    def highlight_maxar_image(self) -> None:
         """Select an image footprint in Maxar metadata layer when it's selected in the table.
 
         Is called by selecting (clicking on) a row in Maxar metadata table.
-        :param row: The index of the selected row (0-based).
         """
         self.restore_maxar_metadata_product()
+        selected_items = self.dlg.maxarMetadataTable.selectedItems()
+        image_id = selected_items[config.MAXAR_METADATA_ID_COLUMN_INDEX].text() if selected_items else ''
         try:
-            self.metadata_layer.removeSelection()
-            self.metadata_layer.select(row)
+            self.metadata_layer.selectByExpression(f"featureId='{image_id}'")
         except RuntimeError:  # layer has been deleted
             pass
 
@@ -485,29 +484,22 @@ class Mapflow:
         # Get the list of features (don't use the generator itself, or it'll get exhausted)
         features = list(self.metadata_layer.getFeatures())
         # Memorize IDs and extents to be able to clip the user's AOI to image on processing creation
-        self.maxar_metadata_extents: List[QgsFeature] = {feature['featureId']: feature for feature in features}
+        self.maxar_metadata_extents = {feature['featureId']: feature for feature in features}
         # Fill out the table
         self.dlg.maxarMetadataTable.setRowCount(len(features))
         # Round up cloud cover to two decimal numbers
         for feature in features:
-            # Use 'or 0' to handle NULL values that don't have a __round__ method
-            feature['cloudCover'] = round(feature['cloudCover'] or 0, 2)
+            if feature['cloudCover']:  # is not NULL, round the value
+                feature['cloudCover'] = round(feature['cloudCover'], 2)
             feature['acquisitionDate'] = feature['acquisitionDate'][:10]  # only date
         for row, feature in enumerate(features):
             for col, attr in enumerate(config.MAXAR_METADATA_ATTRIBUTES):
                 self.dlg.maxarMetadataTable.setItem(row, col, QTableWidgetItem(str(feature[attr])))
 
-    def get_maxar_cql_filter(self) -> str:
-        """Construct a CQL Filter parameter for a Maxar URL.
-
-        If user wants to preview or process a single image, they select a row in the metadata table.
-        The image identified by that row will be specified in the query filter.
-        """
-        cql_filter = 'CQL_FILTER='
-        if self.dlg.maxarMetadataTable.selectedItems():  # won't contain the id bc the column is hidden
-            selected_row = self.dlg.maxarMetadataTable.currentRow()
-            cql_filter += f"feature_id=%27{self.dlg.maxarMetadataTable.item(selected_row, 0).text()}%27"
-        return cql_filter
+    def get_maxar_image_id(self) -> str:
+        """Return the Feature ID of the Maxar image selected in the metadata table, or empty string."""
+        selected_cells = self.dlg.maxarMetadataTable.selectedItems()
+        return selected_cells[config.MAXAR_METADATA_ID_COLUMN_INDEX].text() if selected_cells else ''
 
     def calculate_aoi_area(self, arg: Optional[Union[bool, QgsMapLayer, List[QgsFeature]]]) -> None:
         """Display the area of the processing AOI in sq. km above the processings table.
@@ -656,7 +648,9 @@ class Mapflow:
             params['url'] = self.custom_providers[raster_option]['url']
             if raster_option in config.MAXAR_PRODUCTS:  # add the Connect ID and CQL Filter, if any
                 params['url'] += f'&CONNECTID={self.custom_providers[raster_option]["connectId"]}&'
-                params['url'] += self.get_maxar_cql_filter()
+                image_id = self.get_maxar_image_id()
+                if image_id:
+                    params['url'] += f'CQL_FILTER=feature_id%27{image_id}%27'
             params['source_type'] = self.custom_providers[raster_option]['type']
             if params['source_type'] == 'wms':
                 params['target_resolution'] = 0.000005  # for the 18th zoom
@@ -694,7 +688,9 @@ class Mapflow:
                 aoi_layer.dataProvider().addFeatures([aoi])
                 aoi_layer.updateExtents()
                 # Create a temp layer for the image extent
-                feature_id = self.dlg.maxarMetadataTable.item(selected_row, 0).text()
+                feature_id = self.dlg.maxarMetadataTable.item(
+                    selected_row, config.MAXAR_METADATA_ID_COLUMN_INDEX
+                ).text()
                 image_extent_layer = QgsVectorLayer('Polygon?crs=epsg:4326', 'image extent', 'memory')
                 extent = self.maxar_metadata_extents[feature_id]
                 image_extent_layer.dataProvider().addFeatures([extent])
@@ -752,10 +748,14 @@ class Mapflow:
         provider = self.dlg.customProviderCombo.currentText()
         url = self.custom_providers[provider]['url']
         max_zoom = self.dlg.zoomLimit.value()
+        layer_name = provider
         if provider in config.MAXAR_PRODUCTS:
             url = url.replace('jpeg', 'png')
             url += f'&CONNECTID={self.custom_providers[provider]["connectId"]}&'  # add product id
-            url += self.get_maxar_cql_filter()  # request single image if selected in the table
+            image_id = self.get_maxar_image_id()  # request a single image if selected in the table
+            if image_id:
+                url += f'CQL_FILTER=feature_id=%27{image_id}%27'
+                layer_name = f'{layer_name} {image_id}'
             max_zoom = 14 if self.dlg.zoomLimitMaxar.isChecked() else 18
         # Can use urllib.parse but have to specify safe='/?:{}' which sort of defeats the purpose
         url_escaped = url.replace('&', '%26').replace('=', '%3D')
@@ -767,10 +767,8 @@ class Mapflow:
             'username': self.dlg.customProviderLogin.text(),
             'password': self.dlg.customProviderPassword.text()
         }
-        if self.dlg.maxarMetadataTable.selectedItems():  # won't contain the id bc the column is hidden
-            provider += f' {self.dlg.maxarMetadataTable.item(self.dlg.maxarMetadataTable.currentRow(), 0).text()}'
         uri = '&'.join(f'{key}={val}' for key, val in params.items())  # don't url-encode it
-        layer = QgsRasterLayer(uri, provider, 'wms')
+        layer = QgsRasterLayer(uri, layer_name, 'wms')
         if layer.isValid():
             self.add_layer(layer)
         else:
