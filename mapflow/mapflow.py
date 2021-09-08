@@ -37,19 +37,20 @@ class Mapflow:
         self.iface = iface
         self.main_window = iface.mainWindow()
         self.project = QgsProject.instance()
-        self.layer_tree_root = self.project.layerTreeRoot()  # for adding layers
-        self.layer_group = None  # init as empty, will be set when first layer is added
         self.plugin_dir = os.path.dirname(__file__)
         self.plugin_name = config.PLUGIN_NAME  # aliased here to be overloaded in submodules
-        # Init toolbar and toolbar buttons
-        self.actions = []
-        self.toolbar = self.iface.addToolBar(self.plugin_name)
-        self.toolbar.setObjectName(self.plugin_name)
         # QGIS Settings will be used to store user credentials and various UI element state
         self.settings = QgsSettings()
         self.read_mapflow_env()  # get the server environment to connect to (for admins)
         # Create a namespace for the plugin settings
         self.settings.beginGroup(self.plugin_name.lower())
+        # By default, plugin adds layers to a group unless user explicitly deletes it
+        self.add_layers_to_group = True
+        self.layer_tree_root = self.project.layerTreeRoot()
+        # Init toolbar and toolbar buttons
+        self.actions = []
+        self.toolbar = self.iface.addToolBar(self.plugin_name)
+        self.toolbar.setObjectName(self.plugin_name)
         # Translation
         locale = QSettings().value('locale/userLocale')[0:2]
         locale_path = os.path.join(self.plugin_dir, 'i18n', f'mapflow_{locale}.qm')
@@ -155,22 +156,30 @@ class Mapflow:
         deleted by the user, assume they prefer to have the layers outside the group, and add them to root.
         :param layer: A vector or raster layer to be added.
         """
-        # Update or create a layer group
-        self.layer_group = self.layer_group or self.layer_tree_root.insertGroup(0, self.plugin_name)
-        # To be added to the group, the layer has to be added to the project first
-        self.project.addMapLayer(layer, addToLegend=False)
-        try:  # now add it to the group
-            self.layer_group.insertLayer(0, layer)  # specify 0 or else it adds it to the bottom
-        except RuntimeError:  # the group has been deleted
-            self.layer_tree_root.insertLayer(0, layer)
+        self.layer_group = self.layer_tree_root.findGroup(self.settings.value('layerGroup'))
+        if self.add_layers_to_group:
+            if not self.layer_group:  # сreate a layer group
+                self.layer_group = self.layer_tree_root.insertGroup(0, self.plugin_name)
+                self.layer_group.setExpanded(True)
+                self.settings.setValue('layerGroup', self.plugin_name)
+                # If the group has been deleted, assume user wants to add layers to root, memorize it
+                self.layer_group.destroyed.connect(lambda: setattr(self, 'add_layers_to_group', False))
+                # Let user rename the group, memorize the new name
+                self.layer_group.nameChanged.connect(lambda _, name: self.settings.setValue('layerGroup', name))
+            # To be added to group, layer has to be added to project first
+            self.project.addMapLayer(layer, addToLegend=False)
+            # Explcitly add layer to the position 0 or else it adds it to bottom
+            self.layer_group.insertLayer(0, layer)
+        else:  # assume user opted to not use a group, add layers as usual
+            self.project.addMapLayer(layer)
 
     def restore_maxar_metadata_product(self) -> None:
         """Reset provider combo to match the current metadata table state.
 
-        SecureWatch single-image requests are constructed based on the current selection 
-        in the metadata table and with the current item in the provider list. The user may 
-        change list item after requesting metadata. To avoid ambiguity, this function set 
-        the provider combo to the current metadata product. 
+        SecureWatch single-image requests are constructed based on the current selection
+        in the metadata table and with the current item in the provider list. The user may
+        change list item after requesting metadata. To avoid ambiguity, this function set
+        the provider combo to the current metadata product.
         """
         if self.dlg.customProviderCombo.currentText() != self.current_maxar_metadata_product:
             self.dlg.customProviderCombo.setCurrentText(self.current_maxar_metadata_product)
@@ -955,10 +964,23 @@ class Mapflow:
         This function is referenced by the QGIS plugin loading system, so it can't be renamed.
         Since there are submodules, the various UI texts are set dynamically.
         """
+        # Set dialog titles dynamically so it can be used as a submodule
         self.dlg.setWindowTitle(self.plugin_name)
         self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
         icon_path = os.path.join(self.plugin_dir, 'icon.png')
         self.add_action(icon_path, text=self.plugin_name, callback=self.run)
+        # Find or create a group for plugin layers
+        self.layer_group = None
+        self.project.readProject.connect(self.set_layer_group)
+
+    def set_layer_group(self) -> None:
+        """"""
+        self.layer_group = self.layer_tree_root.findGroup(self.settings.value('layerGroup'))
+        if self.layer_group:
+            # If the group has been deleted, assume user wants to add layers to root, memorize it
+            self.layer_group.destroyed.connect(lambda: setattr(self, 'add_layers_to_group', False))
+            # Let user rename the group, memorize the new name
+            self.layer_group.nameChanged.connect(lambda _, name: self.settings.setValue('layerGroup', name))
 
     def unload(self) -> None:
         """Remove the plugin menu item and icon from QGIS GUI."""
