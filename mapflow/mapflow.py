@@ -1076,16 +1076,16 @@ class Mapflow:
         wds: List[str] = [wd['name'] for wd in res.json()['workflowDefs']]
         self.dlg.workflowDefinitionCombo.clear()
         self.dlg.workflowDefinitionCombo.addItems(wds)
-        # Fetch processings
-        thread = QThread(self.main_window)
-        self.worker = ProcessingFetcher(f'{self.server}/rest/processings', self.server_basic_auth)
-        self.worker.moveToThread(thread)
-        thread.started.connect(self.worker.fetch_processings)
-        self.worker.fetched.connect(self.fill_out_processings_table)
-        self.worker.error.connect(lambda error: self.log(error))
-        self.worker.finished.connect(thread.quit)
-        self.dlg.finished.connect(thread.requestInterruption)
-        thread.start()
+        if not hasattr(self, 'worker'):  # plugin is 1st opened after init
+            # Fetch processings
+            thread = QThread(self.main_window)
+            self.worker = ProcessingFetcher(f'{self.server}/rest/processings', self.server_basic_auth)
+            self.worker.moveToThread(thread)
+            thread.started.connect(self.worker.fetch_processings)
+            self.worker.fetched.connect(self.fill_out_processings_table)
+            self.worker.error.connect(lambda error: self.log(error))
+            self.worker.finished.connect(thread.quit)
+            thread.start()
         # Enable/disable the use of image extent as AOI based on the current raster combo layer
         self.toggle_use_image_extent_as_aoi(self.dlg.rasterCombo.currentLayer())
         # Calculate area of the current AOI layer or feature
