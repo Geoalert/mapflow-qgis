@@ -281,12 +281,19 @@ class Mapflow:
 
         :param provider: Provider's name, as in the config and dropdown list.
         """
+        # Fill out the edit dialog with the current data
         self.dlg_custom_provider.setWindowTitle(provider)
+        self.dlg_custom_provider.name.setText(provider)
+        self.dlg_custom_provider.url.setText(self.custom_providers[provider]['url'])
+        self.dlg_custom_provider.type.setCurrentText(self.custom_providers[provider]['type'])
+        # Open the edit dialog
         while self.dlg_custom_provider.exec():
             if not self.validate_custom_provider():
                 continue
             name = self.dlg_custom_provider.name.text()
+            # Remove the old definition first
             del self.custom_providers[provider]
+            # Add the new definition
             self.custom_providers[name] = {
                 'url': self.dlg_custom_provider.url.text(),
                 'type': self.dlg_custom_provider.type.currentText()
