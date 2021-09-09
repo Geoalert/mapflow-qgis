@@ -30,13 +30,16 @@ class ProcessingFetcher(QObject):
         """Keep polling Mapflow to retrieve the current status for each of the user's processings.
 
         Start an infinite loop that requests the user's processings and if any of those haven't finished,
-        waits for {config.PROCESSING_LIST_REFRESH_INTERVAL}s and continues, or breaks otherwise.
-        It also checks at the start of iteration if interuption has been requested, and if so, breaks too.
+        waits for <PROCESSING_LIST_REFRESH_INTERVAL> and continues, or breaks otherwise. It also checks at
+        the start of iteration if interuption has been requested, and if so, breaks too.
 
         After every successful processing fetch, it sends a signal to the main thread and supplies the fetched
         processings in a JSON-formatted dict for the main thread to fill out the processings table.
         """
         while True:
+            if self.thread().isInterruptionRequested():
+                self.finished.emit()
+                return
             try:
                 r = requests.get(self.url, auth=self.auth, timeout=10)
                 r.raise_for_status()
