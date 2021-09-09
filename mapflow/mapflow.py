@@ -988,7 +988,10 @@ class Mapflow:
 
     def unload(self) -> None:
         """Remove the plugin menu item and icon from QGIS GUI."""
-        self.worker.thread().requestInterruption()
+        try:
+            self.worker.thread().requestInterruption()
+        except AttributeError:  # user quit QGIS or reload the plugin w/out first opening it
+            pass
         self.dlg.close()
         self.dlg_login.close()
         for action in self.actions:
