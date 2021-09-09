@@ -988,6 +988,7 @@ class Mapflow:
 
     def unload(self) -> None:
         """Remove the plugin menu item and icon from QGIS GUI."""
+        self.worker.thread().requestInterruption()
         self.dlg.close()
         self.dlg_login.close()
         for action in self.actions:
@@ -1044,6 +1045,7 @@ class Mapflow:
             for field in (self.dlg_login.loginField, self.dlg_login.passwordField):
                 field.clear()
         self.logged_in = False
+        self.worker.thread().requestInterruption()
         # Assume user wants to log into another account or to another server
         self.run()
 
@@ -1091,7 +1093,7 @@ class Mapflow:
         self.worker.fetched.connect(self.fill_out_processings_table)
         self.worker.error.connect(lambda error: self.log(error))
         self.worker.finished.connect(thread.quit)
-        self.dlg.finished.connect(thread.requestInterruption)
+        # self.dlg.finished.connect(thread.requestInterruption)
         thread.start()
         # Enable/disable the use of image extent as AOI based on the current raster combo layer
         self.toggle_use_image_extent_as_aoi(self.dlg.rasterCombo.currentLayer())
