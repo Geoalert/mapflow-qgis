@@ -182,7 +182,7 @@
      </column>
      <column>
       <property name="text">
-       <string>ID</string>
+       <string notr="true">ID</string>
       </property>
       <property name="textAlignment">
        <set>AlignCenter</set>
@@ -403,7 +403,7 @@
           <enum>Qt::NoFocus</enum>
          </property>
          <property name="text">
-          <string>...</string>
+          <string notr="true">...</string>
          </property>
          <property name="iconSize">
           <size>

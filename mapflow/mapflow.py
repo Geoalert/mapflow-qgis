@@ -75,13 +75,6 @@ class Mapflow:
             self.tr('Mapflow requires Internet connection'),
             parent=self.main_window
         )
-        # Tweak URL's considering the user's locale
-        if locale == 'ru':
-            self.dlg.howToConnect.setText(self.dlg.howToConnect.text().replace('docs.mapflow', 'ru.docs.mapflow'))
-            self.dlg.helpText.setText(self.dlg.helpText.text()
-                                      .replace('docs.mapflow', 'ru.docs.mapflow')
-                                      .replace('http://mapflow.ai', 'http://mapflow.ai/ru')
-                                      )
         # Display the plugin's version in the Help tab
         metadata_parser = ConfigParser()
         metadata_parser.read(os.path.join(self.plugin_dir, 'metadata.txt'))
@@ -967,7 +960,7 @@ class Mapflow:
         self.project.readProject.connect(self.set_layer_group)
 
     def set_layer_group(self) -> None:
-        """"""
+        """Setup a legend group where all layers created by the plugin will be added."""
         self.layer_group = self.layer_tree_root.findGroup(self.settings.value('layerGroup'))
         if self.layer_group:
             # If the group has been deleted, assume user wants to add layers to root, memorize it
