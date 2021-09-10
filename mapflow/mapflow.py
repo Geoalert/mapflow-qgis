@@ -3,7 +3,7 @@ import json
 import os.path
 from datetime import datetime, timedelta, timezone
 from configparser import ConfigParser
-from typing import Callable, List, Dict, Optional, Union
+from typing import List, Dict, Optional, Union
 
 import requests
 from PyQt5.QtCore import QSettings, QCoreApplication, QTranslator, QPersistentModelIndex, QModelIndex, QThread, Qt
@@ -48,7 +48,6 @@ class Mapflow:
         self.add_layers_to_group = True
         self.layer_tree_root = self.project.layerTreeRoot()
         # Init toolbar and toolbar buttons
-        self.actions = []
         self.toolbar = self.iface.addToolBar(self.plugin_name)
         self.toolbar.setObjectName(self.plugin_name)
         # Translation
@@ -950,22 +949,6 @@ class Mapflow:
         # From config, not self.plugin_name bc the latter is overloaded in submodules which break translation
         return QCoreApplication.translate(config.PLUGIN_NAME, message)
 
-    def add_action(self, icon_path: str, text: str, callback: Callable, enabled_flag: bool = True) -> QAction:
-        """Adds actionable icons to the toolbar.
-
-        :param icon_path: The path to an image file that 'll be used for the icon
-        :param text: The name of the button (displayed on hover)
-        :param callback: A function or method to run when the button's clicked
-        :param enabled_flag: Whether the button is enabled by default
-        """
-        icon = QIcon(icon_path)
-        action = QAction(icon, text, self.main_window)
-        action.triggered.connect(callback)
-        action.setEnabled(enabled_flag)
-        self.toolbar.addAction(action)
-        self.actions.append(action)
-        return action
-
     def initGui(self) -> None:
         """Create the menu entries and toolbar icons inside the QGIS GUI.
 
@@ -975,8 +958,10 @@ class Mapflow:
         # Set dialog titles dynamically so it can be used as a submodule
         self.dlg.setWindowTitle(self.plugin_name)
         self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
-        icon_path = os.path.join(self.plugin_dir, 'icon.png')
-        self.add_action(icon_path, text=self.plugin_name, callback=self.run)
+        icon = QIcon(os.path.join(self.plugin_dir, 'icon.png'))
+        plugin_button = QAction(icon, self.plugin_name, self.main_window)
+        plugin_button.triggered.connect(self.run)
+        self.toolbar.addAction(plugin_button)
         # Find or create a group for plugin layers
         self.layer_group = None
         self.project.readProject.connect(self.set_layer_group)
@@ -991,16 +976,13 @@ class Mapflow:
             self.layer_group.nameChanged.connect(lambda _, name: self.settings.setValue('layerGroup', name))
 
     def unload(self) -> None:
-        """Remove the plugin menu item and icon from QGIS GUI."""
+        """Remove the plugin icon & toolbar from QGIS GUI."""
         try:
             self.worker.thread().requestInterruption()
         except AttributeError:  # user quit QGIS or reload the plugin w/out first opening it
             pass
-        self.dlg.close()
-        self.dlg_login.close()
-        for action in self.actions:
-            self.iface.removePluginVectorMenu(self.plugin_name, action)
-            self.iface.removeToolBarIcon(action)
+        for dlg in self.dlg, self.dlg_login, self.dlg_connect_id, self.dlg_custom_provider:
+            dlg.close()
         del self.toolbar
 
     def read_mapflow_env(self) -> None:
