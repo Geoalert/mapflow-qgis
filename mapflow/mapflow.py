@@ -19,7 +19,7 @@ from qgis.core import (
 from .dialogs import MainDialog, LoginDialog, CustomProviderDialog, ConnectIdDialog
 from .workers import ProcessingFetcher, ProcessingCreator
 from . import helpers, config
-from .resources_rc import *  # is somehow used implicitly by QGIS; if removed, icons may or may not show
+from .resources_rc import *  # used implicitly by QGIS; if removed, icons may not show in QGIS < 3.16
 
 
 class Mapflow:
@@ -494,16 +494,21 @@ class Mapflow:
         features = list(self.metadata_layer.getFeatures())
         # Memorize IDs and extents to be able to clip the user's AOI to image on processing creation
         self.maxar_metadata_extents = {feature['featureId']: feature for feature in features}
+        # Format decimals and dates
+        for feature in features:
+            feature['acquisitionDate'] = feature['acquisitionDate'][:10]  # only date
+            # Round up cloud cover to two decimal numbers if it's provided
+            if feature['cloudCover']:
+                feature['cloudCover'] = round(feature['cloudCover'], 2)
         # Fill out the table
         self.dlg.maxarMetadataTable.setRowCount(len(features))
-        # Round up cloud cover to two decimal numbers
-        for feature in features:
-            if feature['cloudCover']:  # is not NULL, round the value
-                feature['cloudCover'] = round(feature['cloudCover'], 2)
-            feature['acquisitionDate'] = feature['acquisitionDate'][:10]  # only date
+        # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
+        self.dlg.processingsTable.setSortingEnabled(False)
         for row, feature in enumerate(features):
             for col, attr in enumerate(config.MAXAR_METADATA_ATTRIBUTES):
                 self.dlg.maxarMetadataTable.setItem(row, col, QTableWidgetItem(str(feature[attr])))
+        # Turn sorting on again
+        self.dlg.processingsTable.setSortingEnabled(True)
 
     def get_maxar_image_id(self) -> str:
         """Return the Feature ID of the Maxar image selected in the metadata table, or empty string."""
@@ -924,9 +929,9 @@ class Mapflow:
             # Extract WD names from WD objects
             processing['workflowDef'] = processing['workflowDef']['name']
         # Fill out the table and restore selection
-        columns = ('name', 'workflowDef', 'status', 'percentCompleted', 'created', 'id')
+        columns = 'name', 'workflowDef', 'status', 'percentCompleted', 'created', 'id'
         selected_processing_names = [processing['name'] for processing in self.selected_processings]
-        # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off while inserting
+        # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
         self.dlg.processingsTable.setSortingEnabled(False)
         for row, processing in enumerate(self.processings):
             for col, attr in enumerate(columns):
@@ -935,8 +940,7 @@ class Mapflow:
                 self.dlg.processingsTable.selectRow(row)
         # Turn sorting on again
         self.dlg.processingsTable.setSortingEnabled(True)
-        # Sort by creation date (4th column) descending
-        self.dlg.processingsTable.sortItems(4, Qt.DescendingOrder)
+        self.dlg.processingsTable.sortItems(columns.index('created'), Qt.DescendingOrder)
 
     def tr(self, message: str) -> str:
         """Localize a UI element text.
