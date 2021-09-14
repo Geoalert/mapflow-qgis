@@ -748,16 +748,23 @@ class Mapflow:
         Is called by clicking the preview button.
         """
         self.save_custom_provider_auth()
+        username = self.dlg.customProviderLogin.text()
+        password = self.dlg.customProviderPassword.text()
         provider = self.dlg.customProviderCombo.currentText()
         url = self.custom_providers[provider]['url']
         max_zoom = self.dlg.zoomLimit.value()
         layer_name = provider
         if provider in config.MAXAR_PRODUCTS:
-            url = url.replace('jpeg', 'png')
-            url += f'&CONNECTID={self.custom_providers[provider]["connectId"]}&'  # add product id
+            if username or password:  # own account
+                url = url.replace('jpeg', 'png')  # for transparency support
+            else:  # our account; send to our endpoint
+                url = self.server + '/rest/png?TileRow={y}&TileCol={x}&TileMatrix={z}'
+                username = self.login
+                password = self.password
+            url += f'&CONNECTID={self.custom_providers[provider]["connectId"]}'  # add product id
             image_id = self.get_maxar_image_id()  # request a single image if selected in the table
             if image_id:
-                url += f'CQL_FILTER=feature_id=%27{image_id}%27'
+                url += f'&CQL_FILTER=feature_id=%27{image_id}%27'
                 layer_name = f'{layer_name} {image_id}'
             max_zoom = 14 if self.dlg.zoomLimitMaxar.isChecked() else 18
         # Can use urllib.parse but have to specify safe='/?:{}' which sort of defeats the purpose
@@ -767,8 +774,8 @@ class Mapflow:
             'url': url_escaped,
             'zmax':  max_zoom,
             'zmin': 0,
-            'username': self.dlg.customProviderLogin.text(),
-            'password': self.dlg.customProviderPassword.text()
+            'username': username,
+            'password': password
         }
         uri = '&'.join(f'{key}={val}' for key, val in params.items())  # don't url-encode it
         layer = QgsRasterLayer(uri, layer_name, 'wms')
