@@ -2,6 +2,21 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="ru_RU" sourcelanguage="en">
 <context>
+    <name>QPlatformTheme</name>
+    <message>
+        <source>Cancel</source>
+        <translation>Отмена</translation>
+    </message>
+    <message>
+        <source>&amp;No</source>
+        <translation>Нет</translation>
+    </message>
+    <message>
+        <source>&amp;Yes</source>
+        <translation>Да</translation>
+    </message>
+</context>
+<context>
     <name>Dialog</name>
     <message>
         <location filename="../static/ui/login_dialog.ui" line="23"/>
