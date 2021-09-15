@@ -495,12 +495,12 @@ class Mapflow:
         # Fill out the table
         self.dlg.maxarMetadataTable.setRowCount(len(features))
         # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
-        self.dlg.processingsTable.setSortingEnabled(False)
+        self.dlg.maxarMetadataTable.setSortingEnabled(False)
         for row, feature in enumerate(features):
             for col, attr in enumerate(config.MAXAR_METADATA_ATTRIBUTES):
                 self.dlg.maxarMetadataTable.setItem(row, col, QTableWidgetItem(str(feature[attr])))
         # Turn sorting on again
-        self.dlg.processingsTable.setSortingEnabled(True)
+        self.dlg.maxarMetadataTable.setSortingEnabled(True)
 
     def get_maxar_image_id(self) -> str:
         """Return the Feature ID of the Maxar image selected in the metadata table, or empty string."""
