@@ -119,11 +119,6 @@
         <translation>Рабочая папка:</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="629"/>
-        <source>...</source>
-        <translation></translation>
-    </message>
-    <message>
         <location filename="../static/ui/main_dialog.ui" line="1113"/>
         <source>Help</source>
         <translation>Помощь</translation>
@@ -264,6 +259,11 @@
         <source>Type</source>
         <translation>Тип</translation>
     </message>
+    <message>
+        <location filename="../static/ui/custom_provider_dialog.ui" line="14"/>
+        <source>Custom provider</source>
+        <translation>Добавить источник</translation>
+    </message>
 </context>
 <context>
     <name>Mapflow</name>
@@ -343,7 +343,7 @@
         <translation>Пожалуйста, подождите пока обработка выполняется. Это может занять несколько минут</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="834"/>
+        <location filename="../mapflow.py" line="841"/>
         <source>Error saving results! See QGIS logs.</source>
         <translation>Ошибка сохранения результатов обработки. Более подробная информация в логе QGIS.</translation>
     </message>
@@ -353,7 +353,7 @@
         <translation>Для работы с Mapflow требуется Интернет соединение</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="906"/>
+        <location filename="../mapflow.py" line="913"/>
         <source> finished. Double-click it in the table to download the results.</source>
         <translation> завершилась. Дважды кликните на нее в таблице чтобы загрузить результаты.</translation>
     </message>
@@ -373,7 +373,7 @@
         <translation>Неверные реквизиты</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="953"/>
+        <location filename="../mapflow.py" line="960"/>
         <source>Log in</source>
         <translation>Вход</translation>
     </message>
@@ -393,12 +393,12 @@
         <translation>Выберите продукт Максар в списке выше</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="778"/>
+        <location filename="../mapflow.py" line="785"/>
         <source>Sorry, we couldn&apos;t load: </source>
         <translation>Мы не смогли загрузить: </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="845"/>
+        <location filename="../mapflow.py" line="852"/>
         <source>Couldn&apos;t load the results</source>
         <translation>Ошибка загрузки результатов</translation>
     </message>
