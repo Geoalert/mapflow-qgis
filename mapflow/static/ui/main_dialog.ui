@@ -92,20 +92,8 @@
        <height>500</height>
       </size>
      </property>
-     <property name="baseSize">
-      <size>
-       <width>0</width>
-       <height>0</height>
-      </size>
-     </property>
-     <property name="mouseTracking">
-      <bool>false</bool>
-     </property>
      <property name="focusPolicy">
       <enum>Qt::NoFocus</enum>
-     </property>
-     <property name="sizeAdjustPolicy">
-      <enum>QAbstractScrollArea::AdjustIgnored</enum>
      </property>
      <property name="autoScroll">
       <bool>false</bool>
@@ -125,14 +113,11 @@
      <property name="columnCount">
       <number>6</number>
      </property>
-     <attribute name="horizontalHeaderCascadingSectionResizes">
-      <bool>false</bool>
-     </attribute>
      <attribute name="horizontalHeaderMinimumSectionSize">
-      <number>67</number>
+      <number>0</number>
      </attribute>
      <attribute name="horizontalHeaderDefaultSectionSize">
-      <number>116</number>
+      <number>100</number>
      </attribute>
      <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
       <bool>true</bool>
@@ -374,6 +359,13 @@
          </property>
          <property name="showCrs">
           <bool>true</bool>
+         </property>
+         <property name="excludedProviders">
+          <stringlist notr="true">
+           <string>wms</string>
+           <string>postgresraster</string>
+           <string>grassraster</string>
+          </stringlist>
          </property>
         </widget>
        </item>
