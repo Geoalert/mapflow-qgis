@@ -9,7 +9,7 @@ import requests
 from PyQt5.QtCore import QSettings, QCoreApplication, QTranslator, QPersistentModelIndex, QModelIndex, QThread, Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QMessageBox, QFileDialog, QTableWidgetItem, QAction
-from qgis import processing
+from qgis import processing as qgis_processing  # to avoid collisions
 from qgis.gui import QgisInterface
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, QgsCoordinateReferenceSystem,
@@ -699,7 +699,7 @@ class Mapflow:
                 image_extent_layer.dataProvider().addFeatures([extent])
                 aoi_layer.updateExtents()
                 # Find the intersection and pass it to the worker
-                intersection = processing.run(
+                intersection = qgis_processing.run(
                     'qgis:intersection',
                     {'INPUT': aoi_layer, 'OVERLAY': image_extent_layer, 'OUTPUT': 'memory:'}
                 )['OUTPUT']
@@ -805,11 +805,11 @@ class Mapflow:
             return
         r.raise_for_status()
         # Add the source raster (COG) if it has been created
-        tif_url = [processing['rasterLayer']['tileUrl'] for processing in self.processings if processing['id'] == pid]
+        tif_url = next(filter(lambda p: p['id'] == pid, self.processings))['rasterLayer'].get('tileUrl')
         if tif_url:
             params = {
                 'type': 'xyz',
-                'url': tif_url[0],
+                'url': tif_url,
                 'zmin': 0,
                 'zmax': 18,
                 'username': self.dlg_login.loginField.text(),
