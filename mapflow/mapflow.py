@@ -139,6 +139,11 @@ class Mapflow:
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
         self.dlg.zoomLimitMaxar.toggled.connect(lambda state: self.settings.setValue('zoomLimitMaxar', state))
         self.dlg.maxarMetadataTable.cellDoubleClicked.connect(self.maxar_double_click_preview)
+        self.dlg.finished.connect(self.f)
+
+    def f(self):
+        state = self.dlg.processingsTable.horizontalHeader().saveState()
+        self.settings.setValue('processingsTableHeaderState', state)
 
     def add_layer(self, layer: QgsMapLayer) -> None:
         """Add layers created by the plugin to the legend.
@@ -965,6 +970,9 @@ class Mapflow:
         # Find or create a group for plugin layers
         self.layer_group = None
         self.project.readProject.connect(self.set_layer_group)
+        self.dlg.processingsTable.horizontalHeader().restoreState(
+            self.settings.value('processingsTableHeaderState', b'')
+        )
 
     def set_layer_group(self) -> None:
         """Setup a legend group where all layers created by the plugin will be added."""
