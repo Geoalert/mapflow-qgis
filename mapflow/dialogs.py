@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from PyQt5 import uic
-from PyQt5.QtWidgets import QWidget
+from PyQt5.QtWidgets import QWidget, QHeaderView
 from qgis.core import QgsMapLayerProxyModel
 
 
@@ -13,6 +13,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         """Constructor."""
         super().__init__(parent)
         self.setupUi(self)
+        self.processingsTable.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         # Restrict combos to relevant layer types; QGIS 3.10-3.20 (at least) bugs up if set in .ui
         self.maxarAOICombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
         self.polygonCombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)

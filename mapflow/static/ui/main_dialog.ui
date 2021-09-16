@@ -6,291 +6,52 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>630</width>
-    <height>600</height>
+    <width>650</width>
+    <height>589</height>
    </rect>
   </property>
-  <property name="sizePolicy">
-   <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-    <horstretch>0</horstretch>
-    <verstretch>0</verstretch>
-   </sizepolicy>
-  </property>
-  <property name="minimumSize">
-   <size>
-    <width>630</width>
-    <height>600</height>
-   </size>
-  </property>
-  <property name="maximumSize">
-   <size>
-    <width>630</width>
-    <height>600</height>
-   </size>
-  </property>
   <property name="windowTitle">
-   <string>Mapflow</string>
+   <string notr="true">Mapflow</string>
   </property>
-  <property name="sizeGripEnabled">
-   <bool>false</bool>
+  <property name="windowIcon">
+   <iconset resource="../resources.qrc">
+    <normaloff>:/plugins/mapflow/icons/mapflow.png</normaloff>:/plugins/mapflow/icons/mapflow.png</iconset>
   </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <item>
   <widget class="QTabWidget" name="tabWidget">
-   <property name="geometry">
-    <rect>
-     <x>10</x>
-     <y>0</y>
-     <width>611</width>
-     <height>601</height>
-    </rect>
-   </property>
-   <property name="sizePolicy">
-    <sizepolicy hsizetype="Fixed" vsizetype="Expanding">
-     <horstretch>0</horstretch>
-     <verstretch>0</verstretch>
-    </sizepolicy>
-   </property>
-   <property name="minimumSize">
-    <size>
-     <width>585</width>
-     <height>485</height>
-    </size>
-   </property>
-   <property name="focusPolicy">
-    <enum>Qt::ClickFocus</enum>
-   </property>
    <property name="currentIndex">
     <number>0</number>
    </property>
+     <property name="movable">
+      <bool>true</bool>
+     </property>
    <widget class="QWidget" name="processingsTab">
     <attribute name="title">
      <string>Processing</string>
     </attribute>
-    <widget class="QTableWidget" name="processingsTable">
-     <property name="geometry">
-      <rect>
-       <x>12</x>
-       <y>186</y>
-       <width>581</width>
-       <height>301</height>
-      </rect>
-     </property>
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="minimumSize">
-      <size>
-       <width>562</width>
-       <height>300</height>
-      </size>
-     </property>
-     <property name="maximumSize">
-      <size>
-       <width>16777215</width>
-       <height>500</height>
-      </size>
-     </property>
-     <property name="focusPolicy">
-      <enum>Qt::NoFocus</enum>
-     </property>
-     <property name="autoScroll">
-      <bool>false</bool>
-     </property>
-     <property name="editTriggers">
-      <set>QAbstractItemView::NoEditTriggers</set>
-     </property>
-     <property name="alternatingRowColors">
-      <bool>true</bool>
-     </property>
-     <property name="selectionBehavior">
-      <enum>QAbstractItemView::SelectRows</enum>
-     </property>
-     <property name="sortingEnabled">
-      <bool>true</bool>
-     </property>
-     <property name="columnCount">
-      <number>6</number>
-     </property>
-     <attribute name="horizontalHeaderMinimumSectionSize">
-      <number>0</number>
-     </attribute>
-     <attribute name="horizontalHeaderDefaultSectionSize">
-      <number>100</number>
-     </attribute>
-     <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
-      <bool>true</bool>
-     </attribute>
-     <attribute name="horizontalHeaderStretchLastSection">
-      <bool>true</bool>
-     </attribute>
-     <column>
-      <property name="text">
-       <string>Name</string>
-      </property>
-      <property name="textAlignment">
-       <set>AlignCenter</set>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>Model</string>
-      </property>
-      <property name="textAlignment">
-       <set>AlignCenter</set>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>Status</string>
-      </property>
-      <property name="textAlignment">
-       <set>AlignCenter</set>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>Progress</string>
-      </property>
-      <property name="textAlignment">
-       <set>AlignCenter</set>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>Created</string>
-      </property>
-      <property name="textAlignment">
-       <set>AlignCenter</set>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string notr="true">ID</string>
-      </property>
-      <property name="textAlignment">
-       <set>AlignCenter</set>
-      </property>
-     </column>
-    </widget>
-    <widget class="QWidget" name="processingWidget" native="true">
-     <property name="geometry">
-      <rect>
-       <x>12</x>
-       <y>12</y>
-       <width>580</width>
-       <height>165</height>
-      </rect>
-     </property>
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="minimumSize">
-      <size>
-       <width>580</width>
-       <height>165</height>
-      </size>
-     </property>
-     <widget class="QPushButton" name="startProcessing">
-      <property name="geometry">
-       <rect>
-        <x>200</x>
-        <y>120</y>
-        <width>171</width>
-        <height>41</height>
-       </rect>
-      </property>
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-        <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-      <property name="font">
-       <font>
-        <pointsize>12</pointsize>
-       </font>
-      </property>
-      <property name="text">
-       <string>Start processing</string>
-      </property>
-      <property name="default">
-       <bool>true</bool>
-      </property>
-     </widget>
-     <widget class="QLabel" name="labelAOIArea">
-      <property name="geometry">
-       <rect>
-        <x>0</x>
-        <y>130</y>
-        <width>181</width>
-        <height>21</height>
-       </rect>
-      </property>
-      <property name="font">
-       <font>
-        <italic>true</italic>
-       </font>
-      </property>
-      <property name="text">
-       <string/>
-      </property>
-     </widget>
-     <widget class="QWidget" name="layoutWidget">
-      <property name="geometry">
-       <rect>
-        <x>0</x>
-        <y>10</y>
-        <width>571</width>
-        <height>105</height>
-       </rect>
-      </property>
-      <layout class="QGridLayout" name="gridLayout">
+      <layout class="QVBoxLayout" name="processingsLayout" stretch="0,0,1,0">
+       <item>
+        <layout class="QGridLayout" name="processingOptions">
        <item row="0" column="0">
         <widget class="QLabel" name="labelProcessingName">
-         <property name="font">
-          <font>
-           <pointsize>12</pointsize>
-          </font>
-         </property>
          <property name="text">
           <string>Processing name:</string>
          </property>
         </widget>
        </item>
-       <item row="0" column="1" colspan="2">
+         <item row="0" column="1">
         <widget class="QLineEdit" name="processingName">
-         <property name="minimumSize">
-          <size>
-           <width>100</width>
-           <height>0</height>
-          </size>
-         </property>
-         <property name="maximumSize">
-          <size>
-           <width>150</width>
-           <height>16777215</height>
-          </size>
-         </property>
-         <property name="font">
-          <font>
-           <pointsize>12</pointsize>
-          </font>
-         </property>
          <property name="text">
           <string/>
          </property>
         </widget>
        </item>
-       <item row="0" column="3">
-        <widget class="QLabel" name="labelAIModel">
+         <item row="0" column="2">
+          <widget class="QLabel" name="labelAiModel">
          <property name="font">
           <font>
-           <pointsize>12</pointsize>
+             <pointsize>11</pointsize>
           </font>
          </property>
          <property name="text">
@@ -298,65 +59,40 @@
          </property>
         </widget>
        </item>
-       <item row="0" column="4" colspan="2">
-        <widget class="QComboBox" name="workflowDefinitionCombo">
-         <property name="minimumSize">
-          <size>
-           <width>100</width>
-           <height>0</height>
-          </size>
-         </property>
-         <property name="maximumSize">
-          <size>
-           <width>160</width>
-           <height>16777215</height>
-          </size>
-         </property>
-         <property name="font">
-          <font>
-           <pointsize>12</pointsize>
-          </font>
+         <item row="0" column="3">
+          <widget class="QComboBox" name="modelCombo"/>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="labelAoiLayer">
+           <property name="text">
+            <string>Area:</string>
          </property>
         </widget>
        </item>
-       <item row="1" column="0">
-        <widget class="QLabel" name="labelAOILayer">
-         <property name="font">
-          <font>
-           <pointsize>12</pointsize>
-          </font>
+         <item row="1" column="1">
+          <widget class="QgsMapLayerComboBox" name="polygonCombo">
+           <property name="allowEmptyLayer">
+            <bool>false</bool>
          </property>
-         <property name="text">
-          <string>Area:</string>
+           <property name="showCrs">
+            <bool>true</bool>
          </property>
         </widget>
        </item>
-       <item row="1" column="3">
+         <item row="1" column="2">
         <widget class="QLabel" name="labelImagerySource">
-         <property name="font">
-          <font>
-           <pointsize>12</pointsize>
-          </font>
-         </property>
          <property name="text">
           <string>Imagery source:</string>
          </property>
         </widget>
        </item>
-       <item row="1" column="4">
+         <item row="1" column="3">
+          <layout class="QHBoxLayout" name="imagerySource" stretch="1,0">
+           <property name="spacing">
+            <number>0</number>
+           </property>
+           <item>
         <widget class="QgsMapLayerComboBox" name="rasterCombo">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="minimumSize">
-          <size>
-           <width>0</width>
-           <height>0</height>
-          </size>
-         </property>
          <property name="showCrs">
           <bool>true</bool>
          </property>
@@ -369,7 +105,7 @@
          </property>
         </widget>
        </item>
-       <item row="1" column="5">
+           <item>
         <widget class="QPushButton" name="selectTif">
          <property name="enabled">
           <bool>true</bool>
@@ -382,17 +118,9 @@
          </property>
          <property name="maximumSize">
           <size>
-           <width>25</width>
-           <height>25</height>
+               <width>29</width>
+               <height>29</height>
           </size>
-         </property>
-         <property name="font">
-          <font>
-           <pointsize>8</pointsize>
-          </font>
-         </property>
-         <property name="focusPolicy">
-          <enum>Qt::NoFocus</enum>
          </property>
          <property name="text">
           <string notr="true">...</string>
@@ -405,30 +133,10 @@
          </property>
         </widget>
        </item>
-       <item row="1" column="1" colspan="2">
-        <widget class="QgsMapLayerComboBox" name="polygonCombo">
-         <property name="minimumSize">
-          <size>
-           <width>100</width>
-           <height>0</height>
-          </size>
-         </property>
-         <property name="maximumSize">
-          <size>
-           <width>160</width>
-           <height>16777215</height>
-          </size>
-         </property>
-         <property name="allowEmptyLayer">
-          <bool>false</bool>
-         </property>
-         <property name="showCrs">
-          <bool>true</bool>
-         </property>
-        </widget>
+          </layout>
        </item>
-       <item row="2" column="0" colspan="3">
-        <widget class="QCheckBox" name="useImageExtentAsAOI">
+         <item row="2" column="0" colspan="2">
+          <widget class="QCheckBox" name="useImageExtentAsAoi">
          <property name="enabled">
           <bool>false</bool>
          </property>
@@ -442,7 +150,7 @@
          </property>
         </widget>
        </item>
-       <item row="2" column="3" colspan="2">
+         <item row="2" column="2" colspan="2">
         <widget class="QCheckBox" name="updateCache">
          <property name="font">
           <font>
@@ -455,128 +163,194 @@
         </widget>
        </item>
       </layout>
-     </widget>
-    </widget>
-    <widget class="QWidget" name="processingsController" native="true">
-     <property name="geometry">
-      <rect>
-       <x>12</x>
-       <y>489</y>
-       <width>581</width>
-       <height>51</height>
-      </rect>
-     </property>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="processingHeader" stretch="1,0,1">
+         <item>
+          <widget class="QLabel" name="labelAoiArea">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
        <horstretch>0</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
      </property>
-     <property name="minimumSize">
+           <property name="font">
+            <font>
+             <italic>true</italic>
+            </font>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="startProcessing">
+           <property name="text">
+            <string>Start processing</string>
+           </property>
+           <property name="default">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="spacerProcessingHeader">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
       <size>
-       <width>0</width>
-       <height>34</height>
+             <width>40</width>
+             <height>20</height>
       </size>
      </property>
-     <property name="sizeIncrement">
-      <size>
-       <width>0</width>
-       <height>0</height>
-      </size>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QTableWidget" name="processingsTable">
+         <property name="focusPolicy">
+          <enum>Qt::NoFocus</enum>
+         </property>
+         <property name="autoScroll">
+          <bool>false</bool>
+         </property>
+         <property name="editTriggers">
+          <set>QAbstractItemView::NoEditTriggers</set>
+         </property>
+         <property name="tabKeyNavigation">
+          <bool>false</bool>
+         </property>
+         <property name="showDropIndicator" stdset="0">
+          <bool>false</bool>
+         </property>
+         <property name="alternatingRowColors">
+          <bool>true</bool>
+         </property>
+         <property name="selectionBehavior">
+          <enum>QAbstractItemView::SelectRows</enum>
+         </property>
+         <property name="sortingEnabled">
+          <bool>true</bool>
      </property>
-     <property name="baseSize">
-      <size>
-       <width>0</width>
-       <height>0</height>
-      </size>
+         <property name="columnCount">
+          <number>6</number>
      </property>
-     <widget class="QPushButton" name="deleteProcessings">
-      <property name="geometry">
-       <rect>
-        <x>486</x>
-        <y>10</y>
-        <width>84</width>
-        <height>32</height>
-       </rect>
+         <attribute name="horizontalHeaderMinimumSectionSize">
+          <number>0</number>
+         </attribute>
+         <attribute name="horizontalHeaderDefaultSectionSize">
+          <number>100</number>
+         </attribute>
+         <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
+          <bool>true</bool>
+         </attribute>
+         <attribute name="horizontalHeaderStretchLastSection">
+          <bool>true</bool>
+         </attribute>
+         <column>
+          <property name="text">
+           <string>Name</string>
       </property>
-      <property name="font">
-       <font>
-        <pointsize>12</pointsize>
-       </font>
+          <property name="textAlignment">
+           <set>AlignCenter</set>
       </property>
-      <property name="styleSheet">
-       <string notr="true"/>
+         </column>
+         <column>
+          <property name="text">
+           <string>Model</string>
       </property>
+          <property name="textAlignment">
+           <set>AlignCenter</set>
+          </property>
+         </column>
+         <column>
       <property name="text">
-       <string>Delete</string>
+           <string>Status</string>
       </property>
+          <property name="textAlignment">
+           <set>AlignCenter</set>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Progress</string>
+          </property>
+          <property name="textAlignment">
+           <set>AlignCenter</set>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Created</string>
+          </property>
+          <property name="textAlignment">
+           <set>AlignCenter</set>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string notr="true">ID</string>
+          </property>
+          <property name="textAlignment">
+           <set>AlignCenter</set>
+          </property>
+         </column>
      </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="processingFooter" stretch="0,1,0">
+         <property name="spacing">
+          <number>20</number>
+         </property>
+         <item>
      <widget class="QPushButton" name="logoutButton">
-      <property name="enabled">
-       <bool>true</bool>
+           <property name="text">
+            <string>Log out</string>
       </property>
-      <property name="geometry">
-       <rect>
-        <x>0</x>
-        <y>10</y>
-        <width>89</width>
-        <height>32</height>
-       </rect>
-      </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="username">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
         <horstretch>0</horstretch>
         <verstretch>0</verstretch>
        </sizepolicy>
       </property>
-      <property name="font">
-       <font>
-        <pointsize>12</pointsize>
-       </font>
-      </property>
       <property name="text">
-       <string>Log out</string>
+            <string notr="true"/>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
       </property>
      </widget>
-     <widget class="QLabel" name="username">
-      <property name="geometry">
-       <rect>
-        <x>180</x>
-        <y>17</y>
-        <width>251</width>
-        <height>20</height>
-       </rect>
+         </item>
+         <item>
+          <widget class="QPushButton" name="deleteProcessings">
+           <property name="styleSheet">
+            <string notr="true"/>
       </property>
       <property name="text">
-       <string/>
+            <string>Delete</string>
       </property>
      </widget>
-    </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
    </widget>
    <widget class="QWidget" name="settingsTab">
     <attribute name="title">
      <string>Settings</string>
     </attribute>
-    <widget class="QWidget" name="layoutWidget">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>10</y>
-       <width>581</width>
-       <height>551</height>
-      </rect>
-     </property>
-     <layout class="QVBoxLayout" name="verticalLayout" stretch="0,0,0,1">
+      <layout class="QVBoxLayout" name="settingsLayout" stretch="0,0,0,1">
       <item>
        <layout class="QFormLayout" name="layoutOutputDirectory">
         <item row="0" column="0">
          <widget class="QLabel" name="labelOutputDirectory">
-          <property name="font">
-           <font>
-            <pointsize>12</pointsize>
-            <kerning>true</kerning>
-           </font>
-          </property>
           <property name="text">
            <string>Output directory:</string>
           </property>
@@ -585,7 +359,7 @@
         <item row="0" column="1">
          <layout class="QHBoxLayout" name="layoutOutputDirectoryInput">
           <property name="spacing">
-           <number>2</number>
+            <number>0</number>
           </property>
           <item>
            <widget class="QLineEdit" name="outputDirectory">
@@ -607,18 +381,18 @@
             </property>
             <property name="minimumSize">
              <size>
-              <width>41</width>
-              <height>30</height>
+               <width>29</width>
+               <height>29</height>
              </size>
             </property>
             <property name="maximumSize">
              <size>
-              <width>41</width>
-              <height>30</height>
+               <width>29</width>
+               <height>29</height>
              </size>
             </property>
             <property name="text">
-             <string>...</string>
+              <string notr="true">...</string>
             </property>
            </widget>
           </item>
@@ -627,19 +401,12 @@
        </layout>
       </item>
       <item>
-       <layout class="QHBoxLayout" name="layoutPreview" stretch="1,0,0,0,0">
+        <layout class="QHBoxLayout" name="customProvider" stretch="1,0,0,0,0">
         <item>
-         <widget class="QComboBox" name="customProviderCombo">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-         </widget>
+          <widget class="QComboBox" name="customProviderCombo"/>
         </item>
         <item>
-         <layout class="QHBoxLayout" name="layoutCustomProviderEdit">
+          <layout class="QHBoxLayout" name="customProviderControls">
           <property name="spacing">
            <number>0</number>
           </property>
@@ -653,24 +420,15 @@
             </property>
             <property name="minimumSize">
              <size>
-              <width>30</width>
-              <height>0</height>
+               <width>29</width>
+               <height>29</height>
              </size>
             </property>
             <property name="maximumSize">
              <size>
-              <width>30</width>
-              <height>16777215</height>
+               <width>29</width>
+               <height>29</height>
              </size>
-            </property>
-            <property name="font">
-             <font>
-              <weight>75</weight>
-              <bold>true</bold>
-             </font>
-            </property>
-            <property name="styleSheet">
-             <string notr="true">color: rgb(115, 210, 22);</string>
             </property>
             <property name="text">
              <string/>
@@ -691,24 +449,15 @@
             </property>
             <property name="minimumSize">
              <size>
-              <width>30</width>
-              <height>0</height>
+               <width>29</width>
+               <height>29</height>
              </size>
             </property>
             <property name="maximumSize">
              <size>
-              <width>30</width>
-              <height>16777215</height>
+               <width>29</width>
+               <height>29</height>
              </size>
-            </property>
-            <property name="font">
-             <font>
-              <weight>75</weight>
-              <bold>true</bold>
-             </font>
-            </property>
-            <property name="styleSheet">
-             <string notr="true">color: rgb(239, 41, 41);</string>
             </property>
             <property name="text">
              <string/>
@@ -729,14 +478,14 @@
             </property>
             <property name="minimumSize">
              <size>
-              <width>30</width>
-              <height>0</height>
+               <width>29</width>
+               <height>29</height>
              </size>
             </property>
             <property name="maximumSize">
              <size>
-              <width>30</width>
-              <height>16777215</height>
+               <width>29</width>
+               <height>29</height>
              </size>
             </property>
             <property name="text">
@@ -751,7 +500,7 @@
          </layout>
         </item>
         <item>
-         <widget class="QLabel" name="label">
+          <widget class="QLabel" name="labelZoomLimit">
           <property name="text">
            <string>Zoom limit:</string>
           </property>
@@ -759,14 +508,8 @@
         </item>
         <item>
          <widget class="QSpinBox" name="zoomLimit">
-          <property name="readOnly">
-           <bool>false</bool>
-          </property>
           <property name="buttonSymbols">
            <enum>QAbstractSpinBox::PlusMinus</enum>
-          </property>
-          <property name="accelerated">
-           <bool>false</bool>
           </property>
           <property name="maximum">
            <number>21</number>
@@ -778,18 +521,6 @@
         </item>
         <item>
          <widget class="QPushButton" name="preview">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="font">
-           <font>
-            <pointsize>12</pointsize>
-            <kerning>true</kerning>
-           </font>
-          </property>
           <property name="text">
            <string>Preview</string>
           </property>
@@ -825,6 +556,12 @@
           <layout class="QFormLayout" name="customProviderAuth">
            <item row="0" column="0">
             <widget class="QLabel" name="labelCustomProviderLogin">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
              <property name="font">
               <font>
                <pointsize>12</pointsize>
@@ -839,7 +576,7 @@
            <item row="0" column="1">
             <widget class="QLineEdit" name="customProviderLogin">
              <property name="sizePolicy">
-              <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
                <horstretch>0</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
@@ -851,6 +588,12 @@
            </item>
            <item row="1" column="0">
             <widget class="QLabel" name="labelCustomProviderPassword">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
              <property name="font">
               <font>
                <pointsize>12</pointsize>
@@ -865,7 +608,7 @@
            <item row="1" column="1">
             <widget class="QgsPasswordLineEdit" name="customProviderPassword">
              <property name="sizePolicy">
-              <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
                <horstretch>0</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
@@ -898,34 +641,34 @@
         <property name="title">
          <string>Maxar SecureWatch Metadata</string>
         </property>
-        <property name="flat">
-         <bool>true</bool>
-        </property>
         <property name="checkable">
          <bool>false</bool>
         </property>
         <property name="checked">
          <bool>false</bool>
         </property>
-        <layout class="QVBoxLayout" name="verticalLayout_2">
+         <layout class="QVBoxLayout" name="layoutMaxar">
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
          <item>
-          <layout class="QHBoxLayout" name="layoutMaxarHeader" stretch="0,0,0">
+           <layout class="QHBoxLayout" name="maxarHeader">
            <property name="spacing">
             <number>20</number>
            </property>
            <item>
             <widget class="QLabel" name="howToConnect">
-             <property name="font">
-              <font>
-               <pointsize>11</pointsize>
-               <kerning>true</kerning>
-              </font>
-             </property>
              <property name="text">
               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-             </property>
-             <property name="textFormat">
-              <enum>Qt::AutoText</enum>
              </property>
              <property name="wordWrap">
               <bool>true</bool>
@@ -961,21 +704,9 @@
           </layout>
          </item>
          <item>
-          <layout class="QHBoxLayout" name="layoutMaxarOptions" stretch="0,1,0">
+           <layout class="QHBoxLayout" name="maxarOptions" stretch="0,1,0">
            <item>
             <widget class="QLabel" name="labelMaxarAOI">
-             <property name="minimumSize">
-              <size>
-               <width>0</width>
-               <height>0</height>
-              </size>
-             </property>
-             <property name="font">
-              <font>
-               <pointsize>12</pointsize>
-               <kerning>true</kerning>
-              </font>
-             </property>
              <property name="text">
               <string>Area:</string>
              </property>
@@ -983,9 +714,6 @@
            </item>
            <item>
             <widget class="QgsMapLayerComboBox" name="maxarAOICombo">
-             <property name="allowEmptyLayer">
-              <bool>false</bool>
-             </property>
              <property name="showCrs">
               <bool>true</bool>
              </property>
@@ -993,12 +721,6 @@
            </item>
            <item>
             <widget class="QPushButton" name="getImageMetadata">
-             <property name="font">
-              <font>
-               <pointsize>12</pointsize>
-               <kerning>true</kerning>
-              </font>
-             </property>
              <property name="text">
               <string>Get metadata</string>
              </property>
@@ -1008,15 +730,6 @@
          </item>
          <item>
           <widget class="QTableWidget" name="maxarMetadataTable">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="mouseTracking">
-            <bool>false</bool>
-           </property>
            <property name="focusPolicy">
             <enum>Qt::NoFocus</enum>
            </property>
@@ -1026,6 +739,9 @@
            <property name="editTriggers">
             <set>QAbstractItemView::NoEditTriggers</set>
            </property>
+            <property name="tabKeyNavigation">
+             <bool>false</bool>
+            </property>
            <property name="alternatingRowColors">
             <bool>true</bool>
            </property>
@@ -1099,50 +815,25 @@
       </item>
      </layout>
     </widget>
-   </widget>
    <widget class="QWidget" name="helpTab">
     <attribute name="title">
      <string>Help</string>
     </attribute>
-    <layout class="QGridLayout" name="gridLayout_3">
-     <item row="0" column="0">
-      <widget class="QScrollArea" name="scrollArea">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-         <horstretch>0</horstretch>
-         <verstretch>1</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="focusPolicy">
-        <enum>Qt::NoFocus</enum>
-       </property>
-       <property name="widgetResizable">
-        <bool>true</bool>
-       </property>
-       <widget class="QWidget" name="scrollAreaWidgetContents">
-        <property name="geometry">
-         <rect>
-          <x>0</x>
-          <y>0</y>
-          <width>583</width>
-          <height>539</height>
-         </rect>
-        </property>
-        <widget class="QWidget" name="layoutWidget">
-         <property name="geometry">
-          <rect>
-           <x>30</x>
-           <y>20</y>
-           <width>526</width>
-           <height>371</height>
-          </rect>
-         </property>
-         <layout class="QVBoxLayout" name="layoutHelp" stretch="0,0">
+      <layout class="QVBoxLayout" name="helpLayout" stretch="0,0,1">
           <property name="spacing">
            <number>20</number>
           </property>
+       <property name="topMargin">
+        <number>11</number>
+       </property>
           <item>
            <widget class="QLabel" name="pluginVersion">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
             <property name="font">
              <font>
               <weight>75</weight>
@@ -1158,26 +849,35 @@
            </widget>
           </item>
           <item>
-           <widget class="QLabel" name="helpText">
+        <widget class="QLabel" name="credentialsInfo">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="text">
+          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-style:italic;&quot;&gt;This application requires access to &lt;/span&gt;&lt;a href=&quot;http://mapflow.ai/&quot;&gt;&lt;span style=&quot; font-style:italic; text-decoration: underline; color:#0000ff;&quot;&gt;Mapflow.ai&lt;/span&gt;&lt;/a&gt;&lt;span style=&quot; font-style:italic;&quot;&gt; Processing API service. &lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-style:italic;&quot;&gt;To obtain credentials, please, &lt;/span&gt;&lt;a href=&quot;mailto:help@geoalert.io?subject=Processing API access&amp;amp;body=Hello, I'd like to use your QGIS plugin.&quot;&gt;&lt;span style=&quot; font-style:italic; text-decoration: underline; color:#0057ae;&quot;&gt;send us a request.&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+         <property name="wordWrap">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="docLinks">
             <property name="text">
-             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;
-&lt;div style=&quot;margin:30px; background-color: #e8e8e8&quot;&gt;
-&lt;p&gt;This application requires access to &lt;a href=&quot;http://mapflow.ai/&quot;&gt;Mapflow.ai&lt;/a&gt; Processing API service. To obtain credentials, please, &lt;a href=&quot;mailto:help@geoalert.io?subject=Processing API access&amp;body=Hello, I'd like to use your QGIS plugin.&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;send us a request.&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;
-&lt;h2 style=&quot;margin:30px;&quot;&gt;How to use the plugin&lt;/h2&gt;
-&lt;ul style=&quot;margin:10px; background-color: #e8e8e8&quot;&gt;
-&lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-install-the-plugin&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Installation guide&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;User Interface walkthrough&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to use a different imagery tileset&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect to Maxar SercureWatch&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-process-your-own-imagery-data&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to process your own image&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;/body&gt;&lt;/html&gt;</string>
+          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h2 style=&quot; margin-top:30px; margin-bottom:30px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:x-large; font-weight:600;&quot;&gt;How to use the plugin&lt;/span&gt;&lt;/h2&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-install-the-plugin&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Installation guide&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;User Interface walkthrough&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-process-your-own-imagery-data&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to process your own image&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to use a different imagery tileset&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect to Maxar SercureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
             <property name="textFormat">
              <enum>Qt::AutoText</enum>
             </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
             <property name="wordWrap">
              <bool>true</bool>
             </property>
@@ -1189,11 +889,8 @@
          </layout>
         </widget>
        </widget>
-      </widget>
      </item>
     </layout>
-   </widget>
-  </widget>
  </widget>
  <customwidgets>
   <customwidget>
@@ -1214,15 +911,6 @@
   </customwidget>
  </customwidgets>
  <tabstops>
-  <tabstop>processingName</tabstop>
-  <tabstop>workflowDefinitionCombo</tabstop>
-  <tabstop>polygonCombo</tabstop>
-  <tabstop>rasterCombo</tabstop>
-  <tabstop>selectTif</tabstop>
-  <tabstop>useImageExtentAsAOI</tabstop>
-  <tabstop>startProcessing</tabstop>
-  <tabstop>logoutButton</tabstop>
-  <tabstop>deleteProcessings</tabstop>
   <tabstop>tabWidget</tabstop>
  </tabstops>
  <resources/>

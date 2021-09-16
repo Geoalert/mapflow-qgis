@@ -1,25 +1,28 @@
-import sys
+import sys  # Python version check for ensuring compatibility
 import json
 import os.path
-from datetime import datetime, timedelta, timezone
-from configparser import ConfigParser
 from typing import List, Dict, Optional, Union
+from datetime import datetime, timedelta, timezone  # processing creation datetime formatting
+from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
 import requests
-from PyQt5.QtCore import QSettings, QCoreApplication, QTranslator, QPersistentModelIndex, QModelIndex, QThread, Qt
+from PyQt5.QtCore import (
+    Qt, QSettings, QCoreApplication, QTranslator, QPersistentModelIndex, QModelIndex,
+    QThread,
+)
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QMessageBox, QFileDialog, QTableWidgetItem, QAction
+from PyQt5.QtWidgets import QMessageBox, QFileDialog, QTableWidgetItem, QAction, QTableWidget
 from qgis import processing as qgis_processing  # to avoid collisions
-from qgis.gui import QgisInterface
 from qgis.core import (
-    QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, QgsCoordinateReferenceSystem,
-    QgsDistanceArea, QgsGeometry, QgsMapLayerType, Qgis, QgsVectorFileWriter, QgsMessageLog
+    QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature,
+    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsMapLayerType, Qgis,
+    QgsVectorFileWriter, QgsMessageLog
 )
 
 from .dialogs import MainDialog, LoginDialog, CustomProviderDialog, ConnectIdDialog
 from .workers import ProcessingFetcher, ProcessingCreator
 from . import helpers, config
-from .resources_rc import *  # used implicitly by QGIS; if removed, icons may not show in QGIS < 3.16
+from .resources_rc import *  # used implicitly by QGIS; if removed icons may not show in QGIS < 3.16
 
 
 class Mapflow:
@@ -28,7 +31,7 @@ class Mapflow:
     It is instantiated by QGIS and shouldn't be used directly.
     """
 
-    def __init__(self, iface: QgisInterface) -> None:
+    def __init__(self, iface) -> None:
         """Initialize the plugin.
 
         :param iface: an instance of the QGIS interface.
@@ -47,6 +50,8 @@ class Mapflow:
         # By default, plugin adds layers to a group unless user explicitly deletes it
         self.add_layers_to_group = True
         self.layer_tree_root = self.project.layerTreeRoot()
+        # Store user's current processing
+        self.processings = []
         # Init toolbar and toolbar buttons
         self.toolbar = self.iface.addToolBar(self.plugin_name)
         self.toolbar.setObjectName(self.plugin_name)
@@ -80,7 +85,8 @@ class Mapflow:
         metadata_parser.read(os.path.join(self.plugin_dir, 'metadata.txt'))
         plugin_version = metadata_parser.get('general', 'version')
         self.dlg.pluginVersion.setText(self.dlg.pluginVersion.text() + plugin_version)
-        self.current_maxar_metadata_product = ''  # used for previewing a Maxar image by double-clicking its row
+        # Used for previewing a Maxar image by double-clicking its row
+        self.current_maxar_metadata_product = ''
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         # Check if there are stored credentials
         self.logged_in = self.settings.value('serverLogin') and self.settings.value('serverPassword')
@@ -110,18 +116,20 @@ class Mapflow:
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
         # SET UP SIGNALS & SLOTS
+        # Memorize dialog element sizes & positioning
+        self.dlg.finished.connect(self.save_dialog_state)
         # Connect buttons
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         self.dlg.selectTif.clicked.connect(self.select_tif)
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.rasterCombo.layerChanged.connect(self.toggle_use_image_extent_as_aoi)
-        self.dlg.useImageExtentAsAOI.stateChanged.connect(lambda is_checked: self.dlg.polygonCombo.setEnabled(not is_checked))
+        self.dlg.useImageExtentAsAoi.stateChanged.connect(lambda is_checked: self.dlg.polygonCombo.setEnabled(not is_checked))
         self.dlg.startProcessing.clicked.connect(self.create_processing)
         # Calculate AOI area
         self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area)
         self.dlg.rasterCombo.layerChanged.connect(self.calculate_aoi_area)
-        self.dlg.useImageExtentAsAOI.toggled.connect(self.calculate_aoi_area)
+        self.dlg.useImageExtentAsAoi.toggled.connect(self.calculate_aoi_area)
         self.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
         # Processings
         self.dlg.processingsTable.itemSelectionChanged.connect(self.memorize_selected_processings)
@@ -139,11 +147,14 @@ class Mapflow:
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
         self.dlg.zoomLimitMaxar.toggled.connect(lambda state: self.settings.setValue('zoomLimitMaxar', state))
         self.dlg.maxarMetadataTable.cellDoubleClicked.connect(self.maxar_double_click_preview)
-        self.dlg.finished.connect(self.f)
 
-    def f(self):
+    def save_dialog_state(self):
+        """Memorize dialog element sizes & positioning to allow user to customize the look."""
+        # Save table columns widths
         state = self.dlg.processingsTable.horizontalHeader().saveState()
         self.settings.setValue('processingsTableHeaderState', state)
+        state = self.dlg.maxarMetadataTable.horizontalHeader().saveState()
+        self.settings.setValue('maxarMetadataTableHeaderState', state)
 
     def add_layer(self, layer: QgsMapLayer) -> None:
         """Add layers created by the plugin to the legend.
@@ -347,8 +358,8 @@ class Mapflow:
         # False if imagery source is 'Mapbox Satellite' or 'Custom provider', i.e. a 'virtual' layer
         enabled = bool(layer)
         # If a 'virtual layer', it's extent can't be used
-        self.dlg.useImageExtentAsAOI.setEnabled(enabled)
-        self.dlg.useImageExtentAsAOI.setChecked(enabled)
+        self.dlg.useImageExtentAsAoi.setEnabled(enabled)
+        self.dlg.useImageExtentAsAoi.setChecked(enabled)
         # Raster can't be cached for user GeoTIFFs
         self.dlg.updateCache.setEnabled(not enabled)
 
@@ -533,10 +544,10 @@ class Mapflow:
             layer = self.dlg.polygonCombo.currentLayer()
             if not layer:
                 return
-        elif isinstance(arg, list) and not self.dlg.useImageExtentAsAOI.isChecked():  # feature selection changed
+        elif isinstance(arg, list) and not self.dlg.useImageExtentAsAoi.isChecked():  # feature selection changed
             layer = self.dlg.polygonCombo.currentLayer()
             # All project layers are monitored for selection, so have to check if it's the same layer as in the combo
-            if layer != self.iface.activeLayer() or self.dlg.useImageExtentAsAOI.isChecked():
+            if layer != self.iface.activeLayer() or self.dlg.useImageExtentAsAoi.isChecked():
                 return
         elif isinstance(arg, bool):  # checkbox state changed
             combo = self.dlg.rasterCombo if arg else self.dlg.polygonCombo
@@ -552,7 +563,7 @@ class Mapflow:
         elif len(list(layer.getSelectedFeatures())) == 1:
             aoi = next(layer.getSelectedFeatures()).geometry()
         else:
-            self.dlg.labelAOIArea.setText('')
+            self.dlg.labelAoiArea.setText('')
             return
         # Now, do the math
         layer_crs: QgsCoordinateReferenceSystem = layer.crs()
@@ -562,7 +573,7 @@ class Mapflow:
         calculator.setSourceCrs(layer_crs, self.project.transformContext())
         area = calculator.measureArea(aoi) / 10**6  # sq. m to sq. km
         label = self.tr('Area: {:.2f} sq.km').format(area)
-        self.dlg.labelAOIArea.setText(label)
+        self.dlg.labelAoiArea.setText(label)
 
     def memorize_selected_processings(self) -> None:
         """Memorize the currently selected processings by ID.
@@ -625,7 +636,7 @@ class Mapflow:
         elif processing_name in self.processing_names:
             self.alert(self.tr('Processing name taken. Please, choose a different name.'))
             return
-        if not (self.dlg.polygonCombo.currentLayer() or self.dlg.useImageExtentAsAOI.isChecked()):
+        if not (self.dlg.polygonCombo.currentLayer() or self.dlg.useImageExtentAsAoi.isChecked()):
             self.alert(self.tr('Please, select an area of interest'))
             return
         auth_fields = (self.dlg.customProviderLogin.text(), self.dlg.customProviderPassword.text())
@@ -637,7 +648,7 @@ class Mapflow:
             'processing_name': processing_name,
             'server': self.server,
             'auth': self.server_basic_auth,
-            'wd': self.dlg.workflowDefinitionCombo.currentText(),
+            'wd': self.dlg.modelCombo.currentText(),
             'meta': {  # optional metadata
                 'source-app': 'qgis',
                 'source': 'maxar' if raster_option in config.MAXAR_PRODUCTS else raster_option.lower()
@@ -670,7 +681,7 @@ class Mapflow:
             params['raster_password'] = self.dlg.customProviderPassword.text()
             self.save_custom_provider_auth()
         worker_kwargs['params'] = params
-        if not self.dlg.useImageExtentAsAOI.isChecked():
+        if not self.dlg.useImageExtentAsAoi.isChecked():
             aoi_layer = self.dlg.polygonCombo.currentLayer()
             if aoi_layer.featureCount() == 1:
                 aoi_feature = next(aoi_layer.getFeatures())
@@ -904,25 +915,21 @@ class Mapflow:
         if sys.version_info.minor < 7:  # python 3.6
             for processing in processings:
                 processing['created'] = processing['created'].replace('Z', '+0000')
-        try:
-            finished_processings = [
-                processing['name'] for processing in processings
-                if processing['percentCompleted'] == 100
-                and now - datetime.strptime(processing['created'], config.PROCESSING_DATETIME_FORMAT) < one_day
-            ]
-            previously_finished_processings = [
-                processing['name'] for processing in self.processings
-                if processing['percentCompleted'] == '100%'
-            ]
-            for processing in set(finished_processings) - set(previously_finished_processings):
-                self.alert(processing + self.tr(' finished. Double-click it in the table to download the results.'))
-        except AttributeError:  # On plugin start, there's no self.processings, just ignore the exception
-            pass
+        finished_processings = [
+            processing['name'] for processing in processings
+            if processing['percentCompleted'] == 100
+            and now - datetime.strptime(processing['created'], config.PROCESSING_DATETIME_FORMAT) < one_day
+        ]
+        previously_finished_processings = [
+            processing['name'] for processing in self.processings
+            if processing['percentCompleted'] == '100%'
+        ]
+        for processing in set(finished_processings) - set(previously_finished_processings):
+            self.alert(processing + self.tr(' finished. Double-click it in the table to download the results.'))
         # Save as an instance attribute to reuse elsewhere
         self.processings = processings
         # Save ref to check name uniqueness at processing creation
-        self.processing_names: List[str] = [processing['name'] for processing in self.processings]
-        self.dlg.processingsTable.setRowCount(len(self.processings))
+        self.processing_names = [processing['name'] for processing in self.processings]
         for processing in self.processings:
             # Add % signs to progress column for clarity
             processing['percentCompleted'] = f'{processing["percentCompleted"]}%'
@@ -937,14 +944,28 @@ class Mapflow:
         selected_processing_names = [processing['name'] for processing in self.selected_processings]
         # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
         self.dlg.processingsTable.setSortingEnabled(False)
+        self.dlg.processingsTable.setRowCount(len(self.processings))
         for row, processing in enumerate(self.processings):
             for col, attr in enumerate(columns):
                 self.dlg.processingsTable.setItem(row, col, QTableWidgetItem(processing[attr]))
             if processing['name'] in selected_processing_names:
                 self.dlg.processingsTable.selectRow(row)
+        # self.shrink_table_height_to_content(self.dlg.processingsTable)
         # Turn sorting on again
         self.dlg.processingsTable.setSortingEnabled(True)
         self.dlg.processingsTable.sortItems(columns.index('created'), Qt.DescendingOrder)
+
+    def shrink_table_height_to_content(self, table: QTableWidget) -> None:
+        """Limit table height so that no whitespace is shown after the last row.
+
+        :param table: The table to shrink
+        """
+        self.dlg.processingsTable.setMaximumHeight(
+            table.rowCount() * self.dlg.processingsTable.rowHeight(0)
+            + self.dlg.processingsTable.horizontalHeader().height()
+            + 2 * self.dlg.processingsTable.frameWidth()
+            + 12  # 12px for the scrollbar
+        )
 
     def tr(self, message: str) -> str:
         """Localize a UI element text.
@@ -1080,8 +1101,8 @@ class Mapflow:
                 self.dlg_login.show()
                 return
         wds: List[str] = [wd['name'] for wd in res.json()['workflowDefs']]
-        self.dlg.workflowDefinitionCombo.clear()
-        self.dlg.workflowDefinitionCombo.addItems(wds)
+        self.dlg.modelCombo.clear()
+        self.dlg.modelCombo.addItems(wds)
         # Fetch processings
         thread = QThread(self.main_window)
         self.worker = ProcessingFetcher(f'{self.server}/rest/processings', self.server_basic_auth)
@@ -1095,7 +1116,7 @@ class Mapflow:
         # Enable/disable the use of image extent as AOI based on the current raster combo layer
         self.toggle_use_image_extent_as_aoi(self.dlg.rasterCombo.currentLayer())
         # Calculate area of the current AOI layer or feature
-        combo = self.dlg.rasterCombo if self.dlg.useImageExtentAsAOI.isChecked() else self.dlg.polygonCombo
+        combo = self.dlg.rasterCombo if self.dlg.useImageExtentAsAoi.isChecked() else self.dlg.polygonCombo
         self.calculate_aoi_area(combo.currentLayer())
         # Show main dialog
         self.dlg.show()
