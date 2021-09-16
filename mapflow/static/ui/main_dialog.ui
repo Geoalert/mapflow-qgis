@@ -49,11 +49,6 @@
        </item>
          <item row="0" column="2">
           <widget class="QLabel" name="labelAiModel">
-         <property name="font">
-          <font>
-             <pointsize>11</pointsize>
-          </font>
-         </property>
          <property name="text">
           <string>Mapflow model:</string>
          </property>
@@ -152,11 +147,6 @@
        </item>
          <item row="2" column="2" colspan="2">
         <widget class="QCheckBox" name="updateCache">
-         <property name="font">
-          <font>
-           <pointsize>12</pointsize>
-          </font>
-         </property>
          <property name="text">
           <string>Update image in cache</string>
          </property>
@@ -556,18 +546,6 @@
           <layout class="QFormLayout" name="customProviderAuth">
            <item row="0" column="0">
             <widget class="QLabel" name="labelCustomProviderLogin">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-             <property name="font">
-              <font>
-               <pointsize>12</pointsize>
-               <kerning>true</kerning>
-              </font>
-             </property>
              <property name="text">
               <string>Login:</string>
              </property>
@@ -575,12 +553,6 @@
            </item>
            <item row="0" column="1">
             <widget class="QLineEdit" name="customProviderLogin">
-             <property name="sizePolicy">
-               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-               <horstretch>0</horstretch>
-               <verstretch>0</verstretch>
-              </sizepolicy>
-             </property>
              <property name="text">
               <string/>
              </property>
@@ -588,18 +560,6 @@
            </item>
            <item row="1" column="0">
             <widget class="QLabel" name="labelCustomProviderPassword">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-             <property name="font">
-              <font>
-               <pointsize>12</pointsize>
-               <kerning>true</kerning>
-              </font>
-             </property>
              <property name="text">
               <string>Password:</string>
              </property>
@@ -607,12 +567,6 @@
            </item>
            <item row="1" column="1">
             <widget class="QgsPasswordLineEdit" name="customProviderPassword">
-             <property name="sizePolicy">
-               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-               <horstretch>0</horstretch>
-               <verstretch>0</verstretch>
-              </sizepolicy>
-             </property>
              <property name="text">
               <string/>
              </property>
@@ -622,12 +576,6 @@
          </item>
          <item row="0" column="1">
           <widget class="QCheckBox" name="customProviderSaveAuth">
-           <property name="font">
-            <font>
-             <pointsize>12</pointsize>
-             <kerning>true</kerning>
-            </font>
-           </property>
            <property name="text">
             <string>Save Login/Password</string>
            </property>
@@ -834,12 +782,6 @@
            <verstretch>0</verstretch>
           </sizepolicy>
          </property>
-            <property name="font">
-             <font>
-              <weight>75</weight>
-              <bold>true</bold>
-             </font>
-            </property>
             <property name="text">
              <string>You are using Mapflow for QGIS v</string>
             </property>
