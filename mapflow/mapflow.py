@@ -51,7 +51,7 @@ class Mapflow:
         self.toolbar = self.iface.addToolBar(self.plugin_name)
         self.toolbar.setObjectName(self.plugin_name)
         # Translation
-        locale = QSettings().value('locale/userLocale')[0:2]
+        locale = QSettings().value('locale/userLocale', '')[0:2]
         locale_path = os.path.join(self.plugin_dir, 'i18n', f'mapflow_{locale}.qm')
         if os.path.exists(locale_path):
             self.translator = QTranslator()
