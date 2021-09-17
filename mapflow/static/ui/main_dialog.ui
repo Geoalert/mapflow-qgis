@@ -30,8 +30,8 @@
     <attribute name="title">
      <string>Processing</string>
     </attribute>
-      <layout class="QVBoxLayout" name="processingsLayout" stretch="0,0,1,0">
-       <item>
+      <layout class="QGridLayout" name="layoutProcessing">
+       <item row="0" column="0">
         <layout class="QGridLayout" name="processingOptions">
        <item row="0" column="0">
         <widget class="QLabel" name="labelProcessingName">
@@ -130,7 +130,11 @@
        </item>
           </layout>
        </item>
-         <item row="2" column="0" colspan="2">
+        </layout>
+       </item>
+       <item row="1" column="0">
+        <layout class="QHBoxLayout" name="additionalOptions" stretch="0,1,0">
+         <item>
           <widget class="QCheckBox" name="useImageExtentAsAoi">
          <property name="enabled">
           <bool>false</bool>
@@ -140,7 +144,20 @@
          </property>
         </widget>
        </item>
-         <item row="2" column="2" colspan="2">
+         <item>
+          <spacer name="spacerAdditionalOptions">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>10</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
         <widget class="QCheckBox" name="updateCache">
          <property name="text">
           <string>Update image in cache</string>
@@ -149,7 +166,7 @@
        </item>
       </layout>
        </item>
-       <item>
+       <item row="2" column="0">
         <layout class="QHBoxLayout" name="processingHeader" stretch="1,0,1">
          <item>
           <widget class="QLabel" name="labelAoiArea">
@@ -194,7 +211,7 @@
          </item>
         </layout>
        </item>
-       <item>
+       <item row="3" column="0">
         <widget class="QTableWidget" name="processingsTable">
          <property name="focusPolicy">
           <enum>Qt::NoFocus</enum>
@@ -285,7 +302,7 @@
          </column>
      </widget>
        </item>
-       <item>
+       <item row="4" column="0">
         <layout class="QHBoxLayout" name="processingFooter" stretch="0,1,0">
          <property name="spacing">
           <number>20</number>
@@ -529,7 +546,7 @@
         <property name="saveCollapsedState">
          <bool>true</bool>
         </property>
-        <layout class="QGridLayout" name="gridLayout_2" columnstretch="1,0">
+         <layout class="QGridLayout" name="layourCustomProviderAuthGroup" columnstretch="1,0">
          <item row="0" column="0">
           <layout class="QFormLayout" name="customProviderAuth">
            <item row="0" column="0">
@@ -597,7 +614,7 @@
            <number>0</number>
           </property>
          <item>
-           <layout class="QHBoxLayout" name="maxarHeader">
+           <layout class="QHBoxLayout" name="maxarHeader" stretch="0,1,0,1,0">
            <property name="spacing">
             <number>20</number>
            </property>
@@ -615,6 +632,19 @@
             </widget>
            </item>
            <item>
+             <spacer name="spacerMaxarHeaderLeft">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>5</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+            <item>
             <widget class="QLabel" name="termsOfService">
              <property name="text">
               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;a href=&quot;https://www.maxar.com/legal/securewatch-license&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Terms of Service&lt;/span&gt;&lt;/a&gt;&lt;/body&gt;&lt;/html&gt;</string>
@@ -628,6 +658,19 @@
             </widget>
            </item>
            <item>
+             <spacer name="spacerMaxarHeaderRight">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>1</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+            <item>
             <widget class="QCheckBox" name="zoomLimitMaxar">
               <property name="layoutDirection">
                <enum>Qt::RightToLeft</enum>
@@ -758,12 +801,9 @@
     <attribute name="title">
      <string>Help</string>
     </attribute>
-      <layout class="QVBoxLayout" name="helpLayout" stretch="0,0,1">
+      <layout class="QVBoxLayout" name="layoutHelp" stretch="0,0,0,1">
           <property name="spacing">
-           <number>20</number>
-          </property>
-       <property name="topMargin">
-        <number>11</number>
+        <number>50</number>
        </property>
           <item>
            <widget class="QLabel" name="pluginVersion">
@@ -783,12 +823,6 @@
           </item>
           <item>
         <widget class="QLabel" name="credentialsInfo">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
          <property name="text">
           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-style:italic;&quot;&gt;This application requires access to &lt;/span&gt;&lt;a href=&quot;http://mapflow.ai/&quot;&gt;&lt;span style=&quot; font-style:italic; text-decoration: underline; color:#0000ff;&quot;&gt;Mapflow.ai&lt;/span&gt;&lt;/a&gt;&lt;span style=&quot; font-style:italic;&quot;&gt; Processing API service. &lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-style:italic;&quot;&gt;To obtain credentials, please, &lt;/span&gt;&lt;a href=&quot;mailto:help@geoalert.io?subject=Processing API access&amp;amp;body=Hello, I'd like to use your QGIS plugin.&quot;&gt;&lt;span style=&quot; font-style:italic; text-decoration: underline; color:#0057ae;&quot;&gt;send us a request.&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
          </property>
@@ -819,6 +853,19 @@
             </property>
            </widget>
           </item>
+       <item>
+        <spacer name="spacerHelp">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>0</width>
+           <height>0</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
          </layout>
         </widget>
        </widget>
