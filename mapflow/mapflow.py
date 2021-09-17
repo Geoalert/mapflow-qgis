@@ -152,9 +152,6 @@ class Mapflow:
         self.dlg.zoomLimitMaxar.toggled.connect(lambda state: self.settings.setValue('zoomLimitMaxar', state))
         self.dlg.maxarMetadataTable.cellDoubleClicked.connect(self.maxar_double_click_preview)
 
-    def tr_native(self, message: str) -> str:
-        return QCoreApplication.translate('QPlatformTheme', message)
-
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
         # Save table columns widths
@@ -966,7 +963,7 @@ class Mapflow:
 
         :param message: A text to translate
         """
-        # Don't use self.plugin_name as context since it'll be overriden in supermodules  
+        # Don't use self.plugin_name as context since it'll be overriden in supermodules
         return QCoreApplication.translate(config.PLUGIN_NAME, message)
 
     def initGui(self) -> None:
@@ -983,8 +980,6 @@ class Mapflow:
         plugin_button = QAction(icon, self.plugin_name, self.main_window)
         plugin_button.triggered.connect(self.run)
         self.toolbar.addAction(plugin_button)
-        # Initialize plugin layer group var; QGIS layer tree is loaded after plugin loading
-        self.layer_group = None
         self.project.readProject.connect(self.set_layer_group)
         # Restore table section sizes
         self.dlg.processingsTable.horizontalHeader().restoreState(
