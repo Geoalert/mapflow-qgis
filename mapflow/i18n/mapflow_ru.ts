@@ -105,21 +105,6 @@
         <translation>Данные ДЗЗ:</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="101"/>
-        <source>wms</source>
-        <translation></translation>
-    </message>
-    <message>
-        <location filename="../static/ui/main_dialog.ui" line="102"/>
-        <source>postgresraster</source>
-        <translation></translation>
-    </message>
-    <message>
-        <location filename="../static/ui/main_dialog.ui" line="103"/>
-        <source>grassraster</source>
-        <translation></translation>
-    </message>
-    <message>
         <location filename="../static/ui/main_dialog.ui" line="149"/>
         <source>Use image extent</source>
         <translation>Использовать экстент снимка</translation>
@@ -133,6 +118,11 @@
         <location filename="../static/ui/main_dialog.ui" line="190"/>
         <source>Start processing</source>
         <translation>Начать обработку</translation>
+    </message>
+    <message>
+        <location filename="../static/ui/main_dialog.ui" line="245"/>
+        <source>Name</source>
+        <translation type="finished">Название</translation>
     </message>
     <message>
         <location filename="../static/ui/main_dialog.ui" line="263"/>
