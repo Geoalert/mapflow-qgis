@@ -375,7 +375,7 @@ class Mapflow:
         if path:
             self.dlg.outputDirectory.setText(path)
             # Save to settings to set it automatically at next plugin start
-            self.settings.setValue("outputDir", path)
+            self.settings.setValue('outputDir', path)
             return path
 
     def check_if_output_directory_is_selected(self) -> bool:
@@ -950,22 +950,9 @@ class Mapflow:
                 self.dlg.processingsTable.setItem(row, col, QTableWidgetItem(processing[attr]))
             if processing['name'] in selected_processing_names:
                 self.dlg.processingsTable.selectRow(row)
-        # self.shrink_table_height_to_content(self.dlg.processingsTable)
         # Turn sorting on again
         self.dlg.processingsTable.setSortingEnabled(True)
         self.dlg.processingsTable.sortItems(columns.index('created'), Qt.DescendingOrder)
-
-    def shrink_table_height_to_content(self, table: QTableWidget) -> None:
-        """Limit table height so that no whitespace is shown after the last row.
-
-        :param table: The table to shrink
-        """
-        self.dlg.processingsTable.setMaximumHeight(
-            table.rowCount() * self.dlg.processingsTable.rowHeight(0)
-            + self.dlg.processingsTable.horizontalHeader().height()
-            + 2 * self.dlg.processingsTable.frameWidth()
-            + 12  # 12px for the scrollbar
-        )
 
     def tr(self, message: str) -> str:
         """Localize a UI element text.
@@ -981,18 +968,23 @@ class Mapflow:
         This function is referenced by the QGIS plugin loading system, so it can't be renamed.
         Since there are submodules, the various UI texts are set dynamically.
         """
-        # Set dialog titles dynamically so it can be used as a submodule
+        # Set main dialog title dynamically so it could be overridden when used as a submodule
         self.dlg.setWindowTitle(self.plugin_name)
         self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
+        # Display plugin icon in own toolbar
         icon = QIcon(os.path.join(self.plugin_dir, 'icon.png'))
         plugin_button = QAction(icon, self.plugin_name, self.main_window)
         plugin_button.triggered.connect(self.run)
         self.toolbar.addAction(plugin_button)
-        # Find or create a group for plugin layers
+        # Initialize plugin layer group var; QGIS layer tree is loaded after plugin loading
         self.layer_group = None
         self.project.readProject.connect(self.set_layer_group)
+        # Restore table section sizes
         self.dlg.processingsTable.horizontalHeader().restoreState(
             self.settings.value('processingsTableHeaderState', b'')
+        )
+        self.dlg.maxarMetadataTable.horizontalHeader().restoreState(
+            self.settings.value('maxarMetadataTableHeaderState', b'')
         )
 
     def set_layer_group(self) -> None:
