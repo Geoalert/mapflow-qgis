@@ -17,7 +17,7 @@
     </message>
 </context>
 <context>
-    <name>Dialog</name>
+    <name>LoginDialog</name>
     <message>
         <location filename="../static/ui/login_dialog.ui" line="23"/>
         <source>Mapflow - Log In</source>
@@ -36,7 +36,7 @@
     <message>
         <location filename="../static/ui/login_dialog.ui" line="85"/>
         <source>Remember me</source>
-        <translation>Запомнить меня</translation>
+        <translation>Запомнить</translation>
     </message>
     <message>
         <location filename="../static/ui/login_dialog.ui" line="182"/>
@@ -49,11 +49,6 @@
         <translation>Вход</translation>
     </message>
     <message>
-        <location filename="../static/ui/custom_provider_dialog.ui" line="22"/>
-        <source>Name</source>
-        <translation>Название</translation>
-    </message>
-    <message>
         <location filename="../static/ui/login_dialog.ui" line="64"/>
         <source>Token</source>
         <translation>Токен</translation>
@@ -62,6 +57,14 @@
         <location filename="../static/ui/login_dialog.ui" line="98"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://mapflow.ai&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Need an account?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://mapflow.ai&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Зарегистрироваться&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+    </message>
+</context>
+<context>
+    <name>CustomProviderDialog</name>
+    <message>
+        <location filename="../static/ui/custom_provider_dialog.ui" line="22"/>
+        <source>Name</source>
+        <translation>Название</translation>
     </message>
     <message>
         <location filename="../static/ui/custom_provider_dialog.ui" line="46"/>
@@ -73,6 +76,9 @@
         <source>Custom provider</source>
         <translation>Добавить источник</translation>
     </message>
+</context>
+<context>
+    <name>MainDialog</name>
     <message>
         <location filename="../static/ui/main_dialog.ui" line="31"/>
         <source>Processing</source>
