@@ -225,7 +225,7 @@ class Mapflow:
         """
         provider = self.dlg.customProviderCombo.currentText()
         # Ask for confirmation
-        if self.alert(self.tr('Permanently remove {}?').format(provider), 'question') == QMessageBox.No:
+        if self.alert(self.tr('Permanently remove ') + provider + '?', 'question') == QMessageBox.No:
             return
         del self.custom_providers[provider]
         self.update_custom_provider_config()
