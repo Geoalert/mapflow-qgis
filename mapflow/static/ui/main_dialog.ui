@@ -32,11 +32,11 @@
     </attribute>
       <layout class="QGridLayout" name="layoutProcessing">
        <item row="0" column="0">
-        <layout class="QGridLayout" name="processingOptions">
+        <layout class="QGridLayout" name="processingOptions" columnstretch="0,1,0,1">
        <item row="0" column="0">
         <widget class="QLabel" name="labelProcessingName">
          <property name="text">
-          <string>Processing name:</string>
+            <string>Name:</string>
          </property>
         </widget>
        </item>

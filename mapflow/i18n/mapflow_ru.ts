@@ -70,7 +70,7 @@
     </message>
     <message>
         <location filename="../static/ui/main_dialog.ui" line="39"/>
-        <source>Processing name:</source>
+        <source>Name:</source>
         <translation>Название:</translation>
     </message>
     <message>
