@@ -11,7 +11,7 @@ from PyQt5.QtCore import (
     QThread,
 )
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QMessageBox, QFileDialog, QTableWidgetItem, QAction, QTableWidget
+from PyQt5.QtWidgets import QMessageBox, QFileDialog, QTableWidgetItem, QAction
 from qgis import processing as qgis_processing  # to avoid collisions
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature,
@@ -62,23 +62,27 @@ class Mapflow:
             self.translator = QTranslator()
             self.translator.load(locale_path)
             QCoreApplication.installTranslator(self.translator)
+        # Translate native Qt texts; doesn't work in a cycle for some reason
+        QCoreApplication.translate('QPlatformTheme', 'Cancel')
+        QCoreApplication.translate('QPlatformTheme', '&Yes')
+        QCoreApplication.translate('QPlatformTheme', '&No')
         # Init dialogs
         self.dlg = MainDialog(self.main_window)
         self.dlg_login = LoginDialog(self.main_window)
-        self.dlg_custom_provider = CustomProviderDialog(self.main_window)
-        self.dlg_connect_id = ConnectIdDialog(self.main_window)
+        self.dlg_custom_provider = CustomProviderDialog(self.dlg)
+        self.dlg_connect_id = ConnectIdDialog(self.dlg)
         self.red_border_style = 'border-color: rgb(239, 41, 41);'  # used to highlight invalid inputs
         self.timeout_alert = QMessageBox(
             QMessageBox.Warning, self.plugin_name,
             self.tr("Sorry, we couldn't connect to Mapflow. Please try again later."
                     'If the problem remains, please, send us an email to help@geoalert.io.'),
-            parent=self.main_window
+            parent=self.dlg
         )
         self.offline_alert = QMessageBox(
             QMessageBox.Information,
             self.plugin_name,
             self.tr('Mapflow requires Internet connection'),
-            parent=self.main_window
+            parent=self.dlg
         )
         # Display the plugin's version in the Help tab
         metadata_parser = ConfigParser()
@@ -147,6 +151,9 @@ class Mapflow:
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
         self.dlg.zoomLimitMaxar.toggled.connect(lambda state: self.settings.setValue('zoomLimitMaxar', state))
         self.dlg.maxarMetadataTable.cellDoubleClicked.connect(self.maxar_double_click_preview)
+
+    def tr_native(self, message: str) -> str:
+        return QCoreApplication.translate('QPlatformTheme', message)
 
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
@@ -959,8 +966,7 @@ class Mapflow:
 
         :param message: A text to translate
         """
-        # From config, not self.plugin_name bc the latter is overloaded in submodules which break translation
-        return QCoreApplication.translate(config.PLUGIN_NAME, message)
+        return QCoreApplication.translate(__file__, message)
 
     def initGui(self) -> None:
         """Create the menu entries and toolbar icons inside the QGIS GUI.
