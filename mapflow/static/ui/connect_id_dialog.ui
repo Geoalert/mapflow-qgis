@@ -10,8 +10,33 @@
     <height>106</height>
    </rect>
   </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>394</width>
+    <height>106</height>
+   </size>
+  </property>
+  <property name="maximumSize">
+   <size>
+    <width>394</width>
+    <height>106</height>
+   </size>
+  </property>
   <property name="windowTitle">
    <string notr="true">Connect ID</string>
+  </property>
+  <property name="windowIcon">
+   <iconset resource="../resources.qrc">
+    <normaloff>:/plugins/mapflow/icons/mapflow.png</normaloff>:/plugins/mapflow/icons/mapflow.png</iconset>
+  </property>
+  <property name="modal">
+   <bool>true</bool>
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <property name="bottomMargin">

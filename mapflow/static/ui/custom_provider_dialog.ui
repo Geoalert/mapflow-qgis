@@ -1,17 +1,42 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>Dialog</class>
- <widget class="QDialog" name="Dialog">
+ <class>CustomProviderDialog</class>
+ <widget class="QDialog" name="CustomProviderDialog">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>324</width>
+    <width>325</width>
     <height>175</height>
    </rect>
   </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>325</width>
+    <height>175</height>
+   </size>
+  </property>
+  <property name="maximumSize">
+   <size>
+    <width>325</width>
+    <height>175</height>
+   </size>
+  </property>
   <property name="windowTitle">
    <string>Custom provider</string>
+  </property>
+  <property name="windowIcon">
+   <iconset resource="../resources.qrc">
+    <normaloff>:/plugins/mapflow/icons/mapflow.png</normaloff>:/plugins/mapflow/icons/mapflow.png</iconset>
+  </property>
+  <property name="modal">
+   <bool>true</bool>
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <item row="0" column="0">
@@ -96,7 +121,7 @@
   <connection>
    <sender>buttonBox</sender>
    <signal>accepted()</signal>
-   <receiver>Dialog</receiver>
+   <receiver>CustomProviderDialog</receiver>
    <slot>accept()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -112,7 +137,7 @@
   <connection>
    <sender>buttonBox</sender>
    <signal>rejected()</signal>
-   <receiver>Dialog</receiver>
+   <receiver>CustomProviderDialog</receiver>
    <slot>reject()</slot>
    <hints>
     <hint type="sourcelabel">

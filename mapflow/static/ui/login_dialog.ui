@@ -1,16 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>Dialog</class>
- <widget class="QDialog" name="Dialog">
-  <property name="windowModality">
-   <enum>Qt::WindowModal</enum>
-  </property>
+ <class>LoginDialog</class>
+ <widget class="QDialog" name="LoginDialog">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>332</width>
-    <height>208</height>
+    <width>350</width>
+    <height>210</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -19,21 +16,27 @@
     <verstretch>0</verstretch>
    </sizepolicy>
   </property>
+  <property name="minimumSize">
+   <size>
+    <width>350</width>
+    <height>210</height>
+   </size>
+  </property>
+  <property name="maximumSize">
+   <size>
+    <width>350</width>
+    <height>210</height>
+   </size>
+  </property>
   <property name="windowTitle">
    <string>Mapflow - Log In</string>
   </property>
   <property name="windowIcon">
-   <iconset>
-    <normaloff>icon.png</normaloff>icon.png</iconset>
+   <iconset resource="../resources.qrc">
+    <normaloff>:/plugins/mapflow/icons/mapflow.png</normaloff>:/plugins/mapflow/icons/mapflow.png</iconset>
   </property>
   <property name="styleSheet">
    <string notr="true">rgb(255,0,0)</string>
-  </property>
-  <property name="sizeGripEnabled">
-   <bool>false</bool>
-  </property>
-  <property name="modal">
-   <bool>true</bool>
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <item row="0" column="0">
@@ -49,9 +52,6 @@
          <widget class="QLineEdit" name="loginField">
           <property name="text">
            <string/>
-          </property>
-          <property name="alignment">
-           <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
           </property>
           <property name="clearButtonEnabled">
            <bool>true</bool>
@@ -70,9 +70,6 @@
           <property name="clearButtonEnabled">
            <bool>true</bool>
           </property>
-          <property name="showLockIcon">
-           <bool>false</bool>
-          </property>
          </widget>
         </item>
     </layout>
@@ -88,17 +85,8 @@
         </item>
           <item>
       <widget class="QLabel" name="needAnAccount">
-       <property name="font">
-        <font>
-         <pointsize>11</pointsize>
-         <kerning>true</kerning>
-        </font>
-       </property>
            <property name="text">
         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://mapflow.ai&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Need an account?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-           </property>
-       <property name="textFormat">
-        <enum>Qt::AutoText</enum>
            </property>
        <property name="wordWrap">
         <bool>true</bool>
@@ -112,16 +100,7 @@
       </item>
    <item row="2" column="0">
          <widget class="QLabel" name="invalidCredentialsMessage">
-          <property name="font">
-           <font>
-            <weight>75</weight>
-            <bold>true</bold>
-           </font>
-          </property>
           <property name="visible">
-           <bool>false</bool>
-          </property>
-          <property name="autoFillBackground">
            <bool>false</bool>
           </property>
           <property name="styleSheet">
@@ -143,9 +122,6 @@
         </item>
    <item row="3" column="0">
      <layout class="QHBoxLayout" name="layoutButtons">
-     <property name="topMargin">
-      <number>15</number>
-     </property>
       <item>
        <spacer name="horizontalSpacer">
         <property name="orientation">
@@ -172,36 +148,15 @@
         </property>
         <item>
          <widget class="QPushButton" name="cancelButton">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
           <property name="text">
            <string>Cancel</string>
-          </property>
-          <property name="flat">
-           <bool>false</bool>
           </property>
          </widget>
         </item>
         <item>
          <widget class="QPushButton" name="loginButton">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="autoFillBackground">
-           <bool>false</bool>
-          </property>
           <property name="text">
            <string>Log in</string>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
           </property>
           <property name="default">
            <bool>true</bool>
@@ -226,7 +181,7 @@
   <connection>
    <sender>cancelButton</sender>
    <signal>clicked()</signal>
-   <receiver>Dialog</receiver>
+   <receiver>LoginDialog</receiver>
    <slot>reject()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -242,7 +197,7 @@
   <connection>
    <sender>loginButton</sender>
    <signal>clicked()</signal>
-   <receiver>Dialog</receiver>
+   <receiver>LoginDialog</receiver>
    <slot>accept()</slot>
    <hints>
     <hint type="sourcelabel">
