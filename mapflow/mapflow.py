@@ -966,7 +966,8 @@ class Mapflow:
 
         :param message: A text to translate
         """
-        return QCoreApplication.translate(__file__, message)
+        # Don't use self.plugin_name as context since it'll be overriden in supermodules  
+        return QCoreApplication.translate(config.PLUGIN_NAME, message)
 
     def initGui(self) -> None:
         """Create the menu entries and toolbar icons inside the QGIS GUI.

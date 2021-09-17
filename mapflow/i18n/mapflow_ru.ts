@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE TS>
-<TS version="2.1" language="ru_RU" sourcelanguage="en">
+<!DOCTYPE TS><TS version="2.0" language="ru_RU" sourcelanguage="en">
 <context>
     <name>CustomProviderDialog</name>
     <message>
@@ -80,7 +79,7 @@
         <translation>Модель Mapflow:</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="657"/>
+        <location filename="../static/ui/main_dialog.ui" line="650"/>
         <source>Area:</source>
         <translation>Область:</translation>
     </message>
@@ -150,102 +149,102 @@
         <translation>Рабочая папка:</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="490"/>
+        <location filename="../static/ui/main_dialog.ui" line="483"/>
         <source>Zoom limit:</source>
         <translation>Зум:</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="510"/>
+        <location filename="../static/ui/main_dialog.ui" line="503"/>
         <source>Preview</source>
         <translation>Просмотр</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="525"/>
+        <location filename="../static/ui/main_dialog.ui" line="518"/>
         <source>Credentials</source>
         <translation>Авторизация</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="545"/>
+        <location filename="../static/ui/main_dialog.ui" line="538"/>
         <source>Login:</source>
         <translation>Логин:</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="559"/>
+        <location filename="../static/ui/main_dialog.ui" line="552"/>
         <source>Password:</source>
         <translation>Пароль:</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="575"/>
+        <location filename="../static/ui/main_dialog.ui" line="568"/>
         <source>Save Login/Password</source>
         <translation>Запомнить</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="585"/>
+        <location filename="../static/ui/main_dialog.ui" line="578"/>
         <source>Maxar SecureWatch Metadata</source>
         <translation>Метаданные Maxar SecureWatch</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="614"/>
+        <location filename="../static/ui/main_dialog.ui" line="607"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Руководство&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="627"/>
+        <location filename="../static/ui/main_dialog.ui" line="620"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;a href=&quot;https://www.maxar.com/legal/securewatch-license&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Terms of Service&lt;/span&gt;&lt;/a&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;a href=&quot;https://www.maxar.com/legal/securewatch-license&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Условия использования&lt;/span&gt;&lt;/a&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="643"/>
+        <location filename="../static/ui/main_dialog.ui" line="636"/>
         <source>Limit zoom to 14</source>
         <translation>Зум не более 14</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="671"/>
+        <location filename="../static/ui/main_dialog.ui" line="664"/>
         <source>Get metadata</source>
         <translation>Получить метаданные</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="711"/>
+        <location filename="../static/ui/main_dialog.ui" line="704"/>
         <source>Source Unit</source>
         <translation>Категория</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="719"/>
+        <location filename="../static/ui/main_dialog.ui" line="712"/>
         <source>Product Type</source>
         <translation>Тип</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="727"/>
+        <location filename="../static/ui/main_dialog.ui" line="720"/>
         <source>Band Order</source>
         <translation>Порядок каналов</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="735"/>
+        <location filename="../static/ui/main_dialog.ui" line="728"/>
         <source>Cloud Cover</source>
         <translation>Облачность</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="743"/>
+        <location filename="../static/ui/main_dialog.ui" line="736"/>
         <source>Date</source>
         <translation>Дата</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="766"/>
+        <location filename="../static/ui/main_dialog.ui" line="759"/>
         <source>Help</source>
         <translation>Помощь</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="784"/>
+        <location filename="../static/ui/main_dialog.ui" line="777"/>
         <source>You are using Mapflow for QGIS v</source>
         <translation>Вы используете плагин Mapflow версии </translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="800"/>
+        <location filename="../static/ui/main_dialog.ui" line="793"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-style:italic;&quot;&gt;This application requires access to &lt;/span&gt;&lt;a href=&quot;http://mapflow.ai/&quot;&gt;&lt;span style=&quot; font-style:italic; text-decoration: underline; color:#0000ff;&quot;&gt;Mapflow.ai&lt;/span&gt;&lt;/a&gt;&lt;span style=&quot; font-style:italic;&quot;&gt; Processing API service. &lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-style:italic;&quot;&gt;To obtain credentials, please, &lt;/span&gt;&lt;a href=&quot;mailto:help@geoalert.io?subject=Processing API access&amp;amp;body=Hello, I&apos;d like to use your QGIS plugin.&quot;&gt;&lt;span style=&quot; font-style:italic; text-decoration: underline; color:#0057ae;&quot;&gt;send us a request.&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-style:italic;&quot;&gt;Для работы плагина требуется доступ к API платформы &lt;a href=&quot;http://mapflow.ai/&quot;&gt;Mapflow.ai&lt;/a&gt;. Напишите нам на &lt;a href=&quot;mailto:help@geoalert.io?subject=Доступ к API&amp;body=Здравствуйте, я хотел бы использовать ваш QGIS плагин.&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;почту&lt;/span&gt;&lt;/a&gt; для получения доступа.&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
-        <location filename="../static/ui/main_dialog.ui" line="813"/>
+        <location filename="../static/ui/main_dialog.ui" line="806"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h2 style=&quot; margin-top:30px; margin-bottom:30px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:x-large; font-weight:600;&quot;&gt;How to use the plugin&lt;/span&gt;&lt;/h2&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-install-the-plugin&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Installation guide&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;User Interface walkthrough&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-process-your-own-imagery-data&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to process your own image&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to use a different imagery tileset&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect to Maxar SercureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h2 style=&quot; margin-top:30px; margin-bottom:30px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:x-large; font-weight:600;&quot;&gt;Как пользоваться плагином&lt;/span&gt;&lt;/h2&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-install-the-plugin&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Установка&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Пользовательский интерфейс&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-process-your-own-imagery-data&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать собственный снимок для обработки&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать снимки из других источников&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/docs_api/qgis_mapflow.html#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как подключить Maxar SercureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
@@ -373,7 +372,7 @@
         <translation>Неверные реквизиты</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="979"/>
+        <location filename="../mapflow.py" line="980"/>
         <source>Log in</source>
         <translation>Вход</translation>
     </message>
