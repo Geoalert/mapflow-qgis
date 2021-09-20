@@ -7,11 +7,11 @@ from configparser import ConfigParser  # parse metadata.txt -> QGIS version chec
 
 import requests
 from PyQt5.QtCore import (
-    Qt, QSettings, QCoreApplication, QTranslator, QPersistentModelIndex, QModelIndex,
+    QSettings, QCoreApplication, QTranslator, QPersistentModelIndex, QModelIndex,
     QThread,
 )
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QMessageBox, QFileDialog, QTableWidgetItem, QAction
+from PyQt5.QtWidgets import QMessageBox, QFileDialog, QTableWidgetItem, QAction, QAbstractItemView
 from qgis import processing as qgis_processing  # to avoid collisions
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature,
@@ -114,8 +114,6 @@ class Mapflow:
             self.custom_providers = json.load(f)
         self.dlg.rasterCombo.setAdditionalItems((*self.custom_providers, 'Mapbox'))
         self.dlg.customProviderCombo.addItems(self.custom_providers)
-        # Store processings selected in the table
-        self.selected_processings: List[Dict[str, Union[str, int]]] = []
         # Hide the ID columns as only needed for table operations, not the user
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
@@ -136,7 +134,6 @@ class Mapflow:
         self.dlg.useImageExtentAsAoi.toggled.connect(self.calculate_aoi_area)
         self.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
         # Processings
-        self.dlg.processingsTable.itemSelectionChanged.connect(self.memorize_selected_processings)
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_processing_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Custom provider
@@ -579,21 +576,6 @@ class Mapflow:
         label = self.tr('Area: {:.2f} sq.km').format(area)
         self.dlg.labelAoiArea.setText(label)
 
-    def memorize_selected_processings(self) -> None:
-        """Memorize the currently selected processings by ID.
-
-        Is used to restore selection in the processings table after refill.
-        IDs are saved to an instance attribute 'selected_processings'.
-
-        Is called when a row in processings table is selected/deselected.
-        """
-        selected_rows: List[int] = [row.row() for row in self.dlg.processingsTable.selectionModel().selectedRows()]
-        self.selected_processings: List[Dict[str, Union[str, int]]] = [{
-            'id': self.dlg.processingsTable.item(row, config.PROCESSING_TABLE_ID_COLUMN_INDEX).text(),
-            'name': self.dlg.processingsTable.item(row, 0).text(),
-            'row': row
-        } for row in selected_rows]
-
     def delete_processings(self) -> None:
         """Delete one or more processings on the server.
 
@@ -913,7 +895,7 @@ class Mapflow:
 
         :param processings: A list of JSON-like dictionaries containing information about the user's processings.
         """
-        # Inform the user about the finished processings
+        # Memorize which processings have been finished to alert user later
         now = datetime.now(timezone.utc)
         one_day = timedelta(1)
         if sys.version_info.minor < 7:  # python 3.6
@@ -928,8 +910,6 @@ class Mapflow:
             processing['name'] for processing in self.processings
             if processing['percentCompleted'] == '100%'
         ]
-        for processing in set(finished_processings) - set(previously_finished_processings):
-            self.alert(processing + self.tr(' finished. Double-click it in the table to download the results.'))
         # Save as an instance attribute to reuse elsewhere
         self.processings = processings
         # Save ref to check name uniqueness at processing creation
@@ -945,18 +925,29 @@ class Mapflow:
             processing['workflowDef'] = processing['workflowDef']['name']
         # Fill out the table and restore selection
         columns = 'name', 'workflowDef', 'status', 'percentCompleted', 'created', 'id'
-        selected_processing_names = [processing['name'] for processing in self.selected_processings]
         # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
         self.dlg.processingsTable.setSortingEnabled(False)
         self.dlg.processingsTable.setRowCount(len(self.processings))
+        # Temporarily enable multi selection so that selectRow won't clear previous selection
+        self.dlg.processingsTable.setSelectionMode(QAbstractItemView.MultiSelection)
+        # Memorize selected processings by id
+        selected_processings = [
+            index.data() for index in self.dlg.processingsTable.selectionModel().selectedIndexes()
+            if index.column() == config.PROCESSING_TABLE_ID_COLUMN_INDEX
+        ]
+        # Explicitly clear selection since resetting row count won't do it
+        self.dlg.processingsTable.clearSelection()
         for row, processing in enumerate(self.processings):
             for col, attr in enumerate(columns):
                 self.dlg.processingsTable.setItem(row, col, QTableWidgetItem(processing[attr]))
-            if processing['name'] in selected_processing_names:
+            if processing['id'] in selected_processings:
                 self.dlg.processingsTable.selectRow(row)
-        # Turn sorting on again
         self.dlg.processingsTable.setSortingEnabled(True)
-        self.dlg.processingsTable.sortItems(columns.index('created'), Qt.DescendingOrder)
+        # Restore extended selection
+        self.dlg.processingsTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        # Inform user about finished processings
+        for processing in set(finished_processings) - set(previously_finished_processings):
+            self.alert(processing + self.tr(' finished. Double-click it in the table to download the results.'))
 
     def tr(self, message: str) -> str:
         """Localize a UI element text.
