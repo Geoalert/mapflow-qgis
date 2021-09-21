@@ -972,13 +972,6 @@ class Mapflow:
         plugin_button.triggered.connect(self.run)
         self.toolbar.addAction(plugin_button)
         self.project.readProject.connect(self.set_layer_group)
-        # Restore table section sizes
-        self.dlg.processingsTable.horizontalHeader().restoreState(
-            self.settings.value('processingsTableHeaderState', b'')
-        )
-        self.dlg.maxarMetadataTable.horizontalHeader().restoreState(
-            self.settings.value('maxarMetadataTableHeaderState', b'')
-        )
 
     def set_layer_group(self) -> None:
         """Setup a legend group where all layers created by the plugin will be added."""
@@ -1103,5 +1096,12 @@ class Mapflow:
         # Calculate area of the current AOI layer or feature
         combo = self.dlg.rasterCombo if self.dlg.useImageExtentAsAoi.isChecked() else self.dlg.polygonCombo
         self.calculate_aoi_area(combo.currentLayer())
+        # Restore table section sizes
+        self.dlg.processingsTable.horizontalHeader().restoreState(
+            self.settings.value('processingsTableHeaderState', b'')
+        )
+        self.dlg.maxarMetadataTable.horizontalHeader().restoreState(
+            self.settings.value('maxarMetadataTableHeaderState', b'')
+        )
         # Show main dialog
         self.dlg.show()
