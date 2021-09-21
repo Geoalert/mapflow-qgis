@@ -918,9 +918,9 @@ class Mapflow:
             # Add % signs to progress column for clarity
             processing['percentCompleted'] = f'{processing["percentCompleted"]}%'
             # Localize creation datetime
-            local_datetime = datetime.strptime(processing['created'], config.PROCESSING_DATETIME_FORMAT)
+            datetime_utc = datetime.strptime(processing['created'], config.PROCESSING_DATETIME_FORMAT)
             # Format as ISO without seconds to save a bit of space
-            processing['created'] = local_datetime.strftime('%Y-%m-%d %H:%M')
+            processing['created'] = datetime_utc.astimezone().strftime('%Y-%m-%d %H:%M')
             # Extract WD names from WD objects
             processing['workflowDef'] = processing['workflowDef']['name']
         # Fill out the table and restore selection
