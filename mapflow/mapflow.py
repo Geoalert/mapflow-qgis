@@ -890,41 +890,31 @@ class Mapflow:
 
         :param processings: A list of JSON-like dictionaries containing information about the user's processings.
         """
-        # Memorize which processings have been finished to alert user later
-        now = datetime.now(timezone.utc)
-        one_day = timedelta(1)
-        if sys.version_info.minor < 7:  # python 3.6
+        if sys.version_info.minor < 7:  # python 3.6 doesn't understand 'Z' as UTC
             for processing in processings:
                 processing['created'] = processing['created'].replace('Z', '+0000')
-        finished_processings = [
-            processing['name'] for processing in processings
-            if processing['percentCompleted'] == 100
-            and now - datetime.strptime(processing['created'], config.PROCESSING_DATETIME_FORMAT) < one_day
-        ]
-        previously_finished_processings = [
-            processing['name'] for processing in self.processings
-            if processing['percentCompleted'] == '100%'
-        ]
-        # Save as an instance attribute to reuse elsewhere
-        self.processings = processings
-        # Save ref to check name uniqueness at processing creation
-        self.processing_names = [processing['name'] for processing in self.processings]
-        for processing in self.processings:
+        for processing in processings:
             # Add % signs to progress column for clarity
             processing['percentCompleted'] = f'{processing["percentCompleted"]}%'
-            # Localize creation datetime
-            datetime_utc = datetime.strptime(processing['created'], config.PROCESSING_DATETIME_FORMAT)
-            # Format as ISO without seconds to save a bit of space
-            processing['created'] = datetime_utc.astimezone().strftime('%Y-%m-%d %H:%M')
+            # Parse and localize creation datetime
+            processing['created'] = datetime.strptime(
+                processing['created'], '%Y-%m-%dT%H:%M:%S.%f%z'
+            ).astimezone()
             # Extract WD names from WD objects
             processing['workflowDef'] = processing['workflowDef']['name']
-        # Fill out the table and restore selection
-        columns = 'name', 'workflowDef', 'status', 'percentCompleted', 'created', 'id'
-        # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
-        self.dlg.processingsTable.setSortingEnabled(False)
-        self.dlg.processingsTable.setRowCount(len(self.processings))
-        # Temporarily enable multi selection so that selectRow won't clear previous selection
-        self.dlg.processingsTable.setSelectionMode(QAbstractItemView.MultiSelection)
+        # Memorize which processings had been finished to alert user later
+        previously_finished_processings = self.settings.value('finishedProcessings', [])
+        now = datetime.now().astimezone()
+        one_day = timedelta(1)
+        finished_processings = [
+            processing['name'] for processing in processings
+            if processing['percentCompleted'] == '100%'
+            and now - processing['created'] < one_day
+        ]
+        self.settings.setValue('finishedProcessings', finished_processings)
+        # Drop seconds to save space
+        for processing in processings:
+            processing['created'] = processing['created'].strftime('%Y-%m-%d %H:%M')
         # Memorize selected processings by id
         selected_processings = [
             index.data() for index in self.dlg.processingsTable.selectionModel().selectedIndexes()
@@ -932,8 +922,14 @@ class Mapflow:
         ]
         # Explicitly clear selection since resetting row count won't do it
         self.dlg.processingsTable.clearSelection()
-        for row, processing in enumerate(self.processings):
-            for col, attr in enumerate(columns):
+        # Temporarily enable multi selection so that selectRow won't clear previous selection
+        self.dlg.processingsTable.setSelectionMode(QAbstractItemView.MultiSelection)
+        # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
+        self.dlg.processingsTable.setSortingEnabled(False)
+        self.dlg.processingsTable.setRowCount(len(processings))
+        # Fill out the table
+        for row, processing in enumerate(processings):
+            for col, attr in enumerate(('name', 'workflowDef', 'status', 'percentCompleted', 'created', 'id')):
                 self.dlg.processingsTable.setItem(row, col, QTableWidgetItem(processing[attr]))
             if processing['id'] in selected_processings:
                 self.dlg.processingsTable.selectRow(row)
@@ -943,6 +939,10 @@ class Mapflow:
         # Inform user about finished processings
         for processing in set(finished_processings) - set(previously_finished_processings):
             self.alert(processing + self.tr(' finished. Double-click it in the table to download the results.'))
+        # Save as an instance attribute to reuse elsewhere
+        self.processings = processings
+        # Save ref to check name uniqueness at processing creation
+        self.processing_names = [processing['name'] for processing in self.processings]
 
     def tr(self, message: str) -> str:
         """Localize a UI element text.
