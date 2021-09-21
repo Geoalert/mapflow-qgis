@@ -125,7 +125,7 @@ class Mapflow:
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         self.dlg.selectTif.clicked.connect(self.select_tif)
         # (Dis)allow the user to use raster extent as AOI
-        self.dlg.rasterCombo.layerChanged.connect(self.toggle_use_image_extent_as_aoi)
+        self.dlg.rasterCombo.currentTextChanged.connect(self.toggle_use_image_extent_as_aoi)
         self.dlg.useImageExtentAsAoi.stateChanged.connect(lambda is_checked: self.dlg.polygonCombo.setEnabled(not is_checked))
         self.dlg.startProcessing.clicked.connect(self.create_processing)
         # Calculate AOI area
@@ -142,7 +142,6 @@ class Mapflow:
         self.dlg.editCustomProvider.clicked.connect(self.edit_provider)
         self.dlg.removeCustomProvider.clicked.connect(self.remove_custom_provider)
         self.dlg.zoomLimit.valueChanged.connect(lambda value: self.settings.setValue('zoomLimit', value))
-        self.dlg.rasterCombo.currentTextChanged.connect(lambda text: self.dlg.customProviderCombo.setCurrentText(text))
         # Maxar
         self.dlg.maxarMetadataTable.itemSelectionChanged.connect(self.highlight_maxar_image)
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
@@ -347,22 +346,18 @@ class Mapflow:
         for layer in filter(helpers.is_polygon_layer, layers):
             layer.selectionChanged.connect(self.calculate_aoi_area)
 
-    def toggle_use_image_extent_as_aoi(self, layer: Optional[QgsRasterLayer]) -> None:
-        """Toggle the 'Use image extent' checkbox depending on the item in the 'Imagery source' combo box.
+    def toggle_use_image_extent_as_aoi(self, provider: str) -> None:
+        """Toggle 'Use image extent' checkbox depending on the item in the imagery combo box.
 
-        If it's a GeoTIFF layer, then 'Use image extent' is enabled and checked since it's presumed that when a user
-        processes their own image, they would often like to process only within its extent.
-        'Update cache' is toggled reversely: if a local GeoTIFF is passed, cache can't be updated.
-
-        :param layer: A raster layer
+        :param provider: A combo box entry representing an imagery provider
         """
-        # False if imagery source is 'Mapbox Satellite' or 'Custom provider', i.e. a 'virtual' layer
-        enabled = bool(layer)
-        # If a 'virtual layer', it's extent can't be used
-        self.dlg.useImageExtentAsAoi.setEnabled(enabled)
-        self.dlg.useImageExtentAsAoi.setChecked(enabled)
-        # Raster can't be cached for user GeoTIFFs
-        self.dlg.updateCache.setEnabled(not enabled)
+        enabled = provider in (*self.custom_providers, 'Mapbox')  # False if GeoTIFF
+        # There's no extent for a tile provider
+        self.dlg.useImageExtentAsAoi.setEnabled(not enabled)
+        # Presume user would like to process within its extent
+        self.dlg.useImageExtentAsAoi.setChecked(not enabled)
+        # Mapflow doesn't currently support caching user imagery
+        self.dlg.updateCache.setEnabled(enabled)
 
     def select_output_directory(self) -> str:
         """Open a file dialog for the user to select a directory where plugin files will be stored.
@@ -1091,8 +1086,6 @@ class Mapflow:
         self.worker.finished.connect(thread.quit)
         # self.dlg.finished.connect(thread.requestInterruption)
         thread.start()
-        # Enable/disable the use of image extent as AOI based on the current raster combo layer
-        self.toggle_use_image_extent_as_aoi(self.dlg.rasterCombo.currentLayer())
         # Calculate area of the current AOI layer or feature
         combo = self.dlg.rasterCombo if self.dlg.useImageExtentAsAoi.isChecked() else self.dlg.polygonCombo
         self.calculate_aoi_area(combo.currentLayer())
