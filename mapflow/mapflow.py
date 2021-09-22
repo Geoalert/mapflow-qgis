@@ -535,19 +535,22 @@ class Mapflow:
             a polygon or raster layer (combo item changed),
             or the state of the 'Use image extent' checkbox
         """
-        layer: QgsMapLayer
-        if arg is None:  # Mapbox Satellite or Custom provider
+        if arg is None:  # 'virtual' layer: Mapbox or custom provider
             layer = self.dlg.polygonCombo.currentLayer()
             if not layer:
+                self.dlg.labelAoiArea.setText('')
                 return
         elif isinstance(arg, list) and not self.dlg.useImageExtentAsAoi.isChecked():  # feature selection changed
             layer = self.dlg.polygonCombo.currentLayer()
-            # All project layers are monitored for selection, so have to check if it's the same layer as in the combo
-            if layer != self.iface.activeLayer() or self.dlg.useImageExtentAsAoi.isChecked():
+            # All polygon layers are monitored so have to check if it's the one in the combo
+            if layer != self.iface.activeLayer():
                 return
-        elif isinstance(arg, bool):  # checkbox state changed
+        elif isinstance(arg, bool):  # 'Use image extent as AOI' toggled
             combo = self.dlg.rasterCombo if arg else self.dlg.polygonCombo
             layer = combo.currentLayer()
+            if not layer:
+                self.dlg.labelAoiArea.setText('')
+                return
         else:  # A new layer has been selected
             layer = arg
         # Layer identified, now let's extract the geometry
@@ -565,7 +568,7 @@ class Mapflow:
         layer_crs: QgsCoordinateReferenceSystem = layer.crs()
         calculator = QgsDistanceArea()
         # Set ellipsoid to use spherical calculations for geographic CRSs
-        calculator.setEllipsoid(layer_crs.ellipsoidAcronym() or 'EPSG:7030')  # 7030=WGS84 => makes a sensible default
+        calculator.setEllipsoid(layer_crs.ellipsoidAcronym() or 'EPSG:7030')  # WGS84 ellipsoid
         calculator.setSourceCrs(layer_crs, self.project.transformContext())
         area = calculator.measureArea(aoi) / 10**6  # sq. m to sq. km
         label = self.tr('Area: {:.2f} sq.km').format(area)
