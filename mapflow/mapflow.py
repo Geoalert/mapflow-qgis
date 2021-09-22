@@ -308,7 +308,7 @@ class Mapflow:
             }
             self.dlg.customProviderCombo.removeItem(self.dlg.customProviderCombo.currentIndex())
             self.update_custom_provider_config()
-            self.dlg.rasterCombo.setAdditionalItems(self.custom_providers)
+            self.dlg.rasterCombo.setAdditionalItems((*self.custom_providers, 'Mapbox'))
             self.dlg.customProviderCombo.addItem(name)
             self.dlg.customProviderCombo.setCurrentText(name)
             break
