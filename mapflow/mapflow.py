@@ -2,7 +2,7 @@ import sys  # Python version check for ensuring compatibility
 import json
 import os.path
 from typing import List, Dict, Optional, Union
-from datetime import datetime, timedelta, timezone  # processing creation datetime formatting
+from datetime import datetime, timedelta  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
 import requests
@@ -93,7 +93,7 @@ class Mapflow:
         self.current_maxar_metadata_product = ''
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         # Check if there are stored credentials
-        self.logged_in = self.settings.value('serverLogin') and self.settings.value('serverPassword')
+        self.logged_in = bool(self.settings.value('serverLogin') and self.settings.value('serverPassword'))
         if self.settings.value('serverRememberMe'):
             self.server = self.settings.value('server')
             self.dlg_login.loginField.setText(self.settings.value('serverLogin'))
@@ -906,15 +906,15 @@ class Mapflow:
             # Extract WD names from WD objects
             processing['workflowDef'] = processing['workflowDef']['name']
         # Memorize which processings had been finished to alert user later
-        previously_finished_processings = self.settings.value('finishedProcessings', [])
+        previously_finished = self.settings.value(f'finishedProcessings{self.login}{self.mapflow_env}', [])
         now = datetime.now().astimezone()
         one_day = timedelta(1)
-        finished_processings = [
+        finished = [
             processing['name'] for processing in processings
             if processing['percentCompleted'] == '100%'
             and now - processing['created'] < one_day
         ]
-        self.settings.setValue('finishedProcessings', finished_processings)
+        self.settings.setValue(f'finishedProcessings{self.login}{self.mapflow_env}', finished)
         # Drop seconds to save space
         for processing in processings:
             processing['created'] = processing['created'].strftime('%Y-%m-%d %H:%M')
@@ -940,7 +940,7 @@ class Mapflow:
         # Restore extended selection
         self.dlg.processingsTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
         # Inform user about finished processings
-        for processing in set(finished_processings) - set(previously_finished_processings):
+        for processing in set(finished) - set(previously_finished):
             self.alert(processing + self.tr(' finished. Double-click it in the table to download the results.'))
         # Save as an instance attribute to reuse elsewhere
         self.processings = processings
@@ -1032,15 +1032,14 @@ class Mapflow:
     def logout(self) -> None:
         """Close the plugin and clear credentials from cache."""
         self.dlg.close()
-        if not self.settings.value('serverRememberMe'):
-            # Erase stored credentials
-            for setting in ('serverLogin', 'serverPassword', 'serverRememberMe'):
-                self.settings.remove(setting)
-            # Clear the login form
-            for field in (self.dlg_login.loginField, self.dlg_login.passwordField):
-                field.clear()
+        # Erase stored credentials
+        for setting in ('serverLogin', 'serverPassword', 'serverRememberMe'):
+            self.settings.remove(setting)
         self.logged_in = False
+        # Stop monitoring processings
         self.worker.thread().requestInterruption()
+        # Recreate the login dialog to start afresh
+        self.dlg_login = LoginDialog(self.main_window)
         # Assume user wants to log into another account or to another server
         self.run()
 
