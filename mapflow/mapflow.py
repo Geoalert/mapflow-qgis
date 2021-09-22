@@ -8,7 +8,7 @@ from configparser import ConfigParser  # parse metadata.txt -> QGIS version chec
 import requests
 from PyQt5.QtCore import (
     QSettings, QCoreApplication, QTranslator, QPersistentModelIndex, QModelIndex,
-    QThread,
+    QThread, Qt
 )
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QMessageBox, QFileDialog, QTableWidgetItem, QAction, QAbstractItemView
@@ -970,6 +970,7 @@ class Mapflow:
         plugin_button.triggered.connect(self.run)
         self.toolbar.addAction(plugin_button)
         self.project.readProject.connect(self.set_layer_group)
+        self.dlg.processingsTable.sortByColumn(4, Qt.DescendingOrder)
 
     def set_layer_group(self) -> None:
         """Setup a legend group where all layers created by the plugin will be added."""
