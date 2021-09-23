@@ -99,11 +99,7 @@ class Mapflow:
             self.dlg_login.loginField.setText(self.settings.value('serverLogin'))
             self.dlg_login.passwordField.setText(self.settings.value('serverPassword'))
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
-        self.dlg.zoomLimit.setValue(int(self.settings.value('zoomLimit') or 14))
-        try:
-            self.dlg.zoomLimitMaxar.setChecked(self.settings.value('zoomLimitMaxar'))
-        except TypeError:  # if unset
-            self.dlg.zoomLimitMaxar.setChecked(True)
+        self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or 14))
         if self.settings.value('customProviderSaveAuth'):
             self.dlg.customProviderSaveAuth.setChecked(True)
             self.dlg.customProviderLogin.setText(self.settings.value('customProviderLogin'))
@@ -141,11 +137,10 @@ class Mapflow:
         self.dlg.addCustomProvider.clicked.connect(self.add_custom_provider)
         self.dlg.editCustomProvider.clicked.connect(self.edit_provider)
         self.dlg.removeCustomProvider.clicked.connect(self.remove_custom_provider)
-        self.dlg.zoomLimit.valueChanged.connect(lambda value: self.settings.setValue('zoomLimit', value))
+        self.dlg.maxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
         # Maxar
         self.dlg.maxarMetadataTable.itemSelectionChanged.connect(self.highlight_maxar_image)
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
-        self.dlg.zoomLimitMaxar.toggled.connect(lambda state: self.settings.setValue('zoomLimitMaxar', state))
         self.dlg.maxarMetadataTable.cellDoubleClicked.connect(self.maxar_double_click_preview)
 
     def save_dialog_state(self):
@@ -752,7 +747,7 @@ class Mapflow:
         password = self.dlg.customProviderPassword.text()
         provider = self.dlg.customProviderCombo.currentText()
         url = self.custom_providers[provider]['url']
-        max_zoom = self.dlg.zoomLimit.value()
+        max_zoom = self.dlg.maxZoom.value()
         layer_name = provider
         if provider in config.MAXAR_PRODUCTS:
             if username or password:  # own account
@@ -766,7 +761,6 @@ class Mapflow:
             if image_id:
                 url += f'&CQL_FILTER=feature_id=%27{image_id}%27'
                 layer_name = f'{layer_name} {image_id}'
-            max_zoom = 14 if self.dlg.zoomLimitMaxar.isChecked() else 18
         # Can use urllib.parse but have to specify safe='/?:{}' which sort of defeats the purpose
         url_escaped = url.replace('&', '%26').replace('=', '%3D')
         params = {

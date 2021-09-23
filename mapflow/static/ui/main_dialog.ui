@@ -497,12 +497,12 @@
         <item>
           <widget class="QLabel" name="labelZoomLimit">
           <property name="text">
-           <string>Zoom limit:</string>
+            <string>Max zoom:</string>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="QSpinBox" name="zoomLimit">
+          <widget class="QSpinBox" name="maxZoom">
           <property name="buttonSymbols">
            <enum>QAbstractSpinBox::PlusMinus</enum>
           </property>
@@ -594,9 +594,6 @@
         <property name="title">
          <string>Maxar SecureWatch Metadata</string>
         </property>
-        <property name="checkable">
-         <bool>false</bool>
-        </property>
         <property name="checked">
          <bool>false</bool>
         </property>
@@ -614,7 +611,7 @@
            <number>0</number>
           </property>
          <item>
-           <layout class="QHBoxLayout" name="maxarHeader" stretch="0,1,0,1,0">
+           <layout class="QHBoxLayout" name="maxarHeader" stretch="0,1,0">
            <property name="spacing">
             <number>20</number>
            </property>
@@ -623,16 +620,13 @@
              <property name="text">
                <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
              </property>
-             <property name="wordWrap">
-              <bool>true</bool>
-             </property>
              <property name="openExternalLinks">
               <bool>true</bool>
              </property>
             </widget>
            </item>
            <item>
-             <spacer name="spacerMaxarHeaderLeft">
+             <spacer name="spacerMaxarHeader">
               <property name="orientation">
                <enum>Qt::Horizontal</enum>
               </property>
@@ -649,36 +643,7 @@
              <property name="text">
                <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://www.maxar.com/legal/securewatch-license&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Terms of Service&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
              </property>
-             <property name="textFormat">
-              <enum>Qt::RichText</enum>
-             </property>
              <property name="openExternalLinks">
-              <bool>true</bool>
-             </property>
-            </widget>
-           </item>
-           <item>
-             <spacer name="spacerMaxarHeaderRight">
-              <property name="orientation">
-               <enum>Qt::Horizontal</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>1</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
-            </item>
-            <item>
-            <widget class="QCheckBox" name="zoomLimitMaxar">
-              <property name="layoutDirection">
-               <enum>Qt::RightToLeft</enum>
-              </property>
-             <property name="text">
-              <string>Limit zoom to 14</string>
-             </property>
-             <property name="checked">
               <bool>true</bool>
              </property>
             </widget>
