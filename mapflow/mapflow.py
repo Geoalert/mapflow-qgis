@@ -44,7 +44,8 @@ class Mapflow:
         self.plugin_name = config.PLUGIN_NAME  # aliased here to be overloaded in submodules
         # QGIS Settings will be used to store user credentials and various UI element state
         self.settings = QgsSettings()
-        self.read_mapflow_env()  # get the server environment to connect to (for admins)
+        # get the server environment to connect to (for admins)
+        self.server = f'https://whitemaps-{self.settings.value("variables/mapflow_env", "production")}.mapflow.ai'
         # Create a namespace for the plugin settings
         self.settings.beginGroup(self.plugin_name.lower())
         # By default, plugin adds layers to a group unless user explicitly deletes it
@@ -95,7 +96,6 @@ class Mapflow:
         # Check if there are stored credentials
         self.logged_in = bool(self.settings.value('serverLogin') and self.settings.value('serverPassword'))
         if self.settings.value('serverRememberMe'):
-            self.server = self.settings.value('server')
             self.dlg_login.loginField.setText(self.settings.value('serverLogin'))
             self.dlg_login.passwordField.setText(self.settings.value('serverPassword'))
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
@@ -900,7 +900,9 @@ class Mapflow:
             # Extract WD names from WD objects
             processing['workflowDef'] = processing['workflowDef']['name']
         # Memorize which processings had been finished to alert user later
-        previously_finished = self.settings.value(f'finishedProcessings{self.login}{self.mapflow_env}', [])
+        user_namespace = self.login.split('@')[0] + '@' + self.server.split('-')[1].split('.')[0]
+        finished_processings_setting = f'finishedProcessings_{user_namespace}'
+        previously_finished = self.settings.value(finished_processings_setting, [])
         now = datetime.now().astimezone()
         one_day = timedelta(1)
         finished = [
@@ -908,7 +910,7 @@ class Mapflow:
             if processing['percentCompleted'] == '100%'
             and now - processing['created'] < one_day
         ]
-        self.settings.setValue(f'finishedProcessings{self.login}{self.mapflow_env}', finished)
+        self.settings.setValue(finished_processings_setting, finished)
         # Drop seconds to save space
         for processing in processings:
             processing['created'] = processing['created'].strftime('%Y-%m-%d %H:%M')
@@ -985,21 +987,15 @@ class Mapflow:
             dlg.close()
         del self.toolbar
 
-    def read_mapflow_env(self) -> None:
-        """Read Mapflow environment from global variables."""
-        self.mapflow_env = self.settings.value('variables/mapflow_env')
-        if self.mapflow_env not in ('production', 'staging', 'duty'):
-            self.mapflow_env = 'production'
-
     def connect_to_server(self) -> None:
         """Log into Mapflow.
 
         Is called at plugin startup.
         """
-        self.settings.endGroup()  # gotta exit 'mapflow' setting group to access global settings
-        self.read_mapflow_env()  # get the server environment to connect to (for admins)
-        self.settings.beginGroup(self.plugin_name.lower())  # enter the 'mapflow setting group again
-        self.server = f'https://whitemaps-{self.mapflow_env}.mapflow.ai'
+        # Get the server environment to connect to (for admins)
+        self.settings.endGroup()  # exit 'mapflow' settings group to access globals
+        self.server = f'https://whitemaps-{self.settings.value("variables/mapflow_env", "production")}.mapflow.ai'
+        self.settings.beginGroup(self.plugin_name.lower())  # enter 'mapflow' settings group again
         login = self.dlg_login.loginField.text()
         password = self.dlg_login.passwordField.text()
         remember_me = self.dlg_login.rememberMe.isChecked()
