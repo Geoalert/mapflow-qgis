@@ -11,7 +11,9 @@ from PyQt5.QtCore import (
     QThread, Qt
 )
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QMessageBox, QFileDialog, QTableWidgetItem, QAction, QAbstractItemView
+from PyQt5.QtWidgets import (
+    QMessageBox, QFileDialog, QTableWidgetItem, QAction, QAbstractItemView, QLabel
+)
 from qgis import processing as qgis_processing  # to avoid collisions
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature,
@@ -45,7 +47,8 @@ class Mapflow:
         # QGIS Settings will be used to store user credentials and various UI element state
         self.settings = QgsSettings()
         # get the server environment to connect to (for admins)
-        self.server = f'https://whitemaps-{self.settings.value("variables/mapflow_env", "production")}.mapflow.ai'
+        mapflow_env = self.settings.value('variables/mapflow_env')
+        self.server = f'https://whitemaps-{mapflow_env or "production"}.mapflow.ai/rest'
         # Create a namespace for the plugin settings
         self.settings.beginGroup(self.plugin_name.lower())
         # By default, plugin adds layers to a group unless user explicitly deletes it
@@ -95,9 +98,8 @@ class Mapflow:
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         # Check if there are stored credentials
         self.logged_in = bool(self.settings.value('serverLogin') and self.settings.value('serverPassword'))
-        if self.settings.value('serverRememberMe'):
-            self.dlg_login.loginField.setText(self.settings.value('serverLogin'))
-            self.dlg_login.passwordField.setText(self.settings.value('serverPassword'))
+        self.dlg_login.username.setText(self.settings.value('serverLogin'))
+        self.dlg_login.password.setText(self.settings.value('serverPassword'))
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or 14))
         if self.settings.value('customProviderSaveAuth'):
@@ -459,7 +461,7 @@ class Mapflow:
             method = 'post'
             params = '&'.join(f'{key}={val}' for key, val in params.items())
             kwargs = {
-                'url': f'{self.server}/rest/meta',
+                'url': self.server + '/meta',
                 'json': {'url': config.MAXAR_METADATA_URL + '?' + params},
                 'auth': (self.login, self.password),
                 'timeout': 10
@@ -589,7 +591,7 @@ class Mapflow:
             pid = self.dlg.processingsTable.item(row, config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
             name = self.dlg.processingsTable.item(row, 0).text()
             try:
-                r = requests.delete(url=f'{self.server}/rest/processings/{pid}', auth=self.server_basic_auth, timeout=5)
+                r = requests.delete(f'{self.server}/processings/{pid}', auth=self.server_basic_auth, timeout=5)
             except requests.ConnectionError:
                 self.offline_alert.show()
                 return
@@ -621,7 +623,7 @@ class Mapflow:
         auth_fields = (self.dlg.customProviderLogin.text(), self.dlg.customProviderPassword.text())
         if any(auth_fields) and not all(auth_fields):
             self.alert(self.tr('Invalid custom provider credentials'), kind='warning')
-        update_cache = str(self.dlg.updateCache.isChecked())  # server currently fails if bool
+        update_cache = str(self.dlg.updateCache.isChecked())  # server fails if bool
         raster_option = self.dlg.rasterCombo.currentText()
         worker_kwargs = {
             'processing_name': processing_name,
@@ -753,7 +755,7 @@ class Mapflow:
             if username or password:  # own account
                 url = url.replace('jpeg', 'png')  # for transparency support
             else:  # our account; send to our endpoint
-                url = self.server + '/rest/png?TileRow={y}&TileCol={x}&TileMatrix={z}'
+                url = self.server + '/png?TileRow={y}&TileCol={x}&TileMatrix={z}'
                 username = self.login
                 password = self.password
             url += f'&CONNECTID={self.custom_providers[provider]["connectId"]}'  # add product id
@@ -793,7 +795,7 @@ class Mapflow:
         processing_name = self.dlg.processingsTable.item(row, 0).text()  # 0th column is Name
         pid = self.dlg.processingsTable.item(row, config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
         try:
-            r = requests.get(f'{self.server}/rest/processings/{pid}/result', auth=self.server_basic_auth)
+            r = requests.get(f'{self.server}/processings/{pid}/result', auth=self.server_basic_auth)
         except requests.ConnectionError:
             self.offline_alert.show()
             return
@@ -806,8 +808,8 @@ class Mapflow:
                 'url': tif_url,
                 'zmin': 0,
                 'zmax': 18,
-                'username': self.dlg_login.loginField.text(),
-                'password': self.dlg_login.passwordField.text()
+                'username': self.dlg_login.username.text(),
+                'password': self.dlg_login.password.text()
             }
             # URI-encoding will invalidate the request so requests.prepare() or the like can't be used
             uri = '&'.join(f'{key}={val}' for key, val in params.items())
@@ -993,38 +995,35 @@ class Mapflow:
         Is called at plugin startup.
         """
         # Get the server environment to connect to (for admins)
-        self.settings.endGroup()  # exit 'mapflow' settings group to access globals
-        self.server = f'https://whitemaps-{self.settings.value("variables/mapflow_env", "production")}.mapflow.ai'
-        self.settings.beginGroup(self.plugin_name.lower())  # enter 'mapflow' settings group again
-        login = self.dlg_login.loginField.text()
-        password = self.dlg_login.passwordField.text()
-        remember_me = self.dlg_login.rememberMe.isChecked()
-        self.settings.setValue('serverRememberMe', remember_me)
+        mapflow_env = QgsSettings().value('variables/mapflow_env')
+        self.server = f'https://whitemaps-{mapflow_env or "production"}.mapflow.ai/rest'
+        # Read input credentials
+        login = self.dlg_login.username.text()
+        password = self.dlg_login.password.text()
         self.server_basic_auth = requests.auth.HTTPBasicAuth(login, password)
         try:
-            # There's no separate auth endpoint so requesting the default project is the way to auth the user
-            res = requests.get(f'{self.server}/rest/projects/default', auth=self.server_basic_auth, timeout=5)
+            res = requests.get(self.server + '/projects/default', auth=self.server_basic_auth, timeout=5)
             res.raise_for_status()
         except requests.ConnectionError:
             self.offline_alert.show()
         except requests.Timeout:
             self.timeout_alert.show()
         except requests.HTTPError:
-            if res.status_code == 401:  # Unauthorized
-                self.dlg_login.invalidCredentialsMessage.setVisible(True)
-        else:  # Success!
+            if res.status_code == 401 and not hasattr(self, 'invalid_credentials_label'):
+                self.invalid_credentials_label = QLabel(self.tr('Invalid credentials'))
+                self.invalid_credentials_label.setStyleSheet('color: rgb(239, 41, 41);')
+                self.dlg_login.layout().insertWidget(1, self.invalid_credentials_label, alignment=Qt.AlignCenter)
+        else:  # success!
             self.logged_in = True  # this var allows skipping auth if the user's remembered
-            self.dlg_login.invalidCredentialsMessage.hide()
-            if remember_me:
-                self.settings.setValue('serverLogin', login)
-                self.settings.setValue('serverPassword', password)
+            self.settings.setValue('serverLogin', login)
+            self.settings.setValue('serverPassword', password)
 
     def logout(self) -> None:
         """Close the plugin and clear credentials from cache."""
         self.dlg.close()
         # Erase stored credentials
-        for setting in ('serverLogin', 'serverPassword', 'serverRememberMe'):
-            self.settings.remove(setting)
+        self.settings.remove('serverLogin')
+        self.settings.remove('serverPassword')
         self.logged_in = False
         # Stop monitoring processings
         self.worker.thread().requestInterruption()
@@ -1045,15 +1044,17 @@ class Mapflow:
                 self.connect_to_server()
             else:
                 # Refresh the form & quit
-                self.dlg_login.invalidCredentialsMessage.hide()
+                if hasattr(self, 'invalid_credentials_label'):
+                    self.invalid_credentials_label.deleteLater()
+                    del self.invalid_credentials_label
                 return
         # Refresh the list of workflow definitions
-        self.login = self.dlg_login.loginField.text()
-        self.password = self.dlg_login.passwordField.text()
+        self.login = self.dlg_login.username.text()
+        self.password = self.dlg_login.password.text()
         self.server_basic_auth = requests.auth.HTTPBasicAuth(self.login, self.password)
         self.dlg.username.setText(self.login)
         try:
-            res = requests.get(f'{self.server}/rest/projects/default', auth=self.server_basic_auth, timeout=5)
+            res = requests.get(self.server + '/projects/default', auth=self.server_basic_auth, timeout=5)
             res.raise_for_status()
         except requests.ConnectionError:
             self.offline_alert.show()
@@ -1062,22 +1063,24 @@ class Mapflow:
             self.timeout_alert.show()
             return
         except requests.HTTPError:
-            if res.status_code == 401:  # Unauthorized - credentials aren't valid anymore
-                self.dlg_login.invalidCredentialsMessage.setVisible(True)
+            if res.status_code == 401:
+                if not hasattr(self, 'invalid_credentials_label'):
+                    self.invalid_credentials_label = QLabel(self.tr('Invalid credentials'))
+                    self.invalid_credentials_label.setStyleSheet('color: rgb(239, 41, 41);')
+                    self.dlg_login.layout().insertWidget(1, self.invalid_credentials_label, alignment=Qt.AlignCenter)
                 self.dlg_login.show()
                 return
-        wds: List[str] = [wd['name'] for wd in res.json()['workflowDefs']]
+        wds = [wd['name'] for wd in res.json()['workflowDefs']]
         self.dlg.modelCombo.clear()
         self.dlg.modelCombo.addItems(wds)
         # Fetch processings
         thread = QThread(self.main_window)
-        self.worker = ProcessingFetcher(f'{self.server}/rest/processings', self.server_basic_auth)
+        self.worker = ProcessingFetcher(self.server + '/processings', self.server_basic_auth)
         self.worker.moveToThread(thread)
         thread.started.connect(self.worker.fetch_processings)
         self.worker.fetched.connect(self.fill_out_processings_table)
         self.worker.error.connect(lambda error: self.log(error))
         self.worker.finished.connect(thread.quit)
-        # self.dlg.finished.connect(thread.requestInterruption)
         thread.start()
         # Calculate area of the current AOI layer or feature
         combo = self.dlg.rasterCombo if self.dlg.useImageExtentAsAoi.isChecked() else self.dlg.polygonCombo

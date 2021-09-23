@@ -46,7 +46,7 @@ class ProcessingFetcher(QObject):
                 processings = r.json()
                 self.fetched.emit(processings)
                 # If there are ongoing processings, keep polling
-                if [p for p in processings if p['status'] in ("IN_PROGRESS", "UNPROCESSED")]:
+                if [p for p in processings if p['status'] in ('IN_PROGRESS', 'UNPROCESSED')]:
                     self.thread().sleep(config.PROCESSING_LIST_REFRESH_INTERVAL)
                     continue
                 self.finished.emit()
@@ -100,13 +100,13 @@ class ProcessingCreator(QObject):
             # Upload the image to the server
             try:
                 with open(self.tif.dataProvider().dataSourceUri(), 'rb') as f:
-                    r = requests.post(f'{self.server}/rest/rasters', auth=self.auth, files={'file': f})
+                    r = requests.post(self.server + '/rasters', auth=self.auth, files={'file': f})
                 r.raise_for_status()
             except Exception as e:
                 self.error.emit(str(e))
                 return
             url = r.json()['url' if 'url' in r.json() else 'uri']  # may depend on the Mapflow environment
-            self.params["url"] = url
+            self.params['url'] = url
             self.tif_uploaded.emit(url)
         # If we pass it as JSON, the URL in params will be urlencoded: e.g. ? -> %3F and the creation will fail
         # To avoid it, we have to convert the body to a string and pass it to the 'data' param instead of 'json'
@@ -124,7 +124,7 @@ class ProcessingCreator(QObject):
         # Post the processing
         try:
             r = requests.post(
-                url=f'{self.server}/rest/processings',
+                url=self.server + '/processings',
                 headers={'Content-Type': 'application/json'},
                 auth=self.auth,
                 data=body)
