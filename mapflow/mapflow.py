@@ -143,7 +143,7 @@ class Mapflow:
         # Maxar
         self.dlg.maxarMetadataTable.itemSelectionChanged.connect(self.highlight_maxar_image)
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
-        self.dlg.maxarMetadataTable.cellDoubleClicked.connect(self.maxar_double_click_preview)
+        self.dlg.maxarMetadataTable.cellDoubleClicked.connect(self.preview)
 
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
@@ -187,11 +187,6 @@ class Mapflow:
         """
         if self.dlg.customProviderCombo.currentText() != self.current_maxar_metadata_product:
             self.dlg.customProviderCombo.setCurrentText(self.current_maxar_metadata_product)
-
-    def maxar_double_click_preview(self) -> None:
-        """Allow previewing SecureWatch images by double-clicking their rows in the table."""
-        self.restore_maxar_metadata_product()  # align the provider combo with the table
-        self.preview()
 
     def highlight_maxar_image(self) -> None:
         """Select an image footprint in Maxar metadata layer when it's selected in the table.
@@ -744,6 +739,8 @@ class Mapflow:
 
         Is called by clicking the preview button.
         """
+        # Align the provider combo with the table
+        self.restore_maxar_metadata_product()
         self.save_custom_provider_auth()
         username = self.dlg.customProviderLogin.text()
         password = self.dlg.customProviderPassword.text()
