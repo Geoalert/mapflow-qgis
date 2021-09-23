@@ -84,11 +84,11 @@ class Mapflow:
             self.tr('Mapflow requires Internet connection'),
             parent=self.dlg
         )
-        # Display the plugin's version in the Help tab
+        # Display the plugin's version
         metadata_parser = ConfigParser()
         metadata_parser.read(os.path.join(self.plugin_dir, 'metadata.txt'))
-        plugin_version = metadata_parser.get('general', 'version')
-        self.dlg.pluginVersion.setText(self.dlg.pluginVersion.text() + plugin_version)
+        plugin_name_and_version = f'{self.plugin_name} {metadata_parser.get("general", "version")}'
+        self.dlg.help.setText(self.dlg.help.text().replace('Mapflow', plugin_name_and_version))
         # Used for previewing a Maxar image by double-clicking its row
         self.current_maxar_metadata_product = ''
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
