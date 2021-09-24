@@ -236,9 +236,6 @@
          <property name="columnCount">
           <number>6</number>
          </property>
-         <attribute name="horizontalHeaderMinimumSectionSize">
-          <number>0</number>
-         </attribute>
          <attribute name="horizontalHeaderDefaultSectionSize">
           <number>100</number>
          </attribute>
