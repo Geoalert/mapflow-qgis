@@ -1,8 +1,0 @@
-<RCC>
-  <qresource prefix="/plugins/mapflow">
-    <file>icons/mapflow.png</file>
-    <file>icons/add_provider.svg</file>
-    <file>icons/remove_provider.svg</file>
-    <file>icons/edit_provider.svg</file>
-  </qresource>
-</RCC>

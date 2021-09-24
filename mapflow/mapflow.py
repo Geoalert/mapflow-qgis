@@ -24,7 +24,6 @@ from qgis.core import (
 from .dialogs import MainDialog, LoginDialog, CustomProviderDialog, ConnectIdDialog
 from .workers import ProcessingFetcher, ProcessingCreator
 from . import helpers, config
-from .resources_rc import *  # used implicitly by QGIS; if removed icons may not show in QGIS < 3.16
 
 
 class Mapflow:

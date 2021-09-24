@@ -31,10 +31,6 @@
   <property name="windowTitle">
    <string notr="true">Connect ID</string>
   </property>
-  <property name="windowIcon">
-   <iconset resource="../resources.qrc">
-    <normaloff>:/plugins/mapflow/icons/mapflow.png</normaloff>:/plugins/mapflow/icons/mapflow.png</iconset>
-  </property>
   <property name="modal">
    <bool>true</bool>
   </property>
