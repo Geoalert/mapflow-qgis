@@ -1025,6 +1025,10 @@ class Mapflow:
         self.worker.thread().requestInterruption()
         # Recreate the login dialog to start afresh
         self.dlg_login = LoginDialog(self.main_window)
+        try:
+            del self.invalid_credentials_label
+        except AttributeError:
+            pass
         # Assume user wants to log into another account or to another server
         self.run()
 
@@ -1040,9 +1044,11 @@ class Mapflow:
                 self.connect_to_server()
             else:
                 # Refresh the form & quit
-                if hasattr(self, 'invalid_credentials_label'):
+                try:
                     self.invalid_credentials_label.deleteLater()
                     del self.invalid_credentials_label
+                except AttributeError:
+                    pass
                 return
         # Refresh the list of workflow definitions
         self.login = self.dlg_login.username.text()
