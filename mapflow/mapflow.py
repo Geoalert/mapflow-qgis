@@ -185,7 +185,10 @@ class Mapflow:
         change list item after requesting metadata. To avoid ambiguity, this function set
         the provider combo to the current metadata product.
         """
-        if self.dlg.customProviderCombo.currentText() != self.current_maxar_metadata_product:
+        if (
+            self.dlg.customProviderCombo.currentText() != self.current_maxar_metadata_product
+            and self.dlg.maxarMetadataTable.selectedItems()
+        ):
             self.dlg.customProviderCombo.setCurrentText(self.current_maxar_metadata_product)
 
     def highlight_maxar_image(self) -> None:
