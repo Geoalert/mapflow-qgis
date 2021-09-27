@@ -337,11 +337,11 @@
        </item>
       </layout>
      </widget>
-     <widget class="QWidget" name="settingsTab">
+     <widget class="QWidget" name="providersTab">
       <attribute name="title">
-       <string>Settings</string>
+       <string>Providers</string>
       </attribute>
-      <layout class="QVBoxLayout" name="settingsLayout" stretch="0,0,1,0">
+      <layout class="QVBoxLayout" name="settingsLayout" stretch="0,0,0,1">
        <item>
         <layout class="QFormLayout" name="layoutOutputDirectory">
          <item row="0" column="0">
