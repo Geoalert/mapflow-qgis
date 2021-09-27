@@ -1010,6 +1010,9 @@ class Mapflow:
                 self.invalid_credentials_label = QLabel(self.tr('Invalid credentials'))
                 self.invalid_credentials_label.setStyleSheet('color: rgb(239, 41, 41);')
                 self.dlg_login.layout().insertWidget(1, self.invalid_credentials_label, alignment=Qt.AlignCenter)
+                new_size = self.dlg_login.width(), self.dlg_login.height() + 21
+                self.dlg_login.setMaximumSize(*new_size)
+                self.dlg_login.setMinimumSize(*new_size)
         else:  # success!
             self.logged_in = True  # this var allows skipping auth if the user's remembered
             self.settings.setValue('serverLogin', login)
@@ -1048,6 +1051,9 @@ class Mapflow:
                 try:
                     self.invalid_credentials_label.deleteLater()
                     del self.invalid_credentials_label
+                    new_size = self.dlg_login.width(), self.dlg_login.height() - 21
+                    self.dlg_login.setMaximumSize(*new_size)
+                    self.dlg_login.setMinimumSize(*new_size)
                 except AttributeError:
                     pass
                 return
@@ -1071,6 +1077,9 @@ class Mapflow:
                     self.invalid_credentials_label = QLabel(self.tr('Invalid credentials'))
                     self.invalid_credentials_label.setStyleSheet('color: rgb(239, 41, 41);')
                     self.dlg_login.layout().insertWidget(1, self.invalid_credentials_label, alignment=Qt.AlignCenter)
+                    new_size = self.dlg_login.width(), self.dlg_login.height() + 21
+                    self.dlg_login.setMaximumSize(*new_size)
+                    self.dlg_login.setMinimumSize(*new_size)
                 self.dlg_login.show()
                 return
         wds = [wd['name'] for wd in res.json()['workflowDefs']]
