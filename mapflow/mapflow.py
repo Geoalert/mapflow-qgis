@@ -146,11 +146,12 @@ class Mapflow:
 
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
-        # Save table columns widths
-        state = self.dlg.processingsTable.horizontalHeader().saveState()
-        self.settings.setValue('processingsTableHeaderState', state)
-        state = self.dlg.maxarMetadataTable.horizontalHeader().saveState()
-        self.settings.setValue('maxarMetadataTableHeaderState', state)
+        # Save main dialog size & position
+        self.settings.setValue('mainDialogState', self.dlg.saveGeometry())
+        # Save table columns widths and sorting
+        for table in 'processingsTable', 'maxarMetadataTable':
+            header = getattr(self.dlg, table).horizontalHeader()
+            self.settings.setValue(table + 'HeaderState', header.saveState())
 
     def add_layer(self, layer: QgsMapLayer) -> None:
         """Add layers created by the plugin to the legend.
@@ -1088,11 +1089,9 @@ class Mapflow:
         combo = self.dlg.rasterCombo if self.dlg.useImageExtentAsAoi.isChecked() else self.dlg.polygonCombo
         self.calculate_aoi_area(combo.currentLayer())
         # Restore table section sizes
-        self.dlg.processingsTable.horizontalHeader().restoreState(
-            self.settings.value('processingsTableHeaderState', b'')
-        )
-        self.dlg.maxarMetadataTable.horizontalHeader().restoreState(
-            self.settings.value('maxarMetadataTableHeaderState', b'')
-        )
+        for table in 'processingsTable', 'maxarMetadataTable':
+            header = getattr(self.dlg, table).horizontalHeader()
+            header.restoreState(self.settings.value(table + 'HeaderState', b''))
         # Show main dialog
+        self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
         self.dlg.show()
