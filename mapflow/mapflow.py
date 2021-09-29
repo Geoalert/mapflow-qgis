@@ -143,10 +143,11 @@ class Mapflow:
         self.dlg.maxarMetadataTable.itemSelectionChanged.connect(self.highlight_maxar_image)
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
         self.dlg.maxarMetadataTable.cellDoubleClicked.connect(self.preview)
+        self.dlg.customProviderCombo.currentTextChanged.connect(self.limit_max_zoom_for_maxar)
 
     def limit_max_zoom_for_maxar(self, provider: str) -> None:
         """Limit zoom to 14 for Maxar if user is not a premium one."""
-        max_zoom = 14 if provider in config.MAXAR_PRODUCTS else 21
+        max_zoom = 14 if provider in config.MAXAR_PRODUCTS and not self.is_premium_user else 21
         self.dlg.maxZoom.setMaximum(max_zoom)
 
     def save_dialog_state(self):
@@ -1101,12 +1102,10 @@ class Mapflow:
         # Get user status
         user_status = user_status.json()
         self.is_premium_user = user_status['isPremium']
-        if not self.is_premium_user:  # limit Maxar zoom for non-premium users
-            self.dlg.maxZoom.setMaximum(14)
-            self.dlg.customProviderCombo.currentTextChanged.connect(self.limit_max_zoom_for_maxar)
-            self.dlg.remainingLimit.setText(
-                self.tr('Processing limit: {} sq.km').format(round(user_status['remainingLimit']))
-            )
+        self.limit_max_zoom_for_maxar(self.dlg.customProviderCombo.currentText())
+        self.dlg.remainingLimit.setText(
+            self.tr('Processing limit: {} sq.km').format(round(user_status['remainingLimit']))
+        )
         # Fetch processings
         thread = QThread(self.main_window)
         self.worker = ProcessingFetcher(self.server + '/processings', self.server_basic_auth)
