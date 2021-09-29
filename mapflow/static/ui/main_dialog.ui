@@ -184,6 +184,9 @@
          </item>
          <item>
           <widget class="QPushButton" name="startProcessing">
+           <property name="styleSheet">
+            <string notr="true">padding: 10px;</string>
+           </property>
            <property name="text">
             <string>Start processing</string>
            </property>
@@ -297,9 +300,6 @@
        </item>
        <item row="4" column="0">
         <layout class="QHBoxLayout" name="processingFooter" stretch="0,1,0">
-         <property name="spacing">
-          <number>20</number>
-         </property>
          <item>
           <widget class="QPushButton" name="logoutButton">
            <property name="text">
@@ -308,15 +308,20 @@
           </widget>
          </item>
          <item>
-          <widget class="QLabel" name="username">
+          <widget class="QLabel" name="remainingLimit">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
              <horstretch>0</horstretch>
              <verstretch>0</verstretch>
             </sizepolicy>
            </property>
+           <property name="font">
+            <font>
+             <italic>true</italic>
+            </font>
+           </property>
            <property name="text">
-            <string notr="true"/>
+            <string/>
            </property>
            <property name="alignment">
             <set>Qt::AlignCenter</set>

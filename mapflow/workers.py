@@ -60,6 +60,7 @@ class ProcessingCreator(QObject):
     """A worker that posts a 'create processing' request to Mapflow."""
 
     finished = pyqtSignal()
+    maxar_unauthorized = pyqtSignal()
     error = pyqtSignal(str)
     tif_uploaded = pyqtSignal(str)
 
@@ -130,5 +131,9 @@ class ProcessingCreator(QObject):
                 data=body)
             r.raise_for_status()
             self.finished.emit()
+        except requests.HTTPError:
+            if r.status_code == 403:
+                self.maxar_unauthorized.emit()
+                return
         except Exception as e:
             self.error.emit(str(e))

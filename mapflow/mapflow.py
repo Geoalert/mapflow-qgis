@@ -100,7 +100,7 @@ class Mapflow:
         self.dlg_login.username.setText(self.settings.value('serverLogin'))
         self.dlg_login.password.setText(self.settings.value('serverPassword'))
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
-        self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or 14))
+        self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or 18))
         if self.settings.value('customProviderSaveAuth'):
             self.dlg.customProviderSaveAuth.setChecked(True)
             self.dlg.customProviderLogin.setText(self.settings.value('customProviderLogin'))
@@ -143,6 +143,11 @@ class Mapflow:
         self.dlg.maxarMetadataTable.itemSelectionChanged.connect(self.highlight_maxar_image)
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
         self.dlg.maxarMetadataTable.cellDoubleClicked.connect(self.preview)
+
+    def limit_max_zoom_for_maxar(self, provider: str) -> None:
+        """Limit zoom to 14 for Maxar if user is not a premium one."""
+        max_zoom = 14 if provider in config.MAXAR_PRODUCTS else 21
+        self.dlg.maxZoom.setMaximum(max_zoom)
 
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
@@ -706,10 +711,15 @@ class Mapflow:
         thread.started.connect(worker.create_processing)
         worker.finished.connect(thread.quit)
         worker.finished.connect(self.processing_created)
-        worker.tif_uploaded.connect(lambda url: self.log(self.tr('Your image was uploaded to: ') + url, Qgis.Success))
-        worker.error.connect(lambda error: self.log(error))
+        worker.tif_uploaded.connect(
+            lambda url: self.log(self.tr('Your image was uploaded to: ') + url, Qgis.Success)
+        )
+        worker.maxar_unauthorized.connect(lambda: self.alert(self.tr(
+            'You need to upgrade your subscription to process Maxar imagery. '
+            "Please, send us an email to help@geoalert.io if you'd like to."), kind='critical'
+        ))
         worker.error.connect(
-            lambda: self.alert(self.tr('Processing creation failed, see the QGIS log for details'), kind='critical')
+            lambda error: self.alert(self.tr('Processing creation failed: ') + error, kind='critical')
         )
         self.dlg.finished.connect(thread.requestInterruption)
         thread.start()
@@ -749,7 +759,6 @@ class Mapflow:
         password = self.dlg.customProviderPassword.text()
         provider = self.dlg.customProviderCombo.currentText()
         url = self.custom_providers[provider]['url']
-        max_zoom = self.dlg.maxZoom.value()
         layer_name = provider
         if provider in config.MAXAR_PRODUCTS:
             if username or password:  # own account
@@ -768,7 +777,7 @@ class Mapflow:
         params = {
             'type': self.custom_providers[provider]['type'],
             'url': url_escaped,
-            'zmax':  max_zoom,
+            'zmax':  self.dlg.maxZoom.value(),
             'zmin': 0,
             'username': username,
             'password': password
@@ -1064,10 +1073,11 @@ class Mapflow:
         self.login = self.dlg_login.username.text()
         self.password = self.dlg_login.password.text()
         self.server_basic_auth = requests.auth.HTTPBasicAuth(self.login, self.password)
-        self.dlg.username.setText(self.login)
         try:
             res = requests.get(self.server + '/projects/default', auth=self.server_basic_auth, timeout=5)
+            user_status = requests.get(self.server + '/user/status', auth=self.server_basic_auth, timeout=5)
             res.raise_for_status()
+            user_status.raise_for_status()
         except requests.ConnectionError:
             self.offline_alert.show()
             return
@@ -1088,6 +1098,15 @@ class Mapflow:
         wds = [wd['name'] for wd in res.json()['workflowDefs']]
         self.dlg.modelCombo.clear()
         self.dlg.modelCombo.addItems(wds)
+        # Get user status
+        user_status = user_status.json()
+        self.is_premium_user = user_status['isPremium']
+        if not self.is_premium_user:  # limit Maxar zoom for non-premium users
+            self.dlg.maxZoom.setMaximum(14)
+            self.dlg.customProviderCombo.currentTextChanged.connect(self.limit_max_zoom_for_maxar)
+            self.dlg.remainingLimit.setText(
+                self.tr('Processing limit: {} sq.km').format(round(user_status['remainingLimit']))
+            )
         # Fetch processings
         thread = QThread(self.main_window)
         self.worker = ProcessingFetcher(self.server + '/processings', self.server_basic_auth)
