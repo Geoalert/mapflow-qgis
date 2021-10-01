@@ -861,6 +861,12 @@ class Mapflow:
         wd = self.dlg.processingsTable.item(row, 1).text()
         style = os.path.join(self.plugin_dir, 'static', 'styles', f'{config.STYLES.get(wd, "default")}.qml')
         results_layer.loadNamedStyle(style)
+        # Set image extent explicitly bc as XYZ, it have doesn't have one by default
+        tif_layer.setExtent(helpers.from_wgs84(
+            QgsGeometry.fromRect(results_layer.extent()),
+            tif_layer.crs(),
+            self.project.transformContext()
+        ).boundingBox())
         # Add the layers to the project
         self.add_layer(tif_layer)
         self.add_layer(results_layer)

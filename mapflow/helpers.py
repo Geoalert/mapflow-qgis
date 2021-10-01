@@ -41,10 +41,24 @@ def to_wgs84(
     return geometry
 
 
+def from_wgs84(geometry: QgsGeometry, target_src: QgsCoordinateReferenceSystem, transform_context: QgsCoordinateTransformContext) -> QgsGeometry:
+    """Transform a geometry from WGS84.
+
+    :param geometry: A feature's geometry
+    :param target_src: The current CRS of the passed geometry
+    :param transform_context: An object containing information about the CRS, datums and the possible tranformations
+        between them available in QGIS
+    """
+    geometry.transform(QgsCoordinateTransform(WGS84, target_src, transform_context))
+    return geometry
+
+
 def get_layer_extent(layer: QgsMapLayer, transform_context: QgsCoordinateTransformContext) -> QgsGeometry:
     """Get a layer's bounding box aka extent/envelope/bounds.
 
     :param layer: The layer of interest
+    :param transform_context: An object containing information about the CRS, datums and the possible tranformations
+        between them available in QGIS
     :param transform_context: An object containing information about the CRS, datums and the possible tranformations
         between them available in QGIS
     """
