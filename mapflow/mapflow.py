@@ -511,7 +511,11 @@ class Mapflow:
         self.dlg.maxarMetadataTable.setSortingEnabled(False)
         for row, feature in enumerate(features):
             for col, attr in enumerate(config.MAXAR_METADATA_ATTRIBUTES):
-                self.dlg.maxarMetadataTable.setItem(row, col, QTableWidgetItem(str(feature[attr])))
+                try:
+                    value = str(feature[attr])
+                except KeyError:  # e.g. <colorBandOrder/> for pachromatic images
+                    value = ''
+                self.dlg.maxarMetadataTable.setItem(row, col, QTableWidgetItem(value))
         # Turn sorting on again
         self.dlg.maxarMetadataTable.setSortingEnabled(True)
 
