@@ -146,8 +146,8 @@ class Mapflow:
         self.dlg.customProviderCombo.currentTextChanged.connect(self.limit_max_zoom_for_maxar)
 
     def limit_max_zoom_for_maxar(self, provider: str) -> None:
-        """Limit zoom to 14 for Maxar if user is not a premium one."""
-        max_zoom = 14 if provider in config.MAXAR_PRODUCTS and not self.is_premium_user else 21
+        """Limit zoom to 13 for Maxar if user is not a premium one."""
+        max_zoom = 13 if provider in config.MAXAR_PRODUCTS and not self.is_premium_user else 21
         self.dlg.maxZoom.setMaximum(max_zoom)
 
     def save_dialog_state(self):
