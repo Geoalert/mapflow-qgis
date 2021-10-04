@@ -1,6 +1,6 @@
 PLUGIN_NAME = 'Mapflow'
 # PROCESSINGS
-PROCESSING_LIST_REFRESH_INTERVAL = 5  # in seconds
+PROCESSING_LIST_REFRESH_INTERVAL = 6000  # in milliseconds
 PROCESSING_TABLE_ID_COLUMN_INDEX = 5
 # MAXAR
 MAXAR_PRODUCTS = ('Maxar SecureWatch', 'Maxar Vivid', 'Maxar Basemaps')
