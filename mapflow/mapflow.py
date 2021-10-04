@@ -525,10 +525,10 @@ class Mapflow:
         return selected_cells[config.MAXAR_METADATA_ID_COLUMN_INDEX].text() if selected_cells else ''
 
     def calculate_aoi_area(self, arg: Optional[Union[bool, QgsMapLayer, List[QgsFeature]]]) -> None:
-        """Display the area of the processing AOI in sq. km above the processings table.
+        """Display the AOI size in sq.km.
 
-        Users are charged by area and various usage limits are defined with respect to area too.
-        So it's important for the user how much area they're going submit for processing.
+        Users are charged by the amount of sq km they process. So it's important for them to know
+        the size of the current AOI. 
         An AOI must be a single feature, or the extent of a GeoTIFF layer, so the area is only displayed when either:
             a) the layer in the polygon combo has a single feature, or, if more, a single feature is selected in it
             b) 'Use image extent' is checked and the current raster combo entry is a GeoTIFF layer
@@ -575,8 +575,8 @@ class Mapflow:
         # Set ellipsoid to use spherical calculations for geographic CRSs
         calculator.setEllipsoid(layer_crs.ellipsoidAcronym() or 'EPSG:7030')  # WGS84 ellipsoid
         calculator.setSourceCrs(layer_crs, self.project.transformContext())
-        area = calculator.measureArea(aoi) / 10**6  # sq. m to sq. km
-        label = self.tr('Area: {:.2f} sq.km').format(area)
+        self.aoi_size = calculator.measureArea(aoi) / 10**6  # sq. m to sq.km
+        label = self.tr('Area: {:.2f} sq.km').format(self.aoi_size)
         self.dlg.labelAoiArea.setText(label)
 
     def delete_processings(self) -> None:
@@ -622,11 +622,20 @@ class Mapflow:
         if not processing_name:
             self.alert(self.tr('Please, specify a name for your processing'))
             return
-        elif processing_name in self.processing_names:
+        if processing_name in self.processing_names:
             self.alert(self.tr('Processing name taken. Please, choose a different name.'))
             return
         if not (self.dlg.polygonCombo.currentLayer() or self.dlg.useImageExtentAsAoi.isChecked()):
             self.alert(self.tr('Please, select an area of interest'))
+            return
+        if self.remainingLimit < self.aoi_size:
+            self.alert(self.tr('Processing limit exceeded'), kind='critical')
+            return
+        if self.aoi_area_limit < self.aoi_size:
+            self.alert(self.tr(
+                'Up to {} sq km can be processed at a time. '
+                'Try splitting up your area of interest.'
+            ).format(self.aoi_area_limit), kind='critical')
             return
         auth_fields = (self.dlg.customProviderLogin.text(), self.dlg.customProviderPassword.text())
         if any(auth_fields) and not all(auth_fields):
@@ -685,7 +694,11 @@ class Mapflow:
             # Reproject it to WGS84 if the layer has another CRS
             layer_crs: QgsCoordinateReferenceSystem = aoi_layer.crs()
             if layer_crs != helpers.WGS84:
-                worker_kwargs['aoi'] = helpers.to_wgs84(aoi_feature.geometry(), layer_crs, self.project.transformContext())
+                worker_kwargs['aoi'] = helpers.to_wgs84(
+                    aoi_feature.geometry(),
+                    layer_crs,
+                    self.project.transformContext()
+                )
             else:
                 worker_kwargs['aoi'] = aoi_feature.geometry()
             # Clip AOI to image if a single Maxar image is requested
@@ -960,6 +973,11 @@ class Mapflow:
         # Inform user about finished processings
         for processing in set(finished) - set(previously_finished):
             self.alert(processing + self.tr(' finished. Double-click it in the table to download the results.'))
+            # Update user processing limit
+            self.remainingLimit -= round(next(filter(
+                lambda x: x['name'] == processing, processings
+            ))['aoiArea']/10**6)
+            self.dlg.remainingLimit.setText(self.tr('Processing limit: {} sq.km').format(self.remainingLimit))
         # Save as an instance attribute to reuse elsewhere
         self.processings = processings
         # Save ref to check name uniqueness at processing creation
@@ -1113,9 +1131,9 @@ class Mapflow:
         user_status = user_status.json()
         self.is_premium_user = user_status['isPremium']
         self.limit_max_zoom_for_maxar(self.dlg.customProviderCombo.currentText())
-        self.dlg.remainingLimit.setText(
-            self.tr('Processing limit: {} sq.km').format(round(user_status['remainingLimit']))
-        )
+        self.remainingLimit = round(user_status['remainingLimit'])
+        self.aoi_area_limit = round(user_status['aoiAreaLimit'])
+        self.dlg.remainingLimit.setText(self.tr('Processing limit: {} sq.km').format(self.remainingLimit))
         # Fetch processings
         thread = QThread(self.main_window)
         self.worker = ProcessingFetcher(self.server + '/processings', self.server_basic_auth)

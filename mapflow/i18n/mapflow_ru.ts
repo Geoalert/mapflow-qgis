@@ -243,77 +243,77 @@
 <context>
     <name>Mapflow</name>
     <message>
-        <location filename="../mapflow.py" line="370"/>
+        <location filename="../mapflow.py" line="371"/>
         <source>Select output directory</source>
         <translation>Выберите папку для сохранения данных</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="390"/>
+        <location filename="../mapflow.py" line="391"/>
         <source>Please, specify an existing output directory</source>
         <translation>Пожалуйста, выберите папку для сохранения данных</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="398"/>
+        <location filename="../mapflow.py" line="399"/>
         <source>Select GeoTIFF</source>
         <translation>Выберите GeoTIFF</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="675"/>
+        <location filename="../mapflow.py" line="689"/>
         <source>Your AOI layer is empty</source>
         <translation>Слой с областями обработки пуст</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="678"/>
+        <location filename="../mapflow.py" line="692"/>
         <source>Please, select a single feature in your AOI layer</source>
         <translation>Пожалуйста, выделите один объект в слое</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="574"/>
+        <location filename="../mapflow.py" line="579"/>
         <source>Area: {:.2f} sq.km</source>
         <translation>Площадь: {:.2f} кв.км</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="589"/>
+        <location filename="../mapflow.py" line="594"/>
         <source>Delete {} processing(s)?</source>
         <translation>Удалить {} обработок?</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="618"/>
+        <location filename="../mapflow.py" line="623"/>
         <source>Please, specify a name for your processing</source>
         <translation>Пожалуйста, выберите название обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="621"/>
+        <location filename="../mapflow.py" line="626"/>
         <source>Processing name taken. Please, choose a different name.</source>
         <translation>Обработка с таким названием уже существует. Пожалуйста, выберите другое название.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="624"/>
+        <location filename="../mapflow.py" line="629"/>
         <source>Please, select an area of interest</source>
         <translation>Пожалуйста, выберите слой с областью обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="646"/>
+        <location filename="../mapflow.py" line="660"/>
         <source>Please, select a GeoTIFF layer</source>
         <translation>Пожалуйста, выберите слой GeoTIFF для обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="714"/>
+        <location filename="../mapflow.py" line="732"/>
         <source>Your image was uploaded to: </source>
         <translation>Ваш локальный снимок был загружен в: </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="726"/>
+        <location filename="../mapflow.py" line="744"/>
         <source>Starting the processing...</source>
         <translation>Создаем обработку...</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="733"/>
+        <location filename="../mapflow.py" line="751"/>
         <source>Success! Processing may take up to several minutes</source>
         <translation>Пожалуйста, подождите пока обработка выполняется. Это может занять несколько минут</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="846"/>
+        <location filename="../mapflow.py" line="864"/>
         <source>Error saving results! See QGIS logs.</source>
         <translation>Ошибка сохранения результатов обработки. Более подробная информация в логе QGIS.</translation>
     </message>
@@ -323,12 +323,12 @@
         <translation>Для работы с Mapflow требуется Интернет соединение</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="951"/>
+        <location filename="../mapflow.py" line="975"/>
         <source> finished. Double-click it in the table to download the results.</source>
         <translation> завершилась. Дважды кликните на нее в таблице чтобы загрузить результаты.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="481"/>
+        <location filename="../mapflow.py" line="482"/>
         <source>Please, check your credentials</source>
         <translation>Пожалуйста, проверьте реквизиты</translation>
     </message>
@@ -338,64 +338,74 @@
         <translation>Нет соединения с Mapflow. Попробуйте понемного позже. Если проблема повторится, напишите нам пожалуйста на help@geoalert.io.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="628"/>
+        <location filename="../mapflow.py" line="642"/>
         <source>Invalid custom provider credentials</source>
         <translation>Неверные реквизиты</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="973"/>
+        <location filename="../mapflow.py" line="1002"/>
         <source>Log in</source>
         <translation>Вход</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="221"/>
+        <location filename="../mapflow.py" line="222"/>
         <source>Permanently remove </source>
         <translation>Удалить </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="264"/>
+        <location filename="../mapflow.py" line="265"/>
         <source> already exists. Click edit button to update it.</source>
         <translation> уже в списке. Нажмите кнопку правки чтобы внести изменения.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="420"/>
+        <location filename="../mapflow.py" line="421"/>
         <source>Select a Maxar product in the provider list</source>
         <translation>Выберите продукт Максар в списке выше</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="790"/>
+        <location filename="../mapflow.py" line="808"/>
         <source>Sorry, we couldn&apos;t load: </source>
         <translation>Мы не смогли загрузить: </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="857"/>
+        <location filename="../mapflow.py" line="875"/>
         <source>Couldn&apos;t load the results</source>
         <translation>Ошибка загрузки результатов</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="484"/>
+        <location filename="../mapflow.py" line="485"/>
         <source> is not responding. Please, try again later.</source>
         <translation> не отвечает. Пожалуйста, попробуйте позже.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1090"/>
+        <location filename="../mapflow.py" line="1119"/>
         <source>Invalid credentials</source>
         <translation>Ошибка авторизации</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="717"/>
+        <location filename="../mapflow.py" line="735"/>
         <source>You need to upgrade your subscription to process Maxar imagery. Please, send us an email to help@geoalert.io if you&apos;d like to.</source>
         <translation>Текущая подписка не включает обработку по Максар. Пожалуйста, напишите нам на help@geoalert.io если вы хотели бы перейти на Премиум.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="721"/>
+        <location filename="../mapflow.py" line="739"/>
         <source>Processing creation failed: </source>
         <translation>Ошибка при создании обработки: </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1107"/>
+        <location filename="../mapflow.py" line="1136"/>
         <source>Processing limit: {} sq.km</source>
         <translation>Доступный лимит: {} кв.км</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="632"/>
+        <source>Processing limit exceeded</source>
+        <translation>Превышен доступный лимит обработки</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="635"/>
+        <source>Up to {} sq km can be processed at a time. Try splitting up your area of interest.</source>
+        <translation>Не более {} кв.км может быть обработано за раз. Попробуйте разбить область обработки на части.</translation>
     </message>
 </context>
 <context>
