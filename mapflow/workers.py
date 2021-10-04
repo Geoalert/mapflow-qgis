@@ -1,59 +1,9 @@
-import os
 import json
 from typing import Any, Dict, Tuple
 
 import requests
 from PyQt5.QtCore import QObject, pyqtSignal
-from qgis.core import QgsMessageLog, Qgis, QgsGeometry, QgsRasterLayer
-
-from . import config
-
-
-class ProcessingFetcher(QObject):
-    """A worker that continiously polls Mapflow to refresh the user's processings status."""
-
-    fetched = pyqtSignal(list)
-    finished = pyqtSignal()
-    error = pyqtSignal(str)
-
-    def __init__(self, url: str, auth: Tuple[str, str]) -> None:
-        """Initialize the worker with a URL and basic auth.
-
-        :param url: The Mapflow server URL
-        :param auth: A (login, password) tuple for user authentication
-        """
-        super().__init__()
-        self.url = url
-        self.auth = auth
-
-    def fetch_processings(self) -> None:
-        """Keep polling Mapflow to retrieve the current status for each of the user's processings.
-
-        Start an infinite loop that requests the user's processings and if any of those haven't finished,
-        waits for <PROCESSING_LIST_REFRESH_INTERVAL> and continues, or breaks otherwise. It also checks at
-        the start of iteration if interuption has been requested, and if so, breaks too.
-
-        After every successful processing fetch, it sends a signal to the main thread and supplies the fetched
-        processings in a JSON-formatted dict for the main thread to fill out the processings table.
-        """
-        while True:
-            if self.thread().isInterruptionRequested():
-                self.finished.emit()
-                return
-            try:
-                r = requests.get(self.url, auth=self.auth, timeout=10)
-                r.raise_for_status()
-                processings = r.json()
-                self.fetched.emit(processings)
-                # If there are ongoing processings, keep polling
-                if [p for p in processings if p['status'] in ('IN_PROGRESS', 'UNPROCESSED')]:
-                    self.thread().sleep(config.PROCESSING_LIST_REFRESH_INTERVAL)
-                    continue
-                self.finished.emit()
-                break
-            except Exception as e:
-                self.error.emit(str(e))
-                return
+from qgis.core import QgsGeometry, QgsRasterLayer
 
 
 class ProcessingCreator(QObject):
@@ -94,21 +44,6 @@ class ProcessingCreator(QObject):
 
     def create_processing(self):
         """Initiate a processing."""
-        if self.thread().isInterruptionRequested():
-            self.finished.emit()
-            return
-        if self.tif:
-            # Upload the image to the server
-            try:
-                with open(self.tif.dataProvider().dataSourceUri(), 'rb') as f:
-                    r = requests.post(self.server + '/rasters', auth=self.auth, files={'file': f})
-                r.raise_for_status()
-            except Exception as e:
-                self.error.emit(str(e))
-                return
-            url = r.json()['url' if 'url' in r.json() else 'uri']  # may depend on the Mapflow environment
-            self.params['url'] = url
-            self.tif_uploaded.emit(url)
         # If we pass it as JSON, the URL in params will be urlencoded: e.g. ? -> %3F and the creation will fail
         # To avoid it, we have to convert the body to a string and pass it to the 'data' param instead of 'json'
         # However, Python serializes a dict with single quotes, so the server will see it as invalid JSON
@@ -120,20 +55,3 @@ class ProcessingCreator(QObject):
             "params": self.params,
             "meta": self.meta
         }).replace('\'', '"').encode()
-        if os.getenv('MAPFLOW_QGIS_ENV'):
-            QgsMessageLog.logMessage(body.decode(), config.PLUGIN_NAME, level=Qgis.Info)
-        # Post the processing
-        try:
-            r = requests.post(
-                url=self.server + '/processings',
-                headers={'Content-Type': 'application/json'},
-                auth=self.auth,
-                data=body)
-            r.raise_for_status()
-            self.finished.emit()
-        except requests.HTTPError:
-            if r.status_code == 403:
-                self.maxar_unauthorized.emit()
-                return
-        except Exception as e:
-            self.error.emit(str(e))
