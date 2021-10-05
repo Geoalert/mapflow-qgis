@@ -569,11 +569,14 @@ class Mapflow:
         else:
             self.dlg.labelAoiArea.setText('')
             return
-        # Now, do the math
         layer_crs: QgsCoordinateReferenceSystem = layer.crs()
+        if not layer_crs.authid():  # unidentified CRS; calculations may be erroneous
+            self.dlg.labelAoiArea.setText('')
+            return
+        # Now, do the math
         calculator = QgsDistanceArea()
-        # Set ellipsoid to use spherical calculations for geographic CRSs
-        calculator.setEllipsoid(layer_crs.ellipsoidAcronym() or 'EPSG:7030')  # WGS84 ellipsoid
+        # Set ellipsoid to calculate on sphere for geographic CRSs; default to 7030 (WGS84)
+        calculator.setEllipsoid(layer_crs.ellipsoidAcronym() or 'EPSG:7030')
         calculator.setSourceCrs(layer_crs, self.project.transformContext())
         self.aoi_size = calculator.measureArea(aoi) / 10**6  # sq. m to sq.km
         label = self.tr('Area: {:.2f} sq.km').format(self.aoi_size)
