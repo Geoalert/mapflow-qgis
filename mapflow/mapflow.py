@@ -14,16 +14,17 @@ from PyQt5.QtCore import (
     Qt, QUrl, QFile, QIODevice
 )
 from PyQt5.QtWidgets import (
-    QMessageBox, QFileDialog, QTableWidgetItem, QAction, QAbstractItemView, QLabel
+    QMessageBox, QFileDialog, QTableWidgetItem, QAction, QAbstractItemView, QLabel,
+    QProgressBar
 )
 from qgis import processing as qgis_processing  # to avoid collisions
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature,
     QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsMapLayerType, Qgis,
-    QgsVectorFileWriter, QgsMessageLog, QgsNetworkAccessManager, QgsNetworkContentFetcher
+    QgsVectorFileWriter, QgsMessageLog, QgsNetworkAccessManager, QgsBlockingNetworkRequest
 )
 
-from .dialogs import MainDialog, LoginDialog, CustomProviderDialog, ConnectIdDialog
+from .dialogs import MainDialog, LoginDialog, ImageryProviderDialog, ConnectIdDialog, ErrorMessage
 from . import helpers, config
 
 
@@ -42,17 +43,23 @@ class Mapflow(QObject):
         # Save refs to key variables used throughout the plugin
         self.iface = iface
         self.main_window = iface.mainWindow()
+        self.message_bar = self.iface.messageBar()
         self.project = QgsProject.instance()
         self.plugin_dir = os.path.dirname(__file__)
         self.plugin_name = config.PLUGIN_NAME  # aliased here to be overloaded in submodules
         # QGIS Settings will be used to store user credentials and various UI element state
         self.settings = QgsSettings()
-        # get the server environment to connect to (for admins)
+        # Get the server environment to connect to (for admins)
         mapflow_env = self.settings.value('variables/mapflow_env') or 'production'
-        self.nam = QgsNetworkAccessManager.instance()
+        self.nam = QgsNetworkAccessManager.instance()  # for async requests
+        self.nam.setTimeout(config.MAPFLOW_DEFAULT_TIMEOUT)
+        self.blocking_nam = QgsBlockingNetworkRequest()  # for sync requests
         self.server = f'https://whitemaps-{mapflow_env}.mapflow.ai/rest'
-        self.processing_fetcher = QgsNetworkContentFetcher()
-        self.processing_fetcher.finished.connect(self.fill_out_processings_table)
+        self.tif_upload_progress_bar = QProgressBar()
+        self.tif_upload_progress_message = self.message_bar.createMessage(
+            self.tr('Uploading image to Mapflow...')
+        )
+        self.tif_upload_progress_message.layout().addWidget(self.tif_upload_progress_bar)
         # Create a namespace for the plugin settings
         self.settings.beginGroup(self.plugin_name.lower())
         # By default, plugin adds layers to a group unless user explicitly deletes it
@@ -77,20 +84,18 @@ class Mapflow(QObject):
         # Init dialogs
         self.dlg = MainDialog(self.main_window)
         self.dlg_login = LoginDialog(self.main_window)
-        self.dlg_custom_provider = CustomProviderDialog(self.dlg)
+        self.dlg_custom_provider = ImageryProviderDialog(self.dlg)
         self.dlg_connect_id = ConnectIdDialog(self.dlg)
         self.red_border_style = 'border-color: rgb(239, 41, 41);'  # used to highlight invalid inputs
-        self.timeout_alert = QMessageBox(
-            QMessageBox.Warning, self.plugin_name,
-            self.tr("Sorry, we couldn't connect to Mapflow. Please try again later."
-                    'If the problem remains, please, send us an email to help@geoalert.io.'),
-            parent=self.dlg
-        )
         self.offline_alert = QMessageBox(
             QMessageBox.Information,
             self.plugin_name,
             self.tr('Mapflow requires Internet connection'),
             parent=self.dlg
+        )
+        self.timeout_alert = ErrorMessage(
+            self.tr('Mapflow is not responding.\nPlease, try again later or send us an email.'),
+            self.main_window
         )
         # Display the plugin's version
         metadata_parser = ConfigParser()
@@ -290,7 +295,7 @@ class Mapflow(QObject):
             self.dlg.customProviderCombo.addItem(name)
             self.dlg.customProviderCombo.setCurrentText(name)
             break
-        self.clear_fields(self.dlg_custom_provider.name, self.dlg_custom_provider.url)
+        self.clear(self.dlg_custom_provider.name, self.dlg_custom_provider.url)
 
     def edit_provider(self) -> None:
         """Edit a web imagery provider.
@@ -596,7 +601,7 @@ class Mapflow(QObject):
         self.dlg.labelAoiArea.setText(label)
 
     def delete_processings(self) -> None:
-        """Delete one or more processings on the server.
+        """Delete one or more processings from the server.
 
         Asks for confirmation in a pop-up dialog. Multiple processings can be selected.
         Selected processings are immediately deleted from the table.
@@ -607,22 +612,30 @@ class Mapflow(QObject):
         if not selected_rows:
             return
         # Ask for confirmation
-        if self.alert(self.tr('Delete {} processing(s)?').format(len(selected_rows)), 'question') == QMessageBox.No:
+        if self.alert(
+            self.tr('Delete {} processing(s)?').format(len(selected_rows)),
+            'question'
+        ) == QMessageBox.No:
             return
         # QPersistentModel index allows deleting rows sequentially while preserving their original indexes
         for index in [QPersistentModelIndex(row) for row in selected_rows]:
             row = index.row()
             pid = self.dlg.processingsTable.item(row, config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
             name = self.dlg.processingsTable.item(row, 0).text()
-            response = self.nam.deleteResource(self.create_http_request(f'/processings/{pid}'))
-            error = response.error()
-            if not error:
+            self.blocking_nam.deleteResource(self.create_http_request(f'/processings/{pid}'))
+            response = self.blocking_nam.reply()
+            if response.error():
+                self.request_error_handler(response)
+            else:
                 self.dlg.processingsTable.removeRow(row)
                 self.processing_names.remove(name)
-            elif error == QNetworkReply.HostNotFoundError:
-                self.offline_alert.show()
-            elif error in (QNetworkReply.TimeoutError, QNetworkReply.OperationCanceledError):
-                self.timeout_alert.show()
+
+    def send_request(self, _type: str, method: str, timeout: int = 5) -> None:
+        """"""
+        if _type == 'sync':
+            if method == 'delete':
+                method == 'deleteResource'
+            getattr(self.blocking_nam, method)()
 
     def create_processing(self) -> None:
         """Create and start a processing on the server.
@@ -638,7 +651,6 @@ class Mapflow(QObject):
         if processing_name in self.processing_names:
             self.alert(self.tr('Processing name taken. Please, choose a different name.'))
             return
-            return
         if not (self.dlg.polygonCombo.currentLayer() or self.dlg.useImageExtentAsAoi.isChecked()):
             self.alert(self.tr('Please, select an area of interest'))
             return
@@ -651,6 +663,7 @@ class Mapflow(QObject):
                 'Try splitting up your area of interest.'
             ).format(self.aoi_area_limit), kind='critical')
             return
+        self.push_message(self.tr('Starting the processing...'))
         auth_fields = (self.dlg.customProviderLogin.text(), self.dlg.customProviderPassword.text())
         if any(auth_fields) and not all(auth_fields):
             self.alert(self.tr('Invalid custom provider credentials'), kind='warning')
@@ -731,42 +744,59 @@ class Mapflow(QObject):
                 )['OUTPUT']
                 aoi_geometry = next(intersection.getFeatures()).geometry()
         processing_params['geometry'] = json.loads(aoi_geometry.asJson())
-        if imagery:  # upload the image to the server
-            processing_params['meta']['source'] = 'tif'
-            # Stash the processing parameters
-            request = self.create_http_request('/rasters')
-            request.setRawHeader(b'X-Processing-Body', json.dumps(processing_params).encode())
-            body = QHttpMultiPart(QHttpMultiPart.FormDataType)
-            image = QFile(path, body)
-            image.open(QIODevice.ReadOnly)
-            tif = QHttpPart()
-            tif.setBodyDevice(image)
-            tif.setHeader(QNetworkRequest.ContentTypeHeader, b'image/tiff')
-            tif.setHeader(QNetworkRequest.ContentDispositionHeader, b'form-data; name="file"')
-            body.append(tif)
-            response = self.nam.post(request, body)
-            response.finished.connect(self.upload_tif_callback)
-            body.setParent(response)
-            print('TIF POSTED')
+        if not imagery:
+            self.post_processing(processing_params)
+            return
+        # Upload the image to the server
+        processing_params['meta']['source'] = 'tif'
+        # Stash the processing parameters
+        request = self.create_http_request('/rastersmultipart')
+        request.setRawHeader(b'X-Processing-Body', json.dumps(processing_params).encode())
+        body = QHttpMultiPart(QHttpMultiPart.FormDataType)
+        tif = QHttpPart()
+        tif.setHeader(QNetworkRequest.ContentTypeHeader, 'image/tiff')
+        tif.setHeader(QNetworkRequest.ContentDispositionHeader, 'form-data; name="file"; filename=""')
+        image = QFile(path, body)
+        image.open(QIODevice.ReadOnly)
+        tif.setBodyDevice(image)
+        body.append(tif)
+        response = self.nam.post(request, body)
+        response.finished.connect(self.upload_tif_callback)
+        body.setParent(response)
 
     def upload_tif_callback(self) -> None:
         """"""
-        print('CALLBACK')
         response = self.sender()
         error = response.error()
         if error:
-            self.log('Error uploading GeoTIFF: ' + response.errorString())
+            self.request_error_handler(response)
             return
-        print('NO ERROR')
-        request_body = json.loads(response.request().rawHeader(b'X-Processing-Body'))
-        request_body['params']['url'] = json.loads(response.readAll())['url']
+        response.uploadProgress.connect(self.upload_tif_progress)
+        print('PROGRESS CONNECTED')
+        request_body = json.loads(response.request().rawHeader(b'X-Processing-Body').data())
+        request_body['params']['url'] = json.loads(response.readAll().data())['url']
+        self.post_processing(request_body)
+
+    def upload_tif_progress(self, bytes_sent: int, bytes_total: int) -> None:
+        """"""
+        print('UPLOAD PROGRESS')
+        if bytes_sent != -1:  # the number of bytes to be uploaded couldn't be determined
+            return
+        if bytes_sent == bytes_total:
+            self.push_message(self.tr('Image successfully uploaded'))
+            self.message_bar.removeWidget(self.tif_upload_progress_message)
+        self.tif_upload_progress_bar.setValue(round(bytes_sent / bytes_total * 100))
+        self.message_bar.pushWidget(self.tif_upload_progress_message)
+
+    def post_processing(self, request_body: dict) -> None:
+        """"""
         response = self.nam.post(
             self.create_http_request('/processings', {'Content-Type': 'application/json'}),
             json.dumps(request_body).encode()
         )
-        response.finished.connect(self.create_processing_callback)
+        response.finished.connect(self.post_processing_callback)
 
-    def create_processing_callback(self) -> None:
+    def post_processing_callback(self) -> None:
         """Display a success message and clear the processing name field.
 
         This is a callback executed after a successful create processing request.
@@ -774,14 +804,14 @@ class Mapflow(QObject):
         response = self.sender()
         error = response.error()
         if error == QNetworkReply.ContentAccessDenied:
-            self.alert(self.tr(
+            ErrorMessage(self.tr(
                 'You need to upgrade your subscription to process Maxar imagery. '
-                "Please, send us an email to help@geoalert.io if you'd like to."), kind='critical'
-            )
+                "Please, send us an email to help@geoalert.io if you'd like to."
+            ), self.dlg).show()
         elif error:
             self.alert(self.tr('Processing creation failed: ') + response.errorString(), kind='critical')
         else:
-            self.alert(self.tr('Success! Processing may take up to several minutes'))
+            self.alert(self.tr("Success! We'll notify you when the processing has finished."))
             self.dlg.processingName.clear()
 
     def save_custom_provider_auth(self) -> None:
@@ -857,9 +887,6 @@ class Mapflow(QObject):
         if error == QNetworkReply.HostNotFoundError:
             self.offline_alert.show()
             return
-        elif error in (QNetworkReply.TimeoutError, QNetworkReply.OperationCanceledError):
-            self.timeout_alert.show()
-            return
         elif error:
             self.alert(error.errorString(), kind='critical')
             return
@@ -880,7 +907,7 @@ class Mapflow(QObject):
         # First, save the features as GeoJSON
         geojson_file_name = os.path.join(self.dlg.outputDirectory.text(), f'{processing_name}.geojson')
         with open(geojson_file_name, 'wb') as f:
-            f.write(r.content)
+            f.write(response.content)
         # Export to Geopackage to prevent QGIS from hanging if the GeoJSON is heavy
         output_path = os.path.join(self.dlg.outputDirectory.text(), f'{processing_name}.gpkg')
         layer = QgsVectorLayer(geojson_file_name, 'temp', 'ogr')
@@ -912,7 +939,7 @@ class Mapflow(QObject):
             return
         # Add a style
         wd = self.dlg.processingsTable.item(row, 1).text()
-        style = os.path.join(self.plugin_dir, 'static', 'styles', f'{config.STYLES.get(wd, "default")}.qml')
+        style = os.path.join(self.plugin_dir, 'static', 'styles', config.STYLES.get(wd, 'default') + '.qml')
         results_layer.loadNamedStyle(style)
         # Set image extent explicitly bc as XYZ, it have doesn't have one by default
         tif_layer.setExtent(helpers.from_wgs84(
@@ -941,7 +968,7 @@ class Mapflow(QObject):
         :param level: The type of a message to display
         :param duration: For how long the message will be displayed
         """
-        self.iface.messageBar().pushMessage(self.plugin_name, message, level, duration)
+        self.messageBar.pushMessage(self.plugin_name, message, level, duration)
 
     def log(self, message: str, level: Qgis.MessageLevel = Qgis.Warning) -> None:
         """Log a message to the QGIS Message Log.
@@ -954,9 +981,12 @@ class Mapflow(QObject):
     def fill_out_processings_table(self) -> None:
         """Fill out the processings table with the processings in the user's default project.
 
-        Is called by self.processing_fetcher upon successful fetch.
+        Is called by upon successful processing fetch.
         """
-        processings = json.loads(self.processing_fetcher.contentAsString())
+        response = self.sender()
+        if response.error():
+            return
+        processings = json.loads(response.readAll().data())
         if sys.version_info.minor < 7:  # python 3.6 doesn't understand 'Z' as UTC
             for processing in processings:
                 processing['created'] = processing['created'].replace('Z', '+0000')
@@ -1054,7 +1084,6 @@ class Mapflow(QObject):
 
     def unload(self) -> None:
         """Remove the plugin icon & toolbar from QGIS GUI."""
-        self.processing_fetcher.cancel()
         for dlg in self.dlg, self.dlg_login, self.dlg_connect_id, self.dlg_custom_provider:
             dlg.close()
         del self.toolbar
@@ -1070,29 +1099,16 @@ class Mapflow(QObject):
         # Save Mapflow Basic Auth to be used with every request to Mapflow
         self.mapflow_auth = f'Basic {b64encode(f"{login}:{password}".encode()).decode()}'.encode()
         # Request user's default project (doubles up as logging in)
-        self.nam.setTimeout(5000)
-        response = self.nam.blockingGet(self.create_http_request('/projects/default'))
-        error = response.error()
-        if not error:
-            self.logged_in = True  # allows skipping auth if the user's remembered
-            self.settings.setValue('serverLogin', login)
-            self.settings.setValue('serverPassword', password)
-            # Create a reusable request to update the processing table at regular intervals
-            self.processing_fetch_request = self.create_http_request('/processings')
-        elif error == QNetworkReply.HostNotFoundError:
-            self.offline_alert.show()
-        elif error in (QNetworkReply.TimeoutError, QNetworkReply.OperationCanceledError):
-            self.timeout_alert.show()
-        elif error == QNetworkReply.AuthenticationRequiredError:
-            if not hasattr(self, 'invalid_credentials_label'):
-                self.invalid_credentials_label = QLabel(self.tr('Invalid credentials'))
-                self.invalid_credentials_label.setStyleSheet('color: rgb(239, 41, 41);')
-                self.dlg_login.layout().insertWidget(1, self.invalid_credentials_label, alignment=Qt.AlignCenter)
-                new_size = self.dlg_login.width(), self.dlg_login.height() + 21
-                self.dlg_login.setMaximumSize(*new_size)
-                self.dlg_login.setMinimumSize(*new_size)
-        else:
-            self.alert(error.errorString())
+        self.blocking_nam.get(self.create_http_request('/projects/default'))
+        response = self.blocking_nam.reply()
+        if response.error():
+            self.request_error_handler(response)
+            return
+        self.logged_in = True  # allows skipping auth if the user's remembered
+        self.settings.setValue('serverLogin', login)
+        self.settings.setValue('serverPassword', password)
+        # Create a reusable request to update the processing table at regular intervals
+        self.processing_fetch_request = self.create_http_request('/processings')
 
     def logout(self) -> None:
         """Close the plugin and clear credentials from cache."""
@@ -1101,8 +1117,6 @@ class Mapflow(QObject):
         self.settings.remove('serverLogin')
         self.settings.remove('serverPassword')
         self.logged_in = False
-        # Stop monitoring processings
-        self.processing_fetcher.cancel()
         # Recreate the login dialog to start afresh
         self.dlg_login = LoginDialog(self.main_window)
         try:
@@ -1111,6 +1125,35 @@ class Mapflow(QObject):
             pass
         # Assume user wants to log into another account or to another server
         self.run()
+
+    def fetch_processings(self) -> None:
+        """"""
+        response = self.nam.get(self.processing_fetch_request)
+        response.finished.connect(self.fill_out_processings_table)
+
+    def request_error_handler(self, response: QNetworkReply) -> None:
+        """"""
+        error = response.error()
+        if not error:
+            return
+        elif error == QNetworkReply.AuthenticationRequiredError:  # invalid/empty credentials
+            if not hasattr(self, 'invalid_credentials_label'):
+                self.invalid_credentials_label = QLabel(self.tr('Invalid credentials'))
+                self.invalid_credentials_label.setStyleSheet('color: rgb(239, 41, 41);')
+                self.dlg_login.layout().insertWidget(1, self.invalid_credentials_label, alignment=Qt.AlignCenter)
+                new_size = self.dlg_login.width(), self.dlg_login.height() + 21
+                self.dlg_login.setMaximumSize(*new_size)
+                self.dlg_login.setMinimumSize(*new_size)
+        elif error == QNetworkReply.HostNotFoundError:
+            if not self.offline_alert.isVisible():
+                self.offline_alert.show()
+        elif error == QNetworkReply.OperationCanceledError:
+            ErrorMessage(
+                self.tr('Mapflow is not responding.\nPlease, try again later or send us an email.'),
+                parent=self.dlg_login if self.dlg_login.isVisible() else self.dlg
+            ).show()
+        else:
+            self.alert(response.errorString(), kind='critical')
 
     def run(self) -> None:
         """Plugin entrypoint.
@@ -1133,48 +1176,25 @@ class Mapflow(QObject):
                 except AttributeError:
                     pass
                 return
-        # Refresh the list of workflow definitions
+        # Authenticate HTTP requests
         self.login = self.dlg_login.username.text()
         self.password = self.dlg_login.password.text()
         self.mapflow_auth = f'Basic {b64encode(f"{self.login}:{self.password}".encode()).decode()}'.encode()
-        # Fetch processings at startup
-        self.processing_fetcher.fetchContent(self.processing_fetch_request)
-        self.processing_fetch_timer = QTimer(self.main_window)
-        self.processing_fetch_timer.setInterval(config.PROCESSING_LIST_REFRESH_INTERVAL)
-        self.processing_fetch_timer.timeout.connect(
-            lambda: self.processing_fetcher.fetchContent(self.processing_fetch_request)
-        )
-        self.processing_fetch_timer.start()
-        response = self.nam.blockingGet(self.create_http_request('/projects/default'))
-        error = response.error()
-        if not error:
-            wds = [wd['name'] for wd in json.loads(response.content().data())['workflowDefs']]
-            self.dlg.modelCombo.clear()
-            self.dlg.modelCombo.addItems(wds)
-        elif error == QNetworkReply.HostNotFoundError:
-            self.offline_alert.show()
+        # Refresh the list of workflow definitions
+        self.blocking_nam.get(self.create_http_request('/projects/default'))
+        response = self.blocking_nam.reply()
+        if response.error():
+            self.request_error_handler(response)
             return
-        elif error in (QNetworkReply.TimeoutError, QNetworkReply.OperationCanceledError):
-            self.timeout_alert.show()
-            return
-        elif error == QNetworkReply.AuthenticationRequiredError:
-            if not hasattr(self, 'invalid_credentials_label'):
-                self.invalid_credentials_label = QLabel(self.tr('Invalid credentials'))
-                self.invalid_credentials_label.setStyleSheet('color: rgb(239, 41, 41);')
-                self.dlg_login.layout().insertWidget(1, self.invalid_credentials_label, alignment=Qt.AlignCenter)
-                new_size = self.dlg_login.width(), self.dlg_login.height() + 21
-                self.dlg_login.setMaximumSize(*new_size)
-                self.dlg_login.setMinimumSize(*new_size)
-            self.dlg_login.show()
-            return
+        self.dlg.modelCombo.clear()
+        self.dlg.modelCombo.addItems([
+            wd['name'] for wd in json.loads(response.content().data())['workflowDefs']
+        ])
         # Get user status
-        response = self.nam.blockingGet(self.create_http_request('/user/status'))
-        error = response.error()
-        if error == QNetworkReply.HostNotFoundError:
-            self.offline_alert.show()
-            return
-        elif error in (QNetworkReply.TimeoutError, QNetworkReply.OperationCanceledError):
-            self.timeout_alert.show()
+        self.blocking_nam.get(self.create_http_request('/user/status'))
+        response = self.blocking_nam.reply()
+        if response.error():
+            self.request_error_handler(response)
             return
         user_status = json.loads(response.content().data())
         self.is_premium_user = user_status['isPremium']
@@ -1185,6 +1205,13 @@ class Mapflow(QObject):
         # Calculate area of the current AOI layer or feature
         combo = self.dlg.rasterCombo if self.dlg.useImageExtentAsAoi.isChecked() else self.dlg.polygonCombo
         self.calculate_aoi_area(combo.currentLayer())
+        # Fetch processings at startup
+        self.processing_fetch_request = self.create_http_request('/processings')
+        self.fetch_processings()  # first fetch them immediately
+        self.processing_fetch_timer = QTimer(self.main_window)
+        self.processing_fetch_timer.setInterval(config.PROCESSING_TABLE_REFRESH_INTERVAL)
+        self.processing_fetch_timer.timeout.connect(self.fetch_processings)
+        self.processing_fetch_timer.start()
         # Restore table section sizes
         for table in 'processingsTable', 'maxarMetadataTable':
             header = getattr(self.dlg, table).horizontalHeader()

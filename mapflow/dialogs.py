@@ -13,7 +13,7 @@ plugin_icon = QIcon(str(icon_path/'mapflow.png'))
 
 class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     def __init__(self, parent: QWidget) -> None:
-        """Constructor."""
+        """Plugin's main dialog."""
         super().__init__(parent)
         self.setupUi(self)
         # Restrict combos to relevant layer types; QGIS 3.10-3.20 (at least) bugs up if set in .ui
@@ -29,15 +29,15 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
 class LoginDialog(*uic.loadUiType(ui_path/'login_dialog.ui')):
     def __init__(self, parent: QWidget) -> None:
-        """Constructor."""
+        """Auth dialog."""
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(plugin_icon)
 
 
-class CustomProviderDialog(*uic.loadUiType(ui_path/'custom_provider_dialog.ui')):
+class ImageryProviderDialog(*uic.loadUiType(ui_path/'imagery_provider_dialog.ui')):
     def __init__(self, parent: QWidget) -> None:
-        """Constructor."""
+        """A dialog for adding or editing an imagery provider."""
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(plugin_icon)
@@ -49,3 +49,12 @@ class ConnectIdDialog(*uic.loadUiType(ui_path/'connect_id_dialog.ui')):
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(plugin_icon)
+
+
+class ErrorMessage(*uic.loadUiType(ui_path/'error_message.ui')):
+    def __init__(self, text: str, parent: QWidget) -> None:
+        """An message box notifying user about a plugin error, with a 'Send a report' button."""
+        super().__init__(parent)
+        self.setupUi(self)
+        self.setWindowIcon(plugin_icon)
+        self.text.setText(text)
