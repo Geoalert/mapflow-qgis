@@ -846,7 +846,6 @@ class Mapflow(QObject):
         if error == QNetworkReply.ContentAccessDenied:
             ErrorMessage(self.tr(
                 'You need to upgrade your subscription to process Maxar imagery. '
-                "Please, send us an email to help@geoalert.io if you'd like to."
             ), self.dlg).show()
         elif error:
             self.alert(self.tr('Processing creation failed: ') + response.errorString(), kind='critical')
@@ -885,7 +884,7 @@ class Mapflow(QObject):
                 url = url.replace('jpeg', 'png')  # for transparency support
             else:  # our account; send to our endpoint
                 url = self.server + '/png?TileRow={y}&TileCol={x}&TileMatrix={z}'
-                url += f'&CONNECTID={self.custom_providers[provider].lower()}'
+                url += f'&CONNECTID={provider.split()[1].lower()}'
                 username = self.username
                 password = self.password
             image_id = self.get_maxar_image_id()  # request a single image if selected in the table
