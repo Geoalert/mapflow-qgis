@@ -21,7 +21,7 @@ from qgis import processing as qgis_processing  # to avoid collisions
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature,
     QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsMapLayerType, Qgis,
-    QgsVectorFileWriter, QgsMessageLog, QgsNetworkAccessManager, QgsBlockingNetworkRequest
+    QgsVectorFileWriter, QgsMessageLog, QgsNetworkAccessManager
 )
 
 from .dialogs import MainDialog, LoginDialog, ImageryProviderDialog, ConnectIdDialog, ErrorMessage
@@ -137,7 +137,7 @@ class Mapflow(QObject):
         self.dlg.useImageExtentAsAoi.toggled.connect(self.calculate_aoi_area)
         self.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
         # Processings
-        self.dlg.processingsTable.cellDoubleClicked.connect(self.download_processing_results)
+        self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Custom provider
         self.dlg.preview.clicked.connect(self.preview)
@@ -187,9 +187,7 @@ class Mapflow(QObject):
         elif method == 'put':
             response = self.nam.put(request, body)
         timer.start()
-        print(timer.interval())
         timer.timeout.connect(response.abort)
-        timer.timeout.connect(lambda: print('timeout'))
         response.finished.connect(callback)
         return response
 
@@ -900,11 +898,12 @@ class Mapflow(QObject):
         else:
             self.alert(self.tr('Error loading: ') + url)
 
-    def download_processing_results(self, row: int) -> None:
+    def download_results(self, row: int) -> None:
         """Download and display processing results along with the source raster, if available.
 
-        Results will be downloaded into the user's output directory. If unset, the user will be prompted to select one.
-        If the processing hasn't finished yet or has failed, the resulting feature layer will be empty.
+        Results will be downloaded into the user's output directory. 
+        If it's unset, the user will be prompted to select one.
+        Unfinished or failed processings yield partial or no results.
 
         Is called by double-clicking on a row in the processings table.
 
@@ -912,36 +911,28 @@ class Mapflow(QObject):
         """
         if not self.check_if_output_directory_is_selected():
             return
-        processing_name = self.dlg.processingsTable.item(row, 0).text()  # 0th column is Name
         pid = self.dlg.processingsTable.item(row, config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
-        response = self.nam.get(self.send_http_request(f'/processings/{pid}/result'))
-        error = response.error()
-        if error == QNetworkReply.HostNotFoundError:
-            self.offline_alert.show()
+        self.send_http_request(
+            'get',
+            f'/processings/{pid}/result',
+            lambda: self.download_results_callback(pid),
+            timeout=300
+        )
+
+    def download_results_callback(self, pid: str) -> None:
+        """"""
+        response = self.sender()
+        if response.error():
+            self.request_error_handler(response)
             return
-        elif error:
-            self.alert(error.errorString(), kind='critical')
-            return
-        # Add the source raster (COG) if it has been created
-        tif_url = next(filter(lambda p: p['id'] == pid, self.processings))['rasterLayer'].get('tileUrl')
-        if tif_url:
-            params = {
-                'type': 'xyz',
-                'url': tif_url,
-                'zmin': 0,
-                'zmax': 18,
-                'username': self.dlg_login.username.text(),
-                'password': self.dlg_login.password.text()
-            }
-            # URI-encoding will invalidate the request so requests.prepare() or the like can't be used
-            uri = '&'.join(f'{key}={val}' for key, val in params.items())
-            tif_layer = QgsRasterLayer(uri, f'{processing_name}_image', 'wms')
+        # Extract processing details
+        processing = next(filter(lambda p: p['id'] == pid, self.processings))
         # First, save the features as GeoJSON
-        geojson_file_name = os.path.join(self.dlg.outputDirectory.text(), f'{processing_name}.geojson')
+        geojson_file_name = os.path.join(self.dlg.outputDirectory.text(), processing['name'] + '.geojson')
         with open(geojson_file_name, 'wb') as f:
-            f.write(response.content)
+            f.write(response.readAll().data())
         # Export to Geopackage to prevent QGIS from hanging if the GeoJSON is heavy
-        output_path = os.path.join(self.dlg.outputDirectory.text(), f'{processing_name}.gpkg')
+        output_path = os.path.join(self.dlg.outputDirectory.text(), processing['name'] + '.gpkg')
         layer = QgsVectorLayer(geojson_file_name, 'temp', 'ogr')
         transform = self.project.transformContext()
         # Layer creation options for QGIS 3.10.3+
@@ -956,33 +947,49 @@ class Mapflow(QObject):
         else:
             error, msg = QgsVectorFileWriter.writeAsVectorFormatV2(layer, output_path, transform, write_options)
         if error:
-            self.push_message(self.tr('Error saving results! See QGIS logs.'), Qgis.Warning)
-            self.log(msg)
+            self.push_message(self.tr('Error saving results: ' + msg), Qgis.Warning)
             return
+        # Load the results into QGIS
+        results_layer = QgsVectorLayer(output_path, processing['name'], 'ogr')
+        if not results_layer:
+            self.push_message(self.tr('Error loading results'), Qgis.Warning)
+            return
+        # Add a style
+        results_layer.loadNamedStyle(os.path.join(
+            self.plugin_dir,
+            'static',
+            'styles',
+            config.STYLES.get(processing['workflowDef'], 'default') + '.qml'
+        ))
+        # Add the source raster (COG) if it has been created
+        raster_url = processing['rasterLayer'].get('tileUrl')
+        if raster_url:
+            params = {
+                'type': 'xyz',
+                'url': raster_url,
+                'zmin': 0,
+                'zmax': 18,
+                'username': self.dlg_login.username.text(),
+                'password': self.dlg_login.password.text()
+            }
+            # URI-encoding will break the request so e.g. urllib.quote can't be used
+            uri = '&'.join(f'{key}={val}' for key, val in params.items())
+            raster = QgsRasterLayer(uri, processing['name'] + '_image', 'wms')
+        # Set image extent explicitly because as XYZ, it doesn't have one by default
+        raster.setExtent(helpers.from_wgs84(
+            QgsGeometry.fromRect(results_layer.extent()),
+            raster.crs(),
+            self.project.transformContext()
+        ).boundingBox())
+        # Add the layers to the project
+        self.add_layer(raster)
+        self.add_layer(results_layer)
+        self.iface.zoomToActiveLayer()
         # Try to delete the GeoJSON file. Fails on Windows
         try:
             os.remove(geojson_file_name)
         except:
             pass
-        # Load the results into QGIS
-        results_layer = QgsVectorLayer(output_path, processing_name, 'ogr')
-        if not results_layer:
-            self.push_message(self.tr("Couldn't load the results"), Qgis.Warning)
-            return
-        # Add a style
-        wd = self.dlg.processingsTable.item(row, 1).text()
-        style = os.path.join(self.plugin_dir, 'static', 'styles', config.STYLES.get(wd, 'default') + '.qml')
-        results_layer.loadNamedStyle(style)
-        # Set image extent explicitly bc as XYZ, it have doesn't have one by default
-        tif_layer.setExtent(helpers.from_wgs84(
-            QgsGeometry.fromRect(results_layer.extent()),
-            tif_layer.crs(),
-            self.project.transformContext()
-        ).boundingBox())
-        # Add the layers to the project
-        self.add_layer(tif_layer)
-        self.add_layer(results_layer)
-        self.iface.zoomToActiveLayer()
 
     def alert(self, message: str, kind: str = 'information') -> None:
         """Display an interactive modal pop up.
