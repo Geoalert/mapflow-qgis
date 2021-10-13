@@ -3,6 +3,7 @@ import json
 import os.path
 from base64 import b64encode, b64decode
 from typing import Callable, List, Optional, Union
+from tempfile import NamedTemporaryFile
 from datetime import datetime, timedelta  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
@@ -925,36 +926,45 @@ class Mapflow(QObject):
         if response.error():
             self.request_error_handler(response)
             return
-        # Extract processing details
         processing = next(filter(lambda p: p['id'] == pid, self.processings))
-        # First, save the features as GeoJSON
-        geojson_file_name = os.path.join(self.dlg.outputDirectory.text(), processing['name'] + '.geojson')
-        with open(geojson_file_name, 'wb') as f:
-            f.write(response.readAll().data())
         # Export to Geopackage to prevent QGIS from hanging if the GeoJSON is heavy
         output_path = os.path.join(self.dlg.outputDirectory.text(), processing['name'] + '.gpkg')
-        layer = QgsVectorLayer(geojson_file_name, 'temp', 'ogr')
         transform = self.project.transformContext()
         # Layer creation options for QGIS 3.10.3+
         write_options = QgsVectorFileWriter.SaveVectorOptions()
         write_options.layerOptions = ['fid=id']
-        # writeAsVectorFormat keeps changing between version so gotta check the version :-(
-        if Qgis.QGIS_VERSION_INT < 31003:
-            error, msg = QgsVectorFileWriter.writeAsVectorFormat(layer, output_path, 'utf8', layerOptions=['fid=id'])
-        elif Qgis.QGIS_VERSION_INT >= 32000:
-            # V3 returns two additional str values but they're not documented, so just discard them
-            error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(layer, output_path, transform, write_options)
-        else:
-            error, msg = QgsVectorFileWriter.writeAsVectorFormatV2(layer, output_path, transform, write_options)
+        with NamedTemporaryFile(mode='wb+') as f:
+            f.write(response.readAll().data())
+            f.seek(0)  # rewind the cursor to the start of the file
+            layer = QgsVectorLayer(f.name, '', 'ogr')
+            # writeAsVectorFormat keeps changing with versions so gotta check the version :-(
+            if Qgis.QGIS_VERSION_INT < 31003:
+                error, msg = QgsVectorFileWriter.writeAsVectorFormat(
+                    layer,
+                    output_path,
+                    'utf8',
+                    layerOptions=['fid=id']
+                )
+            elif Qgis.QGIS_VERSION_INT >= 32000:
+                # V3 returns two additional str values but they're not documented, so just discard them
+                error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(
+                    layer,
+                    output_path,
+                    transform,
+                    write_options
+                )
+            else:
+                error, msg = QgsVectorFileWriter.writeAsVectorFormatV2(
+                    layer,
+                    output_path,
+                    transform,
+                    write_options
+                )
         if error:
-            self.push_message(self.tr('Error saving results: ' + msg), Qgis.Warning)
+            self.push_message(self.tr('Error loading results. Error code: ' + str(error)), Qgis.Warning)
             return
         # Load the results into QGIS
         results_layer = QgsVectorLayer(output_path, processing['name'], 'ogr')
-        if not results_layer:
-            self.push_message(self.tr('Error loading results'), Qgis.Warning)
-            return
-        # Add a style
         results_layer.loadNamedStyle(os.path.join(
             self.plugin_dir,
             'static',
@@ -969,12 +979,14 @@ class Mapflow(QObject):
                 'url': raster_url,
                 'zmin': 0,
                 'zmax': 18,
-                'username': self.dlg_login.username.text(),
-                'password': self.dlg_login.password.text()
+                'username': self.username,
+                'password': self.password
             }
-            # URI-encoding will break the request so e.g. urllib.quote can't be used
-            uri = '&'.join(f'{key}={val}' for key, val in params.items())
-            raster = QgsRasterLayer(uri, processing['name'] + '_image', 'wms')
+            raster = QgsRasterLayer(
+                '&'.join(f'{key}={val}' for key, val in params.items()),  # don't URL-encode it
+                processing['name'] + '_image',
+                'wms'
+            )
         # Set image extent explicitly because as XYZ, it doesn't have one by default
         raster.setExtent(helpers.from_wgs84(
             QgsGeometry.fromRect(results_layer.extent()),
@@ -985,11 +997,6 @@ class Mapflow(QObject):
         self.add_layer(raster)
         self.add_layer(results_layer)
         self.iface.zoomToActiveLayer()
-        # Try to delete the GeoJSON file. Fails on Windows
-        try:
-            os.remove(geojson_file_name)
-        except:
-            pass
 
     def alert(self, message: str, kind: str = 'information') -> None:
         """Display an interactive modal pop up.
@@ -1130,19 +1137,16 @@ class Mapflow(QObject):
         """"""
         self.dlg_login = LoginDialog(self.main_window)
         self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
-        self.dlg_login.accepted.connect(self.log_in)
+        self.dlg_login.accepted.connect(lambda: self.log_in(self.dlg_login.token.text()))
         self.dlg_login.finished.connect(self.set_up_login_dialog)
 
-    def log_in(self) -> None:
+    def log_in(self, credentials_b64: str) -> None:
         """Log into Mapflow."""
         # Get the server URL
         mapflow_env = QgsSettings().value('variables/mapflow_env') or 'production'
         self.server = f'https://whitemaps-{mapflow_env}.mapflow.ai/rest'
-        # Read input credentials
-        login = self.dlg_login.username.text()
-        password = self.dlg_login.password.text()
         # Save Mapflow Basic Auth to be used with every request to Mapflow
-        self.mapflow_auth = f'Basic {b64encode(f"{login}:{password}".encode()).decode()}'.encode()
+        self.mapflow_auth = f'Basic {credentials_b64}'.encode()
         # Log in
         self.send_http_request('get', '/user/status', self.log_in_callback)
 
@@ -1196,6 +1200,7 @@ class Mapflow(QObject):
         response = self.sender()
         if response.error():
             self.request_error_handler(response)
+            self.mapflow_auth = ''
             self.dlg_login.show()
             return
         # Refresh the list of workflow definitions
@@ -1205,9 +1210,9 @@ class Mapflow(QObject):
         # Keep fetching them at regular intervals afterwards
         self.processing_fetch_timer.start()
         self.logged_in = True  # allows skipping auth if the user's remembered
-        _, auth = response.request().rawHeader(b'Authorization').data().decode().split()
-        self.settings.setValue('token', auth.encode())
-        self.username, self.password = b64decode(auth).decode().split(':')
+        token = self.mapflow_auth.decode().split()[1]
+        self.settings.setValue('token', token)
+        self.username, self.password = b64decode(token).decode().split(':')
         user_status = json.loads(response.readAll().data())
         self.is_premium_user = user_status['isPremium']
         self.limit_max_zoom_for_maxar(self.dlg.customProviderCombo.currentText())
@@ -1236,8 +1241,9 @@ class Mapflow(QObject):
 
         Is called by clicking the plugin icon.
         """
-        if not self.logged_in:
+        token = self.settings.value('token')
+        if bool(token):  # credentials are remembered
+            self.log_in(token)
+        else:
             self.set_up_login_dialog()
             self.dlg_login.show()
-        else:
-            self.log_in()
