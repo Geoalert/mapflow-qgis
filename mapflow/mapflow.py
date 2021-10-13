@@ -7,7 +7,6 @@ from tempfile import NamedTemporaryFile
 from datetime import datetime, timedelta  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
-import requests
 from PyQt5.QtGui import QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
@@ -155,13 +154,13 @@ class Mapflow(QObject):
         self.processing_fetch_timer = QTimer(self.main_window)
         self.processing_fetch_timer.setInterval(config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
         self.processing_fetch_timer.timeout.connect(
-            lambda: self.send_http_request('get', '/processings', self.fill_out_processings_table),
+            lambda: self.send_http_request('get',  self.server + '/processings', self.fill_out_processings_table),
         )
 
     def send_http_request(
         self,
         method: str,
-        endpoint: str,
+        url: str,
         callback: Callable,
         body: Union[QHttpMultiPart, bytes] = None,
         headers: dict = None,
@@ -169,10 +168,8 @@ class Mapflow(QObject):
         timeout: int = config.MAPFLOW_DEFAULT_TIMEOUT
     ) -> QNetworkReply:
         """"""
-        request = QNetworkRequest(QUrl(self.server + endpoint))
-        if not basic_auth:
-            basic_auth = self.mapflow_auth
-        request.setRawHeader(b'Authorization', basic_auth)
+        request = QNetworkRequest(QUrl(url))
+        request.setRawHeader(b'Authorization', basic_auth or self.mapflow_auth)
         if headers:
             for key, value in headers.items():
                 request.setRawHeader(key.encode(), value.encode())
@@ -472,7 +469,16 @@ class Mapflow(QObject):
         if not self.check_if_output_directory_is_selected():
             return
         # Start off with the static params
-        params = config.MAXAR_METADATA_REQUEST_PARAMS.copy()
+        params = {
+            'REQUEST': 'GetFeature',
+            'TYPENAME': 'DigitalGlobe:FinishedFeature',
+            'SERVICE': 'WFS',
+            'VERSION': '2.0.0',
+            'SRSNAME': 'EPSG:4326',
+            'FEATUREPROFILE': 'Default_Profile',
+            'WIDTH': 3000,
+            'HEIGHT': 3000
+        }
         # Get the AOI feature within the layer
         if aoi_layer.featureCount() == 1:
             aoi_feature = next(aoi_layer.getFeatures())
@@ -494,54 +500,58 @@ class Mapflow(QObject):
         # Change lon,lat to lat,lon for Maxar
         coords = [position.split(',')[::-1] for position in extent.split(':')]
         params['BBOX'] = ','.join([coord.strip() for position in coords for coord in position])
+        query_params = '&'.join(f'{key}={val}' for key, val in params.items())
+        url = 'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?' + query_params
         # Read credentials
-        login = self.dlg.customProviderLogin.text()
+        username = self.dlg.customProviderLogin.text()
         password = self.dlg.customProviderPassword.text()
-        if login or password:  # user has their own account
-            params['CONNECTID'] = self.custom_providers[current_provider]['connectId']
-            service = 'SecureWatch'
-            method = 'get'
-            kwargs = {
-                'url': config.MAXAR_METADATA_URL,
-                'params': params,
-                'auth': (login, password),
-                'timeout': 5
-            }
+        if username or password:  # user has their own account
+            url += f'&CONNECTID={self.custom_providers[current_provider]["connectId"]}'
+            self.send_http_request(
+                'get',
+                url,
+                lambda: self.get_maxar_metadata_callback(current_provider),
+                basic_auth=f'Basic {b64encode(f"{username}:{password}".encode()).decode()}'.encode(),
+            )
         else:  # assume user wants to use our account, proxy thru Mapflow
-            service = 'Mapflow'
-            method = 'post'
-            kwargs = {
-                'url': self.server + '/meta',
-                'json': {
-                    'url': config.MAXAR_METADATA_URL + '?' + '&'.join(f'{key}={val}' for key, val in params.items()),
-                    'connectId': current_provider.lower()
-                },
-                'auth': (self.username, self.password),
-                'timeout': 10
-            }
-        try:
-            r = getattr(requests, method)(**kwargs)
-        except (requests.ConnectionError, requests.Timeout):  # check for network errors
-            self.alert(service + self.tr(' is not responding. Please, try again later.'))
+            self.send_http_request(
+                'post',
+                self.server + '/meta',
+                lambda: self.get_maxar_metadata_callback(current_provider),
+                body=json.dumps({
+                    'url': url,
+                    'connectId': current_provider.split()[1].lower()
+                }).encode(),
+                headers={'Content-Type': 'application/json'},
+                timeout=7
+            )
+
+    def get_maxar_metadata_callback(self, product: str) -> None:
+        """"""
+        response = self.sender()
+        error = response.error()
+        if error == QNetworkReply.ContentAccessDenied:
+            self.alert(self.tr('Please, check your credentials'), kind='warning')
             return
-        try:
-            r.raise_for_status()  # check for HTTP errors
-        except requests.HTTPError:
-            if r.status_code in (401, 403) and service == 'SecureWatch':
-                self.alert(self.tr('Please, check your credentials'), kind='warning')
-                return
-            elif r.status_code >= 500:
-                self.alert(service + self.tr(' is not responding. Please, try again later.'))
-                return
+        elif error == QNetworkReply.OperationCanceledError:
+            self.alert(self.tr('SecureWatch is not responding. Please, try again later.'), kind='warning')
+            return
+        elif error == QNetworkReply.HostNotFoundError:
+            if not self.offline_alert.isVisible():
+                self.offline_alert.show()
+            return
+        elif error:
+            self.alert(f'{error}: {response.errorString()}', kind='warning')
+            return
         # Memorize the product to prevent further errors if user changes item in the dropdown list
-        self.current_maxar_metadata_product = current_provider
-        layer_name = f'{self.current_maxar_metadata_product} metadata'
+        self.current_maxar_metadata_product = product
+        layer_name = f'{product} metadata'
         # Save metadata to a file; I couldn't get WFS to work, or else no file would be necessary
         output_file_name = os.path.join(
             self.dlg.outputDirectory.text(), f'{layer_name.lower().replace(" ", "_")}.gml'
         )
         with open(output_file_name, 'wb') as f:
-            f.write(r.content)
+            f.write(response.readAll().data())
         self.metadata_layer = QgsVectorLayer(output_file_name, layer_name, 'ogr')
         self.add_layer(self.metadata_layer)
         # Add style
@@ -648,7 +658,7 @@ class Mapflow(QObject):
             name = self.dlg.processingsTable.item(row, 0).text()
             self.send_http_request(
                 'delete',
-                f'/processings/{pid}',
+                self.server + f'/processings/{pid}',
                 lambda: self.delete_processings_callback(row, name)
             )
 
@@ -717,7 +727,7 @@ class Mapflow(QObject):
                 if params['raster_login'] or params['raster_password']:  # user's own account
                     params['url'] += f'&CONNECTID={self.custom_providers[raster_option]["connectId"]}&'
                 else:  # our account
-                    processing_params['meta']['maxar_product'] = self.custom_providers[raster_option].lower()
+                    processing_params['meta']['maxar_product'] = raster_option.split()[1].lower()
                 image_id = self.get_maxar_image_id()
                 if image_id:
                     params['url'] += f'CQL_FILTER=feature_id=%27{image_id}%27'
@@ -786,7 +796,7 @@ class Mapflow(QObject):
         body.append(tif)
         response = self.send_http_request(
             'post',
-            '/rastersmultipart',
+            self.server + '/rastersmultipart',
             lambda: self.upload_tif_callback(processing_params),
             body=body,
             timeout=3600  # one hour
@@ -820,7 +830,7 @@ class Mapflow(QObject):
         """"""
         self.send_http_request(
             'post',
-            '/processings',
+            self.server + '/processings',
             self.post_processing_callback,
             body=json.dumps(request_body).encode(),
             headers={'Content-Type': 'application/json'},
@@ -915,7 +925,7 @@ class Mapflow(QObject):
         pid = self.dlg.processingsTable.item(row, config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
         self.send_http_request(
             'get',
-            f'/processings/{pid}/result',
+            self.server + f'/processings/{pid}/result',
             lambda: self.download_results_callback(pid),
             timeout=300
         )
@@ -1148,7 +1158,7 @@ class Mapflow(QObject):
         # Save Mapflow Basic Auth to be used with every request to Mapflow
         self.mapflow_auth = f'Basic {credentials_b64}'.encode()
         # Log in
-        self.send_http_request('get', '/user/status', self.log_in_callback)
+        self.send_http_request('get',  self.server + '/user/status', self.log_in_callback)
 
     def logout(self) -> None:
         """Close the plugin and clear credentials from cache."""
@@ -1164,10 +1174,10 @@ class Mapflow(QObject):
         if not error:
             return
         elif error == QNetworkReply.AuthenticationRequiredError:  # invalid/empty credentials
-            if self.dlg_login.findChild(QLabel, 'invalidCredentials'):
+            if self.dlg_login.findChild(QLabel, 'invalidToken'):
                 return  # the invalid credentials warning is already there
-            invalid_credentials_label = QLabel(self.tr('Invalid credentials'), self.dlg_login)
-            invalid_credentials_label.setObjectName('invalidCredentials')
+            invalid_credentials_label = QLabel(self.tr('Invalid token'), self.dlg_login)
+            invalid_credentials_label.setObjectName('invalidToken')
             invalid_credentials_label.setStyleSheet('color: rgb(239, 41, 41);')
             self.dlg_login.layout().insertWidget(1, invalid_credentials_label, alignment=Qt.AlignCenter)
             new_size = self.dlg_login.width(), self.dlg_login.height() + 21
@@ -1182,7 +1192,7 @@ class Mapflow(QObject):
                 parent=self.dlg if self.dlg.isVisible() else self.dlg_login
             ).show()
         else:
-            self.alert(response.errorString(), kind='critical')
+            self.alert(f'{error}: {response.errorString()}', kind='critical')
 
     def get_default_project_callback(self) -> None:
         """"""
@@ -1204,9 +1214,9 @@ class Mapflow(QObject):
             self.dlg_login.show()
             return
         # Refresh the list of workflow definitions
-        self.send_http_request('get', '/projects/default', self.get_default_project_callback)
+        self.send_http_request('get',  self.server + '/projects/default', self.get_default_project_callback)
         # Fetch processings at startup
-        self.send_http_request('get', '/processings', self.fill_out_processings_table)
+        self.send_http_request('get',  self.server + '/processings', self.fill_out_processings_table)
         # Keep fetching them at regular intervals afterwards
         self.processing_fetch_timer.start()
         self.logged_in = True  # allows skipping auth if the user's remembered
