@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>350</width>
-    <height>140</height>
+    <height>150</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -22,13 +22,13 @@
   <property name="minimumSize">
    <size>
     <width>350</width>
-    <height>140</height>
+    <height>150</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
     <width>350</width>
-    <height>140</height>
+    <height>150</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -125,22 +125,6 @@
    <hints>
     <hint type="sourcelabel">
      <x>209</x>
-     <y>214</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>179</x>
-     <y>119</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>logIn</sender>
-   <signal>clicked()</signal>
-   <receiver>LoginDialog</receiver>
-   <slot>accept()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>299</x>
      <y>214</y>
     </hint>
     <hint type="destinationlabel">

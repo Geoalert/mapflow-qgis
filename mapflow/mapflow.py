@@ -81,15 +81,18 @@ class Mapflow(QObject):
         QCoreApplication.translate('QPlatformTheme', '&No')
         # Init dialogs
         self.dlg = MainDialog(self.main_window)
-        self.set_up_login_dialog()
+        self.dlg_login = LoginDialog(self.main_window)
+        self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
+        self.dlg_login.logIn.clicked.connect(self.read_mapflow_token)
+        self.dlg_login.finished.connect(self.clean_up_login_dialog)
         self.dlg_custom_provider = ImageryProviderDialog(self.dlg)
         self.dlg_connect_id = ConnectIdDialog(self.dlg)
         self.red_border_style = 'border-color: rgb(239, 41, 41);'  # used to highlight invalid inputs
         self.offline_alert = QMessageBox(
-            QMessageBox.Information,
+            QMessageBox.Critical,
             self.plugin_name,
             self.tr('Mapflow requires Internet connection'),
-            parent=self.dlg
+            parent=self.main_window
         )
         self.timeout_alert = ErrorMessage(
             self.tr('Mapflow is not responding.\nPlease, try again later or send us an email.'),
@@ -109,7 +112,7 @@ class Mapflow(QObject):
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or 18))
         if self.settings.value('customProviderSaveAuth'):
             self.dlg.customProviderSaveAuth.setChecked(True)
-            self.dlg.customProviderLogin.setText(self.settings.value('customProviderLogin'))
+            self.dlg.customProviderUsername.setText(self.settings.value('customProviderUsername'))
             self.dlg.customProviderPassword.setText(self.settings.value('customProviderPassword'))
         # Restore custom providers
         self.custom_provider_config = os.path.join(self.plugin_dir, 'custom_providers.json')
@@ -162,6 +165,7 @@ class Mapflow(QObject):
         method: str,
         url: str,
         callback: Callable,
+        error_handler: Callable = None,
         body: Union[QHttpMultiPart, bytes] = None,
         headers: dict = None,
         basic_auth: bytes = None,
@@ -187,6 +191,7 @@ class Mapflow(QObject):
         timer.start()
         timer.timeout.connect(response.abort)
         response.finished.connect(callback)
+        response.finished.connect(error_handler or self.handle_request_errors)
         return response
 
     def limit_max_zoom_for_maxar(self, provider: str) -> None:
@@ -503,7 +508,7 @@ class Mapflow(QObject):
         query_params = '&'.join(f'{key}={val}' for key, val in params.items())
         url = 'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?' + query_params
         # Read credentials
-        username = self.dlg.customProviderLogin.text()
+        username = self.dlg.customProviderUsername.text()
         password = self.dlg.customProviderPassword.text()
         if username or password:  # user has their own account
             url += f'&CONNECTID={self.custom_providers[current_provider]["connectId"]}'
@@ -511,6 +516,7 @@ class Mapflow(QObject):
                 'get',
                 url,
                 lambda: self.get_maxar_metadata_callback(current_provider),
+                error_handler=self.get_maxar_metadata_error_handler,
                 basic_auth=f'Basic {b64encode(f"{username}:{password}".encode()).decode()}'.encode(),
             )
         else:  # assume user wants to use our account, proxy thru Mapflow
@@ -526,10 +532,12 @@ class Mapflow(QObject):
                 timeout=7
             )
 
-    def get_maxar_metadata_callback(self, product: str) -> None:
+    def get_maxar_metadata_error_handler(self) -> None:
         """"""
         response = self.sender()
         error = response.error()
+        if not error:
+            return
         if error == QNetworkReply.ContentAccessDenied:
             self.alert(self.tr('Please, check your credentials'), kind='warning')
             return
@@ -538,10 +546,17 @@ class Mapflow(QObject):
             return
         elif error == QNetworkReply.HostNotFoundError:
             if not self.offline_alert.isVisible():
+                self.offline_alert.setParent(self.dlg)
                 self.offline_alert.show()
             return
         elif error:
             self.alert(f'{error}: {response.errorString()}', kind='warning')
+            return
+
+    def get_maxar_metadata_callback(self, product: str) -> None:
+        """"""
+        response = self.sender()
+        if response.error():
             return
         # Memorize the product to prevent further errors if user changes item in the dropdown list
         self.current_maxar_metadata_product = product
@@ -667,10 +682,7 @@ class Mapflow(QObject):
 
     def delete_processings_callback(self, row: int, name: str) -> None:
         """"""
-        response = self.sender()
-        if response.error():
-            self.request_error_handler(response)
-        else:
+        if not self.sender().error():
             self.dlg.processingsTable.removeRow(row)
             self.processing_names.remove(name)
 
@@ -701,7 +713,7 @@ class Mapflow(QObject):
             ).format(self.aoi_area_limit), kind='critical')
             return
         self.push_message(self.tr('Starting the processing...'))
-        auth_fields = (self.dlg.customProviderLogin.text(), self.dlg.customProviderPassword.text())
+        auth_fields = (self.dlg.customProviderUsername.text(), self.dlg.customProviderPassword.text())
         if any(auth_fields) and not all(auth_fields):
             self.alert(self.tr('Invalid custom provider credentials'), kind='warning')
         imagery = self.dlg.rasterCombo.currentLayer()
@@ -722,7 +734,7 @@ class Mapflow(QObject):
         params = {}  # processing parameters
         transform_context = self.project.transformContext()
         if raster_option in self.custom_providers:
-            params['raster_login'] = self.dlg.customProviderLogin.text()
+            params['raster_login'] = self.dlg.customProviderUsername.text()
             params['raster_password'] = self.dlg.customProviderPassword.text()
             params['url'] = self.custom_providers[raster_option]['url']
             if raster_option in config.MAXAR_PRODUCTS:  # add Connect ID and CQL Filter, if any
@@ -811,7 +823,6 @@ class Mapflow(QObject):
         response = self.sender()
         error = response.error()
         if error:
-            self.request_error_handler(response)
             return
         response.uploadProgress.connect(self.upload_tif_progress)
         print('PROGRESS CONNECTED')
@@ -865,7 +876,7 @@ class Mapflow(QObject):
         self.settings.setValue('customProviderSaveAuth', self.dlg.customProviderSaveAuth.isChecked())
         # If checked, save the credentials
         if self.dlg.customProviderSaveAuth.isChecked():
-            self.settings.setValue('customProviderLogin', self.dlg.customProviderLogin.text())
+            self.settings.setValue('customProviderUsername', self.dlg.customProviderUsername.text())
             self.settings.setValue('customProviderPassword', self.dlg.customProviderPassword.text())
 
     def preview(self) -> None:
@@ -876,7 +887,7 @@ class Mapflow(QObject):
         # Align the provider combo with the table
         self.restore_maxar_metadata_product()
         self.save_custom_provider_auth()
-        username = self.dlg.customProviderLogin.text()
+        username = self.dlg.customProviderUsername.text()
         password = self.dlg.customProviderPassword.text()
         provider = self.dlg.customProviderCombo.currentText()
         url = self.custom_providers[provider]['url']
@@ -936,7 +947,6 @@ class Mapflow(QObject):
         """"""
         response = self.sender()
         if response.error():
-            self.request_error_handler(response)
             return
         processing = next(filter(lambda p: p['id'] == pid, self.processings))
         # Export to Geopackage to prevent QGIS from hanging if the GeoJSON is heavy
@@ -1058,8 +1068,8 @@ class Mapflow(QObject):
             # Extract WD names from WD objects
             processing['workflowDef'] = processing['workflowDef']['name']
         # Memorize which processings had been finished to alert user later
-        user_namespace = self.username.split('@')[0] + '@' + self.server.split('-')[1].split('.')[0]
-        finished_processings_setting = f'finishedProcessings_{user_namespace}'
+        namespace = self.username.split('@')[0] + '@' + self.server.split('-')[1].split('.')[0]
+        finished_processings_setting = f'finishedProcessings_{namespace}'
         previously_finished = self.settings.value(finished_processings_setting, [])
         now = datetime.now().astimezone()
         one_day = timedelta(1)
@@ -1145,21 +1155,25 @@ class Mapflow(QObject):
             dlg.close()
         del self.toolbar
 
-    def set_up_login_dialog(self) -> None:
+    def clean_up_login_dialog(self) -> None:
         """"""
-        self.dlg_login = LoginDialog(self.main_window)
-        self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
-        self.dlg_login.accepted.connect(lambda: self.log_in(self.dlg_login.token.text()))
-        self.dlg_login.finished.connect(self.set_up_login_dialog)
+        invalid_token_label = self.dlg_login.findChild(QLabel, 'invalidToken')
+        self.dlg_login.token.clear()
+        if invalid_token_label:
+            invalid_token_label.deleteLater()
+            new_size = self.dlg_login.width(), self.dlg_login.height() - invalid_token_label.height()
+            self.dlg_login.setMaximumSize(*new_size)
+            self.dlg_login.setMinimumSize(*new_size)
 
-    def log_in(self, credentials_b64: str) -> None:
+    def read_mapflow_token(self) -> None:
+        """"""
+        self.mapflow_auth = f'Basic {self.dlg_login.token.text()}'.encode()
+        self.log_in()
+
+    def log_in(self) -> None:
         """Log into Mapflow."""
-        # Get the server URL
         mapflow_env = QgsSettings().value('variables/mapflow_env') or 'production'
         self.server = f'https://whitemaps-{mapflow_env}.mapflow.ai/rest'
-        # Save Mapflow Basic Auth to be used with every request to Mapflow
-        self.mapflow_auth = f'Basic {credentials_b64}'.encode()
-        # Log in
         self.send_http_request('get',  self.server + '/user/status', self.log_in_callback)
 
     def logout(self) -> None:
@@ -1170,37 +1184,38 @@ class Mapflow(QObject):
         # Assume user wants to log into another account
         self.dlg_login.show()
 
-    def request_error_handler(self, response: QNetworkReply) -> None:
+    def handle_request_errors(self) -> None:
         """"""
+        response = self.sender()
         error = response.error()
         if not error:
             return
         elif error == QNetworkReply.AuthenticationRequiredError:  # invalid/empty credentials
             if self.dlg_login.findChild(QLabel, 'invalidToken'):
                 return  # the invalid credentials warning is already there
-            invalid_credentials_label = QLabel(self.tr('Invalid token'), self.dlg_login)
-            invalid_credentials_label.setObjectName('invalidToken')
-            invalid_credentials_label.setStyleSheet('color: rgb(239, 41, 41);')
-            self.dlg_login.layout().insertWidget(1, invalid_credentials_label, alignment=Qt.AlignCenter)
-            new_size = self.dlg_login.width(), self.dlg_login.height() + 21
+            invalid_token_label = QLabel(self.tr('Invalid token'), self.dlg_login)
+            invalid_token_label.setObjectName('invalidToken')
+            invalid_token_label.setStyleSheet('color: rgb(239, 41, 41);')
+            self.dlg_login.layout().insertWidget(1, invalid_token_label, alignment=Qt.AlignCenter)
+            new_size = self.dlg_login.width(), self.dlg_login.height() + invalid_token_label.height()
             self.dlg_login.setMaximumSize(*new_size)
             self.dlg_login.setMinimumSize(*new_size)
         elif error == QNetworkReply.HostNotFoundError:
             if not self.offline_alert.isVisible():
+                self.offline_alert.setParent(self.main_window)
                 self.offline_alert.show()
         elif error == QNetworkReply.OperationCanceledError:
             ErrorMessage(
                 self.tr('Mapflow is not responding.\nPlease, try again later or send us an email.'),
-                parent=self.dlg if self.dlg.isVisible() else self.dlg_login
+                parent=self.main_window
             ).show()
         else:
-            self.alert(f'{error}: {response.errorString()}', kind='critical')
+            ErrorMessage(f'{error}: {response.errorString()}', parent=self.main_window).show()
 
     def get_default_project_callback(self) -> None:
         """"""
         response = self.sender()
         if response.error():
-            self.request_error_handler(response)
             return
         self.dlg.modelCombo.clear()
         self.dlg.modelCombo.addItems([
@@ -1211,9 +1226,6 @@ class Mapflow(QObject):
         """"""
         response = self.sender()
         if response.error():
-            self.request_error_handler(response)
-            self.mapflow_auth = ''
-            self.dlg_login.show()
             return
         # Refresh the list of workflow definitions
         self.send_http_request('get',  self.server + '/projects/default', self.get_default_project_callback)
@@ -1222,7 +1234,7 @@ class Mapflow(QObject):
         # Keep fetching them at regular intervals afterwards
         self.processing_fetch_timer.start()
         self.logged_in = True  # allows skipping auth if the user's remembered
-        token = self.mapflow_auth.decode().split()[1]
+        token = self.dlg_login.token.text()
         self.settings.setValue('token', token)
         self.username, self.password = b64decode(token).decode().split(':')
         user_status = json.loads(response.readAll().data())
@@ -1233,6 +1245,7 @@ class Mapflow(QObject):
         self.dlg.remainingLimit.setText(
             self.tr('Processing limit: {} sq.km').format(self.remainingLimit)
         )
+        self.dlg_login.close()
         self.show_main_dialog()
 
     def show_main_dialog(self) -> None:
@@ -1254,8 +1267,9 @@ class Mapflow(QObject):
         Is called by clicking the plugin icon.
         """
         token = self.settings.value('token')
-        if bool(token):  # credentials are remembered
-            self.log_in(token)
+        if bool(token):  # token saved
+            # Save Mapflow Basic Auth to be used with every request to Mapflow
+            self.mapflow_auth = f'Basic {token}'.encode()
+            self.log_in()
         else:
-            self.set_up_login_dialog()
             self.dlg_login.show()
