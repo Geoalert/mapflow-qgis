@@ -160,6 +160,15 @@ class Mapflow(QObject):
             lambda: self.send_http_request('get',  self.server + '/processings', self.fill_out_processings_table),
         )
 
+    def dedupe_filename(self, output_path: str, extension: str) -> str:
+        """"""
+        if not os.path.exists(output_path + extension):
+            return output_path + extension
+        count = 1
+        while os.path.exists(output_path + f'({count})' + extension):
+            count += 1
+        return output_path + f'({count})' + extension
+
     def send_http_request(
         self,
         method: str,
@@ -562,8 +571,9 @@ class Mapflow(QObject):
         self.current_maxar_metadata_product = product
         layer_name = f'{product} metadata'
         # Save metadata to a file; I couldn't get WFS to work, or else no file would be necessary
-        output_file_name = os.path.join(
-            self.dlg.outputDirectory.text(), f'{layer_name.lower().replace(" ", "_")}.gml'
+        output_file_name = self.dedupe_filename(
+            os.path.join(self.dlg.outputDirectory.text(), layer_name.lower().replace(' ', '_')),
+            '.gml'
         )
         with open(output_file_name, 'wb') as f:
             f.write(response.readAll().data())
@@ -682,7 +692,8 @@ class Mapflow(QObject):
 
     def delete_processings_callback(self, row: int, name: str) -> None:
         """"""
-        if not self.sender().error():
+        response = self.sender()
+        if not response.error():
             self.dlg.processingsTable.removeRow(row)
             self.processing_names.remove(name)
 
@@ -816,23 +827,20 @@ class Mapflow(QObject):
             body=body,
             timeout=3600  # one hour
         )
+        response.uploadProgress.connect(self.upload_tif_progress)
         body.setParent(response)
 
     def upload_tif_callback(self, processing_params: dict) -> None:
         """"""
         response = self.sender()
-        error = response.error()
-        if error:
+        if response.error():
             return
-        response.uploadProgress.connect(self.upload_tif_progress)
-        print('PROGRESS CONNECTED')
         processing_params['params']['url'] = json.loads(response.readAll().data())['url']
         self.post_processing(processing_params)
 
     def upload_tif_progress(self, bytes_sent: int, bytes_total: int) -> None:
         """"""
-        print('UPLOAD PROGRESS')
-        if bytes_sent != -1:  # the number of bytes to be uploaded couldn't be determined
+        if bytes_sent == -1:  # the number of bytes uploaded couldn't be determined
             return
         if bytes_sent == bytes_total:
             self.push_message(self.tr('Image successfully uploaded'))
@@ -950,7 +958,10 @@ class Mapflow(QObject):
             return
         processing = next(filter(lambda p: p['id'] == pid, self.processings))
         # Export to Geopackage to prevent QGIS from hanging if the GeoJSON is heavy
-        output_path = os.path.join(self.dlg.outputDirectory.text(), processing['name'] + '.gpkg')
+        output_path = self.dedupe_filename(
+            os.path.join(self.dlg.outputDirectory.text(), processing['name']),
+            '.gpkg'
+        )
         transform = self.project.transformContext()
         # Layer creation options for QGIS 3.10.3+
         write_options = QgsVectorFileWriter.SaveVectorOptions()
@@ -1234,7 +1245,7 @@ class Mapflow(QObject):
         # Keep fetching them at regular intervals afterwards
         self.processing_fetch_timer.start()
         self.logged_in = True  # allows skipping auth if the user's remembered
-        token = self.dlg_login.token.text()
+        token = self.mapflow_auth.decode().split()[1]
         self.settings.setValue('token', token)
         self.username, self.password = b64decode(token).decode().split(':')
         user_status = json.loads(response.readAll().data())
