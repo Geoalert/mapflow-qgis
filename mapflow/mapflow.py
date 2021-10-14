@@ -190,8 +190,8 @@ class Mapflow(QObject):
         return response
 
     def limit_max_zoom_for_maxar(self, provider: str) -> None:
-        """Limit zoom to 14 for Maxar if user is not a premium one."""
-        max_zoom = 14 if provider in config.MAXAR_PRODUCTS and not self.is_premium_user else 21
+        """Limit zoom to 13 for Maxar if user is not a premium one."""
+        max_zoom = 13 if provider in config.MAXAR_PRODUCTS and not self.is_premium_user else 21
         self.dlg.maxZoom.setMaximum(max_zoom)
 
     def save_dialog_state(self):
@@ -630,11 +630,14 @@ class Mapflow(QObject):
         else:
             self.dlg.labelAoiArea.setText('')
             return
-        # Now, do the math
         layer_crs: QgsCoordinateReferenceSystem = layer.crs()
+        if not layer_crs.authid():  # unidentified CRS; calculations may be erroneous
+            self.dlg.labelAoiArea.setText('')
+            return
+        # Now, do the math
         calculator = QgsDistanceArea()
-        # Set ellipsoid to use spherical calculations for geographic CRSs
-        calculator.setEllipsoid(layer_crs.ellipsoidAcronym() or 'EPSG:7030')  # WGS84 ellipsoid
+        # Set ellipsoid to calculate on sphere for geographic CRSs; default to 7030 (WGS84)
+        calculator.setEllipsoid(layer_crs.ellipsoidAcronym() or 'EPSG:7030')
         calculator.setSourceCrs(layer_crs, self.project.transformContext())
         self.aoi_size = calculator.measureArea(aoi) / 10**6  # sq. m to sq.km
         label = self.tr('Area: {:.2f} sq.km').format(self.aoi_size)
