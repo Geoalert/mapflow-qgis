@@ -2,7 +2,7 @@ from pathlib import Path
 
 from PyQt5 import uic
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QWidget
+from PyQt5.QtWidgets import QDialogButtonBox, QWidget
 from qgis.core import QgsMapLayerProxyModel
 
 
@@ -22,9 +22,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.rasterCombo.setFilters(QgsMapLayerProxyModel.RasterLayer)
         # Set icons (can be done in .ui but brings about the resources_rc import bug)
         self.setWindowIcon(plugin_icon)
-        self.addCustomProvider.setIcon(QIcon(str(icon_path/'add_provider.svg')))
-        self.removeCustomProvider.setIcon(QIcon(str(icon_path/'remove_provider.svg')))
-        self.editCustomProvider.setIcon(QIcon(str(icon_path/'edit_provider.svg')))
+        self.addProvider.setIcon(QIcon(str(icon_path/'add_provider.svg')))
+        self.removeProvider.setIcon(QIcon(str(icon_path/'remove_provider.svg')))
+        self.editProvider.setIcon(QIcon(str(icon_path/'edit_provider.svg')))
 
 
 class LoginDialog(*uic.loadUiType(ui_path/'login_dialog.ui')):
@@ -35,12 +35,18 @@ class LoginDialog(*uic.loadUiType(ui_path/'login_dialog.ui')):
         self.setWindowIcon(plugin_icon)
 
 
-class ImageryProviderDialog(*uic.loadUiType(ui_path/'imagery_provider_dialog.ui')):
+class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
     def __init__(self, parent: QWidget) -> None:
         """A dialog for adding or editing an imagery provider."""
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(plugin_icon)
+        ok_button = self.buttonBox.button(QDialogButtonBox.Ok)
+        ok_button.setEnabled(False)
+        self.name.textChanged.connect(lambda text: ok_button.setEnabled(bool(text and self.url.text())))
+        self.url.textChanged.connect(lambda text: ok_button.setEnabled(bool(text and self.name.text())))
+        self.finished.connect(self.name.clear)
+        self.finished.connect(self.url.clear)
 
 
 class ConnectIdDialog(*uic.loadUiType(ui_path/'connect_id_dialog.ui')):
@@ -49,6 +55,9 @@ class ConnectIdDialog(*uic.loadUiType(ui_path/'connect_id_dialog.ui')):
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(plugin_icon)
+        self.connectId.textChanged.connect(
+            lambda: self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(self.connectId.hasAcceptableInput())
+        )
 
 
 class ErrorMessage(*uic.loadUiType(ui_path/'error_message.ui')):

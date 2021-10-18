@@ -10,11 +10,10 @@ from configparser import ConfigParser  # parse metadata.txt -> QGIS version chec
 from PyQt5.QtGui import QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
-    QObject, QSettings, QCoreApplication, QTimer, QTranslator, QPersistentModelIndex, QModelIndex,
-    Qt, QUrl, QFile, QIODevice
+    QObject, QSettings, QCoreApplication, QTimer, QTranslator, Qt, QUrl, QFile, QIODevice
 )
 from PyQt5.QtWidgets import (
-    QMessageBox, QFileDialog, QTableWidgetItem, QAction, QAbstractItemView, QLabel,
+    QDialogButtonBox, QMessageBox, QFileDialog, QTableWidgetItem, QAction, QAbstractItemView, QLabel,
     QProgressBar
 )
 from qgis import processing as qgis_processing  # to avoid collisions
@@ -25,7 +24,7 @@ from qgis.core import (
     QgsVectorFileWriter, QgsMessageLog, QgsNetworkAccessManager
 )
 
-from .dialogs import MainDialog, LoginDialog, ImageryProviderDialog, ConnectIdDialog, ErrorMessage
+from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, ErrorMessage
 from . import helpers, config
 
 
@@ -79,9 +78,9 @@ class Mapflow(QObject):
         self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
         self.dlg_login.logIn.clicked.connect(self.read_mapflow_token)
         self.dlg_login.finished.connect(self.clean_up_login_dialog)
-        self.dlg_custom_provider = ImageryProviderDialog(self.dlg)
+        self.dlg_provider = ProviderDialog(self.dlg)
+        self.dlg_provider.accepted.connect(self.add_or_edit_provider)
         self.dlg_connect_id = ConnectIdDialog(self.dlg)
-        self.red_border_style = 'border-color: rgb(239, 41, 41);'  # used to highlight invalid inputs
         self.offline_alert = QMessageBox(
             QMessageBox.Critical,
             self.plugin_name,
@@ -95,7 +94,7 @@ class Mapflow(QObject):
         # Display the plugin's version
         metadata_parser = ConfigParser()
         metadata_parser.read(os.path.join(self.plugin_dir, 'metadata.txt'))
-        self.plugin_version = metadata_parser.get("general", "version")
+        self.plugin_version = metadata_parser.get('general', 'version')
         self.dlg.help.setText(
             self.dlg.help.text().replace('Mapflow', f'{self.plugin_name} {self.plugin_version}')
         )
@@ -110,18 +109,14 @@ class Mapflow(QObject):
             self.dlg.customProviderSaveAuth.setChecked(True)
             self.dlg.customProviderUsername.setText(self.settings.value('customProviderUsername'))
             self.dlg.customProviderPassword.setText(self.settings.value('customProviderPassword'))
-        # Restore custom providers
-        self.custom_provider_config = os.path.join(self.plugin_dir, 'custom_providers.json')
-        with open(self.custom_provider_config) as f:
-            self.custom_providers = json.load(f)
-        self.dlg.rasterCombo.setAdditionalItems((*self.custom_providers, 'Mapbox'))
-        self.dlg.customProviderCombo.addItems(self.custom_providers)
+        self.update_providers(self.settings.value('providers', config.MAXAR_PRODUCTS))
         # Hide the ID columns as only needed for table operations, not the user
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
         # SET UP SIGNALS & SLOTS
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
+        self.dlg_connect_id.accepted.connect(self.edit_connect_id)
         # Connect buttons
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
@@ -142,15 +137,21 @@ class Mapflow(QObject):
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Custom provider
         self.dlg.preview.clicked.connect(self.preview)
-        self.dlg.addCustomProvider.clicked.connect(self.add_custom_provider)
-        self.dlg.editCustomProvider.clicked.connect(self.edit_provider)
-        self.dlg.removeCustomProvider.clicked.connect(self.remove_custom_provider)
+        self.dlg.addProvider.clicked.connect(self.dlg_provider.show)
+        self.dlg.addProvider.clicked.connect(
+            lambda: setattr(self, 'is_provider_dialog_editing_mode', False)
+        )
+        self.dlg.editProvider.clicked.connect(self.edit_provider)
+        self.dlg.editProvider.clicked.connect(
+            lambda: setattr(self, 'is_provider_dialog_editing_mode', True)
+        )
+        self.dlg.removeProvider.clicked.connect(self.remove_provider)
         self.dlg.maxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
         # Maxar
         self.dlg.maxarMetadataTable.itemSelectionChanged.connect(self.highlight_maxar_image)
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
         self.dlg.maxarMetadataTable.cellDoubleClicked.connect(self.preview)
-        self.dlg.customProviderCombo.currentTextChanged.connect(self.limit_max_zoom_for_maxar)
+        self.dlg.providerCombo.currentTextChanged.connect(self.limit_max_zoom_for_maxar)
         # Poll processings
         self.processing_fetch_timer = QTimer(self.main_window)
         self.processing_fetch_timer.setInterval(config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
@@ -216,7 +217,7 @@ class Mapflow(QObject):
     def add_layer(self, layer: QgsMapLayer) -> None:
         """Add layers created by the plugin to the legend.
 
-        By default, layers are added to a group with the same name as the plugin. 
+        By default, layers are added to a group with the same name as the plugin.
         If the group has been deleted by the user, assume they prefer to not use
         the group, and add layers to the legend root.
 
@@ -248,10 +249,10 @@ class Mapflow(QObject):
         the provider combo to the current metadata product.
         """
         if (
-            self.dlg.customProviderCombo.currentText() != self.current_maxar_metadata_product
+            self.dlg.providerCombo.currentText() != self.current_maxar_metadata_product
             and self.dlg.maxarMetadataTable.selectedItems()
         ):
-            self.dlg.customProviderCombo.setCurrentText(self.current_maxar_metadata_product)
+            self.dlg.providerCombo.setCurrentText(self.current_maxar_metadata_product)
 
     def highlight_maxar_image(self) -> None:
         """Select an image footprint in Maxar metadata layer when it's selected in the table.
@@ -266,129 +267,93 @@ class Mapflow(QObject):
         except RuntimeError:  # layer has been deleted
             pass
         # Sync the raster combo in the Processing tab so user doesn't forget to set Maxar there
-        self.dlg.rasterCombo.setCurrentText(self.dlg.customProviderCombo.currentText())
+        self.dlg.rasterCombo.setCurrentText(self.dlg.providerCombo.currentText())
 
-    def remove_custom_provider(self) -> None:
+    def remove_provider(self) -> None:
         """Delete a an entry from the list of providers and custom_providers.json.
 
         Is called by clicking the red minus button near the provider dropdown list.
         """
-        provider = self.dlg.customProviderCombo.currentText()
+        provider = self.dlg.providerCombo.currentText()
         # Ask for confirmation
-        if self.alert(self.tr('Permanently remove ') + provider + '?', 'question') == QMessageBox.No:
-            return
-        del self.custom_providers[provider]
-        self.update_custom_provider_config()
-        self.dlg.customProviderCombo.removeItem(self.dlg.customProviderCombo.currentIndex())
-        self.dlg.rasterCombo.setAdditionalItems((*self.custom_providers, 'Mapbox'))
+        if QMessageBox.question(
+            self.dlg,
+            self.plugin_name,
+            self.tr('Permanently remove {}?'.format(provider))
+        ) == QMessageBox.Yes:
+            providers = self.settings.value('providers', [])
+            providers.remove(provider)
+            self.settings.setValue('providers', providers)
+            self.dlg.providerCombo.removeItem(self.dlg.providerCombo.currentIndex())
+            self.dlg.rasterCombo.setAdditionalItems(providers)
 
-    def validate_custom_provider(self) -> None:
-        """Check if provider inputs are valid. If not, outline the invalid field with red."""
-        for attr in ('name', 'url'):
-            field = getattr(self.dlg_custom_provider, attr)
-            field_value = field.text()
-            if field_value:
-                field.setStyleSheet('')  # remove red outline if previously invalid
-            else:
-                field.setStyleSheet(self.red_border_style)
-                return False
-        return True
-
-    def update_custom_provider_config(self) -> None:
-        """Write changes to file after a provider has been added, removed or modified."""
-        with open(self.custom_provider_config, 'w') as f:
-            json.dump(self.custom_providers, f, indent=4)
-
-    def clear_fields(self, *args) -> None:
-        """Empty the fields and remove the red outline (invalid input signal), if any.
-
-        :param args: A list of fields to clear.
-        """
-        for field in args:
-            field.setStyleSheet('')
-            field.setText('')
-
-    def add_custom_provider(self) -> None:
-        """Add a web imagery provider.
-
-        Is called by the corresponding button.
-        """
-        while self.dlg_custom_provider.exec():
-            if not self.validate_custom_provider():
-                continue
-            name = self.dlg_custom_provider.name.text()
-            if name in self.custom_providers:
-                self.alert(name + self.tr(' already exists. Click edit button to update it.'))
-                break
-            self.custom_providers[name] = {
-                'url': self.dlg_custom_provider.url.text(),
-                'type': self.dlg_custom_provider.type.currentText()
-            }
-            self.update_custom_provider_config()
-            self.dlg.rasterCombo.setAdditionalItems((*self.custom_providers, 'Mapbox'))
-            self.dlg.rasterCombo.setCurrentText(name)
-            self.dlg.customProviderCombo.addItem(name)
-            self.dlg.customProviderCombo.setCurrentText(name)
-            break
-        self.clear(self.dlg_custom_provider.name, self.dlg_custom_provider.url)
+    def add_or_edit_provider(self) -> None:
+        """Add a web imagery provider."""
+        providers = self.settings.value('providers')
+        if self.is_provider_dialog_editing_mode:  # remove the old definition
+            del providers[self.dlg.providerCombo.currentText()]
+        name = self.dlg_provider.name.text()
+        # Add the new one
+        providers[name] = {
+            'url': self.dlg_provider.url.text(),
+            'type': self.dlg_provider.type.currentText()
+        }
+        # Update the combos
+        self.update_providers(providers)
+        self.dlg.providerCombo.setCurrentText(name)
+        self.dlg.rasterCombo.setCurrentText(name)
 
     def edit_provider(self) -> None:
         """Edit a web imagery provider.
 
         Is called by the corresponding button.
         """
-        provider = self.dlg.customProviderCombo.currentText()
-        edit_method = self.edit_connect_id if provider in config.MAXAR_PRODUCTS else self.edit_custom_provider
-        edit_method(provider)
+        provider = self.dlg.providerCombo.currentText()
+        if provider in config.MAXAR_PRODUCTS:
+            self.show_connect_id_dialog(provider.split()[1])
+        else:
+            self.show_provider_dialog(provider)
 
-    def edit_custom_provider(self, provider) -> None:
+    def show_provider_dialog(self, provider: str) -> None:
         """Change a provider's name, URL or type.
 
         :param provider: Provider's name, as in the config and dropdown list.
         """
+        self.dlg_provider.setWindowTitle(provider)
         # Fill out the edit dialog with the current data
-        self.dlg_custom_provider.setWindowTitle(provider)
-        self.dlg_custom_provider.name.setText(provider)
-        self.dlg_custom_provider.url.setText(self.custom_providers[provider]['url'])
-        self.dlg_custom_provider.type.setCurrentText(self.custom_providers[provider]['type'])
+        providers = self.settings.value('providers')
+        self.dlg_provider.name.setText(provider)
+        self.dlg_provider.url.setText(providers[provider]['url'])
+        self.dlg_provider.type.setCurrentText(providers[provider]['type'])
         # Open the edit dialog
-        while self.dlg_custom_provider.exec():
-            if not self.validate_custom_provider():
-                continue
-            name = self.dlg_custom_provider.name.text()
-            # Remove the old definition first
-            del self.custom_providers[provider]
-            # Add the new definition
-            self.custom_providers[name] = {
-                'url': self.dlg_custom_provider.url.text(),
-                'type': self.dlg_custom_provider.type.currentText()
-            }
-            self.dlg.customProviderCombo.removeItem(self.dlg.customProviderCombo.currentIndex())
-            self.update_custom_provider_config()
-            self.dlg.rasterCombo.setAdditionalItems((*self.custom_providers, 'Mapbox'))
-            self.dlg.customProviderCombo.addItem(name)
-            self.dlg.customProviderCombo.setCurrentText(name)
-            break
-        self.clear_fields(self.dlg_custom_provider.name, self.dlg_custom_provider.url)
+        self.dlg_provider.show()
 
-    def edit_connect_id(self, product) -> None:
+    def update_providers(self, providers: dict) -> None:
+        """"""
+        self.dlg.rasterCombo.setAdditionalItems((*providers, 'Mapbox'))
+        self.dlg.providerCombo.clear()
+        self.dlg.providerCombo.addItems(providers)
+        self.settings.setValue('providers', providers)
+
+    def show_connect_id_dialog(self, product: str) -> None:
+        """"""
+        # Display the current Connect ID
+        connect_ids = self.settings.value('maxarConnectIds')
+        self.dlg_connect_id.connectId.setText(connect_ids.get(product) if connect_ids else '')
+        self.dlg_connect_id.connectId.setCursorPosition(0)
+        # Specify the product being edited in the window title
+        self.dlg_connect_id.setWindowTitle(f'{product} - {self.dlg_connect_id.windowTitle()}')
+        self.dlg_connect_id.show()
+
+    def edit_connect_id(self) -> None:
         """Change the Connect ID for the given Maxar product.
 
         :param provider: Maxar product name, as in the config and dropdown list.
         """
-        current_id = self.custom_providers[product]['connectId']
-        self.dlg_connect_id.connectId.setText(current_id)
-        # Specify the product being edited in the window title
-        self.dlg_connect_id.setWindowTitle(f'{product} - {self.dlg_connect_id.windowTitle()}')
-        while self.dlg_connect_id.exec():
-            if not self.dlg_connect_id.connectId.hasAcceptableInput():
-                self.dlg_connect_id.connectId.setStyleSheet(self.red_border_style)
-                continue
-            new_id = self.dlg_connect_id.connectId.text()
-            self.custom_providers[product]['connectId'] = new_id
-            self.update_custom_provider_config()
-            break
-        self.clear_fields(self.dlg_connect_id.connectId)
+        provider = self.dlg.providerCombo.currentText()
+        providers = self.settings.value('providers')
+        providers[provider]['connectId'] = self.dlg_connect_id.connectId.text()
+        self.settings.setValue('providers', providers)
 
     def monitor_polygon_layer_feature_selection(self, layers: List[QgsMapLayer]) -> None:
         """Set up connection between feature selection in polygon layers and AOI area calculation.
@@ -408,7 +373,7 @@ class Mapflow(QObject):
 
         :param provider: A combo box entry representing an imagery provider
         """
-        enabled = provider in (*self.custom_providers, 'Mapbox')  # False if GeoTIFF
+        enabled = provider in (*self.settings.value('providers', {}), 'Mapbox')  # False if GeoTIFF
         # There's no extent for a tile provider
         self.dlg.useImageExtentAsAoi.setEnabled(not enabled)
         # Presume user would like to process within its extent
@@ -469,9 +434,9 @@ class Mapflow(QObject):
         Is called by clicking the 'Get Image Metadata' button in the main dialog.
         """
         self.save_custom_provider_auth()
-        current_provider = self.dlg.customProviderCombo.currentText()
+        provider = self.dlg.providerCombo.currentText()
         # Perform checks
-        if current_provider not in config.MAXAR_PRODUCTS:
+        if provider not in config.MAXAR_PRODUCTS:
             self.alert(self.tr('Select a Maxar product in the provider list'))
             return
         aoi_layer = self.dlg.maxarAOICombo.currentLayer()
@@ -518,11 +483,17 @@ class Mapflow(QObject):
         username = self.dlg.customProviderUsername.text()
         password = self.dlg.customProviderPassword.text()
         if username or password:  # user has their own account
-            url += f'&CONNECTID={self.custom_providers[current_provider]["connectId"]}'
+            _, product = provider.split()
+            try:
+                connect_id = self.settings.value('maxarConnectIds', {})[product]
+            except KeyError:
+                self.show_connect_id_dialog(product)
+                return
+            url += '&CONNECTID=' + connect_id
             self.send_http_request(
                 'get',
                 url,
-                lambda: self.get_maxar_metadata_callback(current_provider),
+                lambda: self.get_maxar_metadata_callback(provider),
                 error_handler=self.get_maxar_metadata_error_handler,
                 basic_auth=f'Basic {b64encode(f"{username}:{password}".encode()).decode()}'.encode(),
             )
@@ -530,10 +501,10 @@ class Mapflow(QObject):
             self.send_http_request(
                 'post',
                 self.server + '/meta',
-                lambda: self.get_maxar_metadata_callback(current_provider),
+                lambda: self.get_maxar_metadata_callback(provider),
                 body=json.dumps({
                     'url': url,
-                    'connectId': current_provider.split()[1].lower()
+                    'connectId': provider.split()[1].lower()
                 }).encode(),
                 headers={'Content-Type': 'application/json'},
                 timeout=7
@@ -609,7 +580,7 @@ class Mapflow(QObject):
         """Display the AOI size in sq.km.
 
         Users are charged by the amount of sq km they process. So it's important for them to know
-        the size of the current AOI. 
+        the size of the current AOI.
         An AOI must be a single feature, or the extent of a GeoTIFF layer, so the area is only displayed when either:
             a) the layer in the polygon combo has a single feature, or, if more, a single feature is selected in it
             b) 'Use image extent' is checked and the current raster combo entry is a GeoTIFF layer
@@ -907,7 +878,7 @@ class Mapflow(QObject):
         self.save_custom_provider_auth()
         username = self.dlg.customProviderUsername.text()
         password = self.dlg.customProviderPassword.text()
-        provider = self.dlg.customProviderCombo.currentText()
+        provider = self.dlg.providerCombo.currentText()
         url = self.custom_providers[provider]['url']
         layer_name = provider
         if provider in config.MAXAR_PRODUCTS:
@@ -955,7 +926,7 @@ class Mapflow(QObject):
     def download_results(self, row: int) -> None:
         """Download and display processing results along with the source raster, if available.
 
-        Results will be downloaded into the user's output directory. 
+        Results will be downloaded into the user's output directory.
         If it's unset, the user will be prompted to select one.
         Unfinished or failed processings yield partial or no results.
 
@@ -1189,7 +1160,7 @@ class Mapflow(QObject):
 
     def unload(self) -> None:
         """Remove the plugin icon & toolbar from QGIS GUI."""
-        for dlg in self.dlg, self.dlg_login, self.dlg_connect_id, self.dlg_custom_provider:
+        for dlg in self.dlg, self.dlg_login, self.dlg_connect_id, self.dlg_provider:
             dlg.close()
         del self.toolbar
 
@@ -1216,11 +1187,9 @@ class Mapflow(QObject):
 
     def logout(self) -> None:
         """Close the plugin and clear credentials from cache."""
-        self.dlg.close()
         self.settings.remove('token')
         self.logged_in = False
-        # Assume user wants to log into another account
-        self.dlg_login.show()
+        self.dlg_login.show()  # assume user wants to log into another account
 
     def handle_request_errors(self) -> None:
         """"""
@@ -1277,7 +1246,7 @@ class Mapflow(QObject):
         self.username, self.password = b64decode(token).decode().split(':')
         user_status = json.loads(response.readAll().data())
         self.is_premium_user = user_status['isPremium']
-        self.limit_max_zoom_for_maxar(self.dlg.customProviderCombo.currentText())
+        self.limit_max_zoom_for_maxar(self.dlg.providerCombo.currentText())
         self.remainingLimit = round(user_status['remainingLimit'])
         self.aoi_area_limit = round(user_status['aoiAreaLimit'])
         self.dlg.remainingLimit.setText(
@@ -1322,7 +1291,7 @@ class Mapflow(QObject):
         # Check plugin version for compatibility with Processing API
         self.send_http_request(
             'get',
-            self.server + '/processings/version',
+            self.server + '/version',
             self.check_plugin_version_callback,
             basic_auth=b''  # no auth
         )

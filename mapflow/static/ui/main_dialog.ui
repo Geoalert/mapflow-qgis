@@ -396,7 +396,7 @@
        <item>
         <layout class="QHBoxLayout" name="customProvider" stretch="1,0,0,0,0">
          <item>
-          <widget class="QComboBox" name="customProviderCombo"/>
+          <widget class="QComboBox" name="providerCombo"/>
          </item>
          <item>
           <layout class="QHBoxLayout" name="customProviderControls">
@@ -404,7 +404,7 @@
             <number>0</number>
            </property>
            <item>
-            <widget class="QPushButton" name="addCustomProvider">
+            <widget class="QPushButton" name="addProvider">
              <property name="sizePolicy">
               <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                <horstretch>0</horstretch>
@@ -429,7 +429,7 @@
             </widget>
            </item>
            <item>
-            <widget class="QPushButton" name="removeCustomProvider">
+            <widget class="QPushButton" name="removeProvider">
              <property name="sizePolicy">
               <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                <horstretch>0</horstretch>
@@ -454,7 +454,7 @@
             </widget>
            </item>
            <item>
-            <widget class="QPushButton" name="editCustomProvider">
+            <widget class="QPushButton" name="editProvider">
              <property name="sizePolicy">
               <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                <horstretch>0</horstretch>
@@ -799,7 +799,7 @@
  <resources/>
  <connections>
   <connection>
-   <sender>customProviderCombo</sender>
+   <sender>providerCombo</sender>
    <signal>currentTextChanged(QString)</signal>
    <receiver>rasterCombo</receiver>
    <slot>setCurrentText(QString)</slot>
@@ -817,7 +817,7 @@
   <connection>
    <sender>rasterCombo</sender>
    <signal>currentTextChanged(QString)</signal>
-   <receiver>customProviderCombo</receiver>
+   <receiver>providerCombo</receiver>
    <slot>setCurrentText(QString)</slot>
    <hints>
     <hint type="sourcelabel">
@@ -827,6 +827,22 @@
     <hint type="destinationlabel">
      <x>139</x>
      <y>104</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>logoutButton</sender>
+   <signal>clicked()</signal>
+   <receiver>MainDialog</receiver>
+   <slot>close()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>64</x>
+     <y>548</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>324</x>
+     <y>294</y>
     </hint>
    </hints>
   </connection>
