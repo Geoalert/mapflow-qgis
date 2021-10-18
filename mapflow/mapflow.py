@@ -193,8 +193,6 @@ class Mapflow(QObject):
             response = self.nam.post(request, body)
         elif method == 'delete':
             response = self.nam.deleteResource(request)
-        elif method == 'put':
-            response = self.nam.put(request, body)
         timer.start()
         timer.timeout.connect(response.abort)
         response.finished.connect(callback)
@@ -669,38 +667,37 @@ class Mapflow(QObject):
         """Delete one or more processings from the server.
 
         Asks for confirmation in a pop-up dialog. Multiple processings can be selected.
-        Selected processings are immediately deleted from the table.
-
         Is called by clicking the deleteProcessings ('Delete') button.
         """
         # Pause refreshing processings table to avoid conflicts
         self.processing_fetch_timer.stop()
-        selected_rows: List[QModelIndex] = self.dlg.processingsTable.selectionModel().selectedRows()
-        if not selected_rows or QMessageBox.question(
+        selected_ids = [
+            self.dlg.processingsTable.item(index.row(), config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+            for index in self.dlg.processingsTable.selectionModel().selectedRows()
+        ]
+        # Ask for confirmation if there are selected rows
+        if not selected_ids or QMessageBox.question(
             self.dlg,
             self.plugin_name,
             self.tr('Delete selected processings?'),
         ) == QMessageBox.No:
             return
-        # QPersistentModelIndex allows deleting rows sequentially while preserving their original indexes
-        for index in [QPersistentModelIndex(row) for row in selected_rows]:
-            row = index.row()
-            pid = self.dlg.processingsTable.item(row, config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
-            name = self.dlg.processingsTable.item(row, 0).text()
-            print(row)
+        for id_ in selected_ids:
             self.send_http_request(
                 'delete',
-                self.server + f'/processings/{pid}',
-                lambda: self.delete_processings_callback(row, name)
+                self.server + f'/processings/{id_}',
+                lambda id_=id_: self.delete_processings_callback(id_)
             )
 
-    def delete_processings_callback(self, row: int, name: str) -> None:
-        """"""
-        print('Delete' + str(row) + name)
+    def delete_processings_callback(self, id_: str) -> None:
+        """Delete processings from the table after they've been successfully
+        deleted from the server.
+        """
         response = self.sender()  # calling self.sender().error() crashes; gotta save to local
         if not response.error():
+            row = self.dlg.processingsTable.findItems(id_, Qt.MatchExactly)[0].row()
+            self.processing_names.remove(self.dlg.processingsTable.item(row, 0).text())
             self.dlg.processingsTable.removeRow(row)
-            self.processing_names.remove(name)
             self.processing_fetch_timer.start()
 
     def create_processing(self) -> None:
