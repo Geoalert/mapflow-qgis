@@ -1,9 +1,9 @@
 import sys  # Python version check for ensuring compatibility
 import json
 import os.path
+import tempfile
 from base64 import b64encode, b64decode
 from typing import Callable, List, Optional, Union
-from tempfile import NamedTemporaryFile
 from datetime import datetime, timedelta  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import (
     QProgressBar
 )
 from qgis import processing as qgis_processing  # to avoid collisions
+from qgis.gui import QgsMessageBarItem
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature,
     QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsMapLayerType, Qgis,
@@ -29,23 +30,21 @@ from . import helpers, config
 
 
 class Mapflow(QObject):
-    """This class represents the plugin.
-
-    It is instantiated by QGIS and shouldn't be used directly.
-    """
+    """This class represents the plugin. It is instantiated by QGIS."""
 
     def __init__(self, iface) -> None:
         """Initialize the plugin.
 
         :param iface: an instance of the QGIS interface.
         """
-        super().__init__()
         # Save refs to key variables used throughout the plugin
         self.iface = iface
-        self.main_window = iface.mainWindow()
+        self.main_window = self.iface.mainWindow()
+        super().__init__(self.main_window)
         self.message_bar = self.iface.messageBar()
         self.project = QgsProject.instance()
         self.plugin_dir = os.path.dirname(__file__)
+        self.temp_dir = tempfile.gettempdir()
         self.plugin_name = config.PLUGIN_NAME  # aliased here to be overloaded in submodules
         # QGIS Settings will be used to store user credentials and various UI element state
         self.settings = QgsSettings()
@@ -53,11 +52,6 @@ class Mapflow(QObject):
         mapflow_env = self.settings.value('variables/mapflow_env') or 'production'
         self.nam = QgsNetworkAccessManager.instance()  # for async requests
         self.server = f'https://whitemaps-{mapflow_env}.mapflow.ai/rest'
-        self.tif_upload_progress_bar = QProgressBar()
-        self.tif_upload_progress_message = self.message_bar.createMessage(
-            self.tr('Uploading image to Mapflow...')
-        )
-        self.tif_upload_progress_message.layout().addWidget(self.tif_upload_progress_bar)
         # Create a namespace for the plugin settings
         self.settings.beginGroup(self.plugin_name.lower())
         # By default, plugin adds layers to a group unless user explicitly deletes it
@@ -101,8 +95,10 @@ class Mapflow(QObject):
         # Display the plugin's version
         metadata_parser = ConfigParser()
         metadata_parser.read(os.path.join(self.plugin_dir, 'metadata.txt'))
-        plugin_name_and_version = f'{self.plugin_name} {metadata_parser.get("general", "version")}'
-        self.dlg.help.setText(self.dlg.help.text().replace('Mapflow', plugin_name_and_version))
+        self.plugin_version = metadata_parser.get("general", "version")
+        self.dlg.help.setText(
+            self.dlg.help.text().replace('Mapflow', f'{self.plugin_name} {self.plugin_version}')
+        )
         # Used for previewing a Maxar image by double-clicking its row
         self.current_maxar_metadata_product = ''
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
@@ -132,7 +128,9 @@ class Mapflow(QObject):
         self.dlg.selectTif.clicked.connect(self.select_tif)
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.rasterCombo.currentTextChanged.connect(self.toggle_use_image_extent_as_aoi)
-        self.dlg.useImageExtentAsAoi.stateChanged.connect(lambda is_checked: self.dlg.polygonCombo.setEnabled(not is_checked))
+        self.dlg.useImageExtentAsAoi.stateChanged.connect(
+            lambda is_checked: self.dlg.polygonCombo.setEnabled(not is_checked)
+        )
         self.dlg.startProcessing.clicked.connect(self.create_processing)
         # Calculate AOI area
         self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area)
@@ -153,21 +151,21 @@ class Mapflow(QObject):
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
         self.dlg.maxarMetadataTable.cellDoubleClicked.connect(self.preview)
         self.dlg.customProviderCombo.currentTextChanged.connect(self.limit_max_zoom_for_maxar)
-        #######
+        # Poll processings
         self.processing_fetch_timer = QTimer(self.main_window)
         self.processing_fetch_timer.setInterval(config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
         self.processing_fetch_timer.timeout.connect(
-            lambda: self.send_http_request('get',  self.server + '/processings', self.fill_out_processings_table),
+            lambda: self.send_http_request(
+                'get',
+                self.server + '/processings',
+                self.fill_out_processings_table,
+                self.fetch_processings_error_handler
+            ),
         )
 
-    def dedupe_filename(self, output_path: str, extension: str) -> str:
+    def fetch_processings_error_handler(self) -> None:
         """"""
-        if not os.path.exists(output_path + extension):
-            return output_path + extension
-        count = 1
-        while os.path.exists(output_path + f'({count})' + extension):
-            count += 1
-        return output_path + f'({count})' + extension
+        return
 
     def send_http_request(
         self,
@@ -182,7 +180,7 @@ class Mapflow(QObject):
     ) -> QNetworkReply:
         """"""
         request = QNetworkRequest(QUrl(url))
-        request.setRawHeader(b'Authorization', basic_auth or self.mapflow_auth)
+        request.setRawHeader(b'Authorization', self.mapflow_auth if basic_auth is None else basic_auth)
         if headers:
             for key, value in headers.items():
                 request.setRawHeader(key.encode(), value.encode())
@@ -220,8 +218,10 @@ class Mapflow(QObject):
     def add_layer(self, layer: QgsMapLayer) -> None:
         """Add layers created by the plugin to the legend.
 
-        By default, layers are added to a group with the same name as the plugin. If the group has been
-        deleted by the user, assume they prefer to have the layers outside the group, and add them to root.
+        By default, layers are added to a group with the same name as the plugin. 
+        If the group has been deleted by the user, assume they prefer to not use
+        the group, and add layers to the legend root.
+
         :param layer: A vector or raster layer to be added.
         """
         self.layer_group = self.layer_tree_root.findGroup(self.settings.value('layerGroup'))
@@ -571,10 +571,7 @@ class Mapflow(QObject):
         self.current_maxar_metadata_product = product
         layer_name = f'{product} metadata'
         # Save metadata to a file; I couldn't get WFS to work, or else no file would be necessary
-        output_file_name = self.dedupe_filename(
-            os.path.join(self.dlg.outputDirectory.text(), layer_name.lower().replace(' ', '_')),
-            '.gml'
-        )
+        output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex()) + '.gml'
         with open(output_file_name, 'wb') as f:
             f.write(response.readAll().data())
         self.metadata_layer = QgsVectorLayer(output_file_name, layer_name, 'ogr')
@@ -676,14 +673,21 @@ class Mapflow(QObject):
 
         Is called by clicking the deleteProcessings ('Delete') button.
         """
+        # Pause refreshing processings table to avoid conflicts
+        self.processing_fetch_timer.stop()
         selected_rows: List[QModelIndex] = self.dlg.processingsTable.selectionModel().selectedRows()
-        if not selected_rows or self.alert(self.tr('Delete selected processings?'), 'question') == QMessageBox.No:
+        if not selected_rows or QMessageBox.question(
+            self.dlg,
+            self.plugin_name,
+            self.tr('Delete selected processings?'),
+        ) == QMessageBox.No:
             return
-        # QPersistentModel index allows deleting rows sequentially while preserving their original indexes
+        # QPersistentModelIndex allows deleting rows sequentially while preserving their original indexes
         for index in [QPersistentModelIndex(row) for row in selected_rows]:
             row = index.row()
             pid = self.dlg.processingsTable.item(row, config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
             name = self.dlg.processingsTable.item(row, 0).text()
+            print(row)
             self.send_http_request(
                 'delete',
                 self.server + f'/processings/{pid}',
@@ -692,10 +696,12 @@ class Mapflow(QObject):
 
     def delete_processings_callback(self, row: int, name: str) -> None:
         """"""
-        response = self.sender()
+        print('Delete' + str(row) + name)
+        response = self.sender()  # calling self.sender().error() crashes; gotta save to local
         if not response.error():
             self.dlg.processingsTable.removeRow(row)
             self.processing_names.remove(name)
+            self.processing_fetch_timer.start()
 
     def create_processing(self) -> None:
         """Create and start a processing on the server.
@@ -708,6 +714,7 @@ class Mapflow(QObject):
         processing_name = self.dlg.processingName.text()
         if not processing_name:
             self.alert(self.tr('Please, specify a name for your processing'))
+            return
         if processing_name in self.processing_names:
             self.alert(self.tr('Processing name taken. Please, choose a different name.'))
             return
@@ -724,9 +731,6 @@ class Mapflow(QObject):
             ).format(self.aoi_area_limit), kind='critical')
             return
         self.push_message(self.tr('Starting the processing...'))
-        auth_fields = (self.dlg.customProviderUsername.text(), self.dlg.customProviderPassword.text())
-        if any(auth_fields) and not all(auth_fields):
-            self.alert(self.tr('Invalid custom provider credentials'), kind='warning')
         imagery = self.dlg.rasterCombo.currentLayer()
         if imagery:  # check if local raster is a GeoTIFF
             path = imagery.dataProvider().dataSourceUri()
@@ -827,26 +831,35 @@ class Mapflow(QObject):
             body=body,
             timeout=3600  # one hour
         )
-        response.uploadProgress.connect(self.upload_tif_progress)
         body.setParent(response)
+        progress_message = QgsMessageBarItem(
+            self.plugin_name,
+            self.tr('Uploading image to Mapflow...'),
+            QProgressBar(self.message_bar),
+            parent=self.message_bar
+        )
+        self.message_bar.pushItem(progress_message)
+        response.uploadProgress.connect(
+            lambda bytes_sent, bytes_total: self.upload_tif_progress(
+                progress_message,
+                bytes_sent,
+                bytes_total
+            )
+        )
 
     def upload_tif_callback(self, processing_params: dict) -> None:
         """"""
         response = self.sender()
-        if response.error():
-            return
-        processing_params['params']['url'] = json.loads(response.readAll().data())['url']
-        self.post_processing(processing_params)
+        if not response.error():
+            processing_params['params']['url'] = json.loads(response.readAll().data())['url']
+            self.post_processing(processing_params)
 
-    def upload_tif_progress(self, bytes_sent: int, bytes_total: int) -> None:
-        """"""
-        if bytes_sent == -1:  # the number of bytes uploaded couldn't be determined
-            return
-        if bytes_sent == bytes_total:
-            self.push_message(self.tr('Image successfully uploaded'))
-            self.message_bar.removeWidget(self.tif_upload_progress_message)
-        self.tif_upload_progress_bar.setValue(round(bytes_sent / bytes_total * 100))
-        self.message_bar.pushWidget(self.tif_upload_progress_message)
+    def upload_tif_progress(self, message: QgsMessageBarItem, bytes_sent: int, bytes_total: int) -> None:
+        """Display current upload progress in the message bar."""
+        if bytes_total > 0:
+            message.widget().setValue(round(bytes_sent / bytes_total * 100))
+            if bytes_sent == bytes_total:
+                self.message_bar.popWidget(message)
 
     def post_processing(self, request_body: dict) -> None:
         """"""
@@ -912,7 +925,19 @@ class Mapflow(QObject):
             image_id = self.get_maxar_image_id()  # request a single image if selected in the table
             if image_id:
                 url += f'&CQL_FILTER=feature_id=%27{image_id}%27'
-                layer_name = f'{layer_name} {image_id}'
+                row = self.dlg.maxarMetadataTable.currentRow()
+                layer_name = ' '.join((
+                    layer_name,
+                    self.dlg.maxarMetadataTable.item(
+                        row,
+                        config.MAXAR_METADATA_ATTRIBUTES.index('acquisitionDate')
+                    ).text(),
+                    self.dlg.maxarMetadataTable.item(
+                        row,
+                        config.MAXAR_METADATA_ATTRIBUTES.index('productType')
+                    ).text(),
+                    image_id[:4]
+                ))
         # Can use urllib.parse but have to specify safe='/?:{}' which sort of defeats the purpose
         url_escaped = url.replace('&', '%26').replace('=', '%3D')
         params = {
@@ -957,16 +982,21 @@ class Mapflow(QObject):
         if response.error():
             return
         processing = next(filter(lambda p: p['id'] == pid, self.processings))
-        # Export to Geopackage to prevent QGIS from hanging if the GeoJSON is heavy
-        output_path = self.dedupe_filename(
-            os.path.join(self.dlg.outputDirectory.text(), processing['name']),
-            '.gpkg'
-        )
+        # Avoid overwriting existing files by adding (n) to their names
+        output_path = os.path.join(self.dlg.outputDirectory.text(), processing['name'])
+        extension = '.gpkg'
+        if os.path.exists(output_path + extension):
+            count = 1
+            while os.path.exists(output_path + f'({count})' + extension):
+                count += 1
+            output_path += f'({count})' + extension
+        else:
+            output_path += extension
         transform = self.project.transformContext()
         # Layer creation options for QGIS 3.10.3+
         write_options = QgsVectorFileWriter.SaveVectorOptions()
         write_options.layerOptions = ['fid=id']
-        with NamedTemporaryFile(mode='wb+') as f:
+        with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb+') as f:
             f.write(response.readAll().data())
             f.seek(0)  # rewind the cursor to the start of the file
             layer = QgsVectorLayer(f.name, '', 'ogr')
@@ -1215,7 +1245,7 @@ class Mapflow(QObject):
             if not self.offline_alert.isVisible():
                 self.offline_alert.setParent(self.main_window)
                 self.offline_alert.show()
-        elif error == QNetworkReply.OperationCanceledError:
+        elif error in (QNetworkReply.OperationCanceledError, QNetworkReply.ServiceUnavailableError):
             ErrorMessage(
                 self.tr('Mapflow is not responding.\nPlease, try again later or send us an email.'),
                 parent=self.main_window
@@ -1272,11 +1302,33 @@ class Mapflow(QObject):
         self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
         self.dlg.show()
 
+    def check_plugin_version_callback(self) -> None:
+        """"""
+        response = self.sender()
+        if response.error() or int(response.readAll().data()) == 1:
+            return
+        QMessageBox.warning(
+            self.main_window,
+            self.plugin_name,
+            self.tr(
+                'There is a new plugin version available.\n'
+                'Please, upgrade to make sure everything works as expected. '
+                'Go to Plugins -> Manage and Install Plugins -> Upgradable.'
+            )
+        )
+
     def main(self) -> None:
         """Plugin entrypoint.
 
         Is called by clicking the plugin icon.
         """
+        # Check plugin version for compatibility with Processing API
+        self.send_http_request(
+            'get',
+            self.server + '/processings/version',
+            self.check_plugin_version_callback,
+            basic_auth=b''  # no auth
+        )
         token = self.settings.value('token')
         if bool(token):  # token saved
             # Save Mapflow Basic Auth to be used with every request to Mapflow
