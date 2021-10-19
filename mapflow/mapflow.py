@@ -13,7 +13,7 @@ from PyQt5.QtCore import (
     QObject, QSettings, QCoreApplication, QTimer, QTranslator, Qt, QUrl, QFile, QIODevice
 )
 from PyQt5.QtWidgets import (
-    QDialogButtonBox, QMessageBox, QFileDialog, QTableWidgetItem, QAction, QAbstractItemView, QLabel,
+    QMessageBox, QFileDialog, QTableWidgetItem, QAction, QAbstractItemView, QLabel,
     QProgressBar
 )
 from qgis import processing as qgis_processing  # to avoid collisions
@@ -40,12 +40,12 @@ class Mapflow(QObject):
         self.iface = iface
         self.main_window = self.iface.mainWindow()
         super().__init__(self.main_window)
-        self.message_bar = self.iface.messageBar()
         self.project = QgsProject.instance()
+        self.message_bar = self.iface.messageBar()
         self.plugin_dir = os.path.dirname(__file__)
         self.temp_dir = tempfile.gettempdir()
         self.plugin_name = config.PLUGIN_NAME  # aliased here to be overloaded in submodules
-        # QGIS Settings will be used to store user credentials and various UI element state
+        # Settings will be used to store credentials and various UI customizations
         self.settings = QgsSettings()
         # Get the server environment to connect to (for admins)
         mapflow_env = self.settings.value('variables/mapflow_env') or 'production'
@@ -98,17 +98,15 @@ class Mapflow(QObject):
         self.dlg.help.setText(
             self.dlg.help.text().replace('Mapflow', f'{self.plugin_name} {self.plugin_version}')
         )
-        # Used for previewing a Maxar image by double-clicking its row
-        self.current_maxar_metadata_product = ''
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         # Check if there are stored credentials
         self.logged_in = bool(self.settings.value('token'))
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or 18))
-        if self.settings.value('customProviderSaveAuth'):
-            self.dlg.customProviderSaveAuth.setChecked(True)
-            self.dlg.customProviderUsername.setText(self.settings.value('customProviderUsername'))
-            self.dlg.customProviderPassword.setText(self.settings.value('customProviderPassword'))
+        if self.settings.value('providerSaveAuth'):
+            self.dlg.providerSaveAuth.setChecked(True)
+            self.dlg.providerUsername.setText(self.settings.value('providerUsername'))
+            self.dlg.providerPassword.setText(self.settings.value('providerPassword'))
         self.update_providers(self.settings.value('providers', config.MAXAR_PRODUCTS))
         # Hide the ID columns as only needed for table operations, not the user
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
@@ -135,7 +133,7 @@ class Mapflow(QObject):
         # Processings
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
-        # Custom provider
+        # Providers
         self.dlg.preview.clicked.connect(self.preview)
         self.dlg.addProvider.clicked.connect(self.dlg_provider.show)
         self.dlg.addProvider.clicked.connect(
@@ -152,6 +150,7 @@ class Mapflow(QObject):
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
         self.dlg.maxarMetadataTable.cellDoubleClicked.connect(self.preview)
         self.dlg.providerCombo.currentTextChanged.connect(self.limit_max_zoom_for_maxar)
+        self.dlg.providerCombo.currentTextChanged.connect(self.clear_metadata_table)
         # Poll processings
         self.processing_fetch_timer = QTimer(self.main_window)
         self.processing_fetch_timer.setInterval(config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
@@ -163,6 +162,11 @@ class Mapflow(QObject):
                 self.fetch_processings_error_handler
             ),
         )
+
+    def clear_metadata_table(self) -> None:
+        """"""
+        self.dlg.maxarMetadataTable.clearContents()
+        self.dlg.maxarMetadataTable.setRowCount(0)
 
     def fetch_processings_error_handler(self) -> None:
         """"""
@@ -181,6 +185,7 @@ class Mapflow(QObject):
     ) -> QNetworkReply:
         """"""
         request = QNetworkRequest(QUrl(url))
+        request.setRawHeader(b'X-Plugin-Version', self.plugin_version.encode())
         request.setRawHeader(b'Authorization', self.mapflow_auth if basic_auth is None else basic_auth)
         if headers:
             for key, value in headers.items():
@@ -240,26 +245,11 @@ class Mapflow(QObject):
         else:  # assume user opted to not use a group, add layers as usual
             self.project.addMapLayer(layer)
 
-    def restore_maxar_metadata_product(self) -> None:
-        """Reset provider combo to match the current metadata table state.
-
-        SecureWatch single-image requests are constructed based on the current selection
-        in the metadata table and with the current item in the provider list. The user may
-        change list item after requesting metadata. To avoid ambiguity, this function set
-        the provider combo to the current metadata product.
-        """
-        if (
-            self.dlg.providerCombo.currentText() != self.current_maxar_metadata_product
-            and self.dlg.maxarMetadataTable.selectedItems()
-        ):
-            self.dlg.providerCombo.setCurrentText(self.current_maxar_metadata_product)
-
     def highlight_maxar_image(self) -> None:
         """Select an image footprint in Maxar metadata layer when it's selected in the table.
 
         Is called by selecting (clicking on) a row in Maxar metadata table.
         """
-        self.restore_maxar_metadata_product()
         selected_items = self.dlg.maxarMetadataTable.selectedItems()
         image_id = selected_items[config.MAXAR_METADATA_ID_COLUMN_INDEX].text() if selected_items else ''
         try:
@@ -270,7 +260,7 @@ class Mapflow(QObject):
         self.dlg.rasterCombo.setCurrentText(self.dlg.providerCombo.currentText())
 
     def remove_provider(self) -> None:
-        """Delete a an entry from the list of providers and custom_providers.json.
+        """Delete a web tile provider from the list of registered providers.
 
         Is called by clicking the red minus button near the provider dropdown list.
         """
@@ -282,7 +272,7 @@ class Mapflow(QObject):
             self.tr('Permanently remove {}?'.format(provider))
         ) == QMessageBox.Yes:
             providers = self.settings.value('providers', [])
-            providers.remove(provider)
+            del providers[provider]
             self.settings.setValue('providers', providers)
             self.dlg.providerCombo.removeItem(self.dlg.providerCombo.currentIndex())
             self.dlg.rasterCombo.setAdditionalItems(providers)
@@ -310,23 +300,16 @@ class Mapflow(QObject):
         """
         provider = self.dlg.providerCombo.currentText()
         if provider in config.MAXAR_PRODUCTS:
-            self.show_connect_id_dialog(provider.split()[1])
+            self.show_connect_id_dialog(provider)
         else:
-            self.show_provider_dialog(provider)
-
-    def show_provider_dialog(self, provider: str) -> None:
-        """Change a provider's name, URL or type.
-
-        :param provider: Provider's name, as in the config and dropdown list.
-        """
-        self.dlg_provider.setWindowTitle(provider)
-        # Fill out the edit dialog with the current data
-        providers = self.settings.value('providers')
-        self.dlg_provider.name.setText(provider)
-        self.dlg_provider.url.setText(providers[provider]['url'])
-        self.dlg_provider.type.setCurrentText(providers[provider]['type'])
-        # Open the edit dialog
-        self.dlg_provider.show()
+            self.dlg_provider.setWindowTitle(provider)
+            # Fill out the edit dialog with the current data
+            providers = self.settings.value('providers')
+            self.dlg_provider.name.setText(provider)
+            self.dlg_provider.url.setText(providers[provider]['url'])
+            self.dlg_provider.type.setCurrentText(providers[provider]['type'])
+            # Open the edit dialog
+            self.dlg_provider.show()
 
     def update_providers(self, providers: dict) -> None:
         """"""
@@ -338,8 +321,8 @@ class Mapflow(QObject):
     def show_connect_id_dialog(self, product: str) -> None:
         """"""
         # Display the current Connect ID
-        connect_ids = self.settings.value('maxarConnectIds')
-        self.dlg_connect_id.connectId.setText(connect_ids.get(product) if connect_ids else '')
+        providers = self.settings.value('providers')
+        self.dlg_connect_id.connectId.setText(providers[product]['connectId'])
         self.dlg_connect_id.connectId.setCursorPosition(0)
         # Specify the product being edited in the window title
         self.dlg_connect_id.setWindowTitle(f'{product} - {self.dlg_connect_id.windowTitle()}')
@@ -433,7 +416,7 @@ class Mapflow(QObject):
 
         Is called by clicking the 'Get Image Metadata' button in the main dialog.
         """
-        self.save_custom_provider_auth()
+        self.save_provider_auth()
         provider = self.dlg.providerCombo.currentText()
         # Perform checks
         if provider not in config.MAXAR_PRODUCTS:
@@ -480,12 +463,12 @@ class Mapflow(QObject):
         query_params = '&'.join(f'{key}={val}' for key, val in params.items())
         url = 'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?' + query_params
         # Read credentials
-        username = self.dlg.customProviderUsername.text()
-        password = self.dlg.customProviderPassword.text()
+        username = self.dlg.providerUsername.text()
+        password = self.dlg.providerPassword.text()
         if username or password:  # user has their own account
             _, product = provider.split()
             try:
-                connect_id = self.settings.value('maxarConnectIds', {})[product]
+                connect_id = self.settings.value('providers')[product]['connectId']
             except KeyError:
                 self.show_connect_id_dialog(product)
                 return
@@ -537,7 +520,6 @@ class Mapflow(QObject):
         if response.error():
             return
         # Memorize the product to prevent further errors if user changes item in the dropdown list
-        self.current_maxar_metadata_product = product
         layer_name = f'{product} metadata'
         # Save metadata to a file; I couldn't get WFS to work, or else no file would be necessary
         output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex()) + '.gml'
@@ -592,7 +574,7 @@ class Mapflow(QObject):
             a polygon or raster layer (combo item changed),
             or the state of the 'Use image extent' checkbox
         """
-        if arg is None:  # 'virtual' layer: Mapbox or custom provider
+        if arg is None:  # 'virtual' layer: a web tile provider
             layer = self.dlg.polygonCombo.currentLayer()
             if not layer:
                 self.dlg.labelAoiArea.setText('')
@@ -716,24 +698,25 @@ class Mapflow(QObject):
         }
         params = {}  # processing parameters
         transform_context = self.project.transformContext()
-        if raster_option in self.custom_providers:
-            params['raster_login'] = self.dlg.customProviderUsername.text()
-            params['raster_password'] = self.dlg.customProviderPassword.text()
-            params['url'] = self.custom_providers[raster_option]['url']
+        providers = self.settings.value('providers')
+        if raster_option in providers:
+            params['raster_login'] = self.dlg.providerUsername.text()
+            params['raster_password'] = self.dlg.providerPassword.text()
+            params['url'] = providers[raster_option]['url']
             if raster_option in config.MAXAR_PRODUCTS:  # add Connect ID and CQL Filter, if any
                 processing_params['meta']['source'] = 'maxar'
                 if params['raster_login'] or params['raster_password']:  # user's own account
-                    params['url'] += f'&CONNECTID={self.custom_providers[raster_option]["connectId"]}&'
+                    params['url'] += '&CONNECTID=' + providers[raster_option]['connectId']
                 else:  # our account
                     processing_params['meta']['maxar_product'] = raster_option.split()[1].lower()
                 image_id = self.get_maxar_image_id()
                 if image_id:
-                    params['url'] += f'CQL_FILTER=feature_id=%27{image_id}%27'
-            params['source_type'] = self.custom_providers[raster_option]['type']
+                    params['url'] += f'&CQL_FILTER=feature_id=%27{image_id}%27'
+            params['source_type'] = providers[raster_option]['type']
             if params['source_type'] == 'wms':
                 params['target_resolution'] = 0.000005  # for the 18th zoom
             params['cache_raster_update'] = str(self.dlg.updateCache.isChecked())
-            self.save_custom_provider_auth()
+            self.save_provider_auth()
         processing_params['params'] = params
         # Get processing AOI
         if self.dlg.useImageExtentAsAoi.isChecked():
@@ -856,38 +839,37 @@ class Mapflow(QObject):
             self.alert(self.tr("Success! We'll notify you when the processing has finished."))
             self.dlg.processingName.clear()
 
-    def save_custom_provider_auth(self) -> None:
-        """Save custom provider login and password to settings if user checked the save option.
+    def save_provider_auth(self) -> None:
+        """Save provider credentials to settings if user checked the save option.
 
         Is called at three occasions: preview, processing creation and metadata request.
         """
         # Save the checkbox state itself
-        self.settings.setValue('customProviderSaveAuth', self.dlg.customProviderSaveAuth.isChecked())
+        self.settings.setValue('providerSaveAuth', self.dlg.providerSaveAuth.isChecked())
         # If checked, save the credentials
-        if self.dlg.customProviderSaveAuth.isChecked():
-            self.settings.setValue('customProviderUsername', self.dlg.customProviderUsername.text())
-            self.settings.setValue('customProviderPassword', self.dlg.customProviderPassword.text())
+        if self.dlg.providerSaveAuth.isChecked():
+            self.settings.setValue('providerUsername', self.dlg.providerUsername.text())
+            self.settings.setValue('providerPassword', self.dlg.providerPassword.text())
 
     def preview(self) -> None:
         """Display raster tiles served over the Web.
 
         Is called by clicking the preview button.
         """
-        # Align the provider combo with the table
-        self.restore_maxar_metadata_product()
-        self.save_custom_provider_auth()
-        username = self.dlg.customProviderUsername.text()
-        password = self.dlg.customProviderPassword.text()
+        self.save_provider_auth()
+        username = self.dlg.providerUsername.text()
+        password = self.dlg.providerPassword.text()
         provider = self.dlg.providerCombo.currentText()
-        url = self.custom_providers[provider]['url']
         layer_name = provider
+        provider_info = self.settings.value('providers')[provider]
+        url = provider_info['url']
         if provider in config.MAXAR_PRODUCTS:
             if username or password:  # own account
-                url += f'&CONNECTID={self.custom_providers[provider]["connectId"]}'
+                url += '&CONNECTID=' + provider_info['connectId']
                 url = url.replace('jpeg', 'png')  # for transparency support
             else:  # our account; send to our endpoint
                 url = self.server + '/png?TileRow={y}&TileCol={x}&TileMatrix={z}'
-                url += f'&CONNECTID={provider.split()[1].lower()}'
+                url += '&CONNECTID=' + provider.split()[1].lower()
                 username = self.username
                 password = self.password
             image_id = self.get_maxar_image_id()  # request a single image if selected in the table
@@ -909,7 +891,7 @@ class Mapflow(QObject):
         # Can use urllib.parse but have to specify safe='/?:{}' which sort of defeats the purpose
         url_escaped = url.replace('&', '%26').replace('=', '%3D')
         params = {
-            'type': self.custom_providers[provider]['type'],
+            'type': provider_info['type'],
             'url': url_escaped,
             'zmax':  self.dlg.maxZoom.value(),
             'zmin': 0,
@@ -1077,9 +1059,9 @@ class Mapflow(QObject):
             # Extract WD names from WD objects
             processing['workflowDef'] = processing['workflowDef']['name']
         # Memorize which processings had been finished to alert user later
-        namespace = self.username.split('@')[0] + '@' + self.server.split('-')[1].split('.')[0]
-        finished_processings_setting = f'finishedProcessings_{namespace}'
-        previously_finished = self.settings.value(finished_processings_setting, [])
+        env = self.server.split('-')[1].split('.')[0]
+        all_finished = self.settings.value('finished_processings', {})
+        previously_finished = all_finished.get(env, {}).get(self.username, [])
         now = datetime.now().astimezone()
         one_day = timedelta(1)
         finished = [
@@ -1087,7 +1069,11 @@ class Mapflow(QObject):
             if processing['percentCompleted'] == '100%'
             and now - processing['created'] < one_day
         ]
-        self.settings.setValue(finished_processings_setting, finished)
+        # Update the list of finished processings for the given account
+        if not all_finished.get(env):  # 1st assignment
+            all_finished[env] = {}
+        all_finished[env][self.username] = finished
+        self.settings.setValue('finished_processings', all_finished)
         # Drop seconds to save space
         for processing in processings:
             processing['created'] = processing['created'].strftime('%Y-%m-%d %H:%M')

@@ -394,12 +394,12 @@
         </layout>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="customProvider" stretch="1,0,0,0,0">
+        <layout class="QHBoxLayout" name="provider" stretch="1,0,0,0,0">
          <item>
           <widget class="QComboBox" name="providerCombo"/>
          </item>
          <item>
-          <layout class="QHBoxLayout" name="customProviderControls">
+          <layout class="QHBoxLayout" name="providerControls">
            <property name="spacing">
             <number>0</number>
            </property>
@@ -510,7 +510,7 @@
         </layout>
        </item>
        <item>
-        <widget class="QgsCollapsibleGroupBox" name="customProviderAuthGroup">
+        <widget class="QgsCollapsibleGroupBox" name="providerAuthGroup">
          <property name="title">
           <string>Credentials</string>
          </property>
@@ -528,30 +528,30 @@
          </property>
          <layout class="QGridLayout" name="layourCustomProviderAuthGroup" columnstretch="1,0">
           <item row="0" column="0">
-           <layout class="QFormLayout" name="customProviderAuth">
+           <layout class="QFormLayout" name="providerAuth">
             <item row="0" column="0">
-             <widget class="QLabel" name="labelcustomProviderUsername">
+             <widget class="QLabel" name="labelProviderUsername">
               <property name="text">
                <string>Login:</string>
               </property>
              </widget>
             </item>
             <item row="0" column="1">
-             <widget class="QLineEdit" name="customProviderUsername">
+             <widget class="QLineEdit" name="providerUsername">
               <property name="text">
                <string/>
               </property>
              </widget>
             </item>
             <item row="1" column="0">
-             <widget class="QLabel" name="labelCustomProviderPassword">
+             <widget class="QLabel" name="labelProviderPassword">
               <property name="text">
                <string>Password:</string>
               </property>
              </widget>
             </item>
             <item row="1" column="1">
-             <widget class="QgsPasswordLineEdit" name="customProviderPassword">
+             <widget class="QgsPasswordLineEdit" name="providerPassword">
               <property name="text">
                <string/>
               </property>
@@ -560,7 +560,7 @@
            </layout>
           </item>
           <item row="0" column="1">
-           <widget class="QCheckBox" name="customProviderSaveAuth">
+           <widget class="QCheckBox" name="providerSaveAuth">
             <property name="text">
              <string>Save Login/Password</string>
             </property>

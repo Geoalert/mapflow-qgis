@@ -2,6 +2,9 @@
 <ui version="4.0">
  <class>ConnectIdDialog</class>
  <widget class="QDialog" name="ConnectIdDialog">
+  <property name="windowModality">
+   <enum>Qt::WindowModal</enum>
+  </property>
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -30,9 +33,6 @@
   </property>
   <property name="windowTitle">
    <string notr="true">Connect ID</string>
-  </property>
-  <property name="modal">
-   <bool>true</bool>
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <property name="bottomMargin">

@@ -41,10 +41,10 @@ class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(plugin_icon)
-        ok_button = self.buttonBox.button(QDialogButtonBox.Ok)
-        ok_button.setEnabled(False)
-        self.name.textChanged.connect(lambda text: ok_button.setEnabled(bool(text and self.url.text())))
-        self.url.textChanged.connect(lambda text: ok_button.setEnabled(bool(text and self.name.text())))
+        ok = self.buttonBox.button(QDialogButtonBox.Ok)
+        ok.setEnabled(False)
+        self.name.textChanged.connect(lambda text: ok.setEnabled(bool(text and self.url.text())))
+        self.url.textChanged.connect(lambda text: ok.setEnabled(bool(text and self.name.text())))
         self.finished.connect(self.name.clear)
         self.finished.connect(self.url.clear)
 
@@ -56,7 +56,9 @@ class ConnectIdDialog(*uic.loadUiType(ui_path/'connect_id_dialog.ui')):
         self.setupUi(self)
         self.setWindowIcon(plugin_icon)
         self.connectId.textChanged.connect(
-            lambda: self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(self.connectId.hasAcceptableInput())
+            lambda text: self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(
+                self.connectId.hasAcceptableInput() or len(text) == 4  # dashes
+            )
         )
 
 
