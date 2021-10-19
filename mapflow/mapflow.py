@@ -382,18 +382,12 @@ class Mapflow(QObject):
     def check_if_output_directory_is_selected(self) -> bool:
         """Check if the user specified an existing output dir.
 
-        The 'outputDirectory' field in the Settings tab is checked. If it doesn't contain a path to an
-        existing directory, prompt the user to select one by opening a modal file selection dialog.
-
         Returns True if an existing directory is specified or a new directory has been selected, else False.
         """
-        if os.path.exists(self.dlg.outputDirectory.text()):
+        if os.path.exists(self.dlg.outputDirectory.text()) or self.select_output_directory():
             return True
-        elif self.select_output_directory():
-            return True
-        else:
-            self.alert(self.tr('Please, specify an existing output directory'))
-            return False
+        self.alert(self.tr('Please, specify an existing output directory'))
+        return False
 
     def select_tif(self) -> None:
         """Open a file selection dialog for the user to select a GeoTIFF for processing.
@@ -500,10 +494,10 @@ class Mapflow(QObject):
         if not error:
             return
         if error == QNetworkReply.ContentAccessDenied:
-            self.alert(self.tr('Please, check your credentials'), kind='warning')
+            self.alert(self.tr('Please, check your credentials'), icon='warning')
             return
         elif error == QNetworkReply.OperationCanceledError:
-            self.alert(self.tr('SecureWatch is not responding. Please, try again later.'), kind='warning')
+            self.alert(self.tr('SecureWatch is not responding. Please, try again later.'), icon='warning')
             return
         elif error == QNetworkReply.HostNotFoundError:
             if not self.offline_alert.isVisible():
@@ -511,7 +505,7 @@ class Mapflow(QObject):
                 self.offline_alert.show()
             return
         elif error:
-            self.alert(f'{error}: {response.errorString()}', kind='warning')
+            self.alert(f'{error}: {response.errorString()}', icon='warning')
             return
 
     def get_maxar_metadata_callback(self, product: str) -> None:
@@ -672,15 +666,15 @@ class Mapflow(QObject):
             self.alert(self.tr('Please, select an area of interest'))
             return
         if self.remainingLimit < self.aoi_size:
-            self.alert(self.tr('Processing limit exceeded'), kind='critical')
+            self.alert(self.tr('Processing limit exceeded'), icon='critical')
             return
         if self.aoi_area_limit < self.aoi_size:
             self.alert(self.tr(
                 'Up to {} sq km can be processed at a time. '
                 'Try splitting up your area of interest.'
-            ).format(self.aoi_area_limit), kind='critical')
+            ).format(self.aoi_area_limit), icon='critical')
             return
-        self.push_message(self.tr('Starting the processing...'))
+        self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
         imagery = self.dlg.rasterCombo.currentLayer()
         if imagery:  # check if local raster is a GeoTIFF
             path = imagery.dataProvider().dataSourceUri()
@@ -834,7 +828,7 @@ class Mapflow(QObject):
                 'You need to upgrade your subscription to process Maxar imagery. '
             ), self.dlg).show()
         elif error:
-            self.alert(self.tr('Processing creation failed: ') + response.errorString(), kind='critical')
+            self.alert(self.tr('Processing creation failed: ') + response.errorString(), icon='critical')
         else:
             self.alert(self.tr("Success! We'll notify you when the processing has finished."))
             self.dlg.processingName.clear()
@@ -974,7 +968,7 @@ class Mapflow(QObject):
                     write_options
                 )
         if error:
-            self.push_message(self.tr('Error loading results. Error code: ' + str(error)), Qgis.Warning)
+            self.message_bar.pushWarning(self.tr('Error loading results. Error code: ' + str(error)))
             return
         # Load the results into QGIS
         results_layer = QgsVectorLayer(output_path, processing['name'], 'ogr')
@@ -1011,31 +1005,13 @@ class Mapflow(QObject):
         self.add_layer(results_layer)
         self.iface.zoomToActiveLayer()
 
-    def alert(self, message: str, kind: str = 'information') -> None:
-        """Display an interactive modal pop up.
+    def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.critical) -> None:
+        """Display a minimalistic modal dialog with some info or a question.
 
         :param message: A text to display
-        :param kind: The type of a pop-up to display; it is translated into a class method name of QMessageBox,
-            so must be one of https://doc.qt.io/qt-5/qmessagebox.html#static-public-members
+        :param icon: Info/Warning/Critical/Question
         """
-        return getattr(QMessageBox, kind)(self.dlg, self.plugin_name, message)
-
-    def push_message(self, message: str, level: Qgis.MessageLevel = Qgis.Info, duration: int = 5) -> None:
-        """Display a message on the message bar.
-
-        :param message: A text to display
-        :param level: The type of a message to display
-        :param duration: For how long the message will be displayed
-        """
-        self.message_bar.pushMessage(self.plugin_name, message, level, duration)
-
-    def log(self, message: str, level: Qgis.MessageLevel = Qgis.Warning) -> None:
-        """Log a message to the QGIS Message Log.
-
-        :param message: A text to display
-        :param level: The type of a message to display
-        """
-        QgsMessageLog.logMessage(message, self.plugin_name, level=level)
+        return QMessageBox(icon, self.plugin_name, message, parent=self.dlg).exec() == QMessageBox.Ok
 
     def fill_out_processings_table(self) -> None:
         """Fill out the processings table with the processings in the user's default project.
@@ -1100,7 +1076,10 @@ class Mapflow(QObject):
         self.dlg.processingsTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
         # Inform user about finished processings
         for processing in set(finished) - set(previously_finished):
-            self.alert(processing + self.tr(' finished. Double-click it in the table to download the results.'))
+            self.alert(
+                processing + self.tr(' finished. Double-click it in the table to download the results.'),
+                QMessageBox.Information
+            )
             # Update user processing limit
             self.remainingLimit -= round(next(filter(
                 lambda x: x['name'] == processing, processings
