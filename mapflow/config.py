@@ -4,7 +4,7 @@ MAPFLOW_DEFAULT_TIMEOUT = 5  # in seconds
 PROCESSING_TABLE_REFRESH_INTERVAL = 6  # in seconds
 PROCESSING_TABLE_ID_COLUMN_INDEX = 5
 # MAXAR
-MAXAR_METADATA_ATTRIBUTES = 'sourceUnit', 'productType', 'colorBandOrder', 'cloudCover', 'acquisitionDate', 'featureId'
+MAXAR_METADATA_ATTRIBUTES = 'productType', 'colorBandOrder', 'cloudCover', 'offNadirAngle', 'acquisitionDate', 'featureId'
 MAXAR_METADATA_ID_COLUMN_INDEX = MAXAR_METADATA_ATTRIBUTES.index('featureId')
 # MISC
 MAXAR_PRODUCTS = {

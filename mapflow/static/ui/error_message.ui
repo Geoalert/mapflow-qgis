@@ -3,7 +3,7 @@
  <class>ErrorDialog</class>
  <widget class="QDialog" name="ErrorDialog">
   <property name="windowModality">
-   <enum>Qt::WindowModal</enum>
+   <enum>Qt::ApplicationModal</enum>
   </property>
   <property name="geometry">
    <rect>
@@ -22,10 +22,10 @@
   <property name="windowTitle">
    <string notr="true">Mapflow</string>
   </property>
-  <property name="modal">
-   <bool>true</bool>
-  </property>
   <layout class="QGridLayout" name="gridLayout">
+   <property name="verticalSpacing">
+    <number>0</number>
+   </property>
    <item row="0" column="0">
     <widget class="QLabel" name="text">
      <property name="sizePolicy">
@@ -49,9 +49,6 @@
     <widget class="QLabel" name="sendEmail">
      <property name="text">
       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;mailto:help@geoalert.io?subject=Plugin Error&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Send us an email&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-     </property>
-     <property name="textFormat">
-      <enum>Qt::RichText</enum>
      </property>
      <property name="alignment">
       <set>Qt::AlignCenter</set>

@@ -17,7 +17,7 @@
    <item>
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
-      <number>0</number>
+      <number>1</number>
      </property>
      <property name="movable">
       <bool>true</bool>
@@ -649,14 +649,6 @@
             </attribute>
             <column>
              <property name="text">
-              <string>Source Unit</string>
-             </property>
-             <property name="textAlignment">
-              <set>AlignCenter</set>
-             </property>
-            </column>
-            <column>
-             <property name="text">
               <string>Product Type</string>
              </property>
              <property name="textAlignment">
@@ -674,6 +666,14 @@
             <column>
              <property name="text">
               <string>Cloud Cover</string>
+             </property>
+             <property name="textAlignment">
+              <set>AlignCenter</set>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>OffNadirAngle</string>
              </property>
              <property name="textAlignment">
               <set>AlignCenter</set>
