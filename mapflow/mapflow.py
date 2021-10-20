@@ -379,8 +379,6 @@ class Mapflow(QObject):
         if not aoi_layer:
             self.alert(self.tr('Please, select an area of interest'))
             return
-        if not self.check_if_output_directory_is_selected():
-            return
         # Start off with the static params
         params = {
             'REQUEST': 'GetFeature',
@@ -973,7 +971,7 @@ class Mapflow(QObject):
         self.add_layer(raster)
         self.iface.zoomToActiveLayer()
 
-    def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.critical) -> None:
+    def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical) -> None:
         """Display a minimalistic modal dialog with some info or a question.
 
         :param message: A text to display
