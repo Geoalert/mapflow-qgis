@@ -59,6 +59,5 @@ class Http(QObject):
         timer.setInterval(timeout * 1000)  # seconds -> milliseconds
         response = method(request, body) if method == self.nam.post else method(request)
         response.finished.connect(callback)
-        if error_handler:
-            response.finished.connect(error_handler)
+        response.finished.connect(error_handler or self.default_error_handler)
         return response
