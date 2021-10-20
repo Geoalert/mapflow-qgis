@@ -836,8 +836,7 @@ class Mapflow(QObject):
                     self.dlg.maxarMetadataTable.item(
                         row,
                         config.MAXAR_METADATA_ATTRIBUTES.index('productType')
-                    ).text(),
-                    image_id[:4]
+                    ).text()
                 ))
         # Can use urllib.parse but have to specify safe='/?:{}' which sort of defeats the purpose
         url_escaped = url.replace('&', '%26').replace('=', '%3D')
