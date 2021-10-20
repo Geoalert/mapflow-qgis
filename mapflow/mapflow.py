@@ -102,14 +102,14 @@ class Mapflow(QObject):
         self.http = Http(self.plugin_version, self.handle_request_errors)
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         # Check if there are stored credentials
-        self.logged_in = bool(self.settings.value('token'))
+        self.logged_in = False
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or 18))
         if self.settings.value('providerSaveAuth'):
             self.dlg.providerSaveAuth.setChecked(True)
             self.dlg.providerUsername.setText(self.settings.value('providerUsername'))
             self.dlg.providerPassword.setText(self.settings.value('providerPassword'))
-        self.update_providers(self.settings.value('providers', config.MAXAR_PRODUCTS))
+        self.update_providers(self.settings.value('providers') or config.MAXAR_PRODUCTS)
         # Hide the ID columns as only needed for table operations, not the user
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
@@ -154,7 +154,7 @@ class Mapflow(QObject):
         self.dlg.providerCombo.currentTextChanged.connect(self.limit_max_zoom_for_maxar)
         self.dlg.providerCombo.currentTextChanged.connect(self.clear_metadata_table)
         # Poll processings
-        self.processing_fetch_timer = QTimer(self.main_window)
+        self.processing_fetch_timer = QTimer(self.dlg)
         self.processing_fetch_timer.setInterval(config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
         self.processing_fetch_timer.timeout.connect(
             lambda: self.http.get(
@@ -230,7 +230,7 @@ class Mapflow(QObject):
         provider = self.dlg.providerCombo.currentText()
         # Ask for confirmation
         if self.alert(self.tr('Permanently remove {}?'.format(provider)), QMessageBox.Question):
-            providers = self.settings.value('providers', [])
+            providers = self.settings.value('providers')
             del providers[provider]
             self.settings.setValue('providers', providers)
             self.dlg.providerCombo.removeItem(self.dlg.providerCombo.currentIndex())
@@ -1119,6 +1119,7 @@ class Mapflow(QObject):
 
     def logout(self) -> None:
         """Close the plugin and clear credentials from cache."""
+        self.processing_fetch_timer.stop()
         self.settings.remove('token')
         self.logged_in = False
         self.dlg_login.show()  # assume user wants to log into another account
@@ -1130,6 +1131,8 @@ class Mapflow(QObject):
         if not error:
             return
         elif error == QNetworkReply.AuthenticationRequiredError:  # invalid/empty credentials
+            if self.logged_in:  # prevent deadlocks
+                self.logout()
             if self.dlg_login.findChild(QLabel, 'invalidToken'):
                 return  # the invalid credentials warning is already there
             invalid_token_label = QLabel(self.tr('Invalid token'), self.dlg_login)
@@ -1222,7 +1225,9 @@ class Mapflow(QObject):
         # Check plugin version for compatibility with Processing API
         self.http.get(url=f'{self.server}/version', callback=self.check_plugin_version_callback)
         token = self.settings.value('token')
-        if bool(token):  # token saved
+        if self.logged_in:
+            self.dlg.show()
+        elif bool(token):  # token saved
             # Save Mapflow Basic Auth to be used with every request to Mapflow
             self.mapflow_auth = f'Basic {token}'
             self.http.basic_auth = self.mapflow_auth
