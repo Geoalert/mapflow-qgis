@@ -51,7 +51,8 @@ class Http(QObject):
     ) -> QNetworkReply:
         """Send an actual request."""
         request = QNetworkRequest(QUrl(url))
-        request.setHeader(QNetworkRequest.ContentTypeHeader, 'application/json')
+        if isinstance(body, bytes):
+            request.setHeader(QNetworkRequest.ContentTypeHeader, 'application/json')
         request.setRawHeader(b'X-Plugin-Version', self.plugin_version.encode())
         request.setRawHeader(b'Authorization', basic_auth or self._basic_auth)
         timer = QTimer()
