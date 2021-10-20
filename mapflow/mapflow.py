@@ -229,7 +229,7 @@ class Mapflow(QObject):
         """
         provider = self.dlg.providerCombo.currentText()
         # Ask for confirmation
-        if self.alert(self.tr('Permanently remove {}?'.format(provider)), QMessageBox.question):
+        if self.alert(self.tr('Permanently remove {}?'.format(provider)), QMessageBox.Question):
             providers = self.settings.value('providers', [])
             del providers[provider]
             self.settings.setValue('providers', providers)
@@ -579,7 +579,7 @@ class Mapflow(QObject):
         ]
         # Ask for confirmation if there are selected rows
         if selected_ids and self.alert(
-            self.tr('Delete selected processings?'), QMessageBox.question
+            self.tr('Delete selected processings?'), QMessageBox.Question
         ):
             for id_ in selected_ids:
                 self.http.delete(
