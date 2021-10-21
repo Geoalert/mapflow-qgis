@@ -63,9 +63,17 @@ class ConnectIdDialog(*uic.loadUiType(ui_path/'connect_id_dialog.ui')):
 
 
 class ErrorMessage(*uic.loadUiType(ui_path/'error_message.ui')):
-    def __init__(self, text: str, parent: QWidget) -> None:
+    def __init__(self,  parent: QWidget, text: str, title: str = None, email_body: str = '') -> None:
         """An message box notifying user about a plugin error, with a 'Send a report' button."""
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(plugin_icon)
         self.text.setText(text)
+        if title:
+            self.title.setText(title)
+        self.mailTo.setText(
+            '<html><head/><body><p><a href="mailto:help@geoalert.io?subject=Plugin Error&body=' +
+            email_body +
+            '"><span style=" text-decoration: underline; color:#0057ae;">Let us know</span></a></p></body></html>'
+        )
+        print(self.mailTo.text())

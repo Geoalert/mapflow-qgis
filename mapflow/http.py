@@ -39,11 +39,27 @@ class Http(QObject):
         """Send a DELETE request."""
         return self.send_request(self.nam.deleteResource, **kwargs)
 
+    def response_dispatcher(
+        self,
+        response: QNetworkReply,
+        callback: Callable,
+        callback_kwargs: dict,
+        error_handler: Callable
+    ) -> None:
+        """"""
+        if response.error():
+            self.default_error_handler(response)  # handle general errors
+            if error_handler:  # handle specific errors
+                error_handler(response)
+        else:
+            callback(response, **callback_kwargs)
+
     def send_request(
         self,
         method: Callable,
         url: str,
         callback: Callable = None,
+        callback_kwargs: dict = None,
         error_handler: Callable = None,
         basic_auth: bytes = None,
         timeout: int = config.MAPFLOW_DEFAULT_TIMEOUT,
@@ -51,14 +67,16 @@ class Http(QObject):
     ) -> QNetworkReply:
         """Send an actual request."""
         request = QNetworkRequest(QUrl(url))
+        if not callback_kwargs:
+            callback_kwargs = {}
         if isinstance(body, bytes):
             request.setHeader(QNetworkRequest.ContentTypeHeader, 'application/json')
         request.setRawHeader(b'X-Plugin-Version', self.plugin_version.encode())
         request.setRawHeader(b'Authorization', basic_auth or self._basic_auth)
-        timer = QTimer()
-        timer.setSingleShot(True)
-        timer.setInterval(timeout * 1000)  # seconds -> milliseconds
         response = method(request, body) if method == self.nam.post else method(request)
-        response.finished.connect(callback)
-        response.finished.connect(error_handler or self.default_error_handler)
+        QTimer.singleShot(timeout * 1000, response.abort)
+        response.finished.connect(
+            lambda response=response, callback=callback, error_handler=error_handler:
+            self.response_dispatcher(response, callback, callback_kwargs, error_handler)
+        )
         return response
