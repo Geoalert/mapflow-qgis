@@ -13,7 +13,7 @@ from PyQt5.QtCore import (
     QObject, QSettings, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion
 )
 from PyQt5.QtWidgets import (
-    QMessageBox, QFileDialog, QTableWidgetItem, QAction, QAbstractItemView, QLabel,
+    QApplication, QMessageBox, QFileDialog, QTableWidgetItem, QAction, QAbstractItemView, QLabel,
     QProgressBar
 )
 from qgis import processing as qgis_processing  # to avoid collisions
@@ -92,6 +92,8 @@ class Mapflow(QObject):
         self.http = Http(self.plugin_version, self.default_error_handler)
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         # Check if there are stored credentials
+        self.is_user_loaded = False
+        self.is_project_loaded = False
         self.logged_in = False
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or 18))
@@ -495,23 +497,17 @@ class Mapflow(QObject):
             a polygon or raster layer (combo item changed),
             or the state of the 'Use image extent' checkbox
         """
-        print(self.sender())
         if arg is None:  # 'virtual' layer: a web tile provider
-            print('None')
             layer = self.dlg.polygonCombo.currentLayer()
             if not layer:
                 self.dlg.labelAoiArea.setText('')
                 return
         elif isinstance(arg, list) and not self.dlg.useImageExtentAsAoi.isChecked():  # feature selection changed
-            print('list')
             layer = self.dlg.polygonCombo.currentLayer()
             # All polygon layers are monitored so have to check if it's the one in the combo
-            print(layer)
             if layer != self.iface.activeLayer():
-                print(self.iface.activeLayer(), 'returning')
                 return
         elif isinstance(arg, bool):  # 'Use image extent as AOI' toggled
-            print('bool')
             combo = self.dlg.rasterCombo if arg else self.dlg.polygonCombo
             layer = combo.currentLayer()
             if not layer:
@@ -860,6 +856,7 @@ class Mapflow(QObject):
                 url=f'{self.server}/processings/{pid}/result',
                 callback=self.download_results_callback,
                 callback_kwargs={'pid': pid},
+                error_handler=self.download_results_error_handler,
                 timeout=300
             )
 
@@ -937,14 +934,24 @@ class Mapflow(QObject):
         # Set image extent explicitly because as XYZ, it doesn't have one by default
         self.http.get(
             url=f'{self.server}/processings/{pid}/aois',
-            callback=self.set_raster_extent,
+            callback=self.set_raster_extent_callback,
             callback_kwargs={
                 'vector': results_layer,
                 'raster': raster
-            }
+            },
+            error_handler=self.set_raster_extent_error_handler
         )
 
-    def set_raster_extent(self, response: QNetworkReply, vector: QgsVectorLayer, raster: QgsRasterLayer) -> None:
+    def download_results_error_handler(self, response: QNetworkReply) -> None:
+        """"""
+        self.report_error(response, self.tr('Error downloading results'))
+
+    def set_raster_extent_callback(
+        self,
+        response: QNetworkReply,
+        vector: QgsVectorLayer,
+        raster: QgsRasterLayer
+    ) -> None:
         """"""
         aoi_outer_ring = json.loads(response.readAll().data())[0]['geometry']['coordinates'][0]
         # Extract BBOX corners manually to construct a BBOX
@@ -960,14 +967,22 @@ class Mapflow(QObject):
         self.add_layer(vector)
         self.iface.zoomToActiveLayer()
 
+    def set_raster_extent_error_handler(self, response: QNetworkReply) -> None:
+        """"""
+        self.report_error(response, self.tr('Error loading results'))
+
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical) -> None:
         """Display a minimalistic modal dialog with some info or a question.
 
         :param message: A text to display
         :param icon: Info/Warning/Critical/Question
         """
-        parent = self.dlg if self.dlg.isVisible() else self.dlg_login
-        return QMessageBox(icon, self.plugin_name, message, parent=parent).exec() == QMessageBox.Ok
+        return QMessageBox(
+            icon,
+            self.plugin_name,
+            message,
+            parent=QApplication.activeWindow()
+        ).exec() == QMessageBox.Ok
 
     def fill_out_processings_table(self, response: QNetworkReply) -> None:
         """Fill out the processings table with the processings in the user's default project.
@@ -1106,13 +1121,17 @@ class Mapflow(QObject):
         """Log into Mapflow."""
         mapflow_env = QgsSettings().value('variables/mapflow_env') or 'production'
         self.server = f'https://whitemaps-{mapflow_env}.mapflow.ai/rest'
-        self.http.get(url=f'{self.server}/user/status', callback=self.log_in_callback)
+        self.http.get(
+            url=f'{self.server}/user/status',
+            callback=self.log_in_callback,
+            error_handler=self.log_in_error_handler
+        )
 
     def logout(self) -> None:
         """Close the plugin and clear credentials from cache."""
         self.processing_fetch_timer.stop()
         self.settings.remove('token')
-        self.logged_in = False
+        self.logged_in = self.is_project_loaded = self.is_user_loaded = False
         self.dlg.close()
         self.dlg_login.show()  # assume user wants to log into another account
 
@@ -1140,31 +1159,43 @@ class Mapflow(QObject):
         service = 'Mapflow' if 'mapflow' in response.request().url().authority() else 'SecureWatch'
         if error in (
             QNetworkReply.OperationCanceledError,  # timeout
-            QNetworkReply.ServiceUnavailableError  # HTTP 503
+            QNetworkReply.ServiceUnavailableError,  # HTTP 503
+            QNetworkReply.InternalServerError,  # HTTP 500
+            QNetworkReply.ConnectionRefusedError,
+            QNetworkReply.RemoteHostClosedError,
+            QNetworkReply.NetworkSessionFailedError,
         ):
             self.report_error(response, self.tr(service + ' is not responding. Please, try again.'))
         elif error == QNetworkReply.HostNotFoundError:  # offline
             self.alert(self.tr(service + ' requires Internet connection'))
             return
+        elif error in (
+            QNetworkReply.UnknownNetworkError,
+            QNetworkReply.ProxyConnectionRefusedError,
+            QNetworkReply.ProxyConnectionClosedError,
+            QNetworkReply.ProxyNotFoundError,
+            QNetworkReply.ProxyTimeoutError,
+            QNetworkReply.ProxyAuthenticationRequiredError,
+        ):
+            self.report_error(response, self.tr('Proxy error. Please, check your proxy settings.'))
 
     def report_error(self, response: QNetworkReply, title: str = None):
         """"""
-        error_text = response.errorString()
+        if response.error() == QNetworkReply.OperationCanceledError:
+            error_text = 'Request timed out'
+        else:
+            error_text = response.errorString()
         report = {
             'Error': error_text,
-            'Service': 'Mapflow' if 'mapflow' in response.request().url().authority() else 'SecureWatch',
+            'URL': response.request().url().toDisplayString(),
             'HTTP code': response.attribute(QNetworkRequest.HttpStatusCodeAttribute),
             'Qt code': response.error(),
             'Plugin version': self.plugin_version,
             'QGIS version': Qgis.QGIS_VERSION,
-            'Qt version': qVersion,
+            'Qt version': qVersion(),
         }
-        ErrorMessage(
-            self.dlg if self.dlg.isVisible() else self.dlg_login,
-            error_text,
-            title,
-            '%0a'.join(f'{key}:{value}' for key, value in report.items())
-        ).show()
+        email_body = '%0a'.join(f'{key}: {value}' for key, value in report.items())
+        ErrorMessage(QApplication.activeWindow(), error_text, title, email_body).show()
 
     def get_default_project_callback(self, response: QNetworkReply) -> None:
         """"""
@@ -1172,6 +1203,10 @@ class Mapflow(QObject):
         self.dlg.modelCombo.addItems([
             wd['name'] for wd in json.loads(response.readAll().data())['workflowDefs']
         ])
+        self.is_project_loaded = True
+        if self.is_user_loaded:
+            self.dlg_login.close()
+            self.show_main_dialog()
 
     def log_in_callback(self, response: QNetworkReply) -> None:
         """"""
@@ -1193,8 +1228,10 @@ class Mapflow(QObject):
         self.dlg.remainingLimit.setText(
             self.tr('Processing limit: {} sq.km').format(self.remainingLimit)
         )
-        self.dlg_login.close()
-        self.show_main_dialog()
+        self.is_user_loaded = True
+        if self.is_project_loaded:
+            self.dlg_login.close()
+            self.show_main_dialog()
 
     def show_main_dialog(self) -> None:
         """"""

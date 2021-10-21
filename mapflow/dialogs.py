@@ -76,4 +76,3 @@ class ErrorMessage(*uic.loadUiType(ui_path/'error_message.ui')):
             email_body +
             '"><span style=" text-decoration: underline; color:#0057ae;">Let us know</span></a></p></body></html>'
         )
-        print(self.mailTo.text())
