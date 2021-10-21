@@ -405,11 +405,10 @@ class Mapflow(QObject):
         username = self.dlg.providerUsername.text()
         password = self.dlg.providerPassword.text()
         if username or password:  # user has their own account
-            _, product = provider.split()
             try:
-                connect_id = self.settings.value('providers')[product]['connectId']
+                connect_id = self.settings.value('providers')[provider]['connectId']
             except KeyError:
-                self.show_connect_id_dialog(product)
+                self.show_connect_id_dialog(provider)
                 return
             url += '&CONNECTID=' + connect_id
             self.http.get(
