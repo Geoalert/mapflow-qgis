@@ -410,7 +410,6 @@ class Mapflow(QObject):
                 self.show_connect_id_dialog(provider)
                 return
             url += '&CONNECTID=' + connect_id
-            print('requesting meta')
             self.http.get(
                 url=url,
                 callback=self.get_maxar_metadata_callback,
@@ -440,7 +439,6 @@ class Mapflow(QObject):
 
     def get_maxar_metadata_callback(self, response: QNetworkReply, product: str) -> None:
         """"""
-        print('callback')
         # Memorize the product to prevent further errors if user changes item in the dropdown list
         layer_name = f'{product} metadata'
         # Save metadata to a file; I couldn't get WFS to work, or else no file would be necessary
