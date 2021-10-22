@@ -2,6 +2,9 @@
 <ui version="4.0">
  <class>ConnectIdDialog</class>
  <widget class="QDialog" name="ConnectIdDialog">
+  <property name="windowModality">
+   <enum>Qt::WindowModal</enum>
+  </property>
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -31,9 +34,6 @@
   <property name="windowTitle">
    <string notr="true">Connect ID</string>
   </property>
-  <property name="modal">
-   <bool>true</bool>
-  </property>
   <layout class="QGridLayout" name="gridLayout">
    <property name="bottomMargin">
     <number>7</number>
@@ -61,9 +61,9 @@
  <connections>
   <connection>
    <sender>buttonBox</sender>
-   <signal>accepted()</signal>
+   <signal>rejected()</signal>
    <receiver>ConnectIdDialog</receiver>
-   <slot>accept()</slot>
+   <slot>reject()</slot>
    <hints>
     <hint type="sourcelabel">
      <x>196</x>
@@ -77,9 +77,9 @@
   </connection>
   <connection>
    <sender>buttonBox</sender>
-   <signal>rejected()</signal>
+   <signal>accepted()</signal>
    <receiver>ConnectIdDialog</receiver>
-   <slot>reject()</slot>
+   <slot>accept()</slot>
    <hints>
     <hint type="sourcelabel">
      <x>196</x>

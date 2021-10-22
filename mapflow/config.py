@@ -1,23 +1,29 @@
 PLUGIN_NAME = 'Mapflow'
+MAPFLOW_DEFAULT_TIMEOUT = 5  # in seconds
 # PROCESSINGS
-PROCESSING_LIST_REFRESH_INTERVAL = 5  # in seconds
+PROCESSING_TABLE_REFRESH_INTERVAL = 6  # in seconds
 PROCESSING_TABLE_ID_COLUMN_INDEX = 5
 # MAXAR
-MAXAR_PRODUCTS = ('Maxar SecureWatch', 'Maxar Vivid', 'Maxar Basemaps')
-MAXAR_METADATA_URL = 'https://securewatch.digitalglobe.com/catalogservice/wfsaccess'
-MAXAR_METADATA_ATTRIBUTES = 'sourceUnit', 'productType', 'colorBandOrder', 'cloudCover', 'acquisitionDate', 'featureId'
+MAXAR_METADATA_ATTRIBUTES = 'productType', 'colorBandOrder', 'cloudCover', 'offNadirAngle', 'acquisitionDate', 'featureId'
 MAXAR_METADATA_ID_COLUMN_INDEX = MAXAR_METADATA_ATTRIBUTES.index('featureId')
-MAXAR_METADATA_REQUEST_PARAMS = {
-    'REQUEST': 'GetFeature',
-    'TYPENAME': 'DigitalGlobe:FinishedFeature',
-    'SERVICE': 'WFS',
-    'VERSION': '2.0.0',
-    'SRSNAME': 'EPSG:4326',
-    'FEATUREPROFILE': 'Default_Profile',
-    'WIDTH': 3000,
-    'HEIGHT': 3000
-}
 # MISC
+MAXAR_PRODUCTS = {
+    'Maxar SecureWatch': {
+        'url': 'https://securewatch.digitalglobe.com/earthservice/wmtsaccess?SERVICE=WMTS&VERSION=1.0.0&STYLE=&REQUEST=GetTile&LAYER=DigitalGlobe:ImageryTileService&FORMAT=image/jpeg&TileRow={y}&TileCol={x}&TileMatrixSet=EPSG:3857&TileMatrix=EPSG:3857:{z}',
+        'type': 'xyz',
+        'connectId': ''
+    },
+    'Maxar Vivid': {
+        'url': 'https://securewatch.digitalglobe.com/earthservice/wmtsaccess?SERVICE=WMTS&VERSION=1.0.0&STYLE=&REQUEST=GetTile&LAYER=DigitalGlobe:ImageryTileService&FORMAT=image/jpeg&TileRow={y}&TileCol={x}&TileMatrixSet=EPSG:3857&TileMatrix=EPSG:3857:{z}',
+        'type': 'xyz',
+        'connectId': ''
+    },
+    'Maxar Basemaps': {
+        'url': 'https://securewatch.digitalglobe.com/earthservice/wmtsaccess?SERVICE=WMTS&VERSION=1.0.0&STYLE=&REQUEST=GetTile&LAYER=DigitalGlobe:ImageryTileService&FORMAT=image/jpeg&TileRow={y}&TileCol={x}&TileMatrixSet=EPSG:3857&TileMatrix=EPSG:3857:{z}',
+        'type': 'xyz',
+        'connectId': ''
+    }
+}
 STYLES = {
     'Buildings Detection': 'buildings',
     'Buildings Detection With Heights': 'buildings',

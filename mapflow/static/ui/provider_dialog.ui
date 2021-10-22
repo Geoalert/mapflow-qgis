@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>CustomProviderDialog</class>
- <widget class="QDialog" name="CustomProviderDialog">
+ <class>ProviderDialog</class>
+ <widget class="QDialog" name="ProviderDialog">
+  <property name="windowModality">
+   <enum>Qt::WindowModal</enum>
+  </property>
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -29,10 +32,7 @@
    </size>
   </property>
   <property name="windowTitle">
-   <string>Custom provider</string>
-  </property>
-  <property name="modal">
-   <bool>true</bool>
+   <string notr="true">Provider</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <item row="0" column="0">
@@ -116,24 +116,8 @@
  <connections>
   <connection>
    <sender>buttonBox</sender>
-   <signal>accepted()</signal>
-   <receiver>CustomProviderDialog</receiver>
-   <slot>accept()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>248</x>
-     <y>254</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>157</x>
-     <y>274</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>buttonBox</sender>
    <signal>rejected()</signal>
-   <receiver>CustomProviderDialog</receiver>
+   <receiver>ProviderDialog</receiver>
    <slot>reject()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -143,6 +127,22 @@
     <hint type="destinationlabel">
      <x>286</x>
      <y>274</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>buttonBox</sender>
+   <signal>accepted()</signal>
+   <receiver>ProviderDialog</receiver>
+   <slot>accept()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>162</x>
+     <y>149</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>162</x>
+     <y>87</y>
     </hint>
    </hints>
   </connection>

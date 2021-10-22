@@ -1,36 +1,36 @@
 import sys  # Python version check for ensuring compatibility
 import json
 import os.path
-from typing import List, Dict, Optional, Union
+import tempfile
+from base64 import b64encode, b64decode
+from typing import List, Optional, Union
 from datetime import datetime, timedelta  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
-import requests
-from PyQt5.QtCore import (
-    QSettings, QCoreApplication, QTranslator, QPersistentModelIndex, QModelIndex,
-    QThread, Qt
-)
 from PyQt5.QtGui import QIcon
+from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
+from PyQt5.QtCore import (
+    QObject, QSettings, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion
+)
 from PyQt5.QtWidgets import (
-    QMessageBox, QFileDialog, QTableWidgetItem, QAction, QAbstractItemView, QLabel
+    QApplication, QMessageBox, QFileDialog, QTableWidgetItem, QAction, QAbstractItemView, QLabel,
+    QProgressBar
 )
 from qgis import processing as qgis_processing  # to avoid collisions
+from qgis.gui import QgsMessageBarItem
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature,
     QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsMapLayerType, Qgis,
-    QgsVectorFileWriter, QgsMessageLog
+    QgsVectorFileWriter, QgsRectangle
 )
 
-from .dialogs import MainDialog, LoginDialog, CustomProviderDialog, ConnectIdDialog
-from .workers import ProcessingFetcher, ProcessingCreator
+from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, ErrorMessage
+from .http import Http
 from . import helpers, config
 
 
-class Mapflow:
-    """This class represents the plugin.
-
-    It is instantiated by QGIS and shouldn't be used directly.
-    """
+class Mapflow(QObject):
+    """This class represents the plugin. It is instantiated by QGIS."""
 
     def __init__(self, iface) -> None:
         """Initialize the plugin.
@@ -39,15 +39,18 @@ class Mapflow:
         """
         # Save refs to key variables used throughout the plugin
         self.iface = iface
-        self.main_window = iface.mainWindow()
+        self.main_window = self.iface.mainWindow()
+        super().__init__(self.main_window)
         self.project = QgsProject.instance()
+        self.message_bar = self.iface.messageBar()
         self.plugin_dir = os.path.dirname(__file__)
+        self.temp_dir = tempfile.gettempdir()
         self.plugin_name = config.PLUGIN_NAME  # aliased here to be overloaded in submodules
-        # QGIS Settings will be used to store user credentials and various UI element state
+        # Settings will be used to store credentials and various UI customizations
         self.settings = QgsSettings()
-        # get the server environment to connect to (for admins)
-        mapflow_env = self.settings.value('variables/mapflow_env')
-        self.server = f'https://whitemaps-{mapflow_env or "production"}.mapflow.ai/rest'
+        # Get the server environment to connect to (for admins)
+        mapflow_env = self.settings.value('variables/mapflow_env') or 'production'
+        self.server = f'https://whitemaps-{mapflow_env}.mapflow.ai/rest'
         # Create a namespace for the plugin settings
         self.settings.beginGroup(self.plugin_name.lower())
         # By default, plugin adds layers to a group unless user explicitly deletes it
@@ -72,58 +75,49 @@ class Mapflow:
         # Init dialogs
         self.dlg = MainDialog(self.main_window)
         self.dlg_login = LoginDialog(self.main_window)
-        self.dlg_custom_provider = CustomProviderDialog(self.dlg)
+        self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
+        self.dlg_login.logIn.clicked.connect(self.read_mapflow_token)
+        self.dlg_login.finished.connect(self.clean_up_login_dialog)
+        self.dlg_provider = ProviderDialog(self.dlg)
+        self.dlg_provider.accepted.connect(self.add_or_edit_provider)
         self.dlg_connect_id = ConnectIdDialog(self.dlg)
-        self.red_border_style = 'border-color: rgb(239, 41, 41);'  # used to highlight invalid inputs
-        self.timeout_alert = QMessageBox(
-            QMessageBox.Warning, self.plugin_name,
-            self.tr("Sorry, we couldn't connect to Mapflow. Please try again later."
-                    'If the problem remains, please, send us an email to help@geoalert.io.'),
-            parent=self.dlg
-        )
-        self.offline_alert = QMessageBox(
-            QMessageBox.Information,
-            self.plugin_name,
-            self.tr('Mapflow requires Internet connection'),
-            parent=self.dlg
-        )
         # Display the plugin's version
         metadata_parser = ConfigParser()
         metadata_parser.read(os.path.join(self.plugin_dir, 'metadata.txt'))
-        plugin_name_and_version = f'{self.plugin_name} {metadata_parser.get("general", "version")}'
-        self.dlg.help.setText(self.dlg.help.text().replace('Mapflow', plugin_name_and_version))
-        # Used for previewing a Maxar image by double-clicking its row
-        self.current_maxar_metadata_product = ''
-        # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
+        self.plugin_version = metadata_parser.get('general', 'version')
+        self.dlg.help.setText(
+            self.dlg.help.text().replace('Mapflow', f'{self.plugin_name} {self.plugin_version}')
+        )
+        # Initialize HTTP request sender
+        self.http = Http(self.plugin_version, self.default_error_handler)
         # Check if there are stored credentials
-        self.logged_in = bool(self.settings.value('serverLogin') and self.settings.value('serverPassword'))
-        self.dlg_login.username.setText(self.settings.value('serverLogin'))
-        self.dlg_login.password.setText(self.settings.value('serverPassword'))
+        self.is_user_loaded = False
+        self.is_project_loaded = False
+        self.logged_in = False
+        # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or 18))
-        if self.settings.value('customProviderSaveAuth'):
-            self.dlg.customProviderSaveAuth.setChecked(True)
-            self.dlg.customProviderLogin.setText(self.settings.value('customProviderLogin'))
-            self.dlg.customProviderPassword.setText(self.settings.value('customProviderPassword'))
-        # Restore custom providers
-        self.custom_provider_config = os.path.join(self.plugin_dir, 'custom_providers.json')
-        with open(self.custom_provider_config) as f:
-            self.custom_providers = json.load(f)
-        self.dlg.rasterCombo.setAdditionalItems((*self.custom_providers, 'Mapbox'))
-        self.dlg.customProviderCombo.addItems(self.custom_providers)
+        if self.settings.value('providerSaveAuth'):
+            self.dlg.providerSaveAuth.setChecked(True)
+            self.dlg.providerUsername.setText(self.settings.value('providerUsername'))
+            self.dlg.providerPassword.setText(self.settings.value('providerPassword'))
+        self.update_providers(self.settings.value('providers') or config.MAXAR_PRODUCTS)
         # Hide the ID columns as only needed for table operations, not the user
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
         # SET UP SIGNALS & SLOTS
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
+        self.dlg_connect_id.accepted.connect(self.edit_connect_id)
         # Connect buttons
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         self.dlg.selectTif.clicked.connect(self.select_tif)
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.rasterCombo.currentTextChanged.connect(self.toggle_use_image_extent_as_aoi)
-        self.dlg.useImageExtentAsAoi.stateChanged.connect(lambda is_checked: self.dlg.polygonCombo.setEnabled(not is_checked))
+        self.dlg.useImageExtentAsAoi.stateChanged.connect(
+            lambda is_checked: self.dlg.polygonCombo.setEnabled(not is_checked)
+        )
         self.dlg.startProcessing.clicked.connect(self.create_processing)
         # Calculate AOI area
         self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area)
@@ -131,19 +125,36 @@ class Mapflow:
         self.dlg.useImageExtentAsAoi.toggled.connect(self.calculate_aoi_area)
         self.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
         # Processings
-        self.dlg.processingsTable.cellDoubleClicked.connect(self.download_processing_results)
+        self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
-        # Custom provider
+        # Providers
         self.dlg.preview.clicked.connect(self.preview)
-        self.dlg.addCustomProvider.clicked.connect(self.add_custom_provider)
-        self.dlg.editCustomProvider.clicked.connect(self.edit_provider)
-        self.dlg.removeCustomProvider.clicked.connect(self.remove_custom_provider)
+        self.dlg.addProvider.clicked.connect(self.dlg_provider.show)
+        self.dlg.addProvider.clicked.connect(lambda: self.dlg_provider.setProperty('mode', 'add'))
+        self.dlg.editProvider.clicked.connect(self.edit_provider)
+        self.dlg.editProvider.clicked.connect(lambda: self.dlg_provider.setProperty('mode', 'edit'))
+        self.dlg.removeProvider.clicked.connect(self.remove_provider)
         self.dlg.maxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
         # Maxar
         self.dlg.maxarMetadataTable.itemSelectionChanged.connect(self.highlight_maxar_image)
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
         self.dlg.maxarMetadataTable.cellDoubleClicked.connect(self.preview)
-        self.dlg.customProviderCombo.currentTextChanged.connect(self.limit_max_zoom_for_maxar)
+        self.dlg.providerCombo.currentTextChanged.connect(self.limit_max_zoom_for_maxar)
+        self.dlg.providerCombo.currentTextChanged.connect(self.clear_metadata_table)
+        # Poll processings
+        self.processing_fetch_timer = QTimer(self.dlg)
+        self.processing_fetch_timer.setInterval(config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
+        self.processing_fetch_timer.timeout.connect(
+            lambda: self.http.get(
+                url=f'{self.server}/processings',
+                callback=self.fill_out_processings_table,
+            )
+        )
+
+    def clear_metadata_table(self) -> None:
+        """Reset Maxar metadata table when user changes the provider in the list."""
+        self.dlg.maxarMetadataTable.clearContents()
+        self.dlg.maxarMetadataTable.setRowCount(0)
 
     def limit_max_zoom_for_maxar(self, provider: str) -> None:
         """Limit zoom to 13 for Maxar if user is not a premium one."""
@@ -162,8 +173,10 @@ class Mapflow:
     def add_layer(self, layer: QgsMapLayer) -> None:
         """Add layers created by the plugin to the legend.
 
-        By default, layers are added to a group with the same name as the plugin. If the group has been
-        deleted by the user, assume they prefer to have the layers outside the group, and add them to root.
+        By default, layers are added to a group with the same name as the plugin.
+        If the group has been deleted by the user, assume they prefer to not use
+        the group, and add layers to the legend root.
+
         :param layer: A vector or raster layer to be added.
         """
         self.layer_group = self.layer_tree_root.findGroup(self.settings.value('layerGroup'))
@@ -183,26 +196,11 @@ class Mapflow:
         else:  # assume user opted to not use a group, add layers as usual
             self.project.addMapLayer(layer)
 
-    def restore_maxar_metadata_product(self) -> None:
-        """Reset provider combo to match the current metadata table state.
-
-        SecureWatch single-image requests are constructed based on the current selection
-        in the metadata table and with the current item in the provider list. The user may
-        change list item after requesting metadata. To avoid ambiguity, this function set
-        the provider combo to the current metadata product.
-        """
-        if (
-            self.dlg.customProviderCombo.currentText() != self.current_maxar_metadata_product
-            and self.dlg.maxarMetadataTable.selectedItems()
-        ):
-            self.dlg.customProviderCombo.setCurrentText(self.current_maxar_metadata_product)
-
     def highlight_maxar_image(self) -> None:
         """Select an image footprint in Maxar metadata layer when it's selected in the table.
 
         Is called by selecting (clicking on) a row in Maxar metadata table.
         """
-        self.restore_maxar_metadata_product()
         selected_items = self.dlg.maxarMetadataTable.selectedItems()
         image_id = selected_items[config.MAXAR_METADATA_ID_COLUMN_INDEX].text() if selected_items else ''
         try:
@@ -210,129 +208,85 @@ class Mapflow:
         except RuntimeError:  # layer has been deleted
             pass
         # Sync the raster combo in the Processing tab so user doesn't forget to set Maxar there
-        self.dlg.rasterCombo.setCurrentText(self.dlg.customProviderCombo.currentText())
+        self.dlg.rasterCombo.setCurrentText(self.dlg.providerCombo.currentText())
 
-    def remove_custom_provider(self) -> None:
-        """Delete a an entry from the list of providers and custom_providers.json.
+    def remove_provider(self) -> None:
+        """Delete a web tile provider from the list of registered providers.
 
         Is called by clicking the red minus button near the provider dropdown list.
         """
-        provider = self.dlg.customProviderCombo.currentText()
+        provider = self.dlg.providerCombo.currentText()
         # Ask for confirmation
-        if self.alert(self.tr('Permanently remove ') + provider + '?', 'question') == QMessageBox.No:
-            return
-        del self.custom_providers[provider]
-        self.update_custom_provider_config()
-        self.dlg.customProviderCombo.removeItem(self.dlg.customProviderCombo.currentIndex())
-        self.dlg.rasterCombo.setAdditionalItems((*self.custom_providers, 'Mapbox'))
+        if self.alert(self.tr('Permanently remove {}?'.format(provider)), QMessageBox.Question):
+            providers = self.settings.value('providers')
+            del providers[provider]
+            self.settings.setValue('providers', providers)
+            self.dlg.providerCombo.removeItem(self.dlg.providerCombo.currentIndex())
+            self.dlg.rasterCombo.setAdditionalItems(('Mapbox', *providers))
 
-    def validate_custom_provider(self) -> None:
-        """Check if provider inputs are valid. If not, outline the invalid field with red."""
-        for attr in ('name', 'url'):
-            field = getattr(self.dlg_custom_provider, attr)
-            field_value = field.text()
-            if field_value:
-                field.setStyleSheet('')  # remove red outline if previously invalid
-            else:
-                field.setStyleSheet(self.red_border_style)
-                return False
-        return True
-
-    def update_custom_provider_config(self) -> None:
-        """Write changes to file after a provider has been added, removed or modified."""
-        with open(self.custom_provider_config, 'w') as f:
-            json.dump(self.custom_providers, f, indent=4)
-
-    def clear_fields(self, *args) -> None:
-        """Empty the fields and remove the red outline (invalid input signal), if any.
-
-        :param args: A list of fields to clear.
-        """
-        for field in args:
-            field.setStyleSheet('')
-            field.setText('')
-
-    def add_custom_provider(self) -> None:
-        """Add a web imagery provider.
-
-        Is called by the corresponding button.
-        """
-        while self.dlg_custom_provider.exec():
-            if not self.validate_custom_provider():
-                continue
-            name = self.dlg_custom_provider.name.text()
-            if name in self.custom_providers:
-                self.alert(name + self.tr(' already exists. Click edit button to update it.'))
-                break
-            self.custom_providers[name] = {
-                'url': self.dlg_custom_provider.url.text(),
-                'type': self.dlg_custom_provider.type.currentText()
-            }
-            self.update_custom_provider_config()
-            self.dlg.rasterCombo.setAdditionalItems((*self.custom_providers, 'Mapbox'))
-            self.dlg.rasterCombo.setCurrentText(name)
-            self.dlg.customProviderCombo.addItem(name)
-            self.dlg.customProviderCombo.setCurrentText(name)
-            break
-        self.clear_fields(self.dlg_custom_provider.name, self.dlg_custom_provider.url)
+    def add_or_edit_provider(self) -> None:
+        """Add a web imagery provider or commit edits to an existing one."""
+        providers = self.settings.value('providers')
+        if self.dlg_provider.property('mode') == 'edit':  # remove the old definition
+            del providers[self.dlg.providerCombo.currentText()]
+        name = self.dlg_provider.name.text()
+        # Add the new one
+        providers[name] = {
+            'url': self.dlg_provider.url.text(),
+            'type': self.dlg_provider.type.currentText()
+        }
+        # Update the combos
+        self.update_providers(providers)
+        self.dlg.providerCombo.setCurrentText(name)
+        self.dlg.rasterCombo.setCurrentText(name)
 
     def edit_provider(self) -> None:
-        """Edit a web imagery provider.
+        """Prepare and show the provider edit dialog.
 
         Is called by the corresponding button.
         """
-        provider = self.dlg.customProviderCombo.currentText()
-        edit_method = self.edit_connect_id if provider in config.MAXAR_PRODUCTS else self.edit_custom_provider
-        edit_method(provider)
+        provider = self.dlg.providerCombo.currentText()
+        if provider in config.MAXAR_PRODUCTS:
+            self.show_connect_id_dialog(provider)
+        else:
+            self.dlg_provider.setWindowTitle(provider)
+            # Fill out the edit dialog with the current data
+            providers = self.settings.value('providers')
+            self.dlg_provider.name.setText(provider)
+            self.dlg_provider.url.setText(providers[provider]['url'])
+            self.dlg_provider.type.setCurrentText(providers[provider]['type'])
+            # Open the edit dialog
+            self.dlg_provider.show()
 
-    def edit_custom_provider(self, provider) -> None:
-        """Change a provider's name, URL or type.
+    def update_providers(self, providers: dict) -> None:
+        """Update imagery & providers dropdown list after editing or adding a new one."""
+        self.dlg.rasterCombo.setAdditionalItems((*providers, 'Mapbox'))
+        self.dlg.providerCombo.clear()
+        self.dlg.providerCombo.addItems(providers)
+        self.settings.setValue('providers', providers)
 
-        :param provider: Provider's name, as in the config and dropdown list.
+    def show_connect_id_dialog(self, product: str) -> None:
+        """Prepare and show the Connect ID editing dialog.
+
+        :param product: Maxar product whose Connect ID will be edited.
         """
-        # Fill out the edit dialog with the current data
-        self.dlg_custom_provider.setWindowTitle(provider)
-        self.dlg_custom_provider.name.setText(provider)
-        self.dlg_custom_provider.url.setText(self.custom_providers[provider]['url'])
-        self.dlg_custom_provider.type.setCurrentText(self.custom_providers[provider]['type'])
-        # Open the edit dialog
-        while self.dlg_custom_provider.exec():
-            if not self.validate_custom_provider():
-                continue
-            name = self.dlg_custom_provider.name.text()
-            # Remove the old definition first
-            del self.custom_providers[provider]
-            # Add the new definition
-            self.custom_providers[name] = {
-                'url': self.dlg_custom_provider.url.text(),
-                'type': self.dlg_custom_provider.type.currentText()
-            }
-            self.dlg.customProviderCombo.removeItem(self.dlg.customProviderCombo.currentIndex())
-            self.update_custom_provider_config()
-            self.dlg.rasterCombo.setAdditionalItems((*self.custom_providers, 'Mapbox'))
-            self.dlg.customProviderCombo.addItem(name)
-            self.dlg.customProviderCombo.setCurrentText(name)
-            break
-        self.clear_fields(self.dlg_custom_provider.name, self.dlg_custom_provider.url)
+        # Display the current Connect ID
+        providers = self.settings.value('providers')
+        self.dlg_connect_id.connectId.setText(providers[product]['connectId'])
+        self.dlg_connect_id.connectId.setCursorPosition(0)
+        # Specify the product being edited in the window title
+        self.dlg_connect_id.setWindowTitle(f'{product} - {self.dlg_connect_id.windowTitle()}')
+        self.dlg_connect_id.show()
 
-    def edit_connect_id(self, product) -> None:
+    def edit_connect_id(self) -> None:
         """Change the Connect ID for the given Maxar product.
 
         :param provider: Maxar product name, as in the config and dropdown list.
         """
-        current_id = self.custom_providers[product]['connectId']
-        self.dlg_connect_id.connectId.setText(current_id)
-        # Specify the product being edited in the window title
-        self.dlg_connect_id.setWindowTitle(f'{product} - {self.dlg_connect_id.windowTitle()}')
-        while self.dlg_connect_id.exec():
-            if not self.dlg_connect_id.connectId.hasAcceptableInput():
-                self.dlg_connect_id.connectId.setStyleSheet(self.red_border_style)
-                continue
-            new_id = self.dlg_connect_id.connectId.text()
-            self.custom_providers[product]['connectId'] = new_id
-            self.update_custom_provider_config()
-            break
-        self.clear_fields(self.dlg_connect_id.connectId)
+        provider = self.dlg.providerCombo.currentText()
+        providers = self.settings.value('providers')
+        providers[provider]['connectId'] = self.dlg_connect_id.connectId.text()
+        self.settings.setValue('providers', providers)
 
     def monitor_polygon_layer_feature_selection(self, layers: List[QgsMapLayer]) -> None:
         """Set up connection between feature selection in polygon layers and AOI area calculation.
@@ -352,7 +306,7 @@ class Mapflow:
 
         :param provider: A combo box entry representing an imagery provider
         """
-        enabled = provider in (*self.custom_providers, 'Mapbox')  # False if GeoTIFF
+        enabled = provider in (*self.settings.value('providers', {}), 'Mapbox')  # False if GeoTIFF
         # There's no extent for a tile provider
         self.dlg.useImageExtentAsAoi.setEnabled(not enabled)
         # Presume user would like to process within its extent
@@ -378,18 +332,12 @@ class Mapflow:
     def check_if_output_directory_is_selected(self) -> bool:
         """Check if the user specified an existing output dir.
 
-        The 'outputDirectory' field in the Settings tab is checked. If it doesn't contain a path to an
-        existing directory, prompt the user to select one by opening a modal file selection dialog.
-
         Returns True if an existing directory is specified or a new directory has been selected, else False.
         """
-        if os.path.exists(self.dlg.outputDirectory.text()):
+        if os.path.exists(self.dlg.outputDirectory.text()) or self.select_output_directory():
             return True
-        elif self.select_output_directory():
-            return True
-        else:
-            self.alert(self.tr('Please, specify an existing output directory'))
-            return False
+        self.alert(self.tr('Please, specify an existing output directory'))
+        return False
 
     def select_tif(self) -> None:
         """Open a file selection dialog for the user to select a GeoTIFF for processing.
@@ -412,21 +360,27 @@ class Mapflow:
 
         Is called by clicking the 'Get Image Metadata' button in the main dialog.
         """
-        # Memorize the product to prevent further errors if user changes item in the dropdown list
-        self.current_maxar_metadata_product = self.dlg.customProviderCombo.currentText()
-        params = config.MAXAR_METADATA_REQUEST_PARAMS.copy()
-        try:
-            params['CONNECTID'] = self.custom_providers[self.current_maxar_metadata_product]['connectId']
-        except KeyError:
+        self.save_provider_auth()
+        provider = self.dlg.providerCombo.currentText()
+        # Perform checks
+        if provider not in config.MAXAR_PRODUCTS:
             self.alert(self.tr('Select a Maxar product in the provider list'))
-            return
-        self.save_custom_provider_auth()
-        if not self.check_if_output_directory_is_selected():
             return
         aoi_layer = self.dlg.maxarAOICombo.currentLayer()
         if not aoi_layer:
             self.alert(self.tr('Please, select an area of interest'))
             return
+        # Start off with the static params
+        params = {
+            'REQUEST': 'GetFeature',
+            'TYPENAME': 'DigitalGlobe:FinishedFeature',
+            'SERVICE': 'WFS',
+            'VERSION': '2.0.0',
+            'SRSNAME': 'EPSG:4326',
+            'FEATUREPROFILE': 'Default_Profile',
+            'WIDTH': 3000,
+            'HEIGHT': 3000
+        }
         # Get the AOI feature within the layer
         if aoi_layer.featureCount() == 1:
             aoi_feature = next(aoi_layer.getFeatures())
@@ -446,51 +400,61 @@ class Mapflow:
         # Get the '{min_lon},{min_lat} : {max_lon},{max_lat}' (SW-NE) representation of the AOI's bbox
         extent = aoi.boundingBox().toString()
         # Change lon,lat to lat,lon for Maxar
-        coords = [reversed(position.split(',')) for position in extent.split(':')]
+        coords = [position.split(',')[::-1] for position in extent.split(':')]
         params['BBOX'] = ','.join([coord.strip() for position in coords for coord in position])
+        query_params = '&'.join(f'{key}={val}' for key, val in params.items())
+        url = 'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?' + query_params
         # Read credentials
-        login = self.dlg.customProviderLogin.text()
-        password = self.dlg.customProviderPassword.text()
-        if login or password:  # user has their own account
-            service = 'SecureWatch'
-            method = 'get'
-            kwargs = {
-                'url': config.MAXAR_METADATA_URL,
-                'params': params,
-                'auth': (login, password),
-                'timeout': 5
-            }
+        username = self.dlg.providerUsername.text()
+        password = self.dlg.providerPassword.text()
+        if username or password:  # user has their own account
+            connect_id = self.settings.value('providers')[provider]['connectId']
+            if not connect_id:
+                self.show_connect_id_dialog(provider)
+                return
+            url += '&CONNECTID=' + connect_id
+            self.http.get(
+                url=url,
+                callback=self.get_maxar_metadata_callback,
+                callback_kwargs={'product': provider},
+                error_handler=self.get_maxar_metadata_error_handler,
+                basic_auth=f'Basic {b64encode(f"{username}:{password}".encode()).decode()}'.encode(),
+            )
         else:  # assume user wants to use our account, proxy thru Mapflow
-            service = 'Mapflow'
-            method = 'post'
-            params = '&'.join(f'{key}={val}' for key, val in params.items())
-            kwargs = {
-                'url': self.server + '/meta',
-                'json': {'url': config.MAXAR_METADATA_URL + '?' + params},
-                'auth': (self.login, self.password),
-                'timeout': 10
-            }
-        try:
-            r = getattr(requests, method)(**kwargs)
-        except (requests.ConnectionError, requests.Timeout):  # check for network errors
-            self.alert(service + self.tr(' is not responding. Please, try again later.'))
-            return
-        try:
-            r.raise_for_status()  # check for HTTP errors
-        except requests.HTTPError:
-            if r.status_code in (401, 403) and service == 'SecureWatch':
-                self.alert(self.tr('Please, check your credentials'), kind='warning')
-                return
-            elif r.status_code >= 500:
-                self.alert(service + self.tr(' is not responding. Please, try again later.'))
-                return
-        layer_name = f'{self.current_maxar_metadata_product} metadata'
+            self.http.post(
+                url=f'{self.server}/meta',
+                callback=self.get_maxar_metadata_callback,
+                callback_kwargs={'product': provider},
+                body=json.dumps({
+                    'url': url,
+                    'connectId': provider.split()[1].lower()
+                }).encode(),
+                timeout=7
+            )
+
+    def get_maxar_metadata_error_handler(self, response: QNetworkReply) -> None:
+        """Error handler for metadata requests.
+
+        :param response: The HTTP response.
+        """
+        error = response.error()
+        if error == QNetworkReply.ContentAccessDenied:
+            self.alert(self.tr('Please, check your credentials'))
+        else:
+            self.report_error(response, self.tr("We couldn't get metadata from Maxar"))
+
+    def get_maxar_metadata_callback(self, response: QNetworkReply, product: str) -> None:
+        """Handle metadata request' response in case of success.
+
+        :param response: The HTTP response.
+        :param product: Maxar product whose metadata was requested.
+        """
+        # Memorize the product to prevent further errors if user changes item in the dropdown list
+        layer_name = f'{product} metadata'
         # Save metadata to a file; I couldn't get WFS to work, or else no file would be necessary
-        output_file_name = os.path.join(
-            self.dlg.outputDirectory.text(), f'{layer_name.lower().replace(" ", "_")}.gml'
-        )
+        output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex()) + '.gml'
         with open(output_file_name, 'wb') as f:
-            f.write(r.content)
+            f.write(response.readAll().data())
         self.metadata_layer = QgsVectorLayer(output_file_name, layer_name, 'ogr')
         self.add_layer(self.metadata_layer)
         # Add style
@@ -501,8 +465,9 @@ class Mapflow:
         self.maxar_metadata_extents = {feature['featureId']: feature for feature in features}
         # Format decimals and dates
         for feature in features:
-            feature['acquisitionDate'] = feature['acquisitionDate'][:10]  # only date
-            # Round up cloud cover to two decimal numbers if it's provided
+            feature['acquisitionDate'] = feature['acquisitionDate'][:16]  # no seconds
+            if feature['offNadirAngle']:
+                feature['offNadirAngle'] = round(feature['offNadirAngle'])
             if feature['cloudCover']:
                 feature['cloudCover'] = round(feature['cloudCover'], 2)
         # Fill out the table
@@ -528,7 +493,7 @@ class Mapflow:
         """Display the AOI size in sq.km.
 
         Users are charged by the amount of sq km they process. So it's important for them to know
-        the size of the current AOI. 
+        the size of the current AOI.
         An AOI must be a single feature, or the extent of a GeoTIFF layer, so the area is only displayed when either:
             a) the layer in the polygon combo has a single feature, or, if more, a single feature is selected in it
             b) 'Use image extent' is checked and the current raster combo entry is a GeoTIFF layer
@@ -540,12 +505,12 @@ class Mapflow:
             a polygon or raster layer (combo item changed),
             or the state of the 'Use image extent' checkbox
         """
-        if arg is None:  # 'virtual' layer: Mapbox or custom provider
+        if arg is None:  # 'virtual' layer: a web tile provider
             layer = self.dlg.polygonCombo.currentLayer()
             if not layer:
                 self.dlg.labelAoiArea.setText('')
                 return
-        elif isinstance(arg, list) and not self.dlg.useImageExtentAsAoi.isChecked():  # feature selection changed
+        elif isinstance(arg, list):  # feature selection changed
             layer = self.dlg.polygonCombo.currentLayer()
             # All polygon layers are monitored so have to check if it's the one in the combo
             if layer != self.iface.activeLayer():
@@ -583,35 +548,47 @@ class Mapflow:
         self.dlg.labelAoiArea.setText(label)
 
     def delete_processings(self) -> None:
-        """Delete one or more processings on the server.
+        """Delete one or more processings from the server.
 
         Asks for confirmation in a pop-up dialog. Multiple processings can be selected.
-        Selected processings are immediately deleted from the table.
-
         Is called by clicking the deleteProcessings ('Delete') button.
         """
-        selected_rows: List[QModelIndex] = self.dlg.processingsTable.selectionModel().selectedRows()
-        if not selected_rows:
-            return
-        # Ask for confirmation
-        if self.alert(self.tr('Delete {} processing(s)?').format(len(selected_rows)), 'question') == QMessageBox.No:
-            return
-        # QPersistentModel index allows deleting rows sequentially while preserving their original indexes
-        for index in [QPersistentModelIndex(row) for row in selected_rows]:
-            row = index.row()
-            pid = self.dlg.processingsTable.item(row, config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
-            name = self.dlg.processingsTable.item(row, 0).text()
-            try:
-                r = requests.delete(f'{self.server}/processings/{pid}', auth=self.server_basic_auth, timeout=5)
-            except requests.ConnectionError:
-                self.offline_alert.show()
-                return
-            except requests.Timeout:
-                self.timeout_alert.show()
-                return
-            r.raise_for_status()
-            self.dlg.processingsTable.removeRow(row)
-            self.processing_names.remove(name)
+        # Pause refreshing processings table to avoid conflicts
+        self.processing_fetch_timer.stop()
+        selected_ids = [
+            self.dlg.processingsTable.item(index.row(), config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+            for index in self.dlg.processingsTable.selectionModel().selectedRows()
+        ]
+        # Ask for confirmation if there are selected rows
+        if selected_ids and self.alert(
+            self.tr('Delete selected processings?'), QMessageBox.Question
+        ):
+            for id_ in selected_ids:
+                self.http.delete(
+                    url=f'{self.server}/processings/{id_}',
+                    callback=self.delete_processings_callback,
+                    callback_kwargs={'id_': id_},
+                    error_handler=self.delete_processings_error_handler
+                )
+
+    def delete_processings_callback(self, response: QNetworkReply, id_: str) -> None:
+        """Delete processings from the table after they've been successfully
+        deleted from the server.
+
+        :param response: The HTTP response.
+        :param _id: ID of the deleted processing.
+        """
+        row = self.dlg.processingsTable.findItems(id_, Qt.MatchExactly)[0].row()
+        self.processing_names.remove(self.dlg.processingsTable.item(row, 0).text())
+        self.dlg.processingsTable.removeRow(row)
+        self.processing_fetch_timer.start()
+
+    def delete_processings_error_handler(self, response: QNetworkReply) -> None:
+        """Error handler for processing deletion request.
+
+        :param response: The HTTP response.
+        """
+        self.report_error(response, self.tr("Error deleting a processing"))
 
     def create_processing(self) -> None:
         """Create and start a processing on the server.
@@ -632,90 +609,97 @@ class Mapflow:
             self.alert(self.tr('Please, select an area of interest'))
             return
         if self.remainingLimit < self.aoi_size:
-            self.alert(self.tr('Processing limit exceeded'), kind='critical')
+            self.alert(self.tr('Processing limit exceeded'))
             return
         if self.aoi_area_limit < self.aoi_size:
             self.alert(self.tr(
                 'Up to {} sq km can be processed at a time. '
                 'Try splitting up your area of interest.'
-            ).format(self.aoi_area_limit), kind='critical')
+            ).format(self.aoi_area_limit))
             return
-        auth_fields = (self.dlg.customProviderLogin.text(), self.dlg.customProviderPassword.text())
-        if any(auth_fields) and not all(auth_fields):
-            self.alert(self.tr('Invalid custom provider credentials'), kind='warning')
-        update_cache = str(self.dlg.updateCache.isChecked())  # server fails if bool
         raster_option = self.dlg.rasterCombo.currentText()
-        worker_kwargs = {
-            'processing_name': processing_name,
-            'server': self.server,
-            'auth': self.server_basic_auth,
-            'wd': self.dlg.modelCombo.currentText(),
+        if raster_option in config.MAXAR_PRODUCTS and not self.is_premium_user:
+            ErrorMessage(
+                self.dlg,
+                self.tr('Click on the link below to send us an email'),
+                self.tr('Upgrade your subscription to process Maxar imagery'),
+                self.tr(
+                    "I'd like to upgrade my subscription to Mapflow Processing API "
+                    'to be able to process Maxar imagery.'
+                )
+            ).show()
+            return
+        self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
+        imagery = self.dlg.rasterCombo.currentLayer()
+        if imagery:  # check if local raster is a GeoTIFF
+            path = imagery.dataProvider().dataSourceUri()
+            if not os.path.splitext(path)[-1] in ('.tif', '.tiff'):
+                self.alert(self.tr('Please, select a GeoTIFF layer'))
+                return
+        processing_params = {
+            'name': processing_name,
+            'wdName': self.dlg.modelCombo.currentText(),
             'meta': {  # optional metadata
                 'source-app': 'qgis',
-                'source': 'maxar' if raster_option in config.MAXAR_PRODUCTS else raster_option.lower()
+                'source': raster_option.lower()
             }
         }
         params = {}  # processing parameters
-        current_raster_layer: QgsRasterLayer = self.dlg.rasterCombo.currentLayer()
-        # Local GeoTIFF
-        if current_raster_layer:
-            if not os.path.splitext(current_raster_layer.dataProvider().dataSourceUri())[-1] in ('.tif', '.tiff'):
-                self.alert(self.tr('Please, select a GeoTIFF layer'))
-                return
-            # Upload the image to the server
-            worker_kwargs['tif'] = current_raster_layer
-            worker_kwargs['aoi'] = helpers.get_layer_extent(current_raster_layer, self.project.transformContext())
-            worker_kwargs['meta']['source'] = 'tif'
-            params['source_type'] = 'tif'
-        elif raster_option != 'Mapbox':  # non-default provider
-            params['url'] = self.custom_providers[raster_option]['url']
-            if raster_option in config.MAXAR_PRODUCTS:  # add the Connect ID and CQL Filter, if any
-                params['url'] += f'&CONNECTID={self.custom_providers[raster_option]["connectId"]}&'
+        transform_context = self.project.transformContext()
+        providers = self.settings.value('providers')
+        if raster_option in providers:
+            params['raster_login'] = self.dlg.providerUsername.text()
+            params['raster_password'] = self.dlg.providerPassword.text()
+            params['url'] = providers[raster_option]['url']
+            if raster_option in config.MAXAR_PRODUCTS:  # add Connect ID and CQL Filter, if any
+                processing_params['meta']['source'] = 'maxar'
+                if params['raster_login'] or params['raster_password']:  # user's own account
+                    params['url'] += '&CONNECTID=' + providers[raster_option]['connectId']
+                else:  # our account
+                    processing_params['meta']['maxar_product'] = raster_option.split()[1].lower()
                 image_id = self.get_maxar_image_id()
                 if image_id:
-                    params['url'] += f'CQL_FILTER=feature_id=%27{image_id}%27'
-            params['source_type'] = self.custom_providers[raster_option]['type']
+                    params['url'] += f'&CQL_FILTER=feature_id=%27{image_id}%27'
+            params['source_type'] = providers[raster_option]['type']
             if params['source_type'] == 'wms':
                 params['target_resolution'] = 0.000005  # for the 18th zoom
-            params['cache_raster_update'] = update_cache
-            params['raster_login'] = self.dlg.customProviderLogin.text()
-            params['raster_password'] = self.dlg.customProviderPassword.text()
-            self.save_custom_provider_auth()
-        worker_kwargs['params'] = params
-        if not self.dlg.useImageExtentAsAoi.isChecked():
+            params['cache_raster_update'] = str(self.dlg.updateCache.isChecked())
+            self.save_provider_auth()
+        processing_params['params'] = params
+        # Get processing AOI
+        if self.dlg.useImageExtentAsAoi.isChecked():
+            aoi_geometry = helpers.get_layer_extent(imagery, transform_context)
+        else:
             aoi_layer = self.dlg.polygonCombo.currentLayer()
-            if aoi_layer.featureCount() == 1:
+            # AOI must be either the only feature or the only selected feature in its layer
+            feature_count = aoi_layer.featureCount()
+            selected_features = list(aoi_layer.getSelectedFeatures())
+            if feature_count == 1:
                 aoi_feature = next(aoi_layer.getFeatures())
-            elif len(list(aoi_layer.getSelectedFeatures())) == 1:
-                aoi_feature = next(aoi_layer.getSelectedFeatures())
-            elif aoi_layer.featureCount() == 0:
+            elif len(selected_features) == 1:
+                aoi_feature = selected_features[0]
+            elif feature_count == 0:
                 self.alert(self.tr('Your AOI layer is empty'))
                 return
             else:
                 self.alert(self.tr('Please, select a single feature in your AOI layer'))
                 return
+            aoi_geometry = aoi_feature.geometry()
             # Reproject it to WGS84 if the layer has another CRS
-            layer_crs: QgsCoordinateReferenceSystem = aoi_layer.crs()
+            layer_crs = aoi_layer.crs()
             if layer_crs != helpers.WGS84:
-                worker_kwargs['aoi'] = helpers.to_wgs84(
-                    aoi_feature.geometry(),
-                    layer_crs,
-                    self.project.transformContext()
-                )
-            else:
-                worker_kwargs['aoi'] = aoi_feature.geometry()
-            # Clip AOI to image if a single Maxar image is requested
+                aoi_geometry = helpers.to_wgs84(aoi_geometry, layer_crs, transform_context)
+            # Clip AOI to image extent if a single Maxar image is requested
             selected_image = self.dlg.maxarMetadataTable.selectedItems()
             if raster_option in config.MAXAR_PRODUCTS and selected_image:
-                # Recreate AOI layer; shall we change helpers.to_wgs84 to return layer, not geometry?
-                aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326', 'aoi', 'memory')
+                aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
                 aoi = QgsFeature()
-                aoi.setGeometry(worker_kwargs['aoi'])
+                aoi.setGeometry(aoi_geometry)
                 aoi_layer.dataProvider().addFeatures([aoi])
                 aoi_layer.updateExtents()
                 # Create a temp layer for the image extent
                 feature_id = selected_image[config.MAXAR_METADATA_ID_COLUMN_INDEX].text()
-                image_extent_layer = QgsVectorLayer('Polygon?crs=epsg:4326', 'image extent', 'memory')
+                image_extent_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
                 extent = self.maxar_metadata_extents[feature_id]
                 image_extent_layer.dataProvider().addFeatures([extent])
                 aoi_layer.updateExtents()
@@ -724,79 +708,155 @@ class Mapflow:
                     'qgis:intersection',
                     {'INPUT': aoi_layer, 'OVERLAY': image_extent_layer, 'OUTPUT': 'memory:'}
                 )['OUTPUT']
-                worker_kwargs['aoi'] = next(intersection.getFeatures()).geometry()
-        # Spin up a worker, a thread, and move the worker to the thread
-        thread = QThread(self.main_window)
-        worker = ProcessingCreator(**worker_kwargs)
-        worker.moveToThread(thread)
-        thread.started.connect(worker.create_processing)
-        worker.finished.connect(thread.quit)
-        worker.finished.connect(self.processing_created)
-        worker.tif_uploaded.connect(
-            lambda url: self.log(self.tr('Your image was uploaded to: ') + url, Qgis.Success)
+                aoi_geometry = next(intersection.getFeatures()).geometry()
+        processing_params['geometry'] = json.loads(aoi_geometry.asJson())
+        if not imagery:
+            self.post_processing(processing_params)
+            return
+        # Upload the image to the server
+        processing_params['meta']['source'] = 'tif'
+        body = QHttpMultiPart(QHttpMultiPart.FormDataType)
+        tif = QHttpPart()
+        tif.setHeader(QNetworkRequest.ContentTypeHeader, 'image/tiff')
+        tif.setHeader(QNetworkRequest.ContentDispositionHeader, 'form-data; name="file"; filename=""')
+        image = QFile(path, body)
+        image.open(QIODevice.ReadOnly)
+        tif.setBodyDevice(image)
+        body.append(tif)
+        response = self.http.post(
+            url=f'{self.server}/rasters',
+            callback=self.upload_tif_callback,
+            callback_kwargs={'processing_params': processing_params},
+            error_handler=self.upload_tif_error_handler,
+            body=body,
+            timeout=3600  # one hour
         )
-        worker.maxar_unauthorized.connect(lambda: self.alert(self.tr(
-            'You need to upgrade your subscription to process Maxar imagery. '
-            "Please, send us an email to help@geoalert.io if you'd like to."), kind='critical'
-        ))
-        worker.error.connect(
-            lambda error: self.alert(self.tr('Processing creation failed: ') + error, kind='critical')
+        body.setParent(response)
+        progress_message = QgsMessageBarItem(
+            self.plugin_name,
+            self.tr('Uploading image to Mapflow...'),
+            QProgressBar(self.message_bar),
+            parent=self.message_bar
         )
-        self.dlg.finished.connect(thread.requestInterruption)
-        thread.start()
-        self.push_message(self.tr('Starting the processing...'))
+        self.message_bar.pushItem(progress_message)
+        response.uploadProgress.connect(
+            lambda bytes_sent, bytes_total: self.upload_tif_progress(
+                progress_message,
+                bytes_sent,
+                bytes_total
+            )
+        )
 
-    def processing_created(self) -> None:
-        """Display a success message and start polling Mapflow for processing progress.
+    def upload_tif_callback(self, response: QNetworkReply, processing_params: dict) -> None:
+        """Start processing upon a successful GeoTIFF upload.
 
-        This is a callback executed after a successful create processing request.
+        :param response: The HTTP response.
+        :param processing_params: A dictionary with the processing parameters.
         """
-        self.alert(self.tr("Success! Processing may take up to several minutes"))
-        # Restart the thread with a worker that monitors processing progress
-        self.worker.thread().start()
+        processing_params['params']['url'] = json.loads(response.readAll().data())['url']
+        self.post_processing(processing_params)
+
+    def upload_tif_progress(self, message: QgsMessageBarItem, bytes_sent: int, bytes_total: int) -> None:
+        """Display current upload progress in the message bar.
+
+        :param message: The message widget to be displayed in the Message Bar.
+        :param bytes_sent: The number of bytes that have been successfully sent.
+        :param bytes_total: The total number of bytes to send.
+        """
+        if bytes_total > 0:
+            message.widget().setValue(round(bytes_sent / bytes_total * 100))
+            if bytes_sent == bytes_total:
+                self.message_bar.popWidget(message)
+
+    def upload_tif_error_handler(self, response: QNetworkReply) -> None:
+        """Error handler for GeoTIFF upload request.
+
+        :param response: The HTTP response.
+        """
+        self.report_error(response, self.tr("We couldn't upload your GeoTIFF"))
+
+    def post_processing(self, request_body: dict) -> None:
+        """Submit a processing to Mapflow.
+
+        :param request_body: Processing parameters.
+        """
+        self.http.post(
+            url=f'{self.server}/processings',
+            callback=self.post_processing_callback,
+            body=json.dumps(request_body).encode()
+        )
+
+    def post_processing_error_handler(self, response: QNetworkReply) -> None:
+        """Error handler for processing creation requests.
+
+        :param response: The HTTP response.
+        """
+        self.report_error(response, self.tr('Processing creation failed'))
+
+    def post_processing_callback(self, response: QNetworkReply) -> None:
+        """Display a success message and clear the processing name field.
+
+        :param response: The HTTP response.
+        """
+        self.processing_fetch_timer.start()  # start monitoring
+        self.alert(
+            self.tr("Success! We'll notify you when the processing has finished."),
+            QMessageBox.Information
+        )
         self.dlg.processingName.clear()
 
-    def save_custom_provider_auth(self) -> None:
-        """Save custom provider login and password to settings if user checked the save option.
+    def save_provider_auth(self) -> None:
+        """Save provider credentials to settings if user checked the save option.
 
         Is called at three occasions: preview, processing creation and metadata request.
         """
         # Save the checkbox state itself
-        self.settings.setValue('customProviderSaveAuth', self.dlg.customProviderSaveAuth.isChecked())
+        self.settings.setValue('providerSaveAuth', self.dlg.providerSaveAuth.isChecked())
         # If checked, save the credentials
-        if self.dlg.customProviderSaveAuth.isChecked():
-            self.settings.setValue('customProviderLogin', self.dlg.customProviderLogin.text())
-            self.settings.setValue('customProviderPassword', self.dlg.customProviderPassword.text())
+        if self.dlg.providerSaveAuth.isChecked():
+            self.settings.setValue('providerUsername', self.dlg.providerUsername.text())
+            self.settings.setValue('providerPassword', self.dlg.providerPassword.text())
 
     def preview(self) -> None:
         """Display raster tiles served over the Web.
 
         Is called by clicking the preview button.
         """
-        # Align the provider combo with the table
-        self.restore_maxar_metadata_product()
-        self.save_custom_provider_auth()
-        username = self.dlg.customProviderLogin.text()
-        password = self.dlg.customProviderPassword.text()
-        provider = self.dlg.customProviderCombo.currentText()
-        url = self.custom_providers[provider]['url']
+        self.save_provider_auth()
+        username = self.dlg.providerUsername.text()
+        password = self.dlg.providerPassword.text()
+        provider = self.dlg.providerCombo.currentText()
         layer_name = provider
+        provider_info = self.settings.value('providers')[provider]
+        url = provider_info['url']
         if provider in config.MAXAR_PRODUCTS:
             if username or password:  # own account
+                url += '&CONNECTID=' + provider_info['connectId']
                 url = url.replace('jpeg', 'png')  # for transparency support
             else:  # our account; send to our endpoint
                 url = self.server + '/png?TileRow={y}&TileCol={x}&TileMatrix={z}'
-                username = self.login
+                url += '&CONNECTID=' + provider.split()[1].lower()
+                username = self.username
                 password = self.password
-            url += f'&CONNECTID={self.custom_providers[provider]["connectId"]}'  # add product id
             image_id = self.get_maxar_image_id()  # request a single image if selected in the table
             if image_id:
                 url += f'&CQL_FILTER=feature_id=%27{image_id}%27'
-                layer_name = f'{layer_name} {image_id}'
+                row = self.dlg.maxarMetadataTable.currentRow()
+                layer_name = ' '.join((
+                    layer_name,
+                    self.dlg.maxarMetadataTable.item(
+                        row,
+                        config.MAXAR_METADATA_ATTRIBUTES.index('acquisitionDate')
+                    ).text(),
+                    self.dlg.maxarMetadataTable.item(
+                        row,
+                        config.MAXAR_METADATA_ATTRIBUTES.index('productType')
+                    ).text()
+                ))
         # Can use urllib.parse but have to specify safe='/?:{}' which sort of defeats the purpose
         url_escaped = url.replace('&', '%26').replace('=', '%3D')
         params = {
-            'type': self.custom_providers[provider]['type'],
+            'type': provider_info['type'],
             'url': url_escaped,
             'zmax':  self.dlg.maxZoom.value(),
             'zmin': 0,
@@ -808,123 +868,179 @@ class Mapflow:
         if layer.isValid():
             self.add_layer(layer)
         else:
-            self.alert(self.tr("Sorry, we couldn't load: ") + url)
+            self.alert(self.tr('Error loading: ') + url)
 
-    def download_processing_results(self, row: int) -> None:
+    def download_results(self, row: int) -> None:
         """Download and display processing results along with the source raster, if available.
 
-        Results will be downloaded into the user's output directory. If unset, the user will be prompted to select one.
-        If the processing hasn't finished yet or has failed, the resulting feature layer will be empty.
+        Results will be downloaded into the user's output directory.
+        If it's unset, the user will be prompted to select one.
+        Unfinished or failed processings yield partial or no results.
 
         Is called by double-clicking on a row in the processings table.
 
         :param int: Row number in the processings table (0-based)
         """
-        if not self.check_if_output_directory_is_selected():
-            return
-        processing_name = self.dlg.processingsTable.item(row, 0).text()  # 0th column is Name
-        pid = self.dlg.processingsTable.item(row, config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
-        try:
-            r = requests.get(f'{self.server}/processings/{pid}/result', auth=self.server_basic_auth)
-        except requests.ConnectionError:
-            self.offline_alert.show()
-            return
-        r.raise_for_status()
-        # Add the source raster (COG) if it has been created
-        tif_url = next(filter(lambda p: p['id'] == pid, self.processings))['rasterLayer'].get('tileUrl')
-        if tif_url:
-            params = {
-                'type': 'xyz',
-                'url': tif_url,
-                'zmin': 0,
-                'zmax': 18,
-                'username': self.dlg_login.username.text(),
-                'password': self.dlg_login.password.text()
-            }
-            # URI-encoding will invalidate the request so requests.prepare() or the like can't be used
-            uri = '&'.join(f'{key}={val}' for key, val in params.items())
-            tif_layer = QgsRasterLayer(uri, f'{processing_name}_image', 'wms')
-        # First, save the features as GeoJSON
-        geojson_file_name = os.path.join(self.dlg.outputDirectory.text(), f'{processing_name}.geojson')
-        with open(geojson_file_name, 'wb') as f:
-            f.write(r.content)
-        # Export to Geopackage to prevent QGIS from hanging if the GeoJSON is heavy
-        output_path = os.path.join(self.dlg.outputDirectory.text(), f'{processing_name}.gpkg')
-        layer = QgsVectorLayer(geojson_file_name, 'temp', 'ogr')
+        if self.check_if_output_directory_is_selected():
+            pid = self.dlg.processingsTable.item(row, config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+            self.http.get(
+                url=f'{self.server}/processings/{pid}/result',
+                callback=self.download_results_callback,
+                callback_kwargs={'pid': pid},
+                error_handler=self.download_results_error_handler,
+                timeout=300
+            )
+
+    def download_results_callback(self, response: QNetworkReply, pid: str) -> None:
+        """Display processing results upon their successful fetch.
+
+        :param response: The HTTP response.
+        :param pid: ID of the inspected processing.
+        """
+        processing = next(filter(lambda p: p['id'] == pid, self.processings))
+        # Avoid overwriting existing files by adding (n) to their names
+        output_path = os.path.join(self.dlg.outputDirectory.text(), processing['name'])
+        extension = '.gpkg'
+        if os.path.exists(output_path + extension):
+            count = 1
+            while os.path.exists(output_path + f'({count})' + extension):
+                count += 1
+            output_path += f'({count})' + extension
+        else:
+            output_path += extension
         transform = self.project.transformContext()
         # Layer creation options for QGIS 3.10.3+
         write_options = QgsVectorFileWriter.SaveVectorOptions()
         write_options.layerOptions = ['fid=id']
-        # writeAsVectorFormat keeps changing between version so gotta check the version :-(
-        if Qgis.QGIS_VERSION_INT < 31003:
-            error, msg = QgsVectorFileWriter.writeAsVectorFormat(layer, output_path, 'utf8', layerOptions=['fid=id'])
-        elif Qgis.QGIS_VERSION_INT >= 32000:
-            # V3 returns two additional str values but they're not documented, so just discard them
-            error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(layer, output_path, transform, write_options)
-        else:
-            error, msg = QgsVectorFileWriter.writeAsVectorFormatV2(layer, output_path, transform, write_options)
+        with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb+') as f:
+            f.write(response.readAll().data())
+            f.seek(0)  # rewind the cursor to the start of the file
+            layer = QgsVectorLayer(f.name, '', 'ogr')
+            # writeAsVectorFormat keeps changing with versions so gotta check the version :-(
+            if Qgis.QGIS_VERSION_INT < 31003:
+                error, msg = QgsVectorFileWriter.writeAsVectorFormat(
+                    layer,
+                    output_path,
+                    'utf8',
+                    layerOptions=['fid=id']
+                )
+            elif Qgis.QGIS_VERSION_INT >= 32000:
+                # V3 returns two additional str values but they're not documented, so just discard them
+                error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(
+                    layer,
+                    output_path,
+                    transform,
+                    write_options
+                )
+            else:
+                error, msg = QgsVectorFileWriter.writeAsVectorFormatV2(
+                    layer,
+                    output_path,
+                    transform,
+                    write_options
+                )
         if error:
-            self.push_message(self.tr('Error saving results! See QGIS logs.'), Qgis.Warning)
-            self.log(msg)
+            self.alert(self.tr('Error loading results. Error code: ' + str(error)))
             return
-        # Try to delete the GeoJSON file. Fails on Windows
-        try:
-            os.remove(geojson_file_name)
-        except:
-            pass
         # Load the results into QGIS
-        results_layer = QgsVectorLayer(output_path, processing_name, 'ogr')
-        if not results_layer:
-            self.push_message(self.tr("Couldn't load the results"), Qgis.Warning)
-            return
-        # Add a style
-        wd = self.dlg.processingsTable.item(row, 1).text()
-        style = os.path.join(self.plugin_dir, 'static', 'styles', f'{config.STYLES.get(wd, "default")}.qml')
-        results_layer.loadNamedStyle(style)
-        # Set image extent explicitly bc as XYZ, it have doesn't have one by default
-        tif_layer.setExtent(helpers.from_wgs84(
-            QgsGeometry.fromRect(results_layer.extent()),
-            tif_layer.crs(),
+        results_layer = QgsVectorLayer(output_path, processing['name'], 'ogr')
+        results_layer.loadNamedStyle(os.path.join(
+            self.plugin_dir,
+            'static',
+            'styles',
+            config.STYLES.get(processing['workflowDef'], 'default') + '.qml'
+        ))
+        # Add the source raster (COG) if it has been created
+        raster_url = processing['rasterLayer'].get('tileUrl')
+        if raster_url:
+            params = {
+                'type': 'xyz',
+                'url': raster_url,
+                'zmin': 0,
+                'zmax': 18,
+                'username': self.username,
+                'password': self.password
+            }
+            raster = QgsRasterLayer(
+                '&'.join(f'{key}={val}' for key, val in params.items()),  # don't URL-encode it
+                processing['name'] + ' image',
+                'wms'
+            )
+        # Set image extent explicitly because as XYZ, it doesn't have one by default
+        self.http.get(
+            url=f'{self.server}/processings/{pid}/aois',
+            callback=self.set_raster_extent_callback,
+            callback_kwargs={
+                'vector': results_layer,
+                'raster': raster
+            },
+            error_handler=self.set_raster_extent_error_handler
+        )
+
+    def download_results_error_handler(self, response: QNetworkReply) -> None:
+        """Error handler for downloading processing results.
+
+        :param response: The HTTP response.
+        """
+        self.report_error(response, self.tr('Error downloading results'))
+
+    def set_raster_extent_callback(
+        self,
+        response: QNetworkReply,
+        vector: QgsVectorLayer,
+        raster: QgsRasterLayer
+    ) -> None:
+        """Set processing raster extent upon successfully requesting the processing's AOI.
+
+        :param response: The HTTP response.
+        :param vector: The downloaded feature layer.
+        :param response: The downloaded raster which was used for processing.
+        """
+        aoi_outer_ring = json.loads(response.readAll().data())[0]['geometry']['coordinates'][0]
+        # Extract BBOX corners manually to construct a BBOX
+        min_lon, *_, max_lon = sorted([point[0] for point in aoi_outer_ring])
+        min_lat, *_, max_lat = sorted([point[1] for point in aoi_outer_ring])
+        raster.setExtent(helpers.from_wgs84(
+            QgsGeometry.fromRect(QgsRectangle(min_lon, min_lat, max_lon, max_lat)),
+            raster.crs(),
             self.project.transformContext()
         ).boundingBox())
         # Add the layers to the project
-        self.add_layer(tif_layer)
-        self.add_layer(results_layer)
+        self.add_layer(raster)
+        self.add_layer(vector)
         self.iface.zoomToActiveLayer()
 
-    def alert(self, message: str, kind: str = 'information') -> None:
-        """Display an interactive modal pop up.
+    def set_raster_extent_error_handler(self, response: QNetworkReply) -> None:
+        """Error handler for processing AOI requests.
+
+        :param response: The HTTP response.
+        """
+        self.report_error(response, self.tr('Error loading results'))
+
+    def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical) -> None:
+        """Display a minimalistic modal dialog with some info or a question.
 
         :param message: A text to display
-        :param kind: The type of a pop-up to display; it is translated into a class method name of QMessageBox,
-            so must be one of https://doc.qt.io/qt-5/qmessagebox.html#static-public-members
+        :param icon: Info/Warning/Critical/Question
         """
-        return getattr(QMessageBox, kind)(self.dlg, self.plugin_name, message)
+        return QMessageBox(
+            icon,
+            self.plugin_name,
+            message,
+            parent=QApplication.activeWindow()
+        ).exec() == QMessageBox.Ok
 
-    def push_message(self, message: str, level: Qgis.MessageLevel = Qgis.Info, duration: int = 5) -> None:
-        """Display a message on the message bar.
-
-        :param message: A text to display
-        :param level: The type of a message to display
-        :param duration: For how long the message will be displayed
-        """
-        self.iface.messageBar().pushMessage(self.plugin_name, message, level, duration)
-
-    def log(self, message: str, level: Qgis.MessageLevel = Qgis.Warning) -> None:
-        """Log a message to the QGIS Message Log.
-
-        :param message: A text to display
-        :param level: The type of a message to display
-        """
-        QgsMessageLog.logMessage(message, self.plugin_name, level=level)
-
-    def fill_out_processings_table(self, processings: List[Dict[str, Union[str, int]]]) -> None:
+    def fill_out_processings_table(self, response: QNetworkReply) -> None:
         """Fill out the processings table with the processings in the user's default project.
 
-        Is called by the FetchProcessings worker running in a separate thread upon successful fetch.
-
-        :param processings: A list of JSON-like dictionaries containing information about the user's processings.
+        Is called by upon successful processing fetch.
+        :param response: The HTTP response.
         """
+        processings = json.loads(response.readAll().data())
+        try:  # check if there any ongoing processings
+            next(filter(lambda p: p['percentCompleted'] < 100, processings))
+        except StopIteration:  # all processings have finished
+            self.processing_fetch_timer.stop()
         if sys.version_info.minor < 7:  # python 3.6 doesn't understand 'Z' as UTC
             for processing in processings:
                 processing['created'] = processing['created'].replace('Z', '+0000')
@@ -938,9 +1054,9 @@ class Mapflow:
             # Extract WD names from WD objects
             processing['workflowDef'] = processing['workflowDef']['name']
         # Memorize which processings had been finished to alert user later
-        user_namespace = self.login.split('@')[0] + '@' + self.server.split('-')[1].split('.')[0]
-        finished_processings_setting = f'finishedProcessings_{user_namespace}'
-        previously_finished = self.settings.value(finished_processings_setting, [])
+        env = self.server.split('-')[1].split('.')[0]
+        all_finished = self.settings.value('finished_processings', {})
+        previously_finished = all_finished.get(env, {}).get(self.username, [])
         now = datetime.now().astimezone()
         one_day = timedelta(1)
         finished = [
@@ -948,7 +1064,11 @@ class Mapflow:
             if processing['percentCompleted'] == '100%'
             and now - processing['created'] < one_day
         ]
-        self.settings.setValue(finished_processings_setting, finished)
+        # Update the list of finished processings for the given account
+        if not all_finished.get(env):  # 1st assignment
+            all_finished[env] = {}
+        all_finished[env][self.username] = finished
+        self.settings.setValue('finished_processings', all_finished)
         # Drop seconds to save space
         for processing in processings:
             processing['created'] = processing['created'].strftime('%Y-%m-%d %H:%M')
@@ -975,7 +1095,10 @@ class Mapflow:
         self.dlg.processingsTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
         # Inform user about finished processings
         for processing in set(finished) - set(previously_finished):
-            self.alert(processing + self.tr(' finished. Double-click it in the table to download the results.'))
+            self.alert(
+                processing + self.tr(' finished. Double-click it in the table to download the results.'),
+                QMessageBox.Information
+            )
             # Update user processing limit
             self.remainingLimit -= round(next(filter(
                 lambda x: x['name'] == processing, processings
@@ -1002,11 +1125,10 @@ class Mapflow:
         """
         # Set main dialog title dynamically so it could be overridden when used as a submodule
         self.dlg.setWindowTitle(self.plugin_name)
-        self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
         # Display plugin icon in own toolbar
         icon = QIcon(os.path.join(self.plugin_dir, 'icon.png'))
         plugin_button = QAction(icon, self.plugin_name, self.main_window)
-        plugin_button.triggered.connect(self.run)
+        plugin_button.triggered.connect(self.main)
         self.toolbar.addAction(plugin_button)
         self.project.readProject.connect(self.set_layer_group)
         self.dlg.processingsTable.sortByColumn(4, Qt.DescendingOrder)
@@ -1022,130 +1144,163 @@ class Mapflow:
 
     def unload(self) -> None:
         """Remove the plugin icon & toolbar from QGIS GUI."""
-        try:
-            self.worker.thread().requestInterruption()
-        except AttributeError:  # user quit QGIS or reload the plugin w/out first opening it
-            pass
-        for dlg in self.dlg, self.dlg_login, self.dlg_connect_id, self.dlg_custom_provider:
+        for dlg in self.dlg, self.dlg_login, self.dlg_connect_id, self.dlg_provider:
             dlg.close()
         del self.toolbar
 
-    def connect_to_server(self) -> None:
-        """Log into Mapflow.
+    def clean_up_login_dialog(self) -> None:
+        """Remove the invalid credentials message and resize the dialog accordingly."""
+        invalid_token_label = self.dlg_login.findChild(QLabel, 'invalidToken')
+        self.dlg_login.token.clear()
+        if invalid_token_label:
+            invalid_token_label.deleteLater()
+            new_size = self.dlg_login.width(), self.dlg_login.height() - invalid_token_label.height()
+            self.dlg_login.setMaximumSize(*new_size)
+            self.dlg_login.setMinimumSize(*new_size)
 
-        Is called at plugin startup.
-        """
-        # Get the server environment to connect to (for admins)
-        mapflow_env = QgsSettings().value('variables/mapflow_env')
-        self.server = f'https://whitemaps-{mapflow_env or "production"}.mapflow.ai/rest'
-        # Read input credentials
-        login = self.dlg_login.username.text()
-        password = self.dlg_login.password.text()
-        self.server_basic_auth = requests.auth.HTTPBasicAuth(login, password)
-        try:
-            res = requests.get(self.server + '/projects/default', auth=self.server_basic_auth, timeout=5)
-            res.raise_for_status()
-        except requests.ConnectionError:
-            self.offline_alert.show()
-        except requests.Timeout:
-            self.timeout_alert.show()
-        except requests.HTTPError:
-            if res.status_code == 401 and not hasattr(self, 'invalid_credentials_label'):
-                self.invalid_credentials_label = QLabel(self.tr('Invalid credentials'))
-                self.invalid_credentials_label.setStyleSheet('color: rgb(239, 41, 41);')
-                self.dlg_login.layout().insertWidget(1, self.invalid_credentials_label, alignment=Qt.AlignCenter)
-                new_size = self.dlg_login.width(), self.dlg_login.height() + 21
-                self.dlg_login.setMaximumSize(*new_size)
-                self.dlg_login.setMinimumSize(*new_size)
-        else:  # success!
-            self.logged_in = True  # this var allows skipping auth if the user's remembered
-            self.settings.setValue('serverLogin', login)
-            self.settings.setValue('serverPassword', password)
+    def read_mapflow_token(self) -> None:
+        """Compose and memorize the user's credentils as Basic Auth."""
+        self.mapflow_auth = f'Basic {self.dlg_login.token.text()}'
+        self.http.basic_auth = self.mapflow_auth
+        self.log_in()
+
+    def log_in(self) -> None:
+        """Log into Mapflow."""
+        mapflow_env = QgsSettings().value('variables/mapflow_env') or 'production'
+        self.server = f'https://whitemaps-{mapflow_env}.mapflow.ai/rest'
+        self.http.get(
+            url=f'{self.server}/user/status',
+            callback=self.log_in_callback,
+            error_handler=self.log_in_error_handler
+        )
 
     def logout(self) -> None:
         """Close the plugin and clear credentials from cache."""
+        self.processing_fetch_timer.stop()
+        for setting in ('token', 'providerPassword', 'providerUsername', 'providerSaveAuth'):
+            self.settings.remove(setting)
+        self.dlg.providerUsername.clear()
+        self.dlg.providerPassword.clear()
+        self.logged_in = self.is_project_loaded = self.is_user_loaded = False
         self.dlg.close()
-        # Erase stored credentials
-        self.settings.remove('serverLogin')
-        self.settings.remove('serverPassword')
-        self.logged_in = False
-        # Stop monitoring processings
-        self.worker.thread().requestInterruption()
-        # Recreate the login dialog to start afresh
-        self.dlg_login = LoginDialog(self.main_window)
-        try:
-            del self.invalid_credentials_label
-        except AttributeError:
-            pass
-        # Assume user wants to log into another account or to another server
-        self.run()
+        self.dlg_login.show()  # assume user wants to log into another account
 
-    def run(self) -> None:
-        """Plugin entrypoint.
+    def log_in_error_handler(self, response: QNetworkReply) -> None:
+        """Error handler for the login request.
 
-        Is called by clicking the plugin icon.
+        :param response: The HTTP response.
         """
-        # If not logged in, show the login form
-        while not self.logged_in:
-            # If the user closes the dialog
-            if self.dlg_login.exec():
-                self.connect_to_server()
-            else:
-                # Refresh the form & quit
-                try:
-                    self.invalid_credentials_label.deleteLater()
-                    del self.invalid_credentials_label
-                    new_size = self.dlg_login.width(), self.dlg_login.height() - 21
-                    self.dlg_login.setMaximumSize(*new_size)
-                    self.dlg_login.setMinimumSize(*new_size)
-                except AttributeError:
-                    pass
-                return
-        # Refresh the list of workflow definitions
-        self.login = self.dlg_login.username.text()
-        self.password = self.dlg_login.password.text()
-        self.server_basic_auth = requests.auth.HTTPBasicAuth(self.login, self.password)
-        try:
-            res = requests.get(self.server + '/projects/default', auth=self.server_basic_auth, timeout=5)
-            user_status = requests.get(self.server + '/user/status', auth=self.server_basic_auth, timeout=5)
-            res.raise_for_status()
-            user_status.raise_for_status()
-        except requests.ConnectionError:
-            self.offline_alert.show()
+        error = response.error()
+        if error == QNetworkReply.AuthenticationRequiredError:  # invalid/empty credentials
+            if self.logged_in:  # prevent deadlocks
+                self.logout()
+            if self.dlg_login.findChild(QLabel, 'invalidToken'):
+                return  # the invalid credentials warning is already there
+            invalid_token_label = QLabel(self.tr('Invalid token'), self.dlg_login)
+            invalid_token_label.setObjectName('invalidToken')
+            invalid_token_label.setStyleSheet('color: rgb(239, 41, 41);')
+            self.dlg_login.layout().insertWidget(1, invalid_token_label, alignment=Qt.AlignCenter)
+            new_size = self.dlg_login.width(), self.dlg_login.height() + invalid_token_label.height()
+            self.dlg_login.setMaximumSize(*new_size)
+            self.dlg_login.setMinimumSize(*new_size)
+        else:
+            self.report_error(response, self.tr("Can't log in to Mapflow"))
+
+    def default_error_handler(self, response: QNetworkReply) -> None:
+        """Handle general networking errors: offline, timeout, server errors.
+
+        :param response: The HTTP response.
+        """
+        error = response.error()
+        service = 'Mapflow' if 'mapflow' in response.request().url().authority() else 'SecureWatch'
+        if error in (
+            QNetworkReply.OperationCanceledError,  # timeout
+            QNetworkReply.ServiceUnavailableError,  # HTTP 503
+            QNetworkReply.InternalServerError,  # HTTP 500
+            QNetworkReply.ConnectionRefusedError,
+            QNetworkReply.RemoteHostClosedError,
+            QNetworkReply.NetworkSessionFailedError,
+        ):
+            self.report_error(response, self.tr(service + ' is not responding. Please, try again.'))
+        elif error == QNetworkReply.HostNotFoundError:  # offline
+            self.alert(self.tr(service + ' requires Internet connection'))
             return
-        except requests.Timeout:
-            self.timeout_alert.show()
-            return
-        except requests.HTTPError:
-            if res.status_code == 401:
-                if not hasattr(self, 'invalid_credentials_label'):
-                    self.invalid_credentials_label = QLabel(self.tr('Invalid credentials'))
-                    self.invalid_credentials_label.setStyleSheet('color: rgb(239, 41, 41);')
-                    self.dlg_login.layout().insertWidget(1, self.invalid_credentials_label, alignment=Qt.AlignCenter)
-                    new_size = self.dlg_login.width(), self.dlg_login.height() + 21
-                    self.dlg_login.setMaximumSize(*new_size)
-                    self.dlg_login.setMinimumSize(*new_size)
-                self.dlg_login.show()
-                return
-        wds = [wd['name'] for wd in res.json()['workflowDefs']]
+        elif error in (
+            QNetworkReply.UnknownNetworkError,
+            QNetworkReply.ProxyConnectionRefusedError,
+            QNetworkReply.ProxyConnectionClosedError,
+            QNetworkReply.ProxyNotFoundError,
+            QNetworkReply.ProxyTimeoutError,
+            QNetworkReply.ProxyAuthenticationRequiredError,
+        ):
+            self.report_error(response, self.tr('Proxy error. Please, check your proxy settings.'))
+
+    def report_error(self, response: QNetworkReply, title: str = None):
+        """Prepare and show an error message for the supplied response.
+
+        :param response: The HTTP response.
+        :param title: The error message's title.
+        """
+        if response.error() == QNetworkReply.OperationCanceledError:
+            error_text = 'Request timed out'
+        else:
+            error_text = response.errorString()
+        report = {
+            'Error': error_text,
+            'URL': response.request().url().toDisplayString(),
+            'HTTP code': response.attribute(QNetworkRequest.HttpStatusCodeAttribute),
+            'Qt code': response.error(),
+            'Plugin version': self.plugin_version,
+            'QGIS version': Qgis.QGIS_VERSION,
+            'Qt version': qVersion(),
+        }
+        email_body = '%0a'.join(f'{key}: {value}' for key, value in report.items())
+        ErrorMessage(QApplication.activeWindow(), error_text, title, email_body).show()
+
+    def get_default_project_callback(self, response: QNetworkReply) -> None:
+        """Fill out the model dropdown list upon successful default project fetch.
+
+        :param response: The HTTP response.
+        """
         self.dlg.modelCombo.clear()
-        self.dlg.modelCombo.addItems(wds)
-        # Get user status
-        user_status = user_status.json()
+        self.dlg.modelCombo.addItems([
+            wd['name'] for wd in json.loads(response.readAll().data())['workflowDefs']
+        ])
+        self.is_project_loaded = True
+        if self.is_user_loaded:
+            self.dlg_login.close()
+            self.show_main_dialog()
+
+    def log_in_callback(self, response: QNetworkReply) -> None:
+        """Request user default project and processing upon authentication.
+
+        :param response: The HTTP response.
+        """
+        # Refresh the list of workflow definitions
+        self.http.get(url=f'{self.server}/projects/default', callback=self.get_default_project_callback)
+        # Fetch processings at startup
+        self.http.get(url=f'{self.server}/processings', callback=self.fill_out_processings_table)
+        # Keep fetching them at regular intervals afterwards
+        self.processing_fetch_timer.start()
+        self.logged_in = True  # allows skipping auth if the user's remembered
+        token = self.mapflow_auth.split()[1]
+        self.settings.setValue('token', token)
+        self.username, self.password = b64decode(token).decode().split(':')
+        user_status = json.loads(response.readAll().data())
         self.is_premium_user = user_status['isPremium']
-        self.limit_max_zoom_for_maxar(self.dlg.customProviderCombo.currentText())
+        self.limit_max_zoom_for_maxar(self.dlg.providerCombo.currentText())
         self.remainingLimit = round(user_status['remainingLimit'])
         self.aoi_area_limit = round(user_status['aoiAreaLimit'])
-        self.dlg.remainingLimit.setText(self.tr('Processing limit: {} sq.km').format(self.remainingLimit))
-        # Fetch processings
-        thread = QThread(self.main_window)
-        self.worker = ProcessingFetcher(self.server + '/processings', self.server_basic_auth)
-        self.worker.moveToThread(thread)
-        thread.started.connect(self.worker.fetch_processings)
-        self.worker.fetched.connect(self.fill_out_processings_table)
-        self.worker.error.connect(lambda error: self.log(error))
-        self.worker.finished.connect(thread.quit)
-        thread.start()
+        self.dlg.remainingLimit.setText(
+            self.tr('Processing limit: {} sq.km').format(self.remainingLimit)
+        )
+        self.is_user_loaded = True
+        if self.is_project_loaded:
+            self.dlg_login.close()
+            self.show_main_dialog()
+
+    def show_main_dialog(self) -> None:
+        """Prepare and display the main dialog."""
         # Calculate area of the current AOI layer or feature
         combo = self.dlg.rasterCombo if self.dlg.useImageExtentAsAoi.isChecked() else self.dlg.polygonCombo
         self.calculate_aoi_area(combo.currentLayer())
@@ -1153,6 +1308,36 @@ class Mapflow:
         for table in 'processingsTable', 'maxarMetadataTable':
             header = getattr(self.dlg, table).horizontalHeader()
             header.restoreState(self.settings.value(table + 'HeaderState', b''))
-        # Show main dialog
+        # Show
         self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
         self.dlg.show()
+
+    def check_plugin_version_callback(self, response: QNetworkReply) -> None:
+        """Inspect the backend version and show a warning if it is incompatible w/ the plugin.
+
+        :param response: The HTTP response.
+        """
+        if int(response.readAll().data()) > 1:
+            self.alert(
+                self.tr(
+                    'There is a new version of Mapflow for QGIS available.\n'
+                    'Please, upgrade to make sure everything works as expected. '
+                    'Go to Plugins -> Manage and Install Plugins -> Upgradable.'
+                ),
+                QMessageBox.Warning
+            )
+
+    def main(self) -> None:
+        """Plugin entrypoint."""
+        # Check plugin version for compatibility with Processing API
+        self.http.get(url=f'{self.server}/version', callback=self.check_plugin_version_callback)
+        token = self.settings.value('token')
+        if self.logged_in:
+            self.dlg.show()
+        elif bool(token):  # token saved
+            # Save Mapflow Basic Auth to be used with every request to Mapflow
+            self.mapflow_auth = f'Basic {token}'
+            self.http.basic_auth = self.mapflow_auth
+            self.log_in()
+        else:
+            self.dlg_login.show()
