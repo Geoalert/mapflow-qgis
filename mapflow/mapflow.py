@@ -222,7 +222,7 @@ class Mapflow(QObject):
             del providers[provider]
             self.settings.setValue('providers', providers)
             self.dlg.providerCombo.removeItem(self.dlg.providerCombo.currentIndex())
-            self.dlg.rasterCombo.setAdditionalItems(providers)
+            self.dlg.rasterCombo.setAdditionalItems(('Mapbox', *providers))
 
     def add_or_edit_provider(self) -> None:
         """Add a web imagery provider."""
@@ -500,7 +500,7 @@ class Mapflow(QObject):
             if not layer:
                 self.dlg.labelAoiArea.setText('')
                 return
-        elif isinstance(arg, list) and not self.dlg.useImageExtentAsAoi.isChecked():  # feature selection changed
+        elif isinstance(arg, list):  # feature selection changed
             layer = self.dlg.polygonCombo.currentLayer()
             # All polygon layers are monitored so have to check if it's the one in the combo
             if layer != self.iface.activeLayer():
