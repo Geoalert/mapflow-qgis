@@ -1247,14 +1247,13 @@ class Mapflow(QObject):
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
         """"""
         if int(response.readAll().data()) > 1:
-            QMessageBox.warning(
-                self.main_window,
-                self.plugin_name,
+            self.alert(
                 self.tr(
-                    'There is a new plugin version available.\n'
+                    'There is a new version of Mapflow for QGIS available.\n'
                     'Please, upgrade to make sure everything works as expected. '
                     'Go to Plugins -> Manage and Install Plugins -> Upgradable.'
-                )
+                ),
+                QMessageBox.Warning
             )
 
     def main(self) -> None:
