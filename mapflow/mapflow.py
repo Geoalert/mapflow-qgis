@@ -90,11 +90,11 @@ class Mapflow(QObject):
         )
         # Initialize HTTP request sender
         self.http = Http(self.plugin_version, self.default_error_handler)
-        # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         # Check if there are stored credentials
         self.is_user_loaded = False
         self.is_project_loaded = False
         self.logged_in = False
+        # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or 18))
         if self.settings.value('providerSaveAuth'):
@@ -152,7 +152,7 @@ class Mapflow(QObject):
         )
 
     def clear_metadata_table(self) -> None:
-        """"""
+        """Reset Maxar metadata table when user changes the provider in the list."""
         self.dlg.maxarMetadataTable.clearContents()
         self.dlg.maxarMetadataTable.setRowCount(0)
 
@@ -225,7 +225,7 @@ class Mapflow(QObject):
             self.dlg.rasterCombo.setAdditionalItems(('Mapbox', *providers))
 
     def add_or_edit_provider(self) -> None:
-        """Add a web imagery provider."""
+        """Add a web imagery provider or commit edits to an existing one."""
         providers = self.settings.value('providers')
         if self.dlg_provider.property('mode') == 'edit':  # remove the old definition
             del providers[self.dlg.providerCombo.currentText()]
@@ -241,7 +241,7 @@ class Mapflow(QObject):
         self.dlg.rasterCombo.setCurrentText(name)
 
     def edit_provider(self) -> None:
-        """Edit a web imagery provider.
+        """Prepare and show the provider edit dialog.
 
         Is called by the corresponding button.
         """
@@ -259,14 +259,17 @@ class Mapflow(QObject):
             self.dlg_provider.show()
 
     def update_providers(self, providers: dict) -> None:
-        """"""
+        """Update imagery & providers dropdown list after editing or adding a new one."""
         self.dlg.rasterCombo.setAdditionalItems((*providers, 'Mapbox'))
         self.dlg.providerCombo.clear()
         self.dlg.providerCombo.addItems(providers)
         self.settings.setValue('providers', providers)
 
     def show_connect_id_dialog(self, product: str) -> None:
-        """"""
+        """Prepare and show the Connect ID editing dialog.
+
+        :param product: Maxar product whose Connect ID will be edited.
+        """
         # Display the current Connect ID
         providers = self.settings.value('providers')
         self.dlg_connect_id.connectId.setText(providers[product]['connectId'])
@@ -430,7 +433,10 @@ class Mapflow(QObject):
             )
 
     def get_maxar_metadata_error_handler(self, response: QNetworkReply) -> None:
-        """"""
+        """Error handler for metadata requests.
+
+        :param response: The HTTP response.
+        """
         error = response.error()
         if error == QNetworkReply.ContentAccessDenied:
             self.alert(self.tr('Please, check your credentials'))
@@ -438,7 +444,11 @@ class Mapflow(QObject):
             self.report_error(response, self.tr("We couldn't get metadata from Maxar"))
 
     def get_maxar_metadata_callback(self, response: QNetworkReply, product: str) -> None:
-        """"""
+        """Handle metadata request' response in case of success.
+
+        :param response: The HTTP response.
+        :param product: Maxar product whose metadata was requested.
+        """
         # Memorize the product to prevent further errors if user changes item in the dropdown list
         layer_name = f'{product} metadata'
         # Save metadata to a file; I couldn't get WFS to work, or else no file would be necessary
@@ -564,6 +574,9 @@ class Mapflow(QObject):
     def delete_processings_callback(self, response: QNetworkReply, id_: str) -> None:
         """Delete processings from the table after they've been successfully
         deleted from the server.
+
+        :param response: The HTTP response.
+        :param _id: ID of the deleted processing.
         """
         row = self.dlg.processingsTable.findItems(id_, Qt.MatchExactly)[0].row()
         self.processing_names.remove(self.dlg.processingsTable.item(row, 0).text())
@@ -571,8 +584,10 @@ class Mapflow(QObject):
         self.processing_fetch_timer.start()
 
     def delete_processings_error_handler(self, response: QNetworkReply) -> None:
-        """"""
-        error = response.error()
+        """Error handler for processing deletion request.
+
+        :param response: The HTTP response.
+        """
         self.report_error(response, self.tr("Error deleting a processing"))
 
     def create_processing(self) -> None:
@@ -733,23 +748,38 @@ class Mapflow(QObject):
         )
 
     def upload_tif_callback(self, response: QNetworkReply, processing_params: dict) -> None:
-        """"""
+        """Start processing upon a successful GeoTIFF upload.
+
+        :param response: The HTTP response.
+        :param processing_params: A dictionary with the processing parameters.
+        """
         processing_params['params']['url'] = json.loads(response.readAll().data())['url']
         self.post_processing(processing_params)
 
     def upload_tif_progress(self, message: QgsMessageBarItem, bytes_sent: int, bytes_total: int) -> None:
-        """Display current upload progress in the message bar."""
+        """Display current upload progress in the message bar.
+
+        :param message: The message widget to be displayed in the Message Bar.
+        :param bytes_sent: The number of bytes that have been successfully sent.
+        :param bytes_total: The total number of bytes to send.
+        """
         if bytes_total > 0:
             message.widget().setValue(round(bytes_sent / bytes_total * 100))
             if bytes_sent == bytes_total:
                 self.message_bar.popWidget(message)
 
     def upload_tif_error_handler(self, response: QNetworkReply) -> None:
-        """"""
+        """Error handler for GeoTIFF upload request.
+
+        :param response: The HTTP response.
+        """
         self.report_error(response, self.tr("We couldn't upload your GeoTIFF"))
 
     def post_processing(self, request_body: dict) -> None:
-        """"""
+        """Submit a processing to Mapflow.
+
+        :param request_body: Processing parameters.
+        """
         self.http.post(
             url=f'{self.server}/processings',
             callback=self.post_processing_callback,
@@ -757,13 +787,16 @@ class Mapflow(QObject):
         )
 
     def post_processing_error_handler(self, response: QNetworkReply) -> None:
-        """"""
+        """Error handler for processing creation requests.
+
+        :param response: The HTTP response.
+        """
         self.report_error(response, self.tr('Processing creation failed'))
 
     def post_processing_callback(self, response: QNetworkReply) -> None:
         """Display a success message and clear the processing name field.
 
-        This is a callback executed after a successful create processing request.
+        :param response: The HTTP response.
         """
         self.processing_fetch_timer.start()  # start monitoring
         self.alert(
@@ -859,7 +892,11 @@ class Mapflow(QObject):
             )
 
     def download_results_callback(self, response: QNetworkReply, pid: str) -> None:
-        """"""
+        """Display processing results upon their successful fetch.
+
+        :param response: The HTTP response.
+        :param pid: ID of the inspected processing.
+        """
         processing = next(filter(lambda p: p['id'] == pid, self.processings))
         # Avoid overwriting existing files by adding (n) to their names
         output_path = os.path.join(self.dlg.outputDirectory.text(), processing['name'])
@@ -903,7 +940,7 @@ class Mapflow(QObject):
                     write_options
                 )
         if error:
-            self.message_bar.pushWarning(self.tr('Error loading results. Error code: ' + str(error)))
+            self.alert(self.tr('Error loading results. Error code: ' + str(error)))
             return
         # Load the results into QGIS
         results_layer = QgsVectorLayer(output_path, processing['name'], 'ogr')
@@ -941,7 +978,10 @@ class Mapflow(QObject):
         )
 
     def download_results_error_handler(self, response: QNetworkReply) -> None:
-        """"""
+        """Error handler for downloading processing results.
+
+        :param response: The HTTP response.
+        """
         self.report_error(response, self.tr('Error downloading results'))
 
     def set_raster_extent_callback(
@@ -950,7 +990,12 @@ class Mapflow(QObject):
         vector: QgsVectorLayer,
         raster: QgsRasterLayer
     ) -> None:
-        """"""
+        """Set processing raster extent upon successfully requesting the processing's AOI.
+
+        :param response: The HTTP response.
+        :param vector: The downloaded feature layer.
+        :param response: The downloaded raster which was used for processing.
+        """
         aoi_outer_ring = json.loads(response.readAll().data())[0]['geometry']['coordinates'][0]
         # Extract BBOX corners manually to construct a BBOX
         min_lon, *_, max_lon = sorted([point[0] for point in aoi_outer_ring])
@@ -966,7 +1011,10 @@ class Mapflow(QObject):
         self.iface.zoomToActiveLayer()
 
     def set_raster_extent_error_handler(self, response: QNetworkReply) -> None:
-        """"""
+        """Error handler for processing AOI requests.
+
+        :param response: The HTTP response.
+        """
         self.report_error(response, self.tr('Error loading results'))
 
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical) -> None:
@@ -986,6 +1034,7 @@ class Mapflow(QObject):
         """Fill out the processings table with the processings in the user's default project.
 
         Is called by upon successful processing fetch.
+        :param response: The HTTP response.
         """
         processings = json.loads(response.readAll().data())
         try:  # check if there any ongoing processings
@@ -1100,7 +1149,7 @@ class Mapflow(QObject):
         del self.toolbar
 
     def clean_up_login_dialog(self) -> None:
-        """"""
+        """Remove the invalid credentials message and resize the dialog accordingly."""
         invalid_token_label = self.dlg_login.findChild(QLabel, 'invalidToken')
         self.dlg_login.token.clear()
         if invalid_token_label:
@@ -1110,7 +1159,7 @@ class Mapflow(QObject):
             self.dlg_login.setMinimumSize(*new_size)
 
     def read_mapflow_token(self) -> None:
-        """"""
+        """Compose and memorize the user's credentils as Basic Auth."""
         self.mapflow_auth = f'Basic {self.dlg_login.token.text()}'
         self.http.basic_auth = self.mapflow_auth
         self.log_in()
@@ -1128,13 +1177,19 @@ class Mapflow(QObject):
     def logout(self) -> None:
         """Close the plugin and clear credentials from cache."""
         self.processing_fetch_timer.stop()
-        self.settings.remove('token')
+        for setting in ('token', 'providerPassword', 'providerUsername', 'providerSaveAuth'):
+            self.settings.remove(setting)
+        self.dlg.providerUsername.clear()
+        self.dlg.providerPassword.clear()
         self.logged_in = self.is_project_loaded = self.is_user_loaded = False
         self.dlg.close()
         self.dlg_login.show()  # assume user wants to log into another account
 
     def log_in_error_handler(self, response: QNetworkReply) -> None:
-        """"""
+        """Error handler for the login request.
+
+        :param response: The HTTP response.
+        """
         error = response.error()
         if error == QNetworkReply.AuthenticationRequiredError:  # invalid/empty credentials
             if self.logged_in:  # prevent deadlocks
@@ -1152,7 +1207,10 @@ class Mapflow(QObject):
             self.report_error(response, self.tr("Can't log in to Mapflow"))
 
     def default_error_handler(self, response: QNetworkReply) -> None:
-        """Handle general networking errors: offline, timeout, server errors."""
+        """Handle general networking errors: offline, timeout, server errors.
+
+        :param response: The HTTP response.
+        """
         error = response.error()
         service = 'Mapflow' if 'mapflow' in response.request().url().authority() else 'SecureWatch'
         if error in (
@@ -1178,7 +1236,11 @@ class Mapflow(QObject):
             self.report_error(response, self.tr('Proxy error. Please, check your proxy settings.'))
 
     def report_error(self, response: QNetworkReply, title: str = None):
-        """"""
+        """Prepare and show an error message for the supplied response.
+
+        :param response: The HTTP response.
+        :param title: The error message's title.
+        """
         if response.error() == QNetworkReply.OperationCanceledError:
             error_text = 'Request timed out'
         else:
@@ -1196,7 +1258,10 @@ class Mapflow(QObject):
         ErrorMessage(QApplication.activeWindow(), error_text, title, email_body).show()
 
     def get_default_project_callback(self, response: QNetworkReply) -> None:
-        """"""
+        """Fill out the model dropdown list upon successful default project fetch.
+
+        :param response: The HTTP response.
+        """
         self.dlg.modelCombo.clear()
         self.dlg.modelCombo.addItems([
             wd['name'] for wd in json.loads(response.readAll().data())['workflowDefs']
@@ -1207,7 +1272,10 @@ class Mapflow(QObject):
             self.show_main_dialog()
 
     def log_in_callback(self, response: QNetworkReply) -> None:
-        """"""
+        """Request user default project and processing upon authentication.
+
+        :param response: The HTTP response.
+        """
         # Refresh the list of workflow definitions
         self.http.get(url=f'{self.server}/projects/default', callback=self.get_default_project_callback)
         # Fetch processings at startup
@@ -1232,7 +1300,7 @@ class Mapflow(QObject):
             self.show_main_dialog()
 
     def show_main_dialog(self) -> None:
-        """"""
+        """Prepare and display the main dialog."""
         # Calculate area of the current AOI layer or feature
         combo = self.dlg.rasterCombo if self.dlg.useImageExtentAsAoi.isChecked() else self.dlg.polygonCombo
         self.calculate_aoi_area(combo.currentLayer())
@@ -1245,7 +1313,10 @@ class Mapflow(QObject):
         self.dlg.show()
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
-        """"""
+        """Inspect the backend version and show a warning if it is incompatible w/ the plugin.
+
+        :param response: The HTTP response.
+        """
         if int(response.readAll().data()) > 1:
             self.alert(
                 self.tr(
@@ -1257,10 +1328,7 @@ class Mapflow(QObject):
             )
 
     def main(self) -> None:
-        """Plugin entrypoint.
-
-        Is called by clicking the plugin icon.
-        """
+        """Plugin entrypoint."""
         # Check plugin version for compatibility with Processing API
         self.http.get(url=f'{self.server}/version', callback=self.check_plugin_version_callback)
         token = self.settings.value('token')
