@@ -44,13 +44,15 @@ class Http(QObject):
         response: QNetworkReply,
         callback: Callable,
         callback_kwargs: dict,
-        error_handler: Callable
+        error_handler: Callable,
+        use_default_error_handler: bool
     ) -> None:
         """"""
         if response.error():
-            self.default_error_handler(response)  # handle general errors
-            if error_handler:  # handle specific errors
-                error_handler(response)
+            if use_default_error_handler:
+                if self.default_error_handler(response):
+                    return  # a general error occurred and has been handled
+            error_handler(response)  # handle specific errors
         else:
             callback(response, **callback_kwargs)
 
@@ -61,14 +63,13 @@ class Http(QObject):
         callback: Callable = None,
         callback_kwargs: dict = None,
         error_handler: Callable = None,
+        use_default_error_handler: bool = True,
         basic_auth: bytes = None,
         timeout: int = config.MAPFLOW_DEFAULT_TIMEOUT,
         body: Union[QHttpMultiPart, bytes] = None
     ) -> QNetworkReply:
         """Send an actual request."""
         request = QNetworkRequest(QUrl(url))
-        if not callback_kwargs:
-            callback_kwargs = {}
         if isinstance(body, bytes):
             request.setHeader(QNetworkRequest.ContentTypeHeader, 'application/json')
         request.setRawHeader(b'X-Plugin-Version', self.plugin_version.encode())
@@ -76,7 +77,18 @@ class Http(QObject):
         response = method(request, body) if method == self.nam.post else method(request)
         QTimer.singleShot(timeout * 1000, response.abort)
         response.finished.connect(
-            lambda response=response, callback=callback, error_handler=error_handler:
-            self.response_dispatcher(response, callback, callback_kwargs, error_handler)
+            lambda
+            response=response,
+            callback=callback,
+            callback_kwargs=callback_kwargs or {},
+            error_handler=error_handler or (lambda _: None),
+            use_default_error_handler=use_default_error_handler:
+            self.response_dispatcher(
+                response,
+                callback,
+                callback_kwargs,
+                error_handler,
+                use_default_error_handler
+            )
         )
         return response

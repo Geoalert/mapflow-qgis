@@ -56,6 +56,8 @@ class Mapflow(QObject):
         # By default, plugin adds layers to a group unless user explicitly deletes it
         self.add_layers_to_group = True
         self.layer_tree_root = self.project.layerTreeRoot()
+        # Set up authentication flags
+        self.is_user_loaded = self.is_project_loaded = self.logged_in = False
         # Store user's current processing
         self.processings = []
         # Init toolbar and toolbar buttons
@@ -90,10 +92,12 @@ class Mapflow(QObject):
         )
         # Initialize HTTP request sender
         self.http = Http(self.plugin_version, self.default_error_handler)
-        # Check if there are stored credentials
-        self.is_user_loaded = False
-        self.is_project_loaded = False
-        self.logged_in = False
+        # Check plugin version for compatibility with Processing API
+        self.http.get(
+            url=f'{self.server}/version',
+            callback=self.check_plugin_version_callback,
+            use_default_error_handler=False  # ignore errors
+        )
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or 18))
@@ -317,15 +321,14 @@ class Mapflow(QObject):
     def select_output_directory(self) -> str:
         """Open a file dialog for the user to select a directory where plugin files will be stored.
 
-        Is called by clicking the 'selectOutputDirectory' button or when other functions that use file storage
-        are called (get_maxar_metadata(), download_processing_results()).
-
-        Returns the selected path, or None if the user closed the dialog.
+        Returns the selected path, or None if user closed the dialog.
         """
-        path: str = QFileDialog.getExistingDirectory(self.main_window, self.tr('Select output directory'))
+        path = QFileDialog.getExistingDirectory(
+            QApplication.activeWindow(),
+            self.tr('Select output directory')
+        )
         if path:
             self.dlg.outputDirectory.setText(path)
-            # Save to settings to set it automatically at next plugin start
             self.settings.setValue('outputDir', path)
             return path
 
@@ -344,10 +347,11 @@ class Mapflow(QObject):
 
         Is called by clicking the 'selectTif' button in the main dialog.
         """
-        dlg = QFileDialog(self.main_window, self.tr('Select GeoTIFF'))
+        dlg = QFileDialog(QApplication.activeWindow(), self.tr('Select GeoTIFF'))
+        dlg.setFileMode(QFileDialog.ExistingFile)
         dlg.setMimeTypeFilters(['image/tiff'])
         if dlg.exec():
-            path: str = dlg.selectedFiles()[0]
+            path = dlg.selectedFiles()[0]
             layer = QgsRasterLayer(path, os.path.splitext(os.path.basename(path))[0])
             self.add_layer(layer)
             self.dlg.rasterCombo.setLayer(layer)
@@ -1206,10 +1210,11 @@ class Mapflow(QObject):
         else:
             self.report_error(response, self.tr("Can't log in to Mapflow"))
 
-    def default_error_handler(self, response: QNetworkReply) -> None:
+    def default_error_handler(self, response: QNetworkReply) -> bool:
         """Handle general networking errors: offline, timeout, server errors.
 
         :param response: The HTTP response.
+        Returns True if the error has been handled, otherwise returns False.
         """
         error = response.error()
         service = 'Mapflow' if 'mapflow' in response.request().url().authority() else 'SecureWatch'
@@ -1221,10 +1226,14 @@ class Mapflow(QObject):
             QNetworkReply.RemoteHostClosedError,
             QNetworkReply.NetworkSessionFailedError,
         ):
-            self.report_error(response, self.tr(service + ' is not responding. Please, try again.'))
+            self.report_error(response, self.tr(
+                service + ' is not responding. Please, try again.\n\n'
+                'If you are behind a proxy or firewall,\ncheck your QGIS proxy settings.\n'
+            ))
+            return True
         elif error == QNetworkReply.HostNotFoundError:  # offline
             self.alert(self.tr(service + ' requires Internet connection'))
-            return
+            return True
         elif error in (
             QNetworkReply.UnknownNetworkError,
             QNetworkReply.ProxyConnectionRefusedError,
@@ -1234,6 +1243,8 @@ class Mapflow(QObject):
             QNetworkReply.ProxyAuthenticationRequiredError,
         ):
             self.report_error(response, self.tr('Proxy error. Please, check your proxy settings.'))
+            return True
+        return False
 
     def report_error(self, response: QNetworkReply, title: str = None):
         """Prepare and show an error message for the supplied response.
@@ -1329,13 +1340,10 @@ class Mapflow(QObject):
 
     def main(self) -> None:
         """Plugin entrypoint."""
-        # Check plugin version for compatibility with Processing API
-        self.http.get(url=f'{self.server}/version', callback=self.check_plugin_version_callback)
         token = self.settings.value('token')
         if self.logged_in:
             self.dlg.show()
-        elif bool(token):  # token saved
-            # Save Mapflow Basic Auth to be used with every request to Mapflow
+        elif token:  # token saved
             self.mapflow_auth = f'Basic {token}'
             self.http.basic_auth = self.mapflow_auth
             self.log_in()
