@@ -152,6 +152,7 @@ class Mapflow(QObject):
             lambda: self.http.get(
                 url=f'{self.server}/processings',
                 callback=self.fill_out_processings_table,
+                use_default_error_handler=False  # ignore errors to prevent repetitive alerts
             )
         )
 
