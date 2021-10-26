@@ -57,7 +57,7 @@ class Mapflow(QObject):
         self.add_layers_to_group = True
         self.layer_tree_root = self.project.layerTreeRoot()
         # Set up authentication flags
-        self.is_user_loaded = self.is_project_loaded = self.logged_in = False
+        self.logged_in = False
         # Store user's current processing
         self.processings = []
         # Init toolbar and toolbar buttons
@@ -1173,7 +1173,7 @@ class Mapflow(QObject):
         mapflow_env = QgsSettings().value('variables/mapflow_env') or 'production'
         self.server = f'https://whitemaps-{mapflow_env}.mapflow.ai/rest'
         self.http.get(
-            url=f'{self.server}/user/status',
+            url=f'{self.server}/projects/default',
             callback=self.log_in_callback,
             error_handler=self.log_in_error_handler
         )
@@ -1185,8 +1185,7 @@ class Mapflow(QObject):
             self.settings.remove(setting)
         self.dlg.providerUsername.clear()
         self.dlg.providerPassword.clear()
-        self.logged_in = self.is_project_loaded = self.is_user_loaded = False
-        self.dlg.close()
+        self.logged_in = False
         self.dlg_login.show()  # assume user wants to log into another account
 
     def log_in_error_handler(self, response: QNetworkReply) -> None:
@@ -1268,59 +1267,39 @@ class Mapflow(QObject):
         email_body = '%0a'.join(f'{key}: {value}' for key, value in report.items())
         ErrorMessage(QApplication.activeWindow(), error_text, title, email_body).show()
 
-    def get_default_project_callback(self, response: QNetworkReply) -> None:
-        """Fill out the model dropdown list upon successful default project fetch.
-
-        :param response: The HTTP response.
-        """
-        self.dlg.modelCombo.clear()
-        self.dlg.modelCombo.addItems([
-            wd['name'] for wd in json.loads(response.readAll().data())['workflowDefs']
-        ])
-        self.is_project_loaded = True
-        if self.is_user_loaded:
-            self.dlg_login.close()
-            self.show_main_dialog()
-
     def log_in_callback(self, response: QNetworkReply) -> None:
         """Request user default project and processing upon authentication.
 
         :param response: The HTTP response.
         """
-        # Refresh the list of workflow definitions
-        self.http.get(url=f'{self.server}/projects/default', callback=self.get_default_project_callback)
-        # Fetch processings at startup
+        # Fetch processings at startup and start the timer to keep fetching them afterwards
         self.http.get(url=f'{self.server}/processings', callback=self.fill_out_processings_table)
-        # Keep fetching them at regular intervals afterwards
         self.processing_fetch_timer.start()
-        self.logged_in = True  # allows skipping auth if the user's remembered
-        token = self.mapflow_auth.split()[1]
-        self.settings.setValue('token', token)
-        self.username, self.password = b64decode(token).decode().split(':')
-        user_status = json.loads(response.readAll().data())
-        self.is_premium_user = user_status['isPremium']
+        # Set up the UI with the received data
+        response = json.loads(response.readAll().data())
+        self.is_premium_user = response['user']['isPremium']
         self.limit_max_zoom_for_maxar(self.dlg.providerCombo.currentText())
-        self.remainingLimit = round(user_status['remainingLimit'])
-        self.aoi_area_limit = round(user_status['aoiAreaLimit'])
+        # self.remainingLimit = round(response['user']['remainingLimit'])
+        self.remainingLimit = response['user']['areaLimit'] * 1e-6
+        self.aoi_area_limit = response['user']['aoiAreaLimit'] * 1e-6
         self.dlg.remainingLimit.setText(
             self.tr('Processing limit: {} sq.km').format(self.remainingLimit)
         )
-        self.is_user_loaded = True
-        if self.is_project_loaded:
-            self.dlg_login.close()
-            self.show_main_dialog()
-
-    def show_main_dialog(self) -> None:
-        """Prepare and display the main dialog."""
-        # Calculate area of the current AOI layer or feature
+        self.dlg.modelCombo.clear()
+        self.dlg.modelCombo.addItems([wd['name'] for wd in response['workflowDefs']])
         combo = self.dlg.rasterCombo if self.dlg.useImageExtentAsAoi.isChecked() else self.dlg.polygonCombo
         self.calculate_aoi_area(combo.currentLayer())
         # Restore table section sizes
         for table in 'processingsTable', 'maxarMetadataTable':
             header = getattr(self.dlg, table).horizontalHeader()
             header.restoreState(self.settings.value(table + 'HeaderState', b''))
-        # Show
         self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
+        # Authenticate and keep user logged in
+        self.logged_in = True
+        token = self.mapflow_auth.split()[1]
+        self.settings.setValue('token', token)
+        self.username, self.password = b64decode(token).decode().split(':')
+        self.dlg_login.close()
         self.dlg.show()
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
