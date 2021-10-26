@@ -1298,7 +1298,10 @@ class Mapflow(QObject):
         self.logged_in = True
         token = self.mapflow_auth.split()[1]
         self.settings.setValue('token', token)
-        self.username, self.password = b64decode(token).decode().split(':')
+        try:
+            self.username, self.password = b64decode(token).decode().split(':')
+        except:  # incorrect padding
+            self.username, self.password = b64decode(token + '==').decode().split(':')
         self.dlg_login.close()
         self.dlg.show()
 
