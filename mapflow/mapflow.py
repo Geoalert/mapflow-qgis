@@ -613,7 +613,7 @@ class Mapflow(QObject):
         if not (self.dlg.polygonCombo.currentLayer() or self.dlg.useImageExtentAsAoi.isChecked()):
             self.alert(self.tr('Please, select an area of interest'))
             return
-        if self.remainingLimit < self.aoi_size:
+        if self.remaining_limit < self.aoi_size:
             self.alert(self.tr('Processing limit exceeded'))
             return
         if self.aoi_area_limit < self.aoi_size:
@@ -1105,10 +1105,10 @@ class Mapflow(QObject):
                 QMessageBox.Information
             )
             # Update user processing limit
-            self.remainingLimit -= round(next(filter(
+            self.remaining_limit -= round(next(filter(
                 lambda x: x['name'] == processing, processings
             ))['aoiArea']/10**6)
-            self.dlg.remainingLimit.setText(self.tr('Processing limit: {} sq.km').format(self.remainingLimit))
+            self.dlg.remainingLimit.setText(self.tr('Processing limit: {} sq.km').format(self.remaining_limit))
         # Save as an instance attribute to reuse elsewhere
         self.processings = processings
         # Save ref to check name uniqueness at processing creation
@@ -1269,7 +1269,7 @@ class Mapflow(QObject):
         ErrorMessage(QApplication.activeWindow(), error_text, title, email_body).show()
 
     def log_in_callback(self, response: QNetworkReply) -> None:
-        """Request user default project and processing upon authentication.
+        """Fetch user info, models and processings.
 
         :param response: The HTTP response.
         """
@@ -1278,14 +1278,15 @@ class Mapflow(QObject):
         self.processing_fetch_timer.start()
         # Set up the UI with the received data
         response = json.loads(response.readAll().data())
-        self.is_premium_user = response['user']['isPremium']
+        user = response['user']
+        self.is_premium_user = user['isPremium']
         self.limit_max_zoom_for_maxar(self.dlg.providerCombo.currentText())
-        # self.remainingLimit = round(response['user']['remainingLimit'])
-        self.remainingLimit = response['user']['areaLimit'] * 1e-6
+        if user['role'] == 'ADMIN':
+            self.remaining_limit = 1e+5  # 100K sq. km
+        else:
+            self.remaining_limit = round((user['areaLimit'] - user['processedArea']) * 1e-6)
         self.aoi_area_limit = response['user']['aoiAreaLimit'] * 1e-6
-        self.dlg.remainingLimit.setText(
-            self.tr('Processing limit: {} sq.km').format(self.remainingLimit)
-        )
+        self.dlg.remainingLimit.setText(self.tr('Processing limit: {} sq.km').format(self.remaining_limit))
         self.dlg.modelCombo.clear()
         self.dlg.modelCombo.addItems([wd['name'] for wd in response['workflowDefs']])
         combo = self.dlg.rasterCombo if self.dlg.useImageExtentAsAoi.isChecked() else self.dlg.polygonCombo
