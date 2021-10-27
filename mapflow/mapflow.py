@@ -668,7 +668,7 @@ class Mapflow(QObject):
             params['source_type'] = providers[raster_option]['type']
             if params['source_type'] == 'wms':
                 params['target_resolution'] = 0.000005  # for the 18th zoom
-            params['cache_raster_update'] = str(self.dlg.updateCache.isChecked())
+            params['cache_raster_update'] = str(self.dlg.updateCache.isChecked()).lower()
             self.save_provider_auth()
         processing_params['params'] = params
         # Get processing AOI
