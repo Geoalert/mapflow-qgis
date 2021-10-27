@@ -8,10 +8,18 @@ about=Mapflow provides AI models for automatic feature extraction from satellite
 		- roads
 		- construction sites
 	For a step-by-step user guide, go to https://docs.mapflow.ai/api/qgis_mapflow#user-interface
-version=1.4.1
+version=1.5.0
 author=Geoalert
 email=hello@geoalert.io
 changelog:
+	1.5.0:
+		- Proxy support: now you can work from behind a proxy/firewall
+		- New Mapflow token format: log in with a single token
+		- Own GeoTIFF: upload progress is displayed in the message bar
+		(!) This version introduces some breaking changes. Please, do the following:
+		    - Re-issue your token at https://app.mapflow.ai/account/api
+			- Re-add web tile providers & Maxar Connect IDs
+		Sorry for the inconvenience, enjoy using Mapflow :-)
 	1.4.1:
 		- Improve Maxar usage
 		- Display remaining processing limit in sq km
