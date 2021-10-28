@@ -13,6 +13,7 @@ class Http(QObject):
     def __init__(self, plugin_version: str, default_error_handler: Callable) -> None:
         """"""
         self.nam = QgsNetworkAccessManager.instance()
+        self.nam.setupDefaultProxyAndCache()
         self.plugin_version = plugin_version
         self._basic_auth = b''
         self.default_error_handler = default_error_handler
