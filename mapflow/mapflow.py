@@ -3,7 +3,7 @@ import json
 import os.path
 import tempfile
 from base64 import b64encode, b64decode
-from typing import List, Optional, Union
+from typing import List, Union
 from datetime import datetime, timedelta  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
@@ -19,9 +19,8 @@ from PyQt5.QtWidgets import (
 from qgis import processing as qgis_processing  # to avoid collisions
 from qgis.gui import QgsMessageBarItem
 from qgis.core import (
-    QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature,
-    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsMapLayerType, Qgis,
-    QgsVectorFileWriter, QgsRectangle
+    QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
+    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter, QgsRectangle
 )
 
 from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, ErrorMessage
@@ -124,9 +123,9 @@ class Mapflow(QObject):
         )
         self.dlg.startProcessing.clicked.connect(self.create_processing)
         # Calculate AOI area
-        self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area)
-        self.dlg.rasterCombo.layerChanged.connect(self.calculate_aoi_area)
-        self.dlg.useImageExtentAsAoi.toggled.connect(self.calculate_aoi_area)
+        self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area_polygon_layer)
+        self.dlg.rasterCombo.layerChanged.connect(self.calculate_aoi_area_raster)
+        self.dlg.useImageExtentAsAoi.toggled.connect(self.calculate_aoi_area_use_image_extent)
         self.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
         # Processings
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
@@ -304,7 +303,7 @@ class Mapflow(QObject):
         :param layers: A list of layers of any type (all non-polygon layers will be skipped)
         """
         for layer in filter(helpers.is_polygon_layer, layers):
-            layer.selectionChanged.connect(self.calculate_aoi_area)
+            layer.selectionChanged.connect(self.calculate_aoi_area_selection)
 
     def toggle_use_image_extent_as_aoi(self, provider: str) -> None:
         """Toggle 'Use image extent' checkbox depending on the item in the imagery combo box.
@@ -401,7 +400,7 @@ class Mapflow(QObject):
         # Reproject to WGS84, if necessary
         layer_crs: QgsCoordinateReferenceSystem = aoi_layer.crs()
         if layer_crs != helpers.WGS84:
-            aoi = helpers.to_wgs84(aoi, layer_crs, self.project.transformContext())
+            aoi = helpers.to_wgs84(aoi, layer_crs)
         # Get the '{min_lon},{min_lat} : {max_lon},{max_lat}' (SW-NE) representation of the AOI's bbox
         extent = aoi.boundingBox().toString()
         # Change lon,lat to lat,lon for Maxar
@@ -494,63 +493,57 @@ class Mapflow(QObject):
         selected_cells = self.dlg.maxarMetadataTable.selectedItems()
         return selected_cells[config.MAXAR_METADATA_ID_COLUMN_INDEX].text() if selected_cells else ''
 
-    def calculate_aoi_area(self, arg: Optional[Union[bool, QgsMapLayer, List[QgsFeature]]]) -> None:
+    def calculate_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
+        """"""
+        if not layer:
+            self.dlg.labelAoiArea.clear()
+            return
+        if layer.featureCount() == 1:
+            features = layer.getFeatures()
+        elif len(list(layer.getSelectedFeatures())) == 1:
+            features = layer.getSelectedFeatures()
+        else:
+            self.dlg.labelAoiArea.clear()
+            return
+        self.calculate_aoi_area(next(features).geometry(), layer.crs())
+
+    def calculate_aoi_area_raster(self, layer: Union[QgsRasterLayer, None]) -> None:
+        """"""
+        if layer:
+            self.calculate_aoi_area(QgsGeometry.fromRect(layer.extent()), layer.crs())
+        else:
+            self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+
+    def calculate_aoi_area_use_image_extent(self, use_image_extent: bool) -> None:
+        """"""
+        if use_image_extent:
+            self.calculate_aoi_area_raster(self.dlg.rasterCombo.currentLayer())
+        else:
+            self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+
+    def calculate_aoi_area_selection(self, _: List[QgsFeature]) -> None:
+        """"""
+        layer = self.dlg.polygonCombo.currentLayer()
+        if layer == self.iface.activeLayer():
+            self.calculate_aoi_area_polygon_layer(layer)
+
+    def calculate_aoi_area(self, aoi: QgsGeometry, crs: QgsCoordinateReferenceSystem) -> None:
         """Display the AOI size in sq.km.
 
-        Users are charged by the amount of sq km they process. So it's important for them to know
-        the size of the current AOI.
-        An AOI must be a single feature, or the extent of a GeoTIFF layer, so the area is only displayed when either:
-            a) the layer in the polygon combo has a single feature, or, if more, a single feature is selected in it
-            b) 'Use image extent' is checked and the current raster combo entry is a GeoTIFF layer
-        The area is calculated on the sphere if the CRS is geographical.
-
-        Is called when the current layer has been changed in either of the combos in the processings tab.
-
-        :param arg: A list of selected polygons (layer selection changed),
-            a polygon or raster layer (combo item changed),
-            or the state of the 'Use image extent' checkbox
+        :param aoi: the processing area.
+        :param crs: the CRS of the processing area.
         """
-        if arg is None:  # 'virtual' layer: a web tile provider
-            layer = self.dlg.polygonCombo.currentLayer()
-            if not layer:
-                self.dlg.labelAoiArea.setText('')
-                return
-        elif isinstance(arg, list):  # feature selection changed
-            layer = self.dlg.polygonCombo.currentLayer()
-            # All polygon layers are monitored so have to check if it's the one in the combo
-            if layer != self.iface.activeLayer():
-                return
-        elif isinstance(arg, bool):  # 'Use image extent as AOI' toggled
-            combo = self.dlg.rasterCombo if arg else self.dlg.polygonCombo
-            layer = combo.currentLayer()
-            if not layer:
-                self.dlg.labelAoiArea.setText('')
-                return
-        else:  # A new layer has been selected
-            layer = arg
-        # Layer identified, now let's extract the geometry
-        aoi: QgsGeometry
-        if layer.type() == QgsMapLayerType.RasterLayer:
-            aoi = QgsGeometry.fromRect(layer.extent())
-        elif layer.featureCount() == 1:
-            aoi = next(layer.getFeatures()).geometry()
-        elif len(list(layer.getSelectedFeatures())) == 1:
-            aoi = next(layer.getSelectedFeatures()).geometry()
-        else:
-            self.dlg.labelAoiArea.setText('')
+        if not crs.authid():  # unidentified CRS; calculations may be erroneous
+            self.dlg.labelAoiArea.clear()
+            self.aoi = None
             return
-        layer_crs: QgsCoordinateReferenceSystem = layer.crs()
-        if not layer_crs.authid():  # unidentified CRS; calculations may be erroneous
-            self.dlg.labelAoiArea.setText('')
-            return
-        # Now, do the math
+        self.aoi = aoi  # for reuse in processing creation or metadata request
         calculator = QgsDistanceArea()
-        # Set ellipsoid to calculate on sphere for geographic CRSs; default to 7030 (WGS84)
-        calculator.setEllipsoid(layer_crs.ellipsoidAcronym() or 'EPSG:7030')
-        calculator.setSourceCrs(layer_crs, self.project.transformContext())
+        # Set ellipsoid to calculate on sphere if the CRS is geographic; default to 7030 (WGS84)
+        calculator.setEllipsoid(crs.ellipsoidAcronym() or 'EPSG:7030')
+        calculator.setSourceCrs(crs, self.project.transformContext())
         self.aoi_size = calculator.measureArea(aoi) / 10**6  # sq. m to sq.km
-        label = self.tr('Area: {:.2f} sq.km').format(self.aoi_size)
-        self.dlg.labelAoiArea.setText(label)
+        self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
 
     def delete_processings(self) -> None:
         """Delete one or more processings from the server.
@@ -650,7 +643,6 @@ class Mapflow(QObject):
             }
         }
         params = {}  # processing parameters
-        transform_context = self.project.transformContext()
         providers = self.settings.value('providers')
         if raster_option in providers:
             params['raster_login'] = self.dlg.providerUsername.text()
@@ -673,7 +665,7 @@ class Mapflow(QObject):
         processing_params['params'] = params
         # Get processing AOI
         if self.dlg.useImageExtentAsAoi.isChecked():
-            aoi_geometry = helpers.get_layer_extent(imagery, transform_context)
+            aoi_geometry = helpers.get_layer_extent(imagery)
         else:
             aoi_layer = self.dlg.polygonCombo.currentLayer()
             # AOI must be either the only feature or the only selected feature in its layer
@@ -693,7 +685,7 @@ class Mapflow(QObject):
             # Reproject it to WGS84 if the layer has another CRS
             layer_crs = aoi_layer.crs()
             if layer_crs != helpers.WGS84:
-                aoi_geometry = helpers.to_wgs84(aoi_geometry, layer_crs, transform_context)
+                aoi_geometry = helpers.to_wgs84(aoi_geometry, layer_crs)
             # Clip AOI to image extent if a single Maxar image is requested
             selected_image = self.dlg.maxarMetadataTable.selectedItems()
             if raster_option in config.MAXAR_PRODUCTS and selected_image:
@@ -1005,11 +997,8 @@ class Mapflow(QObject):
         # Extract BBOX corners manually to construct a BBOX
         min_lon, *_, max_lon = sorted([point[0] for point in aoi_outer_ring])
         min_lat, *_, max_lat = sorted([point[1] for point in aoi_outer_ring])
-        raster.setExtent(helpers.from_wgs84(
-            QgsGeometry.fromRect(QgsRectangle(min_lon, min_lat, max_lon, max_lat)),
-            raster.crs(),
-            self.project.transformContext()
-        ).boundingBox())
+        extent = QgsGeometry.fromRect(QgsRectangle(min_lon, min_lat, max_lon, max_lat))
+        raster.setExtent(helpers.from_wgs84(extent, raster.crs()).boundingBox())
         # Add the layers to the project
         self.add_layer(raster)
         self.add_layer(vector)
@@ -1289,8 +1278,7 @@ class Mapflow(QObject):
         self.dlg.remainingLimit.setText(self.tr('Processing limit: {} sq.km').format(self.remaining_limit))
         self.dlg.modelCombo.clear()
         self.dlg.modelCombo.addItems([wd['name'] for wd in response['workflowDefs']])
-        combo = self.dlg.rasterCombo if self.dlg.useImageExtentAsAoi.isChecked() else self.dlg.polygonCombo
-        self.calculate_aoi_area(combo.currentLayer())
+        self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
         # Restore table section sizes
         for table in 'processingsTable', 'maxarMetadataTable':
             header = getattr(self.dlg, table).horizontalHeader()
