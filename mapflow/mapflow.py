@@ -118,10 +118,11 @@ class Mapflow(QObject):
         self.dlg.selectTif.clicked.connect(self.select_tif)
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.rasterCombo.currentTextChanged.connect(self.toggle_use_image_extent_as_aoi)
-        self.dlg.useImageExtentAsAoi.stateChanged.connect(
-            lambda is_checked: self.dlg.polygonCombo.setEnabled(not is_checked)
-        )
+        self.dlg.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
         self.dlg.startProcessing.clicked.connect(self.create_processing)
+        # Sync polygon layer combos
+        self.dlg.polygonCombo.layerChanged.connect(self.dlg.maxarAOICombo.setLayer)
+        self.dlg.maxarAOICombo.layerChanged.connect(self.dlg.polygonCombo.setLayer)
         # Calculate AOI area
         self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area_polygon_layer)
         self.dlg.rasterCombo.layerChanged.connect(self.calculate_aoi_area_raster)
@@ -154,6 +155,11 @@ class Mapflow(QObject):
                 use_default_error_handler=False  # ignore errors to prevent repetitive alerts
             )
         )
+
+    def toggle_polygon_combos(self, use_image_extent: bool) -> None:
+        """"""
+        self.dlg.polygonCombo.setEnabled(not use_image_extent)
+        self.dlg.maxarAOICombo.setEnabled(not use_image_extent)
 
     def clear_metadata_table(self) -> None:
         """Reset Maxar metadata table when user changes the provider in the list."""
@@ -370,8 +376,7 @@ class Mapflow(QObject):
         if provider not in config.MAXAR_PRODUCTS:
             self.alert(self.tr('Select a Maxar product in the provider list'))
             return
-        aoi_layer = self.dlg.maxarAOICombo.currentLayer()
-        if not aoi_layer:
+        if not (self.dlg.maxarAOICombo.isEnabled() and self.aoi):
             self.alert(self.tr('Please, select an area of interest'))
             return
         # Start off with the static params
@@ -385,24 +390,8 @@ class Mapflow(QObject):
             'WIDTH': 3000,
             'HEIGHT': 3000
         }
-        # Get the AOI feature within the layer
-        if aoi_layer.featureCount() == 1:
-            aoi_feature = next(aoi_layer.getFeatures())
-        elif len(list(aoi_layer.getSelectedFeatures())) == 1:
-            aoi_feature = next(aoi_layer.getSelectedFeatures())
-        elif aoi_layer.featureCount() == 0:
-            self.alert(self.tr('Your AOI layer is empty'))
-            return
-        else:
-            self.alert(self.tr('Please, select a single feature in your AOI layer'))
-            return
-        aoi = aoi_feature.geometry()
-        # Reproject to WGS84, if necessary
-        layer_crs: QgsCoordinateReferenceSystem = aoi_layer.crs()
-        if layer_crs != helpers.WGS84:
-            aoi = helpers.to_wgs84(aoi, layer_crs)
-        # Get the '{min_lon},{min_lat} : {max_lon},{max_lat}' (SW-NE) representation of the AOI's bbox
-        extent = aoi.boundingBox().toString()
+        # Get a '{min_lon},{min_lat} : {max_lon},{max_lat}' (SW-NE) representation of the AOI
+        extent = self.aoi.boundingBox().toString()
         # Change lon,lat to lat,lon for Maxar
         coords = [position.split(',')[::-1] for position in extent.split(':')]
         params['BBOX'] = ','.join([coord.strip() for position in coords for coord in position])
@@ -537,11 +526,13 @@ class Mapflow(QObject):
             self.dlg.labelAoiArea.clear()
             self.aoi = None
             return
-        self.aoi = aoi  # for reuse in processing creation or metadata request
+        if crs != helpers.WGS84:
+            aoi = helpers.to_wgs84(aoi, crs)
+        self.aoi = aoi  # save for reuse in processing creation or metadata request
         calculator = QgsDistanceArea()
         # Set ellipsoid to calculate on sphere if the CRS is geographic; default to 7030 (WGS84)
-        calculator.setEllipsoid(crs.ellipsoidAcronym() or 'EPSG:7030')
-        calculator.setSourceCrs(crs, self.project.transformContext())
+        calculator.setEllipsoid('EPSG:7030')  # WGS84 ellipsoid
+        calculator.setSourceCrs(helpers.WGS84, self.project.transformContext())
         self.aoi_size = calculator.measureArea(aoi) / 10**6  # sq. m to sq.km
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
 
@@ -603,7 +594,7 @@ class Mapflow(QObject):
         if processing_name in self.processing_names:
             self.alert(self.tr('Processing name taken. Please, choose a different name.'))
             return
-        if not (self.dlg.polygonCombo.currentLayer() or self.dlg.useImageExtentAsAoi.isChecked()):
+        if not self.aoi:
             self.alert(self.tr('Please, select an area of interest'))
             return
         if self.remaining_limit < self.aoi_size:
@@ -663,35 +654,13 @@ class Mapflow(QObject):
             params['cache_raster_update'] = str(self.dlg.updateCache.isChecked()).lower()
             self.save_provider_auth()
         processing_params['params'] = params
-        # Get processing AOI
         if self.dlg.useImageExtentAsAoi.isChecked():
-            aoi_geometry = helpers.get_layer_extent(imagery)
-        else:
-            aoi_layer = self.dlg.polygonCombo.currentLayer()
-            # AOI must be either the only feature or the only selected feature in its layer
-            feature_count = aoi_layer.featureCount()
-            selected_features = list(aoi_layer.getSelectedFeatures())
-            if feature_count == 1:
-                aoi_feature = next(aoi_layer.getFeatures())
-            elif len(selected_features) == 1:
-                aoi_feature = selected_features[0]
-            elif feature_count == 0:
-                self.alert(self.tr('Your AOI layer is empty'))
-                return
-            else:
-                self.alert(self.tr('Please, select a single feature in your AOI layer'))
-                return
-            aoi_geometry = aoi_feature.geometry()
-            # Reproject it to WGS84 if the layer has another CRS
-            layer_crs = aoi_layer.crs()
-            if layer_crs != helpers.WGS84:
-                aoi_geometry = helpers.to_wgs84(aoi_geometry, layer_crs)
             # Clip AOI to image extent if a single Maxar image is requested
             selected_image = self.dlg.maxarMetadataTable.selectedItems()
             if raster_option in config.MAXAR_PRODUCTS and selected_image:
                 aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
                 aoi = QgsFeature()
-                aoi.setGeometry(aoi_geometry)
+                aoi.setGeometry(self.aoi)
                 aoi_layer.dataProvider().addFeatures([aoi])
                 aoi_layer.updateExtents()
                 # Create a temp layer for the image extent
