@@ -418,7 +418,7 @@ class Mapflow(QObject):
             self.http.post(
                 url=f'{self.server}/meta',
                 callback=self.get_maxar_metadata_callback,
-                callback_kwargs={'product': provider},
+                callback_kwargs={'product': provider, 'aoi': self.aoi},
                 body=json.dumps({
                     'url': url,
                     'connectId': provider.split()[1].lower()
@@ -437,7 +437,7 @@ class Mapflow(QObject):
         else:
             self.report_error(response, self.tr("We couldn't get metadata from Maxar"))
 
-    def get_maxar_metadata_callback(self, response: QNetworkReply, product: str) -> None:
+    def get_maxar_metadata_callback(self, response: QNetworkReply, product: str, aoi: QgsGeometry) -> None:
         """Handle metadata request' response in case of success.
 
         :param response: The HTTP response.
@@ -450,6 +450,13 @@ class Mapflow(QObject):
         with open(output_file_name, 'wb') as f:
             f.write(response.readAll().data())
         self.metadata_layer = QgsVectorLayer(output_file_name, layer_name, 'ogr')
+        # Omit metadata that intersects the extent but no the AOI itself
+        # aoi_geometry_engine = QgsGeometry.createGeometryEngine(aoi.constGet())
+        # aoi_geometry_engine.prepareGeometry()
+        # self.metadata_layer.dataProvider().deleteFeatures([
+        #     feature.id() for feature in self.metadata_layer.getFeatures()
+        #     if aoi_geometry_engine.intersects(feature.geometry().constGet())
+        # ])
         self.add_layer(self.metadata_layer)
         # Add style
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'wfs.qml'))
@@ -487,6 +494,7 @@ class Mapflow(QObject):
         """"""
         if not layer:
             self.dlg.labelAoiArea.clear()
+            self.aoi = self.aoi_size = None
             return
         if layer.featureCount() == 1:
             features = layer.getFeatures()
@@ -494,6 +502,7 @@ class Mapflow(QObject):
             features = layer.getSelectedFeatures()
         else:
             self.dlg.labelAoiArea.clear()
+            self.aoi = self.aoi_size = None
             return
         self.calculate_aoi_area(next(features).geometry(), layer.crs())
 
@@ -531,7 +540,7 @@ class Mapflow(QObject):
         """
         if not crs.authid():  # unidentified CRS; calculations may be erroneous
             self.dlg.labelAoiArea.clear()
-            self.aoi = None
+            self.aoi = self.aoi_size = None
             return
         if crs != helpers.WGS84:
             aoi = helpers.to_wgs84(aoi, crs)
