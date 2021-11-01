@@ -310,6 +310,7 @@ class Mapflow(QObject):
         """
         for layer in filter(helpers.is_polygon_layer, layers):
             layer.selectionChanged.connect(self.calculate_aoi_area_selection)
+            layer.editingStopped.connect(self.calculate_aoi_area_layer_edited)
 
     def toggle_use_image_extent_as_aoi(self, provider: str) -> None:
         """Toggle 'Use image extent' checkbox depending on the item in the imagery combo box.
@@ -514,6 +515,12 @@ class Mapflow(QObject):
         """"""
         layer = self.dlg.polygonCombo.currentLayer()
         if layer == self.iface.activeLayer():
+            self.calculate_aoi_area_polygon_layer(layer)
+
+    def calculate_aoi_area_layer_edited(self) -> None:
+        """"""
+        layer = self.sender()
+        if layer == self.dlg.polygonCombo.currentLayer():
             self.calculate_aoi_area_polygon_layer(layer)
 
     def calculate_aoi_area(self, aoi: QgsGeometry, crs: QgsCoordinateReferenceSystem) -> None:
