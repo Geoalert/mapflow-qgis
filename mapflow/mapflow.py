@@ -1080,7 +1080,10 @@ class Mapflow(QObject):
             self.remaining_limit -= round(next(filter(
                 lambda x: x['name'] == processing, processings
             ))['aoiArea']/10**6)
-            self.dlg.remainingLimit.setText(self.tr('Processing limit: {} sq.km').format(self.remaining_limit))
+            if self.plugin_name == 'Mapflow':
+                self.dlg.remainingLimit.setText(
+                    self.tr('Processing limit: {} sq.km').format(self.remaining_limit)
+                )
         # Save as an instance attribute to reuse elsewhere
         self.processings = processings
         # Save ref to check name uniqueness at processing creation
@@ -1258,7 +1261,10 @@ class Mapflow(QObject):
         else:
             self.remaining_limit = round((user['areaLimit'] - user['processedArea']) * 1e-6)
         self.aoi_area_limit = response['user']['aoiAreaLimit'] * 1e-6
-        self.dlg.remainingLimit.setText(self.tr('Processing limit: {} sq.km').format(self.remaining_limit))
+        if self.plugin_name == 'Mapflow':
+            self.dlg.remainingLimit.setText(
+                self.tr('Processing limit: {} sq.km').format(self.remaining_limit)
+            )
         self.dlg.modelCombo.clear()
         self.dlg.modelCombo.addItems([wd['name'] for wd in response['workflowDefs']])
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
