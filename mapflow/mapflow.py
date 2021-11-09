@@ -688,8 +688,8 @@ class Mapflow(QObject):
                     'qgis:intersection',
                     {'INPUT': aoi_layer, 'OVERLAY': image_extent_layer, 'OUTPUT': 'memory:'}
                 )['OUTPUT']
-                aoi_geometry = next(intersection.getFeatures()).geometry()
-        processing_params['geometry'] = json.loads(aoi_geometry.asJson())
+                self.aoi = next(intersection.getFeatures()).geometry()
+        processing_params['geometry'] = json.loads(self.aoi.asJson())
         if not imagery:
             self.post_processing(processing_params)
             return
