@@ -650,12 +650,14 @@ class Mapflow(QObject):
         params = {}  # processing parameters
         providers = self.settings.value('providers')
         if raster_option in providers:
-            params['raster_login'] = self.dlg.providerUsername.text()
-            params['raster_password'] = self.dlg.providerPassword.text()
             params['url'] = providers[raster_option]['url']
+            use_auth = self.dlg.providerAuthGroup.isChecked()
+            if use_auth:
+                params['raster_login'] = self.dlg.providerUsername.text()
+                params['raster_password'] = self.dlg.providerPassword.text()
             if raster_option in config.MAXAR_PRODUCTS:  # add Connect ID and CQL Filter, if any
                 processing_params['meta']['source'] = 'maxar'
-                if params['raster_login'] or params['raster_password']:  # user's own account
+                if use_auth:  # user's own account
                     params['url'] += '&CONNECTID=' + providers[raster_option]['connectId']
                 else:  # our account
                     processing_params['meta']['maxar_product'] = raster_option.split()[1].lower()
