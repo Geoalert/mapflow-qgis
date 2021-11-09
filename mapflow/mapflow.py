@@ -386,8 +386,6 @@ class Mapflow(QObject):
             'TYPENAME': 'DigitalGlobe:FinishedFeature',
             'SERVICE': 'WFS',
             'VERSION': '2.0.0',
-            'SRSNAME': 'EPSG:4326',
-            'FEATUREPROFILE': 'Default_Profile',
             'WIDTH': 3000,
             'HEIGHT': 3000
         }
