@@ -865,8 +865,12 @@ class Mapflow(QObject):
         provider_info = self.settings.value('providers')[provider]
         url = provider_info['url']
         if provider in config.MAXAR_PRODUCTS:
-            if username or password:  # own account
-                url += '&CONNECTID=' + provider_info['connectId']
+            if self.dlg.providerAuthGroup.isChecked():  # own account
+                connect_id = provider_info['connectId']
+                if connect_id == '----':
+                    self.show_connect_id_dialog(provider)
+                    return
+                url += '&CONNECTID=' + connect_id
                 url = url.replace('jpeg', 'png')  # for transparency support
             else:  # our account; send to our endpoint
                 url = self.server + '/png?TileRow={y}&TileCol={x}&TileMatrix={z}'
