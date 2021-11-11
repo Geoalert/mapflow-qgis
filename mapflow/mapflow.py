@@ -441,7 +441,7 @@ class Mapflow(QObject):
         url = 'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?' + query_params
         if self.dlg.providerAuthGroup.isChecked():  # user's own account
             connect_id = self.settings.value('providers')[provider]['connectId']
-            if connect_id == '----':
+            if not connect_id:
                 self.show_connect_id_dialog(provider)
                 return
             url += '&CONNECTID=' + connect_id
@@ -719,12 +719,11 @@ class Mapflow(QObject):
             if raster_option in config.MAXAR_PRODUCTS:  # add Connect ID and CQL Filter, if any
                 processing_params['meta']['source'] = 'maxar'
                 if use_auth:  # user's own account
-                    connect_id = providers[raster_option]['connectId']
-                    if connect_id == '----':
+                    if providers[raster_option]['connectId']:
+                        params['url'] += '&CONNECTID=' + providers[raster_option]['connectId']
+                    else:
                         self.show_connect_id_dialog(raster_option)
                         return
-                    else:
-                        params['url'] += '&CONNECTID=' + connect_id
                 else:  # our account
                     processing_params['meta']['maxar_product'] = raster_option.split()[1].lower()
                 image_id = self.get_maxar_image_id()
@@ -879,12 +878,12 @@ class Mapflow(QObject):
         url = provider_info['url']
         if provider in config.MAXAR_PRODUCTS:
             if self.dlg.providerAuthGroup.isChecked():  # own account
-                connect_id = provider_info['connectId']
-                if connect_id == '----':
+                if provider_info['connectId']:
+                    url += '&CONNECTID=' + provider_info['connectId']
+                    url = url.replace('jpeg', 'png')  # for transparency support
+                else:
                     self.show_connect_id_dialog(provider)
                     return
-                url += '&CONNECTID=' + connect_id
-                url = url.replace('jpeg', 'png')  # for transparency support
             else:  # our account; send to our endpoint
                 url = self.server + '/png?TileRow={y}&TileCol={x}&TileMatrix={z}'
                 url += '&CONNECTID=' + provider.split()[1].lower()

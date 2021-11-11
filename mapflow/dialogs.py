@@ -55,11 +55,6 @@ class ConnectIdDialog(*uic.loadUiType(ui_path/'connect_id_dialog.ui')):
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(plugin_icon)
-        self.connectId.textChanged.connect(
-            lambda text: self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(
-                self.connectId.hasAcceptableInput() or len(text) == 4  # dashes
-            )
-        )
 
 
 class ImageIdDialog(*uic.loadUiType(ui_path/'aws_image_id_dialog.ui')):
@@ -68,10 +63,6 @@ class ImageIdDialog(*uic.loadUiType(ui_path/'aws_image_id_dialog.ui')):
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(plugin_icon)
-        self.imageId.textChanged.connect(
-            lambda text:
-            self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(not text or len(text) == 34)
-        )
 
 
 class ErrorMessage(*uic.loadUiType(ui_path/'error_message.ui')):
