@@ -512,7 +512,7 @@
        <item>
         <widget class="QgsCollapsibleGroupBox" name="providerAuthGroup">
          <property name="title">
-          <string>Credentials</string>
+          <string>Use imagery provider credentials</string>
          </property>
          <property name="flat">
           <bool>true</bool>

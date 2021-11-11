@@ -139,17 +139,12 @@ class Mapflow(QObject):
         self.dlg.editProvider.clicked.connect(lambda: self.dlg_provider.setProperty('mode', 'edit'))
         self.dlg.removeProvider.clicked.connect(self.remove_provider)
         self.dlg.maxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
-        self.dlg.providerAuthGroup.toggled.connect(
-            lambda enabled: self.dlg.maxZoom.setMaximum(
-                21 if enabled or self.is_premium_user or self.dlg.providerAuthGroup.isChecked()
-                else config.MAXAR_MAX_FREE_ZOOM
-            )
-        )
+        self.dlg.providerAuthGroup.toggled.connect(self.limit_zoom_auth_toggled)
         # Maxar
         self.dlg.maxarMetadataTable.itemSelectionChanged.connect(self.highlight_maxar_image)
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
         self.dlg.maxarMetadataTable.cellDoubleClicked.connect(self.preview)
-        self.dlg.providerCombo.currentTextChanged.connect(self.limit_max_zoom_for_maxar)
+        self.dlg.providerCombo.currentTextChanged.connect(self.limit_zoom_provider_changed)
         self.dlg.providerCombo.currentTextChanged.connect(self.clear_metadata_table)
         # Poll processings
         self.processing_fetch_timer = QTimer(self.dlg)
@@ -163,7 +158,10 @@ class Mapflow(QObject):
         )
 
     def toggle_polygon_combos(self, use_image_extent: bool) -> None:
-        """"""
+        """Disable polygon combos when Use image extent is checked.
+
+        :param use_image_extent: Whether the corresponding checkbox is checked
+        """
         self.dlg.polygonCombo.setEnabled(not use_image_extent)
         self.dlg.maxarAOICombo.setEnabled(not use_image_extent)
 
@@ -172,10 +170,33 @@ class Mapflow(QObject):
         self.dlg.maxarMetadataTable.clearContents()
         self.dlg.maxarMetadataTable.setRowCount(0)
 
-    def limit_max_zoom_for_maxar(self, provider: str) -> None:
-        """Limit zoom to MAXAR_MAX_FREE_ZOOM for Maxar if user is not a premium one."""
-        max_zoom = config.MAXAR_MAX_FREE_ZOOM if provider in config.MAXAR_PRODUCTS and not self.is_premium_user and not self.dlg.providerAuthGroup.isChecked() else 21
-        self.dlg.maxZoom.setMaximum(max_zoom)
+    def limit_zoom_auth_toggled(self, enabled: bool) -> None:
+        """Limit zoom for Maxar when our account is to be used.
+
+        :param enabled: Whether the authorization has been enabled or disabled
+        """
+        if (
+            self.dlg.providerCombo.currentText() in config.MAXAR_PRODUCTS
+            and not (enabled or self.is_premium_user)
+        ):
+            self.dlg.maxZoom.setMaximum(config.MAXAR_MAX_FREE_ZOOM)
+        else:
+            self.dlg.maxZoom.setMaximum(config.MAX_ZOOM)
+            self.dlg.maxZoom.setValue(config.DEFAULT_ZOOM)
+
+    def limit_zoom_provider_changed(self, provider: str) -> None:
+        """Limit zoom for Maxar when our account is to be used.
+
+        :param provider: The currently selected provider
+        """
+        if provider in config.MAXAR_PRODUCTS and not (
+            self.is_premium_user or
+            self.dlg.providerAuthGroup.isChecked()
+        ):
+            self.dlg.maxZoom.setMaximum(config.MAXAR_MAX_FREE_ZOOM)
+        else:
+            self.dlg.maxZoom.setMaximum(config.MAX_ZOOM)
+            self.dlg.maxZoom.setValue(config.DEFAULT_ZOOM)
 
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
@@ -275,7 +296,10 @@ class Mapflow(QObject):
             self.dlg_provider.show()
 
     def update_providers(self, providers: dict) -> None:
-        """Update imagery & providers dropdown list after editing or adding a new one."""
+        """Update imagery & providers dropdown list after editing or adding a new one.
+
+        :param providers: the new provider config to use
+        """
         self.dlg.rasterCombo.setAdditionalItems((*providers, 'Mapbox'))
         self.dlg.providerCombo.clear()
         self.dlg.providerCombo.addItems(providers)
@@ -402,24 +426,24 @@ class Mapflow(QObject):
         params['BBOX'] = ','.join([coord.strip() for position in coords for coord in position])
         query_params = '&'.join(f'{key}={val}' for key, val in params.items())
         url = 'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?' + query_params
-        # Read credentials
-        username = self.dlg.providerUsername.text()
-        password = self.dlg.providerPassword.text()
-        if username or password:  # user has their own account
+        if self.dlg.providerAuthGroup.isChecked():  # user's own account
             connect_id = self.settings.value('providers')[provider]['connectId']
-            if not connect_id:
+            if connect_id == '----':
                 self.show_connect_id_dialog(provider)
                 return
             url += '&CONNECTID=' + connect_id
+            encoded_credentials = b64encode(':'.join((
+                self.dlg.providerUsername.text(),
+                self.dlg.providerPassword.text()
+            )).encode())
             self.http.get(
                 url=url,
                 callback=self.get_maxar_metadata_callback,
                 callback_kwargs={'product': provider, 'aoi': self.aoi},
                 error_handler=self.get_maxar_metadata_error_handler,
-                basic_auth=f'Basic {b64encode(f"{username}:{password}".encode()).decode()}'.encode(),
+                basic_auth=f'Basic {encoded_credentials.decode()}'.encode(),
             )
         else:  # assume user wants to use our account, proxy thru Mapflow
-            print(self.aoi)
             self.http.post(
                 url=f'{self.server}/meta',
                 callback=self.get_maxar_metadata_callback,
@@ -496,7 +520,11 @@ class Mapflow(QObject):
         return selected_cells[config.MAXAR_METADATA_ID_COLUMN_INDEX].text() if selected_cells else ''
 
     def calculate_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
-        """"""
+        """Get the AOI size when polygon layer is changed or its features are changed, 
+        or a one of its features is selected.
+
+        :param layer: The current polygon layer
+        """
         if not layer:
             self.dlg.labelAoiArea.clear()
             self.aoi = self.aoi_size = None
@@ -512,27 +540,36 @@ class Mapflow(QObject):
         self.calculate_aoi_area(next(features).geometry(), layer.crs())
 
     def calculate_aoi_area_raster(self, layer: Union[QgsRasterLayer, None]) -> None:
-        """"""
+        """Get the AOI size when a new entry in the raster combo box is selected.
+
+        :param layer: The current raster layer
+        """
         if layer:
             self.calculate_aoi_area(QgsGeometry.fromRect(layer.extent()), layer.crs())
         else:
             self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
 
     def calculate_aoi_area_use_image_extent(self, use_image_extent: bool) -> None:
-        """"""
+        """Get the AOI size when the Use image extent checkbox is toggled.
+
+        :param use_image_extent: The current state of the checkbox
+        """
         if use_image_extent:
             self.calculate_aoi_area_raster(self.dlg.rasterCombo.currentLayer())
         else:
             self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
 
     def calculate_aoi_area_selection(self, _: List[QgsFeature]) -> None:
-        """"""
+        """Get the AOI size when the selection changed on a polygon layer.
+
+        :param _: A list of currently selected features
+        """
         layer = self.dlg.polygonCombo.currentLayer()
         if layer == self.iface.activeLayer():
             self.calculate_aoi_area_polygon_layer(layer)
 
     def calculate_aoi_area_layer_edited(self) -> None:
-        """"""
+        """Get the AOI size when a feature is added or remove from a layer."""
         layer = self.sender()
         if layer == self.dlg.polygonCombo.currentLayer():
             self.calculate_aoi_area_polygon_layer(layer)
@@ -669,7 +706,12 @@ class Mapflow(QObject):
             if raster_option in config.MAXAR_PRODUCTS:  # add Connect ID and CQL Filter, if any
                 processing_params['meta']['source'] = 'maxar'
                 if use_auth:  # user's own account
-                    params['url'] += '&CONNECTID=' + providers[raster_option]['connectId']
+                    connect_id = providers[raster_option]['connectId']
+                    if connect_id == '----':
+                        self.show_connect_id_dialog(raster_option)
+                        return
+                    else:
+                        params['url'] += '&CONNECTID=' + connect_id
                 else:  # our account
                     processing_params['meta']['maxar_product'] = raster_option.split()[1].lower()
                 image_id = self.get_maxar_image_id()
@@ -1272,7 +1314,7 @@ class Mapflow(QObject):
         response = json.loads(response.readAll().data())
         user = response['user']
         self.is_premium_user = user['isPremium']
-        self.limit_max_zoom_for_maxar(self.dlg.providerCombo.currentText())
+        self.limit_zoom_provider_changed(self.dlg.providerCombo.currentText())
         if user['role'] == 'ADMIN':
             self.remaining_limit = 1e+5  # 100K sq. km
         else:
