@@ -408,11 +408,12 @@ class Mapflow(QObject):
             self.http.get(
                 url=url,
                 callback=self.get_maxar_metadata_callback,
-                callback_kwargs={'product': provider},
+                callback_kwargs={'product': provider, 'aoi': self.aoi},
                 error_handler=self.get_maxar_metadata_error_handler,
                 basic_auth=f'Basic {b64encode(f"{username}:{password}".encode()).decode()}'.encode(),
             )
         else:  # assume user wants to use our account, proxy thru Mapflow
+            print(self.aoi)
             self.http.post(
                 url=f'{self.server}/meta',
                 callback=self.get_maxar_metadata_callback,
