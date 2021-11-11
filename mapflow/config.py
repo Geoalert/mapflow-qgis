@@ -6,6 +6,7 @@ PROCESSING_TABLE_ID_COLUMN_INDEX = 5
 # MAXAR
 MAXAR_METADATA_ATTRIBUTES = 'productType', 'colorBandOrder', 'cloudCover', 'offNadirAngle', 'acquisitionDate', 'featureId'
 MAXAR_METADATA_ID_COLUMN_INDEX = MAXAR_METADATA_ATTRIBUTES.index('featureId')
+MAXAR_MAX_FREE_ZOOM = 13
 # MISC
 MAXAR_PRODUCTS = {
     'Maxar SecureWatch': {

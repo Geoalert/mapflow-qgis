@@ -139,6 +139,12 @@ class Mapflow(QObject):
         self.dlg.editProvider.clicked.connect(lambda: self.dlg_provider.setProperty('mode', 'edit'))
         self.dlg.removeProvider.clicked.connect(self.remove_provider)
         self.dlg.maxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
+        self.dlg.providerAuthGroup.toggled.connect(
+            lambda enabled: self.dlg.maxZoom.setMaximum(
+                21 if enabled or self.is_premium_user or self.dlg.providerAuthGroup.isChecked()
+                else config.MAXAR_MAX_FREE_ZOOM
+            )
+        )
         # Maxar
         self.dlg.maxarMetadataTable.itemSelectionChanged.connect(self.highlight_maxar_image)
         self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
@@ -167,8 +173,8 @@ class Mapflow(QObject):
         self.dlg.maxarMetadataTable.setRowCount(0)
 
     def limit_max_zoom_for_maxar(self, provider: str) -> None:
-        """Limit zoom to 13 for Maxar if user is not a premium one."""
-        max_zoom = 13 if provider in config.MAXAR_PRODUCTS and not self.is_premium_user else 21
+        """Limit zoom to MAXAR_MAX_FREE_ZOOM for Maxar if user is not a premium one."""
+        max_zoom = config.MAXAR_MAX_FREE_ZOOM if provider in config.MAXAR_PRODUCTS and not self.is_premium_user and not self.dlg.providerAuthGroup.isChecked() else 21
         self.dlg.maxZoom.setMaximum(max_zoom)
 
     def save_dialog_state(self):
@@ -622,7 +628,11 @@ class Mapflow(QObject):
             ).format(self.aoi_area_limit))
             return
         raster_option = self.dlg.rasterCombo.currentText()
-        if raster_option in config.MAXAR_PRODUCTS and not self.is_premium_user:
+        if (
+            raster_option in config.MAXAR_PRODUCTS and
+            not self.is_premium_user and
+            not self.dlg.providerAuthGroup.isChecked()
+        ):
             ErrorMessage(
                 self.dlg,
                 self.tr('Click on the link below to send us an email'),
@@ -841,7 +851,11 @@ class Mapflow(QObject):
         params = {
             'type': provider_info['type'],
             'url': url_escaped,
-            'zmax':  self.dlg.maxZoom.value(),
+            'zmax':  (
+                self.dlg.maxZoom.value()
+                if self.is_premium_user or self.dlg.providerAuthGroup.isChecked()
+                else config.MAXAR_MAX_FREE_ZOOM
+            ),
             'zmin': 0,
             'username': username,
             'password': password
