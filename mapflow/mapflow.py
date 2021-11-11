@@ -23,7 +23,7 @@ from qgis.core import (
     QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter, QgsRectangle
 )
 
-from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, ErrorMessage
+from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, ImageIdDialog, ErrorMessage
 from .http import Http
 from . import helpers, config
 
@@ -82,6 +82,7 @@ class Mapflow(QObject):
         self.dlg_provider = ProviderDialog(self.dlg)
         self.dlg_provider.accepted.connect(self.add_or_edit_provider)
         self.dlg_connect_id = ConnectIdDialog(self.dlg)
+        self.dlg_image_id = ImageIdDialog(self.dlg)
         # Display the plugin's version
         metadata_parser = ConfigParser()
         metadata_parser.read(os.path.join(self.plugin_dir, 'metadata.txt'))
@@ -104,7 +105,7 @@ class Mapflow(QObject):
             self.dlg.providerSaveAuth.setChecked(True)
             self.dlg.providerUsername.setText(self.settings.value('providerUsername'))
             self.dlg.providerPassword.setText(self.settings.value('providerPassword'))
-        self.update_providers(self.settings.value('providers') or config.MAXAR_PRODUCTS)
+        self.update_providers(self.settings.value('providers') or config.BUILTIN_PROVIDERS)
         # Hide the ID columns as only needed for table operations, not the user
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
@@ -112,6 +113,7 @@ class Mapflow(QObject):
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
         self.dlg_connect_id.accepted.connect(self.edit_connect_id)
+        self.dlg_image_id.accepted.connect(self.edit_image_id)
         # Connect buttons
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
@@ -285,6 +287,8 @@ class Mapflow(QObject):
         provider = self.dlg.providerCombo.currentText()
         if provider in config.MAXAR_PRODUCTS:
             self.show_connect_id_dialog(provider)
+        elif provider == 'Sentinel':
+            self.show_sentinel_image_id_dialog()
         else:
             self.dlg_provider.setWindowTitle(provider)
             # Fill out the edit dialog with the current data
@@ -305,6 +309,11 @@ class Mapflow(QObject):
         self.dlg.providerCombo.addItems(providers)
         self.settings.setValue('providers', providers)
 
+    def show_sentinel_image_id_dialog(self) -> None:
+        """"""
+        self.dlg_image_id.imageId.setText(self.settings.value('providers')['Sentinel']['imageId'])
+        self.dlg_image_id.show()
+
     def show_connect_id_dialog(self, product: str) -> None:
         """Prepare and show the Connect ID editing dialog.
 
@@ -319,13 +328,17 @@ class Mapflow(QObject):
         self.dlg_connect_id.show()
 
     def edit_connect_id(self) -> None:
-        """Change the Connect ID for the given Maxar product.
-
-        :param provider: Maxar product name, as in the config and dropdown list.
-        """
+        """Change the Connect ID for the given Maxar product."""
         provider = self.dlg.providerCombo.currentText()
         providers = self.settings.value('providers')
         providers[provider]['connectId'] = self.dlg_connect_id.connectId.text()
+        self.settings.setValue('providers', providers)
+
+    def edit_image_id(self) -> None:
+        """Change the AWS Sentinel Image ID."""
+        provider = self.dlg.providerCombo.currentText()
+        providers = self.settings.value('providers')
+        providers[provider]['imageId'] = self.dlg_image_id.imageId.text()
         self.settings.setValue('providers', providers)
 
     def monitor_polygon_layer_feature_selection(self, layers: List[QgsMapLayer]) -> None:

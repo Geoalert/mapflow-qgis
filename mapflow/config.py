@@ -27,6 +27,13 @@ MAXAR_PRODUCTS = {
 # MISC
 MAX_ZOOM = 21
 DEFAULT_ZOOM = 18
+BUILTIN_PROVIDERS = {
+    **MAXAR_PRODUCTS,
+    'Sentinel': {
+        'type': 'aws_sentinel',
+        'imageId': ''
+    }
+}
 STYLES = {
     'Buildings Detection': 'buildings',
     'Buildings Detection With Heights': 'buildings',

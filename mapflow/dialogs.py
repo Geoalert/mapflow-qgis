@@ -62,6 +62,18 @@ class ConnectIdDialog(*uic.loadUiType(ui_path/'connect_id_dialog.ui')):
         )
 
 
+class ImageIdDialog(*uic.loadUiType(ui_path/'aws_image_id_dialog.ui')):
+    def __init__(self, parent: QWidget) -> None:
+        """Constructor."""
+        super().__init__(parent)
+        self.setupUi(self)
+        self.setWindowIcon(plugin_icon)
+        self.imageId.textChanged.connect(
+            lambda text:
+            self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(not text or len(text) == 34)
+        )
+
+
 class ErrorMessage(*uic.loadUiType(ui_path/'error_message.ui')):
     def __init__(self,  parent: QWidget, text: str, title: str = None, email_body: str = '') -> None:
         """An message box notifying user about a plugin error, with a 'Send a report' button."""
