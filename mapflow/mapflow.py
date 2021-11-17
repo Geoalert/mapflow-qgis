@@ -20,7 +20,8 @@ from qgis import processing as qgis_processing  # to avoid collisions
 from qgis.gui import QgsMessageBarItem
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
-    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter, QgsRectangle
+    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter, QgsRectangle,
+    QgsFeatureIterator
 )
 
 from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, ErrorMessage
@@ -641,7 +642,7 @@ class Mapflow(QObject):
         """
         self.report_error(response, self.tr("Error deleting a processing"))
 
-    def clip_aoi_to_image_extent(self, aoi_geometry: QgsGeometry, extent: QgsFeature) -> QgsGeometry:
+    def clip_aoi_to_image_extent(self, aoi_geometry: QgsGeometry, extent: QgsFeature) -> QgsFeatureIterator:
         """Clip user AOI to image extent if the image doesn't cover the entire AOI."""
         aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
         aoi = QgsFeature()
@@ -657,7 +658,7 @@ class Mapflow(QObject):
             'qgis:intersection',
             {'INPUT': aoi_layer, 'OVERLAY': image_extent_layer, 'OUTPUT': 'memory:'}
         )['OUTPUT']
-        return next(intersection.getFeatures()).geometry()
+        return intersection.getFeatures()
 
     def create_processing(self) -> None:
         """Create and start a processing on the server.
@@ -702,12 +703,14 @@ class Mapflow(QObject):
                 )
             ).show()
             return
-        self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
         imagery = self.dlg.rasterCombo.currentLayer()
         if imagery:  # check if local raster is a GeoTIFF
             path = imagery.dataProvider().dataSourceUri()
             if not os.path.splitext(path)[-1] in ('.tif', '.tiff'):
                 self.alert(self.tr('Please, select a GeoTIFF layer'))
+                return
+            if os.path.getsize(imagery.publicSource()) / 2**20 > config.MAX_TIF_SIZE:
+                self.alert(self.tr('Image size cannot exceed 2GB'))
                 return
         processing_params = {
             'name': processing_name,
@@ -750,12 +753,21 @@ class Mapflow(QObject):
         if imagery and not self.dlg.useImageExtentAsAoi.isChecked():  # GeoTIFF but within AOI
             extent = QgsFeature()
             extent.setGeometry(helpers.get_layer_extent(imagery))
-            self.aoi = self.clip_aoi_to_image_extent(self.aoi, extent)
+            try:
+                self.aoi = next(self.clip_aoi_to_image_extent(self.aoi, extent)).geometry()
+            except StopIteration:
+                self.alert(self.tr('Image and processing area do not intersect'))
+                return
         elif raster_option in config.MAXAR_PRODUCTS and selected_image:  # Single SW image
             feature_id = selected_image[config.MAXAR_METADATA_ID_COLUMN_INDEX].text()
             extent = self.maxar_metadata_extents[feature_id]
-            self.aoi = self.clip_aoi_to_image_extent(self.aoi, extent)
+            try:
+                self.aoi = next(self.clip_aoi_to_image_extent(self.aoi, extent)).geometry()
+            except StopIteration:
+                self.alert(self.tr('Image and processing area do not intersect'))
+                return
         processing_params['geometry'] = json.loads(self.aoi.asJson())
+        self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
         if not imagery:
             self.post_processing(processing_params)
             return
