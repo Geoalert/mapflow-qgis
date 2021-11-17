@@ -75,10 +75,7 @@ class Mapflow(QObject):
         QCoreApplication.translate('QPlatformTheme', '&No')
         # Init dialogs
         self.dlg = MainDialog(self.main_window)
-        self.dlg_login = LoginDialog(self.main_window)
-        self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
-        self.dlg_login.logIn.clicked.connect(self.read_mapflow_token)
-        self.dlg_login.finished.connect(self.clean_up_login_dialog)
+        self.set_up_login_dialog()
         self.dlg_provider = ProviderDialog(self.dlg)
         self.dlg_provider.accepted.connect(self.add_or_edit_provider)
         self.dlg_connect_id = ConnectIdDialog(self.dlg)
@@ -156,6 +153,13 @@ class Mapflow(QObject):
                 use_default_error_handler=False  # ignore errors to prevent repetitive alerts
             )
         )
+
+    def set_up_login_dialog(self) -> None:
+        """Create a login dialog, set its title and signal-slot connections."""
+        self.dlg_login = LoginDialog(self.main_window)
+        self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
+        self.dlg_login.logIn.clicked.connect(self.read_mapflow_token)
+        self.dlg_login.destroyed.connect(lambda: self.dlg_login.close())
 
     def toggle_polygon_combos(self, use_image_extent: bool) -> None:
         """Disable polygon combos when Use image extent is checked.
@@ -1191,16 +1195,6 @@ class Mapflow(QObject):
             dlg.close()
         del self.toolbar
 
-    def clean_up_login_dialog(self) -> None:
-        """Remove the invalid credentials message and resize the dialog accordingly."""
-        invalid_token_label = self.dlg_login.findChild(QLabel, 'invalidToken')
-        self.dlg_login.token.clear()
-        if invalid_token_label:
-            invalid_token_label.deleteLater()
-            new_size = self.dlg_login.width(), self.dlg_login.height() - invalid_token_label.height()
-            self.dlg_login.setMaximumSize(*new_size)
-            self.dlg_login.setMinimumSize(*new_size)
-
     def read_mapflow_token(self) -> None:
         """Compose and memorize the user's credentils as Basic Auth."""
         self.mapflow_auth = f'Basic {self.dlg_login.token.text()}'
@@ -1225,6 +1219,8 @@ class Mapflow(QObject):
         self.dlg.providerUsername.clear()
         self.dlg.providerPassword.clear()
         self.logged_in = False
+        self.dlg.close()
+        self.set_up_login_dialog()  # recreate the login dialog
         self.dlg_login.show()  # assume user wants to log into another account
 
     def log_in_error_handler(self, response: QNetworkReply) -> None:
@@ -1232,21 +1228,7 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        error = response.error()
-        if error == QNetworkReply.AuthenticationRequiredError:  # invalid/empty credentials
-            if self.logged_in:  # prevent deadlocks
-                self.logout()
-            if self.dlg_login.findChild(QLabel, 'invalidToken'):
-                return  # the invalid credentials warning is already there
-            invalid_token_label = QLabel(self.tr('Invalid token'), self.dlg_login)
-            invalid_token_label.setObjectName('invalidToken')
-            invalid_token_label.setStyleSheet('color: rgb(239, 41, 41);')
-            self.dlg_login.layout().insertWidget(1, invalid_token_label, alignment=Qt.AlignCenter)
-            new_size = self.dlg_login.width(), self.dlg_login.height() + invalid_token_label.height()
-            self.dlg_login.setMaximumSize(*new_size)
-            self.dlg_login.setMinimumSize(*new_size)
-        else:
-            self.report_error(response, self.tr("Can't log in to Mapflow"))
+        self.report_error(response, self.tr("Can't log in to Mapflow"))
 
     def default_error_handler(self, response: QNetworkReply) -> bool:
         """Handle general networking errors: offline, timeout, server errors.
@@ -1256,7 +1238,23 @@ class Mapflow(QObject):
         """
         error = response.error()
         service = 'Mapflow' if 'mapflow' in response.request().url().authority() else 'SecureWatch'
-        if error in (
+        if error == QNetworkReply.AuthenticationRequiredError:  # invalid/empty credentials
+            # Prevent deadlocks
+            if self.logged_in:  # token re-issued during a plugin session
+                self.logout()
+            elif self.settings.value('token'):  # env changed w/out logging out (admin)
+                self.dlg_login.show()
+            # Wrong token entered - display a message
+            elif not self.dlg_login.findChild(QLabel, 'invalidToken'):
+                invalid_token_label = QLabel(self.tr('Invalid token'), self.dlg_login)
+                invalid_token_label.setObjectName('invalidToken')
+                invalid_token_label.setStyleSheet('color: rgb(239, 41, 41);')
+                self.dlg_login.layout().insertWidget(1, invalid_token_label, alignment=Qt.AlignCenter)
+                new_size = self.dlg_login.width(), self.dlg_login.height() + invalid_token_label.height()
+                self.dlg_login.setMaximumSize(*new_size)
+                self.dlg_login.setMinimumSize(*new_size)
+            return True
+        elif error in (
             QNetworkReply.OperationCanceledError,  # timeout
             QNetworkReply.ServiceUnavailableError,  # HTTP 503
             QNetworkReply.InternalServerError,  # HTTP 500
@@ -1372,4 +1370,5 @@ class Mapflow(QObject):
             self.http.basic_auth = self.mapflow_auth
             self.log_in()
         else:
+            self.set_up_login_dialog()
             self.dlg_login.show()
