@@ -484,12 +484,12 @@ class Mapflow(QObject):
             f.write(response.readAll().data())
         self.metadata_layer = QgsVectorLayer(output_file_name, layer_name, 'ogr')
         # Omit metadata that intersects the extent but no the AOI itself
-        # aoi_geometry_engine = QgsGeometry.createGeometryEngine(aoi.constGet())
-        # aoi_geometry_engine.prepareGeometry()
-        # self.metadata_layer.dataProvider().deleteFeatures([
-        #     feature.id() for feature in self.metadata_layer.getFeatures()
-        #     if aoi_geometry_engine.intersects(feature.geometry().constGet())
-        # ])
+        aoi_geometry_engine = QgsGeometry.createGeometryEngine(aoi.constGet())
+        aoi_geometry_engine.prepareGeometry()
+        self.metadata_layer.dataProvider().deleteFeatures([
+            feature.id() for feature in self.metadata_layer.getFeatures()
+            if aoi_geometry_engine.intersects(feature.geometry().constGet())
+        ])
         self.add_layer(self.metadata_layer)
         # Add style
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'wfs.qml'))
