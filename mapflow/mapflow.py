@@ -641,6 +641,24 @@ class Mapflow(QObject):
         """
         self.report_error(response, self.tr("Error deleting a processing"))
 
+    def clip_aoi_to_image_extent(self, aoi_geometry: QgsGeometry, extent: QgsFeature) -> QgsGeometry:
+        """Clip user AOI to image extent if the image doesn't cover the entire AOI."""
+        aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
+        aoi = QgsFeature()
+        aoi.setGeometry(aoi_geometry)
+        aoi_layer.dataProvider().addFeatures([aoi])
+        aoi_layer.updateExtents()
+        # Create a temp layer for the image extent
+        image_extent_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
+        image_extent_layer.dataProvider().addFeatures([extent])
+        aoi_layer.updateExtents()
+        # Find the intersection and pass it to the worker
+        intersection = qgis_processing.run(
+            'qgis:intersection',
+            {'INPUT': aoi_layer, 'OVERLAY': image_extent_layer, 'OUTPUT': 'memory:'}
+        )['OUTPUT']
+        return next(intersection.getFeatures()).geometry()
+
     def create_processing(self) -> None:
         """Create and start a processing on the server.
 
@@ -727,27 +745,16 @@ class Mapflow(QObject):
             params['cache_raster_update'] = str(self.dlg.updateCache.isChecked()).lower()
             self.save_provider_auth()
         processing_params['params'] = params
-        if self.dlg.useImageExtentAsAoi.isChecked():
-            # Clip AOI to image extent if a single Maxar image is requested
-            selected_image = self.dlg.maxarMetadataTable.selectedItems()
-            if raster_option in config.MAXAR_PRODUCTS and selected_image:
-                aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
-                aoi = QgsFeature()
-                aoi.setGeometry(self.aoi)
-                aoi_layer.dataProvider().addFeatures([aoi])
-                aoi_layer.updateExtents()
-                # Create a temp layer for the image extent
-                feature_id = selected_image[config.MAXAR_METADATA_ID_COLUMN_INDEX].text()
-                image_extent_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
-                extent = self.maxar_metadata_extents[feature_id]
-                image_extent_layer.dataProvider().addFeatures([extent])
-                aoi_layer.updateExtents()
-                # Find the intersection and pass it to the worker
-                intersection = qgis_processing.run(
-                    'qgis:intersection',
-                    {'INPUT': aoi_layer, 'OVERLAY': image_extent_layer, 'OUTPUT': 'memory:'}
-                )['OUTPUT']
-                self.aoi = next(intersection.getFeatures()).geometry()
+        # Clip AOI to image extent if a single Maxar image is requested
+        selected_image = self.dlg.maxarMetadataTable.selectedItems()
+        if imagery and not self.dlg.useImageExtentAsAoi.isChecked():  # GeoTIFF but within AOI
+            extent = QgsFeature()
+            extent.setGeometry(helpers.get_layer_extent(imagery))
+            self.aoi = self.clip_aoi_to_image_extent(self.aoi, extent)
+        elif raster_option in config.MAXAR_PRODUCTS and selected_image:  # Single SW image
+            feature_id = selected_image[config.MAXAR_METADATA_ID_COLUMN_INDEX].text()
+            extent = self.maxar_metadata_extents[feature_id]
+            self.aoi = self.clip_aoi_to_image_extent(self.aoi, extent)
         processing_params['geometry'] = json.loads(self.aoi.asJson())
         if not imagery:
             self.post_processing(processing_params)
