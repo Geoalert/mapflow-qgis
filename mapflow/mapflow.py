@@ -676,7 +676,16 @@ class Mapflow(QObject):
             self.alert(self.tr('Processing name taken. Please, choose a different name.'))
             return
         if not self.aoi:
-            self.alert(self.tr('Please, select an area of interest'))
+            use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
+            combo = self.dlg.rasterCombo if use_image_extent_as_aoi else self.dlg.polygonCombo
+            layer = combo.currentLayer()
+            if layer and not layer.crs().authid():
+                if use_image_extent_as_aoi:
+                    self.alert(self.tr('GeoTIFF has invalid projection'))
+                else:
+                    self.alert(self.tr('Processing area has invalid projection'))
+            else:
+                self.alert(self.tr('Please, select an area of interest'))
             return
         if self.remaining_limit < self.aoi_size:
             self.alert(self.tr('Processing limit exceeded'))
