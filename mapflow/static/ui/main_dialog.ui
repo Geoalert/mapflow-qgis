@@ -237,7 +237,7 @@
           <bool>true</bool>
          </property>
          <property name="columnCount">
-          <number>6</number>
+          <number>7</number>
          </property>
          <attribute name="horizontalHeaderDefaultSectionSize">
           <number>100</number>
@@ -275,6 +275,14 @@
          <column>
           <property name="text">
            <string>Progress</string>
+          </property>
+          <property name="textAlignment">
+           <set>AlignCenter</set>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Area, sq.km</string>
           </property>
           <property name="textAlignment">
            <set>AlignCenter</set>

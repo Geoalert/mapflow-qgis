@@ -1118,7 +1118,8 @@ class Mapflow(QObject):
                 processing['created'] = processing['created'].replace('Z', '+0000')
         for processing in processings:
             # Add % signs to progress column for clarity
-            processing['percentCompleted'] = f'{processing["percentCompleted"]}%'
+            processing['percentCompleted'] = str(processing['percentCompleted']) + '%'
+            processing['aoiArea'] = round(processing['aoiArea'] / 10**6, 2)
             # Parse and localize creation datetime
             processing['created'] = datetime.strptime(
                 processing['created'], '%Y-%m-%dT%H:%M:%S.%f%z'
@@ -1158,8 +1159,8 @@ class Mapflow(QObject):
         self.dlg.processingsTable.setRowCount(len(processings))
         # Fill out the table
         for row, processing in enumerate(processings):
-            for col, attr in enumerate(('name', 'workflowDef', 'status', 'percentCompleted', 'created', 'id')):
-                self.dlg.processingsTable.setItem(row, col, QTableWidgetItem(processing[attr]))
+            for col, attr in enumerate(config.PROCESSING_ATTRIBUTES):
+                self.dlg.processingsTable.setItem(row, col, QTableWidgetItem(str(processing[attr])))
             if processing['id'] in selected_processings:
                 self.dlg.processingsTable.selectRow(row)
         self.dlg.processingsTable.setSortingEnabled(True)
