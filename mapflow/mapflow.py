@@ -688,7 +688,8 @@ class Mapflow(QObject):
                 self.alert(self.tr('Please, select an area of interest'))
             return
         if self.remaining_limit < self.aoi_size:
-            self.alert(self.tr('Processing limit exceeded'))
+            if self.plugin_name == 'Mapflow':  # don't alert in TechInspection
+                self.alert(self.tr('Processing limit exceeded'))
             return
         if self.aoi_area_limit < self.aoi_size:
             self.alert(self.tr(
