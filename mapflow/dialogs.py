@@ -17,7 +17,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         super().__init__(parent)
         self.setupUi(self)
         # Restrict combos to relevant layer types; QGIS 3.10-3.20 (at least) bugs up if set in .ui
-        self.maxarAOICombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
+        self.maxarAoiCombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
         self.polygonCombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
         self.rasterCombo.setFilters(QgsMapLayerProxyModel.RasterLayer)
         # Set icons (can be done in .ui but brings about the resources_rc import bug)

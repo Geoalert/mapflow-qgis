@@ -119,8 +119,8 @@ class Mapflow(QObject):
         self.dlg.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
         self.dlg.startProcessing.clicked.connect(self.create_processing)
         # Sync polygon layer combos
-        self.dlg.polygonCombo.layerChanged.connect(self.dlg.maxarAOICombo.setLayer)
-        self.dlg.maxarAOICombo.layerChanged.connect(self.dlg.polygonCombo.setLayer)
+        self.dlg.polygonCombo.layerChanged.connect(self.dlg.maxarAoiCombo.setLayer)
+        self.dlg.maxarAoiCombo.layerChanged.connect(self.dlg.polygonCombo.setLayer)
         # Calculate AOI area
         self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area_polygon_layer)
         self.dlg.rasterCombo.layerChanged.connect(self.calculate_aoi_area_raster)
@@ -140,10 +140,9 @@ class Mapflow(QObject):
         self.dlg.providerAuthGroup.toggled.connect(self.limit_zoom_auth_toggled)
         # Maxar
         self.dlg.maxarMetadataTable.itemSelectionChanged.connect(self.highlight_maxar_image)
-        self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
+        self.dlg.getMetadata.clicked.connect(self.get_maxar_metadata)
         self.dlg.maxarMetadataTable.cellDoubleClicked.connect(self.preview)
-        self.dlg.providerCombo.currentTextChanged.connect(self.limit_zoom_provider_changed)
-        self.dlg.providerCombo.currentTextChanged.connect(self.clear_metadata_table)
+        self.dlg.providerCombo.currentTextChanged.connect(self.on_provider_change)
         # Poll processings
         self.processing_fetch_timer = QTimer(self.dlg)
         self.processing_fetch_timer.setInterval(config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
@@ -168,12 +167,7 @@ class Mapflow(QObject):
         :param use_image_extent: Whether the corresponding checkbox is checked
         """
         self.dlg.polygonCombo.setEnabled(not use_image_extent)
-        self.dlg.maxarAOICombo.setEnabled(not use_image_extent)
-
-    def clear_metadata_table(self) -> None:
-        """Reset Maxar metadata table when user changes the provider in the list."""
-        self.dlg.maxarMetadataTable.clearContents()
-        self.dlg.maxarMetadataTable.setRowCount(0)
+        self.dlg.maxarAoiCombo.setEnabled(not use_image_extent)
 
     def limit_zoom_auth_toggled(self, enabled: bool) -> None:
         """Limit zoom for Maxar when our account is to be used.
@@ -189,17 +183,20 @@ class Mapflow(QObject):
             self.dlg.maxZoom.setMaximum(config.MAX_ZOOM)
             self.dlg.maxZoom.setValue(config.DEFAULT_ZOOM)
 
-    def limit_zoom_provider_changed(self, provider: str) -> None:
+    def on_provider_change(self, provider: str) -> None:
         """Limit zoom for Maxar when our account is to be used.
 
         :param provider: The currently selected provider
         """
-        if provider in config.MAXAR_PRODUCTS and not (
-            self.is_premium_user or
-            self.dlg.providerAuthGroup.isChecked()
-        ):
-            self.dlg.maxZoom.setMaximum(config.MAXAR_MAX_FREE_ZOOM)
+        # Clear metadata to avoid confusion
+        self.dlg.maxarMetadataTable.clearContents()
+        self.dlg.maxarMetadataTable.setRowCount(0)
+        if provider in config.MAXAR_PRODUCTS:
+            self.dlg.maxar.setEnabled(True)  # deactivate metadata panel
+            if not (self.is_premium_user or self.dlg.providerAuthGroup.isChecked()):
+                self.dlg.maxZoom.setMaximum(config.MAXAR_MAX_FREE_ZOOM)
         else:
+            self.dlg.maxar.setEnabled(False)  # activate metadata panel
             self.dlg.maxZoom.setMaximum(config.MAX_ZOOM)
             self.dlg.maxZoom.setValue(config.DEFAULT_ZOOM)
 
@@ -407,14 +404,17 @@ class Mapflow(QObject):
         Is called by clicking the 'Get Image Metadata' button in the main dialog.
         """
         self.save_provider_auth()
-        provider = self.dlg.providerCombo.currentText()
-        # Perform checks
-        if provider not in config.MAXAR_PRODUCTS:
-            self.alert(self.tr('Select a Maxar product in the provider list'))
-            return
-        if not (self.dlg.maxarAOICombo.isEnabled() and self.aoi):
+        if self.dlg.metadataUseCanvasExtent.isChecked():
+            aoi = helpers.to_wgs84(
+                QgsGeometry.fromRect(self.iface.mapCanvas().extent()),
+                self.project.crs()
+            )
+        elif self.aoi:
+            aoi = self.aoi
+        else:
             self.alert(self.tr('Please, select an area of interest'))
             return
+        provider = self.dlg.providerCombo.currentText()
         # Start off with the static params
         params = {
             'REQUEST': 'GetFeature',
@@ -425,7 +425,7 @@ class Mapflow(QObject):
             'HEIGHT': 3000
         }
         # Get a '{min_lon},{min_lat} : {max_lon},{max_lat}' (SW-NE) representation of the AOI
-        extent = self.aoi.boundingBox().toString()
+        extent = aoi.boundingBox().toString()
         # Change lon,lat to lat,lon for Maxar
         coords = [position.split(',')[::-1] for position in extent.split(':')]
         params['BBOX'] = ','.join([coord.strip() for position in coords for coord in position])
@@ -1346,7 +1346,7 @@ class Mapflow(QObject):
         response = json.loads(response.readAll().data())
         user = response['user']
         self.is_premium_user = user['isPremium']
-        self.limit_zoom_provider_changed(self.dlg.providerCombo.currentText())
+        self.on_provider_change(self.dlg.providerCombo.currentText())
         if user['role'] == 'ADMIN':
             self.remaining_limit = 1e+5  # 100K sq. km
         else:
