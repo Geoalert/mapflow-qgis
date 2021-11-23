@@ -530,6 +530,8 @@ class Mapflow(QObject):
 
         :param layer: The current polygon layer
         """
+        if self.dlg.useImageExtentAsAoi.isChecked():  # image extent used; no difference
+            return
         if not layer:
             self.dlg.labelAoiArea.clear()
             self.aoi = self.aoi_size = None
