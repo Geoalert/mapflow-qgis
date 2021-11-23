@@ -10,7 +10,7 @@ from configparser import ConfigParser  # parse metadata.txt -> QGIS version chec
 from PyQt5.QtGui import QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
-    QObject, QSettings, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion
+    QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion
 )
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QTableWidgetItem, QAction, QAbstractItemView, QLabel,
@@ -115,7 +115,7 @@ class Mapflow(QObject):
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         self.dlg.selectTif.clicked.connect(self.select_tif)
         # (Dis)allow the user to use raster extent as AOI
-        self.dlg.rasterCombo.currentTextChanged.connect(self.toggle_use_image_extent_as_aoi)
+        self.dlg.rasterCombo.layerChanged.connect(self.toggle_use_image_extent_as_aoi)
         self.dlg.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
         self.dlg.startProcessing.clicked.connect(self.create_processing)
         # Sync polygon layer combos
@@ -344,18 +344,15 @@ class Mapflow(QObject):
             layer.selectionChanged.connect(self.calculate_aoi_area_selection)
             layer.editingStopped.connect(self.calculate_aoi_area_layer_edited)
 
-    def toggle_use_image_extent_as_aoi(self, provider: str) -> None:
+    def toggle_use_image_extent_as_aoi(self, provider: Union[QgsRasterLayer, None]) -> None:
         """Toggle 'Use image extent' checkbox depending on the item in the imagery combo box.
 
-        :param provider: A combo box entry representing an imagery provider
+        :param provider: A GDAL raster layer or None if one of web tile providers
         """
-        enabled = provider in (*self.settings.value('providers', {}), 'Mapbox')  # False if GeoTIFF
-        # There's no extent for a tile provider
-        self.dlg.useImageExtentAsAoi.setEnabled(not enabled)
-        # Presume user would like to process within its extent
-        self.dlg.useImageExtentAsAoi.setChecked(not enabled)
-        # Mapflow doesn't currently support caching user imagery
-        self.dlg.updateCache.setEnabled(enabled)
+        enabled = True if provider and provider.crs().authid() else False
+        self.dlg.useImageExtentAsAoi.setEnabled(enabled)
+        self.dlg.useImageExtentAsAoi.setChecked(enabled)
+        self.dlg.updateCache.setEnabled(not enabled)
 
     def select_output_directory(self) -> str:
         """Open a file dialog for the user to select a directory where plugin files will be stored.
@@ -552,7 +549,10 @@ class Mapflow(QObject):
         :param layer: The current raster layer
         """
         if layer:
-            self.calculate_aoi_area(QgsGeometry.fromRect(layer.extent()), layer.crs())
+            if layer.crs().authid():  # valid CRS
+                self.calculate_aoi_area(QgsGeometry.fromRect(layer.extent()), layer.crs())
+            else:
+                self.alert(self.tr('The image has invalid projection and cannot be processed.'))
         else:
             self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
 
@@ -717,6 +717,9 @@ class Mapflow(QObject):
             return
         imagery = self.dlg.rasterCombo.currentLayer()
         if imagery:  # check if local raster is a GeoTIFF
+            if not imagery.crs().authid():  # invalid CRS
+                self.alert(self.tr('The image has invalid projection and cannot be processed.'))
+                return
             path = imagery.dataProvider().dataSourceUri()
             if not os.path.splitext(path)[-1] in ('.tif', '.tiff'):
                 self.alert(self.tr('Please, select a GeoTIFF layer'))
