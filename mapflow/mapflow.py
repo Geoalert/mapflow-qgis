@@ -1213,7 +1213,7 @@ class Mapflow(QObject):
         plugin_button.triggered.connect(self.main)
         self.toolbar.addAction(plugin_button)
         self.project.readProject.connect(self.set_layer_group)
-        self.dlg.processingsTable.sortByColumn(4, Qt.DescendingOrder)
+        self.dlg.processingsTable.sortByColumn(config.PROCESSING_TABLE_SORT_COLUMN_INDEX, Qt.DescendingOrder)
 
     def set_layer_group(self) -> None:
         """Setup a legend group where all layers created by the plugin will be added."""
