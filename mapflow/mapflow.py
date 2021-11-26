@@ -103,8 +103,6 @@ class Mapflow(QObject):
             self.dlg.providerUsername.setText(self.settings.value('providerUsername'))
             self.dlg.providerPassword.setText(self.settings.value('providerPassword'))
         self.update_providers(self.settings.value('providers') or config.MAXAR_PRODUCTS)
-        # Hide the ID columns as only needed for table operations, not the user
-        self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
         # SET UP SIGNALS & SLOTS
         # Memorize dialog element sizes & positioning
@@ -1368,6 +1366,7 @@ class Mapflow(QObject):
         for table in 'processingsTable', 'maxarMetadataTable':
             header = getattr(self.dlg, table).horizontalHeader()
             header.restoreState(self.settings.value(table + 'HeaderState', b''))
+        self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
         # Authenticate and keep user logged in
         self.logged_in = True
