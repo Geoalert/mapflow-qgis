@@ -1,195 +1,261 @@
 <!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
-<qgis version="3.16.4-Hannover" maxScale="0" simplifyAlgorithm="0" labelsEnabled="1" hasScaleBasedVisibilityFlag="0" simplifyDrawingHints="1" readOnly="0" minScale="100000000" simplifyLocal="1" simplifyMaxScale="1" styleCategories="AllStyleCategories" simplifyDrawingTol="1">
+<qgis version="3.22.1-Białowieża" styleCategories="LayerConfiguration|Symbology|Labeling|Fields|Forms|Rendering|Legend" minScale="100000000" simplifyLocal="1" readOnly="0" hasScaleBasedVisibilityFlag="0" simplifyDrawingTol="1" symbologyReferenceScale="-1" simplifyAlgorithm="0" simplifyMaxScale="1" simplifyDrawingHints="1" maxScale="0" labelsEnabled="1">
   <flags>
     <Identifiable>1</Identifiable>
     <Removable>1</Removable>
     <Searchable>1</Searchable>
+    <Private>0</Private>
   </flags>
-  <temporal accumulate="0" durationUnit="min" durationField="" enabled="0" endField="" mode="0" endExpression="" fixedDuration="0" startField="" startExpression="">
-    <fixedRange>
-      <start></start>
-      <end></end>
-    </fixedRange>
-  </temporal>
-  <renderer-v2 forceraster="0" enableorderby="0" symbollevels="0" type="singleSymbol">
+  <renderer-v2 forceraster="0" enableorderby="0" referencescale="-1" type="RuleRenderer" symbollevels="0">
+    <rules key="{7800d116-9010-48df-85a5-ae800993076a}">
+      <rule label="Other" key="{44c878ef-d60b-4dd1-8496-8775a743d77a}" filter="ELSE" symbol="0"/>
+      <rule label="Selected" key="{2e588a0f-a4e5-4cb6-8037-a215b2c01bc3}" filter="is_selected()" symbol="1"/>
+    </rules>
     <symbols>
-      <symbol name="0" alpha="1" clip_to_extent="1" type="fill" force_rhr="0">
-        <layer pass="0" enabled="1" locked="0" class="SimpleFill">
-          <prop v="3x:0,0,0,0,0,0" k="border_width_map_unit_scale"/>
-          <prop v="217,39,39,25" k="color"/>
-          <prop v="bevel" k="joinstyle"/>
-          <prop v="0,0" k="offset"/>
-          <prop v="3x:0,0,0,0,0,0" k="offset_map_unit_scale"/>
-          <prop v="MM" k="offset_unit"/>
-          <prop v="239,53,162,255" k="outline_color"/>
-          <prop v="solid" k="outline_style"/>
-          <prop v="0.26" k="outline_width"/>
-          <prop v="MM" k="outline_width_unit"/>
-          <prop v="solid" k="style"/>
+      <symbol name="0" force_rhr="0" type="fill" clip_to_extent="1" alpha="1">
+        <data_defined_properties>
+          <Option type="Map">
+            <Option value="" name="name" type="QString"/>
+            <Option name="properties"/>
+            <Option value="collection" name="type" type="QString"/>
+          </Option>
+        </data_defined_properties>
+        <layer pass="0" class="SimpleFill" enabled="1" locked="0">
+          <Option type="Map">
+            <Option value="3x:0,0,0,0,0,0" name="border_width_map_unit_scale" type="QString"/>
+            <Option value="217,39,39,25" name="color" type="QString"/>
+            <Option value="bevel" name="joinstyle" type="QString"/>
+            <Option value="0,0" name="offset" type="QString"/>
+            <Option value="3x:0,0,0,0,0,0" name="offset_map_unit_scale" type="QString"/>
+            <Option value="MM" name="offset_unit" type="QString"/>
+            <Option value="239,53,162,255" name="outline_color" type="QString"/>
+            <Option value="solid" name="outline_style" type="QString"/>
+            <Option value="0.26" name="outline_width" type="QString"/>
+            <Option value="MM" name="outline_width_unit" type="QString"/>
+            <Option value="solid" name="style" type="QString"/>
+          </Option>
+          <prop k="border_width_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="color" v="217,39,39,25"/>
+          <prop k="joinstyle" v="bevel"/>
+          <prop k="offset" v="0,0"/>
+          <prop k="offset_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="offset_unit" v="MM"/>
+          <prop k="outline_color" v="239,53,162,255"/>
+          <prop k="outline_style" v="solid"/>
+          <prop k="outline_width" v="0.26"/>
+          <prop k="outline_width_unit" v="MM"/>
+          <prop k="style" v="solid"/>
           <data_defined_properties>
             <Option type="Map">
-              <Option name="name" value="" type="QString"/>
+              <Option value="" name="name" type="QString"/>
               <Option name="properties"/>
-              <Option name="type" value="collection" type="QString"/>
+              <Option value="collection" name="type" type="QString"/>
+            </Option>
+          </data_defined_properties>
+        </layer>
+      </symbol>
+      <symbol name="1" force_rhr="0" type="fill" clip_to_extent="1" alpha="1">
+        <data_defined_properties>
+          <Option type="Map">
+            <Option value="" name="name" type="QString"/>
+            <Option name="properties"/>
+            <Option value="collection" name="type" type="QString"/>
+          </Option>
+        </data_defined_properties>
+        <layer pass="1" class="SimpleFill" enabled="1" locked="0">
+          <Option type="Map">
+            <Option value="3x:0,0,0,0,0,0" name="border_width_map_unit_scale" type="QString"/>
+            <Option value="217,39,39,25" name="color" type="QString"/>
+            <Option value="bevel" name="joinstyle" type="QString"/>
+            <Option value="0,0" name="offset" type="QString"/>
+            <Option value="3x:0,0,0,0,0,0" name="offset_map_unit_scale" type="QString"/>
+            <Option value="MM" name="offset_unit" type="QString"/>
+            <Option value="239,53,162,255" name="outline_color" type="QString"/>
+            <Option value="solid" name="outline_style" type="QString"/>
+            <Option value="0.26" name="outline_width" type="QString"/>
+            <Option value="MM" name="outline_width_unit" type="QString"/>
+            <Option value="solid" name="style" type="QString"/>
+          </Option>
+          <prop k="border_width_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="color" v="217,39,39,25"/>
+          <prop k="joinstyle" v="bevel"/>
+          <prop k="offset" v="0,0"/>
+          <prop k="offset_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="offset_unit" v="MM"/>
+          <prop k="outline_color" v="239,53,162,255"/>
+          <prop k="outline_style" v="solid"/>
+          <prop k="outline_width" v="0.26"/>
+          <prop k="outline_width_unit" v="MM"/>
+          <prop k="style" v="solid"/>
+          <data_defined_properties>
+            <Option type="Map">
+              <Option value="" name="name" type="QString"/>
+              <Option name="properties"/>
+              <Option value="collection" name="type" type="QString"/>
             </Option>
           </data_defined_properties>
         </layer>
       </symbol>
     </symbols>
-    <rotation/>
-    <sizescale/>
   </renderer-v2>
   <labeling type="simple">
     <settings calloutType="simple">
-      <text-style fontItalic="0" fontSizeUnit="Point" fontFamily="MS Shell Dlg 2" fontWeight="50" fontWordSpacing="0" fontUnderline="0" multilineHeight="1" capitalization="0" isExpression="0" fontSizeMapUnitScale="3x:0,0,0,0,0,0" textColor="0,0,0,255" fontSize="10" useSubstitutions="0" fontLetterSpacing="0" previewBkgrdColor="255,255,255,255" textOpacity="1" fontStrikeout="0" fieldName="formattedDate" textOrientation="horizontal" allowHtml="0" namedStyle="Normal" blendMode="0" fontKerning="1">
-        <text-buffer bufferColor="245,245,245,255" bufferSizeMapUnitScale="3x:0,0,0,0,0,0" bufferNoFill="1" bufferSize="1" bufferSizeUnits="MM" bufferDraw="1" bufferOpacity="1" bufferJoinStyle="128" bufferBlendMode="0"/>
-        <text-mask maskSizeUnits="MM" maskedSymbolLayers="" maskEnabled="0" maskOpacity="1" maskJoinStyle="128" maskType="0" maskSizeMapUnitScale="3x:0,0,0,0,0,0" maskSize="1.1"/>
-        <background shapeRadiiMapUnitScale="3x:0,0,0,0,0,0" shapeRadiiX="0" shapeBorderWidthMapUnitScale="3x:0,0,0,0,0,0" shapeOffsetUnit="MM" shapeOpacity="1" shapeSizeUnit="MM" shapeSVGFile="" shapeSizeMapUnitScale="3x:0,0,0,0,0,0" shapeFillColor="255,255,255,255" shapeOffsetMapUnitScale="3x:0,0,0,0,0,0" shapeType="0" shapeBorderColor="128,128,128,255" shapeDraw="0" shapeRotationType="0" shapeBorderWidthUnit="MM" shapeJoinStyle="64" shapeBlendMode="0" shapeRadiiUnit="MM" shapeRotation="0" shapeOffsetX="0" shapeSizeY="0" shapeSizeX="0" shapeOffsetY="0" shapeRadiiY="0" shapeBorderWidth="0" shapeSizeType="0">
-          <symbol name="markerSymbol" alpha="1" clip_to_extent="1" type="marker" force_rhr="0">
-            <layer pass="0" enabled="1" locked="0" class="SimpleMarker">
-              <prop v="0" k="angle"/>
-              <prop v="141,90,153,255" k="color"/>
-              <prop v="1" k="horizontal_anchor_point"/>
-              <prop v="bevel" k="joinstyle"/>
-              <prop v="circle" k="name"/>
-              <prop v="0,0" k="offset"/>
-              <prop v="3x:0,0,0,0,0,0" k="offset_map_unit_scale"/>
-              <prop v="MM" k="offset_unit"/>
-              <prop v="35,35,35,255" k="outline_color"/>
-              <prop v="solid" k="outline_style"/>
-              <prop v="0" k="outline_width"/>
-              <prop v="3x:0,0,0,0,0,0" k="outline_width_map_unit_scale"/>
-              <prop v="MM" k="outline_width_unit"/>
-              <prop v="diameter" k="scale_method"/>
-              <prop v="2" k="size"/>
-              <prop v="3x:0,0,0,0,0,0" k="size_map_unit_scale"/>
-              <prop v="MM" k="size_unit"/>
-              <prop v="1" k="vertical_anchor_point"/>
+      <text-style previewBkgrdColor="255,255,255,255" fontLetterSpacing="0" fontSizeUnit="Point" capitalization="0" fontSize="10" fontItalic="0" multilineHeight="1" fontWordSpacing="0" fontKerning="1" useSubstitutions="0" fontWeight="50" textColor="0,0,0,255" textOpacity="1" textOrientation="horizontal" fontSizeMapUnitScale="3x:0,0,0,0,0,0" isExpression="0" fieldName="formattedDate" fontFamily="Ubuntu" legendString="Aa" fontUnderline="0" allowHtml="0" fontStrikeout="0" namedStyle="Regular" blendMode="0">
+        <families/>
+        <text-buffer bufferColor="245,245,245,255" bufferOpacity="1" bufferDraw="1" bufferJoinStyle="128" bufferSize="1" bufferSizeUnits="MM" bufferSizeMapUnitScale="3x:0,0,0,0,0,0" bufferNoFill="1" bufferBlendMode="0"/>
+        <text-mask maskJoinStyle="128" maskEnabled="0" maskSizeUnits="MM" maskedSymbolLayers="" maskSize="1.1" maskSizeMapUnitScale="3x:0,0,0,0,0,0" maskOpacity="1" maskType="0"/>
+        <background shapeType="0" shapeBorderWidthMapUnitScale="3x:0,0,0,0,0,0" shapeFillColor="255,255,255,255" shapeRadiiMapUnitScale="3x:0,0,0,0,0,0" shapeRotation="0" shapeDraw="0" shapeRadiiX="0" shapeOpacity="1" shapeRotationType="0" shapeSizeUnit="MM" shapeRadiiUnit="MM" shapeJoinStyle="64" shapeBorderColor="128,128,128,255" shapeRadiiY="0" shapeSizeX="0" shapeSizeMapUnitScale="3x:0,0,0,0,0,0" shapeSizeY="0" shapeOffsetMapUnitScale="3x:0,0,0,0,0,0" shapeBlendMode="0" shapeSVGFile="" shapeOffsetX="0" shapeOffsetUnit="MM" shapeSizeType="0" shapeBorderWidthUnit="MM" shapeBorderWidth="0" shapeOffsetY="0">
+          <symbol name="markerSymbol" force_rhr="0" type="marker" clip_to_extent="1" alpha="1">
+            <data_defined_properties>
+              <Option type="Map">
+                <Option value="" name="name" type="QString"/>
+                <Option name="properties"/>
+                <Option value="collection" name="type" type="QString"/>
+              </Option>
+            </data_defined_properties>
+            <layer pass="0" class="SimpleMarker" enabled="1" locked="0">
+              <Option type="Map">
+                <Option value="0" name="angle" type="QString"/>
+                <Option value="square" name="cap_style" type="QString"/>
+                <Option value="141,90,153,255" name="color" type="QString"/>
+                <Option value="1" name="horizontal_anchor_point" type="QString"/>
+                <Option value="bevel" name="joinstyle" type="QString"/>
+                <Option value="circle" name="name" type="QString"/>
+                <Option value="0,0" name="offset" type="QString"/>
+                <Option value="3x:0,0,0,0,0,0" name="offset_map_unit_scale" type="QString"/>
+                <Option value="MM" name="offset_unit" type="QString"/>
+                <Option value="35,35,35,255" name="outline_color" type="QString"/>
+                <Option value="solid" name="outline_style" type="QString"/>
+                <Option value="0" name="outline_width" type="QString"/>
+                <Option value="3x:0,0,0,0,0,0" name="outline_width_map_unit_scale" type="QString"/>
+                <Option value="MM" name="outline_width_unit" type="QString"/>
+                <Option value="diameter" name="scale_method" type="QString"/>
+                <Option value="2" name="size" type="QString"/>
+                <Option value="3x:0,0,0,0,0,0" name="size_map_unit_scale" type="QString"/>
+                <Option value="MM" name="size_unit" type="QString"/>
+                <Option value="1" name="vertical_anchor_point" type="QString"/>
+              </Option>
+              <prop k="angle" v="0"/>
+              <prop k="cap_style" v="square"/>
+              <prop k="color" v="141,90,153,255"/>
+              <prop k="horizontal_anchor_point" v="1"/>
+              <prop k="joinstyle" v="bevel"/>
+              <prop k="name" v="circle"/>
+              <prop k="offset" v="0,0"/>
+              <prop k="offset_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+              <prop k="offset_unit" v="MM"/>
+              <prop k="outline_color" v="35,35,35,255"/>
+              <prop k="outline_style" v="solid"/>
+              <prop k="outline_width" v="0"/>
+              <prop k="outline_width_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+              <prop k="outline_width_unit" v="MM"/>
+              <prop k="scale_method" v="diameter"/>
+              <prop k="size" v="2"/>
+              <prop k="size_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+              <prop k="size_unit" v="MM"/>
+              <prop k="vertical_anchor_point" v="1"/>
               <data_defined_properties>
                 <Option type="Map">
-                  <Option name="name" value="" type="QString"/>
+                  <Option value="" name="name" type="QString"/>
                   <Option name="properties"/>
-                  <Option name="type" value="collection" type="QString"/>
+                  <Option value="collection" name="type" type="QString"/>
+                </Option>
+              </data_defined_properties>
+            </layer>
+          </symbol>
+          <symbol name="fillSymbol" force_rhr="0" type="fill" clip_to_extent="1" alpha="1">
+            <data_defined_properties>
+              <Option type="Map">
+                <Option value="" name="name" type="QString"/>
+                <Option name="properties"/>
+                <Option value="collection" name="type" type="QString"/>
+              </Option>
+            </data_defined_properties>
+            <layer pass="0" class="SimpleFill" enabled="1" locked="0">
+              <Option type="Map">
+                <Option value="3x:0,0,0,0,0,0" name="border_width_map_unit_scale" type="QString"/>
+                <Option value="255,255,255,255" name="color" type="QString"/>
+                <Option value="bevel" name="joinstyle" type="QString"/>
+                <Option value="0,0" name="offset" type="QString"/>
+                <Option value="3x:0,0,0,0,0,0" name="offset_map_unit_scale" type="QString"/>
+                <Option value="MM" name="offset_unit" type="QString"/>
+                <Option value="128,128,128,255" name="outline_color" type="QString"/>
+                <Option value="no" name="outline_style" type="QString"/>
+                <Option value="0" name="outline_width" type="QString"/>
+                <Option value="MM" name="outline_width_unit" type="QString"/>
+                <Option value="solid" name="style" type="QString"/>
+              </Option>
+              <prop k="border_width_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+              <prop k="color" v="255,255,255,255"/>
+              <prop k="joinstyle" v="bevel"/>
+              <prop k="offset" v="0,0"/>
+              <prop k="offset_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+              <prop k="offset_unit" v="MM"/>
+              <prop k="outline_color" v="128,128,128,255"/>
+              <prop k="outline_style" v="no"/>
+              <prop k="outline_width" v="0"/>
+              <prop k="outline_width_unit" v="MM"/>
+              <prop k="style" v="solid"/>
+              <data_defined_properties>
+                <Option type="Map">
+                  <Option value="" name="name" type="QString"/>
+                  <Option name="properties"/>
+                  <Option value="collection" name="type" type="QString"/>
                 </Option>
               </data_defined_properties>
             </layer>
           </symbol>
         </background>
-        <shadow shadowBlendMode="6" shadowOffsetUnit="MM" shadowOffsetGlobal="1" shadowOffsetMapUnitScale="3x:0,0,0,0,0,0" shadowRadiusUnit="MM" shadowRadiusMapUnitScale="3x:0,0,0,0,0,0" shadowColor="0,0,0,255" shadowOpacity="0.7" shadowDraw="0" shadowRadiusAlphaOnly="0" shadowOffsetAngle="135" shadowScale="100" shadowRadius="1.5" shadowUnder="0" shadowOffsetDist="1"/>
+        <shadow shadowUnder="0" shadowRadius="1.5" shadowRadiusMapUnitScale="3x:0,0,0,0,0,0" shadowOffsetAngle="135" shadowRadiusUnit="MM" shadowOpacity="0.7" shadowRadiusAlphaOnly="0" shadowBlendMode="6" shadowOffsetGlobal="1" shadowOffsetDist="1" shadowColor="0,0,0,255" shadowOffsetMapUnitScale="3x:0,0,0,0,0,0" shadowScale="100" shadowOffsetUnit="MM" shadowDraw="0"/>
         <dd_properties>
           <Option type="Map">
-            <Option name="name" value="" type="QString"/>
+            <Option value="" name="name" type="QString"/>
             <Option name="properties"/>
-            <Option name="type" value="collection" type="QString"/>
+            <Option value="collection" name="type" type="QString"/>
           </Option>
         </dd_properties>
         <substitutions/>
       </text-style>
-      <text-format placeDirectionSymbol="0" plussign="0" reverseDirectionSymbol="0" autoWrapLength="0" multilineAlign="3" addDirectionSymbol="0" decimals="3" wrapChar="" leftDirectionSymbol="&lt;" useMaxLineLengthForAutoWrap="1" formatNumbers="0" rightDirectionSymbol=">"/>
-      <placement dist="0" preserveRotation="1" lineAnchorPercent="0.5" placementFlags="10" centroidInside="0" xOffset="0" overrunDistanceUnit="MM" placement="0" yOffset="0" offsetUnits="MM" geometryGeneratorType="PointGeometry" maxCurvedCharAngleOut="-25" offsetType="0" fitInPolygonOnly="0" overrunDistance="0" layerType="PolygonGeometry" labelOffsetMapUnitScale="3x:0,0,0,0,0,0" polygonPlacementFlags="2" priority="5" quadOffset="4" repeatDistance="0" repeatDistanceMapUnitScale="3x:0,0,0,0,0,0" geometryGeneratorEnabled="0" predefinedPositionOrder="TR,TL,BR,BL,R,L,TSR,BSR" repeatDistanceUnits="MM" distUnits="MM" lineAnchorType="0" overrunDistanceMapUnitScale="3x:0,0,0,0,0,0" distMapUnitScale="3x:0,0,0,0,0,0" rotationAngle="0" centroidWhole="0" maxCurvedCharAngleIn="25" geometryGenerator=""/>
-      <rendering minFeatureSize="0" scaleMax="0" drawLabels="1" displayAll="0" limitNumLabels="0" labelPerPart="0" obstacleType="1" upsidedownLabels="0" scaleVisibility="0" zIndex="0" mergeLines="0" obstacleFactor="1" obstacle="1" fontLimitPixelSize="0" fontMinPixelSize="3" fontMaxPixelSize="10000" maxNumLabels="2000" scaleMin="0"/>
+      <text-format addDirectionSymbol="0" formatNumbers="0" decimals="3" placeDirectionSymbol="0" autoWrapLength="0" reverseDirectionSymbol="0" rightDirectionSymbol=">" plussign="0" wrapChar="" leftDirectionSymbol="&lt;" useMaxLineLengthForAutoWrap="1" multilineAlign="3"/>
+      <placement overrunDistance="0" lineAnchorClipping="0" geometryGeneratorType="PointGeometry" distMapUnitScale="3x:0,0,0,0,0,0" xOffset="0" rotationUnit="AngleDegrees" quadOffset="4" rotationAngle="0" dist="0" overrunDistanceUnit="MM" layerType="PolygonGeometry" priority="5" centroidWhole="0" yOffset="0" lineAnchorType="0" geometryGeneratorEnabled="0" repeatDistance="0" centroidInside="0" predefinedPositionOrder="TR,TL,BR,BL,R,L,TSR,BSR" polygonPlacementFlags="2" placement="0" overrunDistanceMapUnitScale="3x:0,0,0,0,0,0" fitInPolygonOnly="0" maxCurvedCharAngleIn="25" distUnits="MM" repeatDistanceMapUnitScale="3x:0,0,0,0,0,0" lineAnchorPercent="0.5" maxCurvedCharAngleOut="-25" offsetType="0" geometryGenerator="" offsetUnits="MM" repeatDistanceUnits="MM" placementFlags="10" preserveRotation="1" labelOffsetMapUnitScale="3x:0,0,0,0,0,0"/>
+      <rendering scaleVisibility="0" minFeatureSize="0" unplacedVisibility="0" upsidedownLabels="0" obstacleType="1" fontLimitPixelSize="0" displayAll="0" fontMaxPixelSize="10000" mergeLines="0" scaleMax="0" zIndex="0" limitNumLabels="0" scaleMin="0" fontMinPixelSize="3" labelPerPart="0" drawLabels="1" obstacleFactor="1" maxNumLabels="2000" obstacle="1"/>
       <dd_properties>
         <Option type="Map">
-          <Option name="name" value="" type="QString"/>
+          <Option value="" name="name" type="QString"/>
           <Option name="properties"/>
-          <Option name="type" value="collection" type="QString"/>
+          <Option value="collection" name="type" type="QString"/>
         </Option>
       </dd_properties>
       <callout type="simple">
         <Option type="Map">
-          <Option name="anchorPoint" value="pole_of_inaccessibility" type="QString"/>
+          <Option value="pole_of_inaccessibility" name="anchorPoint" type="QString"/>
+          <Option value="0" name="blendMode" type="int"/>
           <Option name="ddProperties" type="Map">
-            <Option name="name" value="" type="QString"/>
+            <Option value="" name="name" type="QString"/>
             <Option name="properties"/>
-            <Option name="type" value="collection" type="QString"/>
+            <Option value="collection" name="type" type="QString"/>
           </Option>
-          <Option name="drawToAllParts" value="false" type="bool"/>
-          <Option name="enabled" value="0" type="QString"/>
-          <Option name="labelAnchorPoint" value="point_on_exterior" type="QString"/>
-          <Option name="lineSymbol" value="&lt;symbol name=&quot;symbol&quot; alpha=&quot;1&quot; clip_to_extent=&quot;1&quot; type=&quot;line&quot; force_rhr=&quot;0&quot;>&lt;layer pass=&quot;0&quot; enabled=&quot;1&quot; locked=&quot;0&quot; class=&quot;SimpleLine&quot;>&lt;prop v=&quot;0&quot; k=&quot;align_dash_pattern&quot;/>&lt;prop v=&quot;square&quot; k=&quot;capstyle&quot;/>&lt;prop v=&quot;5;2&quot; k=&quot;customdash&quot;/>&lt;prop v=&quot;3x:0,0,0,0,0,0&quot; k=&quot;customdash_map_unit_scale&quot;/>&lt;prop v=&quot;MM&quot; k=&quot;customdash_unit&quot;/>&lt;prop v=&quot;0&quot; k=&quot;dash_pattern_offset&quot;/>&lt;prop v=&quot;3x:0,0,0,0,0,0&quot; k=&quot;dash_pattern_offset_map_unit_scale&quot;/>&lt;prop v=&quot;MM&quot; k=&quot;dash_pattern_offset_unit&quot;/>&lt;prop v=&quot;0&quot; k=&quot;draw_inside_polygon&quot;/>&lt;prop v=&quot;bevel&quot; k=&quot;joinstyle&quot;/>&lt;prop v=&quot;60,60,60,255&quot; k=&quot;line_color&quot;/>&lt;prop v=&quot;solid&quot; k=&quot;line_style&quot;/>&lt;prop v=&quot;0.3&quot; k=&quot;line_width&quot;/>&lt;prop v=&quot;MM&quot; k=&quot;line_width_unit&quot;/>&lt;prop v=&quot;0&quot; k=&quot;offset&quot;/>&lt;prop v=&quot;3x:0,0,0,0,0,0&quot; k=&quot;offset_map_unit_scale&quot;/>&lt;prop v=&quot;MM&quot; k=&quot;offset_unit&quot;/>&lt;prop v=&quot;0&quot; k=&quot;ring_filter&quot;/>&lt;prop v=&quot;0&quot; k=&quot;tweak_dash_pattern_on_corners&quot;/>&lt;prop v=&quot;0&quot; k=&quot;use_custom_dash&quot;/>&lt;prop v=&quot;3x:0,0,0,0,0,0&quot; k=&quot;width_map_unit_scale&quot;/>&lt;data_defined_properties>&lt;Option type=&quot;Map&quot;>&lt;Option name=&quot;name&quot; value=&quot;&quot; type=&quot;QString&quot;/>&lt;Option name=&quot;properties&quot;/>&lt;Option name=&quot;type&quot; value=&quot;collection&quot; type=&quot;QString&quot;/>&lt;/Option>&lt;/data_defined_properties>&lt;/layer>&lt;/symbol>" type="QString"/>
-          <Option name="minLength" value="0" type="double"/>
-          <Option name="minLengthMapUnitScale" value="3x:0,0,0,0,0,0" type="QString"/>
-          <Option name="minLengthUnit" value="MM" type="QString"/>
-          <Option name="offsetFromAnchor" value="0" type="double"/>
-          <Option name="offsetFromAnchorMapUnitScale" value="3x:0,0,0,0,0,0" type="QString"/>
-          <Option name="offsetFromAnchorUnit" value="MM" type="QString"/>
-          <Option name="offsetFromLabel" value="0" type="double"/>
-          <Option name="offsetFromLabelMapUnitScale" value="3x:0,0,0,0,0,0" type="QString"/>
-          <Option name="offsetFromLabelUnit" value="MM" type="QString"/>
+          <Option value="false" name="drawToAllParts" type="bool"/>
+          <Option value="0" name="enabled" type="QString"/>
+          <Option value="point_on_exterior" name="labelAnchorPoint" type="QString"/>
+          <Option value="&lt;symbol name=&quot;symbol&quot; force_rhr=&quot;0&quot; type=&quot;line&quot; clip_to_extent=&quot;1&quot; alpha=&quot;1&quot;>&lt;data_defined_properties>&lt;Option type=&quot;Map&quot;>&lt;Option value=&quot;&quot; name=&quot;name&quot; type=&quot;QString&quot;/>&lt;Option name=&quot;properties&quot;/>&lt;Option value=&quot;collection&quot; name=&quot;type&quot; type=&quot;QString&quot;/>&lt;/Option>&lt;/data_defined_properties>&lt;layer pass=&quot;0&quot; class=&quot;SimpleLine&quot; enabled=&quot;1&quot; locked=&quot;0&quot;>&lt;Option type=&quot;Map&quot;>&lt;Option value=&quot;0&quot; name=&quot;align_dash_pattern&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;square&quot; name=&quot;capstyle&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;5;2&quot; name=&quot;customdash&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;3x:0,0,0,0,0,0&quot; name=&quot;customdash_map_unit_scale&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;MM&quot; name=&quot;customdash_unit&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;0&quot; name=&quot;dash_pattern_offset&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;3x:0,0,0,0,0,0&quot; name=&quot;dash_pattern_offset_map_unit_scale&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;MM&quot; name=&quot;dash_pattern_offset_unit&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;0&quot; name=&quot;draw_inside_polygon&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;bevel&quot; name=&quot;joinstyle&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;60,60,60,255&quot; name=&quot;line_color&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;solid&quot; name=&quot;line_style&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;0.3&quot; name=&quot;line_width&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;MM&quot; name=&quot;line_width_unit&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;0&quot; name=&quot;offset&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;3x:0,0,0,0,0,0&quot; name=&quot;offset_map_unit_scale&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;MM&quot; name=&quot;offset_unit&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;0&quot; name=&quot;ring_filter&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;0&quot; name=&quot;trim_distance_end&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;3x:0,0,0,0,0,0&quot; name=&quot;trim_distance_end_map_unit_scale&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;MM&quot; name=&quot;trim_distance_end_unit&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;0&quot; name=&quot;trim_distance_start&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;3x:0,0,0,0,0,0&quot; name=&quot;trim_distance_start_map_unit_scale&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;MM&quot; name=&quot;trim_distance_start_unit&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;0&quot; name=&quot;tweak_dash_pattern_on_corners&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;0&quot; name=&quot;use_custom_dash&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;3x:0,0,0,0,0,0&quot; name=&quot;width_map_unit_scale&quot; type=&quot;QString&quot;/>&lt;/Option>&lt;prop k=&quot;align_dash_pattern&quot; v=&quot;0&quot;/>&lt;prop k=&quot;capstyle&quot; v=&quot;square&quot;/>&lt;prop k=&quot;customdash&quot; v=&quot;5;2&quot;/>&lt;prop k=&quot;customdash_map_unit_scale&quot; v=&quot;3x:0,0,0,0,0,0&quot;/>&lt;prop k=&quot;customdash_unit&quot; v=&quot;MM&quot;/>&lt;prop k=&quot;dash_pattern_offset&quot; v=&quot;0&quot;/>&lt;prop k=&quot;dash_pattern_offset_map_unit_scale&quot; v=&quot;3x:0,0,0,0,0,0&quot;/>&lt;prop k=&quot;dash_pattern_offset_unit&quot; v=&quot;MM&quot;/>&lt;prop k=&quot;draw_inside_polygon&quot; v=&quot;0&quot;/>&lt;prop k=&quot;joinstyle&quot; v=&quot;bevel&quot;/>&lt;prop k=&quot;line_color&quot; v=&quot;60,60,60,255&quot;/>&lt;prop k=&quot;line_style&quot; v=&quot;solid&quot;/>&lt;prop k=&quot;line_width&quot; v=&quot;0.3&quot;/>&lt;prop k=&quot;line_width_unit&quot; v=&quot;MM&quot;/>&lt;prop k=&quot;offset&quot; v=&quot;0&quot;/>&lt;prop k=&quot;offset_map_unit_scale&quot; v=&quot;3x:0,0,0,0,0,0&quot;/>&lt;prop k=&quot;offset_unit&quot; v=&quot;MM&quot;/>&lt;prop k=&quot;ring_filter&quot; v=&quot;0&quot;/>&lt;prop k=&quot;trim_distance_end&quot; v=&quot;0&quot;/>&lt;prop k=&quot;trim_distance_end_map_unit_scale&quot; v=&quot;3x:0,0,0,0,0,0&quot;/>&lt;prop k=&quot;trim_distance_end_unit&quot; v=&quot;MM&quot;/>&lt;prop k=&quot;trim_distance_start&quot; v=&quot;0&quot;/>&lt;prop k=&quot;trim_distance_start_map_unit_scale&quot; v=&quot;3x:0,0,0,0,0,0&quot;/>&lt;prop k=&quot;trim_distance_start_unit&quot; v=&quot;MM&quot;/>&lt;prop k=&quot;tweak_dash_pattern_on_corners&quot; v=&quot;0&quot;/>&lt;prop k=&quot;use_custom_dash&quot; v=&quot;0&quot;/>&lt;prop k=&quot;width_map_unit_scale&quot; v=&quot;3x:0,0,0,0,0,0&quot;/>&lt;data_defined_properties>&lt;Option type=&quot;Map&quot;>&lt;Option value=&quot;&quot; name=&quot;name&quot; type=&quot;QString&quot;/>&lt;Option name=&quot;properties&quot;/>&lt;Option value=&quot;collection&quot; name=&quot;type&quot; type=&quot;QString&quot;/>&lt;/Option>&lt;/data_defined_properties>&lt;/layer>&lt;/symbol>" name="lineSymbol" type="QString"/>
+          <Option value="0" name="minLength" type="double"/>
+          <Option value="3x:0,0,0,0,0,0" name="minLengthMapUnitScale" type="QString"/>
+          <Option value="MM" name="minLengthUnit" type="QString"/>
+          <Option value="0" name="offsetFromAnchor" type="double"/>
+          <Option value="3x:0,0,0,0,0,0" name="offsetFromAnchorMapUnitScale" type="QString"/>
+          <Option value="MM" name="offsetFromAnchorUnit" type="QString"/>
+          <Option value="0" name="offsetFromLabel" type="double"/>
+          <Option value="3x:0,0,0,0,0,0" name="offsetFromLabelMapUnitScale" type="QString"/>
+          <Option value="MM" name="offsetFromLabelUnit" type="QString"/>
         </Option>
       </callout>
     </settings>
   </labeling>
-  <customproperties>
-    <property key="dualview/previewExpressions" value="&quot;id&quot;"/>
-    <property key="embeddedWidgets/count" value="0"/>
-    <property key="variableNames"/>
-    <property key="variableValues"/>
-  </customproperties>
   <blendMode>0</blendMode>
   <featureBlendMode>0</featureBlendMode>
   <layerOpacity>1</layerOpacity>
-  <SingleCategoryDiagramRenderer diagramType="Histogram" attributeLegend="1">
-    <DiagramCategory minScaleDenominator="0" scaleBasedVisibility="0" sizeType="MM" lineSizeScale="3x:0,0,0,0,0,0" showAxis="1" direction="0" minimumSize="0" enabled="0" barWidth="5" sizeScale="3x:0,0,0,0,0,0" width="15" spacingUnitScale="3x:0,0,0,0,0,0" spacingUnit="MM" height="15" labelPlacementMethod="XHeight" backgroundAlpha="255" diagramOrientation="Up" lineSizeType="MM" scaleDependency="Area" opacity="1" maxScaleDenominator="1e+08" rotationOffset="270" penAlpha="255" spacing="5" backgroundColor="#ffffff" penColor="#000000" penWidth="0">
-      <fontProperties style="" description="MS Shell Dlg 2,7.8,-1,5,50,0,0,0,0,0"/>
-      <attribute label="" color="#000000" field=""/>
-      <axisSymbol>
-        <symbol name="" alpha="1" clip_to_extent="1" type="line" force_rhr="0">
-          <layer pass="0" enabled="1" locked="0" class="SimpleLine">
-            <prop v="0" k="align_dash_pattern"/>
-            <prop v="square" k="capstyle"/>
-            <prop v="5;2" k="customdash"/>
-            <prop v="3x:0,0,0,0,0,0" k="customdash_map_unit_scale"/>
-            <prop v="MM" k="customdash_unit"/>
-            <prop v="0" k="dash_pattern_offset"/>
-            <prop v="3x:0,0,0,0,0,0" k="dash_pattern_offset_map_unit_scale"/>
-            <prop v="MM" k="dash_pattern_offset_unit"/>
-            <prop v="0" k="draw_inside_polygon"/>
-            <prop v="bevel" k="joinstyle"/>
-            <prop v="35,35,35,255" k="line_color"/>
-            <prop v="solid" k="line_style"/>
-            <prop v="0.26" k="line_width"/>
-            <prop v="MM" k="line_width_unit"/>
-            <prop v="0" k="offset"/>
-            <prop v="3x:0,0,0,0,0,0" k="offset_map_unit_scale"/>
-            <prop v="MM" k="offset_unit"/>
-            <prop v="0" k="ring_filter"/>
-            <prop v="0" k="tweak_dash_pattern_on_corners"/>
-            <prop v="0" k="use_custom_dash"/>
-            <prop v="3x:0,0,0,0,0,0" k="width_map_unit_scale"/>
-            <data_defined_properties>
-              <Option type="Map">
-                <Option name="name" value="" type="QString"/>
-                <Option name="properties"/>
-                <Option name="type" value="collection" type="QString"/>
-              </Option>
-            </data_defined_properties>
-          </layer>
-        </symbol>
-      </axisSymbol>
-    </DiagramCategory>
-  </SingleCategoryDiagramRenderer>
-  <DiagramLayerSettings showAll="1" obstacle="0" placement="1" dist="0" zIndex="0" linePlacementFlags="18" priority="0">
-    <properties>
-      <Option type="Map">
-        <Option name="name" value="" type="QString"/>
-        <Option name="properties"/>
-        <Option name="type" value="collection" type="QString"/>
-      </Option>
-    </properties>
-  </DiagramLayerSettings>
-  <geometryOptions geometryPrecision="0" removeDuplicateNodes="0">
-    <activeChecks/>
-    <checkConfiguration type="Map">
-      <Option name="QgsGeometryGapCheck" type="Map">
-        <Option name="allowedGapsBuffer" value="0" type="double"/>
-        <Option name="allowedGapsEnabled" value="false" type="bool"/>
-        <Option name="allowedGapsLayer" value="" type="QString"/>
-      </Option>
-    </checkConfiguration>
-  </geometryOptions>
-  <legend type="default-vector"/>
-  <referencedLayers/>
+  <legend showLabelLegend="0" type="default-vector"/>
   <fieldConfiguration>
     <field name="gml_id" configurationFlags="None">
       <editWidget type="TextEdit">
@@ -471,6 +537,13 @@
         </config>
       </editWidget>
     </field>
+    <field name="acquisitionType" configurationFlags="None">
+      <editWidget type="TextEdit">
+        <config>
+          <Option/>
+        </config>
+      </editWidget>
+    </field>
     <field name="vendorName" configurationFlags="None">
       <editWidget type="TextEdit">
         <config>
@@ -479,13 +552,6 @@
       </editWidget>
     </field>
     <field name="vendorReference" configurationFlags="None">
-      <editWidget type="TextEdit">
-        <config>
-          <Option/>
-        </config>
-      </editWidget>
-    </field>
-    <field name="acquisitionType" configurationFlags="None">
       <editWidget type="TextEdit">
         <config>
           <Option/>
@@ -501,142 +567,142 @@
     </field>
   </fieldConfiguration>
   <aliases>
-    <alias index="0" name="" field="gml_id"/>
-    <alias index="1" name="" field="featureId"/>
-    <alias index="2" name="" field="acquisitionDate"/>
-    <alias index="3" name="" field="acquisitionTime"/>
-    <alias index="4" name="" field="source"/>
-    <alias index="5" name="" field="sourceUnit"/>
-    <alias index="6" name="" field="productType"/>
-    <alias index="7" name="" field="CE90Accuracy"/>
-    <alias index="8" name="" field="RMSEAccuracy"/>
-    <alias index="9" name="" field="cloudCover"/>
-    <alias index="10" name="" field="offNadirAngle"/>
-    <alias index="11" name="" field="sunElevation"/>
-    <alias index="12" name="" field="sunAzimuth"/>
-    <alias index="13" name="" field="groundSampleDistance"/>
-    <alias index="14" name="" field="groundSampleDistanceUnit"/>
-    <alias index="15" name="" field="dataLayer"/>
-    <alias index="16" name="" field="legacyDescription"/>
-    <alias index="17" name="" field="outputMosaic"/>
-    <alias index="18" name="" field="colorBandOrder"/>
-    <alias index="19" name="" field="assetName"/>
-    <alias index="20" name="" field="assetType"/>
-    <alias index="21" name="" field="legacyId"/>
-    <alias index="22" name="" field="factoryOrderNumber"/>
-    <alias index="23" name="" field="perPixelX"/>
-    <alias index="24" name="" field="perPixelY"/>
-    <alias index="25" name="" field="crsFromPixels"/>
-    <alias index="26" name="" field="ageDays"/>
-    <alias index="27" name="" field="formattedDate"/>
-    <alias index="28" name="" field="ingestDate"/>
-    <alias index="29" name="" field="spatialAccuracy"/>
-    <alias index="30" name="" field="earliestAcquisitionDate"/>
-    <alias index="31" name="" field="latestAcquisitionDate"/>
-    <alias index="32" name="" field="pixelsIngested"/>
-    <alias index="33" name="" field="preciseGeometry"/>
-    <alias index="34" name="" field="companyName"/>
-    <alias index="35" name="" field="isBrowse"/>
-    <alias index="36" name="" field="isMirrored"/>
-    <alias index="37" name="" field="isMultipleWKB"/>
-    <alias index="38" name="" field="copyright"/>
-    <alias index="39" name="" field="niirs"/>
-    <alias index="40" name="" field="vendorName"/>
-    <alias index="41" name="" field="vendorReference"/>
-    <alias index="42" name="" field="acquisitionType"/>
-    <alias index="43" name="" field="licenseType"/>
+    <alias name="" index="0" field="gml_id"/>
+    <alias name="" index="1" field="featureId"/>
+    <alias name="" index="2" field="acquisitionDate"/>
+    <alias name="" index="3" field="acquisitionTime"/>
+    <alias name="" index="4" field="source"/>
+    <alias name="" index="5" field="sourceUnit"/>
+    <alias name="" index="6" field="productType"/>
+    <alias name="" index="7" field="CE90Accuracy"/>
+    <alias name="" index="8" field="RMSEAccuracy"/>
+    <alias name="" index="9" field="cloudCover"/>
+    <alias name="" index="10" field="offNadirAngle"/>
+    <alias name="" index="11" field="sunElevation"/>
+    <alias name="" index="12" field="sunAzimuth"/>
+    <alias name="" index="13" field="groundSampleDistance"/>
+    <alias name="" index="14" field="groundSampleDistanceUnit"/>
+    <alias name="" index="15" field="dataLayer"/>
+    <alias name="" index="16" field="legacyDescription"/>
+    <alias name="" index="17" field="outputMosaic"/>
+    <alias name="" index="18" field="colorBandOrder"/>
+    <alias name="" index="19" field="assetName"/>
+    <alias name="" index="20" field="assetType"/>
+    <alias name="" index="21" field="legacyId"/>
+    <alias name="" index="22" field="factoryOrderNumber"/>
+    <alias name="" index="23" field="perPixelX"/>
+    <alias name="" index="24" field="perPixelY"/>
+    <alias name="" index="25" field="crsFromPixels"/>
+    <alias name="" index="26" field="ageDays"/>
+    <alias name="" index="27" field="formattedDate"/>
+    <alias name="" index="28" field="ingestDate"/>
+    <alias name="" index="29" field="spatialAccuracy"/>
+    <alias name="" index="30" field="earliestAcquisitionDate"/>
+    <alias name="" index="31" field="latestAcquisitionDate"/>
+    <alias name="" index="32" field="pixelsIngested"/>
+    <alias name="" index="33" field="preciseGeometry"/>
+    <alias name="" index="34" field="companyName"/>
+    <alias name="" index="35" field="isBrowse"/>
+    <alias name="" index="36" field="isMirrored"/>
+    <alias name="" index="37" field="isMultipleWKB"/>
+    <alias name="" index="38" field="copyright"/>
+    <alias name="" index="39" field="niirs"/>
+    <alias name="" index="40" field="acquisitionType"/>
+    <alias name="" index="41" field="vendorName"/>
+    <alias name="" index="42" field="vendorReference"/>
+    <alias name="" index="43" field="licenseType"/>
   </aliases>
   <defaults>
-    <default expression="" applyOnUpdate="0" field="gml_id"/>
-    <default expression="" applyOnUpdate="0" field="featureId"/>
-    <default expression="" applyOnUpdate="0" field="acquisitionDate"/>
-    <default expression="" applyOnUpdate="0" field="acquisitionTime"/>
-    <default expression="" applyOnUpdate="0" field="source"/>
-    <default expression="" applyOnUpdate="0" field="sourceUnit"/>
-    <default expression="" applyOnUpdate="0" field="productType"/>
-    <default expression="" applyOnUpdate="0" field="CE90Accuracy"/>
-    <default expression="" applyOnUpdate="0" field="RMSEAccuracy"/>
-    <default expression="" applyOnUpdate="0" field="cloudCover"/>
-    <default expression="" applyOnUpdate="0" field="offNadirAngle"/>
-    <default expression="" applyOnUpdate="0" field="sunElevation"/>
-    <default expression="" applyOnUpdate="0" field="sunAzimuth"/>
-    <default expression="" applyOnUpdate="0" field="groundSampleDistance"/>
-    <default expression="" applyOnUpdate="0" field="groundSampleDistanceUnit"/>
-    <default expression="" applyOnUpdate="0" field="dataLayer"/>
-    <default expression="" applyOnUpdate="0" field="legacyDescription"/>
-    <default expression="" applyOnUpdate="0" field="outputMosaic"/>
-    <default expression="" applyOnUpdate="0" field="colorBandOrder"/>
-    <default expression="" applyOnUpdate="0" field="assetName"/>
-    <default expression="" applyOnUpdate="0" field="assetType"/>
-    <default expression="" applyOnUpdate="0" field="legacyId"/>
-    <default expression="" applyOnUpdate="0" field="factoryOrderNumber"/>
-    <default expression="" applyOnUpdate="0" field="perPixelX"/>
-    <default expression="" applyOnUpdate="0" field="perPixelY"/>
-    <default expression="" applyOnUpdate="0" field="crsFromPixels"/>
-    <default expression="" applyOnUpdate="0" field="ageDays"/>
-    <default expression="" applyOnUpdate="0" field="formattedDate"/>
-    <default expression="" applyOnUpdate="0" field="ingestDate"/>
-    <default expression="" applyOnUpdate="0" field="spatialAccuracy"/>
-    <default expression="" applyOnUpdate="0" field="earliestAcquisitionDate"/>
-    <default expression="" applyOnUpdate="0" field="latestAcquisitionDate"/>
-    <default expression="" applyOnUpdate="0" field="pixelsIngested"/>
-    <default expression="" applyOnUpdate="0" field="preciseGeometry"/>
-    <default expression="" applyOnUpdate="0" field="companyName"/>
-    <default expression="" applyOnUpdate="0" field="isBrowse"/>
-    <default expression="" applyOnUpdate="0" field="isMirrored"/>
-    <default expression="" applyOnUpdate="0" field="isMultipleWKB"/>
-    <default expression="" applyOnUpdate="0" field="copyright"/>
-    <default expression="" applyOnUpdate="0" field="niirs"/>
-    <default expression="" applyOnUpdate="0" field="vendorName"/>
-    <default expression="" applyOnUpdate="0" field="vendorReference"/>
-    <default expression="" applyOnUpdate="0" field="acquisitionType"/>
-    <default expression="" applyOnUpdate="0" field="licenseType"/>
+    <default field="gml_id" expression="" applyOnUpdate="0"/>
+    <default field="featureId" expression="" applyOnUpdate="0"/>
+    <default field="acquisitionDate" expression="" applyOnUpdate="0"/>
+    <default field="acquisitionTime" expression="" applyOnUpdate="0"/>
+    <default field="source" expression="" applyOnUpdate="0"/>
+    <default field="sourceUnit" expression="" applyOnUpdate="0"/>
+    <default field="productType" expression="" applyOnUpdate="0"/>
+    <default field="CE90Accuracy" expression="" applyOnUpdate="0"/>
+    <default field="RMSEAccuracy" expression="" applyOnUpdate="0"/>
+    <default field="cloudCover" expression="" applyOnUpdate="0"/>
+    <default field="offNadirAngle" expression="" applyOnUpdate="0"/>
+    <default field="sunElevation" expression="" applyOnUpdate="0"/>
+    <default field="sunAzimuth" expression="" applyOnUpdate="0"/>
+    <default field="groundSampleDistance" expression="" applyOnUpdate="0"/>
+    <default field="groundSampleDistanceUnit" expression="" applyOnUpdate="0"/>
+    <default field="dataLayer" expression="" applyOnUpdate="0"/>
+    <default field="legacyDescription" expression="" applyOnUpdate="0"/>
+    <default field="outputMosaic" expression="" applyOnUpdate="0"/>
+    <default field="colorBandOrder" expression="" applyOnUpdate="0"/>
+    <default field="assetName" expression="" applyOnUpdate="0"/>
+    <default field="assetType" expression="" applyOnUpdate="0"/>
+    <default field="legacyId" expression="" applyOnUpdate="0"/>
+    <default field="factoryOrderNumber" expression="" applyOnUpdate="0"/>
+    <default field="perPixelX" expression="" applyOnUpdate="0"/>
+    <default field="perPixelY" expression="" applyOnUpdate="0"/>
+    <default field="crsFromPixels" expression="" applyOnUpdate="0"/>
+    <default field="ageDays" expression="" applyOnUpdate="0"/>
+    <default field="formattedDate" expression="" applyOnUpdate="0"/>
+    <default field="ingestDate" expression="" applyOnUpdate="0"/>
+    <default field="spatialAccuracy" expression="" applyOnUpdate="0"/>
+    <default field="earliestAcquisitionDate" expression="" applyOnUpdate="0"/>
+    <default field="latestAcquisitionDate" expression="" applyOnUpdate="0"/>
+    <default field="pixelsIngested" expression="" applyOnUpdate="0"/>
+    <default field="preciseGeometry" expression="" applyOnUpdate="0"/>
+    <default field="companyName" expression="" applyOnUpdate="0"/>
+    <default field="isBrowse" expression="" applyOnUpdate="0"/>
+    <default field="isMirrored" expression="" applyOnUpdate="0"/>
+    <default field="isMultipleWKB" expression="" applyOnUpdate="0"/>
+    <default field="copyright" expression="" applyOnUpdate="0"/>
+    <default field="niirs" expression="" applyOnUpdate="0"/>
+    <default field="acquisitionType" expression="" applyOnUpdate="0"/>
+    <default field="vendorName" expression="" applyOnUpdate="0"/>
+    <default field="vendorReference" expression="" applyOnUpdate="0"/>
+    <default field="licenseType" expression="" applyOnUpdate="0"/>
   </defaults>
   <constraints>
-    <constraint constraints="1" exp_strength="0" unique_strength="0" notnull_strength="1" field="gml_id"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="featureId"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="acquisitionDate"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="acquisitionTime"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="source"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="sourceUnit"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="productType"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="CE90Accuracy"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="RMSEAccuracy"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="cloudCover"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="offNadirAngle"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="sunElevation"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="sunAzimuth"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="groundSampleDistance"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="groundSampleDistanceUnit"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="dataLayer"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="legacyDescription"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="outputMosaic"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="colorBandOrder"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="assetName"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="assetType"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="legacyId"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="factoryOrderNumber"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="perPixelX"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="perPixelY"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="crsFromPixels"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="ageDays"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="formattedDate"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="ingestDate"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="spatialAccuracy"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="earliestAcquisitionDate"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="latestAcquisitionDate"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="pixelsIngested"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="preciseGeometry"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="companyName"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="isBrowse"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="isMirrored"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="isMultipleWKB"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="copyright"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="niirs"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="vendorName"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="vendorReference"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="acquisitionType"/>
-    <constraint constraints="0" exp_strength="0" unique_strength="0" notnull_strength="0" field="licenseType"/>
+    <constraint exp_strength="0" constraints="1" unique_strength="0" field="gml_id" notnull_strength="1"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="featureId" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="acquisitionDate" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="acquisitionTime" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="source" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="sourceUnit" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="productType" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="CE90Accuracy" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="RMSEAccuracy" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="cloudCover" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="offNadirAngle" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="sunElevation" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="sunAzimuth" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="groundSampleDistance" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="groundSampleDistanceUnit" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="dataLayer" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="legacyDescription" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="outputMosaic" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="colorBandOrder" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="assetName" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="assetType" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="legacyId" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="factoryOrderNumber" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="perPixelX" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="perPixelY" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="crsFromPixels" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="ageDays" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="formattedDate" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="ingestDate" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="spatialAccuracy" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="earliestAcquisitionDate" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="latestAcquisitionDate" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="pixelsIngested" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="preciseGeometry" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="companyName" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="isBrowse" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="isMirrored" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="isMultipleWKB" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="copyright" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="niirs" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="acquisitionType" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="vendorName" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="vendorReference" notnull_strength="0"/>
+    <constraint exp_strength="0" constraints="0" unique_strength="0" field="licenseType" notnull_strength="0"/>
   </constraints>
   <constraintExpressions>
     <constraint exp="" desc="" field="gml_id"/>
@@ -679,69 +745,12 @@
     <constraint exp="" desc="" field="isMultipleWKB"/>
     <constraint exp="" desc="" field="copyright"/>
     <constraint exp="" desc="" field="niirs"/>
+    <constraint exp="" desc="" field="acquisitionType"/>
     <constraint exp="" desc="" field="vendorName"/>
     <constraint exp="" desc="" field="vendorReference"/>
-    <constraint exp="" desc="" field="acquisitionType"/>
     <constraint exp="" desc="" field="licenseType"/>
   </constraintExpressions>
   <expressionfields/>
-  <attributeactions>
-    <defaultAction key="Canvas" value="{00000000-0000-0000-0000-000000000000}"/>
-  </attributeactions>
-  <attributetableconfig sortOrder="0" actionWidgetStyle="dropDown" sortExpression="">
-    <columns>
-      <column hidden="1" width="-1" type="actions"/>
-      <column name="gml_id" hidden="0" width="-1" type="field"/>
-      <column name="featureId" hidden="0" width="-1" type="field"/>
-      <column name="acquisitionDate" hidden="0" width="-1" type="field"/>
-      <column name="acquisitionTime" hidden="0" width="-1" type="field"/>
-      <column name="source" hidden="0" width="-1" type="field"/>
-      <column name="sourceUnit" hidden="0" width="-1" type="field"/>
-      <column name="productType" hidden="0" width="-1" type="field"/>
-      <column name="CE90Accuracy" hidden="0" width="-1" type="field"/>
-      <column name="RMSEAccuracy" hidden="0" width="-1" type="field"/>
-      <column name="cloudCover" hidden="0" width="-1" type="field"/>
-      <column name="offNadirAngle" hidden="0" width="-1" type="field"/>
-      <column name="sunElevation" hidden="0" width="-1" type="field"/>
-      <column name="sunAzimuth" hidden="0" width="-1" type="field"/>
-      <column name="groundSampleDistance" hidden="0" width="-1" type="field"/>
-      <column name="groundSampleDistanceUnit" hidden="0" width="-1" type="field"/>
-      <column name="dataLayer" hidden="0" width="-1" type="field"/>
-      <column name="legacyDescription" hidden="0" width="-1" type="field"/>
-      <column name="outputMosaic" hidden="0" width="-1" type="field"/>
-      <column name="colorBandOrder" hidden="0" width="-1" type="field"/>
-      <column name="assetName" hidden="0" width="-1" type="field"/>
-      <column name="assetType" hidden="0" width="-1" type="field"/>
-      <column name="legacyId" hidden="0" width="-1" type="field"/>
-      <column name="factoryOrderNumber" hidden="0" width="-1" type="field"/>
-      <column name="perPixelX" hidden="0" width="-1" type="field"/>
-      <column name="perPixelY" hidden="0" width="-1" type="field"/>
-      <column name="crsFromPixels" hidden="0" width="-1" type="field"/>
-      <column name="ageDays" hidden="0" width="-1" type="field"/>
-      <column name="formattedDate" hidden="0" width="-1" type="field"/>
-      <column name="ingestDate" hidden="0" width="-1" type="field"/>
-      <column name="spatialAccuracy" hidden="0" width="-1" type="field"/>
-      <column name="earliestAcquisitionDate" hidden="0" width="-1" type="field"/>
-      <column name="latestAcquisitionDate" hidden="0" width="-1" type="field"/>
-      <column name="pixelsIngested" hidden="0" width="-1" type="field"/>
-      <column name="preciseGeometry" hidden="0" width="-1" type="field"/>
-      <column name="companyName" hidden="0" width="-1" type="field"/>
-      <column name="isBrowse" hidden="0" width="-1" type="field"/>
-      <column name="isMirrored" hidden="0" width="-1" type="field"/>
-      <column name="isMultipleWKB" hidden="0" width="-1" type="field"/>
-      <column name="copyright" hidden="0" width="-1" type="field"/>
-      <column name="niirs" hidden="0" width="-1" type="field"/>
-      <column name="vendorName" hidden="0" width="-1" type="field"/>
-      <column name="vendorReference" hidden="0" width="-1" type="field"/>
-      <column name="acquisitionType" hidden="0" width="-1" type="field"/>
-      <column name="licenseType" hidden="0" width="-1" type="field"/>
-    </columns>
-  </attributetableconfig>
-  <conditionalstyles>
-    <rowstyles/>
-    <fieldstyles/>
-  </conditionalstyles>
-  <storedexpressions/>
   <editform tolerant="1"></editform>
   <editforminit/>
   <editforminitcodesource>0</editforminitcodesource>
@@ -867,9 +876,54 @@ def my_form_open(dialog, layer, feature):
     <field labelOnTop="0" name="vendorName"/>
     <field labelOnTop="0" name="vendorReference"/>
   </labelOnTop>
+  <reuseLastValue>
+    <field name="CE90Accuracy" reuseLastValue="0"/>
+    <field name="RMSEAccuracy" reuseLastValue="0"/>
+    <field name="acquisitionDate" reuseLastValue="0"/>
+    <field name="acquisitionTime" reuseLastValue="0"/>
+    <field name="acquisitionType" reuseLastValue="0"/>
+    <field name="ageDays" reuseLastValue="0"/>
+    <field name="assetName" reuseLastValue="0"/>
+    <field name="assetType" reuseLastValue="0"/>
+    <field name="cloudCover" reuseLastValue="0"/>
+    <field name="colorBandOrder" reuseLastValue="0"/>
+    <field name="companyName" reuseLastValue="0"/>
+    <field name="copyright" reuseLastValue="0"/>
+    <field name="crsFromPixels" reuseLastValue="0"/>
+    <field name="dataLayer" reuseLastValue="0"/>
+    <field name="earliestAcquisitionDate" reuseLastValue="0"/>
+    <field name="factoryOrderNumber" reuseLastValue="0"/>
+    <field name="featureId" reuseLastValue="0"/>
+    <field name="formattedDate" reuseLastValue="0"/>
+    <field name="gml_id" reuseLastValue="0"/>
+    <field name="groundSampleDistance" reuseLastValue="0"/>
+    <field name="groundSampleDistanceUnit" reuseLastValue="0"/>
+    <field name="ingestDate" reuseLastValue="0"/>
+    <field name="isBrowse" reuseLastValue="0"/>
+    <field name="isMirrored" reuseLastValue="0"/>
+    <field name="isMultipleWKB" reuseLastValue="0"/>
+    <field name="latestAcquisitionDate" reuseLastValue="0"/>
+    <field name="legacyDescription" reuseLastValue="0"/>
+    <field name="legacyId" reuseLastValue="0"/>
+    <field name="licenseType" reuseLastValue="0"/>
+    <field name="niirs" reuseLastValue="0"/>
+    <field name="offNadirAngle" reuseLastValue="0"/>
+    <field name="outputMosaic" reuseLastValue="0"/>
+    <field name="perPixelX" reuseLastValue="0"/>
+    <field name="perPixelY" reuseLastValue="0"/>
+    <field name="pixelsIngested" reuseLastValue="0"/>
+    <field name="preciseGeometry" reuseLastValue="0"/>
+    <field name="productType" reuseLastValue="0"/>
+    <field name="source" reuseLastValue="0"/>
+    <field name="sourceUnit" reuseLastValue="0"/>
+    <field name="spatialAccuracy" reuseLastValue="0"/>
+    <field name="sunAzimuth" reuseLastValue="0"/>
+    <field name="sunElevation" reuseLastValue="0"/>
+    <field name="vendorName" reuseLastValue="0"/>
+    <field name="vendorReference" reuseLastValue="0"/>
+  </reuseLastValue>
   <dataDefinedFieldProperties/>
   <widgets/>
   <previewExpression>"id"</previewExpression>
-  <mapTip></mapTip>
   <layerGeometryType>2</layerGeometryType>
 </qgis>
