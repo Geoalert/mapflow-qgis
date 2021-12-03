@@ -97,7 +97,7 @@ class Mapflow(QObject):
         )
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
-        self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or 18))
+        self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or config.DEFAULT_ZOOM))
         if self.settings.value('providerSaveAuth'):
             self.dlg.providerSaveAuth.setChecked(True)
             self.dlg.providerUsername.setText(self.settings.value('providerUsername'))
