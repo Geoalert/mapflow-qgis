@@ -29,7 +29,7 @@ MAXAR_PRODUCTS = {
 # MISC
 MAX_TIF_SIZE = 2000  # MB
 MAX_ZOOM = 21
-DEFAULT_ZOOM = 18
+DEFAULT_ZOOM = 13
 STYLES = {
     'Buildings Detection': 'buildings',
     'Buildings Detection With Heights': 'buildings',

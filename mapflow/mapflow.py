@@ -179,7 +179,7 @@ class Mapflow(QObject):
             self.dlg.maxZoom.setMaximum(config.MAXAR_MAX_FREE_ZOOM)
         else:
             self.dlg.maxZoom.setMaximum(config.MAX_ZOOM)
-            self.dlg.maxZoom.setValue(config.DEFAULT_ZOOM)
+            self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or config.DEFAULT_ZOOM))
 
     def on_provider_change(self, provider: str) -> None:
         """Limit zoom for Maxar when our account is to be used.
@@ -196,7 +196,7 @@ class Mapflow(QObject):
         else:
             self.dlg.maxar.setEnabled(False)  # activate metadata panel
             self.dlg.maxZoom.setMaximum(config.MAX_ZOOM)
-            self.dlg.maxZoom.setValue(config.DEFAULT_ZOOM)
+            self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or config.DEFAULT_ZOOM))
 
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
