@@ -755,7 +755,7 @@ class Mapflow(QObject):
                     processing_params['meta']['maxar_product'] = raster_option.split()[1].lower()
                 image_id = self.get_maxar_image_id()
                 if image_id:
-                    params['url'] += f'&CQL_FILTER=feature_id=%27{image_id}%27'
+                    params['url'] += f'&FEATURECOLLECTION={image_id}'
             params['source_type'] = providers[raster_option]['type']
             if params['source_type'] == 'wms':
                 params['target_resolution'] = 0.000005  # for the 18th zoom
@@ -916,7 +916,7 @@ class Mapflow(QObject):
                 password = self.password
             image_id = self.get_maxar_image_id()  # request a single image if selected in the table
             if image_id:
-                url += f'&CQL_FILTER=feature_id=%27{image_id}%27'
+                url += f'&FEATURECOLLECTION={image_id}'
                 row = self.dlg.maxarMetadataTable.currentRow()
                 layer_name = ' '.join((
                     layer_name,
