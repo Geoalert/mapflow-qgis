@@ -315,7 +315,7 @@ class Mapflow(QObject):
         self.dlg_connect_id.connectId.setText(providers[product]['connectId'])
         self.dlg_connect_id.connectId.setCursorPosition(0)
         # Specify the product being edited in the window title
-        self.dlg_connect_id.setWindowTitle(f'{product} - {self.dlg_connect_id.windowTitle()}')
+        self.dlg_connect_id.setWindowTitle(f'Connect ID - {product}')
         self.dlg_connect_id.show()
 
     def edit_connect_id(self) -> None:
