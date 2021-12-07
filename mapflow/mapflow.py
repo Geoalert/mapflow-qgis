@@ -325,7 +325,8 @@ class Mapflow(QObject):
         """
         provider = self.dlg.providerCombo.currentText()
         providers = self.settings.value('providers')
-        providers[provider]['connectId'] = self.dlg_connect_id.connectId.text()
+        connect_id = self.dlg_connect_id.connectId.text()
+        providers[provider]['connectId'] = connect_id
         self.settings.setValue('providers', providers)
 
     def monitor_polygon_layer_feature_selection(self, layers: List[QgsMapLayer]) -> None:
@@ -428,7 +429,7 @@ class Mapflow(QObject):
         url = 'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?' + query_params
         if self.dlg.providerAuthGroup.isChecked():  # user's own account
             connect_id = self.settings.value('providers')[provider]['connectId']
-            if connect_id == '----':
+            if not connect_id:
                 self.show_connect_id_dialog(provider)
                 return
             url += '&CONNECTID=' + connect_id
@@ -745,7 +746,7 @@ class Mapflow(QObject):
                 processing_params['meta']['source'] = 'maxar'
                 if use_auth:  # user's own account
                     connect_id = providers[raster_option]['connectId']
-                    if connect_id == '----':
+                    if not connect_id:
                         self.show_connect_id_dialog(raster_option)
                         return
                     else:
@@ -903,7 +904,7 @@ class Mapflow(QObject):
         if provider in config.MAXAR_PRODUCTS:
             if self.dlg.providerAuthGroup.isChecked():  # own account
                 connect_id = provider_info['connectId']
-                if connect_id == '----':
+                if not connect_id:
                     self.show_connect_id_dialog(provider)
                     return
                 url += '&CONNECTID=' + connect_id

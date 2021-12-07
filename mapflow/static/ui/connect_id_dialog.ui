@@ -40,9 +40,6 @@
    </property>
    <item row="0" column="0">
     <widget class="QLineEdit" name="connectId">
-     <property name="inputMask">
-      <string notr="true">HHHHHHHH-HHHH-HHHH-HHHH-HHHHHHHHHHHH</string>
-     </property>
      <property name="maxLength">
       <number>36</number>
      </property>

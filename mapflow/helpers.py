@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from qgis.core import (
@@ -8,6 +9,7 @@ from qgis.core import (
 
 PROJECT = QgsProject.instance()
 WGS84 = QgsCoordinateReferenceSystem('EPSG:4326')
+UUID_REGEX = re.compile('[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\Z')
 
 
 def is_geotiff_layer(layer: QgsMapLayer) -> bool:
@@ -59,3 +61,8 @@ def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
     if layer_crs != WGS84:
         extent_geometry = to_wgs84(extent_geometry, layer_crs)
     return extent_geometry
+
+
+def is_uuid(value: str) -> bool:
+    """Validate UUID supplied by the user."""
+    return bool(UUID_REGEX.match(value))
