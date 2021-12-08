@@ -1,5 +1,6 @@
 import re
 from pathlib import Path
+from urllib import parse
 
 from qgis.core import (
     QgsMapLayer, QgsMapLayerType, QgsWkbTypes, QgsGeometry, QgsProject,
@@ -9,7 +10,11 @@ from qgis.core import (
 
 PROJECT = QgsProject.instance()
 WGS84 = QgsCoordinateReferenceSystem('EPSG:4326')
-UUID_REGEX = re.compile('[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\Z')
+UUID_REGEX = re.compile(r'[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\Z')
+URL_PATTERN = r'https?://(www\.)?([-\w]{1,256}\.)+[a-zA-Z0-9]{1,6}'  # schema + domains
+URL_REGEX = re.compile(URL_PATTERN)
+XYZ_REGEX = re.compile(URL_PATTERN + r'(.*\{[xyz]\}){3}.*', re.I)
+QUAD_KEY_REGEX = re.compile(URL_PATTERN + r'(.*\{q\}).*', re.I)
 
 
 def is_geotiff_layer(layer: QgsMapLayer) -> bool:
@@ -63,6 +68,27 @@ def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
     return extent_geometry
 
 
-def is_uuid(value: str) -> bool:
-    """Validate UUID supplied by the user."""
-    return bool(UUID_REGEX.match(value))
+def validate_provider_form(form) -> bool:
+    """Return True if input looks valid otherwise return False."""
+    name = form.name.text()
+    url = form.url.text()
+    type_ = form.type.currentText()
+    if name and url:  # non-empty
+        if type_ in ('xyz', 'tms'):
+            return bool(XYZ_REGEX.match(url))
+        elif type_ == 'wms':
+            query_params = {  # parse query params and convert them to uppercase
+                param.upper(): value for param, value in 
+                dict(parse.parse_qsl(parse.urlsplit(url).query)).items()
+            }
+            return (
+                URL_REGEX.match(url) and
+                query_params.get('REQUEST', '').lower() == 'getmap' and
+                all(query_params.get(param) for param in (
+                    # Mandatory params according to the WMS spec
+                    'LAYERS', 'STYLES', 'BBOX', 'WIDTH', 'HEIGHT', 'CRS', 'VERSION'
+                ))
+            )
+        else:  # Quad Key
+            return bool(QUAD_KEY_REGEX.match(url))
+    return False

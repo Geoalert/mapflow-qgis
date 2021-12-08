@@ -1,4 +1,4 @@
-from .helpers import is_uuid
+from .helpers import UUID_REGEX, validate_provider_form
 
 from pathlib import Path
 
@@ -45,8 +45,9 @@ class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
         self.setWindowIcon(plugin_icon)
         ok = self.buttonBox.button(QDialogButtonBox.Ok)
         ok.setEnabled(False)
-        self.name.textChanged.connect(lambda text: ok.setEnabled(bool(text and self.url.text())))
-        self.url.textChanged.connect(lambda text: ok.setEnabled(bool(text and self.name.text())))
+        self.name.textChanged.connect(lambda: ok.setEnabled(validate_provider_form(self)))
+        self.url.textChanged.connect(lambda: ok.setEnabled(validate_provider_form(self)))
+        self.type.currentTextChanged.connect(lambda: ok.setEnabled(validate_provider_form(self)))
         self.finished.connect(self.name.clear)
         self.finished.connect(self.url.clear)
 
@@ -58,7 +59,8 @@ class ConnectIdDialog(*uic.loadUiType(ui_path/'connect_id_dialog.ui')):
         self.setupUi(self)
         self.setWindowIcon(plugin_icon)
         self.connectId.textChanged.connect(
-            lambda text: self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(is_uuid(text) or not(text))
+            lambda text: self.buttonBox.button(QDialogButtonBox.Ok).\
+                setEnabled(bool(UUID_REGEX.match(text)) or not(text))
         )
 
 
