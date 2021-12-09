@@ -429,7 +429,7 @@ class Mapflow(QObject):
         url = 'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?' + query_params
         if self.dlg.providerAuthGroup.isChecked():  # user's own account
             connect_id = self.settings.value('providers')[provider]['connectId']
-            if not connect_id:
+            if not helpers.UUID_REGEX.match(connect_id):
                 self.show_connect_id_dialog(provider)
                 return
             url += '&CONNECTID=' + connect_id
@@ -746,7 +746,7 @@ class Mapflow(QObject):
                 processing_params['meta']['source'] = 'maxar'
                 if use_auth:  # user's own account
                     connect_id = providers[raster_option]['connectId']
-                    if not connect_id:
+                    if not helpers.UUID_REGEX.match(connect_id):
                         self.show_connect_id_dialog(raster_option)
                         return
                     else:
@@ -904,7 +904,7 @@ class Mapflow(QObject):
         if provider in config.MAXAR_PRODUCTS:
             if self.dlg.providerAuthGroup.isChecked():  # own account
                 connect_id = provider_info['connectId']
-                if not connect_id:
+                if not helpers.UUID_REGEX.match(connect_id):
                     self.show_connect_id_dialog(provider)
                     return
                 url += '&CONNECTID=' + connect_id
