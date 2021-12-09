@@ -8,10 +8,13 @@ about=Mapflow provides AI models for automatic feature extraction from satellite
 		- roads
 		- construction sites
 	For a step-by-step user guide, go to https://docs.mapflow.ai/api/qgis_mapflow#user-interface
-version=1.5.1
+version=1.5.2
 author=Geoalert
 email=hello@geoalert.io
 changelog:
+	1.5.2: 
+		- Limit Maxar max zoom to 12 to prevent accidental traffic wasting
+		- Alert about an invalid GeoTIFF CRS
 	1.5.1:
 		- Fix permission denied when processing Maxar w/ own account
 		- Prompt to enter a Connect ID on preview and metadata requests when unset
