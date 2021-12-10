@@ -119,7 +119,7 @@ class Mapflow(QObject):
         # Sync polygon layer combos
         self.dlg.polygonCombo.layerChanged.connect(self.dlg.maxarAoiCombo.setLayer)
         self.dlg.maxarAoiCombo.layerChanged.connect(self.dlg.polygonCombo.setLayer)
-        # Calculate AOI area
+        # Calculate AOI size
         self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area_polygon_layer)
         self.dlg.rasterCombo.layerChanged.connect(self.calculate_aoi_area_raster)
         self.dlg.useImageExtentAsAoi.toggled.connect(self.calculate_aoi_area_use_image_extent)
@@ -521,26 +521,22 @@ class Mapflow(QObject):
         return selected_cells[config.MAXAR_METADATA_ID_COLUMN_INDEX].text() if selected_cells else ''
 
     def calculate_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
-        """Get the AOI size when polygon layer is changed or its features are changed, 
-        or a one of its features is selected.
+        """Get the AOI size total when polygon another layer is chosen, 
+        current layer's selection is changed or the layer's features are modified.
 
         :param layer: The current polygon layer
         """
-        if self.dlg.useImageExtentAsAoi.isChecked():  # image extent used; no difference
+        if self.dlg.useImageExtentAsAoi.isChecked():  # GeoTIFF extent used; no difference
             return
-        if not layer:
+        if layer and layer.featureCount() > 0:
+            features = list(layer.getSelectedFeatures()) or layer.getFeatures()
+            self.calculate_aoi_area(
+                QgsGeometry.collectGeometry([feature.geometry() for feature in features]),
+                layer.crs()
+            )
+        else:  # empty layer or combo's itself is empty
             self.dlg.labelAoiArea.clear()
             self.aoi = self.aoi_size = None
-            return
-        if layer.featureCount() == 1:
-            features = layer.getFeatures()
-        elif len(list(layer.getSelectedFeatures())) == 1:
-            features = layer.getSelectedFeatures()
-        else:
-            self.dlg.labelAoiArea.clear()
-            self.aoi = self.aoi_size = None
-            return
-        self.calculate_aoi_area(next(features).geometry(), layer.crs())
 
     def calculate_aoi_area_raster(self, layer: Union[QgsRasterLayer, None]) -> None:
         """Get the AOI size when a new entry in the raster combo box is selected.
