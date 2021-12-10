@@ -152,6 +152,21 @@ class Mapflow(QObject):
             )
         )
 
+    def is_valid_local_raster(self, raster: QgsRasterLayer) -> bool:
+        """Return True for a GeoTIFF with a valid CRS that fits into config.MAX_TIF_SIZE.
+        :param raster: A raster layer to test
+        """
+        is_valid = False  # default
+        if not raster.crs().authid():
+            self.alert(self.tr('The image has invalid projection and cannot be processed.'))
+        if not os.path.splitext(raster.dataProvider().dataSourceUri())[-1] in ('.tif', '.tiff'):
+            self.alert(self.tr('Please, select a GeoTIFF layer'))
+        if os.path.getsize(raster.publicSource()) / 2**20 > config.MAX_TIF_SIZE:
+            self.alert(self.tr('Image size cannot exceed 2GB'))
+        else:
+            is_valid = True
+        return is_valid
+
     def set_up_login_dialog(self) -> None:
         """Create a login dialog, set its title and signal-slot connections."""
         self.dlg_login = LoginDialog(self.main_window)
@@ -543,11 +558,9 @@ class Mapflow(QObject):
 
         :param layer: The current raster layer
         """
-        if layer:
-            if layer.crs().authid():  # valid CRS
-                self.calculate_aoi_area(QgsGeometry.fromRect(layer.extent()), layer.crs())
-            else:
-                self.alert(self.tr('The image has invalid projection and cannot be processed.'))
+        if layer and self.is_valid_local_raster(layer):
+            geometry = QgsGeometry.collectGeometry([QgsGeometry.fromRect(layer.extent())])
+            self.calculate_aoi_area(geometry, layer.crs())
         else:
             self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
 
@@ -663,15 +676,12 @@ class Mapflow(QObject):
         if not processing_name:
             self.alert(self.tr('Please, specify a name for your processing'))
             return
+        use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
         if not self.aoi:
-            use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
-            combo = self.dlg.rasterCombo if use_image_extent_as_aoi else self.dlg.polygonCombo
-            layer = combo.currentLayer()
-            if layer and not layer.crs().authid():
-                if use_image_extent_as_aoi:
-                    self.alert(self.tr('GeoTIFF has invalid projection'))
-                else:
-                    self.alert(self.tr('Processing area has invalid projection'))
+            if use_image_extent_as_aoi:
+                self.alert(self.tr('GeoTIFF has invalid projection'))
+            elif self.dlg.polygonCombo.currentLayer():
+                self.alert(self.tr('Processing area has invalid projection'))
             else:
                 self.alert(self.tr('Please, select an area of interest'))
             return
@@ -682,37 +692,26 @@ class Mapflow(QObject):
         if self.aoi_area_limit < self.aoi_size:
             self.alert(self.tr(
                 'Up to {} sq km can be processed at a time. '
-                'Try splitting up your area of interest.'
+                'Try splitting your area(s) into several processings.'
             ).format(self.aoi_area_limit))
             return
         raster_option = self.dlg.rasterCombo.currentText()
-        if (
-            raster_option in config.MAXAR_PRODUCTS and
-            not self.is_premium_user and
-            not self.dlg.providerAuthGroup.isChecked()
-        ):
+        use_auth = self.dlg.providerAuthGroup.isChecked()
+        is_maxar = raster_option in config.MAXAR_PRODUCTS
+        if is_maxar and not self.is_premium_user and not use_auth:
             ErrorMessage(
-                self.dlg,
-                self.tr('Click on the link below to send us an email'),
-                self.tr('Upgrade your subscription to process Maxar imagery'),
-                self.tr(
+                parent=self.dlg,
+                text=self.tr('Click on the link below to send us an email'),
+                title=self.tr('Upgrade your subscription to process Maxar imagery'),
+                email_body=self.tr(
                     "I'd like to upgrade my subscription to Mapflow Processing API "
                     'to be able to process Maxar imagery.'
                 )
             ).show()
             return
         imagery = self.dlg.rasterCombo.currentLayer()
-        if imagery:  # check if local raster is a GeoTIFF
-            if not imagery.crs().authid():  # invalid CRS
-                self.alert(self.tr('The image has invalid projection and cannot be processed.'))
-                return
-            path = imagery.dataProvider().dataSourceUri()
-            if not os.path.splitext(path)[-1] in ('.tif', '.tiff'):
-                self.alert(self.tr('Please, select a GeoTIFF layer'))
-                return
-            if os.path.getsize(imagery.publicSource()) / 2**20 > config.MAX_TIF_SIZE:
-                self.alert(self.tr('Image size cannot exceed 2GB'))
-                return
+        if imagery and not self.is_valid_local_raster(imagery):
+            return
         processing_params = {
             'name': processing_name,
             'wdName': self.dlg.modelCombo.currentText(),
@@ -725,11 +724,10 @@ class Mapflow(QObject):
         providers = self.settings.value('providers')
         if raster_option in providers:
             params['url'] = providers[raster_option]['url']
-            use_auth = self.dlg.providerAuthGroup.isChecked()
             if use_auth:
                 params['raster_login'] = self.dlg.providerUsername.text()
                 params['raster_password'] = self.dlg.providerPassword.text()
-            if raster_option in config.MAXAR_PRODUCTS:  # add Connect ID and CQL Filter, if any
+            if is_maxar:  # add Connect ID and Image ID
                 processing_params['meta']['source'] = 'maxar'
                 if use_auth:  # user's own account
                     connect_id = providers[raster_option]['connectId']
@@ -751,7 +749,7 @@ class Mapflow(QObject):
         processing_params['params'] = params
         # Clip AOI to image extent if a single Maxar image is requested
         selected_image = self.dlg.maxarMetadataTable.selectedItems()
-        if imagery and not self.dlg.useImageExtentAsAoi.isChecked():  # GeoTIFF but within AOI
+        if imagery and not use_image_extent_as_aoi:  # GeoTIFF but within AOI
             extent = QgsFeature()
             extent.setGeometry(helpers.get_layer_extent(imagery))
             try:
@@ -759,7 +757,7 @@ class Mapflow(QObject):
             except StopIteration:
                 self.alert(self.tr('Image and processing area do not intersect'))
                 return
-        elif raster_option in config.MAXAR_PRODUCTS and selected_image:  # Single SW image
+        elif is_maxar and selected_image:  # Single SW image
             feature_id = selected_image[config.MAXAR_METADATA_ID_COLUMN_INDEX].text()
             extent = self.maxar_metadata_extents[feature_id]
             try:
@@ -778,7 +776,7 @@ class Mapflow(QObject):
         tif = QHttpPart()
         tif.setHeader(QNetworkRequest.ContentTypeHeader, 'image/tiff')
         tif.setHeader(QNetworkRequest.ContentDispositionHeader, 'form-data; name="file"; filename=""')
-        image = QFile(path, body)
+        image = QFile(imagery.dataProvider().dataSourceUri(), body)
         image.open(QIODevice.ReadOnly)
         tif.setBodyDevice(image)
         body.append(tif)

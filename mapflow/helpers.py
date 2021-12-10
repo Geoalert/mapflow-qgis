@@ -1,10 +1,8 @@
 import re
-from pathlib import Path
 from urllib import parse
 
 from qgis.core import (
-    QgsMapLayer, QgsMapLayerType, QgsWkbTypes, QgsGeometry, QgsProject,
-    QgsCoordinateReferenceSystem, QgsCoordinateTransform
+    QgsMapLayer, QgsGeometry, QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform
 )
 
 
@@ -15,23 +13,6 @@ URL_PATTERN = r'https?://(www\.)?([-\w]{1,256}\.)+[a-zA-Z0-9]{1,6}'  # schema + 
 URL_REGEX = re.compile(URL_PATTERN)
 XYZ_REGEX = re.compile(URL_PATTERN + r'(.*\{[xyz]\}){3}.*', re.I)
 QUAD_KEY_REGEX = re.compile(URL_PATTERN + r'(.*\{q\}).*', re.I)
-
-
-def is_geotiff_layer(layer: QgsMapLayer) -> bool:
-    """Determine if a layer is loaded from a GeoTIFF file.
-
-    :param layer: A layer to test
-    """
-    uri = layer.dataProvider().dataSourceUri()
-    return Path(uri).suffix.lower() in ('.tif', '.tiff')
-
-
-def is_polygon_layer(layer: QgsMapLayer) -> bool:
-    """Determine if a layer is of vector type and has polygonal geometry.
-
-    :param layer: A layer to test
-    """
-    return layer.type() == QgsMapLayerType.VectorLayer and layer.geometryType() == QgsWkbTypes.PolygonGeometry
 
 
 def to_wgs84(geometry: QgsGeometry, source_crs: QgsCoordinateReferenceSystem) -> QgsGeometry:
@@ -78,7 +59,7 @@ def validate_provider_form(form) -> bool:
             return bool(XYZ_REGEX.match(url))
         elif type_ == 'wms':
             query_params = {  # parse query params and convert them to uppercase
-                param.upper(): value for param, value in 
+                param.upper(): value for param, value in
                 dict(parse.parse_qsl(parse.urlsplit(url).query)).items()
             }
             return (
