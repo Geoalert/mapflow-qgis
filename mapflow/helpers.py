@@ -1,27 +1,25 @@
-from pathlib import Path
+import re
+from urllib import parse
 
 from qgis.core import (
-    QgsMapLayer, QgsMapLayerType, QgsWkbTypes, QgsGeometry, QgsProject,
-    QgsCoordinateReferenceSystem, QgsCoordinateTransform
+    QgsMapLayer, QgsGeometry, QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
+    QgsMapLayerType, QgsWkbTypes
 )
 
 
 PROJECT = QgsProject.instance()
 WGS84 = QgsCoordinateReferenceSystem('EPSG:4326')
-
-
-def is_geotiff_layer(layer: QgsMapLayer) -> bool:
-    """Determine if a layer is loaded from a GeoTIFF file.
-
-    :param layer: A layer to test
-    """
-    uri = layer.dataProvider().dataSourceUri()
-    return Path(uri).suffix.lower() in ('.tif', '.tiff')
+UUID_REGEX = re.compile(r'[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\Z')
+URL_PATTERN = r'https?://(www\.)?([-\w]{1,256}\.)+[a-zA-Z0-9]{1,6}'  # schema + domains
+URL_REGEX = re.compile(URL_PATTERN)
+XYZ_REGEX = re.compile(URL_PATTERN + r'(.*\{[xyz]\}){3}.*', re.I)
+QUAD_KEY_REGEX = re.compile(URL_PATTERN + r'(.*\{q\}).*', re.I)
+SENTINEL_IMAGE_DATETIME_REGEX = re.compile(r'_\d{8}T\d{6}', re.I)
+SENTINEL_IMAGE_COORDINATE_REGEX = re.compile(r'T\d{2}[A-Z]{3}', re.I)
 
 
 def is_polygon_layer(layer: QgsMapLayer) -> bool:
     """Determine if a layer is of vector type and has polygonal geometry.
-
     :param layer: A layer to test
     """
     return layer.type() == QgsMapLayerType.VectorLayer and layer.geometryType() == QgsWkbTypes.PolygonGeometry
@@ -59,3 +57,29 @@ def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
     if layer_crs != WGS84:
         extent_geometry = to_wgs84(extent_geometry, layer_crs)
     return extent_geometry
+
+
+def validate_provider_form(form) -> bool:
+    """Return True if input looks valid otherwise return False."""
+    name = form.name.text()
+    url = form.url.text()
+    type_ = form.type.currentText()
+    if name and url:  # non-empty
+        if type_ in ('xyz', 'tms'):
+            return bool(XYZ_REGEX.match(url))
+        elif type_ == 'wms':
+            query_params = {  # parse query params and convert them to uppercase
+                param.upper(): value for param, value in
+                dict(parse.parse_qsl(parse.urlsplit(url).query)).items()
+            }
+            return (
+                URL_REGEX.match(url) and
+                query_params.get('REQUEST', '').lower() == 'getmap' and
+                all(query_params.get(param) for param in (
+                    # Mandatory params according to the WMS spec
+                    'LAYERS', 'STYLES', 'BBOX', 'WIDTH', 'HEIGHT', 'CRS', 'VERSION'
+                ))
+            )
+        else:  # Quad Key
+            return bool(QUAD_KEY_REGEX.match(url))
+    return False

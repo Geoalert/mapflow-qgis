@@ -237,7 +237,7 @@
           <bool>true</bool>
          </property>
          <property name="columnCount">
-          <number>6</number>
+          <number>7</number>
          </property>
          <attribute name="horizontalHeaderDefaultSectionSize">
           <number>100</number>
@@ -275,6 +275,14 @@
          <column>
           <property name="text">
            <string>Progress</string>
+          </property>
+          <property name="textAlignment">
+           <set>AlignCenter</set>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Area, sq.km</string>
           </property>
           <property name="textAlignment">
            <set>AlignCenter</set>
@@ -599,27 +607,34 @@
           <item>
            <layout class="QHBoxLayout" name="maxarOptions" stretch="0,1,0">
             <item>
-             <widget class="QLabel" name="labelMaxarAOI">
+             <widget class="QLabel" name="labelMaxarAoi">
               <property name="text">
                <string>Area:</string>
               </property>
              </widget>
             </item>
             <item>
-             <widget class="QgsMapLayerComboBox" name="maxarAOICombo">
+             <widget class="QgsMapLayerComboBox" name="maxarAoiCombo">
               <property name="showCrs">
                <bool>true</bool>
               </property>
              </widget>
             </item>
             <item>
-             <widget class="QPushButton" name="getImageMetadata">
+             <widget class="QPushButton" name="getMetadata">
               <property name="text">
                <string>Get metadata</string>
               </property>
              </widget>
             </item>
            </layout>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="metadataUseCanvasExtent">
+            <property name="text">
+             <string>Use canvas extent</string>
+            </property>
+           </widget>
           </item>
           <item>
            <widget class="QTableWidget" name="maxarMetadataTable">
@@ -849,6 +864,22 @@
     <hint type="destinationlabel">
      <x>324</x>
      <y>294</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>metadataUseCanvasExtent</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>maxarAoiCombo</receiver>
+   <slot>setDisabled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>149</x>
+     <y>245</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>242</x>
+     <y>220</y>
     </hint>
    </hints>
   </connection>

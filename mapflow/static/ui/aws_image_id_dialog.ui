@@ -41,7 +41,7 @@
    <item row="0" column="0">
     <widget class="QLineEdit" name="imageId">
      <property name="maxLength">
-      <number>34</number>
+      <number>100</number>
      </property>
     </widget>
    </item>

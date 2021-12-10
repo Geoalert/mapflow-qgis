@@ -1,3 +1,4 @@
+from . import helpers
 from pathlib import Path
 
 from PyQt5 import uic
@@ -17,7 +18,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         super().__init__(parent)
         self.setupUi(self)
         # Restrict combos to relevant layer types; QGIS 3.10-3.20 (at least) bugs up if set in .ui
-        self.maxarAOICombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
+        self.maxarAoiCombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
         self.polygonCombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
         self.rasterCombo.setFilters(QgsMapLayerProxyModel.RasterLayer)
         # Set icons (can be done in .ui but brings about the resources_rc import bug)
@@ -43,8 +44,9 @@ class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
         self.setWindowIcon(plugin_icon)
         ok = self.buttonBox.button(QDialogButtonBox.Ok)
         ok.setEnabled(False)
-        self.name.textChanged.connect(lambda text: ok.setEnabled(bool(text and self.url.text())))
-        self.url.textChanged.connect(lambda text: ok.setEnabled(bool(text and self.name.text())))
+        self.name.textChanged.connect(lambda: ok.setEnabled(helpers.validate_provider_form(self)))
+        self.url.textChanged.connect(lambda: ok.setEnabled(helpers.validate_provider_form(self)))
+        self.type.currentTextChanged.connect(lambda: ok.setEnabled(helpers.validate_provider_form(self)))
         self.finished.connect(self.name.clear)
         self.finished.connect(self.url.clear)
 
@@ -55,6 +57,10 @@ class ConnectIdDialog(*uic.loadUiType(ui_path/'connect_id_dialog.ui')):
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(plugin_icon)
+        ok = self.buttonBox.button(QDialogButtonBox.Ok)
+        self.connectId.textChanged.connect(
+            lambda text: ok.setEnabled(bool(helpers.UUID_REGEX.match(text)) or not(text))
+        )
 
 
 class ImageIdDialog(*uic.loadUiType(ui_path/'aws_image_id_dialog.ui')):
@@ -63,6 +69,13 @@ class ImageIdDialog(*uic.loadUiType(ui_path/'aws_image_id_dialog.ui')):
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(plugin_icon)
+        ok = self.buttonBox.button(QDialogButtonBox.Ok)
+        self.imageId.textChanged.connect(
+            lambda text: ok.setEnabled(bool(
+                helpers.SENTINEL_IMAGE_DATETIME_REGEX.search(text) and  
+                helpers.SENTINEL_IMAGE_COORDINATE_REGEX.search(text)  
+            ) or not(text))
+        )
 
 
 class ErrorMessage(*uic.loadUiType(ui_path/'error_message.ui')):

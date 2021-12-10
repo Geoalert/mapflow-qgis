@@ -10,7 +10,7 @@ from configparser import ConfigParser  # parse metadata.txt -> QGIS version chec
 from PyQt5.QtGui import QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
-    QObject, QSettings, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion
+    QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion
 )
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QTableWidgetItem, QAction, QAbstractItemView, QLabel,
@@ -20,7 +20,8 @@ from qgis import processing as qgis_processing  # to avoid collisions
 from qgis.gui import QgsMessageBarItem
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
-    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter, QgsRectangle
+    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter, QgsRectangle,
+    QgsFeatureIterator
 )
 
 from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, ImageIdDialog, ErrorMessage
@@ -63,7 +64,7 @@ class Mapflow(QObject):
         self.toolbar = self.iface.addToolBar(self.plugin_name)
         self.toolbar.setObjectName(self.plugin_name)
         # Translation
-        locale = QSettings().value('locale/userLocale', '')[0:2]
+        locale = self.settings.value('locale/userLocale', 'en_US')[0:2]
         locale_path = os.path.join(self.plugin_dir, 'i18n', f'mapflow_{locale}.qm')
         if os.path.exists(locale_path):
             self.translator = QTranslator()
@@ -75,10 +76,7 @@ class Mapflow(QObject):
         QCoreApplication.translate('QPlatformTheme', '&No')
         # Init dialogs
         self.dlg = MainDialog(self.main_window)
-        self.dlg_login = LoginDialog(self.main_window)
-        self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
-        self.dlg_login.logIn.clicked.connect(self.read_mapflow_token)
-        self.dlg_login.finished.connect(self.clean_up_login_dialog)
+        self.set_up_login_dialog()
         self.dlg_provider = ProviderDialog(self.dlg)
         self.dlg_provider.accepted.connect(self.add_or_edit_provider)
         self.dlg_connect_id = ConnectIdDialog(self.dlg)
@@ -100,15 +98,18 @@ class Mapflow(QObject):
         )
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
-        self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or 18))
+        self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or config.DEFAULT_ZOOM))
         if self.settings.value('providerSaveAuth'):
             self.dlg.providerSaveAuth.setChecked(True)
             self.dlg.providerUsername.setText(self.settings.value('providerUsername'))
             self.dlg.providerPassword.setText(self.settings.value('providerPassword'))
-        self.update_providers(self.settings.value('providers') or config.BUILTIN_PROVIDERS)
+        providers = self.settings.value('providers', config.BUILTIN_PROVIDERS)
+        if config.SENTINEL_OPTION_NAME not in providers:
+            providers[config.SENTINEL_OPTION_NAME] = config.BUILTIN_PROVIDERS[config.SENTINEL_OPTION_NAME]
+        self.update_providers(providers)
+        self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
         # Hide the ID columns as only needed for table operations, not the user
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
-        self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
         # SET UP SIGNALS & SLOTS
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
@@ -119,13 +120,13 @@ class Mapflow(QObject):
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         self.dlg.selectTif.clicked.connect(self.select_tif)
         # (Dis)allow the user to use raster extent as AOI
-        self.dlg.rasterCombo.currentTextChanged.connect(self.toggle_use_image_extent_as_aoi)
+        self.dlg.rasterCombo.layerChanged.connect(self.toggle_use_image_extent_as_aoi)
         self.dlg.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
         self.dlg.startProcessing.clicked.connect(self.create_processing)
         # Sync polygon layer combos
-        self.dlg.polygonCombo.layerChanged.connect(self.dlg.maxarAOICombo.setLayer)
-        self.dlg.maxarAOICombo.layerChanged.connect(self.dlg.polygonCombo.setLayer)
-        # Calculate AOI area
+        self.dlg.polygonCombo.layerChanged.connect(self.dlg.maxarAoiCombo.setLayer)
+        self.dlg.maxarAoiCombo.layerChanged.connect(self.dlg.polygonCombo.setLayer)
+        # Calculate AOI size
         self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area_polygon_layer)
         self.dlg.rasterCombo.layerChanged.connect(self.calculate_aoi_area_raster)
         self.dlg.useImageExtentAsAoi.toggled.connect(self.calculate_aoi_area_use_image_extent)
@@ -144,10 +145,9 @@ class Mapflow(QObject):
         self.dlg.providerAuthGroup.toggled.connect(self.limit_zoom_auth_toggled)
         # Maxar
         self.dlg.maxarMetadataTable.itemSelectionChanged.connect(self.highlight_maxar_image)
-        self.dlg.getImageMetadata.clicked.connect(self.get_maxar_metadata)
+        self.dlg.getMetadata.clicked.connect(self.get_maxar_metadata)
         self.dlg.maxarMetadataTable.cellDoubleClicked.connect(self.preview)
-        self.dlg.providerCombo.currentTextChanged.connect(self.limit_zoom_provider_changed)
-        self.dlg.providerCombo.currentTextChanged.connect(self.clear_metadata_table)
+        self.dlg.providerCombo.currentTextChanged.connect(self.on_provider_change)
         # Poll processings
         self.processing_fetch_timer = QTimer(self.dlg)
         self.processing_fetch_timer.setInterval(config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
@@ -159,18 +159,35 @@ class Mapflow(QObject):
             )
         )
 
+    def is_valid_local_raster(self, raster: QgsRasterLayer) -> bool:
+        """Return True for a GeoTIFF with a valid CRS that fits into config.MAX_TIF_SIZE.
+        :param raster: A raster layer to test
+        """
+        is_valid = False  # default
+        if not raster.crs().authid():
+            self.alert(self.tr('The image has invalid projection and cannot be processed.'))
+        if not os.path.splitext(raster.dataProvider().dataSourceUri())[-1] in ('.tif', '.tiff'):
+            self.alert(self.tr('Please, select a GeoTIFF layer'))
+        if os.path.getsize(raster.publicSource()) / 2**20 > config.MAX_TIF_SIZE:
+            self.alert(self.tr('Image size cannot exceed 2GB'))
+        else:
+            is_valid = True
+        return is_valid
+
+    def set_up_login_dialog(self) -> None:
+        """Create a login dialog, set its title and signal-slot connections."""
+        self.dlg_login = LoginDialog(self.main_window)
+        self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
+        self.dlg_login.logIn.clicked.connect(self.read_mapflow_token)
+        self.dlg_login.destroyed.connect(lambda: self.dlg_login.close())
+
     def toggle_polygon_combos(self, use_image_extent: bool) -> None:
         """Disable polygon combos when Use image extent is checked.
 
         :param use_image_extent: Whether the corresponding checkbox is checked
         """
         self.dlg.polygonCombo.setEnabled(not use_image_extent)
-        self.dlg.maxarAOICombo.setEnabled(not use_image_extent)
-
-    def clear_metadata_table(self) -> None:
-        """Reset Maxar metadata table when user changes the provider in the list."""
-        self.dlg.maxarMetadataTable.clearContents()
-        self.dlg.maxarMetadataTable.setRowCount(0)
+        self.dlg.maxarAoiCombo.setEnabled(not use_image_extent)
 
     def limit_zoom_auth_toggled(self, enabled: bool) -> None:
         """Limit zoom for Maxar when our account is to be used.
@@ -184,21 +201,24 @@ class Mapflow(QObject):
             self.dlg.maxZoom.setMaximum(config.MAXAR_MAX_FREE_ZOOM)
         else:
             self.dlg.maxZoom.setMaximum(config.MAX_ZOOM)
-            self.dlg.maxZoom.setValue(config.DEFAULT_ZOOM)
+            self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or config.DEFAULT_ZOOM))
 
-    def limit_zoom_provider_changed(self, provider: str) -> None:
+    def on_provider_change(self, provider: str) -> None:
         """Limit zoom for Maxar when our account is to be used.
 
         :param provider: The currently selected provider
         """
-        if provider in config.MAXAR_PRODUCTS and not (
-            self.is_premium_user or
-            self.dlg.providerAuthGroup.isChecked()
-        ):
-            self.dlg.maxZoom.setMaximum(config.MAXAR_MAX_FREE_ZOOM)
+        # Clear metadata to avoid confusion
+        self.dlg.maxarMetadataTable.clearContents()
+        self.dlg.maxarMetadataTable.setRowCount(0)
+        if provider in config.MAXAR_PRODUCTS:
+            self.dlg.maxar.setEnabled(True)  # deactivate metadata panel
+            if not (self.is_premium_user or self.dlg.providerAuthGroup.isChecked()):
+                self.dlg.maxZoom.setMaximum(config.MAXAR_MAX_FREE_ZOOM)
         else:
+            self.dlg.maxar.setEnabled(False)  # activate metadata panel
             self.dlg.maxZoom.setMaximum(config.MAX_ZOOM)
-            self.dlg.maxZoom.setValue(config.DEFAULT_ZOOM)
+            self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or config.DEFAULT_ZOOM))
 
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
@@ -287,7 +307,7 @@ class Mapflow(QObject):
         provider = self.dlg.providerCombo.currentText()
         if provider in config.MAXAR_PRODUCTS:
             self.show_connect_id_dialog(provider)
-        elif provider == 'Sentinel':
+        elif provider == config.SENTINEL_OPTION_NAME:
             self.show_sentinel_image_id_dialog()
         else:
             self.dlg_provider.setWindowTitle(provider)
@@ -311,7 +331,9 @@ class Mapflow(QObject):
 
     def show_sentinel_image_id_dialog(self) -> None:
         """"""
-        self.dlg_image_id.imageId.setText(self.settings.value('providers')['Sentinel']['imageId'])
+        self.dlg_image_id.imageId.setText(
+            self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['imageId']
+        )
         self.dlg_image_id.show()
 
     def show_connect_id_dialog(self, product: str) -> None:
@@ -324,14 +346,15 @@ class Mapflow(QObject):
         self.dlg_connect_id.connectId.setText(providers[product]['connectId'])
         self.dlg_connect_id.connectId.setCursorPosition(0)
         # Specify the product being edited in the window title
-        self.dlg_connect_id.setWindowTitle(f'{product} - {self.dlg_connect_id.windowTitle()}')
+        self.dlg_connect_id.setWindowTitle(f'Connect ID - {product}')
         self.dlg_connect_id.show()
 
     def edit_connect_id(self) -> None:
         """Change the Connect ID for the given Maxar product."""
         provider = self.dlg.providerCombo.currentText()
         providers = self.settings.value('providers')
-        providers[provider]['connectId'] = self.dlg_connect_id.connectId.text()
+        connect_id = self.dlg_connect_id.connectId.text()
+        providers[provider]['connectId'] = connect_id
         self.settings.setValue('providers', providers)
 
     def edit_image_id(self) -> None:
@@ -355,18 +378,15 @@ class Mapflow(QObject):
             layer.selectionChanged.connect(self.calculate_aoi_area_selection)
             layer.editingStopped.connect(self.calculate_aoi_area_layer_edited)
 
-    def toggle_use_image_extent_as_aoi(self, provider: str) -> None:
+    def toggle_use_image_extent_as_aoi(self, provider: Union[QgsRasterLayer, None]) -> None:
         """Toggle 'Use image extent' checkbox depending on the item in the imagery combo box.
 
-        :param provider: A combo box entry representing an imagery provider
+        :param provider: A GDAL raster layer or None if one of web tile providers
         """
-        enabled = provider in (*self.settings.value('providers', {}), 'Mapbox')  # False if GeoTIFF
-        # There's no extent for a tile provider
-        self.dlg.useImageExtentAsAoi.setEnabled(not enabled)
-        # Presume user would like to process within its extent
-        self.dlg.useImageExtentAsAoi.setChecked(not enabled)
-        # Mapflow doesn't currently support caching user imagery
-        self.dlg.updateCache.setEnabled(enabled)
+        enabled = True if provider and provider.crs().authid() else False
+        self.dlg.useImageExtentAsAoi.setEnabled(enabled)
+        self.dlg.useImageExtentAsAoi.setChecked(enabled)
+        self.dlg.updateCache.setEnabled(not enabled)
 
     def select_output_directory(self) -> str:
         """Open a file dialog for the user to select a directory where plugin files will be stored.
@@ -415,14 +435,17 @@ class Mapflow(QObject):
         Is called by clicking the 'Get Image Metadata' button in the main dialog.
         """
         self.save_provider_auth()
-        provider = self.dlg.providerCombo.currentText()
-        # Perform checks
-        if provider not in config.MAXAR_PRODUCTS:
-            self.alert(self.tr('Select a Maxar product in the provider list'))
-            return
-        if not (self.dlg.maxarAOICombo.isEnabled() and self.aoi):
+        if self.dlg.metadataUseCanvasExtent.isChecked():
+            aoi = helpers.to_wgs84(
+                QgsGeometry.fromRect(self.iface.mapCanvas().extent()),
+                self.project.crs()
+            )
+        elif self.aoi:
+            aoi = self.aoi
+        else:
             self.alert(self.tr('Please, select an area of interest'))
             return
+        provider = self.dlg.providerCombo.currentText()
         # Start off with the static params
         params = {
             'REQUEST': 'GetFeature',
@@ -433,7 +456,7 @@ class Mapflow(QObject):
             'HEIGHT': 3000
         }
         # Get a '{min_lon},{min_lat} : {max_lon},{max_lat}' (SW-NE) representation of the AOI
-        extent = self.aoi.boundingBox().toString()
+        extent = aoi.boundingBox().toString()
         # Change lon,lat to lat,lon for Maxar
         coords = [position.split(',')[::-1] for position in extent.split(':')]
         params['BBOX'] = ','.join([coord.strip() for position in coords for coord in position])
@@ -441,7 +464,7 @@ class Mapflow(QObject):
         url = 'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?' + query_params
         if self.dlg.providerAuthGroup.isChecked():  # user's own account
             connect_id = self.settings.value('providers')[provider]['connectId']
-            if not connect_id:
+            if not helpers.UUID_REGEX.match(connect_id):
                 self.show_connect_id_dialog(provider)
                 return
             url += '&CONNECTID=' + connect_id
@@ -533,32 +556,31 @@ class Mapflow(QObject):
         return selected_cells[config.MAXAR_METADATA_ID_COLUMN_INDEX].text() if selected_cells else ''
 
     def calculate_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
-        """Get the AOI size when polygon layer is changed or its features are changed, 
-        or a one of its features is selected.
+        """Get the AOI size total when polygon another layer is chosen, 
+        current layer's selection is changed or the layer's features are modified.
 
         :param layer: The current polygon layer
         """
-        if not layer:
+        if self.dlg.useImageExtentAsAoi.isChecked():  # GeoTIFF extent used; no difference
+            return
+        if layer and layer.featureCount() > 0:
+            features = list(layer.getSelectedFeatures()) or layer.getFeatures()
+            self.calculate_aoi_area(
+                QgsGeometry.collectGeometry([feature.geometry() for feature in features]),
+                layer.crs()
+            )
+        else:  # empty layer or combo's itself is empty
             self.dlg.labelAoiArea.clear()
             self.aoi = self.aoi_size = None
-            return
-        if layer.featureCount() == 1:
-            features = layer.getFeatures()
-        elif len(list(layer.getSelectedFeatures())) == 1:
-            features = layer.getSelectedFeatures()
-        else:
-            self.dlg.labelAoiArea.clear()
-            self.aoi = self.aoi_size = None
-            return
-        self.calculate_aoi_area(next(features).geometry(), layer.crs())
 
     def calculate_aoi_area_raster(self, layer: Union[QgsRasterLayer, None]) -> None:
         """Get the AOI size when a new entry in the raster combo box is selected.
 
         :param layer: The current raster layer
         """
-        if layer:
-            self.calculate_aoi_area(QgsGeometry.fromRect(layer.extent()), layer.crs())
+        if layer and self.is_valid_local_raster(layer):
+            geometry = QgsGeometry.collectGeometry([QgsGeometry.fromRect(layer.extent())])
+            self.calculate_aoi_area(geometry, layer.crs())
         else:
             self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
 
@@ -631,15 +653,12 @@ class Mapflow(QObject):
                     error_handler=self.delete_processings_error_handler
                 )
 
-    def delete_processings_callback(self, response: QNetworkReply, id_: str) -> None:
-        """Delete processings from the table after they've been successfully
-        deleted from the server.
+    def delete_processings_callback(self, _: QNetworkReply, id_: str) -> None:
+        """Delete processings from the table after they've been deleted from the server.
 
-        :param response: The HTTP response.
-        :param _id: ID of the deleted processing.
+        :param id_: ID of the deleted processing.
         """
         row = self.dlg.processingsTable.findItems(id_, Qt.MatchExactly)[0].row()
-        self.processing_names.remove(self.dlg.processingsTable.item(row, 0).text())
         self.dlg.processingsTable.removeRow(row)
         self.processing_fetch_timer.start()
 
@@ -650,11 +669,26 @@ class Mapflow(QObject):
         """
         self.report_error(response, self.tr("Error deleting a processing"))
 
+    def clip_aoi_to_image_extent(self, aoi_geometry: QgsGeometry, extent: QgsFeature) -> QgsFeatureIterator:
+        """Clip user AOI to image extent if the image doesn't cover the entire AOI."""
+        aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
+        aoi = QgsFeature()
+        aoi.setGeometry(aoi_geometry)
+        aoi_layer.dataProvider().addFeatures([aoi])
+        aoi_layer.updateExtents()
+        # Create a temp layer for the image extent
+        image_extent_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
+        image_extent_layer.dataProvider().addFeatures([extent])
+        aoi_layer.updateExtents()
+        # Find the intersection and pass it to the worker
+        intersection = qgis_processing.run(
+            'qgis:intersection',
+            {'INPUT': aoi_layer, 'OVERLAY': image_extent_layer, 'OUTPUT': 'memory:'}
+        )['OUTPUT']
+        return intersection.getFeatures()
+
     def create_processing(self) -> None:
         """Create and start a processing on the server.
-
-        The UI inputs are read, validated, and if valid, passed to a worker in a separate thread.
-        This worker then post a requests to Mapflow and executes a callback based on the request outcome.
 
         Is called by clicking the 'Create processing' button.
         """
@@ -662,44 +696,42 @@ class Mapflow(QObject):
         if not processing_name:
             self.alert(self.tr('Please, specify a name for your processing'))
             return
-        if processing_name in self.processing_names:
-            self.alert(self.tr('Processing name taken. Please, choose a different name.'))
-            return
+        use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
         if not self.aoi:
-            self.alert(self.tr('Please, select an area of interest'))
+            if use_image_extent_as_aoi:
+                self.alert(self.tr('GeoTIFF has invalid projection'))
+            elif self.dlg.polygonCombo.currentLayer():
+                self.alert(self.tr('Processing area has invalid projection'))
+            else:
+                self.alert(self.tr('Please, select an area of interest'))
             return
         if self.remaining_limit < self.aoi_size:
-            self.alert(self.tr('Processing limit exceeded'))
+            if self.plugin_name == 'Mapflow':  # don't alert in TechInspection
+                self.alert(self.tr('Processing limit exceeded'))
             return
         if self.aoi_area_limit < self.aoi_size:
             self.alert(self.tr(
                 'Up to {} sq km can be processed at a time. '
-                'Try splitting up your area of interest.'
+                'Try splitting your area(s) into several processings.'
             ).format(self.aoi_area_limit))
             return
         raster_option = self.dlg.rasterCombo.currentText()
-        if (
-            raster_option in config.MAXAR_PRODUCTS and
-            not self.is_premium_user and
-            not self.dlg.providerAuthGroup.isChecked()
-        ):
+        use_auth = self.dlg.providerAuthGroup.isChecked()
+        is_maxar = raster_option in config.MAXAR_PRODUCTS
+        if is_maxar and not self.is_premium_user and not use_auth:
             ErrorMessage(
-                self.dlg,
-                self.tr('Click on the link below to send us an email'),
-                self.tr('Upgrade your subscription to process Maxar imagery'),
-                self.tr(
+                parent=self.dlg,
+                text=self.tr('Click on the link below to send us an email'),
+                title=self.tr('Upgrade your subscription to process Maxar imagery'),
+                email_body=self.tr(
                     "I'd like to upgrade my subscription to Mapflow Processing API "
                     'to be able to process Maxar imagery.'
                 )
             ).show()
             return
-        self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
         imagery = self.dlg.rasterCombo.currentLayer()
-        if imagery:  # check if local raster is a GeoTIFF
-            path = imagery.dataProvider().dataSourceUri()
-            if not os.path.splitext(path)[-1] in ('.tif', '.tiff'):
-                self.alert(self.tr('Please, select a GeoTIFF layer'))
-                return
+        if imagery and not self.is_valid_local_raster(imagery):
+            return
         processing_params = {
             'name': processing_name,
             'wdName': self.dlg.modelCombo.currentText(),
@@ -712,51 +744,50 @@ class Mapflow(QObject):
         providers = self.settings.value('providers')
         if raster_option in providers:
             params['url'] = providers[raster_option]['url']
-            use_auth = self.dlg.providerAuthGroup.isChecked()
             if use_auth:
                 params['raster_login'] = self.dlg.providerUsername.text()
                 params['raster_password'] = self.dlg.providerPassword.text()
-            if raster_option in config.MAXAR_PRODUCTS:  # add Connect ID and CQL Filter, if any
+            if raster_option == config.SENTINEL_OPTION_NAME:
+                params['url'] += providers[config.SENTINEL_OPTION_NAME]['imageId']
+            elif is_maxar:  # add Connect ID and Image ID
                 processing_params['meta']['source'] = 'maxar'
                 if use_auth:  # user's own account
-                    if providers[raster_option]['connectId']:
-                        params['url'] += '&CONNECTID=' + providers[raster_option]['connectId']
-                    else:
+                    connect_id = providers[raster_option]['connectId']
+                    if not helpers.UUID_REGEX.match(connect_id):
                         self.show_connect_id_dialog(raster_option)
                         return
+                    params['url'] += '&CONNECTID=' + providers[raster_option]['connectId']
                 else:  # our account
                     processing_params['meta']['maxar_product'] = raster_option.split()[1].lower()
                 image_id = self.get_maxar_image_id()
                 if image_id:
-                    params['url'] += f'&CQL_FILTER=feature_id=%27{image_id}%27'
+                    params['url'] += f'&FEATURECOLLECTION={image_id}'
             params['source_type'] = providers[raster_option]['type']
             if params['source_type'] == 'wms':
                 params['target_resolution'] = 0.000005  # for the 18th zoom
             params['cache_raster_update'] = str(self.dlg.updateCache.isChecked()).lower()
             self.save_provider_auth()
         processing_params['params'] = params
-        if self.dlg.useImageExtentAsAoi.isChecked():
-            # Clip AOI to image extent if a single Maxar image is requested
-            selected_image = self.dlg.maxarMetadataTable.selectedItems()
-            if raster_option in config.MAXAR_PRODUCTS and selected_image:
-                aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
-                aoi = QgsFeature()
-                aoi.setGeometry(self.aoi)
-                aoi_layer.dataProvider().addFeatures([aoi])
-                aoi_layer.updateExtents()
-                # Create a temp layer for the image extent
-                feature_id = selected_image[config.MAXAR_METADATA_ID_COLUMN_INDEX].text()
-                image_extent_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
-                extent = self.maxar_metadata_extents[feature_id]
-                image_extent_layer.dataProvider().addFeatures([extent])
-                aoi_layer.updateExtents()
-                # Find the intersection and pass it to the worker
-                intersection = qgis_processing.run(
-                    'qgis:intersection',
-                    {'INPUT': aoi_layer, 'OVERLAY': image_extent_layer, 'OUTPUT': 'memory:'}
-                )['OUTPUT']
-                self.aoi = next(intersection.getFeatures()).geometry()
+        # Clip AOI to image extent if a single Maxar image is requested
+        selected_image = self.dlg.maxarMetadataTable.selectedItems()
+        if imagery and not use_image_extent_as_aoi:  # GeoTIFF but within AOI
+            extent = QgsFeature()
+            extent.setGeometry(helpers.get_layer_extent(imagery))
+            try:
+                self.aoi = next(self.clip_aoi_to_image_extent(self.aoi, extent)).geometry()
+            except StopIteration:
+                self.alert(self.tr('Image and processing area do not intersect'))
+                return
+        elif is_maxar and selected_image:  # Single SW image
+            feature_id = selected_image[config.MAXAR_METADATA_ID_COLUMN_INDEX].text()
+            extent = self.maxar_metadata_extents[feature_id]
+            try:
+                self.aoi = next(self.clip_aoi_to_image_extent(self.aoi, extent)).geometry()
+            except StopIteration:
+                self.alert(self.tr('Image and processing area do not intersect'))
+                return
         processing_params['geometry'] = json.loads(self.aoi.asJson())
+        self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
         if not imagery:
             self.post_processing(processing_params)
             return
@@ -766,7 +797,7 @@ class Mapflow(QObject):
         tif = QHttpPart()
         tif.setHeader(QNetworkRequest.ContentTypeHeader, 'image/tiff')
         tif.setHeader(QNetworkRequest.ContentDispositionHeader, 'form-data; name="file"; filename=""')
-        image = QFile(path, body)
+        image = QFile(imagery.dataProvider().dataSourceUri(), body)
         image.open(QIODevice.ReadOnly)
         tif.setBodyDevice(image)
         body.append(tif)
@@ -878,7 +909,8 @@ class Mapflow(QObject):
         url = provider_info['url']
         if provider in config.MAXAR_PRODUCTS:
             if self.dlg.providerAuthGroup.isChecked():  # own account
-                if provider_info['connectId']:
+                connect_id = provider_info['connectId']
+                if helpers.UUID_REGEX.match(connect_id):
                     url += '&CONNECTID=' + provider_info['connectId']
                     url = url.replace('jpeg', 'png')  # for transparency support
                 else:
@@ -891,7 +923,7 @@ class Mapflow(QObject):
                 password = self.password
             image_id = self.get_maxar_image_id()  # request a single image if selected in the table
             if image_id:
-                url += f'&CQL_FILTER=feature_id=%27{image_id}%27'
+                url += f'&FEATURECOLLECTION={image_id}'
                 row = self.dlg.maxarMetadataTable.currentRow()
                 layer_name = ' '.join((
                     layer_name,
@@ -1098,7 +1130,8 @@ class Mapflow(QObject):
                 processing['created'] = processing['created'].replace('Z', '+0000')
         for processing in processings:
             # Add % signs to progress column for clarity
-            processing['percentCompleted'] = f'{processing["percentCompleted"]}%'
+            processing['percentCompleted'] = str(processing['percentCompleted']) + '%'
+            processing['aoiArea'] = round(processing['aoiArea'] / 10**6, 2)
             # Parse and localize creation datetime
             processing['created'] = datetime.strptime(
                 processing['created'], '%Y-%m-%dT%H:%M:%S.%f%z'
@@ -1112,7 +1145,7 @@ class Mapflow(QObject):
         now = datetime.now().astimezone()
         one_day = timedelta(1)
         finished = [
-            processing['name'] for processing in processings
+            processing['id'] for processing in processings
             if processing['percentCompleted'] == '100%'
             and now - processing['created'] < one_day
         ]
@@ -1138,31 +1171,29 @@ class Mapflow(QObject):
         self.dlg.processingsTable.setRowCount(len(processings))
         # Fill out the table
         for row, processing in enumerate(processings):
-            for col, attr in enumerate(('name', 'workflowDef', 'status', 'percentCompleted', 'created', 'id')):
-                self.dlg.processingsTable.setItem(row, col, QTableWidgetItem(processing[attr]))
+            for col, attr in enumerate(config.PROCESSING_ATTRIBUTES):
+                self.dlg.processingsTable.setItem(row, col, QTableWidgetItem(str(processing[attr])))
             if processing['id'] in selected_processings:
                 self.dlg.processingsTable.selectRow(row)
         self.dlg.processingsTable.setSortingEnabled(True)
         # Restore extended selection
         self.dlg.processingsTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
         # Inform user about finished processings
-        for processing in set(finished) - set(previously_finished):
+        for processing_id in set(finished) - set(previously_finished):
+            processing = next(filter(lambda x: x['id'] == processing_id, processings))
             self.alert(
-                processing + self.tr(' finished. Double-click it in the table to download the results.'),
+                processing['name'] +
+                self.tr(' finished. Double-click it in the table to download the results.'),
                 QMessageBox.Information
             )
             # Update user processing limit
-            self.remaining_limit -= round(next(filter(
-                lambda x: x['name'] == processing, processings
-            ))['aoiArea']/10**6)
+            self.remaining_limit -= round(processing['aoiArea']/10**6)
             if self.plugin_name == 'Mapflow':
                 self.dlg.remainingLimit.setText(
                     self.tr('Processing limit: {} sq.km').format(self.remaining_limit)
                 )
         # Save as an instance attribute to reuse elsewhere
         self.processings = processings
-        # Save ref to check name uniqueness at processing creation
-        self.processing_names = [processing['name'] for processing in self.processings]
 
     def tr(self, message: str) -> str:
         """Localize a UI element text.
@@ -1186,7 +1217,7 @@ class Mapflow(QObject):
         plugin_button.triggered.connect(self.main)
         self.toolbar.addAction(plugin_button)
         self.project.readProject.connect(self.set_layer_group)
-        self.dlg.processingsTable.sortByColumn(4, Qt.DescendingOrder)
+        self.dlg.processingsTable.sortByColumn(config.PROCESSING_TABLE_SORT_COLUMN_INDEX, Qt.DescendingOrder)
 
     def set_layer_group(self) -> None:
         """Setup a legend group where all layers created by the plugin will be added."""
@@ -1202,16 +1233,6 @@ class Mapflow(QObject):
         for dlg in self.dlg, self.dlg_login, self.dlg_connect_id, self.dlg_provider:
             dlg.close()
         del self.toolbar
-
-    def clean_up_login_dialog(self) -> None:
-        """Remove the invalid credentials message and resize the dialog accordingly."""
-        invalid_token_label = self.dlg_login.findChild(QLabel, 'invalidToken')
-        self.dlg_login.token.clear()
-        if invalid_token_label:
-            invalid_token_label.deleteLater()
-            new_size = self.dlg_login.width(), self.dlg_login.height() - invalid_token_label.height()
-            self.dlg_login.setMaximumSize(*new_size)
-            self.dlg_login.setMinimumSize(*new_size)
 
     def read_mapflow_token(self) -> None:
         """Compose and memorize the user's credentils as Basic Auth."""
@@ -1237,6 +1258,8 @@ class Mapflow(QObject):
         self.dlg.providerUsername.clear()
         self.dlg.providerPassword.clear()
         self.logged_in = False
+        self.dlg.close()
+        self.set_up_login_dialog()  # recreate the login dialog
         self.dlg_login.show()  # assume user wants to log into another account
 
     def log_in_error_handler(self, response: QNetworkReply) -> None:
@@ -1244,21 +1267,7 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        error = response.error()
-        if error == QNetworkReply.AuthenticationRequiredError:  # invalid/empty credentials
-            if self.logged_in:  # prevent deadlocks
-                self.logout()
-            if self.dlg_login.findChild(QLabel, 'invalidToken'):
-                return  # the invalid credentials warning is already there
-            invalid_token_label = QLabel(self.tr('Invalid token'), self.dlg_login)
-            invalid_token_label.setObjectName('invalidToken')
-            invalid_token_label.setStyleSheet('color: rgb(239, 41, 41);')
-            self.dlg_login.layout().insertWidget(1, invalid_token_label, alignment=Qt.AlignCenter)
-            new_size = self.dlg_login.width(), self.dlg_login.height() + invalid_token_label.height()
-            self.dlg_login.setMaximumSize(*new_size)
-            self.dlg_login.setMinimumSize(*new_size)
-        else:
-            self.report_error(response, self.tr("Can't log in to Mapflow"))
+        self.report_error(response, self.tr("Can't log in to Mapflow"))
 
     def default_error_handler(self, response: QNetworkReply) -> bool:
         """Handle general networking errors: offline, timeout, server errors.
@@ -1268,7 +1277,23 @@ class Mapflow(QObject):
         """
         error = response.error()
         service = 'Mapflow' if 'mapflow' in response.request().url().authority() else 'SecureWatch'
-        if error in (
+        if error == QNetworkReply.AuthenticationRequiredError:  # invalid/empty credentials
+            # Prevent deadlocks
+            if self.logged_in:  # token re-issued during a plugin session
+                self.logout()
+            elif self.settings.value('token'):  # env changed w/out logging out (admin)
+                self.dlg_login.show()
+            # Wrong token entered - display a message
+            elif not self.dlg_login.findChild(QLabel, 'invalidToken'):
+                invalid_token_label = QLabel(self.tr('Invalid token'), self.dlg_login)
+                invalid_token_label.setObjectName('invalidToken')
+                invalid_token_label.setStyleSheet('color: rgb(239, 41, 41);')
+                self.dlg_login.layout().insertWidget(1, invalid_token_label, alignment=Qt.AlignCenter)
+                new_size = self.dlg_login.width(), self.dlg_login.height() + invalid_token_label.height()
+                self.dlg_login.setMaximumSize(*new_size)
+                self.dlg_login.setMinimumSize(*new_size)
+            return True
+        elif error in (
             QNetworkReply.OperationCanceledError,  # timeout
             QNetworkReply.ServiceUnavailableError,  # HTTP 503
             QNetworkReply.InternalServerError,  # HTTP 500
@@ -1330,7 +1355,7 @@ class Mapflow(QObject):
         response = json.loads(response.readAll().data())
         user = response['user']
         self.is_premium_user = user['isPremium']
-        self.limit_zoom_provider_changed(self.dlg.providerCombo.currentText())
+        self.on_provider_change(self.dlg.providerCombo.currentText())
         if user['role'] == 'ADMIN':
             self.remaining_limit = 1e+5  # 100K sq. km
         else:
@@ -1347,6 +1372,7 @@ class Mapflow(QObject):
         for table in 'processingsTable', 'maxarMetadataTable':
             header = getattr(self.dlg, table).horizontalHeader()
             header.restoreState(self.settings.value(table + 'HeaderState', b''))
+        self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
         # Authenticate and keep user logged in
         self.logged_in = True
@@ -1384,4 +1410,5 @@ class Mapflow(QObject):
             self.http.basic_auth = self.mapflow_auth
             self.log_in()
         else:
+            self.set_up_login_dialog()
             self.dlg_login.show()
