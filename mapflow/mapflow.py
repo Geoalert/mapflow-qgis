@@ -620,15 +620,12 @@ class Mapflow(QObject):
                     error_handler=self.delete_processings_error_handler
                 )
 
-    def delete_processings_callback(self, response: QNetworkReply, id_: str) -> None:
-        """Delete processings from the table after they've been successfully
-        deleted from the server.
+    def delete_processings_callback(self, _: QNetworkReply, id_: str) -> None:
+        """Delete processings from the table after they've been deleted from the server.
 
-        :param response: The HTTP response.
-        :param _id: ID of the deleted processing.
+        :param id_: ID of the deleted processing.
         """
         row = self.dlg.processingsTable.findItems(id_, Qt.MatchExactly)[0].row()
-        self.processing_names.remove(self.dlg.processingsTable.item(row, 0).text())
         self.dlg.processingsTable.removeRow(row)
         self.processing_fetch_timer.start()
 
@@ -660,17 +657,11 @@ class Mapflow(QObject):
     def create_processing(self) -> None:
         """Create and start a processing on the server.
 
-        The UI inputs are read, validated, and if valid, passed to a worker in a separate thread.
-        This worker then post a requests to Mapflow and executes a callback based on the request outcome.
-
         Is called by clicking the 'Create processing' button.
         """
         processing_name = self.dlg.processingName.text()
         if not processing_name:
             self.alert(self.tr('Please, specify a name for your processing'))
-            return
-        if processing_name in self.processing_names:
-            self.alert(self.tr('Processing name taken. Please, choose a different name.'))
             return
         if not self.aoi:
             use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
@@ -1134,7 +1125,7 @@ class Mapflow(QObject):
         now = datetime.now().astimezone()
         one_day = timedelta(1)
         finished = [
-            processing['name'] for processing in processings
+            processing['id'] for processing in processings
             if processing['percentCompleted'] == '100%'
             and now - processing['created'] < one_day
         ]
@@ -1168,23 +1159,21 @@ class Mapflow(QObject):
         # Restore extended selection
         self.dlg.processingsTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
         # Inform user about finished processings
-        for processing in set(finished) - set(previously_finished):
+        for processing_id in set(finished) - set(previously_finished):
+            processing = next(filter(lambda x: x['id'] == processing_id, processings))
             self.alert(
-                processing + self.tr(' finished. Double-click it in the table to download the results.'),
+                processing['name'] +
+                self.tr(' finished. Double-click it in the table to download the results.'),
                 QMessageBox.Information
             )
             # Update user processing limit
-            self.remaining_limit -= round(next(filter(
-                lambda x: x['name'] == processing, processings
-            ))['aoiArea']/10**6)
+            self.remaining_limit -= round(processing['aoiArea']/10**6)
             if self.plugin_name == 'Mapflow':
                 self.dlg.remainingLimit.setText(
                     self.tr('Processing limit: {} sq.km').format(self.remaining_limit)
                 )
         # Save as an instance attribute to reuse elsewhere
         self.processings = processings
-        # Save ref to check name uniqueness at processing creation
-        self.processing_names = [processing['name'] for processing in self.processings]
 
     def tr(self, message: str) -> str:
         """Localize a UI element text.
