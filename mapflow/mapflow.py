@@ -277,6 +277,7 @@ class Mapflow(QObject):
         provider = self.dlg.providerCombo.currentText()
         # Ask for confirmation
         if self.alert(self.tr('Permanently remove {}?'.format(provider)), QMessageBox.Question):
+            print('yes')
             providers = self.settings.value('providers')
             del providers[provider]
             self.settings.setValue('providers', providers)
@@ -1107,12 +1108,10 @@ class Mapflow(QObject):
         :param message: A text to display
         :param icon: Info/Warning/Critical/Question
         """
-        return QMessageBox(
-            icon,
-            self.plugin_name,
-            message,
-            parent=QApplication.activeWindow()
-        ).exec() == QMessageBox.Ok
+        box = QMessageBox(icon, self.plugin_name, message, parent=QApplication.activeWindow())
+        if icon == QMessageBox.Question:  # by default, only OK is added
+            box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
+        return box.exec() == QMessageBox.Ok
 
     def fill_out_processings_table(self, response: QNetworkReply) -> None:
         """Fill out the processings table with the processings in the user's default project.
