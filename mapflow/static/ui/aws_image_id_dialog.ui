@@ -32,7 +32,7 @@
    </size>
   </property>
   <property name="windowTitle">
-   <string notr="true">Sentinel Image ID</string>
+   <string notr="true">Sentinel-2 L2A Image ID</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <property name="bottomMargin">

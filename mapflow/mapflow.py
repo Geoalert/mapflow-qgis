@@ -21,7 +21,7 @@ from qgis.gui import QgsMessageBarItem
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
     QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter, QgsRectangle,
-    QgsFeatureIterator
+    QgsFeatureIterator, QgsWkbTypes
 )
 
 from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, ImageIdDialog, ErrorMessage
@@ -209,7 +209,8 @@ class Mapflow(QObject):
         :param provider: The currently selected provider
         """
         # Clear metadata to avoid confusion
-        self.dlg.metadataTable.clearContents()
+        self.dlg.metadataTable.clear()
+        self.dlg.metadataTable.setColumnCount(0)
         self.dlg.metadataTable.setRowCount(0)
         if provider == config.SENTINEL_OPTION_NAME:
             self.dlg.maxar.setEnabled(True)
@@ -279,7 +280,6 @@ class Mapflow(QObject):
         provider = self.dlg.providerCombo.currentText()
         # Ask for confirmation
         if self.alert(self.tr('Permanently remove {}?'.format(provider)), QMessageBox.Question):
-            print('yes')
             providers = self.settings.value('providers')
             del providers[provider]
             self.settings.setValue('providers', providers)
@@ -450,15 +450,37 @@ class Mapflow(QObject):
 
     def get_sentinel_metadata(self, aoi: QgsGeometry) -> None:
         """"""
-        metadata = QgsVectorLayer(
+        if aoi.wkbType() == QgsWkbTypes.MultiPolygon:
+            # can't pass a multipolygon to WFS 'geometry' param; use bbox instead
+            aoi = QgsGeometry.fromRect(aoi.boundingBox())
+        aoi = helpers.from_wgs84(aoi, helpers.WEB_MERCATOR)
+        options = QgsVectorLayer.LayerOptions()
+        options.skipCrsValidation = True
+        metadata_layer = QgsVectorLayer(
             'https://services.sentinel-hub.com/ogc/wfs/951fdd43-a6e5-4a0b-87bf-49ebc30c7de3?'
-            'TYPENAME=DSS2&BBOX=85,70,86,71',
+            f'MAXCC=50.0&TYPENAME=DSS2&GEOMETRY={aoi.asWkt()}',
             'Sentinel-2 metadata',
-            'wfs'
+            'wfs',
+            options
         )
-        metadata.crsChanged.connect(lambda: print('CRS'))
-        metadata.setCrs(helpers.WGS84)
-        self.project.addMapLayer(metadata)
+        metadata_layer.setCrs(helpers.WEB_MERCATOR)
+        metadata_layer.dataProvider().fullExtentCalculated.connect(
+            lambda layer=metadata_layer: self.get_sentinel_metadata_callback(layer)
+        )
+        self.add_layer(metadata_layer)
+
+    def get_sentinel_metadata_callback(self, metadata_layer: QgsVectorLayer) -> None:
+        """"""
+        self.dlg.metadataTable.clear()
+        self.dlg.metadataTable.setColumnCount(len(config.SENTINEL_METADATA_ATTRIBUTES))
+        self.dlg.metadataTable.setHorizontalHeaderLabels(config.SENTINEL_METADATA_ATTRIBUTES)
+        self.dlg.metadataTable.setRowCount(metadata_layer.featureCount())
+        for row, feature in enumerate(metadata_layer.getFeatures()):
+            cloud_cover = round(feature['cloudCoverPercentage'])
+            self.dlg.metadataTable.setItem(row, 0, QTableWidgetItem(str(cloud_cover)))
+            datetime_ = feature['date'] + ' ' + feature['time'][:-3]
+            self.dlg.metadataTable.setItem(row, 1, QTableWidgetItem(datetime_))
+            self.dlg.metadataTable.setItem(row, 2, QTableWidgetItem(feature['id']))
         # params = {
         #     'collections': ['sentinel-2-l2a'],  # doesn't accept > 1 in fact
         #     'intersection': aoi.asJson(),
@@ -565,13 +587,16 @@ class Mapflow(QObject):
             if feature['offNadirAngle']:
                 feature['offNadirAngle'] = round(feature['offNadirAngle'])
             if feature['cloudCover']:
-                feature['cloudCover'] = round(feature['cloudCover'], 2)
+                feature['cloudCover'] = round(feature['cloudCover'] * 100)
+        self.dlg.metadataTable.clear()
         # Fill out the table
+        self.dlg.metadataTable.setColumnCount(len(config.MAXAR_METADATA_ATTRIBUTES))
+        self.dlg.metadataTable.setHorizontalHeaderLabels(config.MAXAR_METADATA_ATTRIBUTES.keys())
         self.dlg.metadataTable.setRowCount(len(features))
         # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
         self.dlg.metadataTable.setSortingEnabled(False)
         for row, feature in enumerate(features):
-            for col, attr in enumerate(config.MAXAR_METADATA_ATTRIBUTES):
+            for col, attr in enumerate(config.MAXAR_METADATA_ATTRIBUTES.values()):
                 try:
                     value = str(feature[attr])
                 except KeyError:  # e.g. <colorBandOrder/> for pachromatic images
@@ -594,11 +619,12 @@ class Mapflow(QObject):
         if self.dlg.useImageExtentAsAoi.isChecked():  # GeoTIFF extent used; no difference
             return
         if layer and layer.featureCount() > 0:
-            features = list(layer.getSelectedFeatures()) or layer.getFeatures()
-            self.calculate_aoi_area(
-                QgsGeometry.collectGeometry([feature.geometry() for feature in features]),
-                layer.crs()
-            )
+            features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
+            if len(features) == 1:
+                aoi = features[0].geometry()
+            else:
+                aoi = QgsGeometry.collectGeometry([feature.geometry() for feature in features])
+            self.calculate_aoi_area(aoi, layer.crs())
         else:  # empty layer or combo's itself is empty
             self.dlg.labelAoiArea.clear()
             self.aoi = self.aoi_size = None
@@ -955,15 +981,16 @@ class Mapflow(QObject):
             if image_id:
                 url += f'&FEATURECOLLECTION={image_id}'
                 row = self.dlg.metadataTable.currentRow()
+                maxar_metadata_attributes = tuple(config.MAXAR_METADATA_ATTRIBUTES.values())
                 layer_name = ' '.join((
                     layer_name,
                     self.dlg.metadataTable.item(
                         row,
-                        config.MAXAR_METADATA_ATTRIBUTES.index('acquisitionDate')
+                        maxar_metadata_attributes.index('acquisitionDate')
                     ).text(),
                     self.dlg.metadataTable.item(
                         row,
-                        config.MAXAR_METADATA_ATTRIBUTES.index('productType')
+                        maxar_metadata_attributes.index('productType')
                     ).text()
                 ))
         # Can use urllib.parse but have to specify safe='/?:{}' which sort of defeats the purpose

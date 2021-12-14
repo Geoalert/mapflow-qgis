@@ -9,6 +9,7 @@ from qgis.core import (
 
 PROJECT = QgsProject.instance()
 WGS84 = QgsCoordinateReferenceSystem('EPSG:4326')
+WEB_MERCATOR = QgsCoordinateReferenceSystem('EPSG:3857')
 UUID_REGEX = re.compile(r'[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\Z')
 URL_PATTERN = r'https?://(www\.)?([-\w]{1,256}\.)+[a-zA-Z0-9]{1,6}'  # schema + domains
 URL_REGEX = re.compile(URL_PATTERN)
