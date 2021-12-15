@@ -51,8 +51,6 @@ class Mapflow(QObject):
         # Get the server environment to connect to (for admins)
         mapflow_env = self.settings.value('variables/mapflow_env') or 'production'
         self.server = f'https://whitemaps-{mapflow_env}.mapflow.ai/rest'
-        # Create a namespace for the plugin settings
-        self.settings.beginGroup(self.plugin_name.lower())
         # By default, plugin adds layers to a group unless user explicitly deletes it
         self.add_layers_to_group = True
         self.layer_tree_root = self.project.layerTreeRoot()
@@ -74,6 +72,8 @@ class Mapflow(QObject):
         QCoreApplication.translate('QPlatformTheme', 'Cancel')
         QCoreApplication.translate('QPlatformTheme', '&Yes')
         QCoreApplication.translate('QPlatformTheme', '&No')
+        # Create a namespace for the plugin settings
+        self.settings.beginGroup(self.plugin_name.lower())
         # Init dialogs
         self.dlg = MainDialog(self.main_window)
         self.set_up_login_dialog()
