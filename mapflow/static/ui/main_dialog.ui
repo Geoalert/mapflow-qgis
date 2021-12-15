@@ -584,9 +584,9 @@
         </widget>
        </item>
        <item>
-        <widget class="QGroupBox" name="maxar">
+        <widget class="QGroupBox" name="metadata">
          <property name="title">
-          <string>Maxar SecureWatch Metadata</string>
+          <string>Provider Metadata</string>
          </property>
          <property name="checked">
           <bool>false</bool>

@@ -35,7 +35,7 @@ MAXAR_PRODUCTS = {
 }
 # MISC
 SENTINEL_METADATA_ATTRIBUTES = 'Cloud Cover, %', 'Date & Time', 'Image ID'
-SENTINEL_OPTION_NAME = 'Sentinel-2 (free)'
+SENTINEL_OPTION_NAME = 'Sentinel-2'
 MAX_TIF_SIZE = 2000  # MB
 MAX_ZOOM = 21
 DEFAULT_ZOOM = MAXAR_MAX_FREE_ZOOM
@@ -44,7 +44,7 @@ BUILTIN_PROVIDERS = {
     SENTINEL_OPTION_NAME: {
         'url': 'http://',
         'type': 'sentinel_l2a',
-        'imageId': ''
+        'token': ''
     }
 }
 STYLES = {

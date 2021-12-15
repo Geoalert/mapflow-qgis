@@ -21,10 +21,10 @@ from qgis.gui import QgsMessageBarItem
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
     QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter, QgsRectangle,
-    QgsFeatureIterator, QgsWkbTypes
+    QgsFeatureIterator, QgsWkbTypes, QgsDataSourceUri
 )
 
-from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, ImageIdDialog, ErrorMessage
+from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, SentinelHubTokenDialog, ErrorMessage
 from .http import Http
 from . import helpers, config
 
@@ -80,7 +80,7 @@ class Mapflow(QObject):
         self.dlg_provider = ProviderDialog(self.dlg)
         self.dlg_provider.accepted.connect(self.add_or_edit_provider)
         self.dlg_connect_id = ConnectIdDialog(self.dlg)
-        self.dlg_image_id = ImageIdDialog(self.dlg)
+        self.dlg_sentinel_token = SentinelHubTokenDialog(self.dlg)
         # Display the plugin's version
         metadata_parser = ConfigParser()
         metadata_parser.read(os.path.join(self.plugin_dir, 'metadata.txt'))
@@ -114,7 +114,7 @@ class Mapflow(QObject):
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
         self.dlg_connect_id.accepted.connect(self.edit_connect_id)
-        self.dlg_image_id.accepted.connect(self.edit_image_id)
+        self.dlg_sentinel_token.accepted.connect(self.edit_sentinel_token)
         # Connect buttons
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
@@ -201,27 +201,40 @@ class Mapflow(QObject):
             self.dlg.maxZoom.setMaximum(config.MAXAR_MAX_FREE_ZOOM)
         else:
             self.dlg.maxZoom.setMaximum(config.MAX_ZOOM)
-            self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or config.DEFAULT_ZOOM))
+            self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom', config.DEFAULT_ZOOM)))
 
     def on_provider_change(self, provider: str) -> None:
-        """Limit zoom for Maxar when our account is to be used.
+        """Adjust max and current zoom, and update the metadata table when user selects another
+        provider.
 
         :param provider: The currently selected provider
         """
-        # Clear metadata to avoid confusion
         self.dlg.metadataTable.clear()
-        self.dlg.metadataTable.setColumnCount(0)
-        self.dlg.metadataTable.setRowCount(0)
+        provider_name = provider
         if provider == config.SENTINEL_OPTION_NAME:
-            self.dlg.maxar.setEnabled(True)
+            columns = config.SENTINEL_METADATA_ATTRIBUTES
+            enabled = True
+            max_zoom = config.MAX_ZOOM
         elif provider in config.MAXAR_PRODUCTS:
-            self.dlg.maxar.setEnabled(True)
-            if not (self.is_premium_user or self.dlg.providerAuthGroup.isChecked()):
-                self.dlg.maxZoom.setMaximum(config.MAXAR_MAX_FREE_ZOOM)
-        else:
-            self.dlg.maxar.setEnabled(False)  # deactivate metadata panel
-            self.dlg.maxZoom.setMaximum(config.MAX_ZOOM)
-            self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or config.DEFAULT_ZOOM))
+            columns = config.MAXAR_METADATA_ATTRIBUTES
+            enabled = True
+            max_zoom = (
+                21 if self.is_premium_user or self.dlg.providerAuthGroup.isChecked()
+                else config.MAXAR_MAX_FREE_ZOOM
+            )
+        else:  # another provider, tear down the table and deactivate the panel
+            provider_name = 'Provider'
+            columns = tuple()  # empty
+            enabled = False
+            max_zoom = config.MAX_ZOOM
+            # Forced to int bc somehow used to be stored as str, so for backward compatability
+            self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom', config.DEFAULT_ZOOM)))
+        self.dlg.maxZoom.setMaximum(max_zoom)
+        self.dlg.metadataTable.setRowCount(0)
+        self.dlg.metadataTable.setColumnCount(len(columns))
+        self.dlg.metadataTable.setHorizontalHeaderLabels(columns)
+        self.dlg.metadata.setTitle(provider_name + ' Metadata')
+        self.dlg.metadata.setEnabled(enabled)
 
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
@@ -311,7 +324,7 @@ class Mapflow(QObject):
         if provider in config.MAXAR_PRODUCTS:
             self.show_connect_id_dialog(provider)
         elif provider == config.SENTINEL_OPTION_NAME:
-            self.show_sentinel_image_id_dialog()
+            self.show_sentinel_token_dialog()
         else:
             self.dlg_provider.setWindowTitle(provider)
             # Fill out the edit dialog with the current data
@@ -332,12 +345,11 @@ class Mapflow(QObject):
         self.dlg.providerCombo.addItems(providers)
         self.settings.setValue('providers', providers)
 
-    def show_sentinel_image_id_dialog(self) -> None:
+    def show_sentinel_token_dialog(self) -> None:
         """"""
-        self.dlg_image_id.imageId.setText(
-            self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['imageId']
-        )
-        self.dlg_image_id.show()
+        token = self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']
+        self.dlg_sentinel_token.token.setText(token)
+        self.dlg_sentinel_token.show()
 
     def show_connect_id_dialog(self, product: str) -> None:
         """Prepare and show the Connect ID editing dialog.
@@ -360,11 +372,10 @@ class Mapflow(QObject):
         providers[provider]['connectId'] = connect_id
         self.settings.setValue('providers', providers)
 
-    def edit_image_id(self) -> None:
-        """Change the AWS Sentinel Image ID."""
-        provider = self.dlg.providerCombo.currentText()
+    def edit_sentinel_token(self) -> None:
+        """Change the Sentinel Hub Access Token."""
         providers = self.settings.value('providers')
-        providers[provider]['imageId'] = self.dlg_image_id.imageId.text()
+        providers[config.SENTINEL_OPTION_NAME]['token'] = self.dlg_sentinel_token.token.text()
         self.settings.setValue('providers', providers)
 
     def monitor_polygon_layer_feature_selection(self, layers: List[QgsMapLayer]) -> None:
@@ -450,57 +461,87 @@ class Mapflow(QObject):
 
     def get_sentinel_metadata(self, aoi: QgsGeometry) -> None:
         """"""
-        if aoi.wkbType() == QgsWkbTypes.MultiPolygon:
-            # can't pass a multipolygon to WFS 'geometry' param; use bbox instead
-            aoi = QgsGeometry.fromRect(aoi.boundingBox())
-        aoi = helpers.from_wgs84(aoi, helpers.WEB_MERCATOR)
-        options = QgsVectorLayer.LayerOptions()
-        options.skipCrsValidation = True
-        metadata_layer = QgsVectorLayer(
-            'https://services.sentinel-hub.com/ogc/wfs/951fdd43-a6e5-4a0b-87bf-49ebc30c7de3?'
-            f'MAXCC=50.0&TYPENAME=DSS2&GEOMETRY={aoi.asWkt()}',
-            'Sentinel-2 metadata',
-            'wfs',
-            options
+        token = self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']
+        print(aoi.asJson())
+        params = {
+            'collections': ['sentinel-2-l2a'],  # doesn't accept multiple values
+            'intersects': {
+                "coordinates": [
+                    [
+                        [
+                            38.99976949575884,
+                            54.23999168511622
+                        ],
+                        [
+                            39.43398719787716,
+                            54.23999168511622
+                        ],
+                        [
+                            39.43398719787716,
+                            54.539103910266576
+                        ],
+                        [
+                            38.99976949575884,
+                            54.539103910266576
+                        ],
+                        [
+                            38.99976949575884,
+                            54.23999168511622
+                        ]
+                    ]
+                ],
+                "type": "Polygon"
+            },
+            'datetime': '2019-12-10T00:00:00Z/2020-12-10T23:59:59Z',
+            'fields': {
+                'include': ['id', 'properties.eo:cloud_cover', 'properties.datetime'],
+                'exclude': ['links', 'bbox', 'assets']
+            },
+            'query': {
+                'eo:cloud_cover': {
+                    'lt': 100.00
+                }
+            },
+            'limit': 50
+        }
+        self.http.post(
+            url='https://services.sentinel-hub.com/api/v1/catalog/search',
+            auth=f'Bearer {token}'.encode(),
+            body=json.dumps(params).encode(),
+            callback=self.get_sentinel_metadata_callback,
+            error_handler=self.get_sentinel_metadata_error_handler,
+            use_default_error_handler=False
         )
-        metadata_layer.setCrs(helpers.WEB_MERCATOR)
-        metadata_layer.dataProvider().fullExtentCalculated.connect(
-            lambda layer=metadata_layer: self.get_sentinel_metadata_callback(layer)
-        )
-        self.add_layer(metadata_layer)
+        self.dlg.metadataTable.clearContents()
 
-    def get_sentinel_metadata_callback(self, metadata_layer: QgsVectorLayer) -> None:
-        """"""
-        self.dlg.metadataTable.clear()
-        self.dlg.metadataTable.setColumnCount(len(config.SENTINEL_METADATA_ATTRIBUTES))
-        self.dlg.metadataTable.setHorizontalHeaderLabels(config.SENTINEL_METADATA_ATTRIBUTES)
-        self.dlg.metadataTable.setRowCount(metadata_layer.featureCount())
-        for row, feature in enumerate(metadata_layer.getFeatures()):
-            cloud_cover = round(feature['cloudCoverPercentage'])
+    def get_sentinel_metadata_callback(self, response: QNetworkReply) -> None:
+        """Fill out meta.
+
+        :param response: The HTTP response.
+        """
+        output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex()) + '.geojson'
+        with open(output_file_name, 'wb') as f:
+            f.write(response.readAll().data())
+        self.metadata_layer = QgsVectorLayer(output_file_name, config.SENTINEL_OPTION_NAME + ' metadata', 'ogr')
+        self.dlg.metadataTable.setRowCount(self.metadata_layer.featureCount())
+        self.add_layer(self.metadata_layer)
+        for row, feature in enumerate(self.metadata_layer.getFeatures()):
+            cloud_cover = round(feature['properties']['eo:cloud_cover'])
             self.dlg.metadataTable.setItem(row, 0, QTableWidgetItem(str(cloud_cover)))
-            datetime_ = feature['date'] + ' ' + feature['time'][:-3]
+            datetime_ = feature['properties']['datetime'][:-4].replace('T', ' ')  # no seconds or Z
             self.dlg.metadataTable.setItem(row, 1, QTableWidgetItem(datetime_))
             self.dlg.metadataTable.setItem(row, 2, QTableWidgetItem(feature['id']))
-        # params = {
-        #     'collections': ['sentinel-2-l2a'],  # doesn't accept > 1 in fact
-        #     'intersection': aoi.asJson(),
-        #     'datetime': '2019-12-10T00:00:00Z/2019-12-10T23:59:59Z',
-        #     'fields': {
-        #         'include': ['properties.eo:cloud_cover'],
-        #         'exclude': ['links', 'bbox', 'assets']
-        #     },
-        #     'query': {
-        #         'eo:cloudCover': {
-        #             'lt': 50.00
-        #         }
-        #     },
-        #     'limit': 20
-        # }
-        # self.http.post(
-        #     url='https://services.sentinel-hub.com/api/v1/catalog',
-        #     body=params,
-        #     callback=self.get_maxar_metadata_callback
-        # )
+
+    def get_sentinel_metadata_error_handler(self, response: QNetworkReply) -> None:
+        """Error handler for Sentinel metadata requests.
+
+        :param response: The HTTP response.
+        """
+        error = response.error()
+        if error == QNetworkReply.ContentAccessDenied:
+            self.alert(self.tr('Please, check your credentials'))
+        else:
+            self.report_error(response, self.tr("We couldn't get metadata from Sentinel Hub"))
 
     def get_maxar_metadata(self, aoi: QgsGeometry, product: str) -> None:
         """Get SecureWatch image footprints and metadata."""
@@ -529,7 +570,7 @@ class Mapflow(QObject):
                 callback=self.get_maxar_metadata_callback,
                 callback_kwargs={'product': product, 'aoi': self.aoi},
                 error_handler=self.get_maxar_metadata_error_handler,
-                basic_auth=f'Basic {encoded_credentials.decode()}'.encode(),
+                auth=f'Basic {encoded_credentials.decode()}'.encode(),
             )
         else:  # assume user wants to use our account, proxy thru Mapflow
             self.http.post(
@@ -542,6 +583,7 @@ class Mapflow(QObject):
                 }).encode(),
                 timeout=7
             )
+        self.dlg.metadataTable.clearContents()
 
     def get_maxar_metadata_error_handler(self, response: QNetworkReply) -> None:
         """Error handler for metadata requests.
@@ -555,19 +597,16 @@ class Mapflow(QObject):
             self.report_error(response, self.tr("We couldn't get metadata from Maxar"))
 
     def get_maxar_metadata_callback(self, response: QNetworkReply, product: str, aoi: QgsGeometry) -> None:
-        """Handle metadata request' response in case of success.
+        """Handle metadata request response.
 
         :param response: The HTTP response.
         :param product: Maxar product whose metadata was requested.
         """
-        # Memorize the product to prevent further errors if user changes item in the dropdown list
-        layer_name = f'{product} metadata'
-        # Save metadata to a file; I couldn't get WFS to work, or else no file would be necessary
         output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex()) + '.gml'
         with open(output_file_name, 'wb') as f:
             f.write(response.readAll().data())
-        self.metadata_layer = QgsVectorLayer(output_file_name, layer_name, 'ogr')
-        # Omit metadata that intersects the extent but no the AOI itself
+        self.metadata_layer = QgsVectorLayer(output_file_name, f'{product} metadata', 'ogr')
+        # Omit metadata that intersects the extent but not the AOI itself
         aoi_geometry_engine = QgsGeometry.createGeometryEngine(aoi.constGet())
         aoi_geometry_engine.prepareGeometry()
         self.metadata_layer.dataProvider().deleteFeatures([
@@ -583,15 +622,12 @@ class Mapflow(QObject):
         self.maxar_metadata_extents = {feature['featureId']: feature for feature in features}
         # Format decimals and dates
         for feature in features:
-            feature['acquisitionDate'] = feature['acquisitionDate'][:16]  # no seconds
+            feature['acquisitionDate'] = feature['acquisitionDate'][:-3]  # no seconds
             if feature['offNadirAngle']:
                 feature['offNadirAngle'] = round(feature['offNadirAngle'])
             if feature['cloudCover']:
                 feature['cloudCover'] = round(feature['cloudCover'] * 100)
-        self.dlg.metadataTable.clear()
         # Fill out the table
-        self.dlg.metadataTable.setColumnCount(len(config.MAXAR_METADATA_ATTRIBUTES))
-        self.dlg.metadataTable.setHorizontalHeaderLabels(config.MAXAR_METADATA_ATTRIBUTES.keys())
         self.dlg.metadataTable.setRowCount(len(features))
         # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
         self.dlg.metadataTable.setSortingEnabled(False)
@@ -605,10 +641,19 @@ class Mapflow(QObject):
         # Turn sorting on again
         self.dlg.metadataTable.setSortingEnabled(True)
 
-    def get_maxar_image_id(self) -> str:
-        """Return the Feature ID of the Maxar image selected in the metadata table, or empty string."""
+    def get_maxar_image_id(self, provider: str) -> str:
+        """Return the current seleted Maxar or Sentinel image id, or empty string.
+
+        :param provider: The name of currently selected provider, e.g. Sentinel-2
+        """
         selected_cells = self.dlg.metadataTable.selectedItems()
-        return selected_cells[config.MAXAR_METADATA_ID_COLUMN_INDEX].text() if selected_cells else ''
+        if not selected_cells:
+            return ''
+        if provider == config.SENTINEL_OPTION_NAME:
+            id_column_index = config.SENTINEL_METADATA_ATTRIBUTES.index('Image ID')
+        else:  # Maxar
+            id_column_index = tuple(config.MAXAR_METADATA_ATTRIBUTES).index('Image ID')
+        return selected_cells[id_column_index].text()
 
     def calculate_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
         """Get the AOI size total when polygon another layer is chosen, 
