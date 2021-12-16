@@ -213,10 +213,12 @@ class Mapflow(QObject):
         provider_name = provider
         if provider == config.SENTINEL_OPTION_NAME:
             columns = config.SENTINEL_METADATA_ATTRIBUTES
+            sort_by = 1
             enabled = True
             max_zoom = config.MAX_ZOOM
         elif provider in config.MAXAR_PRODUCTS:
             columns = config.MAXAR_METADATA_ATTRIBUTES
+            sort_by = 4
             enabled = True
             max_zoom = (
                 21 if self.is_premium_user or self.dlg.providerAuthGroup.isChecked()
@@ -233,6 +235,7 @@ class Mapflow(QObject):
         self.dlg.metadataTable.setRowCount(0)
         self.dlg.metadataTable.setColumnCount(len(columns))
         self.dlg.metadataTable.setHorizontalHeaderLabels(columns)
+        self.dlg.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
         self.dlg.metadata.setTitle(provider_name + ' Metadata')
         self.dlg.metadata.setEnabled(enabled)
 
@@ -454,19 +457,21 @@ class Mapflow(QObject):
             self.alert(self.tr('Please, select an area of interest'))
             return
         provider = self.dlg.providerCombo.currentText()
+        from_ = self.dlg.metadataFrom.dateTime().toUTC().toString(Qt.ISODate)
+        to = self.dlg.metadataTo.dateTime().toUTC().toString(Qt.ISODate)
+        max_cloud_cover = self.dlg.maxCloudCover.value()
         if provider in config.MAXAR_PRODUCTS:
-            self.get_maxar_metadata(aoi, provider)
+            self.get_maxar_metadata(aoi, provider, from_, to, max_cloud_cover)
         else:
-            self.get_sentinel_metadata(aoi)
+            self.get_sentinel_metadata(aoi, from_, to, max_cloud_cover)
 
-    def get_sentinel_metadata(self, aoi: QgsGeometry) -> None:
+    def get_sentinel_metadata(self, aoi: QgsGeometry, from_, to, max_cloud_cover: int) -> None:
         """"""
         token = self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']
         params = {
             'collections': ['sentinel-2-l2a'],  # doesn't accept multiple values
-            # 'intersects': aoi.asJson(),
-            'intersects': {"coordinates": [[[38.99976949575884, 54.23999168511622], [39.43398719787716, 54.23999168511622], [39.43398719787716, 54.539103910266576], [38.99976949575884, 54.539103910266576], [38.99976949575884, 54.23999168511622]]], "type": "Polygon"},
-            'datetime': '2019-12-10T00:00:00Z/2020-12-10T23:59:59Z',
+            'intersects': json.loads(aoi.asJson()),
+            'datetime': '/'.join((from_, to)),
             'fields': {
                 'include': [
                     'id',
@@ -480,7 +485,7 @@ class Mapflow(QObject):
             },
             'query': {
                 'eo:cloud_cover': {
-                    'lt': 100.00
+                    'lt': float(max_cloud_cover)
                 }
             },
             'limit': 50
@@ -537,17 +542,39 @@ class Mapflow(QObject):
         else:
             self.report_error(response, self.tr("We couldn't get metadata from Sentinel Hub"))
 
-    def get_maxar_metadata(self, aoi: QgsGeometry, product: str) -> None:
-        """Get SecureWatch image footprints and metadata."""
+    def get_maxar_metadata(
+        self,
+        aoi: QgsGeometry,
+        product: str,
+        from_: str,
+        to: str,
+        max_cloud_cover: int
+    ) -> None:
+        """Get SecureWatch image metadata."""
         self.save_provider_auth()
         # Get a '{min_lon},{min_lat} : {max_lon},{max_lat}' (SW-NE) representation of the AOI
         extent = aoi.boundingBox().toString()
         # Change lon,lat to lat,lon (SW format)
         coords = [position.split(',')[::-1] for position in extent.split(':')]
         bbox = ','.join([coord.strip() for position in coords for coord in position])
+        params = {
+            'SERVICE': 'WFS',
+            'VERSION': '2.0.0',
+            'REQUEST': 'GetFeature',
+            'TYPENAME': 'DigitalGlobe:FinishedFeature',
+            'WIDTH': 3000,
+            'HEIGHT': 3000
+        }
+        filter_params = (
+            f'BBOX(geometry,{bbox})',
+            f'acquisitionDate >=\'{from_}\'',
+            f'acquisitionDate <=\'{to}\'',
+            f'cloudCover<{max_cloud_cover/100}'
+        )
         url = (
             'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?'
-            f'REQUEST=GetFeature&TYPENAME=DigitalGlobe:FinishedFeature&SERVICE=WFS&VERSION=2.0.0&BBOX={bbox}'
+            + '&'.join(f'{key}={value}' for key, value in params.items())
+            + '&CQL_FILTER=(' + 'AND'.join(f'({param})' for param in filter_params) + ')'
         )
         if self.dlg.providerAuthGroup.isChecked():  # user's own account
             connect_id = self.settings.value('providers')[product]['connectId']
@@ -586,7 +613,7 @@ class Mapflow(QObject):
         :param product: Maxar product whose metadata was requested.
         """
         response = response.readAll().data()
-        print(response)
+        # print(response)
         output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex()) + '.gml'
         with open(output_file_name, 'wb') as f:
             f.write(response)
@@ -607,7 +634,6 @@ class Mapflow(QObject):
         self.maxar_metadata_extents = {feature['featureId']: feature for feature in features}
         # Format decimals and dates
         for feature in features:
-            print(feature['acquisitionDate'])
             feature['acquisitionDate'] = datetime.strptime(
                 feature['acquisitionDate'] + '+0000', '%Y-%m-%d %H:%M:%S%z'
             ).astimezone().strftime('%Y-%m-%d %H:%M')
