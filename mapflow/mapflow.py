@@ -462,39 +462,20 @@ class Mapflow(QObject):
     def get_sentinel_metadata(self, aoi: QgsGeometry) -> None:
         """"""
         token = self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']
-        print(aoi.asJson())
         params = {
             'collections': ['sentinel-2-l2a'],  # doesn't accept multiple values
-            'intersects': {
-                "coordinates": [
-                    [
-                        [
-                            38.99976949575884,
-                            54.23999168511622
-                        ],
-                        [
-                            39.43398719787716,
-                            54.23999168511622
-                        ],
-                        [
-                            39.43398719787716,
-                            54.539103910266576
-                        ],
-                        [
-                            38.99976949575884,
-                            54.539103910266576
-                        ],
-                        [
-                            38.99976949575884,
-                            54.23999168511622
-                        ]
-                    ]
-                ],
-                "type": "Polygon"
-            },
+            # 'intersects': aoi.asJson(),
+            'intersects': {"coordinates": [[[38.99976949575884, 54.23999168511622], [39.43398719787716, 54.23999168511622], [39.43398719787716, 54.539103910266576], [38.99976949575884, 54.539103910266576], [38.99976949575884, 54.23999168511622]]], "type": "Polygon"},
             'datetime': '2019-12-10T00:00:00Z/2020-12-10T23:59:59Z',
             'fields': {
-                'include': ['id', 'properties.eo:cloud_cover', 'properties.datetime'],
+                'include': [
+                    'id',
+                    'type',
+                    'geometry.type',
+                    'geometry.coordinates',
+                    'properties.datetime',
+                    'properties.eo:cloud_cover',
+                ],
                 'exclude': ['links', 'bbox', 'assets']
             },
             'query': {
@@ -519,18 +500,31 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
+        response = json.loads(response.readAll().data())
+        # Format the response
+        if sys.version_info.minor < 7:  # python 3.6 doesn't understand 'Z' as UTC
+            for feature in response['features']:
+                feature['properties']['datetime'] = feature['properties']['datetime'].replace('Z', '+0000')
+        for feature in response['features']:
+            feature['properties']['datetime'] = datetime.strptime(
+                feature['properties']['datetime'], '%Y-%m-%dT%H:%M:%S%z'
+            ).astimezone().strftime('%Y-%m-%d %H:%M')
+            # Round cloud cover to whole %
+            feature['properties']['eo:cloud_cover'] = round(feature['properties']['eo:cloud_cover'])
         output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex()) + '.geojson'
-        with open(output_file_name, 'wb') as f:
-            f.write(response.readAll().data())
+        with open(output_file_name, 'w') as file:
+            json.dump(response, file)
         self.metadata_layer = QgsVectorLayer(output_file_name, config.SENTINEL_OPTION_NAME + ' metadata', 'ogr')
-        self.dlg.metadataTable.setRowCount(self.metadata_layer.featureCount())
         self.add_layer(self.metadata_layer)
-        for row, feature in enumerate(self.metadata_layer.getFeatures()):
-            cloud_cover = round(feature['properties']['eo:cloud_cover'])
+        self.dlg.metadataTable.setRowCount(self.metadata_layer.featureCount())
+        self.dlg.metadataTable.setSortingEnabled(False)
+        for row, feature in enumerate(response['features']):
+            cloud_cover = feature['properties']['eo:cloud_cover']
             self.dlg.metadataTable.setItem(row, 0, QTableWidgetItem(str(cloud_cover)))
-            datetime_ = feature['properties']['datetime'][:-4].replace('T', ' ')  # no seconds or Z
+            datetime_ = feature['properties']['datetime']
             self.dlg.metadataTable.setItem(row, 1, QTableWidgetItem(datetime_))
             self.dlg.metadataTable.setItem(row, 2, QTableWidgetItem(feature['id']))
+        self.dlg.metadataTable.setSortingEnabled(True)
 
     def get_sentinel_metadata_error_handler(self, response: QNetworkReply) -> None:
         """Error handler for Sentinel metadata requests.
@@ -585,26 +579,17 @@ class Mapflow(QObject):
             )
         self.dlg.metadataTable.clearContents()
 
-    def get_maxar_metadata_error_handler(self, response: QNetworkReply) -> None:
-        """Error handler for metadata requests.
-
-        :param response: The HTTP response.
-        """
-        error = response.error()
-        if error == QNetworkReply.ContentAccessDenied:
-            self.alert(self.tr('Please, check your credentials'))
-        else:
-            self.report_error(response, self.tr("We couldn't get metadata from Maxar"))
-
     def get_maxar_metadata_callback(self, response: QNetworkReply, product: str, aoi: QgsGeometry) -> None:
         """Handle metadata request response.
 
         :param response: The HTTP response.
         :param product: Maxar product whose metadata was requested.
         """
+        response = response.readAll().data()
+        print(response)
         output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex()) + '.gml'
         with open(output_file_name, 'wb') as f:
-            f.write(response.readAll().data())
+            f.write(response)
         self.metadata_layer = QgsVectorLayer(output_file_name, f'{product} metadata', 'ogr')
         # Omit metadata that intersects the extent but not the AOI itself
         aoi_geometry_engine = QgsGeometry.createGeometryEngine(aoi.constGet())
@@ -622,7 +607,10 @@ class Mapflow(QObject):
         self.maxar_metadata_extents = {feature['featureId']: feature for feature in features}
         # Format decimals and dates
         for feature in features:
-            feature['acquisitionDate'] = feature['acquisitionDate'][:-3]  # no seconds
+            print(feature['acquisitionDate'])
+            feature['acquisitionDate'] = datetime.strptime(
+                feature['acquisitionDate'] + '+0000', '%Y-%m-%d %H:%M:%S%z'
+            ).astimezone().strftime('%Y-%m-%d %H:%M')
             if feature['offNadirAngle']:
                 feature['offNadirAngle'] = round(feature['offNadirAngle'])
             if feature['cloudCover']:
@@ -640,6 +628,17 @@ class Mapflow(QObject):
                 self.dlg.metadataTable.setItem(row, col, QTableWidgetItem(value))
         # Turn sorting on again
         self.dlg.metadataTable.setSortingEnabled(True)
+
+    def get_maxar_metadata_error_handler(self, response: QNetworkReply) -> None:
+        """Error handler for metadata requests.
+
+        :param response: The HTTP response.
+        """
+        error = response.error()
+        if error == QNetworkReply.ContentAccessDenied:
+            self.alert(self.tr('Please, check your credentials'))
+        else:
+            self.report_error(response, self.tr("We couldn't get metadata from Maxar"))
 
     def get_maxar_image_id(self, provider: str) -> str:
         """Return the current seleted Maxar or Sentinel image id, or empty string.

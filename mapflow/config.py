@@ -1,3 +1,7 @@
+import time
+
+
+TIMEZONE = time.localtime().tm_zone
 PLUGIN_NAME = 'Mapflow'
 MAPFLOW_DEFAULT_TIMEOUT = 5  # in seconds
 # PROCESSINGS
@@ -9,9 +13,9 @@ PROCESSING_TABLE_SORT_COLUMN_INDEX = PROCESSING_ATTRIBUTES.index('created')
 MAXAR_METADATA_ATTRIBUTES = {
     'Product Type': 'productType',
     'Band Order': 'colorBandOrder', 
-    'Cloud Cover, %': 'cloudCover', 
+    'Cloud Cover %': 'cloudCover', 
     'Off Nadir Angle': 'offNadirAngle', 
-    'Date & Time': 'acquisitionDate', 
+    f'Date & Time ({TIMEZONE})': 'acquisitionDate',
     'Image ID': 'featureId'
 }
 MAXAR_METADATA_ID_COLUMN_INDEX = list(MAXAR_METADATA_ATTRIBUTES.values()).index('featureId')
@@ -34,7 +38,7 @@ MAXAR_PRODUCTS = {
     }
 }
 # MISC
-SENTINEL_METADATA_ATTRIBUTES = 'Cloud Cover, %', 'Date & Time', 'Image ID'
+SENTINEL_METADATA_ATTRIBUTES = 'Cloud Cover %', f'Date & Time ({TIMEZONE})', 'Image ID'
 SENTINEL_OPTION_NAME = 'Sentinel-2'
 MAX_TIF_SIZE = 2000  # MB
 MAX_ZOOM = 21
