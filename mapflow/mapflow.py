@@ -563,18 +563,20 @@ class Mapflow(QObject):
             'REQUEST': 'GetFeature',
             'TYPENAME': 'DigitalGlobe:FinishedFeature',
             'WIDTH': 3000,
-            'HEIGHT': 3000
+            'HEIGHT': 3000,
+            'SORTBY': 'acquisitionDate+D',
+            'PROPERTYNAME': ','.join((*config.MAXAR_METADATA_ATTRIBUTES.values(), 'geometry'))
         }
         filter_params = (
-            f'BBOX(geometry,{bbox})',
+            f'bbox(geometry,{bbox})',
             f'acquisitionDate>=\'{from_}\'',
             f'acquisitionDate<=\'{to}\'',
-            f'cloudCover<{max_cloud_cover/100}'
+            f'cloudCover<{max_cloud_cover/100}',
         )
         url = (
             'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?'
             + '&'.join(f'{key}={value}' for key, value in params.items())
-            + '&CQL_FILTER=(' + 'AND'.join(f'({param})' for param in filter_params) + ')'
+            + '&CQL_FILTER=(' + 'and'.join(f'({param})' for param in filter_params) + ')'
         )
         if self.dlg.providerAuthGroup.isChecked():  # user's own account
             connect_id = self.settings.value('providers')[product]['connectId']
