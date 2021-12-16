@@ -1,3 +1,7 @@
+import time
+
+
+TIMEZONE = time.localtime().tm_zone
 PLUGIN_NAME = 'Mapflow'
 MAPFLOW_DEFAULT_TIMEOUT = 5  # in seconds
 # PROCESSINGS
@@ -6,8 +10,15 @@ PROCESSING_ATTRIBUTES = 'name', 'workflowDef', 'status', 'percentCompleted', 'ao
 PROCESSING_TABLE_ID_COLUMN_INDEX = PROCESSING_ATTRIBUTES.index('id')
 PROCESSING_TABLE_SORT_COLUMN_INDEX = PROCESSING_ATTRIBUTES.index('created')
 # MAXAR
-MAXAR_METADATA_ATTRIBUTES = 'productType', 'colorBandOrder', 'cloudCover', 'offNadirAngle', 'acquisitionDate', 'featureId'
-MAXAR_METADATA_ID_COLUMN_INDEX = MAXAR_METADATA_ATTRIBUTES.index('featureId')
+MAXAR_METADATA_ATTRIBUTES = {
+    'Product Type': 'productType',
+    'Band Order': 'colorBandOrder', 
+    'Cloud Cover %': 'cloudCover', 
+    'Off Nadir Angle': 'offNadirAngle', 
+    f'Date & Time ({TIMEZONE})': 'acquisitionDate',
+    'Image ID': 'featureId'
+}
+MAXAR_METADATA_ID_COLUMN_INDEX = list(MAXAR_METADATA_ATTRIBUTES.values()).index('featureId')
 MAXAR_MAX_FREE_ZOOM = 12
 MAXAR_PRODUCTS = {
     'Maxar SecureWatch': {
@@ -27,7 +38,8 @@ MAXAR_PRODUCTS = {
     }
 }
 # MISC
-SENTINEL_OPTION_NAME = 'Sentinel-2 (free)'
+SENTINEL_METADATA_ATTRIBUTES = 'Cloud Cover %', f'Date & Time ({TIMEZONE})', 'Image ID'
+SENTINEL_OPTION_NAME = 'Sentinel-2'
 MAX_TIF_SIZE = 2000  # MB
 MAX_ZOOM = 21
 DEFAULT_ZOOM = MAXAR_MAX_FREE_ZOOM
@@ -36,7 +48,7 @@ BUILTIN_PROVIDERS = {
     SENTINEL_OPTION_NAME: {
         'url': 'http://',
         'type': 'sentinel_l2a',
-        'imageId': ''
+        'token': ''
     }
 }
 STYLES = {

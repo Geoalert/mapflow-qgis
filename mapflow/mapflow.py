@@ -21,10 +21,10 @@ from qgis.gui import QgsMessageBarItem
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
     QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter, QgsRectangle,
-    QgsFeatureIterator
+    QgsFeatureIterator, QgsWkbTypes, QgsDataSourceUri
 )
 
-from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, ImageIdDialog, ErrorMessage
+from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, SentinelHubTokenDialog, ErrorMessage
 from .http import Http
 from . import helpers, config
 
@@ -80,7 +80,7 @@ class Mapflow(QObject):
         self.dlg_provider = ProviderDialog(self.dlg)
         self.dlg_provider.accepted.connect(self.add_or_edit_provider)
         self.dlg_connect_id = ConnectIdDialog(self.dlg)
-        self.dlg_image_id = ImageIdDialog(self.dlg)
+        self.dlg_sentinel_token = SentinelHubTokenDialog(self.dlg)
         # Display the plugin's version
         metadata_parser = ConfigParser()
         metadata_parser.read(os.path.join(self.plugin_dir, 'metadata.txt'))
@@ -114,7 +114,7 @@ class Mapflow(QObject):
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
         self.dlg_connect_id.accepted.connect(self.edit_connect_id)
-        self.dlg_image_id.accepted.connect(self.edit_image_id)
+        self.dlg_sentinel_token.accepted.connect(self.edit_sentinel_token)
         # Connect buttons
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
@@ -144,9 +144,9 @@ class Mapflow(QObject):
         self.dlg.maxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
         self.dlg.providerAuthGroup.toggled.connect(self.limit_zoom_auth_toggled)
         # Maxar
-        self.dlg.maxarMetadataTable.itemSelectionChanged.connect(self.highlight_maxar_image)
-        self.dlg.getMetadata.clicked.connect(self.get_maxar_metadata)
-        self.dlg.maxarMetadataTable.cellDoubleClicked.connect(self.preview)
+        self.dlg.metadataTable.itemSelectionChanged.connect(self.highlight_maxar_image)
+        self.dlg.getMetadata.clicked.connect(self.get_metadata)
+        self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
         self.dlg.providerCombo.currentTextChanged.connect(self.on_provider_change)
         # Poll processings
         self.processing_fetch_timer = QTimer(self.dlg)
@@ -201,31 +201,50 @@ class Mapflow(QObject):
             self.dlg.maxZoom.setMaximum(config.MAXAR_MAX_FREE_ZOOM)
         else:
             self.dlg.maxZoom.setMaximum(config.MAX_ZOOM)
-            self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or config.DEFAULT_ZOOM))
+            self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom', config.DEFAULT_ZOOM)))
 
     def on_provider_change(self, provider: str) -> None:
-        """Limit zoom for Maxar when our account is to be used.
+        """Adjust max and current zoom, and update the metadata table when user selects another
+        provider.
 
         :param provider: The currently selected provider
         """
-        # Clear metadata to avoid confusion
-        self.dlg.maxarMetadataTable.clearContents()
-        self.dlg.maxarMetadataTable.setRowCount(0)
-        if provider in config.MAXAR_PRODUCTS:
-            self.dlg.maxar.setEnabled(True)  # deactivate metadata panel
-            if not (self.is_premium_user or self.dlg.providerAuthGroup.isChecked()):
-                self.dlg.maxZoom.setMaximum(config.MAXAR_MAX_FREE_ZOOM)
-        else:
-            self.dlg.maxar.setEnabled(False)  # activate metadata panel
-            self.dlg.maxZoom.setMaximum(config.MAX_ZOOM)
-            self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or config.DEFAULT_ZOOM))
+        self.dlg.metadataTable.clear()
+        provider_name = provider
+        if provider == config.SENTINEL_OPTION_NAME:
+            columns = config.SENTINEL_METADATA_ATTRIBUTES
+            sort_by = 1
+            enabled = True
+            max_zoom = config.MAX_ZOOM
+        elif provider in config.MAXAR_PRODUCTS:
+            columns = config.MAXAR_METADATA_ATTRIBUTES
+            sort_by = 4
+            enabled = True
+            max_zoom = (
+                21 if self.is_premium_user or self.dlg.providerAuthGroup.isChecked()
+                else config.MAXAR_MAX_FREE_ZOOM
+            )
+        else:  # another provider, tear down the table and deactivate the panel
+            provider_name = 'Provider'
+            columns = tuple()  # empty
+            enabled = False
+            max_zoom = config.MAX_ZOOM
+            # Forced to int bc somehow used to be stored as str, so for backward compatability
+            self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom', config.DEFAULT_ZOOM)))
+        self.dlg.maxZoom.setMaximum(max_zoom)
+        self.dlg.metadataTable.setRowCount(0)
+        self.dlg.metadataTable.setColumnCount(len(columns))
+        self.dlg.metadataTable.setHorizontalHeaderLabels(columns)
+        self.dlg.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
+        self.dlg.metadata.setTitle(provider_name + ' Metadata')
+        self.dlg.metadata.setEnabled(enabled)
 
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
         # Save main dialog size & position
         self.settings.setValue('mainDialogState', self.dlg.saveGeometry())
         # Save table columns widths and sorting
-        for table in 'processingsTable', 'maxarMetadataTable':
+        for table in 'processingsTable', 'metadataTable':
             header = getattr(self.dlg, table).horizontalHeader()
             self.settings.setValue(table + 'HeaderState', header.saveState())
 
@@ -260,7 +279,7 @@ class Mapflow(QObject):
 
         Is called by selecting (clicking on) a row in Maxar metadata table.
         """
-        selected_items = self.dlg.maxarMetadataTable.selectedItems()
+        selected_items = self.dlg.metadataTable.selectedItems()
         image_id = selected_items[config.MAXAR_METADATA_ID_COLUMN_INDEX].text() if selected_items else ''
         try:
             self.metadata_layer.selectByExpression(f"featureId='{image_id}'")
@@ -277,7 +296,6 @@ class Mapflow(QObject):
         provider = self.dlg.providerCombo.currentText()
         # Ask for confirmation
         if self.alert(self.tr('Permanently remove {}?'.format(provider)), QMessageBox.Question):
-            print('yes')
             providers = self.settings.value('providers')
             del providers[provider]
             self.settings.setValue('providers', providers)
@@ -309,7 +327,7 @@ class Mapflow(QObject):
         if provider in config.MAXAR_PRODUCTS:
             self.show_connect_id_dialog(provider)
         elif provider == config.SENTINEL_OPTION_NAME:
-            self.show_sentinel_image_id_dialog()
+            self.show_sentinel_token_dialog()
         else:
             self.dlg_provider.setWindowTitle(provider)
             # Fill out the edit dialog with the current data
@@ -330,12 +348,11 @@ class Mapflow(QObject):
         self.dlg.providerCombo.addItems(providers)
         self.settings.setValue('providers', providers)
 
-    def show_sentinel_image_id_dialog(self) -> None:
+    def show_sentinel_token_dialog(self) -> None:
         """"""
-        self.dlg_image_id.imageId.setText(
-            self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['imageId']
-        )
-        self.dlg_image_id.show()
+        token = self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']
+        self.dlg_sentinel_token.token.setText(token)
+        self.dlg_sentinel_token.show()
 
     def show_connect_id_dialog(self, product: str) -> None:
         """Prepare and show the Connect ID editing dialog.
@@ -358,11 +375,10 @@ class Mapflow(QObject):
         providers[provider]['connectId'] = connect_id
         self.settings.setValue('providers', providers)
 
-    def edit_image_id(self) -> None:
-        """Change the AWS Sentinel Image ID."""
-        provider = self.dlg.providerCombo.currentText()
+    def edit_sentinel_token(self) -> None:
+        """Change the Sentinel Hub Access Token."""
         providers = self.settings.value('providers')
-        providers[provider]['imageId'] = self.dlg_image_id.imageId.text()
+        providers[config.SENTINEL_OPTION_NAME]['token'] = self.dlg_sentinel_token.token.text()
         self.settings.setValue('providers', providers)
 
     def monitor_polygon_layer_feature_selection(self, layers: List[QgsMapLayer]) -> None:
@@ -427,15 +443,9 @@ class Mapflow(QObject):
             self.add_layer(layer)
             self.dlg.rasterCombo.setLayer(layer)
 
-    def get_maxar_metadata(self) -> None:
-        """Get SecureWatch image footprints and metadata.
-
-        SecureWatch 'metadata' is image footprints with such attributes as capture date or cloud cover.
-        The data is requested via WFS, loaded as a 'Maxar metadata' layer and shown in the maxarMetadataTable.
-
-        Is called by clicking the 'Get Image Metadata' button in the main dialog.
-        """
-        self.save_provider_auth()
+    def get_metadata(self) -> None:
+        """Metadata is image footprints with attributes like capture date or cloud cover."""
+        # Define the AOI
         if self.dlg.metadataUseCanvasExtent.isChecked():
             aoi = helpers.to_wgs84(
                 QgsGeometry.fromRect(self.iface.mapCanvas().extent()),
@@ -447,26 +457,131 @@ class Mapflow(QObject):
             self.alert(self.tr('Please, select an area of interest'))
             return
         provider = self.dlg.providerCombo.currentText()
-        # Start off with the static params
+        from_ = self.dlg.metadataFrom.dateTime().toUTC().toString(Qt.ISODate)
+        to = self.dlg.metadataTo.dateTime().toUTC().toString(Qt.ISODate)
+        max_cloud_cover = self.dlg.maxCloudCover.value()
+        if provider in config.MAXAR_PRODUCTS:
+            self.get_maxar_metadata(aoi, provider, from_, to, max_cloud_cover)
+        else:
+            self.get_sentinel_metadata(aoi, from_, to, max_cloud_cover)
+
+    def get_sentinel_metadata(self, aoi: QgsGeometry, from_, to, max_cloud_cover: int) -> None:
+        """"""
+        token = self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']
         params = {
-            'REQUEST': 'GetFeature',
-            'TYPENAME': 'DigitalGlobe:FinishedFeature',
-            'SERVICE': 'WFS',
-            'VERSION': '2.0.0',
-            'WIDTH': 3000,
-            'HEIGHT': 3000
+            'collections': ['sentinel-2-l2a'],  # doesn't accept multiple values
+            'intersects': json.loads(aoi.asJson()),
+            'datetime': '/'.join((from_, to)),
+            'fields': {
+                'include': [
+                    'id',
+                    'type',
+                    'geometry.type',
+                    'geometry.coordinates',
+                    'properties.datetime',
+                    'properties.eo:cloud_cover',
+                ],
+                'exclude': ['links', 'bbox', 'assets']
+            },
+            'query': {
+                'eo:cloud_cover': {
+                    'lt': float(max_cloud_cover)
+                }
+            },
+            'limit': 50
         }
+        self.http.post(
+            url='https://services.sentinel-hub.com/api/v1/catalog/search',
+            auth=f'Bearer {token}'.encode(),
+            body=json.dumps(params).encode(),
+            callback=self.get_sentinel_metadata_callback,
+            error_handler=self.get_sentinel_metadata_error_handler,
+            use_default_error_handler=False
+        )
+        self.dlg.metadataTable.clearContents()
+
+    def get_sentinel_metadata_callback(self, response: QNetworkReply) -> None:
+        """Fill out meta.
+
+        :param response: The HTTP response.
+        """
+        response = json.loads(response.readAll().data())
+        # Format the response
+        if sys.version_info.minor < 7:  # python 3.6 doesn't understand 'Z' as UTC
+            for feature in response['features']:
+                feature['properties']['datetime'] = feature['properties']['datetime'].replace('Z', '+0000')
+        for feature in response['features']:
+            feature['properties']['datetime'] = datetime.strptime(
+                feature['properties']['datetime'], '%Y-%m-%dT%H:%M:%S%z'
+            ).astimezone().strftime('%Y-%m-%d %H:%M')
+            # Round cloud cover to whole %
+            feature['properties']['eo:cloud_cover'] = round(feature['properties']['eo:cloud_cover'])
+        output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex()) + '.geojson'
+        with open(output_file_name, 'w') as file:
+            json.dump(response, file)
+        self.metadata_layer = QgsVectorLayer(output_file_name, config.SENTINEL_OPTION_NAME + ' metadata', 'ogr')
+        self.add_layer(self.metadata_layer)
+        self.dlg.metadataTable.setRowCount(self.metadata_layer.featureCount())
+        self.dlg.metadataTable.setSortingEnabled(False)
+        for row, feature in enumerate(response['features']):
+            cloud_cover = feature['properties']['eo:cloud_cover']
+            self.dlg.metadataTable.setItem(row, 0, QTableWidgetItem(str(cloud_cover)))
+            datetime_ = feature['properties']['datetime']
+            self.dlg.metadataTable.setItem(row, 1, QTableWidgetItem(datetime_))
+            self.dlg.metadataTable.setItem(row, 2, QTableWidgetItem(feature['id']))
+        self.dlg.metadataTable.setSortingEnabled(True)
+
+    def get_sentinel_metadata_error_handler(self, response: QNetworkReply) -> None:
+        """Error handler for Sentinel metadata requests.
+
+        :param response: The HTTP response.
+        """
+        error = response.error()
+        if error == QNetworkReply.ContentAccessDenied:
+            self.alert(self.tr('Please, check your credentials'))
+        else:
+            self.report_error(response, self.tr("We couldn't get metadata from Sentinel Hub"))
+
+    def get_maxar_metadata(
+        self,
+        aoi: QgsGeometry,
+        product: str,
+        from_: str,
+        to: str,
+        max_cloud_cover: int
+    ) -> None:
+        """Get SecureWatch image metadata."""
+        self.save_provider_auth()
         # Get a '{min_lon},{min_lat} : {max_lon},{max_lat}' (SW-NE) representation of the AOI
         extent = aoi.boundingBox().toString()
-        # Change lon,lat to lat,lon for Maxar
+        # Change lon,lat to lat,lon (SW format)
         coords = [position.split(',')[::-1] for position in extent.split(':')]
-        params['BBOX'] = ','.join([coord.strip() for position in coords for coord in position])
-        query_params = '&'.join(f'{key}={val}' for key, val in params.items())
-        url = 'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?' + query_params
+        bbox = ','.join([coord.strip() for position in coords for coord in position])
+        params = {
+            'SERVICE': 'WFS',
+            'VERSION': '2.0.0',
+            'REQUEST': 'GetFeature',
+            'TYPENAME': 'DigitalGlobe:FinishedFeature',
+            'WIDTH': 3000,
+            'HEIGHT': 3000,
+            'SORTBY': 'acquisitionDate+D',
+            'PROPERTYNAME': ','.join((*config.MAXAR_METADATA_ATTRIBUTES.values(), 'geometry'))
+        }
+        filter_params = (
+            f'bbox(geometry,{bbox})',
+            f'acquisitionDate>=\'{from_}\'',
+            f'acquisitionDate<=\'{to}\'',
+            f'cloudCover<{max_cloud_cover/100}',
+        )
+        url = (
+            'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?'
+            + '&'.join(f'{key}={value}' for key, value in params.items())
+            + '&CQL_FILTER=(' + 'and'.join(f'({param})' for param in filter_params) + ')'
+        )
         if self.dlg.providerAuthGroup.isChecked():  # user's own account
-            connect_id = self.settings.value('providers')[provider]['connectId']
+            connect_id = self.settings.value('providers')[product]['connectId']
             if not helpers.UUID_REGEX.match(connect_id):
-                self.show_connect_id_dialog(provider)
+                self.show_connect_id_dialog(product)
                 return
             url += '&CONNECTID=' + connect_id
             encoded_credentials = b64encode(':'.join((
@@ -476,47 +591,36 @@ class Mapflow(QObject):
             self.http.get(
                 url=url,
                 callback=self.get_maxar_metadata_callback,
-                callback_kwargs={'product': provider, 'aoi': self.aoi},
+                callback_kwargs={'product': product, 'aoi': self.aoi},
                 error_handler=self.get_maxar_metadata_error_handler,
-                basic_auth=f'Basic {encoded_credentials.decode()}'.encode(),
+                auth=f'Basic {encoded_credentials.decode()}'.encode(),
             )
         else:  # assume user wants to use our account, proxy thru Mapflow
             self.http.post(
                 url=f'{self.server}/meta',
                 callback=self.get_maxar_metadata_callback,
-                callback_kwargs={'product': provider, 'aoi': self.aoi},
+                callback_kwargs={'product': product, 'aoi': self.aoi},
                 body=json.dumps({
                     'url': url,
-                    'connectId': provider.split()[1].lower()
+                    'connectId': product.split()[1].lower()
                 }).encode(),
                 timeout=7
             )
-
-    def get_maxar_metadata_error_handler(self, response: QNetworkReply) -> None:
-        """Error handler for metadata requests.
-
-        :param response: The HTTP response.
-        """
-        error = response.error()
-        if error == QNetworkReply.ContentAccessDenied:
-            self.alert(self.tr('Please, check your credentials'))
-        else:
-            self.report_error(response, self.tr("We couldn't get metadata from Maxar"))
+        self.dlg.metadataTable.clearContents()
 
     def get_maxar_metadata_callback(self, response: QNetworkReply, product: str, aoi: QgsGeometry) -> None:
-        """Handle metadata request' response in case of success.
+        """Handle metadata request response.
 
         :param response: The HTTP response.
         :param product: Maxar product whose metadata was requested.
         """
-        # Memorize the product to prevent further errors if user changes item in the dropdown list
-        layer_name = f'{product} metadata'
-        # Save metadata to a file; I couldn't get WFS to work, or else no file would be necessary
+        response = response.readAll().data()
+        # print(response)
         output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex()) + '.gml'
         with open(output_file_name, 'wb') as f:
-            f.write(response.readAll().data())
-        self.metadata_layer = QgsVectorLayer(output_file_name, layer_name, 'ogr')
-        # Omit metadata that intersects the extent but no the AOI itself
+            f.write(response)
+        self.metadata_layer = QgsVectorLayer(output_file_name, f'{product} metadata', 'ogr')
+        # Omit metadata that intersects the extent but not the AOI itself
         aoi_geometry_engine = QgsGeometry.createGeometryEngine(aoi.constGet())
         aoi_geometry_engine.prepareGeometry()
         self.metadata_layer.dataProvider().deleteFeatures([
@@ -532,29 +636,51 @@ class Mapflow(QObject):
         self.maxar_metadata_extents = {feature['featureId']: feature for feature in features}
         # Format decimals and dates
         for feature in features:
-            feature['acquisitionDate'] = feature['acquisitionDate'][:16]  # no seconds
+            feature['acquisitionDate'] = datetime.strptime(
+                feature['acquisitionDate'] + '+0000', '%Y-%m-%d %H:%M:%S%z'
+            ).astimezone().strftime('%Y-%m-%d %H:%M')
             if feature['offNadirAngle']:
                 feature['offNadirAngle'] = round(feature['offNadirAngle'])
             if feature['cloudCover']:
-                feature['cloudCover'] = round(feature['cloudCover'], 2)
+                feature['cloudCover'] = round(feature['cloudCover'] * 100)
         # Fill out the table
-        self.dlg.maxarMetadataTable.setRowCount(len(features))
+        self.dlg.metadataTable.setRowCount(len(features))
         # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
-        self.dlg.maxarMetadataTable.setSortingEnabled(False)
+        self.dlg.metadataTable.setSortingEnabled(False)
         for row, feature in enumerate(features):
-            for col, attr in enumerate(config.MAXAR_METADATA_ATTRIBUTES):
+            for col, attr in enumerate(config.MAXAR_METADATA_ATTRIBUTES.values()):
                 try:
                     value = str(feature[attr])
                 except KeyError:  # e.g. <colorBandOrder/> for pachromatic images
                     value = ''
-                self.dlg.maxarMetadataTable.setItem(row, col, QTableWidgetItem(value))
+                self.dlg.metadataTable.setItem(row, col, QTableWidgetItem(value))
         # Turn sorting on again
-        self.dlg.maxarMetadataTable.setSortingEnabled(True)
+        self.dlg.metadataTable.setSortingEnabled(True)
 
-    def get_maxar_image_id(self) -> str:
-        """Return the Feature ID of the Maxar image selected in the metadata table, or empty string."""
-        selected_cells = self.dlg.maxarMetadataTable.selectedItems()
-        return selected_cells[config.MAXAR_METADATA_ID_COLUMN_INDEX].text() if selected_cells else ''
+    def get_maxar_metadata_error_handler(self, response: QNetworkReply) -> None:
+        """Error handler for metadata requests.
+
+        :param response: The HTTP response.
+        """
+        error = response.error()
+        if error == QNetworkReply.ContentAccessDenied:
+            self.alert(self.tr('Please, check your credentials'))
+        else:
+            self.report_error(response, self.tr("We couldn't get metadata from Maxar"))
+
+    def get_image_id(self, provider: str) -> str:
+        """Return the current seleted Maxar or Sentinel image id, or empty string.
+
+        :param provider: The name of currently selected provider, e.g. Sentinel-2
+        """
+        selected_cells = self.dlg.metadataTable.selectedItems()
+        if not selected_cells:
+            return ''
+        if provider == config.SENTINEL_OPTION_NAME:
+            id_column_index = config.SENTINEL_METADATA_ATTRIBUTES.index('Image ID')
+        else:  # Maxar
+            id_column_index = tuple(config.MAXAR_METADATA_ATTRIBUTES).index('Image ID')
+        return selected_cells[id_column_index].text()
 
     def calculate_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
         """Get the AOI size total when polygon another layer is chosen, 
@@ -565,11 +691,12 @@ class Mapflow(QObject):
         if self.dlg.useImageExtentAsAoi.isChecked():  # GeoTIFF extent used; no difference
             return
         if layer and layer.featureCount() > 0:
-            features = list(layer.getSelectedFeatures()) or layer.getFeatures()
-            self.calculate_aoi_area(
-                QgsGeometry.collectGeometry([feature.geometry() for feature in features]),
-                layer.crs()
-            )
+            features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
+            if len(features) == 1:
+                aoi = features[0].geometry()
+            else:
+                aoi = QgsGeometry.collectGeometry([feature.geometry() for feature in features])
+            self.calculate_aoi_area(aoi, layer.crs())
         else:  # empty layer or combo's itself is empty
             self.dlg.labelAoiArea.clear()
             self.aoi = self.aoi_size = None
@@ -760,9 +887,9 @@ class Mapflow(QObject):
                     params['url'] += '&CONNECTID=' + providers[raster_option]['connectId']
                 else:  # our account
                     processing_params['meta']['maxar_product'] = raster_option.split()[1].lower()
-                image_id = self.get_maxar_image_id()
+                image_id = self.get_image_id(processing_params['meta']['maxar_product'])
                 if image_id:
-                    params['url'] += f'&FEATURECOLLECTION={image_id}'
+                    params['url'] += f'&CQL_FILTER=feature_id=\'{image_id}\''
             params['source_type'] = providers[raster_option]['type']
             if params['source_type'] == 'wms':
                 params['target_resolution'] = 0.000005  # for the 18th zoom
@@ -770,7 +897,7 @@ class Mapflow(QObject):
             self.save_provider_auth()
         processing_params['params'] = params
         # Clip AOI to image extent if a single Maxar image is requested
-        selected_image = self.dlg.maxarMetadataTable.selectedItems()
+        selected_image = self.dlg.metadataTable.selectedItems()
         if imagery and not use_image_extent_as_aoi:  # GeoTIFF but within AOI
             extent = QgsFeature()
             extent.setGeometry(helpers.get_layer_extent(imagery))
@@ -922,19 +1049,20 @@ class Mapflow(QObject):
                 url += '&CONNECTID=' + provider.split()[1].lower()
                 username = self.username
                 password = self.password
-            image_id = self.get_maxar_image_id()  # request a single image if selected in the table
+            image_id = self.get_image_id(provider)  # request a single image if selected in the table
             if image_id:
-                url += f'&FEATURECOLLECTION={image_id}'
-                row = self.dlg.maxarMetadataTable.currentRow()
+                url += f'&CQL_FILTER=feature_id=\'{image_id}\''
+                row = self.dlg.metadataTable.currentRow()
+                maxar_metadata_attributes = tuple(config.MAXAR_METADATA_ATTRIBUTES.values())
                 layer_name = ' '.join((
                     layer_name,
-                    self.dlg.maxarMetadataTable.item(
+                    self.dlg.metadataTable.item(
                         row,
-                        config.MAXAR_METADATA_ATTRIBUTES.index('acquisitionDate')
+                        maxar_metadata_attributes.index('acquisitionDate')
                     ).text(),
-                    self.dlg.maxarMetadataTable.item(
+                    self.dlg.metadataTable.item(
                         row,
-                        config.MAXAR_METADATA_ATTRIBUTES.index('productType')
+                        maxar_metadata_attributes.index('productType')
                     ).text()
                 ))
         # Can use urllib.parse but have to specify safe='/?:{}' which sort of defeats the purpose
@@ -1368,7 +1496,7 @@ class Mapflow(QObject):
         self.dlg.modelCombo.addItems([wd['name'] for wd in response['workflowDefs']])
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
         # Restore table section sizes
-        for table in 'processingsTable', 'maxarMetadataTable':
+        for table in 'processingsTable', 'metadataTable':
             header = getattr(self.dlg, table).horizontalHeader()
             header.restoreState(self.settings.value(table + 'HeaderState', b''))
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)

@@ -63,19 +63,12 @@ class ConnectIdDialog(*uic.loadUiType(ui_path/'connect_id_dialog.ui')):
         )
 
 
-class ImageIdDialog(*uic.loadUiType(ui_path/'aws_image_id_dialog.ui')):
+class SentinelHubTokenDialog(*uic.loadUiType(ui_path/'sentinel_hub_token_dialog.ui')):
     def __init__(self, parent: QWidget) -> None:
         """Constructor."""
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(plugin_icon)
-        ok = self.buttonBox.button(QDialogButtonBox.Ok)
-        self.imageId.textChanged.connect(
-            lambda text: ok.setEnabled(bool(
-                helpers.SENTINEL_IMAGE_DATETIME_REGEX.search(text) and  
-                helpers.SENTINEL_IMAGE_COORDINATE_REGEX.search(text)  
-            ) or not(text))
-        )
 
 
 class ErrorMessage(*uic.loadUiType(ui_path/'error_message.ui')):

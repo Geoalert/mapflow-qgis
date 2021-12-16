@@ -65,7 +65,7 @@ class Http(QObject):
         callback_kwargs: dict = None,
         error_handler: Callable = None,
         use_default_error_handler: bool = True,
-        basic_auth: bytes = None,
+        auth: bytes = None,
         timeout: int = config.MAPFLOW_DEFAULT_TIMEOUT,
         body: Union[QHttpMultiPart, bytes] = None
     ) -> QNetworkReply:
@@ -74,7 +74,7 @@ class Http(QObject):
         if isinstance(body, bytes):
             request.setHeader(QNetworkRequest.ContentTypeHeader, 'application/json')
         request.setRawHeader(b'X-Plugin-Version', self.plugin_version.encode())
-        request.setRawHeader(b'Authorization', basic_auth or self._basic_auth)
+        request.setRawHeader(b'Authorization', auth or self._basic_auth)
         response = method(request, body) if method == self.nam.post else method(request)
         QTimer.singleShot(timeout * 1000, response.abort)
         response.finished.connect(
