@@ -557,24 +557,10 @@ class Mapflow(QObject):
         # Change lon,lat to lat,lon (SW format)
         coords = [position.split(',')[::-1] for position in extent.split(':')]
         bbox = ','.join([coord.strip() for position in coords for coord in position])
-        params = {
-            'SERVICE': 'WFS',
-            'VERSION': '2.0.0',
-            'REQUEST': 'GetFeature',
-            'TYPENAME': 'DigitalGlobe:FinishedFeature',
-            'WIDTH': 3000,
-            'HEIGHT': 3000
-        }
-        filter_params = (
-            f'BBOX(geometry,{bbox})',
-            f'acquisitionDate >=\'{from_}\'',
-            f'acquisitionDate <=\'{to}\'',
-            f'cloudCover<{max_cloud_cover/100}'
-        )
         url = (
-            'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?'
-            + '&'.join(f'{key}={value}' for key, value in params.items())
-            + '&CQL_FILTER=(' + 'AND'.join(f'({param})' for param in filter_params) + ')'
+            'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?WIDTH=3000&HEIGHT=3000&'
+            f'REQUEST=GetFeature&TYPENAME=DigitalGlobe:FinishedFeature&SERVICE=WFS&VERSION=2.0.0&'
+            f'CQL_FILTER=((BBOX(geometry,{bbox}))AND(acquisitionDate>=\'{from_}\')AND(acquisitionDate<=\'{to}\')AND(cloudCover<{max_cloud_cover/100}))'
         )
         if self.dlg.providerAuthGroup.isChecked():  # user's own account
             connect_id = self.settings.value('providers')[product]['connectId']
