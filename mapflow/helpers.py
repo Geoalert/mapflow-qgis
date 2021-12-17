@@ -1,5 +1,4 @@
 import re
-from urllib import parse
 
 from qgis.core import (
     QgsMapLayer, QgsGeometry, QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
@@ -69,18 +68,7 @@ def validate_provider_form(form) -> bool:
         if type_ in ('xyz', 'tms'):
             return bool(XYZ_REGEX.match(url))
         elif type_ == 'wms':
-            query_params = {  # parse query params and convert them to uppercase
-                param.upper(): value for param, value in
-                dict(parse.parse_qsl(parse.urlsplit(url).query)).items()
-            }
-            return (
-                URL_REGEX.match(url) and
-                query_params.get('REQUEST', '').lower() == 'getmap' and
-                all(query_params.get(param) for param in (
-                    # Mandatory params according to the WMS spec
-                    'LAYERS', 'STYLES', 'BBOX', 'WIDTH', 'HEIGHT', 'CRS', 'VERSION'
-                ))
-            )
+            return bool(URL_REGEX.match(url))
         else:  # Quad Key
             return bool(QUAD_KEY_REGEX.match(url))
     return False

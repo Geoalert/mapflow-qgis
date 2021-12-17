@@ -144,7 +144,7 @@ class Mapflow(QObject):
         self.dlg.maxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
         self.dlg.providerAuthGroup.toggled.connect(self.limit_zoom_auth_toggled)
         # Maxar
-        self.dlg.metadataTable.itemSelectionChanged.connect(self.highlight_maxar_image)
+        self.dlg.metadataTable.itemSelectionChanged.connect(self.select_metadata_footprint)
         self.dlg.getMetadata.clicked.connect(self.get_metadata)
         self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
         self.dlg.providerCombo.currentTextChanged.connect(self.on_provider_change)
@@ -274,19 +274,17 @@ class Mapflow(QObject):
         else:  # assume user opted to not use a group, add layers as usual
             self.project.addMapLayer(layer)
 
-    def highlight_maxar_image(self) -> None:
-        """Select an image footprint in Maxar metadata layer when it's selected in the table.
+    def select_metadata_footprint(self) -> None:
+        """Select a footprint in the current metadata layer when user selects it in the table.
 
-        Is called by selecting (clicking on) a row in Maxar metadata table.
+        Is called by selecting a row in the metadata table.
         """
-        selected_items = self.dlg.metadataTable.selectedItems()
-        image_id = selected_items[config.MAXAR_METADATA_ID_COLUMN_INDEX].text() if selected_items else ''
+        provider = self.dlg.providerCombo.currentText()
+        id_field = 'featureId' if provider in config.MAXAR_PRODUCTS else 'id'
         try:
-            self.metadata_layer.selectByExpression(f"featureId='{image_id}'")
+            self.metadata_layer.selectByExpression(f"{id_field}='{self.get_image_id(provider)}'")
         except RuntimeError:  # layer has been deleted
             pass
-        # Sync the raster combo in the Processing tab so user doesn't forget to set Maxar there
-        self.dlg.rasterCombo.setCurrentText(self.dlg.providerCombo.currentText())
 
     def remove_provider(self) -> None:
         """Delete a web tile provider from the list of registered providers.
@@ -521,6 +519,8 @@ class Mapflow(QObject):
             json.dump(response, file)
         self.metadata_layer = QgsVectorLayer(output_file_name, config.SENTINEL_OPTION_NAME + ' metadata', 'ogr')
         self.add_layer(self.metadata_layer)
+        # Add style
+        self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
         self.dlg.metadataTable.setRowCount(self.metadata_layer.featureCount())
         self.dlg.metadataTable.setSortingEnabled(False)
         for row, feature in enumerate(response['features']):
@@ -615,7 +615,6 @@ class Mapflow(QObject):
         :param product: Maxar product whose metadata was requested.
         """
         response = response.readAll().data()
-        # print(response)
         output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex()) + '.gml'
         with open(output_file_name, 'wb') as f:
             f.write(response)
@@ -629,7 +628,7 @@ class Mapflow(QObject):
         ])
         self.add_layer(self.metadata_layer)
         # Add style
-        self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'wfs.qml'))
+        self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
         # Get the list of features (don't use the generator itself, or it'll get exhausted)
         features = list(self.metadata_layer.getFeatures())
         # Memorize IDs and extents to be able to clip the user's AOI to image on processing creation
@@ -677,9 +676,9 @@ class Mapflow(QObject):
         if not selected_cells:
             return ''
         if provider == config.SENTINEL_OPTION_NAME:
-            id_column_index = config.SENTINEL_METADATA_ATTRIBUTES.index('Image ID')
+            id_column_index = config.SENTINEL_METADATA_ID_COLUMN_INDEX
         else:  # Maxar
-            id_column_index = tuple(config.MAXAR_METADATA_ATTRIBUTES).index('Image ID')
+            id_column_index = config.MAXAR_METADATA_ID_COLUMN_INDEX
         return selected_cells[id_column_index].text()
 
     def calculate_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
@@ -876,7 +875,7 @@ class Mapflow(QObject):
                 params['raster_login'] = self.dlg.providerUsername.text()
                 params['raster_password'] = self.dlg.providerPassword.text()
             if raster_option == config.SENTINEL_OPTION_NAME:
-                params['url'] += providers[config.SENTINEL_OPTION_NAME]['imageId']
+                params['url'] += self.get_image_id(raster_option)
             elif is_maxar:  # add Connect ID and Image ID
                 processing_params['meta']['source'] = 'maxar'
                 if use_auth:  # user's own account
@@ -1053,18 +1052,24 @@ class Mapflow(QObject):
             if image_id:
                 url += f'&CQL_FILTER=feature_id=\'{image_id}\''
                 row = self.dlg.metadataTable.currentRow()
-                maxar_metadata_attributes = tuple(config.MAXAR_METADATA_ATTRIBUTES.values())
+                attrs = tuple(config.MAXAR_METADATA_ATTRIBUTES.values())
                 layer_name = ' '.join((
                     layer_name,
-                    self.dlg.metadataTable.item(
-                        row,
-                        maxar_metadata_attributes.index('acquisitionDate')
-                    ).text(),
-                    self.dlg.metadataTable.item(
-                        row,
-                        maxar_metadata_attributes.index('productType')
-                    ).text()
+                    self.dlg.metadataTable.item(row, attrs.index('acquisitionDate')).text(),
+                    self.dlg.metadataTable.item(row, attrs.index('productType')).text()
                 ))
+        elif provider == config.SENTINEL_OPTION_NAME:
+            image_id = self.get_image_id(provider)  # request a single image if selected in the table
+            if image_id:
+                url += f'&CQL_FILTER=feature_id=\'{image_id}\''
+                row = self.dlg.metadataTable.currentRow()
+                attrs = tuple(config.MAXAR_METADATA_ATTRIBUTES.values())
+                layer_name = ' '.join((
+                    layer_name,
+                    self.dlg.metadataTable.item(row, attrs.index('acquisitionDate')).text(),
+                    self.dlg.metadataTable.item(row, attrs.index('productType')).text()
+                ))
+
         # Can use urllib.parse but have to specify safe='/?:{}' which sort of defeats the purpose
         url_escaped = url.replace('&', '%26').replace('=', '%3D')
         params = {
