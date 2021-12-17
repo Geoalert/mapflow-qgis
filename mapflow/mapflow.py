@@ -144,7 +144,8 @@ class Mapflow(QObject):
         self.dlg.maxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
         self.dlg.providerAuthGroup.toggled.connect(self.limit_zoom_auth_toggled)
         # Maxar
-        self.dlg.metadataTable.itemSelectionChanged.connect(self.select_metadata_footprint)
+        self.dlg.imageId.textChanged.connect(self.select_image)
+        self.dlg.metadataTable.itemSelectionChanged.connect(self.get_image_id)
         self.dlg.getMetadata.clicked.connect(self.get_metadata)
         self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
         self.dlg.providerCombo.currentTextChanged.connect(self.on_provider_change)
@@ -274,17 +275,19 @@ class Mapflow(QObject):
         else:  # assume user opted to not use a group, add layers as usual
             self.project.addMapLayer(layer)
 
-    def select_metadata_footprint(self) -> None:
-        """Select a footprint in the current metadata layer when user selects it in the table.
-
-        Is called by selecting a row in the metadata table.
-        """
+    def select_image(self, image_id: str) -> None:
+        """Select a footprint in the current metadata layer when user selects it in the table."""
         provider = self.dlg.providerCombo.currentText()
         id_field = 'featureId' if provider in config.MAXAR_PRODUCTS else 'id'
         try:
-            self.metadata_layer.selectByExpression(f"{id_field}='{self.get_image_id(provider)}'")
+            self.metadata_layer.selectByExpression(f"{id_field}='{image_id}'")
         except RuntimeError:  # layer has been deleted
             pass
+        items = self.dlg.metadataTable.findItems(image_id, Qt.MatchExactly)
+        if items:
+            self.dlg.metadataTable.selectRow(items[0].row())
+        else:
+            self.dlg.metadataTable.clearSelection()
 
     def remove_provider(self) -> None:
         """Delete a web tile provider from the list of registered providers.
@@ -667,19 +670,19 @@ class Mapflow(QObject):
         else:
             self.report_error(response, self.tr("We couldn't get metadata from Maxar"))
 
-    def get_image_id(self, provider: str) -> str:
-        """Return the current seleted Maxar or Sentinel image id, or empty string.
-
-        :param provider: The name of currently selected provider, e.g. Sentinel-2
-        """
+    def get_image_id(self) -> str:
+        """Return the ID of the currently seleted Maxar or Sentinel image, or empty string."""
         selected_cells = self.dlg.metadataTable.selectedItems()
-        if not selected_cells:
-            return ''
-        if provider == config.SENTINEL_OPTION_NAME:
-            id_column_index = config.SENTINEL_METADATA_ID_COLUMN_INDEX
-        else:  # Maxar
-            id_column_index = config.MAXAR_METADATA_ID_COLUMN_INDEX
-        return selected_cells[id_column_index].text()
+        if selected_cells:
+            provider = self.dlg.providerCombo.currentText()
+            image_id = selected_cells[
+                config.SENTINEL_METADATA_ID_COLUMN_INDEX
+                if provider == config.SENTINEL_OPTION_NAME
+                else config.MAXAR_METADATA_ID_COLUMN_INDEX
+            ].text()
+        else:
+            image_id = ''
+        self.dlg.imageId.setText(image_id)
 
     def calculate_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
         """Get the AOI size total when polygon another layer is chosen, 
@@ -875,7 +878,7 @@ class Mapflow(QObject):
                 params['raster_login'] = self.dlg.providerUsername.text()
                 params['raster_password'] = self.dlg.providerPassword.text()
             if raster_option == config.SENTINEL_OPTION_NAME:
-                params['url'] += self.get_image_id(raster_option)
+                params['url'] += self.dlg.imageId.text()
             elif is_maxar:  # add Connect ID and Image ID
                 processing_params['meta']['source'] = 'maxar'
                 if use_auth:  # user's own account
@@ -886,7 +889,7 @@ class Mapflow(QObject):
                     params['url'] += '&CONNECTID=' + providers[raster_option]['connectId']
                 else:  # our account
                     processing_params['meta']['maxar_product'] = raster_option.split()[1].lower()
-                image_id = self.get_image_id(processing_params['meta']['maxar_product'])
+                image_id = self.dlg.imageId.text()
                 if image_id:
                     params['url'] += f'&CQL_FILTER=feature_id=\'{image_id}\''
             params['source_type'] = providers[raster_option]['type']
@@ -1048,7 +1051,7 @@ class Mapflow(QObject):
                 url += '&CONNECTID=' + provider.split()[1].lower()
                 username = self.username
                 password = self.password
-            image_id = self.get_image_id(provider)  # request a single image if selected in the table
+            image_id = self.dlg.imageId.text()
             if image_id:
                 url += f'&CQL_FILTER=feature_id=\'{image_id}\''
                 row = self.dlg.metadataTable.currentRow()
@@ -1059,7 +1062,7 @@ class Mapflow(QObject):
                     self.dlg.metadataTable.item(row, attrs.index('productType')).text()
                 ))
         elif provider == config.SENTINEL_OPTION_NAME:
-            image_id = self.get_image_id(provider)  # request a single image if selected in the table
+            image_id = self.dlg.imageId.text()
             if image_id:
                 url += f'&CQL_FILTER=feature_id=\'{image_id}\''
                 row = self.dlg.metadataTable.currentRow()
