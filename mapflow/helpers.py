@@ -14,8 +14,8 @@ URL_PATTERN = r'https?://(www\.)?([-\w]{1,256}\.)+[a-zA-Z0-9]{1,6}'  # schema + 
 URL_REGEX = re.compile(URL_PATTERN)
 XYZ_REGEX = re.compile(URL_PATTERN + r'(.*\{[xyz]\}){3}.*', re.I)
 QUAD_KEY_REGEX = re.compile(URL_PATTERN + r'(.*\{q\}).*', re.I)
-SENTINEL_IMAGE_DATETIME_REGEX = re.compile(r'_\d{8}T\d{6}', re.I)
-SENTINEL_IMAGE_COORDINATE_REGEX = re.compile(r'T\d{2}[A-Z]{3}', re.I)
+SENTINEL_DATETIME_REGEX = re.compile(r'\d{8}T\d{6}', re.I)
+SENTINEL_COORDINATE_REGEX = re.compile(r'T\d{2}[A-Z]{3}', re.I)
 
 
 def is_polygon_layer(layer: QgsMapLayer) -> bool:

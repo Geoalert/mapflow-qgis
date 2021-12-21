@@ -10,7 +10,7 @@ from configparser import ConfigParser  # parse metadata.txt -> QGIS version chec
 from PyQt5.QtGui import QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
-    QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion
+    QDateTime, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion
 )
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QTableWidgetItem, QAction, QAbstractItemView, QLabel,
@@ -21,10 +21,10 @@ from qgis.gui import QgsMessageBarItem
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
     QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter, QgsRectangle,
-    QgsFeatureIterator, QgsWkbTypes, QgsDataSourceUri
+    QgsFeatureIterator,
 )
 
-from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, SentinelHubTokenDialog, ErrorMessage
+from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, SentinelAuthDialog, ErrorMessage
 from .http import Http
 from . import helpers, config
 
@@ -80,7 +80,7 @@ class Mapflow(QObject):
         self.dlg_provider = ProviderDialog(self.dlg)
         self.dlg_provider.accepted.connect(self.add_or_edit_provider)
         self.dlg_connect_id = ConnectIdDialog(self.dlg)
-        self.dlg_sentinel_token = SentinelHubTokenDialog(self.dlg)
+        self.dlg_sentinel_auth = SentinelAuthDialog(self.dlg)
         # Display the plugin's version
         metadata_parser = ConfigParser()
         metadata_parser.read(os.path.join(self.plugin_dir, 'metadata.txt'))
@@ -114,7 +114,7 @@ class Mapflow(QObject):
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
         self.dlg_connect_id.accepted.connect(self.edit_connect_id)
-        self.dlg_sentinel_token.accepted.connect(self.edit_sentinel_token)
+        self.dlg_sentinel_auth.accepted.connect(self.edit_sentinel_auth)
         # Connect buttons
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
@@ -351,9 +351,9 @@ class Mapflow(QObject):
 
     def show_sentinel_token_dialog(self) -> None:
         """"""
-        token = self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']
-        self.dlg_sentinel_token.token.setText(token)
-        self.dlg_sentinel_token.show()
+        api_key = self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']
+        self.dlg_sentinel_auth.apiKey.setText(api_key)
+        self.dlg_sentinel_auth.show()
 
     def show_connect_id_dialog(self, product: str) -> None:
         """Prepare and show the Connect ID editing dialog.
@@ -376,10 +376,10 @@ class Mapflow(QObject):
         providers[provider]['connectId'] = connect_id
         self.settings.setValue('providers', providers)
 
-    def edit_sentinel_token(self) -> None:
+    def edit_sentinel_auth(self) -> None:
         """Change the Sentinel Hub Access Token."""
         providers = self.settings.value('providers')
-        providers[config.SENTINEL_OPTION_NAME]['token'] = self.dlg_sentinel_token.token.text()
+        providers[config.SENTINEL_OPTION_NAME]['token'] = self.dlg_sentinel_auth.apiKey.text()
         self.settings.setValue('providers', providers)
 
     def monitor_polygon_layer_feature_selection(self, layers: List[QgsMapLayer]) -> None:
@@ -458,83 +458,55 @@ class Mapflow(QObject):
             self.alert(self.tr('Please, select an area of interest'))
             return
         provider = self.dlg.providerCombo.currentText()
-        from_ = self.dlg.metadataFrom.dateTime().toUTC().toString(Qt.ISODate)
-        to = self.dlg.metadataTo.dateTime().toUTC().toString(Qt.ISODate)
+        from_ = self.dlg.metadataFrom.date().toString(Qt.ISODate)
+        to = self.dlg.metadataTo.date().toString(Qt.ISODate)
         max_cloud_cover = self.dlg.maxCloudCover.value()
         if provider in config.MAXAR_PRODUCTS:
             self.get_maxar_metadata(aoi, provider, from_, to, max_cloud_cover)
         else:
-            self.get_sentinel_metadata(aoi, from_, to, max_cloud_cover)
+            self.submit_skywatch_metadata_request(aoi, from_, to, max_cloud_cover)
 
-    def get_sentinel_metadata(self, aoi: QgsGeometry, from_, to, max_cloud_cover: int) -> None:
+    def submit_skywatch_metadata_request(
+        self,
+        aoi: QgsGeometry,
+        from_: QDateTime,
+        to: QDateTime,
+        max_cloud_cover: int
+    ) -> None:
         """"""
-        token = self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']
-        params = {
-            'collections': ['sentinel-2-l2a'],  # doesn't accept multiple values
-            'intersects': json.loads(aoi.asJson()),
-            'datetime': '/'.join((from_, to)),
-            'fields': {
-                'include': [
-                    'id',
-                    'type',
-                    'geometry.type',
-                    'geometry.coordinates',
-                    'properties.datetime',
-                    'properties.eo:cloud_cover',
-                ],
-                'exclude': ['links', 'bbox', 'assets']
-            },
-            'query': {
-                'eo:cloud_cover': {
-                    'lt': float(max_cloud_cover)
-                }
-            },
-            'limit': 50
-        }
         self.http.post(
-            url='https://services.sentinel-hub.com/api/v1/catalog/search',
-            auth=f'Bearer {token}'.encode(),
-            body=json.dumps(params).encode(),
-            callback=self.get_sentinel_metadata_callback,
-            error_handler=self.get_sentinel_metadata_error_handler,
+            url='https://api.skywatch.co/earthcache/archive/search',
+            body=json.dumps({
+                'location': json.loads(aoi.asJson()),
+                'resolution': 'low',
+                'coverage': 0,
+                'start_date': from_,
+                'end_date': to,
+                'order_by': ['-date']
+            }).encode(),
+            headers={'x-api-key': self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']},
+            callback=self.submit_skywatch_metadata_request_callback,
+            callback_kwargs={'max_cloud_cover': max_cloud_cover},
+            error_handler=self.submit_skywatch_metadata_request_error_handler,
             use_default_error_handler=False
         )
         self.dlg.metadataTable.clearContents()
 
-    def get_sentinel_metadata_callback(self, response: QNetworkReply) -> None:
-        """Fill out meta.
+    def submit_skywatch_metadata_request_callback(self, response: QNetworkReply, max_cloud_cover: int):
+        """
 
         :param response: The HTTP response.
         """
-        response = json.loads(response.readAll().data())
-        # Format the response
-        if sys.version_info.minor < 7:  # python 3.6 doesn't understand 'Z' as UTC
-            for feature in response['features']:
-                feature['properties']['datetime'] = feature['properties']['datetime'].replace('Z', '+0000')
-        for feature in response['features']:
-            feature['properties']['datetime'] = datetime.strptime(
-                feature['properties']['datetime'], '%Y-%m-%dT%H:%M:%S%z'
-            ).astimezone().strftime('%Y-%m-%d %H:%M')
-            # Round cloud cover to whole %
-            feature['properties']['eo:cloud_cover'] = round(feature['properties']['eo:cloud_cover'])
-        output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex()) + '.geojson'
-        with open(output_file_name, 'w') as file:
-            json.dump(response, file)
-        self.metadata_layer = QgsVectorLayer(output_file_name, config.SENTINEL_OPTION_NAME + ' metadata', 'ogr')
-        self.add_layer(self.metadata_layer)
-        # Add style
-        self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
-        self.dlg.metadataTable.setRowCount(self.metadata_layer.featureCount())
-        self.dlg.metadataTable.setSortingEnabled(False)
-        for row, feature in enumerate(response['features']):
-            cloud_cover = feature['properties']['eo:cloud_cover']
-            self.dlg.metadataTable.setItem(row, 0, QTableWidgetItem(str(cloud_cover)))
-            datetime_ = feature['properties']['datetime']
-            self.dlg.metadataTable.setItem(row, 1, QTableWidgetItem(datetime_))
-            self.dlg.metadataTable.setItem(row, 2, QTableWidgetItem(feature['id']))
-        self.dlg.metadataTable.setSortingEnabled(True)
+        request_id = json.loads(response.readAll().data())['data']['id']
+        # Poll processings
+        metadata_fetch_timer = QTimer(self.dlg)
+        metadata_fetch_timer.setInterval(config.SKYWATCH_METADATA_POLL_INTERVAL * 1000)
+        metadata_fetch_timer.timeout.connect(
+            lambda: self.fetch_skywatch_metadata(request_id, max_cloud_cover, metadata_fetch_timer)
+        )
+        metadata_fetch_timer.start()
 
-    def get_sentinel_metadata_error_handler(self, response: QNetworkReply) -> None:
+    def submit_skywatch_metadata_request_error_handler(self, response: QNetworkReply) -> None:
         """Error handler for Sentinel metadata requests.
 
         :param response: The HTTP response.
@@ -543,7 +515,60 @@ class Mapflow(QObject):
         if error == QNetworkReply.ContentAccessDenied:
             self.alert(self.tr('Please, check your credentials'))
         else:
-            self.report_error(response, self.tr("We couldn't get metadata from Sentinel Hub"))
+            self.report_error(response, self.tr("We couldn't get a response from SkyWatch"))
+
+    def fetch_skywatch_metadata(self, request_id: str, max_cloud_cover: int, timer: QTimer) -> None:
+        """Check if the metadata is ready.
+
+        :param request_id: The UUID of the submitted SkyWatch request.
+        :param max_cloud_cover: All metadata with a higher cloud cover % will be discarded.
+        """
+        self.http.get(
+            url=f'https://api.skywatch.co/earthcache/archive/search/{request_id}/search_results',
+            headers={'x-api-key': self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']},
+            callback=self.fetch_skywatch_metadata_callback,
+            callback_kwargs={'max_cloud_cover': max_cloud_cover, 'timer': timer},
+            use_default_error_handler=False
+        )
+
+    def fetch_skywatch_metadata_callback(self, response: QNetworkReply, max_cloud_cover: int, timer: QTimer):
+        """"""
+        if response.attribute(QNetworkRequest.HttpStatusCodeAttribute) == 202:
+            return  # not ready yet
+        timer.stop()
+        metadata = {
+            'type': 'FeatureCollection',
+            'features': [{
+                'id': feature['preview_uri'].split('/')[-1].split('.')[0],
+                'type': 'Feature',
+                'geometry': feature['location'],
+                'properties': {
+                    'cloud_cover': round(feature['result_cloud_cover_percentage']),
+                    'datetime': datetime.strptime(
+                        feature['start_time'], '%Y-%m-%dT%H:%M:%S.%f%z'
+                    ).astimezone().strftime('%Y-%m-%d %H:%M'),
+                }
+            }
+                for feature in json.loads(response.readAll().data())['data']
+                if round(feature['result_cloud_cover_percentage']) <= max_cloud_cover
+            ]
+        }
+        output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex()) + '.geojson'
+        with open(output_file_name, 'w') as file:
+            json.dump(metadata, file)
+        self.metadata_layer = QgsVectorLayer(output_file_name, config.SENTINEL_OPTION_NAME + ' metadata', 'ogr')
+        self.add_layer(self.metadata_layer)
+        # Add style
+        self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
+        self.dlg.metadataTable.setRowCount(self.metadata_layer.featureCount())
+        self.dlg.metadataTable.setSortingEnabled(False)
+        for row, feature in enumerate(metadata['features']):
+            cloud_cover = feature['properties']['cloud_cover']
+            self.dlg.metadataTable.setItem(row, 0, QTableWidgetItem(str(cloud_cover)))
+            datetime_ = feature['properties']['datetime']
+            self.dlg.metadataTable.setItem(row, 1, QTableWidgetItem(datetime_))
+            self.dlg.metadataTable.setItem(row, 2, QTableWidgetItem(feature['id']))
+        self.dlg.metadataTable.setSortingEnabled(True)
 
     def get_maxar_metadata(
         self,
@@ -685,7 +710,7 @@ class Mapflow(QObject):
         self.dlg.imageId.setText(image_id)
 
     def calculate_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
-        """Get the AOI size total when polygon another layer is chosen, 
+        """Get the AOI size total when polygon another layer is chosen,
         current layer's selection is changed or the layer's features are modified.
 
         :param layer: The current polygon layer
@@ -1025,15 +1050,48 @@ class Mapflow(QObject):
             self.settings.setValue('providerUsername', self.dlg.providerUsername.text())
             self.settings.setValue('providerPassword', self.dlg.providerPassword.text())
 
+    def preview_sentinel(self, image_id: str) -> None:
+        """"""
+        self.http.get(
+            url=f'https://preview.skywatch.com/esa/sentinel-2/{image_id}.jpg',
+            callback=self.preview_sentinel_callback,
+            error_handler=self.preview_sentinel_error_handler
+        )
+
+    def preview_sentinel_callback(self, response: QNetworkReply) -> None:
+        """"""
+        acquisition_date = datetime.strptime(
+            helpers.SENTINEL_DATETIME_REGEX.search(response.request().url().toDisplayString()).group(0),
+            '%Y%m%dT%H%M%S'
+        ).astimezone().strftime('%Y-%m-%d %H:%M')
+        with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb') as f:
+            f.write(response.readAll().data())
+            f.seek(0)  # rewind the cursor to the start of the file
+        options = QgsRasterLayer.LayerOptions()
+        options.skipCrsValidation = True  # suppress unknown CRS warning
+        layer = QgsRasterLayer(f.name, config.SENTINEL_OPTION_NAME + ' ' + acquisition_date, 'gdal', options)
+        layer.setCrs(helpers.WEB_MERCATOR)
+        self.project.addMapLayer(layer)
+
+    def preview_sentinel_error_handler(self, response: QNetworkReply) -> None:
+        """"""
+        print(response.error())
+        self.alert(self.tr("Sorry, we couldn't load the Sentinel image"))
+        self.report_error(response, self.tr('Error downloading results'))
+
     def preview(self) -> None:
         """Display raster tiles served over the Web.
 
         Is called by clicking the preview button.
         """
+        provider = self.dlg.providerCombo.currentText()
+        if provider == config.SENTINEL_OPTION_NAME:
+            self.preview_sentinel(self.dlg.imageId.text())
+            return
         self.save_provider_auth()
         username = self.dlg.providerUsername.text()
         password = self.dlg.providerPassword.text()
-        provider = self.dlg.providerCombo.currentText()
+        max_zoom = self.dlg.maxZoom.value()
         layer_name = provider
         provider_info = self.settings.value('providers')[provider]
         url = provider_info['url']
@@ -1051,6 +1109,8 @@ class Mapflow(QObject):
                 url += '&CONNECTID=' + provider.split()[1].lower()
                 username = self.username
                 password = self.password
+                if not self.is_premium_user:
+                    max_zoom = config.MAXAR_MAX_FREE_ZOOM
             image_id = self.dlg.imageId.text()
             if image_id:
                 url += f'&CQL_FILTER=feature_id=\'{image_id}\''
@@ -1061,29 +1121,13 @@ class Mapflow(QObject):
                     self.dlg.metadataTable.item(row, attrs.index('acquisitionDate')).text(),
                     self.dlg.metadataTable.item(row, attrs.index('productType')).text()
                 ))
-        elif provider == config.SENTINEL_OPTION_NAME:
-            image_id = self.dlg.imageId.text()
-            if image_id:
-                url += f'&CQL_FILTER=feature_id=\'{image_id}\''
-                row = self.dlg.metadataTable.currentRow()
-                attrs = tuple(config.MAXAR_METADATA_ATTRIBUTES.values())
-                layer_name = ' '.join((
-                    layer_name,
-                    self.dlg.metadataTable.item(row, attrs.index('acquisitionDate')).text(),
-                    self.dlg.metadataTable.item(row, attrs.index('productType')).text()
-                ))
-
-        # Can use urllib.parse but have to specify safe='/?:{}' which sort of defeats the purpose
-        url_escaped = url.replace('&', '%26').replace('=', '%3D')
+            # Can use urllib.parse but have to specify safe='/?:{}' which sort of defeats the purpose
+            url = url.replace('&', '%26').replace('=', '%3D')
         params = {
             'type': provider_info['type'],
-            'url': url_escaped,
-            'zmax':  (
-                self.dlg.maxZoom.value()
-                if self.is_premium_user or self.dlg.providerAuthGroup.isChecked()
-                else config.MAXAR_MAX_FREE_ZOOM
-            ),
+            'url': url,
             'zmin': 0,
+            'zmax':  max_zoom,
             'username': username,
             'password': password
         }

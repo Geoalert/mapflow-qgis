@@ -17,7 +17,7 @@
    <item>
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
-      <number>0</number>
+      <number>1</number>
      </property>
      <property name="movable">
       <bool>true</bool>
@@ -650,7 +650,7 @@
              </layout>
             </item>
             <item row="1" column="0">
-             <layout class="QHBoxLayout" name="layoutDatetime" stretch="0,1,0,1">
+             <layout class="QHBoxLayout" name="layoutDatetime" stretch="0,1,0,1,0">
               <item>
                <widget class="QLabel" name="labelFrom">
                 <property name="text">
@@ -659,19 +659,12 @@
                </widget>
               </item>
               <item>
-               <widget class="QgsDateTimeEdit" name="metadataFrom">
-                <property name="date">
-                 <date>
-                  <year>2020</year>
-                  <month>12</month>
-                  <day>17</day>
-                 </date>
-                </property>
+               <widget class="QDateEdit" name="metadataFrom">
                 <property name="maximumDate">
                  <date>
                   <year>2030</year>
-                  <month>12</month>
-                  <day>31</day>
+                  <month>1</month>
+                  <day>1</day>
                  </date>
                 </property>
                 <property name="minimumDate">
@@ -682,10 +675,17 @@
                  </date>
                 </property>
                 <property name="displayFormat">
-                 <string>yyyy-MM-dd HH:mm</string>
+                 <string>yyyy-MM-dd</string>
                 </property>
-                <property name="allowNull">
-                 <bool>false</bool>
+                <property name="calendarPopup">
+                 <bool>true</bool>
+                </property>
+                <property name="date">
+                 <date>
+                  <year>2020</year>
+                  <month>12</month>
+                  <day>21</day>
+                 </date>
                 </property>
                </widget>
               </item>
@@ -697,12 +697,12 @@
                </widget>
               </item>
               <item>
-               <widget class="QgsDateTimeEdit" name="metadataTo">
+               <widget class="QDateEdit" name="metadataTo">
                 <property name="maximumDate">
                  <date>
                   <year>2030</year>
-                  <month>12</month>
-                  <day>31</day>
+                  <month>1</month>
+                  <day>1</day>
                  </date>
                 </property>
                 <property name="minimumDate">
@@ -713,61 +713,68 @@
                  </date>
                 </property>
                 <property name="displayFormat">
-                 <string>yyyy-MM-dd HH:mm</string>
+                 <string>yyyy-MM-dd</string>
                 </property>
-                <property name="allowNull">
-                 <bool>false</bool>
+                <property name="calendarPopup">
+                 <bool>true</bool>
                 </property>
-               </widget>
-              </item>
-             </layout>
-            </item>
-            <item row="2" column="0">
-             <layout class="QHBoxLayout" name="layoutCloudCover">
-              <item>
-               <widget class="QLabel" name="labelMaxCloudCover">
-                <property name="text">
-                 <string>Cloud cover up to:</string>
+                <property name="date">
+                 <date>
+                  <year>2021</year>
+                  <month>12</month>
+                  <day>21</day>
+                 </date>
                 </property>
                </widget>
               </item>
               <item>
-               <widget class="QSlider" name="maxCloudCover">
-                <property name="minimum">
-                 <number>1</number>
-                </property>
-                <property name="maximum">
-                 <number>100</number>
-                </property>
-                <property name="value">
-                 <number>30</number>
-                </property>
-                <property name="orientation">
-                 <enum>Qt::Horizontal</enum>
-                </property>
-                <property name="tickPosition">
-                 <enum>QSlider::TicksBelow</enum>
-                </property>
-                <property name="tickInterval">
-                 <number>10</number>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QSpinBox" name="maxCloudCoverSpinBox">
-                <property name="suffix">
-                 <string>%</string>
-                </property>
-                <property name="minimum">
-                 <number>1</number>
-                </property>
-                <property name="maximum">
-                 <number>100</number>
-                </property>
-                <property name="value">
-                 <number>30</number>
-                </property>
-               </widget>
+               <layout class="QHBoxLayout" name="layoutCloudCover">
+                <item>
+                 <widget class="QLabel" name="labelMaxCloudCover">
+                  <property name="text">
+                   <string>Cloud cover up to:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QSlider" name="maxCloudCover">
+                  <property name="minimum">
+                   <number>1</number>
+                  </property>
+                  <property name="maximum">
+                   <number>100</number>
+                  </property>
+                  <property name="value">
+                   <number>30</number>
+                  </property>
+                  <property name="orientation">
+                   <enum>Qt::Horizontal</enum>
+                  </property>
+                  <property name="tickPosition">
+                   <enum>QSlider::TicksBelow</enum>
+                  </property>
+                  <property name="tickInterval">
+                   <number>10</number>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QSpinBox" name="maxCloudCoverSpinBox">
+                  <property name="suffix">
+                   <string>%</string>
+                  </property>
+                  <property name="minimum">
+                   <number>1</number>
+                  </property>
+                  <property name="maximum">
+                   <number>100</number>
+                  </property>
+                  <property name="value">
+                   <number>30</number>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
               </item>
              </layout>
             </item>
@@ -858,11 +865,6 @@
    <extends>QGroupBox</extends>
    <header>qgscollapsiblegroupbox.h</header>
    <container>1</container>
-  </customwidget>
-  <customwidget>
-   <class>QgsDateTimeEdit</class>
-   <extends>QDateTimeEdit</extends>
-   <header>qgsdatetimeedit.h</header>
   </customwidget>
   <customwidget>
    <class>QgsMapLayerComboBox</class>
