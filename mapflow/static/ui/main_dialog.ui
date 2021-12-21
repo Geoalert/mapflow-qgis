@@ -17,7 +17,7 @@
    <item>
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
-      <number>1</number>
+      <number>0</number>
      </property>
      <property name="movable">
       <bool>true</bool>
@@ -650,7 +650,7 @@
              </layout>
             </item>
             <item row="1" column="0">
-             <layout class="QHBoxLayout" name="layoutDatetime" stretch="0,1,0,1,0">
+             <layout class="QHBoxLayout" name="layoutDatetime" stretch="0,0,0,0,0,2,0">
               <item>
                <widget class="QLabel" name="labelFrom">
                 <property name="text">
@@ -728,53 +728,49 @@
                </widget>
               </item>
               <item>
-               <layout class="QHBoxLayout" name="layoutCloudCover">
-                <item>
-                 <widget class="QLabel" name="labelMaxCloudCover">
-                  <property name="text">
-                   <string>Cloud cover up to:</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QSlider" name="maxCloudCover">
-                  <property name="minimum">
-                   <number>1</number>
-                  </property>
-                  <property name="maximum">
-                   <number>100</number>
-                  </property>
-                  <property name="value">
-                   <number>30</number>
-                  </property>
-                  <property name="orientation">
-                   <enum>Qt::Horizontal</enum>
-                  </property>
-                  <property name="tickPosition">
-                   <enum>QSlider::TicksBelow</enum>
-                  </property>
-                  <property name="tickInterval">
-                   <number>10</number>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QSpinBox" name="maxCloudCoverSpinBox">
-                  <property name="suffix">
-                   <string>%</string>
-                  </property>
-                  <property name="minimum">
-                   <number>1</number>
-                  </property>
-                  <property name="maximum">
-                   <number>100</number>
-                  </property>
-                  <property name="value">
-                   <number>30</number>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
+               <widget class="QLabel" name="labelMaxCloudCover">
+                <property name="text">
+                 <string>Cloud cover up to:</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QSlider" name="maxCloudCover">
+                <property name="minimum">
+                 <number>1</number>
+                </property>
+                <property name="maximum">
+                 <number>100</number>
+                </property>
+                <property name="value">
+                 <number>30</number>
+                </property>
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="tickPosition">
+                 <enum>QSlider::TicksBelow</enum>
+                </property>
+                <property name="tickInterval">
+                 <number>10</number>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QSpinBox" name="maxCloudCoverSpinBox">
+                <property name="suffix">
+                 <string>%</string>
+                </property>
+                <property name="minimum">
+                 <number>1</number>
+                </property>
+                <property name="maximum">
+                 <number>100</number>
+                </property>
+                <property name="value">
+                 <number>30</number>
+                </property>
+               </widget>
               </item>
              </layout>
             </item>

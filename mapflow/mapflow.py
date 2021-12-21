@@ -1031,12 +1031,18 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        self.processing_fetch_timer.start()  # start monitoring
         self.alert(
             self.tr("Success! We'll notify you when the processing has finished."),
             QMessageBox.Information
         )
         self.dlg.processingName.clear()
+        self.processing_fetch_timer.start()  # start monitoring
+        # Do an extra fetch immediately
+        self.http.get(
+            url=f'{self.server}/processings',
+            callback=self.fill_out_processings_table,
+            use_default_error_handler=False  # ignore errors to prevent repetitive alerts
+        )
 
     def save_provider_auth(self) -> None:
         """Save provider credentials to settings if user checked the save option.
@@ -1075,7 +1081,6 @@ class Mapflow(QObject):
 
     def preview_sentinel_error_handler(self, response: QNetworkReply) -> None:
         """"""
-        print(response.error())
         self.alert(self.tr("Sorry, we couldn't load the Sentinel image"))
         self.report_error(response, self.tr('Error downloading results'))
 
