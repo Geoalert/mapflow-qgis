@@ -469,7 +469,7 @@ class Mapflow(QObject):
     def request_skywatch_metadata(self, aoi: QgsGeometry, from_: str, to: str, max_cloud_cover: int) -> None:
         """"""
         callback_kwargs = {'max_cloud_cover': max_cloud_cover}
-        if aoi.wkbType == QgsWkbTypes.MultiPolygon:
+        if aoi.wkbType() == QgsWkbTypes.MultiPolygon:
             if len(aoi.asMultiPolygon()) == 1:
                 aoi.convertToSingleType()
             else:  # use the BBOX of the parts
@@ -491,7 +491,6 @@ class Mapflow(QObject):
             error_handler=self.request_skywatch_metadata_error_handler,
             use_default_error_handler=False
         )
-        self.dlg.metadataTable.clearContents()
 
     def request_skywatch_metadata_callback(
         self,
@@ -559,6 +558,8 @@ class Mapflow(QObject):
         if response.attribute(QNetworkRequest.HttpStatusCodeAttribute) == 202:
             return  # not ready yet
         timer.stop()
+        self.dlg.metadataTable.clearContents()
+        response = json.loads(response.readAll().data())
         metadata = {
             'type': 'FeatureCollection',
             'features': [{
@@ -572,7 +573,7 @@ class Mapflow(QObject):
                     ).astimezone().strftime('%Y-%m-%d %H:%M'),
                 }
             }
-                for feature in json.loads(response.readAll().data())['data']
+                for feature in response['data']
                 if round(feature['result_cloud_cover_percentage']) <= max_cloud_cover
             ]
         }
@@ -581,13 +582,12 @@ class Mapflow(QObject):
             json.dump(metadata, file)
         self.metadata_layer = QgsVectorLayer(output_file_name, config.SENTINEL_OPTION_NAME + ' metadata', 'ogr')
         if aoi:  # discard images that intersects the bbox not the original AOI itself
-            aoi = aoi.constGet()
+            aoi = QgsGeometry.createGeometryEngine(aoi.constGet())
             aoi.prepareGeometry()
-            for feature in self.metadata_layer.getFeatures():
-                if feature.geometry().constGet().disjoint(aoi):
-                    print('Deleting ', feature.id())
-                    self.metadata_layer.select(feature.id())
-            self.metadata_layer.deleteSelectedFeatures()
+            self.metadata_layer.dataProvider().deleteFeatures([
+                feature.id() for feature in self.metadata_layer.getFeatures()
+                if aoi.disjoint(feature.geometry().constGet())
+            ])
         self.add_layer(self.metadata_layer)
         # Add style
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
