@@ -120,7 +120,7 @@ class Mapflow(QObject):
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         self.dlg.selectTif.clicked.connect(self.select_tif)
         # (Dis)allow the user to use raster extent as AOI
-        self.dlg.rasterCombo.layerChanged.connect(self.toggle_use_image_extent_as_aoi)
+        self.dlg.rasterCombo.layerChanged.connect(self.toggle_processing_checkboxes)
         self.dlg.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
         self.dlg.startProcessing.clicked.connect(self.create_processing)
         # Sync polygon layer combos
@@ -399,15 +399,16 @@ class Mapflow(QObject):
             layer.selectionChanged.connect(self.calculate_aoi_area_selection)
             layer.editingStopped.connect(self.calculate_aoi_area_layer_edited)
 
-    def toggle_use_image_extent_as_aoi(self, provider: Union[QgsRasterLayer, None]) -> None:
-        """Toggle 'Use image extent' checkbox depending on the item in the imagery combo box.
+    def toggle_processing_checkboxes(self, provider: Union[QgsRasterLayer, None]) -> None:
+        """Toggle 'Use image extent' & 'Use cache' depending on the item in the imagery combo box.
 
         :param provider: A GDAL raster layer or None if one of web tile providers
         """
         enabled = True if provider and provider.crs().authid() else False
         self.dlg.useImageExtentAsAoi.setEnabled(enabled)
         self.dlg.useImageExtentAsAoi.setChecked(enabled)
-        self.dlg.updateCache.setEnabled(not enabled)
+        self.dlg.useCache.setEnabled(not enabled)
+        self.dlg.useCache.setChecked(not enabled)
 
     def select_output_directory(self) -> str:
         """Open a file dialog for the user to select a directory where plugin files will be stored.
@@ -955,7 +956,7 @@ class Mapflow(QObject):
             params['source_type'] = providers[raster_option]['type']
             if params['source_type'] == 'wms':
                 params['target_resolution'] = 0.000005  # for the 18th zoom
-            params['cache_raster_update'] = str(self.dlg.updateCache.isChecked()).lower()
+            params['cache_raster_update'] = str(not self.dlg.useCache.isChecked()).lower()
             self.save_provider_auth()
         processing_params['params'] = params
         # Clip AOI to image extent if a single Maxar image is requested
