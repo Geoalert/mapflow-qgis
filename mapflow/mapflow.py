@@ -130,6 +130,9 @@ class Mapflow(QObject):
         self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area_polygon_layer)
         self.dlg.rasterCombo.layerChanged.connect(self.calculate_aoi_area_raster)
         self.dlg.useImageExtentAsAoi.toggled.connect(self.calculate_aoi_area_use_image_extent)
+        self.monitor_polygon_layer_feature_selection([
+            self.project.mapLayer(layer_id) for layer_id in self.project.mapLayers(validOnly=True)
+        ])
         self.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
         # Processings
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
