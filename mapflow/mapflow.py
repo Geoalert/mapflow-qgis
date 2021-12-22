@@ -183,7 +183,6 @@ class Mapflow(QObject):
         self.dlg_login = LoginDialog(self.main_window)
         self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
         self.dlg_login.logIn.clicked.connect(self.read_mapflow_token)
-        self.dlg_login.destroyed.connect(lambda: self.dlg_login.close())
 
     def toggle_polygon_combos(self, use_image_extent: bool) -> None:
         """Disable polygon combos when Use image extent is checked.
@@ -1340,7 +1339,7 @@ class Mapflow(QObject):
         """
         processings = json.loads(response.readAll().data())
         try:  # check if there any ongoing processings
-            next(filter(lambda p: p['percentCompleted'] < 100, processings))
+            next(filter(lambda p: p['status'] == 'IN_PROGRESS', processings))
         except StopIteration:  # all processings have finished
             self.processing_fetch_timer.stop()
         if sys.version_info.minor < 7:  # python 3.6 doesn't understand 'Z' as UTC
@@ -1448,6 +1447,8 @@ class Mapflow(QObject):
 
     def unload(self) -> None:
         """Remove the plugin icon & toolbar from QGIS GUI."""
+        self.processing_fetch_timer.stop()
+        self.processing_fetch_timer.deleteLater()
         for dlg in self.dlg, self.dlg_login, self.dlg_connect_id, self.dlg_provider:
             dlg.close()
         del self.toolbar

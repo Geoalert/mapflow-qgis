@@ -89,7 +89,7 @@ class Http(QObject):
             callback=callback,
             callback_kwargs=callback_kwargs or {},
             error_handler=error_handler or (lambda _: None),
-            error_handler_kwargs=error_handler_kwargs,
+            error_handler_kwargs=error_handler_kwargs or {},
             use_default_error_handler=use_default_error_handler:
             self.response_dispatcher(
                 response,
