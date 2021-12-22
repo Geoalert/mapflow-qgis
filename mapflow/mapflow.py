@@ -3,14 +3,14 @@ import json
 import os.path
 import tempfile
 from base64 import b64encode, b64decode
-from typing import List, Union
+from typing import List, Optional, Union
 from datetime import datetime, timedelta  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
 from PyQt5.QtGui import QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
-    QDateTime, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion
+    QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion
 )
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QTableWidgetItem, QAction, QAbstractItemView, QLabel,
@@ -21,7 +21,7 @@ from qgis.gui import QgsMessageBarItem
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
     QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter, QgsRectangle,
-    QgsFeatureIterator,
+    QgsFeatureIterator, QgsWkbTypes
 )
 
 from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, SentinelAuthDialog, ErrorMessage
@@ -468,6 +468,13 @@ class Mapflow(QObject):
 
     def request_skywatch_metadata(self, aoi: QgsGeometry, from_: str, to: str, max_cloud_cover: int) -> None:
         """"""
+        callback_kwargs = {'max_cloud_cover': max_cloud_cover}
+        if aoi.wkbType == QgsWkbTypes.MultiPolygon:
+            if len(aoi.asMultiPolygon()) == 1:
+                aoi.convertToSingleType()
+            else:  # use the BBOX of the parts
+                callback_kwargs['aoi'] = aoi
+                aoi = QgsGeometry.fromRect(aoi.boundingBox())
         self.http.post(
             url='https://api.skywatch.co/earthcache/archive/search',
             body=json.dumps({
@@ -480,23 +487,30 @@ class Mapflow(QObject):
             }).encode(),
             headers={'x-api-key': self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']},
             callback=self.request_skywatch_metadata_callback,
-            callback_kwargs={'max_cloud_cover': max_cloud_cover},
+            callback_kwargs=callback_kwargs,
             error_handler=self.request_skywatch_metadata_error_handler,
             use_default_error_handler=False
         )
         self.dlg.metadataTable.clearContents()
 
-    def request_skywatch_metadata_callback(self, response: QNetworkReply, max_cloud_cover: int):
-        """
+    def request_skywatch_metadata_callback(
+        self,
+        response: QNetworkReply,
+        max_cloud_cover: int,
+        aoi: Optional[QgsGeometry] = None
+    ):
+        """Start polling SkyWatch for metadata upon a successful request submission
 
         :param response: The HTTP response.
+        :param max_cloud_cover: Passed on to fetch_skywatch_metadata().
+        :param aoi: Passed on to fetch_skywatch_metadata() if AOI is multipart.
         """
         request_id = json.loads(response.readAll().data())['data']['id']
         # Poll processings
         metadata_fetch_timer = QTimer(self.dlg)
         metadata_fetch_timer.setInterval(config.SKYWATCH_METADATA_POLL_INTERVAL * 1000)
         metadata_fetch_timer.timeout.connect(
-            lambda: self.fetch_skywatch_metadata(request_id, max_cloud_cover, metadata_fetch_timer)
+            lambda: self.fetch_skywatch_metadata(request_id, max_cloud_cover, metadata_fetch_timer, aoi)
         )
         metadata_fetch_timer.start()
 
@@ -511,21 +525,36 @@ class Mapflow(QObject):
         else:
             self.report_error(response, self.tr("We couldn't get a response from SkyWatch"))
 
-    def fetch_skywatch_metadata(self, request_id: str, max_cloud_cover: int, timer: QTimer) -> None:
+    def fetch_skywatch_metadata(
+        self,
+        request_id: str,
+        max_cloud_cover: int,
+        timer: QTimer,
+        aoi: Optional[QgsGeometry] = None
+    ) -> None:
         """Check if the metadata is ready.
 
         :param request_id: The UUID of the submitted SkyWatch request.
         :param max_cloud_cover: All metadata with a higher cloud cover % will be discarded.
+        :param aoi: Passed on to fetch_skywatch_metadata() if AOI is multipart.
         """
         self.http.get(
             url=f'https://api.skywatch.co/earthcache/archive/search/{request_id}/search_results',
             headers={'x-api-key': self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']},
             callback=self.fetch_skywatch_metadata_callback,
-            callback_kwargs={'max_cloud_cover': max_cloud_cover, 'timer': timer},
+            callback_kwargs={'max_cloud_cover': max_cloud_cover, 'timer': timer, 'aoi': aoi},
+            error_handler=self.fetch_skywatch_metadata_error_handler,
+            # error_handler_kwargs={'timer': timer},
             use_default_error_handler=False
         )
 
-    def fetch_skywatch_metadata_callback(self, response: QNetworkReply, max_cloud_cover: int, timer: QTimer):
+    def fetch_skywatch_metadata_callback(
+        self,
+        response: QNetworkReply,
+        max_cloud_cover: int,
+        timer: QTimer,
+        aoi: Optional[QgsGeometry] = None
+    ):
         """"""
         if response.attribute(QNetworkRequest.HttpStatusCodeAttribute) == 202:
             return  # not ready yet
@@ -551,6 +580,14 @@ class Mapflow(QObject):
         with open(output_file_name, 'w') as file:
             json.dump(metadata, file)
         self.metadata_layer = QgsVectorLayer(output_file_name, config.SENTINEL_OPTION_NAME + ' metadata', 'ogr')
+        if aoi:  # discard images that intersects the bbox not the original AOI itself
+            aoi = aoi.constGet()
+            aoi.prepareGeometry()
+            for feature in self.metadata_layer.getFeatures():
+                if feature.geometry().constGet().disjoint(aoi):
+                    print('Deleting ', feature.id())
+                    self.metadata_layer.select(feature.id())
+            self.metadata_layer.deleteSelectedFeatures()
         self.add_layer(self.metadata_layer)
         # Add style
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
@@ -563,6 +600,15 @@ class Mapflow(QObject):
             self.dlg.metadataTable.setItem(row, 1, QTableWidgetItem(datetime_))
             self.dlg.metadataTable.setItem(row, 2, QTableWidgetItem(feature['id']))
         self.dlg.metadataTable.setSortingEnabled(True)
+
+    def fetch_skywatch_metadata_error_handler(self, response: QNetworkReply, timer: QTimer) -> None:
+        """Error handler for Sentinel metadata requests.
+
+        :param response: The HTTP response.
+        """
+        timer.stop()
+        timer.deleteLater()
+        self.report_error(response, self.tr("We couldn't fetch metadata from SkyWatch"))
 
     def get_maxar_metadata(
         self,
