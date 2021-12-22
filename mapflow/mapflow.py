@@ -464,15 +464,9 @@ class Mapflow(QObject):
         if provider in config.MAXAR_PRODUCTS:
             self.get_maxar_metadata(aoi, provider, from_, to, max_cloud_cover)
         else:
-            self.submit_skywatch_metadata_request(aoi, from_, to, max_cloud_cover)
+            self.request_skywatch_metadata(aoi, from_, to, max_cloud_cover)
 
-    def submit_skywatch_metadata_request(
-        self,
-        aoi: QgsGeometry,
-        from_: QDateTime,
-        to: QDateTime,
-        max_cloud_cover: int
-    ) -> None:
+    def request_skywatch_metadata(self, aoi: QgsGeometry, from_: str, to: str, max_cloud_cover: int) -> None:
         """"""
         self.http.post(
             url='https://api.skywatch.co/earthcache/archive/search',
@@ -485,14 +479,14 @@ class Mapflow(QObject):
                 'order_by': ['-date']
             }).encode(),
             headers={'x-api-key': self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']},
-            callback=self.submit_skywatch_metadata_request_callback,
+            callback=self.request_skywatch_metadata_callback,
             callback_kwargs={'max_cloud_cover': max_cloud_cover},
-            error_handler=self.submit_skywatch_metadata_request_error_handler,
+            error_handler=self.request_skywatch_metadata_error_handler,
             use_default_error_handler=False
         )
         self.dlg.metadataTable.clearContents()
 
-    def submit_skywatch_metadata_request_callback(self, response: QNetworkReply, max_cloud_cover: int):
+    def request_skywatch_metadata_callback(self, response: QNetworkReply, max_cloud_cover: int):
         """
 
         :param response: The HTTP response.
@@ -506,7 +500,7 @@ class Mapflow(QObject):
         )
         metadata_fetch_timer.start()
 
-    def submit_skywatch_metadata_request_error_handler(self, response: QNetworkReply) -> None:
+    def request_skywatch_metadata_error_handler(self, response: QNetworkReply) -> None:
         """Error handler for Sentinel metadata requests.
 
         :param response: The HTTP response.
@@ -553,7 +547,7 @@ class Mapflow(QObject):
                 if round(feature['result_cloud_cover_percentage']) <= max_cloud_cover
             ]
         }
-        output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex()) + '.geojson'
+        output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex())
         with open(output_file_name, 'w') as file:
             json.dump(metadata, file)
         self.metadata_layer = QgsVectorLayer(output_file_name, config.SENTINEL_OPTION_NAME + ' metadata', 'ogr')
@@ -580,25 +574,21 @@ class Mapflow(QObject):
     ) -> None:
         """Get SecureWatch image metadata."""
         self.save_provider_auth()
-        # Get a '{min_lon},{min_lat} : {max_lon},{max_lat}' (SW-NE) representation of the AOI
-        extent = aoi.boundingBox().toString()
-        # Change lon,lat to lat,lon (SW format)
-        coords = [position.split(',')[::-1] for position in extent.split(':')]
-        bbox = ','.join([coord.strip() for position in coords for coord in position])
         params = {
             'SERVICE': 'WFS',
             'VERSION': '2.0.0',
             'REQUEST': 'GetFeature',
             'TYPENAME': 'DigitalGlobe:FinishedFeature',
+            'SRSNAME': 'urn:ogc:def:crs:EPSG::4326',
             'WIDTH': 3000,
             'HEIGHT': 3000,
             'SORTBY': 'acquisitionDate+D',
             'PROPERTYNAME': ','.join((*config.MAXAR_METADATA_ATTRIBUTES.values(), 'geometry'))
         }
         filter_params = (
-            f'bbox(geometry,{bbox})',
-            f'acquisitionDate>=\'{from_}\'',
-            f'acquisitionDate<=\'{to}\'',
+            f'intersects(geometry,srid=4326;{aoi.asWkt(precision=6).replace(" ", "+")})',
+            f'acquisitionDate>={from_}',
+            f'acquisitionDate<={to}',
             f'cloudCover<{max_cloud_cover/100}',
         )
         url = (
@@ -627,33 +617,26 @@ class Mapflow(QObject):
             self.http.post(
                 url=f'{self.server}/meta',
                 callback=self.get_maxar_metadata_callback,
-                callback_kwargs={'product': product, 'aoi': self.aoi},
+                callback_kwargs={'product': product},
                 body=json.dumps({
                     'url': url,
                     'connectId': product.split()[1].lower()
                 }).encode(),
                 timeout=7
             )
-        self.dlg.metadataTable.clearContents()
 
-    def get_maxar_metadata_callback(self, response: QNetworkReply, product: str, aoi: QgsGeometry) -> None:
+    def get_maxar_metadata_callback(self, response: QNetworkReply, product: str) -> None:
         """Handle metadata request response.
 
         :param response: The HTTP response.
         :param product: Maxar product whose metadata was requested.
         """
+        self.dlg.metadataTable.clearContents()
         response = response.readAll().data()
         output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex()) + '.gml'
         with open(output_file_name, 'wb') as f:
             f.write(response)
         self.metadata_layer = QgsVectorLayer(output_file_name, f'{product} metadata', 'ogr')
-        # Omit metadata that intersects the extent but not the AOI itself
-        aoi_geometry_engine = QgsGeometry.createGeometryEngine(aoi.constGet())
-        aoi_geometry_engine.prepareGeometry()
-        self.metadata_layer.dataProvider().deleteFeatures([
-            feature.id() for feature in self.metadata_layer.getFeatures()
-            if aoi_geometry_engine.intersects(feature.geometry().constGet())
-        ])
         self.add_layer(self.metadata_layer)
         # Add style
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
