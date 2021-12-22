@@ -608,10 +608,11 @@ class Mapflow(QObject):
             )).encode())
             self.http.get(
                 url=url,
-                callback=self.get_maxar_metadata_callback,
-                callback_kwargs={'product': product, 'aoi': self.aoi},
-                error_handler=self.get_maxar_metadata_error_handler,
                 auth=f'Basic {encoded_credentials.decode()}'.encode(),
+                callback=self.get_maxar_metadata_callback,
+                callback_kwargs={'product': product},
+                error_handler=self.get_maxar_metadata_error_handler,
+                use_default_error_handler=False
             )
         else:  # assume user wants to use our account, proxy thru Mapflow
             self.http.post(
@@ -626,7 +627,7 @@ class Mapflow(QObject):
             )
 
     def get_maxar_metadata_callback(self, response: QNetworkReply, product: str) -> None:
-        """Handle metadata request response.
+        """Load and save Maxar metadata as GML, format it and display as a layer.
 
         :param response: The HTTP response.
         :param product: Maxar product whose metadata was requested.
@@ -646,13 +647,15 @@ class Mapflow(QObject):
         self.maxar_metadata_extents = {feature['featureId']: feature for feature in features}
         # Format decimals and dates
         for feature in features:
+            # Parse, localize & format the datetime
             feature['acquisitionDate'] = datetime.strptime(
                 feature['acquisitionDate'] + '+0000', '%Y-%m-%d %H:%M:%S%z'
             ).astimezone().strftime('%Y-%m-%d %H:%M')
-            if feature['offNadirAngle']:
+            try:  # round values for display
                 feature['offNadirAngle'] = round(feature['offNadirAngle'])
-            if feature['cloudCover']:
                 feature['cloudCover'] = round(feature['cloudCover'] * 100)
+            except TypeError:  # None (attr not specified)
+                pass
         # Fill out the table
         self.dlg.metadataTable.setRowCount(len(features))
         # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
