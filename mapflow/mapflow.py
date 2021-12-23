@@ -875,7 +875,7 @@ class Mapflow(QObject):
         image_extent_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
         image_extent_layer.dataProvider().addFeatures([extent])
         aoi_layer.updateExtents()
-        # Find the intersection and pass it to the worker
+        # Find the intersection
         intersection = qgis_processing.run(
             'qgis:intersection',
             {'INPUT': aoi_layer, 'OVERLAY': image_extent_layer, 'OUTPUT': 'memory:'}
@@ -1508,9 +1508,9 @@ class Mapflow(QObject):
             elif self.settings.value('token'):  # env changed w/out logging out (admin)
                 self.dlg_login.show()
             # Wrong token entered - display a message
-            elif not self.dlg_login.findChild(QLabel, 'invalidToken'):
+            elif not self.dlg_login.findChild(QLabel, config.INVALID_TOKEN_WARNING_OBJECT_NAME):
                 invalid_token_label = QLabel(self.tr('Invalid token'), self.dlg_login)
-                invalid_token_label.setObjectName('invalidToken')
+                invalid_token_label.setObjectName(config.INVALID_TOKEN_WARNING_OBJECT_NAME)
                 invalid_token_label.setStyleSheet('color: rgb(239, 41, 41);')
                 self.dlg_login.layout().insertWidget(1, invalid_token_label, alignment=Qt.AlignCenter)
                 new_size = self.dlg_login.width(), self.dlg_login.height() + invalid_token_label.height()
