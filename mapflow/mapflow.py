@@ -13,7 +13,7 @@ from PyQt5.QtCore import (
     QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion
 )
 from PyQt5.QtWidgets import (
-    QApplication, QMessageBox, QFileDialog, QTableWidgetItem, QAction, QAbstractItemView, QLabel,
+    QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction, QAbstractItemView, QLabel,
     QProgressBar
 )
 from qgis import processing as qgis_processing  # to avoid collisions
@@ -512,7 +512,22 @@ class Mapflow(QObject):
         :param max_cloud_cover: Passed on to fetch_skywatch_metadata().
         :param aoi: Passed on to fetch_skywatch_metadata() if AOI is multipart.
         """
+        self.dlg.metadataTable.clearContents()
         request_id = json.loads(response.readAll().data())['data']['id']
+        # Prepare a layer
+        self.metadata_layer = QgsVectorLayer(
+            'polygon?crs=epsg:4326&index=yes&' +
+            '&'.join(f'field={name}:{type_}' for name, type_ in {
+                'id': 'string',
+                'preview_uri': 'string',
+                'cloud_cover': 'integer',
+                'datetime': 'datetime'
+            }.items()),
+            config.SENTINEL_OPTION_NAME + ' metadata',
+            'memory'
+        )
+        # Add style
+        self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
         # Poll processings
         metadata_fetch_timer = QTimer(self.dlg)
         metadata_fetch_timer.setInterval(config.SKYWATCH_POLL_INTERVAL * 1000)
@@ -536,8 +551,9 @@ class Mapflow(QObject):
         self,
         request_id: str,
         max_cloud_cover: int,
-        timer: QTimer,
-        aoi: Optional[QgsGeometry] = None
+        timer: QTimer = None,
+        aoi: Optional[QgsGeometry] = None,
+        start_index: int = 0
     ) -> None:
         """Check if the metadata is ready.
 
@@ -546,27 +562,33 @@ class Mapflow(QObject):
         :param aoi: Passed on to fetch_skywatch_metadata() if AOI is multipart.
         """
         self.http.get(
-            url=f'https://api.skywatch.co/earthcache/archive/search/{request_id}/search_results',
+            url=f'https://api.skywatch.co/earthcache/archive/search/{request_id}/search_results?cursor={start_index}',
             headers={'x-api-key': self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']},
             callback=self.fetch_skywatch_metadata_callback,
-            callback_kwargs={'max_cloud_cover': max_cloud_cover, 'timer': timer, 'aoi': aoi},
+            callback_kwargs={
+                'max_cloud_cover': max_cloud_cover,
+                'request_id': request_id,
+                'timer': timer,
+                'aoi': aoi
+            },
             error_handler=self.fetch_skywatch_metadata_error_handler,
-            # error_handler_kwargs={'timer': timer},
+            error_handler_kwargs={'timer': timer},
             use_default_error_handler=False
         )
 
     def fetch_skywatch_metadata_callback(
         self,
         response: QNetworkReply,
+        request_id: str,
         max_cloud_cover: int,
-        timer: QTimer,
+        timer: QTimer = None,
         aoi: Optional[QgsGeometry] = None
     ):
         """"""
         if response.attribute(QNetworkRequest.HttpStatusCodeAttribute) == 202:
             return  # not ready yet
-        timer.stop()
-        self.dlg.metadataTable.clearContents()
+        if timer:
+            timer.stop()
         response = json.loads(response.readAll().data())
         metadata = {
             'type': 'FeatureCollection',
@@ -586,28 +608,49 @@ class Mapflow(QObject):
                 if round(feature['result_cloud_cover_percentage']) <= max_cloud_cover
             ]
         }
+        # Create a temporary layer for the current page of metadata
         output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex())
         with open(output_file_name, 'w') as file:
             json.dump(metadata, file)
-        self.metadata_layer = QgsVectorLayer(output_file_name, config.SENTINEL_OPTION_NAME + ' metadata', 'ogr')
+        metadata_layer = QgsVectorLayer(output_file_name, '', 'ogr')
         if aoi:  # discard images that intersects the bbox not the original AOI itself
             aoi = QgsGeometry.createGeometryEngine(aoi.constGet())
             aoi.prepareGeometry()
             self.metadata_layer.dataProvider().deleteFeatures([
-                feature.id() for feature in self.metadata_layer.getFeatures()
+                feature.id() for feature in metadata_layer.getFeatures()
                 if aoi.disjoint(feature.geometry().constGet())
             ])
-        self.add_layer(self.metadata_layer)
-        # Add style
-        self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
-        self.dlg.metadataTable.setRowCount(self.metadata_layer.featureCount())
+        # Add the new features to the displayed metadata layer
+        self.metadata_layer.dataProvider().addFeatures(metadata_layer.getFeatures())
+        if timer:  # first page
+            self.add_layer(self.metadata_layer)
+        current_row_count = self.dlg.metadataTable.rowCount()
+        self.dlg.metadataTable.setRowCount(current_row_count + metadata_layer.featureCount())
         self.dlg.metadataTable.setSortingEnabled(False)
-        for row, feature in enumerate(metadata['features']):
+        for row, feature in enumerate(metadata['features'], start=current_row_count):
             self.dlg.metadataTable.setItem(row, 0, QTableWidgetItem(str(feature['properties']['cloud_cover'])))
             self.dlg.metadataTable.setItem(row, 1, QTableWidgetItem(feature['properties']['datetime']))
             self.dlg.metadataTable.setItem(row, 2, QTableWidgetItem(feature['id']))
             self.dlg.metadataTable.setItem(row, 3, QTableWidgetItem(feature['properties']['preview_uri']))
         self.dlg.metadataTable.setSortingEnabled(True)
+        # Handle pagination
+        next_page_start_index = response['pagination']['cursor']['next']
+        layout = self.dlg.metadata.layout()
+        more_button = self.dlg.findChild(QPushButton, config.METADATA_MORE_BUTTON_OBJECT_NAME)
+        if next_page_start_index is not None:
+            if not more_button:  # create one
+                more_button = QPushButton(self.tr('More'))
+                more_button.setObjectName(config.METADATA_MORE_BUTTON_OBJECT_NAME)
+                layout.addWidget(more_button)
+            # Set the button to fetch more metadata on click
+
+            def fetch_skywatch_metadata_next_page(request_id, max_cloud_cover, start_index, aoi):
+                self.fetch_skywatch_metadata(request_id, max_cloud_cover, aoi=aoi, start_index=start_index)
+            more_button.clicked.connect(
+                lambda: fetch_skywatch_metadata_next_page(request_id, max_cloud_cover, next_page_start_index, aoi)
+            )
+        elif more_button:  # last page, remove the button
+            layout.removeWidget(more_button)
 
     def fetch_skywatch_metadata_error_handler(self, response: QNetworkReply, timer: QTimer) -> None:
         """Error handler for Sentinel metadata requests.
