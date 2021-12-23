@@ -215,12 +215,14 @@ class Mapflow(QObject):
         self.dlg.metadataTable.clear()
         provider_name = provider
         if provider == config.SENTINEL_OPTION_NAME:
-            columns = config.SENTINEL_METADATA_ATTRIBUTES
+            columns = config.SENTINEL_ATTRIBUTES
+            hidden_column_index = len(config.SENTINEL_ATTRIBUTES) - 1
             sort_by = 1
             enabled = True
             max_zoom = config.MAX_ZOOM
         elif provider in config.MAXAR_PRODUCTS:
             columns = config.MAXAR_METADATA_ATTRIBUTES
+            hidden_column_index = None
             sort_by = 4
             enabled = True
             max_zoom = (
@@ -230,6 +232,7 @@ class Mapflow(QObject):
         else:  # another provider, tear down the table and deactivate the panel
             provider_name = 'Provider'
             columns = tuple()  # empty
+            hidden_column_index = None
             enabled = False
             max_zoom = config.MAX_ZOOM
             # Forced to int bc somehow used to be stored as str, so for backward compatability
@@ -238,8 +241,10 @@ class Mapflow(QObject):
         self.dlg.metadataTable.setRowCount(0)
         self.dlg.metadataTable.setColumnCount(len(columns))
         self.dlg.metadataTable.setHorizontalHeaderLabels(columns)
+        if hidden_column_index is not None:
+            self.dlg.metadataTable.setColumnHidden(hidden_column_index, True)
         self.dlg.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
-        self.dlg.metadata.setTitle(provider_name + ' Metadata')
+        self.dlg.metadata.setTitle(provider_name + ' Imagery Catalog')
         self.dlg.metadata.setEnabled(enabled)
 
     def save_dialog_state(self):
@@ -510,7 +515,7 @@ class Mapflow(QObject):
         request_id = json.loads(response.readAll().data())['data']['id']
         # Poll processings
         metadata_fetch_timer = QTimer(self.dlg)
-        metadata_fetch_timer.setInterval(config.SKYWATCH_METADATA_POLL_INTERVAL * 1000)
+        metadata_fetch_timer.setInterval(config.SKYWATCH_POLL_INTERVAL * 1000)
         metadata_fetch_timer.timeout.connect(
             lambda: self.fetch_skywatch_metadata(request_id, max_cloud_cover, metadata_fetch_timer, aoi)
         )
@@ -570,6 +575,7 @@ class Mapflow(QObject):
                 'type': 'Feature',
                 'geometry': feature['location'],
                 'properties': {
+                    'preview_uri': feature['preview_uri'],
                     'cloud_cover': round(feature['result_cloud_cover_percentage']),
                     'datetime': datetime.strptime(
                         feature['start_time'], '%Y-%m-%dT%H:%M:%S.%f%z'
@@ -597,11 +603,10 @@ class Mapflow(QObject):
         self.dlg.metadataTable.setRowCount(self.metadata_layer.featureCount())
         self.dlg.metadataTable.setSortingEnabled(False)
         for row, feature in enumerate(metadata['features']):
-            cloud_cover = feature['properties']['cloud_cover']
-            self.dlg.metadataTable.setItem(row, 0, QTableWidgetItem(str(cloud_cover)))
-            datetime_ = feature['properties']['datetime']
-            self.dlg.metadataTable.setItem(row, 1, QTableWidgetItem(datetime_))
+            self.dlg.metadataTable.setItem(row, 0, QTableWidgetItem(str(feature['properties']['cloud_cover'])))
+            self.dlg.metadataTable.setItem(row, 1, QTableWidgetItem(feature['properties']['datetime']))
             self.dlg.metadataTable.setItem(row, 2, QTableWidgetItem(feature['id']))
+            self.dlg.metadataTable.setItem(row, 3, QTableWidgetItem(feature['properties']['preview_uri']))
         self.dlg.metadataTable.setSortingEnabled(True)
 
     def fetch_skywatch_metadata_error_handler(self, response: QNetworkReply, timer: QTimer) -> None:
@@ -736,7 +741,7 @@ class Mapflow(QObject):
         if selected_cells:
             provider = self.dlg.providerCombo.currentText()
             image_id = selected_cells[
-                config.SENTINEL_METADATA_ID_COLUMN_INDEX
+                config.SENTINEL_ID_COLUMN_INDEX
                 if provider == config.SENTINEL_OPTION_NAME
                 else config.MAXAR_METADATA_ID_COLUMN_INDEX
             ].text()
@@ -1089,33 +1094,20 @@ class Mapflow(QObject):
             self.settings.setValue('providerUsername', self.dlg.providerUsername.text())
             self.settings.setValue('providerPassword', self.dlg.providerPassword.text())
 
-    def preview_sentinel(self, image_id: str) -> None:
+    def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str) -> None:
         """"""
-        self.http.get(
-            url=f'https://preview.skywatch.com/esa/sentinel-2/{image_id}.jpg',
-            callback=self.preview_sentinel_callback,
-            error_handler=self.preview_sentinel_error_handler
-        )
-
-    def preview_sentinel_callback(self, response: QNetworkReply) -> None:
-        """"""
-        acquisition_date = datetime.strptime(
-            helpers.SENTINEL_DATETIME_REGEX.search(response.request().url().toDisplayString()).group(0),
-            '%Y%m%dT%H%M%S'
-        ).astimezone().strftime('%Y-%m-%d %H:%M')
         with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb') as f:
             f.write(response.readAll().data())
-            f.seek(0)  # rewind the cursor to the start of the file
         options = QgsRasterLayer.LayerOptions()
         options.skipCrsValidation = True  # suppress unknown CRS warning
-        layer = QgsRasterLayer(f.name, config.SENTINEL_OPTION_NAME + ' ' + acquisition_date, 'gdal', options)
+        layer = QgsRasterLayer(f.name, f'{config.SENTINEL_OPTION_NAME} {datetime_}', 'gdal', options)
         layer.setCrs(helpers.WEB_MERCATOR)
         self.project.addMapLayer(layer)
 
     def preview_sentinel_error_handler(self, response: QNetworkReply) -> None:
         """"""
-        self.alert(self.tr("Sorry, we couldn't load the Sentinel image"))
-        self.report_error(response, self.tr('Error downloading results'))
+        self.alert(self.tr("Sorry, we couldn't load the image"))
+        self.report_error(response, self.tr('Error previewing Sentinel imagery'))
 
     def preview(self) -> None:
         """Display raster tiles served over the Web.
@@ -1124,7 +1116,20 @@ class Mapflow(QObject):
         """
         provider = self.dlg.providerCombo.currentText()
         if provider == config.SENTINEL_OPTION_NAME:
-            self.preview_sentinel(self.dlg.imageId.text())
+            selected_cells = self.dlg.metadataTable.selectedItems()
+            if selected_cells:
+                datetime_ = selected_cells[config.SENTINEL_DATETIME_COLUMN_INDEX]
+                self.http.get(
+                    url=self.dlg.metadataTable.item(
+                        datetime_.row(), 
+                        config.SENTINEL_PREVIEW_COLUMN_INDEX
+                    ).text(),
+                    callback=self.preview_sentinel_callback,
+                    callback_kwargs={'datetime_': datetime_.text()},
+                    error_handler=self.preview_sentinel_error_handler
+                )
+            else:
+                self.alert(self.tr('Please, select an image to preview'), QMessageBox.Information)
             return
         self.save_provider_auth()
         username = self.dlg.providerUsername.text()
