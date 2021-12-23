@@ -1098,10 +1098,7 @@ class Mapflow(QObject):
         """"""
         with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb') as f:
             f.write(response.readAll().data())
-        options = QgsRasterLayer.LayerOptions()
-        options.skipCrsValidation = True  # suppress unknown CRS warning
-        layer = QgsRasterLayer(f.name, f'{config.SENTINEL_OPTION_NAME} {datetime_}', 'gdal', options)
-        layer.setCrs(helpers.WEB_MERCATOR)
+        layer = QgsRasterLayer(f.name, f'{config.SENTINEL_OPTION_NAME} {datetime_}', 'gdal')
         self.project.addMapLayer(layer)
 
     def preview_sentinel_error_handler(self, response: QNetworkReply) -> None:
@@ -1121,7 +1118,7 @@ class Mapflow(QObject):
                 datetime_ = selected_cells[config.SENTINEL_DATETIME_COLUMN_INDEX]
                 self.http.get(
                     url=self.dlg.metadataTable.item(
-                        datetime_.row(), 
+                        datetime_.row(),
                         config.SENTINEL_PREVIEW_COLUMN_INDEX
                     ).text(),
                     callback=self.preview_sentinel_callback,
