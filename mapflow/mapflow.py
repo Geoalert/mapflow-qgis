@@ -138,6 +138,7 @@ class Mapflow(QObject):
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Providers
+        self.dlg.maxCloudCover.valueChanged.connect(self.filter_metadata_by_cloud_cover)
         self.dlg.preview.clicked.connect(self.preview)
         self.dlg.addProvider.clicked.connect(self.dlg_provider.show)
         self.dlg.addProvider.clicked.connect(lambda: self.dlg_provider.setProperty('mode', 'add'))
@@ -162,6 +163,13 @@ class Mapflow(QObject):
                 use_default_error_handler=False  # ignore errors to prevent repetitive alerts
             )
         )
+
+    def filter_metadata_by_cloud_cover(self, value: int) -> None:
+        """"""
+        try:
+            self.metadata_layer.setSubsetString(f'cloudCover <= {value/100}')
+        except (RuntimeError, AttributeError):  # no metadata layer
+            pass
 
     def is_valid_local_raster(self, raster: QgsRasterLayer) -> bool:
         """Return True for a GeoTIFF with a valid CRS that fits into config.MAX_TIF_SIZE.
@@ -519,9 +527,9 @@ class Mapflow(QObject):
             'polygon?crs=epsg:4326&index=yes&' +
             '&'.join(f'field={name}:{type_}' for name, type_ in {
                 'id': 'string',
-                'preview_uri': 'string',
-                'cloud_cover': 'integer',
-                'datetime': 'datetime'
+                'preview': 'string',
+                'cloudCover': 'real',
+                'acquisitionDate': 'datetime'
             }.items()),
             config.SENTINEL_OPTION_NAME + ' metadata',
             'memory'
@@ -597,9 +605,9 @@ class Mapflow(QObject):
                 'type': 'Feature',
                 'geometry': feature['location'],
                 'properties': {
-                    'preview_uri': feature['preview_uri'],
-                    'cloud_cover': round(feature['result_cloud_cover_percentage']),
-                    'datetime': datetime.strptime(
+                    'preview': feature['preview_uri'],
+                    'cloudCover': feature['result_cloud_cover_percentage']/100,
+                    'acquisitionDate': datetime.strptime(
                         feature['start_time'], '%Y-%m-%dT%H:%M:%S.%f%z'
                     ).astimezone().strftime('%Y-%m-%d %H:%M'),
                 }
@@ -628,10 +636,10 @@ class Mapflow(QObject):
         self.dlg.metadataTable.setRowCount(current_row_count + metadata_layer.featureCount())
         self.dlg.metadataTable.setSortingEnabled(False)
         for row, feature in enumerate(metadata['features'], start=current_row_count):
-            self.dlg.metadataTable.setItem(row, 0, QTableWidgetItem(str(feature['properties']['cloud_cover'])))
-            self.dlg.metadataTable.setItem(row, 1, QTableWidgetItem(feature['properties']['datetime']))
+            self.dlg.metadataTable.setItem(row, 0, QTableWidgetItem(str(round(feature['properties']['cloudCover'] * 100))))
+            self.dlg.metadataTable.setItem(row, 1, QTableWidgetItem(feature['properties']['acquisitionDate']))
             self.dlg.metadataTable.setItem(row, 2, QTableWidgetItem(feature['id']))
-            self.dlg.metadataTable.setItem(row, 3, QTableWidgetItem(feature['properties']['preview_uri']))
+            self.dlg.metadataTable.setItem(row, 3, QTableWidgetItem(feature['properties']['preview']))
         self.dlg.metadataTable.setSortingEnabled(True)
         # Handle pagination
         next_page_start_index = response['pagination']['cursor']['next']
@@ -730,10 +738,9 @@ class Mapflow(QObject):
         :param product: Maxar product whose metadata was requested.
         """
         self.dlg.metadataTable.clearContents()
-        response = response.readAll().data()
         output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex()) + '.gml'
         with open(output_file_name, 'wb') as f:
-            f.write(response)
+            f.write(response.readAll().data())
         self.metadata_layer = QgsVectorLayer(output_file_name, f'{product} metadata', 'ogr')
         self.add_layer(self.metadata_layer)
         # Add style
@@ -748,11 +755,11 @@ class Mapflow(QObject):
             feature['acquisitionDate'] = datetime.strptime(
                 feature['acquisitionDate'] + '+0000', '%Y-%m-%d %H:%M:%S%z'
             ).astimezone().strftime('%Y-%m-%d %H:%M')
-            try:  # round values for display
+            # Round values for display
+            if feature['offNadirAngle']:
                 feature['offNadirAngle'] = round(feature['offNadirAngle'])
+            if feature['cloudCover']:
                 feature['cloudCover'] = round(feature['cloudCover'] * 100)
-            except TypeError:  # None (attr not specified)
-                pass
         # Fill out the table
         self.dlg.metadataTable.setRowCount(len(features))
         # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
