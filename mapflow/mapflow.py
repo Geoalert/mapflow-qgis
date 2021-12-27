@@ -10,7 +10,7 @@ from configparser import ConfigParser  # parse metadata.txt -> QGIS version chec
 from PyQt5.QtGui import QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
-    QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion
+    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion
 )
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction, QAbstractItemView, QLabel,
@@ -138,6 +138,8 @@ class Mapflow(QObject):
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Providers
+        self.dlg.metadataFrom.dateChanged.connect(self.filter_metadata_by_date)
+        self.dlg.metadataTo.dateChanged.connect(self.filter_metadata_by_date)
         self.dlg.maxCloudCover.valueChanged.connect(self.filter_metadata_by_cloud_cover)
         self.dlg.preview.clicked.connect(self.preview)
         self.dlg.addProvider.clicked.connect(self.dlg_provider.show)
@@ -170,6 +172,32 @@ class Mapflow(QObject):
             self.metadata_layer.setSubsetString(f'cloudCover <= {value/100}')
         except (RuntimeError, AttributeError):  # no metadata layer
             pass
+        cloud_cover_column_index = [
+            self.dlg.metadataTable.horizontalHeaderItem(col).text()
+            for col in range(self.dlg.metadataTable.columnCount())
+        ].index('Cloud Cover %')
+        for row in range(self.dlg.metadataTable.rowCount()):
+            self.dlg.metadataTable.setRowHidden(
+                row,
+                self.dlg.metadataTable.item(row, cloud_cover_column_index).data(Qt.DisplayRole) > value
+            )
+
+    def filter_metadata_by_date(self, _: QDate) -> None:
+        """"""
+        from_ = self.dlg.metadataFrom.date().toString(Qt.ISODate)
+        to = self.dlg.metadataTo.date().toString(Qt.ISODate)
+        try:
+            self.metadata_layer.setSubsetString(f"acquisitionDate >= '{from_}' and acquisitionDate <= '{to}'")
+        except (RuntimeError, AttributeError):  # no metadata layer
+            pass
+        datetime_column_index = (
+            config.SENTINEL_DATETIME_COLUMN_INDEX
+            if self.dlg.providerCombo.currentText == config.SENTINEL_OPTION_NAME
+            else config.MAXAR_DATETIME_COLUMN_INDEX
+        )
+        for row in range(self.dlg.metadataTable.rowCount()):
+            datetime_ = self.dlg.metadataTable.item(row, datetime_column_index).data(Qt.DisplayRole)
+            self.dlg.metadataTable.setRowHidden(row, datetime_ < from_ or datetime_ > to)
 
     def is_valid_local_raster(self, raster: QgsRasterLayer) -> bool:
         """Return True for a GeoTIFF with a valid CRS that fits into config.MAX_TIF_SIZE.

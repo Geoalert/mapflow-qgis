@@ -4,6 +4,7 @@ import time
 TIMEZONE = time.localtime().tm_zone
 PLUGIN_NAME = 'Mapflow'
 MAPFLOW_DEFAULT_TIMEOUT = 5  # in seconds
+
 # PROCESSINGS
 PROCESSING_TABLE_REFRESH_INTERVAL = 6  # in seconds
 PROCESSING_ATTRIBUTES = 'name', 'workflowDef', 'status', 'percentCompleted', 'aoiArea', 'created', 'id'
@@ -18,7 +19,8 @@ MAXAR_METADATA_ATTRIBUTES = {
     f'Date & Time ({TIMEZONE})': 'acquisitionDate',
     'Image ID': 'featureId'
 }
-MAXAR_METADATA_ID_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.values()).index('featureId')
+MAXAR_ID_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.values()).index('featureId')
+MAXAR_DATETIME_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.keys()).index(f'Date & Time ({TIMEZONE})')
 MAXAR_MAX_FREE_ZOOM = 12
 MAXAR_PRODUCTS = {
     'Maxar SecureWatch': {
