@@ -12,13 +12,13 @@ PROCESSING_TABLE_SORT_COLUMN_INDEX = PROCESSING_ATTRIBUTES.index('created')
 # MAXAR
 MAXAR_METADATA_ATTRIBUTES = {
     'Product Type': 'productType',
-    'Band Order': 'colorBandOrder', 
-    'Cloud Cover %': 'cloudCover', 
-    'Off Nadir Angle': 'offNadirAngle', 
+    'Band Order': 'colorBandOrder',
+    'Cloud Cover %': 'cloudCover',
+    f'Off Nadir Angle \N{DEGREE SIGN}': 'offNadirAngle',
     f'Date & Time ({TIMEZONE})': 'acquisitionDate',
     'Image ID': 'featureId'
 }
-MAXAR_METADATA_ID_COLUMN_INDEX = list(MAXAR_METADATA_ATTRIBUTES.values()).index('featureId')
+MAXAR_METADATA_ID_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.values()).index('featureId')
 MAXAR_MAX_FREE_ZOOM = 12
 MAXAR_PRODUCTS = {
     'Maxar SecureWatch': {
@@ -38,8 +38,14 @@ MAXAR_PRODUCTS = {
     }
 }
 # MISC
-SENTINEL_METADATA_ATTRIBUTES = 'Cloud Cover %', f'Date & Time ({TIMEZONE})', 'Image ID'
+INVALID_TOKEN_WARNING_OBJECT_NAME = 'invalidToken'
+METADATA_MORE_BUTTON_OBJECT_NAME = 'getMoreMetadata'
 SENTINEL_OPTION_NAME = 'Sentinel-2'
+SENTINEL_ATTRIBUTES = 'Cloud Cover %', f'Date & Time ({TIMEZONE})', 'Image ID', 'Preview'
+SENTINEL_ID_COLUMN_INDEX = SENTINEL_ATTRIBUTES.index('Image ID')
+SENTINEL_PREVIEW_COLUMN_INDEX = SENTINEL_ATTRIBUTES.index('Preview')
+SENTINEL_DATETIME_COLUMN_INDEX = SENTINEL_ATTRIBUTES.index(f'Date & Time ({TIMEZONE})')
+SKYWATCH_POLL_INTERVAL = 2
 MAX_TIF_SIZE = 2000  # MB
 MAX_ZOOM = 21
 DEFAULT_ZOOM = MAXAR_MAX_FREE_ZOOM

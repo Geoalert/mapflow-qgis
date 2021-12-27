@@ -63,7 +63,7 @@ class ConnectIdDialog(*uic.loadUiType(ui_path/'connect_id_dialog.ui')):
         )
 
 
-class SentinelHubTokenDialog(*uic.loadUiType(ui_path/'sentinel_hub_token_dialog.ui')):
+class SentinelAuthDialog(*uic.loadUiType(ui_path/'sentinel_auth_dialog.ui')):
     def __init__(self, parent: QWidget) -> None:
         """Constructor."""
         super().__init__(parent)

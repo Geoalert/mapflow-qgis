@@ -1,5 +1,4 @@
 import re
-from urllib import parse
 
 from qgis.core import (
     QgsMapLayer, QgsGeometry, QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
@@ -15,8 +14,8 @@ URL_PATTERN = r'https?://(www\.)?([-\w]{1,256}\.)+[a-zA-Z0-9]{1,6}'  # schema + 
 URL_REGEX = re.compile(URL_PATTERN)
 XYZ_REGEX = re.compile(URL_PATTERN + r'(.*\{[xyz]\}){3}.*', re.I)
 QUAD_KEY_REGEX = re.compile(URL_PATTERN + r'(.*\{q\}).*', re.I)
-SENTINEL_IMAGE_DATETIME_REGEX = re.compile(r'_\d{8}T\d{6}', re.I)
-SENTINEL_IMAGE_COORDINATE_REGEX = re.compile(r'T\d{2}[A-Z]{3}', re.I)
+SENTINEL_DATETIME_REGEX = re.compile(r'\d{8}T\d{6}', re.I)
+SENTINEL_COORDINATE_REGEX = re.compile(r'T\d{2}[A-Z]{3}', re.I)
 
 
 def is_polygon_layer(layer: QgsMapLayer) -> bool:
@@ -69,18 +68,7 @@ def validate_provider_form(form) -> bool:
         if type_ in ('xyz', 'tms'):
             return bool(XYZ_REGEX.match(url))
         elif type_ == 'wms':
-            query_params = {  # parse query params and convert them to uppercase
-                param.upper(): value for param, value in
-                dict(parse.parse_qsl(parse.urlsplit(url).query)).items()
-            }
-            return (
-                URL_REGEX.match(url) and
-                query_params.get('REQUEST', '').lower() == 'getmap' and
-                all(query_params.get(param) for param in (
-                    # Mandatory params according to the WMS spec
-                    'LAYERS', 'STYLES', 'BBOX', 'WIDTH', 'HEIGHT', 'CRS', 'VERSION'
-                ))
-            )
+            return bool(URL_REGEX.match(url))
         else:  # Quad Key
             return bool(QUAD_KEY_REGEX.match(url))
     return False

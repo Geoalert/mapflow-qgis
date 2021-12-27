@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>650</width>
-    <height>589</height>
+    <width>655</width>
+    <height>592</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,7 +17,7 @@
    <item>
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
-      <number>1</number>
+      <number>0</number>
      </property>
      <property name="movable">
       <bool>true</bool>
@@ -129,7 +129,7 @@
         </layout>
        </item>
        <item row="1" column="0">
-        <layout class="QHBoxLayout" name="additionalOptions" stretch="0,1,0">
+        <layout class="QHBoxLayout" name="additionalOptions" stretch="0,1,0,0">
          <item>
           <widget class="QCheckBox" name="useImageExtentAsAoi">
            <property name="enabled">
@@ -154,9 +154,25 @@
           </spacer>
          </item>
          <item>
-          <widget class="QCheckBox" name="updateCache">
+          <widget class="QCheckBox" name="useCache">
+           <property name="toolTip">
+            <string>Cached imagery will be reused if you've previously processed the exact same area with the same imagery source</string>
+           </property>
            <property name="text">
-            <string>Update image in cache</string>
+            <string>Use cache</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="label">
+           <property name="text">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How caching works&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+           <property name="openExternalLinks">
+            <bool>true</bool>
            </property>
           </widget>
          </item>
@@ -402,7 +418,7 @@
         </layout>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="provider" stretch="1,0,0,0,0">
+        <layout class="QHBoxLayout" name="provider" stretch="1,0,0,2,0,0,0">
          <item>
           <widget class="QComboBox" name="providerCombo"/>
          </item>
@@ -487,6 +503,20 @@
             </widget>
            </item>
           </layout>
+         </item>
+         <item>
+          <widget class="QLabel" name="labelImageId">
+           <property name="text">
+            <string>Image ID:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLineEdit" name="imageId">
+           <property name="placeholderText">
+            <string>Select in the table below or paste here</string>
+           </property>
+          </widget>
          </item>
          <item>
           <widget class="QLabel" name="labelZoomLimit">
@@ -586,7 +616,7 @@
        <item>
         <widget class="QGroupBox" name="metadata">
          <property name="title">
-          <string>Provider Metadata</string>
+          <string>Provider Imagery Catalog</string>
          </property>
          <property name="checked">
           <bool>false</bool>
@@ -636,7 +666,7 @@
              </layout>
             </item>
             <item row="1" column="0">
-             <layout class="QHBoxLayout" name="layoutDatetime" stretch="0,1,0,1">
+             <layout class="QHBoxLayout" name="layoutDatetime" stretch="0,0,0,0,0,2,0">
               <item>
                <widget class="QLabel" name="labelFrom">
                 <property name="text">
@@ -645,12 +675,12 @@
                </widget>
               </item>
               <item>
-               <widget class="QgsDateTimeEdit" name="metadataFrom">
+               <widget class="QDateEdit" name="metadataFrom">
                 <property name="maximumDate">
                  <date>
                   <year>2030</year>
-                  <month>12</month>
-                  <day>31</day>
+                  <month>1</month>
+                  <day>1</day>
                  </date>
                 </property>
                 <property name="minimumDate">
@@ -661,10 +691,17 @@
                  </date>
                 </property>
                 <property name="displayFormat">
-                 <string>yyyy-MM-dd HH:mm</string>
+                 <string>yyyy-MM-dd</string>
                 </property>
-                <property name="allowNull">
-                 <bool>false</bool>
+                <property name="calendarPopup">
+                 <bool>true</bool>
+                </property>
+                <property name="date">
+                 <date>
+                  <year>2020</year>
+                  <month>12</month>
+                  <day>21</day>
+                 </date>
                 </property>
                </widget>
               </item>
@@ -676,12 +713,12 @@
                </widget>
               </item>
               <item>
-               <widget class="QgsDateTimeEdit" name="metadataTo">
+               <widget class="QDateEdit" name="metadataTo">
                 <property name="maximumDate">
                  <date>
                   <year>2030</year>
-                  <month>12</month>
-                  <day>31</day>
+                  <month>1</month>
+                  <day>1</day>
                  </date>
                 </property>
                 <property name="minimumDate">
@@ -692,17 +729,20 @@
                  </date>
                 </property>
                 <property name="displayFormat">
-                 <string>yyyy-MM-dd HH:mm</string>
+                 <string>yyyy-MM-dd</string>
                 </property>
-                <property name="allowNull">
-                 <bool>false</bool>
+                <property name="calendarPopup">
+                 <bool>true</bool>
+                </property>
+                <property name="date">
+                 <date>
+                  <year>2021</year>
+                  <month>12</month>
+                  <day>21</day>
+                 </date>
                 </property>
                </widget>
               </item>
-             </layout>
-            </item>
-            <item row="2" column="0">
-             <layout class="QHBoxLayout" name="layoutCloudCover">
               <item>
                <widget class="QLabel" name="labelMaxCloudCover">
                 <property name="text">
@@ -755,7 +795,7 @@
           <item row="1" column="0">
            <widget class="QPushButton" name="getMetadata">
             <property name="text">
-             <string>Get metadata</string>
+             <string>Search imagery</string>
             </property>
            </widget>
           </item>
@@ -792,46 +832,6 @@
              <bool>true</bool>
             </attribute>
            </widget>
-          </item>
-          <item row="3" column="0">
-           <layout class="QHBoxLayout" name="providerFooter" stretch="0,1,0">
-            <property name="spacing">
-             <number>20</number>
-            </property>
-            <item>
-             <widget class="QLabel" name="howToConnect">
-              <property name="text">
-               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-              </property>
-              <property name="openExternalLinks">
-               <bool>true</bool>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <spacer name="spacerFooter">
-              <property name="orientation">
-               <enum>Qt::Horizontal</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>5</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
-            </item>
-            <item>
-             <widget class="QLabel" name="termsOfService">
-              <property name="text">
-               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://www.maxar.com/legal/securewatch-license&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Terms of Service&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-              </property>
-              <property name="openExternalLinks">
-               <bool>true</bool>
-              </property>
-             </widget>
-            </item>
-           </layout>
           </item>
          </layout>
         </widget>
@@ -877,11 +877,6 @@
    <extends>QGroupBox</extends>
    <header>qgscollapsiblegroupbox.h</header>
    <container>1</container>
-  </customwidget>
-  <customwidget>
-   <class>QgsDateTimeEdit</class>
-   <extends>QDateTimeEdit</extends>
-   <header>qgsdatetimeedit.h</header>
   </customwidget>
   <customwidget>
    <class>QgsMapLayerComboBox</class>

@@ -46,6 +46,7 @@ class Http(QObject):
         callback: Callable,
         callback_kwargs: dict,
         error_handler: Callable,
+        error_handler_kwargs: dict,
         use_default_error_handler: bool
     ) -> None:
         """"""
@@ -53,7 +54,7 @@ class Http(QObject):
             if use_default_error_handler:
                 if self.default_error_handler(response):
                     return  # a general error occurred and has been handled
-            error_handler(response)  # handle specific errors
+            error_handler(response, **error_handler_kwargs)  # handle specific errors
         else:
             callback(response, **callback_kwargs)
 
@@ -61,11 +62,13 @@ class Http(QObject):
         self,
         method: Callable,
         url: str,
+        headers: dict = None,
+        auth: bytes = None,
         callback: Callable = None,
         callback_kwargs: dict = None,
         error_handler: Callable = None,
+        error_handler_kwargs: dict = None,
         use_default_error_handler: bool = True,
-        auth: bytes = None,
         timeout: int = config.MAPFLOW_DEFAULT_TIMEOUT,
         body: Union[QHttpMultiPart, bytes] = None
     ) -> QNetworkReply:
@@ -73,8 +76,11 @@ class Http(QObject):
         request = QNetworkRequest(QUrl(url))
         if isinstance(body, bytes):
             request.setHeader(QNetworkRequest.ContentTypeHeader, 'application/json')
-        request.setRawHeader(b'X-Plugin-Version', self.plugin_version.encode())
-        request.setRawHeader(b'Authorization', auth or self._basic_auth)
+        if headers:
+            for key, value in headers.items():
+                request.setRawHeader(key.encode(), value.encode())
+        request.setRawHeader(b'x-plugin-version', self.plugin_version.encode())
+        request.setRawHeader(b'authorization', auth or self._basic_auth)
         response = method(request, body) if method == self.nam.post else method(request)
         QTimer.singleShot(timeout * 1000, response.abort)
         response.finished.connect(
@@ -83,12 +89,14 @@ class Http(QObject):
             callback=callback,
             callback_kwargs=callback_kwargs or {},
             error_handler=error_handler or (lambda _: None),
+            error_handler_kwargs=error_handler_kwargs or {},
             use_default_error_handler=use_default_error_handler:
             self.response_dispatcher(
                 response,
                 callback,
                 callback_kwargs,
                 error_handler,
+                error_handler_kwargs,
                 use_default_error_handler
             )
         )

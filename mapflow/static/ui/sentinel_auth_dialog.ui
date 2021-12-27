@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>SentinelHubTokenDialog</class>
- <widget class="QDialog" name="SentinelHubTokenDialog">
+ <class>SentinelAuthDialog</class>
+ <widget class="QDialog" name="SentinelAuthDialog">
   <property name="windowModality">
    <enum>Qt::WindowModal</enum>
   </property>
@@ -38,14 +38,14 @@
    <item row="0" column="0">
     <layout class="QFormLayout" name="form">
      <item row="0" column="0">
-      <widget class="QLabel" name="labelToken">
+      <widget class="QLabel" name="labelApiKey">
        <property name="text">
-        <string>Token</string>
+        <string>API key:</string>
        </property>
       </widget>
      </item>
      <item row="0" column="1">
-      <widget class="QLineEdit" name="token"/>
+      <widget class="QLineEdit" name="apiKey"/>
      </item>
     </layout>
    </item>
@@ -63,7 +63,7 @@
   <connection>
    <sender>buttonBox</sender>
    <signal>rejected()</signal>
-   <receiver>SentinelHubTokenDialog</receiver>
+   <receiver>SentinelAuthDialog</receiver>
    <slot>reject()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -79,7 +79,7 @@
   <connection>
    <sender>buttonBox</sender>
    <signal>accepted()</signal>
-   <receiver>SentinelHubTokenDialog</receiver>
+   <receiver>SentinelAuthDialog</receiver>
    <slot>accept()</slot>
    <hints>
     <hint type="sourcelabel">
