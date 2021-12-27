@@ -606,7 +606,7 @@ class Mapflow(QObject):
                 'geometry': feature['location'],
                 'properties': {
                     'preview': feature['preview_uri'],
-                    'cloudCover': feature['result_cloud_cover_percentage']/100,
+                    'cloudCover': round(feature['result_cloud_cover_percentage'])/100,
                     'acquisitionDate': datetime.strptime(
                         feature['start_time'], '%Y-%m-%dT%H:%M:%S.%f%z'
                     ).astimezone().strftime('%Y-%m-%d %H:%M'),
@@ -636,10 +636,13 @@ class Mapflow(QObject):
         self.dlg.metadataTable.setRowCount(current_row_count + metadata_layer.featureCount())
         self.dlg.metadataTable.setSortingEnabled(False)
         for row, feature in enumerate(metadata['features'], start=current_row_count):
-            self.dlg.metadataTable.setItem(row, 0, QTableWidgetItem(str(round(feature['properties']['cloudCover'] * 100))))
-            self.dlg.metadataTable.setItem(row, 1, QTableWidgetItem(feature['properties']['acquisitionDate']))
-            self.dlg.metadataTable.setItem(row, 2, QTableWidgetItem(feature['id']))
-            self.dlg.metadataTable.setItem(row, 3, QTableWidgetItem(feature['properties']['preview']))
+            table_items = [QTableWidgetItem() for _ in range(len(config.SENTINEL_ATTRIBUTES))]
+            table_items[0].setData(Qt.DisplayRole, round(feature['properties']['cloudCover'] * 100))
+            table_items[1].setData(Qt.DisplayRole, feature['properties']['acquisitionDate'])
+            table_items[2].setData(Qt.DisplayRole, feature['id'])
+            table_items[3].setData(Qt.DisplayRole, feature['properties']['preview'])
+            for col, table_item in enumerate(table_items):
+                self.dlg.metadataTable.setItem(row, col, table_item)
         self.dlg.metadataTable.setSortingEnabled(True)
         # Handle pagination
         next_page_start_index = response['pagination']['cursor']['next']
@@ -767,10 +770,12 @@ class Mapflow(QObject):
         for row, feature in enumerate(features):
             for col, attr in enumerate(config.MAXAR_METADATA_ATTRIBUTES.values()):
                 try:
-                    value = str(feature[attr])
+                    value = feature[attr]
                 except KeyError:  # e.g. <colorBandOrder/> for pachromatic images
                     value = ''
-                self.dlg.metadataTable.setItem(row, col, QTableWidgetItem(value))
+                table_item = QTableWidgetItem()
+                table_item.setData(Qt.DisplayRole, value)
+                self.dlg.metadataTable.setItem(row, col, table_item)
         # Turn sorting on again
         self.dlg.metadataTable.setSortingEnabled(True)
 
@@ -1399,7 +1404,7 @@ class Mapflow(QObject):
                 processing['created'] = processing['created'].replace('Z', '+0000')
         for processing in processings:
             # Add % signs to progress column for clarity
-            processing['percentCompleted'] = str(processing['percentCompleted']) + '%'
+            processing['percentCompleted'] = processing['percentCompleted']
             processing['aoiArea'] = round(processing['aoiArea'] / 10**6, 2)
             # Parse and localize creation datetime
             processing['created'] = datetime.strptime(
@@ -1415,7 +1420,7 @@ class Mapflow(QObject):
         one_day = timedelta(1)
         finished = [
             processing['id'] for processing in processings
-            if processing['percentCompleted'] == '100%'
+            if processing['percentCompleted'] == 100
             and now - processing['created'] < one_day
         ]
         # Update the list of finished processings for the given account
@@ -1441,7 +1446,9 @@ class Mapflow(QObject):
         # Fill out the table
         for row, processing in enumerate(processings):
             for col, attr in enumerate(config.PROCESSING_ATTRIBUTES):
-                self.dlg.processingsTable.setItem(row, col, QTableWidgetItem(str(processing[attr])))
+                table_item = QTableWidgetItem()
+                table_item.setData(Qt.DisplayRole, processing[attr])
+                self.dlg.processingsTable.setItem(row, col, table_item)
             if processing['id'] in selected_processings:
                 self.dlg.processingsTable.selectRow(row)
         self.dlg.processingsTable.setSortingEnabled(True)
