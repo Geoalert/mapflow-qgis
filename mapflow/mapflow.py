@@ -260,9 +260,9 @@ class Mapflow(QObject):
         # Save main dialog size & position
         self.settings.setValue('mainDialogState', self.dlg.saveGeometry())
         # Save table columns widths and sorting
-        for table in 'processingsTable', 'metadataTable':
-            header = getattr(self.dlg, table).horizontalHeader()
-            self.settings.setValue(table + 'HeaderState', header.saveState())
+        # for table in 'processingsTable', 'metadataTable':
+        #     header = getattr(self.dlg, table).horizontalHeader()
+        #     self.settings.setValue(table + 'HeaderState', header.saveState())
 
     def add_layer(self, layer: QgsMapLayer) -> None:
         """Add layers created by the plugin to the legend.
@@ -1640,9 +1640,9 @@ class Mapflow(QObject):
         self.dlg.modelCombo.addItems([wd['name'] for wd in response['workflowDefs']])
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
         # Restore table section sizes
-        for table in 'processingsTable', 'metadataTable':
-            header = getattr(self.dlg, table).horizontalHeader()
-            header.restoreState(self.settings.value(table + 'HeaderState', b''))
+        # for table in 'processingsTable', 'metadataTable':
+        #     header = getattr(self.dlg, table).horizontalHeader()
+        #     header.restoreState(self.settings.value(table + 'HeaderState', b''))
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
         # Authenticate and keep user logged in
