@@ -138,9 +138,9 @@ class Mapflow(QObject):
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Providers
-        self.dlg.metadataFrom.dateChanged.connect(self.filter_metadata_by_date)
-        self.dlg.metadataTo.dateChanged.connect(self.filter_metadata_by_date)
-        self.dlg.maxCloudCover.valueChanged.connect(self.filter_metadata_by_cloud_cover)
+        self.dlg.metadataFrom.dateChanged.connect(self.filter_metadata)
+        self.dlg.metadataTo.dateChanged.connect(self.filter_metadata)
+        self.dlg.maxCloudCover.valueChanged.connect(self.filter_metadata)
         self.dlg.preview.clicked.connect(self.preview)
         self.dlg.addProvider.clicked.connect(self.dlg_provider.show)
         self.dlg.addProvider.clicked.connect(lambda: self.dlg_provider.setProperty('mode', 'add'))
@@ -166,38 +166,35 @@ class Mapflow(QObject):
             )
         )
 
-    def filter_metadata_by_cloud_cover(self, value: int) -> None:
+    def filter_metadata(self) -> None:
         """"""
+        max_cloud_cover = self.dlg.maxCloudCover.value()
+        from_ = self.dlg.metadataFrom.date().toString(Qt.ISODate)
+        to = self.dlg.metadataTo.date().toString(Qt.ISODate)
+        # Set a filter on the metadata layer
         try:
-            self.metadata_layer.setSubsetString(f'cloudCover <= {value/100}')
+            self.metadata_layer.setSubsetString(
+                f'cloudCover <= {max_cloud_cover/100} '
+                f"and acquisitionDate >= '{from_}' "
+                f"and acquisitionDate <= '{to}'"
+            )
         except (RuntimeError, AttributeError):  # no metadata layer
             pass
+        # Show/hide table rows
         cloud_cover_column_index = [
             self.dlg.metadataTable.horizontalHeaderItem(col).text()
             for col in range(self.dlg.metadataTable.columnCount())
         ].index('Cloud Cover %')
-        for row in range(self.dlg.metadataTable.rowCount()):
-            self.dlg.metadataTable.setRowHidden(
-                row,
-                self.dlg.metadataTable.item(row, cloud_cover_column_index).data(Qt.DisplayRole) > value
-            )
-
-    def filter_metadata_by_date(self, _: QDate) -> None:
-        """"""
-        from_ = self.dlg.metadataFrom.date().toString(Qt.ISODate)
-        to = self.dlg.metadataTo.date().toString(Qt.ISODate)
-        try:
-            self.metadata_layer.setSubsetString(f"acquisitionDate >= '{from_}' and acquisitionDate <= '{to}'")
-        except (RuntimeError, AttributeError):  # no metadata layer
-            pass
         datetime_column_index = (
             config.SENTINEL_DATETIME_COLUMN_INDEX
-            if self.dlg.providerCombo.currentText == config.SENTINEL_OPTION_NAME
+            if self.dlg.providerCombo.currentText() == config.SENTINEL_OPTION_NAME
             else config.MAXAR_DATETIME_COLUMN_INDEX
         )
         for row in range(self.dlg.metadataTable.rowCount()):
+            cloud_cover = self.dlg.metadataTable.item(row, cloud_cover_column_index).data(Qt.DisplayRole)
             datetime_ = self.dlg.metadataTable.item(row, datetime_column_index).data(Qt.DisplayRole)
-            self.dlg.metadataTable.setRowHidden(row, datetime_ < from_ or datetime_ > to)
+            is_fit = cloud_cover > max_cloud_cover or from_ > datetime_ or to < datetime_
+            self.dlg.metadataTable.setRowHidden(row, is_fit)
 
     def is_valid_local_raster(self, raster: QgsRasterLayer) -> bool:
         """Return True for a GeoTIFF with a valid CRS that fits into config.MAX_TIF_SIZE.
@@ -548,7 +545,7 @@ class Mapflow(QObject):
         :param max_cloud_cover: Passed on to fetch_skywatch_metadata().
         :param aoi: Passed on to fetch_skywatch_metadata() if AOI is multipart.
         """
-        self.dlg.metadataTable.clearContents()
+        # self.dlg.metadataTable.clearContents()
         request_id = json.loads(response.readAll().data())['data']['id']
         # Prepare a layer
         self.metadata_layer = QgsVectorLayer(
