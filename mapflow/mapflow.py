@@ -7,7 +7,7 @@ from typing import List, Optional, Union
 from datetime import datetime, timedelta  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QColor, QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
     QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion
@@ -826,7 +826,7 @@ class Mapflow(QObject):
             image_id = selected_cells[
                 config.SENTINEL_ID_COLUMN_INDEX
                 if provider == config.SENTINEL_OPTION_NAME
-                else config.MAXAR_METADATA_ID_COLUMN_INDEX
+                else config.MAXAR_ID_COLUMN_INDEX
             ].text()
         else:
             image_id = ''
@@ -1057,7 +1057,7 @@ class Mapflow(QObject):
                 self.alert(self.tr('Image and processing area do not intersect'))
                 return
         elif is_maxar and selected_image:  # Single SW image
-            feature_id = selected_image[config.MAXAR_METADATA_ID_COLUMN_INDEX].text()
+            feature_id = selected_image[config.MAXAR_ID_COLUMN_INDEX].text()
             extent = self.maxar_metadata_extents[feature_id]
             try:
                 self.aoi = next(self.clip_aoi_to_image_extent(self.aoi, extent)).geometry()
@@ -1182,7 +1182,13 @@ class Mapflow(QObject):
         with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb') as f:
             f.write(response.readAll().data())
         layer = QgsRasterLayer(f.name, f'{config.SENTINEL_OPTION_NAME} {datetime_}', 'gdal')
-        self.project.addMapLayer(layer)
+        # Set the no-data value if undefined
+        layer_provider = layer.dataProvider()
+        for band in range(1, layer.bandCount()):  # bands are 1-based (!)
+            if not layer_provider.sourceHasNoDataValue(band):
+                layer_provider.setNoDataValue(band, 0)
+        layer.renderer().setNodataColor(QColor(Qt.transparent))
+        self.add_layer(layer)
 
     def preview_sentinel_error_handler(self, response: QNetworkReply) -> None:
         """"""
