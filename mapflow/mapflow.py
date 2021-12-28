@@ -715,7 +715,7 @@ class Mapflow(QObject):
             'VERSION': '2.0.0',
             'REQUEST': 'GetFeature',
             'TYPENAME': 'DigitalGlobe:FinishedFeature',
-            'SRSNAME': 'urn:ogc:def:crs:EPSG::4326',
+            'SRSNAME': 'urn:ogc:def:crs:EPSG::3857',
             'WIDTH': 3000,
             'HEIGHT': 3000,
             'SORTBY': 'acquisitionDate+D',
@@ -773,9 +773,8 @@ class Mapflow(QObject):
         with open(output_file_name, 'wb') as f:
             f.write(response.readAll().data())
         self.metadata_layer = QgsVectorLayer(output_file_name, f'{product} metadata', 'ogr')
-        self.add_layer(self.metadata_layer)
-        # Add style
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
+        self.add_layer(self.metadata_layer)
         # Get the list of features (don't use the generator itself, or it'll get exhausted)
         features = list(self.metadata_layer.getFeatures())
         # Memorize IDs and extents to be able to clip the user's AOI to image on processing creation
@@ -1250,6 +1249,12 @@ class Mapflow(QObject):
                     self.dlg.metadataTable.item(row, attrs.index('acquisitionDate')).text(),
                     self.dlg.metadataTable.item(row, attrs.index('productType')).text()
                 ))
+                # Get the image extent to set the correct extent on the raster layer
+                try:
+                    footprints = self.metadata_layer.getFeatures(f"featureId = '{image_id}'")
+                except (RuntimeError, AttributeError):  # layer doesn't exist or has been deleted
+                    extent = None
+                extent = next(footprints).geometry().boundingBox()
             # Can use urllib.parse but have to specify safe='/?:{}' which sort of defeats the purpose
             url = url.replace('&', '%26').replace('=', '%3D')
         params = {
@@ -1263,6 +1268,8 @@ class Mapflow(QObject):
         uri = '&'.join(f'{key}={val}' for key, val in params.items())  # don't url-encode it
         layer = QgsRasterLayer(uri, layer_name, 'wms')
         if layer.isValid():
+            if image_id and extent:
+                layer.setExtent(extent)
             self.add_layer(layer)
         else:
             self.alert(self.tr('Error loading: ') + url)
