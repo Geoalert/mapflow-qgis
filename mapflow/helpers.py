@@ -31,18 +31,20 @@ def to_wgs84(geometry: QgsGeometry, source_crs: QgsCoordinateReferenceSystem) ->
     :param geometry: A feature's geometry
     :param source_crs: The current CRS of the passed geometry
     """
-    geometry.transform(QgsCoordinateTransform(source_crs, WGS84, PROJECT.transformContext()))
-    return geometry
+    spherical_geometry = QgsGeometry(geometry)  # clone
+    spherical_geometry.transform(QgsCoordinateTransform(source_crs, WGS84, PROJECT.transformContext()))
+    return spherical_geometry
 
 
-def from_wgs84(geometry: QgsGeometry, target_src: QgsCoordinateReferenceSystem) -> QgsGeometry:
+def from_wgs84(geometry: QgsGeometry, target_crs: QgsCoordinateReferenceSystem) -> QgsGeometry:
     """Transform a geometry from WGS84.
 
     :param geometry: A feature's geometry
-    :param target_src: The current CRS of the passed geometry
+    :param target_crs: The current CRS of the passed geometry
     """
-    geometry.transform(QgsCoordinateTransform(WGS84, target_src, PROJECT.transformContext()))
-    return geometry
+    projected_geometry = QgsGeometry(geometry)  # clone
+    projected_geometry.transform(QgsCoordinateTransform(WGS84, target_crs, PROJECT.transformContext()))
+    return projected_geometry
 
 
 def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:

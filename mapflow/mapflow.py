@@ -3,7 +3,7 @@ import json
 import os.path
 import tempfile
 from base64 import b64encode, b64decode
-from typing import List, Optional, Union
+from typing import List, Union
 from datetime import datetime, timedelta  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
@@ -138,6 +138,7 @@ class Mapflow(QObject):
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Providers
+        self.dlg.minIntersection.valueChanged.connect(self.filter_metadata)
         self.dlg.metadataFrom.dateChanged.connect(self.filter_metadata)
         self.dlg.metadataTo.dateChanged.connect(self.filter_metadata)
         self.dlg.maxCloudCover.valueChanged.connect(self.filter_metadata)
@@ -166,20 +167,38 @@ class Mapflow(QObject):
             )
         )
 
-    def filter_metadata(self) -> None:
+    def filter_metadata(self, min_intersection=None) -> None:
         """"""
+        try:
+            crs = self.metadata_layer.crs()
+        except (RuntimeError, AttributeError):  # no metadata layer
+            return
         max_cloud_cover = self.dlg.maxCloudCover.value()
+        if min_intersection is None:
+            min_intersection = self.dlg.minIntersection.value()
         from_ = self.dlg.metadataFrom.date().toString(Qt.ISODate)
         to = self.dlg.metadataTo.date().toString(Qt.ISODate)
-        # Set a filter on the metadata layer
-        try:
-            self.metadata_layer.setSubsetString(
-                f'cloudCover <= {max_cloud_cover/100} '
-                f"and acquisitionDate >= '{from_}' "
-                f"and acquisitionDate <= '{to}'"
-            )
-        except (RuntimeError, AttributeError):  # no metadata layer
-            pass
+        filter_ = (
+            f'cloudCover <= {max_cloud_cover/100} '
+            f"and acquisitionDate >= '{from_}' "
+            f"and acquisitionDate <= '{to}' "
+        )
+        aoi = helpers.from_wgs84(self.metadata_aoi, crs)
+        calculator = QgsDistanceArea()
+        calculator.setEllipsoid(crs.ellipsoidAcronym())
+        calculator.setSourceCrs(crs, self.project.transformContext())
+        min_intersection_size = calculator.measureArea(aoi) * (min_intersection/100)
+        aoi = QgsGeometry.createGeometryEngine(aoi.constGet())
+        aoi.prepareGeometry()
+        filtered_ids = [
+            feature['featureId'] for feature in self.metadata_layer.getFeatures()
+            if calculator.measureArea(
+                QgsGeometry(aoi.intersection(feature.geometry().constGet()))
+            ) < min_intersection_size
+        ]
+        if filtered_ids:
+            filter_ += 'and featureId not in (' + ', '.join((f"'{id_}'" for id_ in filtered_ids)) + ')'
+        self.metadata_layer.setSubsetString(filter_)
         # Show/hide table rows
         cloud_cover_column_index = [
             self.dlg.metadataTable.horizontalHeaderItem(col).text()
@@ -193,8 +212,8 @@ class Mapflow(QObject):
         for row in range(self.dlg.metadataTable.rowCount()):
             cloud_cover = self.dlg.metadataTable.item(row, cloud_cover_column_index).data(Qt.DisplayRole)
             datetime_ = self.dlg.metadataTable.item(row, datetime_column_index).data(Qt.DisplayRole)
-            is_fit = cloud_cover > max_cloud_cover or from_ > datetime_ or to < datetime_
-            self.dlg.metadataTable.setRowHidden(row, is_fit)
+            is_unfit = cloud_cover > max_cloud_cover or from_ > datetime_ or to < datetime_
+            self.dlg.metadataTable.setRowHidden(row, is_unfit)
 
     def is_valid_local_raster(self, raster: QgsRasterLayer) -> bool:
         """Return True for a GeoTIFF with a valid CRS that fits into config.MAX_TIF_SIZE.
@@ -502,26 +521,34 @@ class Mapflow(QObject):
         from_ = self.dlg.metadataFrom.date().toString(Qt.ISODate)
         to = self.dlg.metadataTo.date().toString(Qt.ISODate)
         max_cloud_cover = self.dlg.maxCloudCover.value()
+        min_intersection = self.dlg.minIntersection.value()
         if provider in config.MAXAR_PRODUCTS:
-            self.get_maxar_metadata(aoi, provider, from_, to, max_cloud_cover)
+            self.get_maxar_metadata(aoi, provider, from_, to, max_cloud_cover, min_intersection)
         else:
-            self.request_skywatch_metadata(aoi, from_, to, max_cloud_cover)
+            self.request_skywatch_metadata(aoi, from_, to, max_cloud_cover, min_intersection)
 
-    def request_skywatch_metadata(self, aoi: QgsGeometry, from_: str, to: str, max_cloud_cover: int) -> None:
+    def request_skywatch_metadata(
+        self,
+        aoi: QgsGeometry,
+        from_: str,
+        to: str,
+        max_cloud_cover: int,
+        min_intersection: int
+    ) -> None:
         """"""
-        callback_kwargs = {'max_cloud_cover': max_cloud_cover}
+        self.metadata_aoi = aoi
+        callback_kwargs = {'max_cloud_cover': max_cloud_cover, 'min_intersection': min_intersection}
         if aoi.wkbType() == QgsWkbTypes.MultiPolygon:
             if len(aoi.asMultiPolygon()) == 1:
                 aoi.convertToSingleType()
             else:  # use the BBOX of the parts
-                callback_kwargs['aoi'] = aoi
                 aoi = QgsGeometry.fromRect(aoi.boundingBox())
         self.http.post(
             url='https://api.skywatch.co/earthcache/archive/search',
             body=json.dumps({
                 'location': json.loads(aoi.asJson()),
                 'resolution': 'low',
-                'coverage': 0,
+                'coverage': min_intersection,
                 'start_date': from_,
                 'end_date': to,
                 'order_by': ['-date']
@@ -537,15 +564,13 @@ class Mapflow(QObject):
         self,
         response: QNetworkReply,
         max_cloud_cover: int,
-        aoi: Optional[QgsGeometry] = None
+        min_intersection: int
     ):
         """Start polling SkyWatch for metadata upon a successful request submission
 
         :param response: The HTTP response.
         :param max_cloud_cover: Passed on to fetch_skywatch_metadata().
-        :param aoi: Passed on to fetch_skywatch_metadata() if AOI is multipart.
         """
-        # self.dlg.metadataTable.clearContents()
         request_id = json.loads(response.readAll().data())['data']['id']
         # Prepare a layer
         self.metadata_layer = QgsVectorLayer(
@@ -559,13 +584,12 @@ class Mapflow(QObject):
             config.SENTINEL_OPTION_NAME + ' metadata',
             'memory'
         )
-        # Add style
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
         # Poll processings
         metadata_fetch_timer = QTimer(self.dlg)
         metadata_fetch_timer.setInterval(config.SKYWATCH_POLL_INTERVAL * 1000)
         metadata_fetch_timer.timeout.connect(
-            lambda: self.fetch_skywatch_metadata(request_id, max_cloud_cover, metadata_fetch_timer, aoi)
+            lambda: self.fetch_skywatch_metadata(request_id, max_cloud_cover, min_intersection, metadata_fetch_timer)
         )
         metadata_fetch_timer.start()
 
@@ -584,15 +608,14 @@ class Mapflow(QObject):
         self,
         request_id: str,
         max_cloud_cover: int,
+        min_intersection: int,
         timer: QTimer = None,
-        aoi: Optional[QgsGeometry] = None,
         start_index: int = 0
     ) -> None:
         """Check if the metadata is ready.
 
         :param request_id: The UUID of the submitted SkyWatch request.
         :param max_cloud_cover: All metadata with a higher cloud cover % will be discarded.
-        :param aoi: Passed on to fetch_skywatch_metadata() if AOI is multipart.
         """
         self.http.get(
             url=f'https://api.skywatch.co/earthcache/archive/search/{request_id}/search_results?cursor={start_index}',
@@ -600,9 +623,9 @@ class Mapflow(QObject):
             callback=self.fetch_skywatch_metadata_callback,
             callback_kwargs={
                 'max_cloud_cover': max_cloud_cover,
+                'min_intersection': min_intersection,
                 'request_id': request_id,
                 'timer': timer,
-                'aoi': aoi
             },
             error_handler=self.fetch_skywatch_metadata_error_handler,
             error_handler_kwargs={'timer': timer},
@@ -614,8 +637,8 @@ class Mapflow(QObject):
         response: QNetworkReply,
         request_id: str,
         max_cloud_cover: int,
+        min_intersection: int,
         timer: QTimer = None,
-        aoi: Optional[QgsGeometry] = None
     ):
         """"""
         if response.attribute(QNetworkRequest.HttpStatusCodeAttribute) == 202:
@@ -646,15 +669,13 @@ class Mapflow(QObject):
         with open(output_file_name, 'w') as file:
             json.dump(metadata, file)
         metadata_layer = QgsVectorLayer(output_file_name, '', 'ogr')
-        if aoi:  # discard images that intersects the bbox not the original AOI itself
-            aoi = QgsGeometry.createGeometryEngine(aoi.constGet())
-            aoi.prepareGeometry()
-            self.metadata_layer.dataProvider().deleteFeatures([
-                feature.id() for feature in metadata_layer.getFeatures()
-                if aoi.disjoint(feature.geometry().constGet())
-            ])
         # Add the new features to the displayed metadata layer
         self.metadata_layer.dataProvider().addFeatures(metadata_layer.getFeatures())
+        if (
+            self.metadata_aoi.wkbType() == QgsWkbTypes.MultiPolygon
+            and len(self.metadata_aoi.asMultiPolygon()) > 1
+        ):  # filter images that intersect BBOX but don't sufficiently intersect original AOI
+            self.filter_metadata(min_intersection)
         if timer:  # first page
             self.add_layer(self.metadata_layer)
         current_row_count = self.dlg.metadataTable.rowCount()
@@ -703,10 +724,12 @@ class Mapflow(QObject):
         product: str,
         from_: str,
         to: str,
-        max_cloud_cover: int
+        max_cloud_cover: int,
+        min_intersection: int
     ) -> None:
         """Get SecureWatch image metadata."""
         self.save_provider_auth()
+        self.metadata_aoi = aoi
         params = {
             'SERVICE': 'WFS',
             'VERSION': '2.0.0',
@@ -751,7 +774,11 @@ class Mapflow(QObject):
             self.http.post(
                 url=f'{self.server}/meta',
                 callback=self.get_maxar_metadata_callback,
-                callback_kwargs={'product': product},
+                callback_kwargs={
+                    'product': product,
+                    'aoi': aoi,
+                    'min_intersection': min_intersection
+                },
                 body=json.dumps({
                     'url': url,
                     'connectId': product.split()[1].lower()
@@ -759,7 +786,13 @@ class Mapflow(QObject):
                 timeout=7
             )
 
-    def get_maxar_metadata_callback(self, response: QNetworkReply, product: str) -> None:
+    def get_maxar_metadata_callback(
+        self,
+        response: QNetworkReply,
+        product: str,
+        aoi: QgsGeometry,
+        min_intersection: int
+    ) -> None:
         """Load and save Maxar metadata as GML, format it and display as a layer.
 
         :param response: The HTTP response.
@@ -770,6 +803,7 @@ class Mapflow(QObject):
         with open(output_file_name, 'wb') as f:
             f.write(response.readAll().data())
         self.metadata_layer = QgsVectorLayer(output_file_name, f'{product} metadata', 'ogr')
+        self.filter_metadata(min_intersection)
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
         self.add_layer(self.metadata_layer)
         # Get the list of features (don't use the generator itself, or it'll get exhausted)
@@ -895,7 +929,7 @@ class Mapflow(QObject):
             return
         if crs != helpers.WGS84:
             aoi = helpers.to_wgs84(aoi, crs)
-        self.aoi = aoi  # save for reuse in processing creation or metadata request
+        self.aoi = aoi  # save for reuse in processing creation or metadata requests
         calculator = QgsDistanceArea()
         # Set ellipsoid to calculate on sphere if the CRS is geographic; default to 7030 (WGS84)
         calculator.setEllipsoid('EPSG:7030')  # WGS84 ellipsoid
