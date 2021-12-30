@@ -10,7 +10,7 @@ from configparser import ConfigParser  # parse metadata.txt -> QGIS version chec
 from PyQt5.QtGui import QColor, QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
-    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion
+    QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion
 )
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction, QAbstractItemView, QLabel,
@@ -138,10 +138,12 @@ class Mapflow(QObject):
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Providers
-        self.dlg.minIntersection.valueChanged.connect(self.filter_metadata)
+        self.dlg.minIntersectionSpinBox.editingFinished.connect(self.filter_metadata)
+        self.dlg.maxCloudCoverSpinBox.editingFinished.connect(self.filter_metadata)
+        self.dlg.minIntersection.sliderReleased.connect(self.filter_metadata)
+        self.dlg.maxCloudCover.sliderReleased.connect(self.filter_metadata)
         self.dlg.metadataFrom.dateChanged.connect(self.filter_metadata)
         self.dlg.metadataTo.dateChanged.connect(self.filter_metadata)
-        self.dlg.maxCloudCover.valueChanged.connect(self.filter_metadata)
         self.dlg.preview.clicked.connect(self.preview)
         self.dlg.addProvider.clicked.connect(self.dlg_provider.show)
         self.dlg.addProvider.clicked.connect(lambda: self.dlg_provider.setProperty('mode', 'add'))
@@ -190,6 +192,7 @@ class Mapflow(QObject):
         min_intersection_size = calculator.measureArea(aoi) * (min_intersection/100)
         aoi = QgsGeometry.createGeometryEngine(aoi.constGet())
         aoi.prepareGeometry()
+        self.metadata_layer.setSubsetString('')  # clear any existing filters
         filtered_ids = [
             feature['featureId'] for feature in self.metadata_layer.getFeatures()
             if calculator.measureArea(
