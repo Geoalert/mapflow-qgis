@@ -329,7 +329,9 @@ class Mapflow(QObject):
         if self.add_layers_to_group:
             if not self.layer_group:  # сreate a layer group
                 self.layer_group = self.layer_tree_root.insertGroup(0, self.plugin_name)
-                self.layer_group.setExpanded(True)
+                # A bug fix, - gotta collapse first to be able to expand it
+                # Or else it'll ignore the setExpanded(True) calls
+                self.layer_group.setExpanded(False)
                 self.settings.setValue('layerGroup', self.plugin_name)
                 # If the group has been deleted, assume user wants to add layers to root, memorize it
                 self.layer_group.destroyed.connect(lambda: setattr(self, 'add_layers_to_group', False))
@@ -339,6 +341,7 @@ class Mapflow(QObject):
             self.project.addMapLayer(layer, addToLegend=False)
             # Explcitly add layer to the position 0 or else it adds it to bottom
             self.layer_group.insertLayer(0, layer)
+            self.layer_group.setExpanded(True)
         else:  # assume user opted to not use a group, add layers as usual
             self.project.addMapLayer(layer)
 
