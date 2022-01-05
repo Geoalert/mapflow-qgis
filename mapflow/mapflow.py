@@ -192,6 +192,15 @@ class Mapflow(QObject):
         min_intersection_size = calculator.measureArea(aoi) * (min_intersection/100)
         aoi = QgsGeometry.createGeometryEngine(aoi.constGet())
         aoi.prepareGeometry()
+        # Get attributes
+        if self.dlg.providerCombo.currentText() == config.SENTINEL_OPTION_NAME:
+            id_field = 'id'
+            id_column_index = config.SENTINEL_ID_COLUMN_INDEX
+            datetime_column_index = config.SENTINEL_DATETIME_COLUMN_INDEX
+        else:  # Maxar
+            id_field = 'featureId'
+            id_column_index = config.MAXAR_ID_COLUMN_INDEX
+            datetime_column_index = config.MAXAR_DATETIME_COLUMN_INDEX
         self.metadata_layer.setSubsetString('')  # clear any existing filters
         filtered_ids = [
             feature['featureId'] for feature in self.metadata_layer.getFeatures()
@@ -200,22 +209,18 @@ class Mapflow(QObject):
             ) < min_intersection_size
         ]
         if filtered_ids:
-            filter_ += 'and featureId not in (' + ', '.join((f"'{id_}'" for id_ in filtered_ids)) + ')'
+            filter_ += f'and {id_field} not in (' + ', '.join((f"'{id_}'" for id_ in filtered_ids)) + ')'
         self.metadata_layer.setSubsetString(filter_)
         # Show/hide table rows
         cloud_cover_column_index = [
             self.dlg.metadataTable.horizontalHeaderItem(col).text()
             for col in range(self.dlg.metadataTable.columnCount())
         ].index('Cloud Cover %')
-        datetime_column_index = (
-            config.SENTINEL_DATETIME_COLUMN_INDEX
-            if self.dlg.providerCombo.currentText() == config.SENTINEL_OPTION_NAME
-            else config.MAXAR_DATETIME_COLUMN_INDEX
-        )
         for row in range(self.dlg.metadataTable.rowCount()):
+            id_ = self.dlg.metadataTable.item(row, id_column_index).data(Qt.DisplayRole)
             cloud_cover = self.dlg.metadataTable.item(row, cloud_cover_column_index).data(Qt.DisplayRole)
             datetime_ = self.dlg.metadataTable.item(row, datetime_column_index).data(Qt.DisplayRole)
-            is_unfit = cloud_cover > max_cloud_cover or from_ > datetime_ or to < datetime_
+            is_unfit = cloud_cover > max_cloud_cover or from_ > datetime_ or to < datetime_ or id_ in filtered_ids
             self.dlg.metadataTable.setRowHidden(row, is_unfit)
 
     def is_valid_local_raster(self, raster: QgsRasterLayer) -> bool:
@@ -339,6 +344,7 @@ class Mapflow(QObject):
 
     def select_image(self, image_id: str) -> None:
         """Select a footprint in the current metadata layer when user selects it in the table."""
+        if not image_id: return
         provider = self.dlg.providerCombo.currentText()
         id_field = 'featureId' if provider in config.MAXAR_PRODUCTS else 'id'
         try:
@@ -579,7 +585,7 @@ class Mapflow(QObject):
         self.metadata_layer = QgsVectorLayer(
             'polygon?crs=epsg:4326&index=yes&' +
             '&'.join(f'field={name}:{type_}' for name, type_ in {
-                'id': 'string',
+                'featureId': 'string',
                 'preview': 'string',
                 'cloudCover': 'real',
                 'acquisitionDate': 'datetime'
