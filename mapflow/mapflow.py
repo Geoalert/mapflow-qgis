@@ -21,7 +21,7 @@ from qgis.gui import QgsMessageBarItem
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
     QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter, QgsRectangle,
-    QgsFeatureIterator, QgsWkbTypes
+    QgsFeatureIterator, QgsWkbTypes, QgsPoint
 )
 
 from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, SentinelAuthDialog, ErrorMessage
@@ -96,6 +96,7 @@ class Mapflow(QObject):
             callback=self.check_plugin_version_callback,
             use_default_error_handler=False  # ignore errors
         )
+        self.calculator = QgsDistanceArea()
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or config.DEFAULT_ZOOM))
@@ -186,10 +187,9 @@ class Mapflow(QObject):
             f"and acquisitionDate <= '{to}' "
         )
         aoi = helpers.from_wgs84(self.metadata_aoi, crs)
-        calculator = QgsDistanceArea()
-        calculator.setEllipsoid(crs.ellipsoidAcronym())
-        calculator.setSourceCrs(crs, self.project.transformContext())
-        min_intersection_size = calculator.measureArea(aoi) * (min_intersection/100)
+        self.calculator.setEllipsoid(crs.ellipsoidAcronym())
+        self.calculator.setSourceCrs(crs, self.project.transformContext())
+        min_intersection_size = self.calculator.measureArea(aoi) * (min_intersection/100)
         aoi = QgsGeometry.createGeometryEngine(aoi.constGet())
         aoi.prepareGeometry()
         # Get attributes
@@ -204,7 +204,7 @@ class Mapflow(QObject):
         self.metadata_layer.setSubsetString('')  # clear any existing filters
         filtered_ids = [
             feature['featureId'] for feature in self.metadata_layer.getFeatures()
-            if calculator.measureArea(
+            if self.calculator.measureArea(
                 QgsGeometry(aoi.intersection(feature.geometry().constGet()))
             ) < min_intersection_size
         ]
@@ -347,7 +347,8 @@ class Mapflow(QObject):
 
     def select_image(self, image_id: str) -> None:
         """Select a footprint in the current metadata layer when user selects it in the table."""
-        if not image_id: return
+        if not image_id:
+            return
         provider = self.dlg.providerCombo.currentText()
         id_field = 'featureId' if provider in config.MAXAR_PRODUCTS else 'id'
         try:
@@ -517,7 +518,7 @@ class Mapflow(QObject):
             self.dlg.rasterCombo.setLayer(layer)
 
     def get_metadata(self) -> None:
-        """Metadata is image footprints with attributes like capture date or cloud cover."""
+        """Metadata is image footprints with attributes like acquisition date or cloud cover."""
         # Define the AOI
         if self.dlg.metadataUseCanvasExtent.isChecked():
             aoi = helpers.to_wgs84(
@@ -528,6 +529,11 @@ class Mapflow(QObject):
             aoi = self.aoi
         else:
             self.alert(self.tr('Please, select an area of interest'))
+            return
+        self.calculator.setEllipsoid(helpers.WGS84_ELLIPSOID)
+        self.calculator.setSourceCrs(helpers.WGS84, self.project.transformContext())
+        if self.calculator.measureArea(aoi) > config.METADATA_MAX_AREA:
+            self.alert(self.tr('Your area of interest is too large.'))
             return
         provider = self.dlg.providerCombo.currentText()
         from_ = self.dlg.metadataFrom.date().toString(Qt.ISODate)
@@ -554,7 +560,23 @@ class Mapflow(QObject):
             if len(aoi.asMultiPolygon()) == 1:
                 aoi.convertToSingleType()
             else:  # use the BBOX of the parts
-                aoi = QgsGeometry.fromRect(aoi.boundingBox())
+                aoi = aoi.boundingBox()
+                x_min, x_max, y_min, y_max = aoi.xMinimum(), aoi.xMaximum(), aoi.yMinimum(), aoi.yMaximum()
+                north_west = QgsPoint(x_min, y_max)
+                width = QgsGeometry.fromPolyline((north_west, QgsPoint(x_max, y_max)))
+                height = QgsGeometry.fromPolyline((north_west, QgsPoint(x_min, y_min)))
+                self.calculator.setEllipsoid(helpers.WGS84_ELLIPSOID)
+                self.calculator.setSourceCrs(helpers.WGS84, self.project.transformContext())
+                if (
+                    self.calculator.measureLength(width) > config.METADATA_MAX_SIDE_LENGTH
+                    or self.calculator.measureLength(height) > config.METADATA_MAX_SIDE_LENGTH
+                ):
+                    self.alert(self.tr(
+                        'Your area-of-interest extent is too large.\n'
+                        'Try requesting metadata for a smaller subset of your areas by selecting those polygons.'
+                    ))
+                    return
+                aoi = QgsGeometry.fromRect(aoi)
         self.http.post(
             url='https://api.skywatch.co/earthcache/archive/search',
             body=json.dumps({
@@ -942,11 +964,10 @@ class Mapflow(QObject):
         if crs != helpers.WGS84:
             aoi = helpers.to_wgs84(aoi, crs)
         self.aoi = aoi  # save for reuse in processing creation or metadata requests
-        calculator = QgsDistanceArea()
-        # Set ellipsoid to calculate on sphere if the CRS is geographic; default to 7030 (WGS84)
-        calculator.setEllipsoid('EPSG:7030')  # WGS84 ellipsoid
-        calculator.setSourceCrs(helpers.WGS84, self.project.transformContext())
-        self.aoi_size = calculator.measureArea(aoi) / 10**6  # sq. m to sq.km
+        # Set ellipsoid to calculate on sphere if the CRS is geographic
+        self.calculator.setEllipsoid(helpers.WGS84_ELLIPSOID)
+        self.calculator.setSourceCrs(helpers.WGS84, self.project.transformContext())
+        self.aoi_size = self.calculator.measureArea(aoi) / 10**6  # sq. m to sq.km
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
 
     def delete_processings(self) -> None:
