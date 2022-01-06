@@ -735,10 +735,10 @@ class Mapflow(QObject):
                 layout.addWidget(more_button)
             # Set the button to fetch more metadata on click
 
-            def fetch_skywatch_metadata_next_page(request_id, max_cloud_cover, start_index, aoi):
-                self.fetch_skywatch_metadata(request_id, max_cloud_cover, aoi=aoi, start_index=start_index)
+            def fetch_skywatch_metadata_next_page(request_id, max_cloud_cover, min_intersection, start_index):
+                self.fetch_skywatch_metadata(request_id, max_cloud_cover, min_intersection, start_index=start_index)
             more_button.clicked.connect(
-                lambda: fetch_skywatch_metadata_next_page(request_id, max_cloud_cover, next_page_start_index, aoi)
+                lambda: fetch_skywatch_metadata_next_page(request_id, max_cloud_cover, min_intersection, next_page_start_index)
             )
         elif more_button:  # last page, remove the button
             layout.removeWidget(more_button)
@@ -748,8 +748,9 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        timer.stop()
-        timer.deleteLater()
+        if timer:
+            timer.stop()
+            timer.deleteLater()
         self.report_error(response, self.tr("We couldn't fetch metadata from SkyWatch"))
 
     def get_maxar_metadata(
@@ -810,7 +811,6 @@ class Mapflow(QObject):
                 callback=self.get_maxar_metadata_callback,
                 callback_kwargs={
                     'product': product,
-                    'aoi': aoi,
                     'min_intersection': min_intersection
                 },
                 body=json.dumps({
@@ -824,7 +824,6 @@ class Mapflow(QObject):
         self,
         response: QNetworkReply,
         product: str,
-        aoi: QgsGeometry,
         min_intersection: int
     ) -> None:
         """Load and save Maxar metadata as GML, format it and display as a layer.
