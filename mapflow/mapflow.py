@@ -742,6 +742,7 @@ class Mapflow(QObject):
             )
         elif more_button:  # last page, remove the button
             layout.removeWidget(more_button)
+            more_button.deleteLater()
 
     def fetch_skywatch_metadata_error_handler(self, response: QNetworkReply, timer: QTimer) -> None:
         """Error handler for Sentinel metadata requests.
