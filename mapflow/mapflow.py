@@ -7,7 +7,7 @@ from typing import List, Union
 from datetime import datetime, timedelta  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
-import gdal, osr
+import gdal
 from PyQt5.QtGui import QColor, QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
@@ -1258,13 +1258,10 @@ class Mapflow(QObject):
         preview = gdal.Open(f.name)
         if not preview.GetProjection():
             lon_wgs84, *_, lat_wgs84 = self.sentinel_metadata_coords[image_id]
-            crs = osr.SpatialReference()
-            crs.SetUTM(int((180 + lon_wgs84) // 6 + 1), int(lat_wgs84 < 0))
-            crs.SetWellKnownGeogCS('WGS84')
-            crs_wkt = crs.ExportToWkt()
-            preview.SetProjection(crs_wkt)
-            qgis_crs = QgsCoordinateReferenceSystem.fromWkt(crs_wkt)
-            nw = helpers.from_wgs84(QgsGeometry(QgsPoint(lon_wgs84, lat_wgs84)), qgis_crs).asPoint()
+            utm_zone = int((180 + lon_wgs84) // 6 + 1)
+            crs = QgsCoordinateReferenceSystem(f'epsg:32{6 if lat_wgs84 > 0 else 7}{utm_zone}')
+            preview.SetProjection(crs.toWkt())
+            nw = helpers.from_wgs84(QgsGeometry(QgsPoint(lon_wgs84, lat_wgs84)), crs).asPoint()
             preview.SetGeoTransform([
                 nw.x(),  # north-west corner x (lon, in case of UTM) 
                 320,  # pixel horizontal resolution (m)
