@@ -7,6 +7,7 @@ from typing import List, Union
 from datetime import datetime, timedelta  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
+import gdal, osr
 from PyQt5.QtGui import QColor, QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
@@ -610,6 +611,7 @@ class Mapflow(QObject):
         :param max_cloud_cover: Passed on to fetch_skywatch_metadata().
         """
         request_id = json.loads(response.readAll().data())['data']['id']
+        self.sentinel_metadata_coords = {}
         # Prepare a layer
         self.metadata_layer = QgsVectorLayer(
             'polygon?crs=epsg:4326&index=yes&' +
@@ -702,6 +704,10 @@ class Mapflow(QObject):
                 if round(feature['result_cloud_cover_percentage']) <= max_cloud_cover
             ]
         }
+        self.sentinel_metadata_coords.update({
+            feature['id']: feature['geometry']['bbox']
+            for feature in metadata['features']
+        })
         # Create a temporary layer for the current page of metadata
         output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex())
         with open(output_file_name, 'w') as file:
@@ -1244,10 +1250,30 @@ class Mapflow(QObject):
             self.settings.setValue('providerUsername', self.dlg.providerUsername.text())
             self.settings.setValue('providerPassword', self.dlg.providerPassword.text())
 
-    def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str) -> None:
+    def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
         """"""
         with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb') as f:
             f.write(response.readAll().data())
+        # Some previews aren't georef-ed
+        preview = gdal.Open(f.name)
+        if not preview.GetProjection():
+            lon_wgs84, *_, lat_wgs84 = self.sentinel_metadata_coords[image_id]
+            crs = osr.SpatialReference()
+            crs.SetUTM(int((180 + lon_wgs84) // 6 + 1), int(lat_wgs84 < 0))
+            crs.SetWellKnownGeogCS('WGS84')
+            crs_wkt = crs.ExportToWkt()
+            preview.SetProjection(crs_wkt)
+            qgis_crs = QgsCoordinateReferenceSystem.fromWkt(crs_wkt)
+            nw = helpers.from_wgs84(QgsGeometry(QgsPoint(lon_wgs84, lat_wgs84)), qgis_crs).asPoint()
+            preview.SetGeoTransform([
+                nw.x(),  # north-west corner x (lon, in case of UTM) 
+                320,  # pixel horizontal resolution (m)
+                0,  # x-axis rotation
+                nw.y(),  # north-west corner y (lat, in case of UTM)
+                0,  # y-axis rotation
+                -320  # pixel vertical resolution (m)
+            ])
+            preview.FlushCache()
         layer = QgsRasterLayer(f.name, f'{config.SENTINEL_OPTION_NAME} {datetime_}', 'gdal')
         # Set the no-data value if undefined
         layer_provider = layer.dataProvider()
@@ -1278,7 +1304,10 @@ class Mapflow(QObject):
                         config.SENTINEL_PREVIEW_COLUMN_INDEX
                     ).text(),
                     callback=self.preview_sentinel_callback,
-                    callback_kwargs={'datetime_': datetime_.text()},
+                    callback_kwargs={
+                        'datetime_': datetime_.text(), 
+                        'image_id': selected_cells[config.SENTINEL_ID_COLUMN_INDEX].text()
+                    },
                     error_handler=self.preview_sentinel_error_handler
                 )
             else:
