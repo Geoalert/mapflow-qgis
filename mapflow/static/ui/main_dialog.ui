@@ -637,7 +637,7 @@
           <item row="0" column="0">
            <layout class="QGridLayout" name="gridLayout">
             <item row="0" column="0">
-             <layout class="QHBoxLayout" name="layoutMetadataAoi" stretch="1,0">
+             <layout class="QHBoxLayout" name="layoutMetadataAoi" stretch="2,0,0,1,0">
               <item>
                <layout class="QFormLayout" name="formLayout">
                 <item row="0" column="0">
@@ -660,6 +660,51 @@
                <widget class="QCheckBox" name="metadataUseCanvasExtent">
                 <property name="text">
                  <string>Use canvas extent</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="labelMinIntersection">
+                <property name="text">
+                 <string>Min intersection:</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QSlider" name="minIntersection">
+                <property name="minimum">
+                 <number>1</number>
+                </property>
+                <property name="maximum">
+                 <number>100</number>
+                </property>
+                <property name="value">
+                 <number>50</number>
+                </property>
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="tickPosition">
+                 <enum>QSlider::TicksBelow</enum>
+                </property>
+                <property name="tickInterval">
+                 <number>5</number>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QSpinBox" name="minIntersectionSpinBox">
+                <property name="suffix">
+                 <string>%</string>
+                </property>
+                <property name="minimum">
+                 <number>1</number>
+                </property>
+                <property name="maximum">
+                 <number>100</number>
+                </property>
+                <property name="value">
+                 <number>50</number>
                 </property>
                </widget>
               </item>
@@ -901,8 +946,8 @@
    <slot>setCurrentText(QString)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>139</x>
-     <y>104</y>
+     <x>120</x>
+     <y>128</y>
     </hint>
     <hint type="destinationlabel">
      <x>521</x>
@@ -921,8 +966,8 @@
      <y>111</y>
     </hint>
     <hint type="destinationlabel">
-     <x>139</x>
-     <y>104</y>
+     <x>120</x>
+     <y>128</y>
     </hint>
    </hints>
   </connection>
@@ -949,12 +994,12 @@
    <slot>setDisabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>579</x>
-     <y>227</y>
+     <x>329</x>
+     <y>224</y>
     </hint>
     <hint type="destinationlabel">
-     <x>242</x>
-     <y>220</y>
+     <x>145</x>
+     <y>225</y>
     </hint>
    </hints>
   </connection>
@@ -965,12 +1010,12 @@
    <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>472</x>
-     <y>284</y>
+     <x>540</x>
+     <y>261</y>
     </hint>
     <hint type="destinationlabel">
-     <x>575</x>
-     <y>286</y>
+     <x>625</x>
+     <y>265</y>
     </hint>
    </hints>
   </connection>
@@ -981,12 +1026,44 @@
    <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>564</x>
-     <y>304</y>
+     <x>625</x>
+     <y>265</y>
     </hint>
     <hint type="destinationlabel">
-     <x>446</x>
-     <y>300</y>
+     <x>540</x>
+     <y>261</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>minIntersection</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>minIntersectionSpinBox</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>487</x>
+     <y>202</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>595</x>
+     <y>203</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>minIntersectionSpinBox</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>minIntersection</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>601</x>
+     <y>221</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>495</x>
+     <y>205</y>
     </hint>
    </hints>
   </connection>
