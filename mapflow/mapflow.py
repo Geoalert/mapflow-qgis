@@ -3,7 +3,7 @@ import json
 import os.path
 import tempfile
 from base64 import b64encode, b64decode
-from typing import List, Union
+from typing import List, Optional, Union
 from datetime import datetime, timedelta  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
@@ -75,6 +75,8 @@ class Mapflow(QObject):
         QCoreApplication.translate('QPlatformTheme', '&No')
         # Create a namespace for the plugin settings
         self.settings.beginGroup(self.plugin_name.lower())
+        if self.settings.value('processings') is None:
+            self.settings.setValue('processings', {})
         # Init dialogs
         self.dlg = MainDialog(self.main_window)
         self.set_up_login_dialog()
@@ -170,7 +172,7 @@ class Mapflow(QObject):
         self.processing_fetch_timer.timeout.connect(
             lambda: self.http.get(
                 url=f'{self.server}/processings',
-                callback=self.fill_out_processings_table,
+                callback=self.get_processings_callback,
                 use_default_error_handler=False  # ignore errors to prevent repetitive alerts
             )
         )
@@ -1234,9 +1236,29 @@ class Mapflow(QObject):
         # Do an extra fetch immediately
         self.http.get(
             url=f'{self.server}/processings',
-            callback=self.fill_out_processings_table,
-            use_default_error_handler=False  # ignore errors to prevent repetitive alerts
+            callback=self.get_processings_callback
         )
+        self.http.get(
+            url=f'{self.server}/projects/default',
+            callback=self.set_processing_limit
+        )
+
+    def set_processing_limit(
+        self,
+        response: Optional[QNetworkReply] = None,
+        user: Optional[dict] = None
+    ) -> None:
+        """"""
+        if response:
+            user = json.loads(response.readAll().data())['user']
+        if user['role'] == 'ADMIN':
+            self.remaining_limit = 1e5  # 100K sq.km
+        else:
+            self.remaining_limit = (user['areaLimit'] - user['processedArea']) * 1e-6
+        if self.plugin_name == 'Mapflow':
+            self.dlg.remainingLimit.setText(
+                self.tr('Processing limit: {} sq.km').format(round(self.remaining_limit, 2))
+            )
 
     def save_provider_auth(self) -> None:
         """Save provider credentials to settings if user checked the save option.
@@ -1263,7 +1285,7 @@ class Mapflow(QObject):
             preview.SetProjection(crs.toWkt())
             nw = helpers.from_wgs84(QgsGeometry(QgsPoint(lon_wgs84, lat_wgs84)), crs).asPoint()
             preview.SetGeoTransform([
-                nw.x(),  # north-west corner x (lon, in case of UTM) 
+                nw.x(),  # north-west corner x (lon, in case of UTM)
                 320,  # pixel horizontal resolution (m)
                 0,  # x-axis rotation
                 nw.y(),  # north-west corner y (lat, in case of UTM)
@@ -1302,7 +1324,7 @@ class Mapflow(QObject):
                     ).text(),
                     callback=self.preview_sentinel_callback,
                     callback_kwargs={
-                        'datetime_': datetime_.text(), 
+                        'datetime_': datetime_.text(),
                         'image_id': selected_cells[config.SENTINEL_ID_COLUMN_INDEX].text()
                     },
                     error_handler=self.preview_sentinel_error_handler
@@ -1523,50 +1545,73 @@ class Mapflow(QObject):
             box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
         return box.exec() == QMessageBox.Ok
 
-    def fill_out_processings_table(self, response: QNetworkReply) -> None:
-        """Fill out the processings table with the processings in the user's default project.
+    def get_processings_callback(self, response: QNetworkReply) -> None:
+        """Update the processing table and user limit.
 
-        Is called by upon successful processing fetch.
         :param response: The HTTP response.
         """
-        processings = json.loads(response.readAll().data())
-        try:  # check if there any ongoing processings
-            next(filter(lambda p: p['status'] == 'IN_PROGRESS', processings))
-        except StopIteration:  # all processings have finished
+        processings: list[dict] = json.loads(response.readAll().data())
+        if not [p for p in processings if p['status'] == 'IN_PROGRESS']:  # stop polling
             self.processing_fetch_timer.stop()
         if sys.version_info.minor < 7:  # python 3.6 doesn't understand 'Z' as UTC
             for processing in processings:
                 processing['created'] = processing['created'].replace('Z', '+0000')
+        env = QgsSettings().value('variables/mapflow_env') or 'production'
+        processing_history = self.settings.value('processings')
+        user_processing_history = processing_history.get(env, {}).get(self.username, {})
+        now = datetime.now().astimezone()
+        one_day = timedelta(1)
+        update_processing_limit = False
+        finished, failed = [], []
         for processing in processings:
-            # Add % signs to progress column for clarity
-            processing['percentCompleted'] = processing['percentCompleted']
+            # Extract workflow definition (model) names
+            processing['workflowDef'] = processing['workflowDef']['name']
+            # Convert area to sq.km
             processing['aoiArea'] = round(processing['aoiArea'] / 10**6, 2)
-            # Parse and localize creation datetime
+            # Localize creation datetime
             processing['created'] = datetime.strptime(
                 processing['created'], '%Y-%m-%dT%H:%M:%S.%f%z'
             ).astimezone()
-            # Extract WD names from WD objects
-            processing['workflowDef'] = processing['workflowDef']['name']
-        # Memorize which processings had been finished to alert user later
-        env = self.server.split('-')[1].split('.')[0]
-        all_finished = self.settings.value('finished_processings', {})
-        previously_finished = all_finished.get(env, {}).get(self.username, [])
-        now = datetime.now().astimezone()
-        one_day = timedelta(1)
-        finished = [
-            processing['id'] for processing in processings
-            if processing['percentCompleted'] == 100
-            and now - processing['created'] < one_day
-        ]
-        # Update the list of finished processings for the given account
-        if not all_finished.get(env):  # 1st assignment
-            all_finished[env] = {}
-        all_finished[env][self.username] = finished
-        self.settings.setValue('finished_processings', all_finished)
-        # Drop seconds to save space
-        for processing in processings:
+            # Find newly failed processings and alert the user
+            is_new = now - processing['created'] < one_day
+            if processing['status'] == 'FAILED':
+                failed.append(processing)
+                if processing['id'] not in user_processing_history.get('failed', []):
+                    update_processing_limit = True
+                    if is_new:
+                        self.alert(
+                            processing['name'] +
+                            self.tr(' failed.'),
+                            QMessageBox.Critical
+                        )
+            # Find recently finished processings and alert the user
+            elif processing['percentCompleted'] == 100:
+                finished.append(processing)
+                if is_new and processing['id'] not in user_processing_history.get('finished', []):
+                    self.alert(
+                        processing['name'] +
+                        self.tr(' finished. Double-click it in the table to download the results.'),
+                        QMessageBox.Information
+                    )
+            # Serialize datetime and drop seconds for brevity
             processing['created'] = processing['created'].strftime('%Y-%m-%d %H:%M')
-        # Memorize selected processings by id
+        if update_processing_limit:  # return the limit that was reserved for the failed processings
+            self.http.get(
+                url=f'{self.server}/projects/default',
+                callback=self.set_processing_limit
+            )
+        # Update the history for the given account
+        processing_ids = {
+            'finished': [processing['id'] for processing in finished], 
+            'failed': [processing['id'] for processing in failed]
+        }
+        try:  # use try-except bc this will only error once
+            processing_history[env][self.username] = processing_ids
+        except KeyError:  # history for the current env hasn't been initialized yet
+            processing_history[env] = {self.username: processing_ids}
+        self.settings.setValue('processings', processing_history)
+        # UPDATE THE TABLE
+        # Memorize the selection to restore it after table update
         selected_processings = [
             index.data() for index in self.dlg.processingsTable.selectionModel().selectedIndexes()
             if index.column() == config.PROCESSING_TABLE_ID_COLUMN_INDEX
@@ -1589,21 +1634,7 @@ class Mapflow(QObject):
         self.dlg.processingsTable.setSortingEnabled(True)
         # Restore extended selection
         self.dlg.processingsTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        # Inform user about finished processings
-        for processing_id in set(finished) - set(previously_finished):
-            processing = next(filter(lambda x: x['id'] == processing_id, processings))
-            self.alert(
-                processing['name'] +
-                self.tr(' finished. Double-click it in the table to download the results.'),
-                QMessageBox.Information
-            )
-            # Update user processing limit
-            self.remaining_limit -= round(processing['aoiArea']/10**6)
-            if self.plugin_name == 'Mapflow':
-                self.dlg.remainingLimit.setText(
-                    self.tr('Processing limit: {} sq.km').format(self.remaining_limit)
-                )
-        # Save as an instance attribute to reuse elsewhere
+        # Save for reuse
         self.processings = processings
 
     def tr(self, message: str) -> str:
@@ -1762,22 +1793,15 @@ class Mapflow(QObject):
         :param response: The HTTP response.
         """
         # Fetch processings at startup and start the timer to keep fetching them afterwards
-        self.http.get(url=f'{self.server}/processings', callback=self.fill_out_processings_table)
+        self.http.get(url=f'{self.server}/processings', callback=self.get_processings_callback)
         self.processing_fetch_timer.start()
         # Set up the UI with the received data
         response = json.loads(response.readAll().data())
         user = response['user']
+        self.set_processing_limit(user=user)
         self.is_premium_user = user['isPremium']
         self.on_provider_change(self.dlg.providerCombo.currentText())
-        if user['role'] == 'ADMIN':
-            self.remaining_limit = 1e+5  # 100K sq. km
-        else:
-            self.remaining_limit = round((user['areaLimit'] - user['processedArea']) * 1e-6)
         self.aoi_area_limit = response['user']['aoiAreaLimit'] * 1e-6
-        if self.plugin_name == 'Mapflow':
-            self.dlg.remainingLimit.setText(
-                self.tr('Processing limit: {} sq.km').format(self.remaining_limit)
-            )
         self.dlg.modelCombo.clear()
         self.dlg.modelCombo.addItems([wd['name'] for wd in response['workflowDefs']])
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
