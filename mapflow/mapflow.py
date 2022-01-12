@@ -300,6 +300,7 @@ class Mapflow(QObject):
             provider_name = 'Provider'
             columns = tuple()  # empty
             hidden_column_index = None
+            sort_by = None
             enabled = False
             max_zoom = config.MAX_ZOOM
             # Forced to int bc somehow used to be stored as str, so for backward compatability
@@ -310,7 +311,8 @@ class Mapflow(QObject):
         self.dlg.metadataTable.setHorizontalHeaderLabels(columns)
         if hidden_column_index is not None:
             self.dlg.metadataTable.setColumnHidden(hidden_column_index, True)
-        self.dlg.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
+        if sort_by is not None:
+            self.dlg.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
         self.dlg.metadata.setTitle(provider_name + ' Imagery Catalog')
         self.dlg.metadata.setEnabled(enabled)
 
@@ -1806,7 +1808,7 @@ class Mapflow(QObject):
         self.dlg.modelCombo.addItems([wd['name'] for wd in response['workflowDefs']])
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
         # Restore table section sizes
-        # for table in 'processingsTable', 'metadataTable':
+        # for table in 'processingsTable', 'metadataTable'
         #     header = getattr(self.dlg, table).horizontalHeader()
         #     header.restoreState(self.settings.value(table + 'HeaderState', b''))
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
