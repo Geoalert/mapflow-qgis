@@ -7,7 +7,7 @@ from typing import List, Optional, Union
 from datetime import datetime, timedelta  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
-import gdal
+from osgeo import gdal
 from PyQt5.QtGui import QColor, QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
