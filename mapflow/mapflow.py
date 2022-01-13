@@ -584,8 +584,15 @@ class Mapflow(QObject):
                     ))
                     return
                 aoi = QgsGeometry.fromRect(aoi)
+        token = self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']
+        if token:  # own account
+            url='https://api.skywatch.co/earthcache/archive/search'
+            headers = token
+        else:  # our account
+            url = self.server + '/meta/skywatch/id'
+            headers={}
         self.http.post(
-            url='https://api.skywatch.co/earthcache/archive/search',
+            url=url,
             body=json.dumps({
                 'location': json.loads(aoi.asJson()),
                 'resolution': 'low',
@@ -594,7 +601,7 @@ class Mapflow(QObject):
                 'end_date': to,
                 'order_by': ['-date']
             }).encode(),
-            headers={'x-api-key': self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']},
+            headers=headers,
             callback=self.request_skywatch_metadata_callback,
             callback_kwargs=callback_kwargs,
             error_handler=self.request_skywatch_metadata_error_handler,
@@ -652,7 +659,13 @@ class Mapflow(QObject):
         metadata_fetch_timer = QTimer(self.dlg)
         metadata_fetch_timer.setInterval(config.SKYWATCH_POLL_INTERVAL * 1000)
         metadata_fetch_timer.timeout.connect(
-            lambda: self.fetch_skywatch_metadata(request_id, max_cloud_cover, min_intersection, metadata_fetch_timer)
+            lambda: self.fetch_skywatch_metadata(
+                'mapflow' in response.request().url().authority(),
+                request_id, 
+                max_cloud_cover, 
+                min_intersection, 
+                metadata_fetch_timer
+            )
         )
         metadata_fetch_timer.start()
 
@@ -670,6 +683,7 @@ class Mapflow(QObject):
 
     def fetch_skywatch_metadata(
         self,
+        is_proxied: bool,
         request_id: str,
         max_cloud_cover: int,
         min_intersection: int,
@@ -681,9 +695,15 @@ class Mapflow(QObject):
         :param request_id: The UUID of the submitted SkyWatch request.
         :param max_cloud_cover: All metadata with a higher cloud cover % will be discarded.
         """
-        self.http.get(
+        if is_proxied:
+            url = f'{self.server}/meta/skywatch/page?id={request_id}&cursor={start_index}'
+            headers = {}
+        else:
             url=f'https://api.skywatch.co/earthcache/archive/search/{request_id}/search_results?cursor={start_index}',
             headers={'x-api-key': self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']},
+        self.http.get(
+            url=url,
+            headers=headers,
             callback=self.fetch_skywatch_metadata_callback,
             callback_kwargs={
                 'max_cloud_cover': max_cloud_cover,
@@ -766,7 +786,13 @@ class Mapflow(QObject):
             # Set the button to fetch more metadata on click
 
             def fetch_skywatch_metadata_next_page(request_id, max_cloud_cover, min_intersection, start_index):
-                self.fetch_skywatch_metadata(request_id, max_cloud_cover, min_intersection, start_index=start_index)
+                self.fetch_skywatch_metadata(
+                    'mapflow' in response.request().url().authority(),
+                    request_id, 
+                    max_cloud_cover, 
+                    min_intersection, 
+                    start_index=start_index
+                )
             more_button.clicked.connect(
                 lambda: fetch_skywatch_metadata_next_page(request_id, max_cloud_cover, min_intersection, next_page_start_index)
             )
@@ -784,7 +810,7 @@ class Mapflow(QObject):
         if timer:
             timer.stop()
             timer.deleteLater()
-        self.report_error(response, self.tr("We couldn't fetch metadata from SkyWatch"))
+        self.report_error(response, self.tr("We couldn't fetch Sentinel metadata"))
 
     def get_maxar_metadata(
         self,
