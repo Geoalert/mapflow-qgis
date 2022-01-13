@@ -725,6 +725,7 @@ class Mapflow(QObject):
         timer: QTimer = None,
     ):
         """"""
+        is_proxied = 'mapflow' in response.request().url().authority()
         if response.attribute(QNetworkRequest.HttpStatusCodeAttribute) == 202:
             return  # not ready yet
         if timer:
@@ -787,7 +788,7 @@ class Mapflow(QObject):
 
             def fetch_skywatch_metadata_next_page(request_id, max_cloud_cover, min_intersection, start_index):
                 self.fetch_skywatch_metadata(
-                    'mapflow' in response.request().url().authority(),
+                    is_proxied,
                     request_id, 
                     max_cloud_cover, 
                     min_intersection, 
@@ -807,9 +808,11 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        if timer:
+        try:
             timer.stop()
             timer.deleteLater()
+        except (RuntimeError, AttributeError):  # None or has been destroyed
+            pass
         self.report_error(response, self.tr("We couldn't fetch Sentinel metadata"))
 
     def get_maxar_metadata(
@@ -866,7 +869,7 @@ class Mapflow(QObject):
             )
         else:  # assume user wants to use our account, proxy thru Mapflow
             self.http.post(
-                url=f'{self.server}/meta',
+                url=f'{self.server}/meta/maxar',
                 callback=self.get_maxar_metadata_callback,
                 callback_kwargs={
                     'product': product,
