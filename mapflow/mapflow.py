@@ -162,7 +162,7 @@ class Mapflow(QObject):
         self.dlg.providerAuthGroup.toggled.connect(self.limit_zoom_auth_toggled)
         # Maxar
         self.dlg.imageId.textChanged.connect(self.select_image)
-        self.dlg.metadataTable.itemSelectionChanged.connect(self.sync_table_selection_with_other_widgets)
+        self.dlg.metadataTable.itemSelectionChanged.connect(self.sync_table_selection_with_image_id_and_layer)
         self.dlg.getMetadata.clicked.connect(self.get_metadata)
         self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
         self.dlg.providerCombo.currentTextChanged.connect(self.on_provider_change)
@@ -278,6 +278,10 @@ class Mapflow(QObject):
         :param provider: The currently selected provider
         """
         self.dlg.metadataTable.clear()
+        more_button = self.dlg.findChild(QPushButton, config.METADATA_MORE_BUTTON_OBJECT_NAME)
+        if more_button:
+            self.dlg.metadata.layout().removeWidget(more_button)
+            more_button.deleteLater()
         provider_name = provider
         if provider == config.SENTINEL_OPTION_NAME:
             columns = config.SENTINEL_ATTRIBUTES
@@ -307,7 +311,9 @@ class Mapflow(QObject):
         self.dlg.metadataTable.setRowCount(0)
         self.dlg.metadataTable.setColumnCount(len(columns))
         self.dlg.metadataTable.setHorizontalHeaderLabels(columns)
-        if hidden_column_index is not None:
+        for col in range(len(columns)):  # reveal any previously hidden columns
+            self.dlg.metadataTable.setColumnHidden(col, False)
+        if hidden_column_index is not None:  # now hide the relevant ones
             self.dlg.metadataTable.setColumnHidden(hidden_column_index, True)
         if sort_by is not None:
             self.dlg.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
@@ -522,6 +528,8 @@ class Mapflow(QObject):
 
     def get_metadata(self) -> None:
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
+        self.dlg.metadataTable.clearContents()
+        self.dlg.metadataTable.setRowCount(0)
         # Define the AOI
         if self.dlg.metadataUseCanvasExtent.isChecked():
             aoi = helpers.to_wgs84(
@@ -599,14 +607,23 @@ class Mapflow(QObject):
         self.dlg.getMetadata.setDown(True)
 
     def sync_layer_selection_with_table(self, selected_ids: List[int]) -> None:
-        if selected_ids:
-            selected_id = selected_ids[-1] - 1  # rows are 0-based
-            already_selected = set(item.row() for item in self.dlg.metadataTable.selectedItems())
-            if selected_id in already_selected:
-                return
-            self.dlg.metadataTable.selectRow(selected_id)
-        else:
+        if not selected_ids:
             self.dlg.metadataTable.clearSelection()
+            return
+        selected_id = self.metadata_layer.getFeature(selected_ids[-1])['featureId']
+        id_column_index = [
+            config.SENTINEL_ID_COLUMN_INDEX
+            if self.dlg.providerCombo.currentText() == config.SENTINEL_OPTION_NAME
+            else config.MAXAR_ID_COLUMN_INDEX
+        ]
+        already_selected = [
+            item.text() for item in self.dlg.metadataTable.selectedItems()
+            if item.column() == id_column_index
+        ]
+        if selected_id not in already_selected:
+            self.dlg.metadataTable.selectRow(
+                self.dlg.metadataTable.findItems(selected_id, Qt.MatchExactly)[0].row()
+            )
 
     def request_skywatch_metadata_callback(
         self,
@@ -619,7 +636,6 @@ class Mapflow(QObject):
         :param response: The HTTP response.
         :param max_cloud_cover: Passed on to fetch_skywatch_metadata().
         """
-        self.dlg.getMetadata.setDown(False)
         request_id = json.loads(response.readAll().data())['data']['id']
         self.sentinel_metadata_coords = {}
         # Prepare a layer
@@ -761,6 +777,8 @@ class Mapflow(QObject):
         elif more_button:  # last page, remove the button
             layout.removeWidget(more_button)
             more_button.deleteLater()
+        if timer:
+            self.dlg.getMetadata.setDown(False)
 
     def fetch_skywatch_metadata_error_handler(self, response: QNetworkReply, timer: QTimer) -> None:
         """Error handler for Sentinel metadata requests.
@@ -855,7 +873,7 @@ class Mapflow(QObject):
         with open(output_file_name, 'wb') as f:
             f.write(response.readAll().data())
         self.metadata_layer = QgsVectorLayer(output_file_name, f'{product} metadata', 'ogr')
-        self.metadata_layer.selectionChanged.connect(lambda selected: self.dlg.metadataTable.selectRow(selected[-1]))
+        self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
         self.filter_metadata(min_intersection)
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
         self.add_layer(self.metadata_layer)
@@ -901,22 +919,22 @@ class Mapflow(QObject):
         else:
             self.report_error(response, self.tr("We couldn't get metadata from Maxar"))
 
-    def sync_table_selection_with_other_widgets(self) -> str:
-        """Return the ID of the currently seleted Maxar or Sentinel image, or empty string."""
+    def sync_table_selection_with_image_id_and_layer(self) -> str:
+        """"""
         selected_cells = self.dlg.metadataTable.selectedItems()
         if not selected_cells:
             self.dlg.imageId.setText('')
             self.metadata_layer.removeSelection()
             return
-        provider = self.dlg.providerCombo.currentText()
-        image_id = selected_cells[
+        id_column_index = (
             config.SENTINEL_ID_COLUMN_INDEX
-            if provider == config.SENTINEL_OPTION_NAME
+            if self.dlg.providerCombo.currentText() == config.SENTINEL_OPTION_NAME
             else config.MAXAR_ID_COLUMN_INDEX
-        ].text()
+        )
+        image_id = next(cell for cell in selected_cells if cell.column() == id_column_index).text()
         try:
             already_selected = [feature['featureId'] for feature in self.metadata_layer.selectedFeatures()]
-            if (len(already_selected) != 1 or already_selected[0] != selected_cells[0].row() + 1):
+            if (len(already_selected) != 1 or already_selected[0] != image_id):
                 self.metadata_layer.selectByExpression(f"featureId='{image_id}'")
         except RuntimeError:  # layer has been deleted
             pass

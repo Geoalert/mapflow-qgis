@@ -15,7 +15,7 @@ MAXAR_METADATA_ATTRIBUTES = {
     'Product Type': 'productType',
     'Band Order': 'colorBandOrder',
     'Cloud %': 'cloudCover',
-    f'Off Nadir Angle \N{DEGREE SIGN}': 'offNadirAngle',
+    f'\N{DEGREE SIGN} Off Nadir': 'offNadirAngle',
     f'Date & Time ({TIMEZONE})': 'acquisitionDate',
     'Image ID': 'featureId'
 }
