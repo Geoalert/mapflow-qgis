@@ -129,6 +129,7 @@ class Mapflow(QObject):
         self.dlg.selectTif.clicked.connect(self.select_tif)
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.rasterCombo.layerChanged.connect(self.toggle_processing_checkboxes)
+        self.dlg.rasterCombo.currentTextChanged.connect(self.toggle_processing_checkboxes)
         self.dlg.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
         self.dlg.startProcessing.clicked.connect(self.create_processing)
         # Sync polygon layer combos
@@ -477,12 +478,13 @@ class Mapflow(QObject):
             layer.selectionChanged.connect(self.calculate_aoi_area_selection)
             layer.editingStopped.connect(self.calculate_aoi_area_layer_edited)
 
-    def toggle_processing_checkboxes(self, provider: Union[QgsRasterLayer, None]) -> None:
+    def toggle_processing_checkboxes(self, provider: Union[QgsRasterLayer, str, None]) -> None:
         """Toggle 'Use image extent' & 'Use cache' depending on the item in the imagery combo box.
 
-        :param provider: A GDAL raster layer or None if one of web tile providers
+        :param provider: Provider name or None, depending on the signal, if one of the
+            tile providers, otherwise the selected raster layer
         """
-        enabled = True if provider and provider.crs().authid() else False
+        enabled = isinstance(provider, QgsRasterLayer) and bool(provider.crs().authid())
         self.dlg.useImageExtentAsAoi.setEnabled(enabled)
         self.dlg.useImageExtentAsAoi.setChecked(enabled)
         self.dlg.useCache.setEnabled(not enabled)
@@ -1604,7 +1606,7 @@ class Mapflow(QObject):
             )
         # Update the history for the given account
         processing_ids = {
-            'finished': [processing['id'] for processing in finished], 
+            'finished': [processing['id'] for processing in finished],
             'failed': [processing['id'] for processing in failed]
         }
         try:  # use try-except bc this will only error once
