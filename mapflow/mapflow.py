@@ -539,11 +539,6 @@ class Mapflow(QObject):
         else:
             self.alert(self.tr('Please, select an area of interest'))
             return
-        self.calculator.setEllipsoid(helpers.WGS84_ELLIPSOID)
-        self.calculator.setSourceCrs(helpers.WGS84, self.project.transformContext())
-        if self.calculator.measureArea(aoi) > config.METADATA_MAX_AREA:
-            self.alert(self.tr('Your area of interest is too large.'))
-            return
         provider = self.dlg.providerCombo.currentText()
         from_ = self.dlg.metadataFrom.date().toString(Qt.ISODate)
         to = self.dlg.metadataTo.date().toString(Qt.ISODate)
@@ -565,27 +560,40 @@ class Mapflow(QObject):
         """"""
         self.metadata_aoi = aoi
         callback_kwargs = {'max_cloud_cover': max_cloud_cover, 'min_intersection': min_intersection}
+        # Check if the AOI is too large
+        self.calculator.setEllipsoid(helpers.WGS84_ELLIPSOID)
+        self.calculator.setSourceCrs(helpers.WGS84, self.project.transformContext())
+        aoi_bbox = aoi.boundingBox()
+        aoi_bbox_geom = QgsGeometry.fromRect(aoi_bbox)
+        # Check the area
+        if self.calculator.measureArea(aoi_bbox_geom) > config.SKYWATCH_METADATA_MAX_AREA:
+            self.alert(self.tr('Your area of interest is too large.'))
+            return
+        # Check the side length
+        x_min, x_max, y_min, y_max = (
+            aoi_bbox.xMinimum(), 
+            aoi_bbox.xMaximum(), 
+            aoi_bbox.yMinimum(), 
+            aoi_bbox.yMaximum()
+        )
+        north_west = QgsPoint(x_min, y_max)
+        width = QgsGeometry.fromPolyline((north_west, QgsPoint(x_max, y_max)))
+        height = QgsGeometry.fromPolyline((north_west, QgsPoint(x_min, y_min)))
+        if (
+            self.calculator.measureLength(width) > config.SKYWATCH_METADATA_MAX_SIDE_LENGTH
+            or self.calculator.measureLength(height) > config.SKYWATCH_METADATA_MAX_SIDE_LENGTH
+        ):
+            self.alert(self.tr(
+                'Your area-of-interest extent is too large.\n'
+                'Try requesting metadata for a smaller subset of your areas by selecting those polygons.'
+            ))
+            return
+        # Handle the multipolygon case
         if aoi.wkbType() == QgsWkbTypes.MultiPolygon:
             if len(aoi.asMultiPolygon()) == 1:
                 aoi.convertToSingleType()
             else:  # use the BBOX of the parts
-                aoi = aoi.boundingBox()
-                x_min, x_max, y_min, y_max = aoi.xMinimum(), aoi.xMaximum(), aoi.yMinimum(), aoi.yMaximum()
-                north_west = QgsPoint(x_min, y_max)
-                width = QgsGeometry.fromPolyline((north_west, QgsPoint(x_max, y_max)))
-                height = QgsGeometry.fromPolyline((north_west, QgsPoint(x_min, y_min)))
-                self.calculator.setEllipsoid(helpers.WGS84_ELLIPSOID)
-                self.calculator.setSourceCrs(helpers.WGS84, self.project.transformContext())
-                if (
-                    self.calculator.measureLength(width) > config.METADATA_MAX_SIDE_LENGTH
-                    or self.calculator.measureLength(height) > config.METADATA_MAX_SIDE_LENGTH
-                ):
-                    self.alert(self.tr(
-                        'Your area-of-interest extent is too large.\n'
-                        'Try requesting metadata for a smaller subset of your areas by selecting those polygons.'
-                    ))
-                    return
-                aoi = QgsGeometry.fromRect(aoi)
+                aoi = aoi_bbox_geom
         token = self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']
         if token:  # own account
             url='https://api.skywatch.co/earthcache/archive/search'
