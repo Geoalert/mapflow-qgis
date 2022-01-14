@@ -873,7 +873,10 @@ class Mapflow(QObject):
                 url=url,
                 auth=f'Basic {encoded_credentials.decode()}'.encode(),
                 callback=self.get_maxar_metadata_callback,
-                callback_kwargs={'product': product},
+                callback_kwargs={
+                    'product': product,
+                    'min_intersection': min_intersection
+                },
                 error_handler=self.get_maxar_metadata_error_handler,
                 use_default_error_handler=False
             )
