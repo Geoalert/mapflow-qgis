@@ -589,10 +589,10 @@ class Mapflow(QObject):
         token = self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']
         if token:  # own account
             url='https://api.skywatch.co/earthcache/archive/search'
-            headers = token
+            headers = {'x-api_key': token}
         else:  # our account
             url = self.server + '/meta/skywatch/id'
-            headers={}
+            headers = {}
         self.http.post(
             url=url,
             body=json.dumps({
