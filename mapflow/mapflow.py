@@ -162,7 +162,7 @@ class Mapflow(QObject):
         self.dlg.maxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
         self.dlg.providerAuthGroup.toggled.connect(self.limit_zoom_auth_toggled)
         # Maxar
-        self.dlg.imageId.textChanged.connect(self.select_image)
+        self.dlg.imageId.textChanged.connect(self.sync_image_id_with_table_and_layer)
         self.dlg.metadataTable.itemSelectionChanged.connect(self.sync_table_selection_with_image_id_and_layer)
         self.dlg.getMetadata.clicked.connect(self.get_metadata)
         self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
@@ -354,18 +354,6 @@ class Mapflow(QObject):
             self.layer_group.setExpanded(True)
         else:  # assume user opted to not use a group, add layers as usual
             self.project.addMapLayer(layer)
-
-    def select_image(self, image_id: str) -> None:
-        """Select a footprint in the current metadata layer when user selects it in the table."""
-        if not image_id:
-            self.dlg.metadataTable.clearSelection()
-            return
-        items = self.dlg.metadataTable.findItems(image_id, Qt.MatchExactly)
-        if not items:
-            self.dlg.metadataTable.clearSelection()
-            return
-        if items[0] not in self.dlg.metadataTable.selectedItems():
-            self.dlg.metadataTable.selectRow(items[0].row())
 
     def remove_provider(self) -> None:
         """Delete a web tile provider from the list of registered providers.
@@ -571,9 +559,9 @@ class Mapflow(QObject):
             return
         # Check the side length
         x_min, x_max, y_min, y_max = (
-            aoi_bbox.xMinimum(), 
-            aoi_bbox.xMaximum(), 
-            aoi_bbox.yMinimum(), 
+            aoi_bbox.xMinimum(),
+            aoi_bbox.xMaximum(),
+            aoi_bbox.yMinimum(),
             aoi_bbox.yMaximum()
         )
         north_west = QgsPoint(x_min, y_max)
@@ -596,7 +584,7 @@ class Mapflow(QObject):
                 aoi = aoi_bbox_geom
         token = self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']
         if token:  # own account
-            url='https://api.skywatch.co/earthcache/archive/search'
+            url = 'https://api.skywatch.co/earthcache/archive/search'
             headers = {'x-api_key': token}
         else:  # our account
             url = self.server + '/meta/skywatch/id'
@@ -618,25 +606,6 @@ class Mapflow(QObject):
             use_default_error_handler=False
         )
         self.dlg.getMetadata.setDown(True)
-
-    def sync_layer_selection_with_table(self, selected_ids: List[int]) -> None:
-        if not selected_ids:
-            self.dlg.metadataTable.clearSelection()
-            return
-        selected_id = self.metadata_layer.getFeature(selected_ids[-1])['featureId']
-        id_column_index = [
-            config.SENTINEL_ID_COLUMN_INDEX
-            if self.dlg.providerCombo.currentText() == config.SENTINEL_OPTION_NAME
-            else config.MAXAR_ID_COLUMN_INDEX
-        ]
-        already_selected = [
-            item.text() for item in self.dlg.metadataTable.selectedItems()
-            if item.column() == id_column_index
-        ]
-        if selected_id not in already_selected:
-            self.dlg.metadataTable.selectRow(
-                self.dlg.metadataTable.findItems(selected_id, Qt.MatchExactly)[0].row()
-            )
 
     def request_skywatch_metadata_callback(
         self,
@@ -671,9 +640,9 @@ class Mapflow(QObject):
         metadata_fetch_timer.timeout.connect(
             lambda: self.fetch_skywatch_metadata(
                 'mapflow' in response.request().url().authority(),
-                request_id, 
-                max_cloud_cover, 
-                min_intersection, 
+                request_id,
+                max_cloud_cover,
+                min_intersection,
                 metadata_fetch_timer
             )
         )
@@ -709,8 +678,8 @@ class Mapflow(QObject):
             url = f'{self.server}/meta/skywatch/page?id={request_id}&cursor={start_index}'
             headers = {}
         else:
-            url=f'https://api.skywatch.co/earthcache/archive/search/{request_id}/search_results?cursor={start_index}',
-            headers={'x-api-key': self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']},
+            url = f'https://api.skywatch.co/earthcache/archive/search/{request_id}/search_results?cursor={start_index}',
+            headers = {'x-api-key': self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']},
         self.http.get(
             url=url,
             headers=headers,
@@ -741,24 +710,25 @@ class Mapflow(QObject):
         if timer:
             timer.stop()
         response = json.loads(response.readAll().data())
-        metadata = {
-            'type': 'FeatureCollection',
-            'features': [{
+        metadata = {'type': 'FeatureCollection', 'features': []}
+        for feature in response['data']:
+            if round(feature['result_cloud_cover_percentage']) > max_cloud_cover:
+                continue
+            formatted_feature = {
                 'id': feature['preview_uri'].split('/')[-1].split('.')[0],
                 'type': 'Feature',
                 'geometry': feature['location'],
                 'properties': {
-                    'preview': feature['preview_uri'],
-                    'cloudCover': round(feature['result_cloud_cover_percentage'])/100,
-                    'acquisitionDate': datetime.strptime(
-                        feature['start_time'], '%Y-%m-%dT%H:%M:%S.%f%z'
-                    ).astimezone().strftime('%Y-%m-%d %H:%M'),
+                        'preview': feature['preview_uri'],
+                        'cloudCover': round(feature['result_cloud_cover_percentage'])/100,
                 }
             }
-                for feature in response['data']
-                if round(feature['result_cloud_cover_percentage']) <= max_cloud_cover
-            ]
-        }
+            try:
+                datetime_ = datetime.strptime(feature['start_time'], '%Y-%m-%dT%H:%M:%S.%f%z')
+            except ValueError:  # non-standard time format (missing milliseconds)
+                datetime_ = datetime.strptime(feature['start_time'], '%Y-%m-%dT%H:%M:%S%z')
+            formatted_feature['properties']['acquisitionDate'] = datetime_.astimezone().strftime('%Y-%m-%d %H:%M')
+            metadata['features'].append(formatted_feature)
         self.sentinel_metadata_coords.update({
             feature['id']: feature['geometry']['bbox']
             for feature in metadata['features']
@@ -789,7 +759,10 @@ class Mapflow(QObject):
         next_page_start_index = response['pagination']['cursor']['next']
         layout = self.dlg.metadata.layout()
         more_button = self.dlg.findChild(QPushButton, config.METADATA_MORE_BUTTON_OBJECT_NAME)
-        if next_page_start_index is not None:
+        if next_page_start_index is None and more_button:  # last page, remove the button
+            layout.removeWidget(more_button)
+            more_button.deleteLater()
+        else:
             if not more_button:  # create one
                 more_button = QPushButton(self.tr('More'))
                 more_button.setObjectName(config.METADATA_MORE_BUTTON_OBJECT_NAME)
@@ -799,17 +772,19 @@ class Mapflow(QObject):
             def fetch_skywatch_metadata_next_page(request_id, max_cloud_cover, min_intersection, start_index):
                 self.fetch_skywatch_metadata(
                     is_proxied,
-                    request_id, 
-                    max_cloud_cover, 
-                    min_intersection, 
+                    request_id,
+                    max_cloud_cover,
+                    min_intersection,
                     start_index=start_index
                 )
             more_button.clicked.connect(
-                lambda: fetch_skywatch_metadata_next_page(request_id, max_cloud_cover, min_intersection, next_page_start_index)
+                lambda: fetch_skywatch_metadata_next_page(
+                    request_id,
+                    max_cloud_cover,
+                    min_intersection,
+                    next_page_start_index
+                )
             )
-        elif more_button:  # last page, remove the button
-            layout.removeWidget(more_button)
-            more_button.deleteLater()
         if timer:
             self.dlg.getMetadata.setDown(False)
 
@@ -978,6 +953,37 @@ class Mapflow(QObject):
             pass
         if self.dlg.imageId.text() != image_id:
             self.dlg.imageId.setText(image_id)
+
+    def sync_layer_selection_with_table(self, selected_ids: List[int]) -> None:
+        if not selected_ids:
+            self.dlg.metadataTable.clearSelection()
+            return
+        selected_id = self.metadata_layer.getFeature(selected_ids[-1])['featureId']
+        id_column_index = [
+            config.SENTINEL_ID_COLUMN_INDEX
+            if self.dlg.providerCombo.currentText() == config.SENTINEL_OPTION_NAME
+            else config.MAXAR_ID_COLUMN_INDEX
+        ]
+        already_selected = [
+            item.text() for item in self.dlg.metadataTable.selectedItems()
+            if item.column() == id_column_index
+        ]
+        if selected_id not in already_selected:
+            self.dlg.metadataTable.selectRow(
+                self.dlg.metadataTable.findItems(selected_id, Qt.MatchExactly)[0].row()
+            )
+
+    def sync_image_id_with_table_and_layer(self, image_id: str) -> None:
+        """Select a footprint in the current metadata layer when user selects it in the table."""
+        if not image_id:
+            self.dlg.metadataTable.clearSelection()
+            return
+        items = self.dlg.metadataTable.findItems(image_id, Qt.MatchExactly)
+        if not items:
+            self.dlg.metadataTable.clearSelection()
+            return
+        if items[0] not in self.dlg.metadataTable.selectedItems():
+            self.dlg.metadataTable.selectRow(items[0].row())
 
     def calculate_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
         """Get the AOI size total when polygon another layer is chosen,
