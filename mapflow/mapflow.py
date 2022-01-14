@@ -528,9 +528,10 @@ class Mapflow(QObject):
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
-        # Define the AOI
+        provider = self.dlg.providerCombo.currentText()
+        # Check if the AOI is defined
         if self.dlg.metadataUseCanvasExtent.isChecked():
-            aoi = helpers.to_wgs84(
+            self.aoi = helpers.to_wgs84(
                 QgsGeometry.fromRect(self.iface.mapCanvas().extent()),
                 self.project.crs()
             )
@@ -555,7 +556,7 @@ class Mapflow(QObject):
         from_: str,
         to: str,
         max_cloud_cover: int,
-        min_intersection: int
+        min_intersection: int,
     ) -> None:
         """"""
         self.metadata_aoi = aoi
@@ -741,24 +742,25 @@ class Mapflow(QObject):
         if timer:
             timer.stop()
         response = json.loads(response.readAll().data())
-        metadata = {
-            'type': 'FeatureCollection',
-            'features': [{
-                'id': feature['preview_uri'].split('/')[-1].split('.')[0],
-                'type': 'Feature',
-                'geometry': feature['location'],
-                'properties': {
-                    'preview': feature['preview_uri'],
-                    'cloudCover': round(feature['result_cloud_cover_percentage'])/100,
-                    'acquisitionDate': datetime.strptime(
-                        feature['start_time'], '%Y-%m-%dT%H:%M:%S.%f%z'
-                    ).astimezone().strftime('%Y-%m-%d %H:%M'),
+        metadata = {'type': 'FeatureCollection', 'features': []}
+        for feature in response['data']:
+            if round(feature['result_cloud_cover_percentage']) > max_cloud_cover:
+                continue
+            formatted_feature = {
+                    'id': feature['preview_uri'].split('/')[-1].split('.')[0],
+                    'type': 'Feature',
+                    'geometry': feature['location'],
+                    'properties': {
+                        'preview': feature['preview_uri'],
+                        'cloudCover': round(feature['result_cloud_cover_percentage'])/100,
+                    }
                 }
-            }
-                for feature in response['data']
-                if round(feature['result_cloud_cover_percentage']) <= max_cloud_cover
-            ]
-        }
+            try:
+                datetime_ = datetime.strptime(feature['start_time'], '%Y-%m-%dT%H:%M:%S.%f%z')
+            except ValueError:  # non-standard time format (missing milliseconds)
+                datetime_ = datetime.strptime(feature['start_time'], '%Y-%m-%dT%H:%M:%S%z')
+            formatted_feature['properties']['acquisitionDate'] = datetime_.astimezone().strftime('%Y-%m-%d %H:%M')
+            metadata['features'].append(formatted_feature)
         self.sentinel_metadata_coords.update({
             feature['id']: feature['geometry']['bbox']
             for feature in metadata['features']
@@ -786,7 +788,12 @@ class Mapflow(QObject):
         self.filter_metadata(min_intersection)
         self.dlg.metadataTable.setSortingEnabled(True)
         # Handle pagination
-        next_page_start_index = response['pagination']['cursor']['next']
+        try:
+            next_page_start_index = response['pagination']['cursor']['next']
+        except TypeError:  # {"data": [], "pagination": None} - SkyWatch bug when area is too large
+            self.alert(self.tr('Metadata request failed. Try using a smaller area.'))
+            self.dlg.getMetadata.setDown(False)
+            return
         layout = self.dlg.metadata.layout()
         more_button = self.dlg.findChild(QPushButton, config.METADATA_MORE_BUTTON_OBJECT_NAME)
         if next_page_start_index is not None:
