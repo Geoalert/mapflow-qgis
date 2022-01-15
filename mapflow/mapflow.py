@@ -189,11 +189,9 @@ class Mapflow(QObject):
             min_intersection = self.dlg.minIntersection.value()
         from_ = self.dlg.metadataFrom.date().toString(Qt.ISODate)
         to = self.dlg.metadataTo.date().toString(Qt.ISODate)
-        filter_ = (
-            f'cloudCover <= {max_cloud_cover/100} '
-            f"and acquisitionDate >= '{from_}' "
-            f"and acquisitionDate <= '{to}' "
-        )
+        filter_ = f"acquisitionDate >= '{from_}' and acquisitionDate <= '{to}' "
+        if max_cloud_cover < 100:
+            filter_ += f'and cloudCover <= {max_cloud_cover/100}'
         aoi = helpers.from_wgs84(self.metadata_aoi, crs)
         self.calculator.setEllipsoid(crs.ellipsoidAcronym())
         self.calculator.setSourceCrs(crs, self.project.transformContext())
@@ -219,14 +217,16 @@ class Mapflow(QObject):
             ) < min_intersection_size
         ]
         if filtered_ids:
-            filter_ += f'and {id_field} not in (' + ', '.join((f"'{id_}'" for id_ in filtered_ids)) + ')'
+            filter_ += f' and {id_field} not in (' + ', '.join((f"'{id_}'" for id_ in filtered_ids)) + ')'
         self.metadata_layer.setSubsetString(filter_)
         # Show/hide table rows
         for row in range(self.dlg.metadataTable.rowCount()):
             id_ = self.dlg.metadataTable.item(row, id_column_index).data(Qt.DisplayRole)
-            cloud_cover = self.dlg.metadataTable.item(row, cloud_cover_column_index).data(Qt.DisplayRole)
             datetime_ = self.dlg.metadataTable.item(row, datetime_column_index).data(Qt.DisplayRole)
-            is_unfit = cloud_cover > max_cloud_cover or from_ > datetime_ or to < datetime_ or id_ in filtered_ids
+            cloud_cover = self.dlg.metadataTable.item(row, cloud_cover_column_index).data(Qt.DisplayRole)
+            is_unfit = from_ > datetime_ or to < datetime_ or id_ in filtered_ids
+            if cloud_cover is not None:  # may be undefined
+                is_unfit = is_unfit or cloud_cover > max_cloud_cover
             self.dlg.metadataTable.setRowHidden(row, is_unfit)
 
     def is_valid_local_raster(self, raster: QgsRasterLayer) -> bool:
@@ -826,9 +826,10 @@ class Mapflow(QObject):
         filter_params = (
             f'intersects(geometry,srid=4326;{aoi.asWkt(precision=6).replace(" ", "+")})',
             f'acquisitionDate>={from_}',
-            f'acquisitionDate<={to}',
-            f'cloudCover<{max_cloud_cover/100}',
+            f'acquisitionDate<={to}'
         )
+        if max_cloud_cover < 100:
+            filter_params += (f'cloudCover<{max_cloud_cover/100}',)
         url = (
             'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?'
             + '&'.join(f'{key}={value}' for key, value in params.items())
