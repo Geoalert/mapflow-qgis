@@ -189,9 +189,11 @@ class Mapflow(QObject):
             min_intersection = self.dlg.minIntersection.value()
         from_ = self.dlg.metadataFrom.date().toString(Qt.ISODate)
         to = self.dlg.metadataTo.date().toString(Qt.ISODate)
-        filter_ = f"acquisitionDate >= '{from_}' and acquisitionDate <= '{to}' "
-        if max_cloud_cover < 100:
-            filter_ += f'and cloudCover <= {max_cloud_cover/100}'
+        filter_ = (
+            f"acquisitionDate >= '{from_}'"
+            f" and acquisitionDate <= '{to}'"
+            f' and cloudCover is null or cloudCover <= {max_cloud_cover/100}'
+        )
         aoi = helpers.from_wgs84(self.metadata_aoi, crs)
         self.calculator.setEllipsoid(crs.ellipsoidAcronym())
         self.calculator.setSourceCrs(crs, self.project.transformContext())
@@ -828,13 +830,16 @@ class Mapflow(QObject):
             f'acquisitionDate>={from_}',
             f'acquisitionDate<={to}'
         )
-        if max_cloud_cover < 100:
-            filter_params += (f'cloudCover<{max_cloud_cover/100}',)
         url = (
             'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?'
             + '&'.join(f'{key}={value}' for key, value in params.items())
             + '&CQL_FILTER=(' + 'and'.join(f'({param})' for param in filter_params) + ')'
         )
+        callback_kwargs = {
+            'product': product,
+            'min_intersection': min_intersection,
+            'max_cloud_cover': max_cloud_cover
+        }
         if self.dlg.providerAuthGroup.isChecked():  # user's own account
             connect_id = self.settings.value('providers')[product]['connectId']
             if not helpers.UUID_REGEX.match(connect_id):
@@ -849,10 +854,7 @@ class Mapflow(QObject):
                 url=url,
                 auth=f'Basic {encoded_credentials.decode()}'.encode(),
                 callback=self.get_maxar_metadata_callback,
-                callback_kwargs={
-                    'product': product,
-                    'min_intersection': min_intersection
-                },
+                callback_kwargs=callback_kwargs,
                 error_handler=self.get_maxar_metadata_error_handler,
                 use_default_error_handler=False
             )
@@ -860,10 +862,7 @@ class Mapflow(QObject):
             self.http.post(
                 url=f'{self.server}/meta/maxar',
                 callback=self.get_maxar_metadata_callback,
-                callback_kwargs={
-                    'product': product,
-                    'min_intersection': min_intersection
-                },
+                callback_kwargs=callback_kwargs,
                 body=json.dumps({
                     'url': url,
                     'connectId': product.split()[1].lower()
@@ -875,7 +874,8 @@ class Mapflow(QObject):
         self,
         response: QNetworkReply,
         product: str,
-        min_intersection: int
+        min_intersection: int,
+        max_cloud_cover: int
     ) -> None:
         """Load and save Maxar metadata as GML, format it and display as a layer.
 
@@ -888,8 +888,8 @@ class Mapflow(QObject):
             f.write(response.readAll().data())
         self.metadata_layer = QgsVectorLayer(output_file_name, f'{product} metadata', 'ogr')
         self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
-        self.filter_metadata(min_intersection)
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
+        self.filter_metadata(min_intersection)
         self.add_layer(self.metadata_layer)
         # Get the list of features (don't use the generator itself, or it'll get exhausted)
         features = list(self.metadata_layer.getFeatures())
