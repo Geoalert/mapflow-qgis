@@ -779,6 +779,7 @@ class Mapflow(QObject):
                     min_intersection,
                     start_index=start_index
                 )
+            more_button.disconnect()
             more_button.clicked.connect(
                 lambda: fetch_skywatch_metadata_next_page(
                     request_id,
