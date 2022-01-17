@@ -178,13 +178,14 @@ class Mapflow(QObject):
             )
         )
 
-    def filter_metadata(self, *_, min_intersection=None) -> None:
+    def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
         """"""
         try:
             crs = self.metadata_layer.crs()
         except (RuntimeError, AttributeError):  # no metadata layer
             return
-        max_cloud_cover = self.dlg.maxCloudCover.value()
+        if max_cloud_cover is None:
+            max_cloud_cover = self.dlg.maxCloudCover.value()
         if min_intersection is None:
             min_intersection = self.dlg.minIntersection.value()
         from_ = self.dlg.metadataFrom.date().toString(Qt.ISODate)
@@ -859,7 +860,7 @@ class Mapflow(QObject):
             )
         else:  # assume user wants to use our account, proxy thru Mapflow
             self.http.post(
-                url=f'{self.server}/meta/maxar',
+                url=f'{self.server}/meta',
                 callback=self.get_maxar_metadata_callback,
                 callback_kwargs=callback_kwargs,
                 body=json.dumps({
@@ -888,7 +889,7 @@ class Mapflow(QObject):
         self.metadata_layer = QgsVectorLayer(output_file_name, f'{product} metadata', 'ogr')
         self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
-        self.filter_metadata(min_intersection)
+        self.filter_metadata(min_intersection=min_intersection, max_cloud_cover=max_cloud_cover)
         self.add_layer(self.metadata_layer)
         # Get the list of features (don't use the generator itself, or it'll get exhausted)
         features = list(self.metadata_layer.getFeatures())
