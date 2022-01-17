@@ -519,9 +519,10 @@ class Mapflow(QObject):
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
-        # Define the AOI
+        provider = self.dlg.providerCombo.currentText()
+        # Check if the AOI is defined
         if self.dlg.metadataUseCanvasExtent.isChecked():
-            aoi = helpers.to_wgs84(
+            self.aoi = helpers.to_wgs84(
                 QgsGeometry.fromRect(self.iface.mapCanvas().extent()),
                 self.project.crs()
             )
@@ -546,7 +547,7 @@ class Mapflow(QObject):
         from_: str,
         to: str,
         max_cloud_cover: int,
-        min_intersection: int
+        min_intersection: int,
     ) -> None:
         """"""
         self.metadata_aoi = aoi
@@ -759,7 +760,12 @@ class Mapflow(QObject):
         self.filter_metadata(min_intersection)
         self.dlg.metadataTable.setSortingEnabled(True)
         # Handle pagination
-        next_page_start_index = response['pagination']['cursor']['next']
+        try:
+            next_page_start_index = response['pagination']['cursor']['next']
+        except TypeError:  # {"data": [], "pagination": None} - SkyWatch bug when area is too large
+            self.alert(self.tr('Metadata request failed. Try using a smaller area.'))
+            self.dlg.getMetadata.setDown(False)
+            return
         more_button = self.dlg.findChild(QPushButton, config.METADATA_MORE_BUTTON_OBJECT_NAME)
         if next_page_start_index is None and more_button:  # last page, remove the button
             self.dlg.layoutMetadataTable.removeWidget(more_button)
