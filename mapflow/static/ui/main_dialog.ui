@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>655</width>
-    <height>592</height>
+    <width>690</width>
+    <height>612</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -621,172 +621,118 @@
          <property name="checked">
           <bool>false</bool>
          </property>
-         <layout class="QGridLayout" name="gridLayout_2">
-          <property name="leftMargin">
-           <number>0</number>
-          </property>
-          <property name="topMargin">
-           <number>0</number>
-          </property>
-          <property name="rightMargin">
-           <number>0</number>
-          </property>
-          <property name="bottomMargin">
-           <number>0</number>
-          </property>
-          <item row="1" column="0">
-           <layout class="QGridLayout" name="gridLayout">
-            <item row="1" column="0">
-             <layout class="QHBoxLayout" name="layoutDatetime" stretch="0,0,1,0,0">
-              <item>
-               <widget class="QLabel" name="labelFrom">
-                <property name="text">
-                 <string>From</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QDateEdit" name="metadataFrom">
-                <property name="maximumDate">
-                 <date>
-                  <year>2030</year>
-                  <month>1</month>
-                  <day>1</day>
-                 </date>
-                </property>
-                <property name="minimumDate">
-                 <date>
-                  <year>1970</year>
-                  <month>1</month>
-                  <day>1</day>
-                 </date>
-                </property>
-                <property name="displayFormat">
-                 <string>yyyy-MM-dd</string>
-                </property>
-                <property name="calendarPopup">
-                 <bool>true</bool>
-                </property>
-                <property name="date">
-                 <date>
-                  <year>2020</year>
-                  <month>12</month>
-                  <day>21</day>
-                 </date>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QPushButton" name="getMetadata">
-                <property name="text">
-                 <string>Search imagery</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QLabel" name="labelTo">
-                <property name="text">
-                 <string>To</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QDateEdit" name="metadataTo">
-                <property name="maximumDate">
-                 <date>
-                  <year>2030</year>
-                  <month>1</month>
-                  <day>1</day>
-                 </date>
-                </property>
-                <property name="minimumDate">
-                 <date>
-                  <year>1970</year>
-                  <month>1</month>
-                  <day>1</day>
-                 </date>
-                </property>
-                <property name="displayFormat">
-                 <string>yyyy-MM-dd</string>
-                </property>
-                <property name="calendarPopup">
-                 <bool>true</bool>
-                </property>
-                <property name="date">
-                 <date>
-                  <year>2021</year>
-                  <month>12</month>
-                  <day>21</day>
-                 </date>
-                </property>
-               </widget>
-              </item>
-             </layout>
+         <layout class="QGridLayout" name="gridLayout">
+          <item row="0" column="0">
+           <layout class="QHBoxLayout" name="layoutMetadataAoi" stretch="0,1,0">
+            <item>
+             <widget class="QLabel" name="labelMaxarAoi">
+              <property name="text">
+               <string>Area:</string>
+              </property>
+             </widget>
             </item>
-            <item row="0" column="0">
-             <layout class="QHBoxLayout" name="layoutMetadataAoi" stretch="2,0">
-              <item>
-               <layout class="QFormLayout" name="formLayout">
-                <item row="0" column="0">
-                 <widget class="QLabel" name="labelMaxarAoi">
-                  <property name="text">
-                   <string>Area:</string>
-                  </property>
-                 </widget>
-                </item>
-                <item row="0" column="1">
-                 <widget class="QgsMapLayerComboBox" name="maxarAoiCombo">
-                  <property name="showCrs">
-                   <bool>true</bool>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
-              </item>
-              <item>
-               <widget class="QCheckBox" name="metadataUseCanvasExtent">
-                <property name="text">
-                 <string>Use canvas extent</string>
-                </property>
-               </widget>
-              </item>
-             </layout>
+            <item>
+             <widget class="QgsMapLayerComboBox" name="maxarAoiCombo">
+              <property name="showCrs">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="metadataUseCanvasExtent">
+              <property name="text">
+               <string>Use canvas extent</string>
+              </property>
+             </widget>
             </item>
            </layout>
           </item>
-          <item row="4" column="0">
-           <widget class="QTableWidget" name="metadataTable">
-            <property name="focusPolicy">
-             <enum>Qt::NoFocus</enum>
-            </property>
-            <property name="autoScroll">
-             <bool>false</bool>
-            </property>
-            <property name="editTriggers">
-             <set>QAbstractItemView::NoEditTriggers</set>
-            </property>
-            <property name="tabKeyNavigation">
-             <bool>false</bool>
-            </property>
-            <property name="alternatingRowColors">
-             <bool>true</bool>
-            </property>
-            <property name="selectionMode">
-             <enum>QAbstractItemView::SingleSelection</enum>
-            </property>
-            <property name="selectionBehavior">
-             <enum>QAbstractItemView::SelectRows</enum>
-            </property>
-            <property name="sortingEnabled">
-             <bool>true</bool>
-            </property>
-            <property name="cornerButtonEnabled">
-             <bool>false</bool>
-            </property>
-            <attribute name="horizontalHeaderStretchLastSection">
-             <bool>true</bool>
-            </attribute>
-           </widget>
+          <item row="1" column="0">
+           <layout class="QHBoxLayout" name="layoutMetadataDatetime" stretch="0,0,1,0,0">
+            <item>
+             <widget class="QLabel" name="labelFrom">
+              <property name="text">
+               <string>From:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QDateEdit" name="metadataFrom">
+              <property name="maximumDate">
+               <date>
+                <year>2030</year>
+                <month>1</month>
+                <day>1</day>
+               </date>
+              </property>
+              <property name="minimumDate">
+               <date>
+                <year>1970</year>
+                <month>1</month>
+                <day>1</day>
+               </date>
+              </property>
+              <property name="displayFormat">
+               <string>yyyy-MM-dd</string>
+              </property>
+              <property name="calendarPopup">
+               <bool>true</bool>
+              </property>
+              <property name="date">
+               <date>
+                <year>2020</year>
+                <month>12</month>
+                <day>21</day>
+               </date>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="getMetadata">
+              <property name="text">
+               <string>Search imagery</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="labelTo">
+              <property name="text">
+               <string>To:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QDateEdit" name="metadataTo">
+              <property name="maximumDate">
+               <date>
+                <year>2030</year>
+                <month>1</month>
+                <day>1</day>
+               </date>
+              </property>
+              <property name="minimumDate">
+               <date>
+                <year>1970</year>
+                <month>1</month>
+                <day>1</day>
+               </date>
+              </property>
+              <property name="displayFormat">
+               <string>yyyy-MM-dd</string>
+              </property>
+              <property name="calendarPopup">
+               <bool>true</bool>
+              </property>
+              <property name="date">
+               <date>
+                <year>2021</year>
+                <month>12</month>
+                <day>21</day>
+               </date>
+              </property>
+             </widget>
+            </item>
+           </layout>
           </item>
           <item row="2" column="0">
            <widget class="QgsCollapsibleGroupBox" name="metadataFilters">
@@ -892,6 +838,47 @@
              </item>
             </layout>
            </widget>
+          </item>
+          <item row="3" column="0">
+           <layout class="QVBoxLayout" name="layoutMetadataTable">
+            <property name="spacing">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QTableWidget" name="metadataTable">
+              <property name="focusPolicy">
+               <enum>Qt::NoFocus</enum>
+              </property>
+              <property name="autoScroll">
+               <bool>false</bool>
+              </property>
+              <property name="editTriggers">
+               <set>QAbstractItemView::NoEditTriggers</set>
+              </property>
+              <property name="tabKeyNavigation">
+               <bool>false</bool>
+              </property>
+              <property name="alternatingRowColors">
+               <bool>true</bool>
+              </property>
+              <property name="selectionMode">
+               <enum>QAbstractItemView::SingleSelection</enum>
+              </property>
+              <property name="selectionBehavior">
+               <enum>QAbstractItemView::SelectRows</enum>
+              </property>
+              <property name="sortingEnabled">
+               <bool>true</bool>
+              </property>
+              <property name="cornerButtonEnabled">
+               <bool>false</bool>
+              </property>
+              <attribute name="horizontalHeaderStretchLastSection">
+               <bool>true</bool>
+              </attribute>
+             </widget>
+            </item>
+           </layout>
           </item>
          </layout>
         </widget>

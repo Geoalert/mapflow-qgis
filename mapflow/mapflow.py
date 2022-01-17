@@ -114,7 +114,7 @@ class Mapflow(QObject):
         self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
         # Set default metadata dates
         today = QDate.currentDate()
-        self.dlg.metadataFrom.setDate(today.addYears(-1))
+        self.dlg.metadataFrom.setDate(today.addMonths(-6))
         self.dlg.metadataTo.setDate(today)
         # Hide the ID columns as only needed for table operations, not the user
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
@@ -283,7 +283,7 @@ class Mapflow(QObject):
         self.dlg.metadataTable.clear()
         more_button = self.dlg.findChild(QPushButton, config.METADATA_MORE_BUTTON_OBJECT_NAME)
         if more_button:
-            self.dlg.metadata.layout().removeWidget(more_button)
+            self.dlg.layoutMetadataTable.removeWidget(more_button)
             more_button.deleteLater()
         provider_name = provider
         if provider == config.SENTINEL_OPTION_NAME:
@@ -680,8 +680,8 @@ class Mapflow(QObject):
             url = f'{self.server}/meta/skywatch/page?id={request_id}&cursor={start_index}'
             headers = {}
         else:
-            url = f'https://api.skywatch.co/earthcache/archive/search/{request_id}/search_results?cursor={start_index}',
-            headers = {'x-api-key': self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']},
+            url = f'https://api.skywatch.co/earthcache/archive/search/{request_id}/search_results?cursor={start_index}'
+            headers = {'x-api-key': self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']}
         self.http.get(
             url=url,
             headers=headers,
@@ -759,16 +759,15 @@ class Mapflow(QObject):
         self.dlg.metadataTable.setSortingEnabled(True)
         # Handle pagination
         next_page_start_index = response['pagination']['cursor']['next']
-        layout = self.dlg.metadata.layout()
         more_button = self.dlg.findChild(QPushButton, config.METADATA_MORE_BUTTON_OBJECT_NAME)
         if next_page_start_index is None and more_button:  # last page, remove the button
-            layout.removeWidget(more_button)
+            self.dlg.layoutMetadataTable.removeWidget(more_button)
             more_button.deleteLater()
         else:
             if not more_button:  # create one
                 more_button = QPushButton(self.tr('More'))
                 more_button.setObjectName(config.METADATA_MORE_BUTTON_OBJECT_NAME)
-                layout.addWidget(more_button)
+                self.dlg.layoutMetadataTable.addWidget(more_button)
             # Set the button to fetch more metadata on click
 
             def fetch_skywatch_metadata_next_page(request_id, max_cloud_cover, min_intersection, start_index):
