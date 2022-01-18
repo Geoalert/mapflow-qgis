@@ -473,7 +473,7 @@ Please, upgrade to make sure everything works as expected. Go to Plugins -&gt; M
     <message>
         <location filename="../mapflow.py" line="1433"/>
         <source>Please, select an image to preview</source>
-        <translation>Пожалуйста, выберите один снимков</translation>
+        <translation>Пожалуйста, выберите снимок</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1683"/>

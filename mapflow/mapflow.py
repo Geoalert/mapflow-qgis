@@ -288,12 +288,14 @@ class Mapflow(QObject):
             more_button.deleteLater()
         provider_name = provider
         if provider == config.SENTINEL_OPTION_NAME:
+            is_max_zoom_enabled = False
             columns = config.SENTINEL_ATTRIBUTES
             hidden_column_index = len(config.SENTINEL_ATTRIBUTES) - 1
             sort_by = config.SENTINEL_DATETIME_COLUMN_INDEX
             enabled = True
             max_zoom = config.MAX_ZOOM
         elif provider in config.MAXAR_PRODUCTS:
+            is_max_zoom_enabled = True
             columns = config.MAXAR_METADATA_ATTRIBUTES
             hidden_column_index = None
             sort_by = config.MAXAR_DATETIME_COLUMN_INDEX
@@ -303,6 +305,7 @@ class Mapflow(QObject):
                 else config.MAXAR_MAX_FREE_ZOOM
             )
         else:  # another provider, tear down the table and deactivate the panel
+            is_max_zoom_enabled = True
             provider_name = 'Provider'
             columns = tuple()  # empty
             hidden_column_index = None
@@ -311,6 +314,7 @@ class Mapflow(QObject):
             max_zoom = config.MAX_ZOOM
             # Forced to int bc somehow used to be stored as str, so for backward compatability
             self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom', config.DEFAULT_ZOOM)))
+        self.dlg.maxZoom.setEnabled(is_max_zoom_enabled)
         self.dlg.maxZoom.setMaximum(max_zoom)
         self.dlg.metadataTable.setRowCount(0)
         self.dlg.metadataTable.setColumnCount(len(columns))
@@ -768,35 +772,26 @@ class Mapflow(QObject):
             self.alert(self.tr('Metadata request failed. Try using a smaller area.'))
             self.dlg.getMetadata.setDown(False)
             return
-        more_button = self.dlg.findChild(QPushButton, config.METADATA_MORE_BUTTON_OBJECT_NAME)
-        if next_page_start_index is None:
-            if more_button:  # last page, remove the button
+        if next_page_start_index is not None:
+            # Create a 'More' button
+            more_button = QPushButton(self.tr('More'))
+            more_button.setObjectName(config.METADATA_MORE_BUTTON_OBJECT_NAME)
+            self.dlg.layoutMetadataTable.addWidget(more_button)
+            # Set the button to fetch more metadata on click
+            def fetch_skywatch_metadata_next_page(**kwargs):
+                self.fetch_skywatch_metadata(**kwargs)
+                # more_button = self.dlg.findChild(QPushButton, config.METADATA_MORE_BUTTON_OBJECT_NAME)
                 self.dlg.layoutMetadataTable.removeWidget(more_button)
                 more_button.deleteLater()
-        else:
-            if not more_button:  # create one
-                more_button = QPushButton(self.tr('More'))
-                more_button.setObjectName(config.METADATA_MORE_BUTTON_OBJECT_NAME)
-                self.dlg.layoutMetadataTable.addWidget(more_button)
-            # Set the button to fetch more metadata on click
-
-            def fetch_skywatch_metadata_next_page(request_id, max_cloud_cover, min_intersection, start_index):
-                self.fetch_skywatch_metadata(
-                    is_proxied,
-                    request_id,
-                    max_cloud_cover,
-                    min_intersection,
-                    start_index=start_index
-                )
-            more_button.disconnect()
             more_button.clicked.connect(
                 lambda: fetch_skywatch_metadata_next_page(
-                    request_id,
-                    max_cloud_cover,
-                    min_intersection,
-                    next_page_start_index
+                    is_proxied=is_proxied,  
+                    request_id=request_id,
+                    max_cloud_cover=max_cloud_cover,
+                    min_intersection=min_intersection,
+                    start_index=next_page_start_index
+                    )
                 )
-            )
         if timer:
             self.dlg.getMetadata.setDown(False)
 
@@ -952,7 +947,10 @@ class Mapflow(QObject):
         selected_cells = self.dlg.metadataTable.selectedItems()
         if not selected_cells:
             self.dlg.imageId.setText('')
-            self.metadata_layer.removeSelection()
+            try:
+                self.metadata_layer.removeSelection()
+            except RuntimeError:  # layer has been deleted
+                pass
             return
         id_column_index = (
             config.SENTINEL_ID_COLUMN_INDEX
@@ -1381,8 +1379,12 @@ class Mapflow(QObject):
             f.write(response.readAll().data())
         # Some previews aren't georef-ed
         preview = gdal.Open(f.name)
-        if not preview.GetProjection():
-            lon_wgs84, *_, lat_wgs84 = self.sentinel_metadata_coords[image_id]
+        try:
+            image_metadata = self.sentinel_metadata_coords[image_id]
+        except (AttributeError, KeyError):
+            image_metadata = None
+        if image_metadata and not preview.GetProjection():
+            lon_wgs84, *_, lat_wgs84 = image_metadata
             utm_zone = int((180 + lon_wgs84) // 6 + 1)
             crs = QgsCoordinateReferenceSystem(f'epsg:32{6 if lat_wgs84 > 0 else 7}{utm_zone}')
             preview.SetProjection(crs.toWkt())
@@ -1405,32 +1407,48 @@ class Mapflow(QObject):
         layer.renderer().setNodataColor(QColor(Qt.transparent))
         self.add_layer(layer)
 
-    def preview_sentinel_error_handler(self, response: QNetworkReply) -> None:
+    def preview_sentinel_error_handler(self, response: QNetworkReply, guess_format=False, **kwargs) -> None:
         """Error handler for requesting a Sentinel preview from SkyWatch."""
+        if guess_format:
+            alternative_url = response.request().url().toDisplayString().replace('jp2', 'jpg')
+            self.http.get(
+                url=alternative_url,
+                callback=self.preview_sentinel_callback,
+                callback_kwargs=kwargs,
+                error_handler=self.preview_sentinel_error_handler
+            )
+            return
         self.alert(self.tr("Sorry, we couldn't load the image"))
         self.report_error(response, self.tr('Error previewing Sentinel imagery'))
 
     def preview(self) -> None:
         """Display raster tiles served over the Web."""
         provider = self.dlg.providerCombo.currentText()
+        image_id = self.dlg.imageId.text()
         if provider == config.SENTINEL_OPTION_NAME:
             selected_cells = self.dlg.metadataTable.selectedItems()
             if selected_cells:
                 datetime_ = selected_cells[config.SENTINEL_DATETIME_COLUMN_INDEX]
-                self.http.get(
-                    url=self.dlg.metadataTable.item(
-                        datetime_.row(),
-                        config.SENTINEL_PREVIEW_COLUMN_INDEX
-                    ).text(),
-                    callback=self.preview_sentinel_callback,
-                    callback_kwargs={
-                        'datetime_': datetime_.text(),
-                        'image_id': selected_cells[config.SENTINEL_ID_COLUMN_INDEX].text()
-                    },
-                    error_handler=self.preview_sentinel_error_handler
-                )
+                url = self.dlg.metadataTable.item(datetime_.row(), config.SENTINEL_PREVIEW_COLUMN_INDEX).text()
+                datetime_ = datetime_.text()
+                guess_format = False
+            elif image_id:
+                url = f'https://preview.skywatch.com/esa/sentinel-2/{image_id}.jp2'
+                datetime_ = datetime.strptime(
+                    helpers.SENTINEL_DATETIME_REGEX.search(image_id).group(0), '%Y%m%dT%H%M%S'
+                ).astimezone().strftime('%Y-%m-%d %H:%M')
+                guess_format = True
             else:
                 self.alert(self.tr('Please, select an image to preview'), QMessageBox.Information)
+                return
+            callback_kwargs = {'datetime_': datetime_, 'image_id': image_id}
+            self.http.get(
+                url=url,
+                callback=self.preview_sentinel_callback,
+                callback_kwargs=callback_kwargs,
+                error_handler=self.preview_sentinel_error_handler,
+                error_handler_kwargs={'guess_format': guess_format, **callback_kwargs}
+            )
             return
         self.save_provider_auth()
         username = self.dlg.providerUsername.text()
@@ -1455,16 +1473,18 @@ class Mapflow(QObject):
                 password = self.password
                 if not self.is_premium_user:
                     max_zoom = config.MAXAR_MAX_FREE_ZOOM
-            image_id = self.dlg.imageId.text()
             if image_id:
                 url += f'&CQL_FILTER=feature_id=\'{image_id}\''
                 row = self.dlg.metadataTable.currentRow()
                 attrs = tuple(config.MAXAR_METADATA_ATTRIBUTES.values())
-                layer_name = ' '.join((
-                    layer_name,
-                    self.dlg.metadataTable.item(row, attrs.index('acquisitionDate')).text(),
-                    self.dlg.metadataTable.item(row, attrs.index('productType')).text()
-                ))
+                try:
+                    layer_name = ' '.join((
+                        layer_name,
+                        self.dlg.metadataTable.item(row, attrs.index('acquisitionDate')).text(),
+                        self.dlg.metadataTable.item(row, attrs.index('productType')).text()
+                    ))
+                except AttributeError:  # the table is empty
+                    layer_name = f'{layer_name} {image_id}'
                 # Get the image extent to set the correct extent on the raster layer
                 try:
                     extent = next(
@@ -1472,8 +1492,8 @@ class Mapflow(QObject):
                     ).geometry().boundingBox()
                 except (RuntimeError, AttributeError):  # layer doesn't exist or has been deleted
                     extent = None
-            # Can use urllib.parse but have to specify safe='/?:{}' which sort of defeats the purpose
-            url = url.replace('&', '%26').replace('=', '%3D')
+        # Can use urllib.parse but have to specify safe='/?:{}' which sort of defeats the purpose
+        url = url.replace('&', '%26').replace('=', '%3D')
         params = {
             'type': provider_info['type'],
             'url': url,
@@ -1485,7 +1505,7 @@ class Mapflow(QObject):
         uri = '&'.join(f'{key}={val}' for key, val in params.items())  # don't url-encode it
         layer = QgsRasterLayer(uri, layer_name, 'wms')
         if layer.isValid():
-            if image_id and extent:
+            if provider in (config.SENTINEL_OPTION_NAME, *config.MAXAR_PRODUCTS) and image_id and extent:
                 layer.setExtent(extent)
             self.add_layer(layer)
         else:
