@@ -112,8 +112,8 @@ class Mapflow(QObject):
             providers[config.SENTINEL_OPTION_NAME] = config.BUILTIN_PROVIDERS[config.SENTINEL_OPTION_NAME]
         self.update_providers(providers)
         self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
-        self.dlg.minIntersection.setValue(self.settings.value('metadataMinIntersection', 0))
-        self.dlg.maxCloudCover.setValue(self.settings.value('metadataMaxCloudCover', 100))
+        self.dlg.minIntersection.setValue(int(self.settings.value('metadataMinIntersection', 0)))
+        self.dlg.maxCloudCover.setValue(int(self.settings.value('metadataMaxCloudCover', 100)))
         # Set default metadata dates
         today = QDate.currentDate()
         self.dlg.metadataFrom.setDate(self.settings.value('metadataFrom', today.addMonths(-6)))
@@ -179,7 +179,7 @@ class Mapflow(QObject):
         )
 
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
-        """"""
+        """Filter out the metadata table and layer every time user changes a filter."""
         try:
             crs = self.metadata_layer.crs()
         except (RuntimeError, AttributeError):  # no metadata layer
@@ -321,7 +321,7 @@ class Mapflow(QObject):
             self.dlg.metadataTable.setColumnHidden(hidden_column_index, True)
         if sort_by is not None:
             self.dlg.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
-        self.dlg.metadata.setTitle(provider_name + ' Imagery Catalog')
+        self.dlg.metadata.setTitle(provider_name + self.tr(' Imagery Catalog'))
         self.dlg.metadata.setEnabled(enabled)
 
     def save_dialog_state(self):
@@ -419,7 +419,7 @@ class Mapflow(QObject):
         self.settings.setValue('providers', providers)
 
     def show_sentinel_token_dialog(self) -> None:
-        """"""
+        """Prepare and display a dialog to edit the SkyWatch token."""
         api_key = self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']
         self.dlg_sentinel_auth.apiKey.setText(api_key)
         self.dlg_sentinel_auth.show()
@@ -553,7 +553,7 @@ class Mapflow(QObject):
         max_cloud_cover: int,
         min_intersection: int,
     ) -> None:
-        """"""
+        """Sumbit a request to SkyWatch to get metadata."""
         self.metadata_aoi = aoi
         callback_kwargs = {'max_cloud_cover': max_cloud_cover, 'min_intersection': min_intersection}
         # Check if the AOI is too large
@@ -664,7 +664,7 @@ class Mapflow(QObject):
         if error == QNetworkReply.ContentAccessDenied:
             self.alert(self.tr('Please, check your credentials'))
         else:
-            self.report_error(response, self.tr("We couldn't get a response from SkyWatch"))
+            self.report_error(response, self.tr("We couldn't fetch Sentinel metadata"))
 
     def fetch_skywatch_metadata(
         self,
@@ -709,7 +709,7 @@ class Mapflow(QObject):
         min_intersection: int,
         timer: QTimer = None,
     ):
-        """"""
+        """Parse the returned metadata page and fill out the table and the layer."""
         is_proxied = 'mapflow' in response.request().url().authority()
         if response.attribute(QNetworkRequest.HttpStatusCodeAttribute) == 202:
             return  # not ready yet
@@ -943,7 +943,11 @@ class Mapflow(QObject):
             self.report_error(response, self.tr("We couldn't get metadata from Maxar"))
 
     def sync_table_selection_with_image_id_and_layer(self) -> str:
-        """"""
+        """
+        Every time user selects a row in the metadata table, select the 
+        corresponding feature in the metadata layer and put the selected image's
+        id into the "Image ID" field. 
+        """
         selected_cells = self.dlg.metadataTable.selectedItems()
         if not selected_cells:
             self.dlg.imageId.setText('')
@@ -965,6 +969,13 @@ class Mapflow(QObject):
             self.dlg.imageId.setText(image_id)
 
     def sync_layer_selection_with_table(self, selected_ids: List[int]) -> None:
+        """
+        Every time user selects an image in the metadata layer, select the corresponding
+        row in the table and fill out the image id in the providers tab.
+
+        :param selected_ids: The selected feature IDs. These aren't the image IDs, but rather
+            the primary keys of the features.
+        """
         if not selected_ids:
             self.dlg.metadataTable.clearSelection()
             return
@@ -984,7 +995,11 @@ class Mapflow(QObject):
             )
 
     def sync_image_id_with_table_and_layer(self, image_id: str) -> None:
-        """Select a footprint in the current metadata layer when user selects it in the table."""
+        """
+        Select a footprint in the current metadata layer when user selects it in the table.
+
+        :param image_id: The new image ID.
+        """
         if not image_id:
             self.dlg.metadataTable.clearSelection()
             return
@@ -1335,7 +1350,7 @@ class Mapflow(QObject):
         response: Optional[QNetworkReply] = None,
         user: Optional[dict] = None
     ) -> None:
-        """"""
+        """Set the user's processing limit as reported by Mapflow."""
         if response:
             user = json.loads(response.readAll().data())['user']
         if user['role'] == 'ADMIN':
@@ -1360,7 +1375,7 @@ class Mapflow(QObject):
             self.settings.setValue('providerPassword', self.dlg.providerPassword.text())
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
-        """"""
+        """Save and open the preview image as a layer."""
         with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb') as f:
             f.write(response.readAll().data())
         # Some previews aren't georef-ed
@@ -1390,15 +1405,12 @@ class Mapflow(QObject):
         self.add_layer(layer)
 
     def preview_sentinel_error_handler(self, response: QNetworkReply) -> None:
-        """"""
+        """Error handler for requesting a Sentinel preview from SkyWatch."""
         self.alert(self.tr("Sorry, we couldn't load the image"))
         self.report_error(response, self.tr('Error previewing Sentinel imagery'))
 
     def preview(self) -> None:
-        """Display raster tiles served over the Web.
-
-        Is called by clicking the preview button.
-        """
+        """Display raster tiles served over the Web."""
         provider = self.dlg.providerCombo.currentText()
         if provider == config.SENTINEL_OPTION_NAME:
             selected_cells = self.dlg.metadataTable.selectedItems()
@@ -1769,9 +1781,6 @@ class Mapflow(QObject):
         self.settings.setValue('metadataMaxCloudCover', self.dlg.maxCloudCover.value())
         self.settings.setValue('metadataFrom', self.dlg.metadataFrom.date())
         self.settings.setValue('metadataTo', self.dlg.metadataTo.date())
-
-    def on_main_dialog_closure(self) -> None:
-        """"""
 
     def read_mapflow_token(self) -> None:
         """Compose and memorize the user's credentils as Basic Auth."""
