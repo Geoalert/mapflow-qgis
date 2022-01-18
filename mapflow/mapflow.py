@@ -365,7 +365,7 @@ class Mapflow(QObject):
         """
         provider = self.dlg.providerCombo.currentText()
         # Ask for confirmation
-        if self.alert(self.tr('Permanently remove {}?'.format(provider)), QMessageBox.Question):
+        if self.alert(self.tr('Permanently remove {}?').format(provider), QMessageBox.Question):
             providers = self.settings.value('providers')
             del providers[provider]
             self.settings.setValue('providers', providers)
@@ -759,7 +759,7 @@ class Mapflow(QObject):
             table_items[3].setData(Qt.DisplayRole, feature['properties']['preview'])
             for col, table_item in enumerate(table_items):
                 self.dlg.metadataTable.setItem(row, col, table_item)
-        self.filter_metadata(min_intersection)
+        self.filter_metadata(min_intersection=min_intersection, max_cloud_cover=max_cloud_cover)
         self.dlg.metadataTable.setSortingEnabled(True)
         # Handle pagination
         try:
@@ -769,9 +769,10 @@ class Mapflow(QObject):
             self.dlg.getMetadata.setDown(False)
             return
         more_button = self.dlg.findChild(QPushButton, config.METADATA_MORE_BUTTON_OBJECT_NAME)
-        if next_page_start_index is None and more_button:  # last page, remove the button
-            self.dlg.layoutMetadataTable.removeWidget(more_button)
-            more_button.deleteLater()
+        if next_page_start_index is None:
+            if more_button:  # last page, remove the button
+                self.dlg.layoutMetadataTable.removeWidget(more_button)
+                more_button.deleteLater()
         else:
             if not more_button:  # create one
                 more_button = QPushButton(self.tr('More'))
