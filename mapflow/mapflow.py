@@ -112,10 +112,12 @@ class Mapflow(QObject):
             providers[config.SENTINEL_OPTION_NAME] = config.BUILTIN_PROVIDERS[config.SENTINEL_OPTION_NAME]
         self.update_providers(providers)
         self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
+        self.dlg.minIntersection.setValue(self.settings.value('metadataMinIntersection', 0))
+        self.dlg.maxCloudCover.setValue(self.settings.value('metadataMaxCloudCover', 100))
         # Set default metadata dates
         today = QDate.currentDate()
-        self.dlg.metadataFrom.setDate(today.addMonths(-6))
-        self.dlg.metadataTo.setDate(today)
+        self.dlg.metadataFrom.setDate(self.settings.value('metadataFrom', today.addMonths(-6)))
+        self.dlg.metadataTo.setDate(self.settings.value('metadataTo', today))
         # Hide the ID columns as only needed for table operations, not the user
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
@@ -147,10 +149,8 @@ class Mapflow(QObject):
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Providers
-        self.dlg.minIntersectionSpinBox.editingFinished.connect(self.filter_metadata)
-        self.dlg.maxCloudCoverSpinBox.editingFinished.connect(self.filter_metadata)
-        self.dlg.minIntersection.sliderReleased.connect(self.filter_metadata)
-        self.dlg.maxCloudCover.sliderReleased.connect(self.filter_metadata)
+        self.dlg.minIntersectionSpinBox.valueChanged.connect(self.filter_metadata)
+        self.dlg.maxCloudCoverSpinBox.valueChanged.connect(self.filter_metadata)
         self.dlg.metadataFrom.dateChanged.connect(self.filter_metadata)
         self.dlg.metadataTo.dateChanged.connect(self.filter_metadata)
         self.dlg.preview.clicked.connect(self.preview)
@@ -519,10 +519,14 @@ class Mapflow(QObject):
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
+        more_button = self.dlg.findChild(QPushButton, config.METADATA_MORE_BUTTON_OBJECT_NAME)
+        if more_button:
+            self.dlg.layoutMetadataTable.removeWidget(more_button)
+            more_button.deleteLater()
         provider = self.dlg.providerCombo.currentText()
         # Check if the AOI is defined
         if self.dlg.metadataUseCanvasExtent.isChecked():
-            self.aoi = helpers.to_wgs84(
+            aoi = helpers.to_wgs84(
                 QgsGeometry.fromRect(self.iface.mapCanvas().extent()),
                 self.project.crs()
             )
@@ -558,8 +562,9 @@ class Mapflow(QObject):
         aoi_bbox = aoi.boundingBox()
         aoi_bbox_geom = QgsGeometry.fromRect(aoi_bbox)
         # Check the area
+        aoi_too_large_message = self.tr('Your area of interest is too large.')
         if self.calculator.measureArea(aoi_bbox_geom) > config.SKYWATCH_METADATA_MAX_AREA:
-            self.alert(self.tr('Your area of interest is too large.'))
+            self.alert(aoi_too_large_message)
             return
         # Check the side length
         x_min, x_max, y_min, y_max = (
@@ -575,10 +580,7 @@ class Mapflow(QObject):
             self.calculator.measureLength(width) > config.SKYWATCH_METADATA_MAX_SIDE_LENGTH
             or self.calculator.measureLength(height) > config.SKYWATCH_METADATA_MAX_SIDE_LENGTH
         ):
-            self.alert(self.tr(
-                'Your area-of-interest extent is too large.\n'
-                'Try requesting metadata for a smaller subset of your areas by selecting those polygons.'
-            ))
+            self.alert(aoi_too_large_message)
             return
         # Handle the multipolygon case
         if aoi.wkbType() == QgsWkbTypes.MultiPolygon:
@@ -1452,10 +1454,11 @@ class Mapflow(QObject):
                 ))
                 # Get the image extent to set the correct extent on the raster layer
                 try:
-                    footprints = self.metadata_layer.getFeatures(f"featureId = '{image_id}'")
+                    extent = next(
+                        self.metadata_layer.getFeatures(f"featureId = '{image_id}'")
+                    ).geometry().boundingBox()
                 except (RuntimeError, AttributeError):  # layer doesn't exist or has been deleted
                     extent = None
-                extent = next(footprints).geometry().boundingBox()
             # Can use urllib.parse but have to specify safe='/?:{}' which sort of defeats the purpose
             url = url.replace('&', '%26').replace('=', '%3D')
         params = {
@@ -1762,6 +1765,13 @@ class Mapflow(QObject):
         for dlg in self.dlg, self.dlg_login, self.dlg_connect_id, self.dlg_provider:
             dlg.close()
         del self.toolbar
+        self.settings.setValue('metadataMinIntersection', self.dlg.minIntersection.value())
+        self.settings.setValue('metadataMaxCloudCover', self.dlg.maxCloudCover.value())
+        self.settings.setValue('metadataFrom', self.dlg.metadataFrom.date())
+        self.settings.setValue('metadataTo', self.dlg.metadataTo.date())
+
+    def on_main_dialog_closure(self) -> None:
+        """"""
 
     def read_mapflow_token(self) -> None:
         """Compose and memorize the user's credentils as Basic Auth."""
