@@ -1131,7 +1131,7 @@ class Mapflow(QObject):
         aoi_layer.dataProvider().addFeatures([aoi])
         aoi_layer.updateExtents()
         # Create a temp layer for the image extent
-        image_extent_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
+        image_extent_layer = QgsVectorLayer('Polygon?crs=epsg:3857', '', 'memory')
         image_extent_layer.dataProvider().addFeatures([extent])
         aoi_layer.updateExtents()
         # Find the intersection
