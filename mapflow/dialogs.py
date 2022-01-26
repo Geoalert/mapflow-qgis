@@ -81,7 +81,7 @@ class ErrorMessage(*uic.loadUiType(ui_path/'error_message.ui')):
         if title:
             self.title.setText(title)
         self.mailTo.setText(
-            '<html><head/><body><p><a href="mailto:help@geoalert.io?subject=Plugin Error&body=' +
+            '<html><head/><body><p><a href="mailto:help@geoalert.io?subject=Mapflow-QGIS&body=' +
             email_body +
             '"><span style=" text-decoration: underline; color:#0057ae;">Let us know</span></a></p></body></html>'
         )
