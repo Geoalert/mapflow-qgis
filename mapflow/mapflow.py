@@ -1612,7 +1612,7 @@ class Mapflow(QObject):
         # Set image extent explicitly because as XYZ, it doesn't have one by default
         self.http.get(
             url=f'{self.server}/processings/{pid}/aois',
-            callback=self.set_raster_extent_callback,
+            callback=self.set_raster_extent,
             callback_kwargs={
                 'vector': results_layer,
                 'raster': raster
@@ -1627,7 +1627,7 @@ class Mapflow(QObject):
         """
         self.report_error(response, self.tr('Error downloading results'))
 
-    def set_raster_extent_callback(
+    def set_raster_extent(
         self,
         response: QNetworkReply,
         vector: QgsVectorLayer,
@@ -1639,11 +1639,12 @@ class Mapflow(QObject):
         :param vector: The downloaded feature layer.
         :param response: The downloaded raster which was used for processing.
         """
-        aoi_outer_ring = json.loads(response.readAll().data())[0]['geometry']['coordinates'][0]
-        # Extract BBOX corners manually to construct a BBOX
-        min_lon, *_, max_lon = sorted([point[0] for point in aoi_outer_ring])
-        min_lat, *_, max_lat = sorted([point[1] for point in aoi_outer_ring])
-        extent = QgsGeometry.fromRect(QgsRectangle(min_lon, min_lat, max_lon, max_lat))
+        with open(os.path.join(self.temp_dir, os.urandom(32).hex()), 'w') as f:
+            json.dump({
+                'type': 'FeatureCollection',
+                'features': json.loads(response.readAll().data())
+            }, f)
+        extent = QgsGeometry.fromRect(QgsVectorLayer(f.name, '', 'ogr').extent())
         raster.setExtent(helpers.from_wgs84(extent, raster.crs()).boundingBox())
         # Add the layers to the project
         self.add_layer(raster)
