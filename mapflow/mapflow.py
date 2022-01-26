@@ -1131,7 +1131,7 @@ class Mapflow(QObject):
         aoi_layer.dataProvider().addFeatures([aoi])
         aoi_layer.updateExtents()
         # Create a temp layer for the image extent
-        image_extent_layer = QgsVectorLayer('Polygon?crs=epsg:3857', '', 'memory')
+        image_extent_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
         image_extent_layer.dataProvider().addFeatures([extent])
         aoi_layer.updateExtents()
         # Find the intersection
@@ -1235,6 +1235,8 @@ class Mapflow(QObject):
         elif is_maxar and selected_image:  # Single SW image
             feature_id = selected_image[config.MAXAR_ID_COLUMN_INDEX].text()
             extent = self.maxar_metadata_extents[feature_id]
+            extent_4326 = helpers.to_wgs84(extent.geometry(), helpers.WEB_MERCATOR)
+            extent.setGeometry(extent_4326)
             try:
                 self.aoi = next(self.clip_aoi_to_image_extent(self.aoi, extent)).geometry()
             except StopIteration:
