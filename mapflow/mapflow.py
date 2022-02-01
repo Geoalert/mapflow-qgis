@@ -237,8 +237,8 @@ class Mapflow(QObject):
         :param raster: A raster layer to test
         """
         is_valid = False  # default
-        if not raster.crs().authid():
-            self.alert(self.tr('The image has invalid projection and cannot be processed.'))
+        if not raster.crs().isValid():
+            self.alert(self.tr('The image has an invalid coordintate refeference system.'))
         if not os.path.splitext(raster.dataProvider().dataSourceUri())[-1] in ('.tif', '.tiff'):
             self.alert(self.tr('Please, select a GeoTIFF layer'))
         if os.path.getsize(raster.publicSource()) / 2**20 > config.MAX_TIF_SIZE:
@@ -475,7 +475,7 @@ class Mapflow(QObject):
         :param provider: Provider name or None, depending on the signal, if one of the
             tile providers, otherwise the selected raster layer
         """
-        enabled = isinstance(provider, QgsRasterLayer) and bool(provider.crs().authid())
+        enabled = isinstance(provider, QgsRasterLayer)
         self.dlg.useImageExtentAsAoi.setEnabled(enabled)
         self.dlg.useImageExtentAsAoi.setChecked(enabled)
         self.dlg.useCache.setEnabled(not enabled)
@@ -1070,10 +1070,6 @@ class Mapflow(QObject):
         :param aoi: the processing area.
         :param crs: the CRS of the processing area.
         """
-        if not crs.authid():  # unidentified CRS; calculations may be erroneous
-            self.dlg.labelAoiArea.clear()
-            self.aoi = self.aoi_size = None
-            return
         if crs != helpers.WGS84:
             aoi = helpers.to_wgs84(aoi, crs)
         self.aoi = aoi  # save for reuse in processing creation or metadata requests
@@ -1317,6 +1313,7 @@ class Mapflow(QObject):
         self.http.post(
             url=f'{self.server}/processings',
             callback=self.post_processing_callback,
+            callback_kwargs={'processing_name': request_body['name']},
             error_handler=self.post_processing_error_handler,
             body=json.dumps(request_body).encode()
         )
@@ -1328,13 +1325,14 @@ class Mapflow(QObject):
         """
         self.report_error(response, self.tr('Processing creation failed'))
 
-    def post_processing_callback(self, _: QNetworkReply) -> None:
+    def post_processing_callback(self, _: QNetworkReply, processing_name: str) -> None:
         """Display a success message and clear the processing name field."""
         self.alert(
             self.tr("Success! We'll notify you when the processing has finished."),
             QMessageBox.Information
         )
-        self.dlg.processingName.clear()
+        if self.dlg.processingName.text() == processing_name:
+            self.dlg.processingName.clear()
         self.processing_fetch_timer.start()  # start monitoring
         # Do an extra fetch immediately
         self.http.get(
