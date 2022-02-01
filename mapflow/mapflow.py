@@ -122,7 +122,7 @@ class Mapflow(QObject):
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
         # Memorize dialog element sizes & positioning
-        self.dlg.finished.connect(self.save_dialog_state)
+        # self.dlg.visibilityChanged.connect(self.save_dialog_state)
         self.dlg_connect_id.accepted.connect(self.edit_connect_id)
         self.dlg_sentinel_auth.accepted.connect(self.edit_sentinel_auth)
         # Connect buttons
@@ -778,6 +778,7 @@ class Mapflow(QObject):
             more_button.setObjectName(config.METADATA_MORE_BUTTON_OBJECT_NAME)
             self.dlg.layoutMetadataTable.addWidget(more_button)
             # Set the button to fetch more metadata on click
+
             def fetch_skywatch_metadata_next_page(**kwargs):
                 self.fetch_skywatch_metadata(**kwargs)
                 # more_button = self.dlg.findChild(QPushButton, config.METADATA_MORE_BUTTON_OBJECT_NAME)
@@ -785,13 +786,13 @@ class Mapflow(QObject):
                 more_button.deleteLater()
             more_button.clicked.connect(
                 lambda: fetch_skywatch_metadata_next_page(
-                    is_proxied=is_proxied,  
+                    is_proxied=is_proxied,
                     request_id=request_id,
                     max_cloud_cover=max_cloud_cover,
                     min_intersection=min_intersection,
                     start_index=next_page_start_index
-                    )
                 )
+            )
         if timer:
             self.dlg.getMetadata.setDown(False)
 
@@ -1932,7 +1933,7 @@ class Mapflow(QObject):
         self.dlg.modelCombo.addItems([wd['name'] for wd in response['workflowDefs']])
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
-        self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
+        # self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
         # Authenticate and keep user logged in
         self.logged_in = True
         token = self.mapflow_auth.split()[1]
