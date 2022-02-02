@@ -1,6 +1,5 @@
 import time
 
-
 TIMEZONE = time.localtime().tm_zone
 PLUGIN_NAME = 'Mapflow'
 MAPFLOW_DEFAULT_TIMEOUT = 5  # in seconds
@@ -11,14 +10,7 @@ PROCESSING_ATTRIBUTES = 'name', 'workflowDef', 'status', 'percentCompleted', 'ao
 PROCESSING_TABLE_ID_COLUMN_INDEX = PROCESSING_ATTRIBUTES.index('id')
 PROCESSING_TABLE_SORT_COLUMN_INDEX = PROCESSING_ATTRIBUTES.index('created')
 # MAXAR
-MAXAR_METADATA_ATTRIBUTES = {
-    'Product Type': 'productType',
-    'Band Order': 'colorBandOrder',
-    'Cloud %': 'cloudCover',
-    f'\N{DEGREE SIGN} Off Nadir': 'offNadirAngle',
-    f'Date & Time ({TIMEZONE})': 'acquisitionDate',
-    'Image ID': 'featureId'
-}
+
 MAXAR_ID_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.values()).index('featureId')
 MAXAR_DATETIME_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.keys()).index(f'Date & Time ({TIMEZONE})')
 MAXAR_CLOUD_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.keys()).index(f'Cloud %')

@@ -21,13 +21,13 @@ from qgis import processing as qgis_processing  # to avoid collisions
 from qgis.gui import QgsMessageBarItem
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
-    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter, QgsRectangle,
+    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter,
     QgsFeatureIterator, QgsWkbTypes, QgsPoint
 )
 
-from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, SentinelAuthDialog, ErrorMessage
-from .http import Http
-from . import helpers, config
+from mapflow import helpers, config, regex
+from mapflow.http import Http
+from mapflow.dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, SentinelAuthDialog, ErrorMessage
 
 
 class Mapflow(QObject):
@@ -847,7 +847,7 @@ class Mapflow(QObject):
         }
         if self.dlg.providerAuthGroup.isChecked():  # user's own account
             connect_id = self.settings.value('providers')[product]['connectId']
-            if not helpers.UUID_REGEX.match(connect_id):
+            if not regex.UUID.match(connect_id):
                 self.show_connect_id_dialog(product)
                 return
             url += '&CONNECTID=' + connect_id
@@ -1203,7 +1203,7 @@ class Mapflow(QObject):
                 processing_params['meta']['source'] = 'maxar'
                 if use_auth:  # user's own account
                     connect_id = providers[raster_option]['connectId']
-                    if not helpers.UUID_REGEX.match(connect_id):
+                    if not regex.UUID.match(connect_id):
                         self.show_connect_id_dialog(raster_option)
                         return
                     params['url'] += '&CONNECTID=' + providers[raster_option]['connectId']
@@ -1435,7 +1435,7 @@ class Mapflow(QObject):
             elif image_id:
                 url = f'https://preview.skywatch.com/esa/sentinel-2/{image_id}.jp2'
                 datetime_ = datetime.strptime(
-                    helpers.SENTINEL_DATETIME_REGEX.search(image_id).group(0), '%Y%m%dT%H%M%S'
+                    regex.SENTINEL_DATETIME.search(image_id).group(0), '%Y%m%dT%H%M%S'
                 ).astimezone().strftime('%Y-%m-%d %H:%M')
                 guess_format = True
             else:
@@ -1460,7 +1460,7 @@ class Mapflow(QObject):
         if provider in config.MAXAR_PRODUCTS:
             if self.dlg.providerAuthGroup.isChecked():  # own account
                 connect_id = provider_info['connectId']
-                if helpers.UUID_REGEX.match(connect_id):
+                if regex.UUID.match(connect_id):
                     url += '&CONNECTID=' + provider_info['connectId']
                     url = url.replace('jpeg', 'png')  # for transparency support
                 else:

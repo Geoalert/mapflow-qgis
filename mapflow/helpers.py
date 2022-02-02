@@ -1,22 +1,16 @@
-import re
-
 from qgis.core import (
     QgsMapLayer, QgsGeometry, QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
     QgsMapLayerType, QgsWkbTypes
 )
+
+from mapflow import regex
+
 
 
 PROJECT = QgsProject.instance()
 WGS84 = QgsCoordinateReferenceSystem('EPSG:4326')
 WGS84_ELLIPSOID = WGS84.ellipsoidAcronym()
 WEB_MERCATOR = QgsCoordinateReferenceSystem('EPSG:3857')
-UUID_REGEX = re.compile(r'[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\Z')
-URL_PATTERN = r'https?://(www\.)?([-\w]{1,256}\.)+[a-zA-Z0-9]{1,6}'  # schema + domains
-URL_REGEX = re.compile(URL_PATTERN)
-XYZ_REGEX = re.compile(URL_PATTERN + r'(.*\{[xyz]\}){3}.*', re.I)
-QUAD_KEY_REGEX = re.compile(URL_PATTERN + r'(.*\{q\}).*', re.I)
-SENTINEL_DATETIME_REGEX = re.compile(r'\d{8}T\d{6}', re.I)
-SENTINEL_COORDINATE_REGEX = re.compile(r'T\d{2}[A-Z]{3}', re.I)
 
 
 def is_polygon_layer(layer: QgsMapLayer) -> bool:
@@ -69,9 +63,9 @@ def validate_provider_form(form) -> bool:
     type_ = form.type.currentText()
     if name and url:  # non-empty
         if type_ in ('xyz', 'tms'):
-            return bool(XYZ_REGEX.match(url))
+            return bool(regex.XYZ.match(url))
         elif type_ == 'wms':
-            return bool(URL_REGEX.match(url))
+            return bool(regex.URL.match(url))
         else:  # Quad Key
-            return bool(QUAD_KEY_REGEX.match(url))
+            return bool(regex.QUAD_KEY.match(url))
     return False
