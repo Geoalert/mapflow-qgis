@@ -25,6 +25,7 @@ from qgis.core import (
     QgsFeatureIterator, QgsWkbTypes, QgsPoint
 )
 
+from mapflow.maxar import Maxar
 from mapflow import helpers, config, regex
 from mapflow.http import Http
 from mapflow.dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, SentinelAuthDialog, ErrorMessage
@@ -111,6 +112,15 @@ class Mapflow(QObject):
         if config.SENTINEL_OPTION_NAME not in providers:
             providers[config.SENTINEL_OPTION_NAME] = config.BUILTIN_PROVIDERS[config.SENTINEL_OPTION_NAME]
         self.update_providers(providers)
+
+        ######
+        providers = self.settings.value('providers')
+        if providers is None:
+            maxar_connect_ids = {product: '' for product in Maxar.SUPPORTED_PRODUCTS}
+        else:
+            maxar_connect_ids = {key: value for key, value in providers if key in Maxar.SUPPORTED_PRODUCTS}
+        self.maxar = Maxar(maxar_connect_ids, self.server, )
+
         self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
         self.dlg.minIntersection.setValue(int(self.settings.value('metadataMinIntersection', 0)))
         self.dlg.maxCloudCover.setValue(int(self.settings.value('metadataMaxCloudCover', 100)))
@@ -296,7 +306,7 @@ class Mapflow(QObject):
             max_zoom = config.MAX_ZOOM
         elif provider in config.MAXAR_PRODUCTS:
             is_max_zoom_enabled = True
-            columns = config.MAXAR_METADATA_ATTRIBUTES
+            columns = self.metadata_columns
             hidden_column_index = None
             sort_by = config.MAXAR_DATETIME_COLUMN_INDEX
             enabled = True
@@ -828,7 +838,7 @@ class Mapflow(QObject):
             'WIDTH': 3000,
             'HEIGHT': 3000,
             'SORTBY': 'acquisitionDate+D',
-            'PROPERTYNAME': ','.join((*config.MAXAR_METADATA_ATTRIBUTES.values(), 'geometry'))
+            'PROPERTYNAME': ','.join((*self.metadata_attributes, 'geometry'))
         }
         filter_params = (
             f'intersects(geometry,srid=4326;{aoi.asWkt(precision=6).replace(" ", "+")})',
@@ -916,7 +926,7 @@ class Mapflow(QObject):
         # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
         self.dlg.metadataTable.setSortingEnabled(False)
         for row, feature in enumerate(features):
-            for col, attr in enumerate(config.MAXAR_METADATA_ATTRIBUTES.values()):
+            for col, attr in enumerate(self.metadata_attributes):
                 try:
                     value = feature[attr]
                 except KeyError:  # e.g. <colorBandOrder/> for pachromatic images
@@ -1476,12 +1486,11 @@ class Mapflow(QObject):
             if image_id:
                 url += f'&CQL_FILTER=feature_id=\'{image_id}\''
                 row = self.dlg.metadataTable.currentRow()
-                attrs = tuple(config.MAXAR_METADATA_ATTRIBUTES.values())
                 try:
                     layer_name = ' '.join((
                         layer_name,
-                        self.dlg.metadataTable.item(row, attrs.index('acquisitionDate')).text(),
-                        self.dlg.metadataTable.item(row, attrs.index('productType')).text()
+                        self.dlg.metadataTable.item(row, self.metadata_attributes.index('acquisitionDate')).text(),
+                        self.dlg.metadataTable.item(row, self.metadata_attributes.index('productType')).text()
                     ))
                 except AttributeError:  # the table is empty
                     layer_name = f'{layer_name} {image_id}'
