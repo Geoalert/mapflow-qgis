@@ -121,6 +121,7 @@ class Mapflow(QObject):
         # Hide the ID columns as only needed for table operations, not the user
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
+        self.dlg.rasterCombo.currentTextChanged.connect(self.set_available_wds)
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
         self.dlg_connect_id.accepted.connect(self.edit_connect_id)
@@ -177,6 +178,15 @@ class Mapflow(QObject):
                 use_default_error_handler=False  # ignore errors to prevent repetitive alerts
             )
         )
+
+    def set_available_wds(self, provider_name: str) -> None:
+        """Restrict the list of workflow defintions (models) based on the imagery provider."""
+        self.dlg.modelCombo.clear()
+        if provider_name == config.SENTINEL_OPTION_NAME:
+            wds = (config.SENTINEL_WD_NAME,)
+        else:
+            wds = [wd for wd in self.wds if wd != config.SENTINEL_WD_NAME]
+        self.dlg.modelCombo.addItems(wds)
 
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
         """Filter out the metadata table and layer every time user changes a filter."""
@@ -1928,8 +1938,8 @@ class Mapflow(QObject):
         self.is_premium_user = user['isPremium']
         self.on_provider_change(self.dlg.providerCombo.currentText())
         self.aoi_area_limit = response['user']['aoiAreaLimit'] * 1e-6
-        self.dlg.modelCombo.clear()
-        self.dlg.modelCombo.addItems([wd['name'] for wd in response['workflowDefs']])
+        self.wds = [wd['name'] for wd in response['workflowDefs']]
+        self.set_available_wds(self.wds)
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
