@@ -8,10 +8,12 @@ from datetime import datetime, timedelta  # processing creation datetime formatt
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
 from osgeo import gdal
+from PyQt5.QtXml import QDomDocument
 from PyQt5.QtGui import QColor, QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
-    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion
+    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion,
+    QTextStream, QByteArray
 )
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction, QAbstractItemView, QLabel,
@@ -788,6 +790,7 @@ class Mapflow(QObject):
             more_button.setObjectName(config.METADATA_MORE_BUTTON_OBJECT_NAME)
             self.dlg.layoutMetadataTable.addWidget(more_button)
             # Set the button to fetch more metadata on click
+
             def fetch_skywatch_metadata_next_page(**kwargs):
                 self.fetch_skywatch_metadata(**kwargs)
                 # more_button = self.dlg.findChild(QPushButton, config.METADATA_MORE_BUTTON_OBJECT_NAME)
@@ -795,13 +798,13 @@ class Mapflow(QObject):
                 more_button.deleteLater()
             more_button.clicked.connect(
                 lambda: fetch_skywatch_metadata_next_page(
-                    is_proxied=is_proxied,  
+                    is_proxied=is_proxied,
                     request_id=request_id,
                     max_cloud_cover=max_cloud_cover,
                     min_intersection=min_intersection,
                     start_index=next_page_start_index
-                    )
                 )
+            )
         if timer:
             self.dlg.getMetadata.setDown(False)
 
@@ -830,15 +833,10 @@ class Mapflow(QObject):
         self.save_provider_auth()
         self.metadata_aoi = aoi
         params = {
-            'SERVICE': 'WFS',
-            'VERSION': '2.0.0',
-            'REQUEST': 'GetFeature',
-            'TYPENAME': 'DigitalGlobe:FinishedFeature',
-            'SRSNAME': 'urn:ogc:def:crs:EPSG::3857',
-            'WIDTH': 3000,
-            'HEIGHT': 3000,
-            'SORTBY': 'acquisitionDate+D',
-            'PROPERTYNAME': ','.join((*config.MAXAR_METADATA_ATTRIBUTES.values(), 'geometry'))
+            'width': 3000,
+            'height': 3000,
+            'sortby': 'acquisitionDate+D',
+            'propertyname': ','.join((*config.MAXAR_METADATA_ATTRIBUTES.values(), 'geometry'))
         }
         filter_params = (
             f'intersects(geometry,srid=4326;{aoi.asWkt(precision=6).replace(" ", "+")})',
@@ -848,13 +846,37 @@ class Mapflow(QObject):
         url = (
             'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?'
             + '&'.join(f'{key}={value}' for key, value in params.items())
-            + '&CQL_FILTER=(' + 'and'.join(f'({param})' for param in filter_params) + ')'
+            # + '&CQL_FILTER=(' + 'and'.join(f'({param})' for param in filter_params) + ')'
         )
         callback_kwargs = {
             'product': product,
             'min_intersection': min_intersection,
             'max_cloud_cover': max_cloud_cover
         }
+        aoi = helpers.from_wgs84(aoi, helpers.WEB_MERCATOR)
+        byte_array = QByteArray(b'')
+        stream = QTextStream(byte_array)
+        elem = aoi.get().asGml3(QDomDocument(), precision=5, ns="http://www.opengis.net/gml")
+        elem.save(stream, 0)  # 0 = no indentation (minimize request size)
+        stream.seek(0)  # rewind to the start
+        body = f"""<?xml version="1.0" encoding="utf-8"?>
+            <GetFeature 
+                service="wfs" 
+                version="2.0.3"
+                width="3000"
+                height="3000"
+                outputFormat="text/xml; subtype=gml/3.1.1"
+                xmlns="http://www.opengis.net/wfs" 
+                xmlns:ogc="http://www.opengis.net/ogc">
+                <Query typeName="DigitalGlobe:FinishedFeature" srsName="EPSG:3857">
+                <ogc:Filter>
+                    <ogc:Intersects>
+                        <ogc:PropertyName>geometry</ogc:PropertyName>
+                        {stream.readAll()}
+                    </ogc:Intersects>
+                </ogc:Filter>
+                </Query>
+            </GetFeature>"""
         if self.dlg.providerAuthGroup.isChecked():  # user's own account
             connect_id = self.settings.value('providers')[product]['connectId']
             if not helpers.UUID_REGEX.match(connect_id):
@@ -865,8 +887,9 @@ class Mapflow(QObject):
                 self.dlg.providerUsername.text(),
                 self.dlg.providerPassword.text()
             )).encode())
-            self.http.get(
+            self.http.post(
                 url=url,
+                body=body.encode(),
                 auth=f'Basic {encoded_credentials.decode()}'.encode(),
                 callback=self.get_maxar_metadata_callback,
                 callback_kwargs=callback_kwargs,
@@ -897,6 +920,8 @@ class Mapflow(QObject):
         :param response: The HTTP response.
         :param product: Maxar product whose metadata was requested.
         """
+        print(response.readAll().data())
+        return
         self.dlg.metadataTable.clearContents()
         output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex()) + '.gml'
         with open(output_file_name, 'wb') as f:
