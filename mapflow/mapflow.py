@@ -869,10 +869,15 @@ class Mapflow(QObject):
                                 <ogc:Literal>{to}</ogc:Literal>
                             </ogc:UpperBoundary>
                         </ogc:PropertyIsBetween>
-                        <ogc:PropertyIsLessThanOrEqualTo>
-                            <ogc:PropertyName>cloudCover</ogc:PropertyName>
-                            <ogc:Literal>{max_cloud_cover}</ogc:Literal>
-                        </ogc:PropertyIsLessThanOrEqualTo>
+                        <ogc:Or>
+                            <ogc:PropertyIsLessThanOrEqualTo>
+                                <ogc:PropertyName>cloudCover</ogc:PropertyName>
+                                <ogc:Literal>{max_cloud_cover/100}</ogc:Literal>
+                            </ogc:PropertyIsLessThanOrEqualTo>
+                            <ogc:PropertyIsNull>
+                                <ogc:PropertyName>cloudCover</ogc:PropertyName>
+                            </ogc:PropertyIsNull>
+                        </ogc:Or>
                         <ogc:Intersects>
                             <ogc:PropertyName>geometry</ogc:PropertyName>
                             {stream.readAll()}
