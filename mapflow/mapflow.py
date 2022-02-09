@@ -832,28 +832,12 @@ class Mapflow(QObject):
         """Get SecureWatch image metadata."""
         self.save_provider_auth()
         self.metadata_aoi = aoi
-        params = {
-            'width': 3000,
-            'height': 3000,
-            'sortby': 'acquisitionDate+D',
-            'propertyname': ','.join((*config.MAXAR_METADATA_ATTRIBUTES.values(), 'geometry'))
-        }
-        filter_params = (
-            f'intersects(geometry,srid=4326;{aoi.asWkt(precision=6).replace(" ", "+")})',
-            f'acquisitionDate>={from_}',
-            f'acquisitionDate<={to}'
-        )
-        url = (
-            'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?'
-            + '&'.join(f'{key}={value}' for key, value in params.items())
-            # + '&CQL_FILTER=(' + 'and'.join(f'({param})' for param in filter_params) + ')'
-        )
+        url = 'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?width=3000&height=3000'
         callback_kwargs = {
             'product': product,
             'min_intersection': min_intersection,
             'max_cloud_cover': max_cloud_cover
         }
-        aoi = helpers.from_wgs84(aoi, helpers.WEB_MERCATOR)
         byte_array = QByteArray(b'')
         stream = QTextStream(byte_array)
         elem = aoi.get().asGml3(QDomDocument(), precision=5, ns="http://www.opengis.net/gml")
@@ -862,19 +846,45 @@ class Mapflow(QObject):
         body = f"""<?xml version="1.0" encoding="utf-8"?>
             <GetFeature 
                 service="wfs" 
-                version="2.0.3"
-                width="3000"
-                height="3000"
-                outputFormat="text/xml; subtype=gml/3.1.1"
+                version="1.1.0"
+                outputFormat="json"
                 xmlns="http://www.opengis.net/wfs" 
                 xmlns:ogc="http://www.opengis.net/ogc">
-                <Query typeName="DigitalGlobe:FinishedFeature" srsName="EPSG:3857">
+                <Query typeName="DigitalGlobe:FinishedFeature" srsName="EPSG:4326">
+                <PropertyName>productType</PropertyName>
+                <PropertyName>colorBandOrder</PropertyName>
+                <PropertyName>cloudCover</PropertyName>
+                <PropertyName>offNadirAngle</PropertyName>
+                <PropertyName>acquisitionDate</PropertyName>
+                <PropertyName>featureId</PropertyName>
+                <PropertyName>geometry</PropertyName>
                 <ogc:Filter>
-                    <ogc:Intersects>
-                        <ogc:PropertyName>geometry</ogc:PropertyName>
-                        {stream.readAll()}
-                    </ogc:Intersects>
+                    <ogc:And>
+                        <ogc:PropertyIsBetween>
+                            <ogc:PropertyName>acquisitionDate</ogc:PropertyName>
+                            <ogc:LowerBoundary>
+                                <ogc:Literal>{from_}</ogc:Literal>
+                            </ogc:LowerBoundary>
+                            <ogc:UpperBoundary>
+                                <ogc:Literal>{to}</ogc:Literal>
+                            </ogc:UpperBoundary>
+                        </ogc:PropertyIsBetween>
+                        <ogc:PropertyIsLessThanOrEqualTo>
+                            <ogc:PropertyName>cloudCover</ogc:PropertyName>
+                            <ogc:Literal>{max_cloud_cover}</ogc:Literal>
+                        </ogc:PropertyIsLessThanOrEqualTo>
+                        <ogc:Intersects>
+                            <ogc:PropertyName>geometry</ogc:PropertyName>
+                            {stream.readAll()}
+                        </ogc:Intersects>
+                    </ogc:And>
                 </ogc:Filter>
+                <ogc:SortBy>
+                    <ogc:SortProperty>
+                        <ogc:PropertyName>acquisitionDate</ogc:PropertyName>
+                        <ogc:SortOrder>DESC</ogc:SortOrder>
+                    </ogc:SortProperty>
+                </ogc:SortBy>
                 </Query>
             </GetFeature>"""
         if self.dlg.providerAuthGroup.isChecked():  # user's own account
@@ -882,7 +892,7 @@ class Mapflow(QObject):
             if not helpers.UUID_REGEX.match(connect_id):
                 self.show_connect_id_dialog(product)
                 return
-            url += '&CONNECTID=' + connect_id
+            url += '&connectid=' + connect_id
             encoded_credentials = b64encode(':'.join((
                 self.dlg.providerUsername.text(),
                 self.dlg.providerPassword.text()
@@ -899,12 +909,13 @@ class Mapflow(QObject):
         else:  # assume user wants to use our account, proxy thru Mapflow
             self.http.post(
                 url=f'{self.server}/meta',
-                callback=self.get_maxar_metadata_callback,
-                callback_kwargs=callback_kwargs,
                 body=json.dumps({
                     'url': url,
+                    'body': body,
                     'connectId': product.split()[1].lower()
                 }).encode(),
+                callback=self.get_maxar_metadata_callback,
+                callback_kwargs=callback_kwargs,
                 timeout=7
             )
 
@@ -915,45 +926,44 @@ class Mapflow(QObject):
         min_intersection: int,
         max_cloud_cover: int
     ) -> None:
-        """Load and save Maxar metadata as GML, format it and display as a layer.
+        """Format, save and load Maxar metadata.
 
         :param response: The HTTP response.
         :param product: Maxar product whose metadata was requested.
         """
-        print(response.readAll().data())
-        return
         self.dlg.metadataTable.clearContents()
-        output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex()) + '.gml'
-        with open(output_file_name, 'wb') as f:
-            f.write(response.readAll().data())
-        self.metadata_layer = QgsVectorLayer(output_file_name, f'{product} metadata', 'ogr')
-        self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
-        self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
-        self.filter_metadata(min_intersection=min_intersection, max_cloud_cover=max_cloud_cover)
-        self.add_layer(self.metadata_layer)
-        # Get the list of features (don't use the generator itself, or it'll get exhausted)
-        features = list(self.metadata_layer.getFeatures())
-        # Memorize IDs and extents to be able to clip the user's AOI to image on processing creation
-        self.maxar_metadata_extents = {feature['featureId']: feature for feature in features}
+        metadata = json.loads(response.readAll().data())
         # Format decimals and dates
-        for feature in features:
+        for feature in metadata['features']:
             # Parse, localize & format the datetime
-            feature['acquisitionDate'] = datetime.strptime(
-                feature['acquisitionDate'] + '+0000', '%Y-%m-%d %H:%M:%S%z'
+            feature['properties']['acquisitionDate'] = datetime.strptime(
+                feature['properties']['acquisitionDate'] + '+0000', '%Y-%m-%d %H:%M:%S%z'
             ).astimezone().strftime('%Y-%m-%d %H:%M')
             # Round values for display
-            if feature['offNadirAngle']:
-                feature['offNadirAngle'] = round(feature['offNadirAngle'])
-            if feature['cloudCover']:
-                feature['cloudCover'] = round(feature['cloudCover'] * 100)
+            if feature['properties']['offNadirAngle']:
+                feature['properties']['offNadirAngle'] = round(feature['properties']['offNadirAngle'])
+            if feature['properties']['cloudCover']:
+                feature['properties']['cloudCover'] = round(feature['properties']['cloudCover'] * 100)
+        with open(os.path.join(self.temp_dir, os.urandom(32).hex()) + '.geojson', 'w') as file:
+            json.dump(metadata, file)
+            file.seek(0)
+            self.metadata_layer = QgsVectorLayer(file.name, f'{product} metadata', 'ogr')
+        self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
+        self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
+        self.add_layer(self.metadata_layer)
+        # Memorize IDs and extents to be able to clip the user's AOI to image on processing creation
+        self.maxar_metadata_extents = {
+            feature['featureId']: feature 
+            for feature in self.metadata_layer.getFeatures()
+        }
         # Fill out the table
-        self.dlg.metadataTable.setRowCount(len(features))
+        self.dlg.metadataTable.setRowCount(metadata['totalFeatures'])
         # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
         self.dlg.metadataTable.setSortingEnabled(False)
-        for row, feature in enumerate(features):
+        for row, feature in enumerate(metadata['features']):
             for col, attr in enumerate(config.MAXAR_METADATA_ATTRIBUTES.values()):
                 try:
-                    value = feature[attr]
+                    value = feature['properties'][attr]
                 except KeyError:  # e.g. <colorBandOrder/> for pachromatic images
                     value = ''
                 table_item = QTableWidgetItem()
@@ -961,6 +971,7 @@ class Mapflow(QObject):
                 self.dlg.metadataTable.setItem(row, col, table_item)
         # Turn sorting on again
         self.dlg.metadataTable.setSortingEnabled(True)
+        self.filter_metadata(min_intersection=min_intersection, max_cloud_cover=max_cloud_cover)
 
     def get_maxar_metadata_error_handler(self, response: QNetworkReply) -> None:
         """Error handler for metadata requests.
