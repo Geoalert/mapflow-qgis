@@ -933,6 +933,12 @@ class Mapflow(QObject):
         """
         self.dlg.metadataTable.clearContents()
         metadata = json.loads(response.readAll().data())
+        if metadata['totalFeatures'] == 0:
+            self.alert(
+                self.tr('No images match your criteria. Try adjusting dates and filters.'), 
+                QMessageBox.Information
+            )
+            return
         # Format decimals and dates
         for feature in metadata['features']:
             # Parse, localize & format the datetime
