@@ -205,7 +205,7 @@ class Mapflow(QObject):
         filter_ = (
             f"acquisitionDate >= '{from_}'"
             f" and acquisitionDate <= '{to}'"
-            f' and cloudCover is null or cloudCover <= {max_cloud_cover/100}'
+            f' and cloudCover is null or cloudCover <= {max_cloud_cover}'
         )
         aoi = helpers.from_wgs84(self.metadata_aoi, crs)
         self.calculator.setEllipsoid(crs.ellipsoidAcronym())
@@ -648,7 +648,7 @@ class Mapflow(QObject):
             '&'.join(f'field={name}:{type_}' for name, type_ in {
                 'featureId': 'string',
                 'preview': 'string',
-                'cloudCover': 'real',
+                'cloudCover': 'int',
                 'acquisitionDate': 'datetime'
             }.items()),
             config.SENTINEL_OPTION_NAME + ' metadata',
@@ -742,7 +742,7 @@ class Mapflow(QObject):
                 'geometry': feature['location'],
                 'properties': {
                         'preview': feature['preview_uri'],
-                        'cloudCover': round(feature['result_cloud_cover_percentage'])/100,
+                        'cloudCover': round(feature['result_cloud_cover_percentage']),
                 }
             }
             try:
@@ -770,7 +770,7 @@ class Mapflow(QObject):
         for row, feature in enumerate(metadata['features'], start=current_row_count):
             table_items = [QTableWidgetItem() for _ in range(len(config.SENTINEL_ATTRIBUTES))]
             table_items[0].setData(Qt.DisplayRole, feature['properties']['acquisitionDate'])
-            table_items[1].setData(Qt.DisplayRole, round(feature['properties']['cloudCover'] * 100))
+            table_items[1].setData(Qt.DisplayRole, round(feature['properties']['cloudCover']))
             table_items[2].setData(Qt.DisplayRole, feature['id'])
             table_items[3].setData(Qt.DisplayRole, feature['properties']['preview'])
             for col, table_item in enumerate(table_items):
