@@ -215,24 +215,22 @@ class Mapflow(QObject):
         aoi.prepareGeometry()
         # Get attributes
         if self.dlg.providerCombo.currentText() == config.SENTINEL_OPTION_NAME:
-            id_field = 'id'
             id_column_index = config.SENTINEL_ID_COLUMN_INDEX
             datetime_column_index = config.SENTINEL_DATETIME_COLUMN_INDEX
             cloud_cover_column_index = config.SENTINEL_CLOUD_COLUMN_INDEX
         else:  # Maxar
-            id_field = 'featureId'
             id_column_index = config.MAXAR_ID_COLUMN_INDEX
             datetime_column_index = config.MAXAR_DATETIME_COLUMN_INDEX
             cloud_cover_column_index = config.MAXAR_CLOUD_COLUMN_INDEX
         self.metadata_layer.setSubsetString('')  # clear any existing filters
         filtered_ids = [
-            feature['featureId'] for feature in self.metadata_layer.getFeatures()
+            feature['id'] for feature in self.metadata_layer.getFeatures()
             if self.calculator.measureArea(
                 QgsGeometry(aoi.intersection(feature.geometry().constGet()))
             ) < min_intersection_size
         ]
         if filtered_ids:
-            filter_ += f' and {id_field} not in (' + ', '.join((f"'{id_}'" for id_ in filtered_ids)) + ')'
+            filter_ += f' and id not in (' + ', '.join((f"'{id_}'" for id_ in filtered_ids)) + ')'
         self.metadata_layer.setSubsetString(filter_)
         # Show/hide table rows
         for row in range(self.dlg.metadataTable.rowCount()):
@@ -628,6 +626,7 @@ class Mapflow(QObject):
             use_default_error_handler=False
         )
         self.dlg.getMetadata.setDown(True)
+        self.dlg.getMetadata.blockSignals(True)
 
     def request_skywatch_metadata_callback(
         self,
@@ -646,7 +645,7 @@ class Mapflow(QObject):
         self.metadata_layer = QgsVectorLayer(
             'polygon?crs=epsg:4326&index=yes&' +
             '&'.join(f'field={name}:{type_}' for name, type_ in {
-                'featureId': 'string',
+                'id': 'string',
                 'preview': 'string',
                 'cloudCover': 'int',
                 'acquisitionDate': 'datetime'
@@ -675,6 +674,7 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
+        self.dlg.getMetadata.blockSignals(False)
         self.dlg.getMetadata.setDown(False)
         error = response.error()
         if error == QNetworkReply.ContentAccessDenied:
@@ -780,8 +780,16 @@ class Mapflow(QObject):
         # Handle pagination
         try:
             next_page_start_index = response['pagination']['cursor']['next']
-        except TypeError:  # {"data": [], "pagination": None} - SkyWatch bug when area is too large
-            self.alert(self.tr('Metadata request failed. Try using a smaller area.'))
+        except TypeError:  # {"data": [], "pagination": None}
+            try:
+                self.project.removeMapLayer(self.metadata_layer)
+            except (AttributeError, RuntimeError):  # metadata layer has been deleted
+                pass
+            self.alert(
+                self.tr('No images match your criteria. Try relaxing the filters.'),
+                QMessageBox.Information
+            )
+            self.dlg.getMetadata.blockSignals(False)
             self.dlg.getMetadata.setDown(False)
             return
         if next_page_start_index is not None:
@@ -806,6 +814,7 @@ class Mapflow(QObject):
                 )
             )
         if timer:
+            self.dlg.getMetadata.blockSignals(False)
             self.dlg.getMetadata.setDown(False)
 
     def fetch_skywatch_metadata_error_handler(self, response: QNetworkReply, timer: QTimer) -> None:
@@ -856,7 +865,6 @@ class Mapflow(QObject):
                 <PropertyName>cloudCover</PropertyName>
                 <PropertyName>offNadirAngle</PropertyName>
                 <PropertyName>acquisitionDate</PropertyName>
-                <PropertyName>featureId</PropertyName>
                 <PropertyName>geometry</PropertyName>
                 <ogc:Filter>
                     <ogc:And>
@@ -940,7 +948,7 @@ class Mapflow(QObject):
         metadata = json.loads(response.readAll().data())
         if metadata['totalFeatures'] == 0:
             self.alert(
-                self.tr('No images match your criteria. Try adjusting dates and filters.'), 
+                self.tr('No images match your criteria. Try relaxing the filters.'),
                 QMessageBox.Information
             )
             return
@@ -964,7 +972,7 @@ class Mapflow(QObject):
         self.add_layer(self.metadata_layer)
         # Memorize IDs and extents to be able to clip the user's AOI to image on processing creation
         self.maxar_metadata_extents = {
-            feature['featureId']: feature 
+            feature['id']: feature 
             for feature in self.metadata_layer.getFeatures()
         }
         # Fill out the table
@@ -972,6 +980,7 @@ class Mapflow(QObject):
         # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
         self.dlg.metadataTable.setSortingEnabled(False)
         for row, feature in enumerate(metadata['features']):
+            feature['properties']['id'] = feature['id']  # for uniformity
             for col, attr in enumerate(config.MAXAR_METADATA_ATTRIBUTES.values()):
                 try:
                     value = feature['properties'][attr]
@@ -1016,9 +1025,9 @@ class Mapflow(QObject):
         )
         image_id = next(cell for cell in selected_cells if cell.column() == id_column_index).text()
         try:
-            already_selected = [feature['featureId'] for feature in self.metadata_layer.selectedFeatures()]
+            already_selected = [feature['id'] for feature in self.metadata_layer.selectedFeatures()]
             if (len(already_selected) != 1 or already_selected[0] != image_id):
-                self.metadata_layer.selectByExpression(f"featureId='{image_id}'")
+                self.metadata_layer.selectByExpression(f"id='{image_id}'")
         except RuntimeError:  # layer has been deleted
             pass
         if self.dlg.imageId.text() != image_id:
@@ -1035,7 +1044,7 @@ class Mapflow(QObject):
         if not selected_ids:
             self.dlg.metadataTable.clearSelection()
             return
-        selected_id = self.metadata_layer.getFeature(selected_ids[-1])['featureId']
+        selected_id = self.metadata_layer.getFeature(selected_ids[-1])['id']
         id_column_index = [
             config.SENTINEL_ID_COLUMN_INDEX
             if self.dlg.providerCombo.currentText() == config.SENTINEL_OPTION_NAME
@@ -1545,7 +1554,7 @@ class Mapflow(QObject):
                 # Get the image extent to set the correct extent on the raster layer
                 try:
                     extent = next(
-                        self.metadata_layer.getFeatures(f"featureId = '{image_id}'")
+                        self.metadata_layer.getFeatures(f"id = '{image_id}'")
                     ).geometry().boundingBox()
                 except (RuntimeError, AttributeError):  # layer doesn't exist or has been deleted
                     extent = None
