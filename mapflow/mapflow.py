@@ -686,8 +686,8 @@ class Mapflow(QObject):
         self,
         is_proxied: bool,
         request_id: str,
-        max_cloud_cover: int,
-        min_intersection: int,
+        max_cloud_cover: int = None,
+        min_intersection: int = None,
         timer: QTimer = None,
         start_index: int = 0
     ) -> None:
@@ -721,8 +721,8 @@ class Mapflow(QObject):
         self,
         response: QNetworkReply,
         request_id: str,
-        max_cloud_cover: int,
-        min_intersection: int,
+        max_cloud_cover: int = None,
+        min_intersection: int = None,
         timer: QTimer = None,
     ):
         """Parse the returned metadata page and fill out the table and the layer."""
@@ -731,6 +731,10 @@ class Mapflow(QObject):
             return  # not ready yet
         if timer:
             timer.stop()
+        if min_intersection is None:
+            min_intersection = self.dlg.minIntersection.value()
+        if max_cloud_cover is None:
+            max_cloud_cover = self.dlg.maxCloudCover.value()
         response = json.loads(response.readAll().data())
         metadata = {'type': 'FeatureCollection', 'features': []}
         for feature in response['data']:
@@ -808,8 +812,6 @@ class Mapflow(QObject):
                 lambda: fetch_skywatch_metadata_next_page(
                     is_proxied=is_proxied,
                     request_id=request_id,
-                    max_cloud_cover=max_cloud_cover,
-                    min_intersection=min_intersection,
                     start_index=next_page_start_index
                 )
             )
