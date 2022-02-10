@@ -14,14 +14,14 @@ from PyQt5.QtCore import (
     QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion
 )
 from PyQt5.QtWidgets import (
-    QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction, QAbstractItemView, QLabel,
-    QProgressBar
+    QApplication, QWidget, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction, 
+    QAbstractItemView, QLabel, QProgressBar
 )
 from qgis import processing as qgis_processing  # to avoid collisions
 from qgis.gui import QgsMessageBarItem
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
-    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter, QgsRectangle,
+    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter,
     QgsFeatureIterator, QgsWkbTypes, QgsPoint
 )
 
@@ -1215,7 +1215,13 @@ class Mapflow(QObject):
                 params['raster_login'] = self.dlg.providerUsername.text()
                 params['raster_password'] = self.dlg.providerPassword.text()
             if raster_option == config.SENTINEL_OPTION_NAME:
-                params['url'] += self.dlg.imageId.text()
+                image_id = self.dlg.imageId.text()
+                if image_id:
+                    params['url'] += image_id
+                else:
+                    self.alert(self.tr('Please, select a Sentinel-2 image in the Providers tab'))
+                    self.dlg.tabWidget.setCurrentWidget(self.dlg.tabWidget.findChild(QWidget, 'providersTab'))
+                    return
             elif is_maxar:  # add Connect ID and Image ID
                 processing_params['meta']['source'] = 'maxar'
                 if use_auth:  # user's own account
