@@ -11,7 +11,7 @@ from osgeo import gdal
 from PyQt5.QtGui import QColor, QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
-    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion
+    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion, QUrl
 )
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction, 
@@ -741,8 +741,9 @@ class Mapflow(QObject):
         for feature in response['data']:
             if round(feature['result_cloud_cover_percentage']) > max_cloud_cover:
                 continue
+            id_ = feature['product_name'].split('tiles')[-1].split('metadata')[0]
             formatted_feature = {
-                'id': feature['preview_uri'].split('/')[-1].split('.')[0],
+                'id': id_,
                 'type': 'Feature',
                 'geometry': feature['location'],
                 'properties': {
@@ -1453,6 +1454,9 @@ class Mapflow(QObject):
             if selected_cells:
                 datetime_ = selected_cells[config.SENTINEL_DATETIME_COLUMN_INDEX]
                 url = self.dlg.metadataTable.item(datetime_.row(), config.SENTINEL_PREVIEW_COLUMN_INDEX).text()
+                if not url:
+                    self.alert(self.tr("Sorry, there's no preview for this image."), QMessageBox.Information)
+                    return
                 datetime_ = datetime_.text()
                 guess_format = False
             elif image_id:
