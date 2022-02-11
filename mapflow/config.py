@@ -17,9 +17,9 @@ MAXAR_METADATA_ATTRIBUTES = {
     'Cloud %': 'cloudCover',
     f'\N{DEGREE SIGN} Off Nadir': 'offNadirAngle',
     f'Date & Time ({TIMEZONE})': 'acquisitionDate',
-    'Image ID': 'featureId'
+    'Image ID': 'id'
 }
-MAXAR_ID_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.values()).index('featureId')
+MAXAR_ID_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.values()).index('id')
 MAXAR_DATETIME_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.keys()).index(f'Date & Time ({TIMEZONE})')
 MAXAR_CLOUD_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.keys()).index(f'Cloud %')
 MAXAR_MAX_FREE_ZOOM = 12
