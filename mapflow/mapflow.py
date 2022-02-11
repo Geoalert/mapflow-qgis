@@ -232,6 +232,7 @@ class Mapflow(QObject):
         if filtered_ids:
             filter_ += f' and id not in (' + ', '.join((f"'{id_}'" for id_ in filtered_ids)) + ')'
         self.metadata_layer.setSubsetString(filter_)
+        to = QDate.fromString(to, Qt.ISODate).addDays(1).toString(Qt.ISODate)
         # Show/hide table rows
         for row in range(self.dlg.metadataTable.rowCount()):
             id_ = self.dlg.metadataTable.item(row, id_column_index).data(Qt.DisplayRole)
