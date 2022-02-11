@@ -16,14 +16,14 @@ from PyQt5.QtCore import (
     QTextStream, QByteArray
 )
 from PyQt5.QtWidgets import (
-    QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction, QAbstractItemView, QLabel,
-    QProgressBar
+    QApplication, QWidget, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction, 
+    QAbstractItemView, QLabel, QProgressBar
 )
 from qgis import processing as qgis_processing  # to avoid collisions
 from qgis.gui import QgsMessageBarItem
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
-    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter, QgsRectangle,
+    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter,
     QgsFeatureIterator, QgsWkbTypes, QgsPoint
 )
 
@@ -123,6 +123,7 @@ class Mapflow(QObject):
         # Hide the ID columns as only needed for table operations, not the user
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
+        self.dlg.modelCombo.currentTextChanged.connect(self.set_available_imagery_sources)
         self.dlg.rasterCombo.currentTextChanged.connect(self.set_available_wds)
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
@@ -181,14 +182,20 @@ class Mapflow(QObject):
             )
         )
 
+
+    def set_available_imagery_sources(self, wd: str) -> None:
+        """"""
+        if wd == config.SENTINEL_WD_NAME:
+            self.dlg.rasterCombo.setCurrentText(config.SENTINEL_OPTION_NAME)
+        elif self.dlg.rasterCombo.currentText() == config.SENTINEL_OPTION_NAME:
+            self.dlg.rasterCombo.setCurrentText('Mapbox')
+
     def set_available_wds(self, provider_name: str) -> None:
         """Restrict the list of workflow defintions (models) based on the imagery provider."""
-        self.dlg.modelCombo.clear()
         if provider_name == config.SENTINEL_OPTION_NAME:
-            wds = (config.SENTINEL_WD_NAME,)
-        else:
-            wds = [wd for wd in self.wds if wd != config.SENTINEL_WD_NAME]
-        self.dlg.modelCombo.addItems(wds)
+            self.dlg.modelCombo.setCurrentText(config.SENTINEL_WD_NAME)
+        elif self.dlg.modelCombo.currentText() == config.SENTINEL_WD_NAME:
+            self.dlg.modelCombo.setCurrentIndex(0)
 
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
         """Filter out the metadata table and layer every time user changes a filter."""
@@ -741,8 +748,9 @@ class Mapflow(QObject):
         for feature in response['data']:
             if round(feature['result_cloud_cover_percentage']) > max_cloud_cover:
                 continue
+            id_ = feature['product_name'].split('tiles')[-1].split('metadata')[0]
             formatted_feature = {
-                'id': feature['preview_uri'].split('/')[-1].split('.')[0],
+                'id': id_,
                 'type': 'Feature',
                 'geometry': feature['location'],
                 'properties': {
@@ -1267,7 +1275,13 @@ class Mapflow(QObject):
                 params['raster_login'] = self.dlg.providerUsername.text()
                 params['raster_password'] = self.dlg.providerPassword.text()
             if raster_option == config.SENTINEL_OPTION_NAME:
-                params['url'] += self.dlg.imageId.text()
+                image_id = self.dlg.imageId.text()
+                if image_id:
+                    params['url'] += image_id
+                else:
+                    self.alert(self.tr('Please, select a Sentinel-2 image in the Providers tab'))
+                    self.dlg.tabWidget.setCurrentWidget(self.dlg.tabWidget.findChild(QWidget, 'providersTab'))
+                    return
             elif is_maxar:  # add Connect ID and Image ID
                 processing_params['meta']['source'] = 'maxar'
                 if use_auth:  # user's own account
@@ -1499,6 +1513,9 @@ class Mapflow(QObject):
             if selected_cells:
                 datetime_ = selected_cells[config.SENTINEL_DATETIME_COLUMN_INDEX]
                 url = self.dlg.metadataTable.item(datetime_.row(), config.SENTINEL_PREVIEW_COLUMN_INDEX).text()
+                if not url:
+                    self.alert(self.tr("Sorry, there's no preview for this image."), QMessageBox.Information)
+                    return
                 datetime_ = datetime_.text()
                 guess_format = False
             elif image_id:
@@ -1998,7 +2015,7 @@ class Mapflow(QObject):
         self.on_provider_change(self.dlg.providerCombo.currentText())
         self.aoi_area_limit = response['user']['aoiAreaLimit'] * 1e-6
         self.wds = [wd['name'] for wd in response['workflowDefs']]
-        self.set_available_wds(self.wds)
+        self.dlg.modelCombo.addItems(self.wds)
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
