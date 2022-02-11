@@ -734,14 +734,7 @@ class Mapflow(QObject):
         for feature in response['data']:
             if round(feature['result_cloud_cover_percentage']) > max_cloud_cover:
                 continue
-            try:  # http://sentinel-s2-l1c.s3.amazonaws.com/tiles/37/U/EA/2021/1/28/0/metadata.xml
-                id_ = feature['preview_uri'].split('/')[-1].split('.')[0]
-            except AttributeError:  # preview & thumbnail are None (None.split())
-                # 2021-01-28T08:34:56.993000+00:00 -> 083456
-                acqusition_time: str = feature['start_time'].split('T')[1][:8].replace(':', '')
-                utm_zone, band, square, year, month, day = QUrl(feature['product_name']).path().split('/')[2:-2]
-                date_ = datetime(int(year), int(month), int(day)).strftime("%Y%m%d")
-                id_ = f'_{date_}T{acqusition_time}_T{utm_zone}{band}{square}_'
+            id_ = feature['product_name'].split('tiles')[-1].split('metadata')[0]
             formatted_feature = {
                 'id': id_,
                 'type': 'Feature',
@@ -1448,6 +1441,9 @@ class Mapflow(QObject):
             if selected_cells:
                 datetime_ = selected_cells[config.SENTINEL_DATETIME_COLUMN_INDEX]
                 url = self.dlg.metadataTable.item(datetime_.row(), config.SENTINEL_PREVIEW_COLUMN_INDEX).text()
+                if not url:
+                    self.alert(self.tr("Sorry, there's no preview for this image."), QMessageBox.Information)
+                    return
                 datetime_ = datetime_.text()
                 guess_format = False
             elif image_id:
