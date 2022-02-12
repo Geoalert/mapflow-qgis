@@ -16,7 +16,7 @@ from PyQt5.QtCore import (
     QTextStream, QByteArray
 )
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction, 
+    QApplication, QWidget, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction,
     QAbstractItemView, QLabel, QProgressBar
 )
 from qgis import processing as qgis_processing  # to avoid collisions
@@ -181,7 +181,6 @@ class Mapflow(QObject):
                 use_default_error_handler=False  # ignore errors to prevent repetitive alerts
             )
         )
-
 
     def set_available_imagery_sources(self, wd: str) -> None:
         """"""
@@ -983,7 +982,7 @@ class Mapflow(QObject):
         self.add_layer(self.metadata_layer)
         # Memorize IDs and extents to be able to clip the user's AOI to image on processing creation
         self.maxar_metadata_extents = {
-            feature['id']: feature 
+            feature['id']: feature
             for feature in self.metadata_layer.getFeatures()
         }
         # Fill out the table
@@ -1352,13 +1351,17 @@ class Mapflow(QObject):
             parent=self.message_bar
         )
         self.message_bar.pushItem(progress_message)
-        response.uploadProgress.connect(
-            lambda bytes_sent, bytes_total: self.upload_tif_progress(
-                progress_message,
-                bytes_sent,
-                bytes_total
-            )
-        )
+
+        def display_upload_progress(bytes_sent: int, bytes_total: int):
+            try:
+                progress_message.widget().setValue(round(bytes_sent / bytes_total * 100))
+            except ZeroDivisionError:  # may happen for some reason
+                return
+            if bytes_sent == bytes_total:
+                self.message_bar.popWidget(progress_message)
+        connection = response.uploadProgress.connect(display_upload_progress)
+        # Tear this connection if the user closes the progress message
+        progress_message.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
 
     def upload_tif_callback(self, response: QNetworkReply, processing_params: dict) -> None:
         """Start processing upon a successful GeoTIFF upload.
@@ -1368,18 +1371,6 @@ class Mapflow(QObject):
         """
         processing_params['params']['url'] = json.loads(response.readAll().data())['url']
         self.post_processing(processing_params)
-
-    def upload_tif_progress(self, message: QgsMessageBarItem, bytes_sent: int, bytes_total: int) -> None:
-        """Display current upload progress in the message bar.
-
-        :param message: The message widget to be displayed in the Message Bar.
-        :param bytes_sent: The number of bytes that have been successfully sent.
-        :param bytes_total: The total number of bytes to send.
-        """
-        if bytes_total > 0:
-            message.widget().setValue(round(bytes_sent / bytes_total * 100))
-            if bytes_sent == bytes_total:
-                self.message_bar.popWidget(message)
 
     def upload_tif_error_handler(self, response: QNetworkReply) -> None:
         """Error handler for GeoTIFF upload request.
