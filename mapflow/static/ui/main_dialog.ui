@@ -401,6 +401,9 @@
                <height>29</height>
               </size>
              </property>
+             <property name="toolTip">
+              <string>Add your own web imagery provider</string>
+             </property>
              <property name="text">
               <string/>
              </property>
@@ -569,6 +572,9 @@
        </item>
        <item>
         <widget class="QGroupBox" name="metadata">
+         <property name="toolTip">
+          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Here, you can search Maxar or Sentinel imagery for your area and timespan.&lt;/p&gt;&lt;p&gt;Additional filters are also available below.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         </property>
          <property name="title">
           <string>Provider Imagery Catalog</string>
          </property>
@@ -587,6 +593,9 @@
             </item>
             <item>
              <widget class="QgsMapLayerComboBox" name="maxarAoiCombo">
+              <property name="toolTip">
+               <string>Any (multi-)polygon(s)</string>
+              </property>
               <property name="showCrs">
                <bool>true</bool>
               </property>
@@ -594,6 +603,9 @@
             </item>
             <item>
              <widget class="QCheckBox" name="metadataUseCanvasExtent">
+              <property name="toolTip">
+               <string>Use your current screen area</string>
+              </property>
               <property name="text">
                <string>Use canvas extent</string>
               </property>
@@ -605,6 +617,9 @@
            <layout class="QHBoxLayout" name="layoutMetadataDatetime" stretch="0,0,1,0,0">
             <item>
              <widget class="QLabel" name="labelFrom">
+              <property name="toolTip">
+               <string>Earlier images won't be shown</string>
+              </property>
               <property name="text">
                <string>From:</string>
               </property>
@@ -612,6 +627,9 @@
             </item>
             <item>
              <widget class="QDateEdit" name="metadataFrom">
+              <property name="toolTip">
+               <string>Dates are inclusive</string>
+              </property>
               <property name="maximumDate">
                <date>
                 <year>2030</year>
@@ -643,6 +661,9 @@
             </item>
             <item>
              <widget class="QPushButton" name="getMetadata">
+              <property name="toolTip">
+               <string>Click and wait for a few seconds until the table below is filled out</string>
+              </property>
               <property name="text">
                <string>Search imagery</string>
               </property>
@@ -650,6 +671,9 @@
             </item>
             <item>
              <widget class="QLabel" name="labelTo">
+              <property name="toolTip">
+               <string>More recent images won't be shown</string>
+              </property>
               <property name="text">
                <string>To:</string>
               </property>
@@ -657,6 +681,9 @@
             </item>
             <item>
              <widget class="QDateEdit" name="metadataTo">
+              <property name="toolTip">
+               <string>Dates are inclusive</string>
+              </property>
               <property name="maximumDate">
                <date>
                 <year>2030</year>
@@ -690,6 +717,9 @@
           </item>
           <item row="2" column="0">
            <widget class="QgsCollapsibleGroupBox" name="metadataFilters">
+            <property name="toolTip">
+             <string>Click to specify additional search criteria</string>
+            </property>
             <property name="title">
              <string>Additional filters</string>
             </property>
@@ -709,6 +739,9 @@
              </item>
              <item row="0" column="1">
               <widget class="QSlider" name="minIntersection">
+               <property name="toolTip">
+                <string>Images that cover fewer % of your area won't be shown</string>
+               </property>
                <property name="maximum">
                 <number>100</number>
                </property>
@@ -802,6 +835,9 @@
              <widget class="QTableWidget" name="metadataTable">
               <property name="focusPolicy">
                <enum>Qt::NoFocus</enum>
+              </property>
+              <property name="toolTip">
+               <string>Double-click on a row to preview its image</string>
               </property>
               <property name="autoScroll">
                <bool>false</bool>

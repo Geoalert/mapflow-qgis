@@ -305,6 +305,10 @@ class Mapflow(QObject):
             self.dlg.layoutMetadataTable.removeWidget(more_button)
             more_button.deleteLater()
         provider_name = provider
+        image_id_tooltip = self.tr(
+            f'If you already know which {provider_name} image you want to process,\n' 
+            'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
+        )
         if provider == config.SENTINEL_OPTION_NAME:
             is_max_zoom_enabled = False
             columns = config.SENTINEL_ATTRIBUTES
@@ -312,6 +316,7 @@ class Mapflow(QObject):
             sort_by = config.SENTINEL_DATETIME_COLUMN_INDEX
             enabled = True
             max_zoom = config.MAX_ZOOM
+            image_id_placeholder = self.tr('e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00')
         elif provider in config.MAXAR_PRODUCTS:
             is_max_zoom_enabled = True
             columns = config.MAXAR_METADATA_ATTRIBUTES
@@ -322,6 +327,7 @@ class Mapflow(QObject):
                 21 if self.is_premium_user or self.dlg.providerAuthGroup.isChecked()
                 else config.MAXAR_MAX_FREE_ZOOM
             )
+            image_id_placeholder = self.tr('e.g. a3b154c4-0cc7-4f3b-934c-0ffc9b34ecd1')
         else:  # another provider, tear down the table and deactivate the panel
             is_max_zoom_enabled = True
             provider_name = 'Provider'
@@ -332,6 +338,8 @@ class Mapflow(QObject):
             max_zoom = config.MAX_ZOOM
             # Forced to int bc somehow used to be stored as str, so for backward compatability
             self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom', config.DEFAULT_ZOOM)))
+            image_id_placeholder = self.tr(f'Leave this field empty for {provider_name}')
+            image_id_tooltip = self.tr(f"{provider_name} doesn't allow processing single images.")
         self.dlg.maxZoom.setEnabled(is_max_zoom_enabled)
         self.dlg.maxZoom.setMaximum(max_zoom)
         self.dlg.metadataTable.setRowCount(0)
@@ -345,6 +353,8 @@ class Mapflow(QObject):
             self.dlg.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
         self.dlg.metadata.setTitle(provider_name + self.tr(' Imagery Catalog'))
         self.dlg.metadata.setEnabled(enabled)
+        self.dlg.imageId.setPlaceholderText(image_id_placeholder)
+        self.dlg.labelImageId.setToolTip(image_id_tooltip)
 
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
@@ -1512,9 +1522,13 @@ class Mapflow(QObject):
                 guess_format = False
             elif image_id:
                 url = f'https://preview.skywatch.com/esa/sentinel-2/{image_id}.jp2'
-                datetime_ = datetime.strptime(
-                    helpers.SENTINEL_DATETIME_REGEX.search(image_id).group(0), '%Y%m%dT%H%M%S'
-                ).astimezone().strftime('%Y-%m-%d %H:%M')
+                try:
+                    datetime_ = datetime.strptime(
+                        helpers.SENTINEL_DATETIME_REGEX.search(image_id).group(0), '%Y%m%dT%H%M%S'
+                    ).astimezone().strftime('%Y-%m-%d %H:%M')
+                except AttributeError:
+                    self.alert(self.tr('A Sentinel image ID looks like S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00'))
+                    return
                 guess_format = True
             else:
                 self.alert(self.tr('Please, select an image to preview'), QMessageBox.Information)
