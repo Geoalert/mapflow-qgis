@@ -186,6 +186,7 @@ class Mapflow(QObject):
         """"""
         if wd == config.SENTINEL_WD_NAME:
             self.dlg.rasterCombo.setCurrentText(config.SENTINEL_OPTION_NAME)
+            self.dlg.tabWidget.setCurrentWidget(self.dlg.tabWidget.findChild(QWidget, 'providersTab'))
         elif self.dlg.rasterCombo.currentText() == config.SENTINEL_OPTION_NAME:
             self.dlg.rasterCombo.setCurrentText('Mapbox')
 
