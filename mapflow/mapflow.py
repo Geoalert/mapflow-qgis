@@ -306,7 +306,7 @@ class Mapflow(QObject):
             more_button.deleteLater()
         provider_name = provider
         image_id_tooltip = self.tr(
-            f'If you already know which {provider_name} image you want to process,\n' 
+            f'If you already know which {provider_name} image you want to process,\n'
             'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
         )
         if provider == config.SENTINEL_OPTION_NAME:
@@ -1097,10 +1097,10 @@ class Mapflow(QObject):
         provider = self.dlg.providerCombo.currentText()
         if provider == config.SENTINEL_OPTION_NAME:
             if not ((
-                helpers.SENTINEL_DATETIME_REGEX.search(image_id) 
+                helpers.SENTINEL_DATETIME_REGEX.search(image_id)
                 and helpers.SENTINEL_COORDINATE_REGEX.search(image_id)
-                ) or (helpers.SENTINEL_PRODUCT_NAME_REGEX.search(image_id)
-            )):
+            ) or (helpers.SENTINEL_PRODUCT_NAME_REGEX.search(image_id)
+                  )):
                 self.alert(self.tr(
                     'A Sentinel image ID should look like '
                     'S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 '
@@ -1313,7 +1313,7 @@ class Mapflow(QObject):
                 if image_id:
                     params['url'] += image_id
                 else:
-                    self.alert(self.tr('Please, select a Sentinel-2 image in the Providers tab'))
+                    self.alert(self.tr('Search the Sentinel-2 catalog for a suitable image'))
                     self.dlg.tabWidget.setCurrentWidget(self.dlg.tabWidget.findChild(QWidget, 'providersTab'))
                     return
             elif is_maxar:  # add Connect ID and Image ID
@@ -1540,7 +1540,7 @@ class Mapflow(QObject):
                 datetime_ = selected_cells[config.SENTINEL_DATETIME_COLUMN_INDEX]
                 url = self.dlg.metadataTable.item(datetime_.row(), config.SENTINEL_PREVIEW_COLUMN_INDEX).text()
                 if not url:
-                    self.alert(self.tr("Sorry, there's no preview for this image."), QMessageBox.Information)
+                    self.alert(self.tr("Sorry, there's no preview for this image"), QMessageBox.Information)
                     return
                 datetime_ = datetime_.text()
                 guess_format = False
