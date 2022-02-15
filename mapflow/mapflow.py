@@ -1094,6 +1094,25 @@ class Mapflow(QObject):
         if not image_id:
             self.dlg.metadataTable.clearSelection()
             return
+        provider = self.dlg.providerCombo.currentText()
+        if provider == config.SENTINEL_OPTION_NAME:
+            if not ((
+                helpers.SENTINEL_DATETIME_REGEX.search(image_id) 
+                and helpers.SENTINEL_COORDINATE_REGEX.search(image_id)
+                ) or (helpers.SENTINEL_PRODUCT_NAME_REGEX.search(image_id)
+            )):
+                self.alert(self.tr(
+                    'A Sentinel image ID should look like '
+                    'S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 '
+                    'or /36/S/XA/2022/02/09/0/'
+                ))
+                self.dlg.imageId.clear()
+                return
+        elif provider in config.MAXAR_PRODUCTS:
+            if not helpers.UUID_REGEX.match(image_id):
+                self.dlg.imageId.clear()
+                self.alert('A Maxar image ID should look like a3b154c4-0cc7-4f3b-934c-0ffc9b34ecd1')
+                return
         items = self.dlg.metadataTable.findItems(image_id, Qt.MatchExactly)
         if not items:
             self.dlg.metadataTable.clearSelection()
@@ -1526,13 +1545,13 @@ class Mapflow(QObject):
                 datetime_ = datetime_.text()
                 guess_format = False
             elif image_id:
-                url = f'https://preview.skywatch.com/esa/sentinel-2/{image_id}.jp2'
-                try:
-                    datetime_ = datetime.strptime(
-                        helpers.SENTINEL_DATETIME_REGEX.search(image_id).group(0), '%Y%m%dT%H%M%S'
-                    ).astimezone().strftime('%Y-%m-%d %H:%M')
-                except AttributeError:
-                    self.alert(self.tr('A Sentinel image ID looks like S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00'))
+                datetime_ = helpers.SENTINEL_DATETIME_REGEX.search(image_id)
+                if datetime_ and helpers.SENTINEL_COORDINATE_REGEX.search(image_id):
+                    url = f'https://preview.skywatch.com/esa/sentinel-2/{image_id}.jp2'
+                    datetime_ = datetime.strptime(datetime_.group(0), '%Y%m%dT%H%M%S')\
+                        .astimezone().strftime('%Y-%m-%d %H:%M')
+                else:
+                    self.alert(self.tr("We couldn't load a preview for this image"))
                     return
                 guess_format = True
             else:
@@ -1606,7 +1625,7 @@ class Mapflow(QObject):
                 layer.setExtent(extent)
             self.add_layer(layer)
         else:
-            self.alert(self.tr('Error loading: ') + url)
+            self.alert(self.tr("We couldn't load a preview for this image"))
 
     def download_results(self, row: int) -> None:
         """Download and display processing results along with the source raster, if available.
