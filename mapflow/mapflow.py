@@ -24,7 +24,7 @@ from qgis.gui import QgsMessageBarItem
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
     QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter,
-    QgsFeatureIterator, QgsWkbTypes, QgsPoint
+    QgsFeatureIterator, QgsWkbTypes, QgsPoint, QgsMapLayerType
 )
 
 from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, SentinelAuthDialog, ErrorMessage
@@ -123,6 +123,11 @@ class Mapflow(QObject):
         # Hide the ID columns as only needed for table operations, not the user
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
+        imagery_sources = [
+            self.dlg.rasterCombo.layer(index)
+            for index in range(self.dlg.rasterCombo.count())
+        ]
+        self.filter_non_tif_rasters(list(filter(bool, imagery_sources)))
         self.dlg.modelCombo.currentTextChanged.connect(self.set_available_imagery_sources)
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
@@ -149,6 +154,7 @@ class Mapflow(QObject):
             self.project.mapLayer(layer_id) for layer_id in self.project.mapLayers(validOnly=True)
         ])
         self.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
+        self.project.layersAdded.connect(self.filter_non_tif_rasters)
         # Processings
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
@@ -181,6 +187,18 @@ class Mapflow(QObject):
                 use_default_error_handler=False  # ignore errors to prevent repetitive alerts
             )
         )
+
+    def filter_non_tif_rasters(self, layers: List[QgsMapLayer]) -> None:
+        """Leave only GeoTIFF layers in the Imagery Source combo box."""
+        excepted_layers = [
+            layer for layer in layers if layer.type() == QgsMapLayerType.RasterLayer 
+            and not (
+                layer.crs().isValid()
+                and os.path.splitext(layer.dataProvider().dataSourceUri())[-1] in ('.tif', '.tiff')
+                and os.path.getsize(layer.publicSource()) / 2**20 < config.MAX_TIF_SIZE
+            )
+        ]
+        self.dlg.rasterCombo.setExceptedLayerList(self.dlg.rasterCombo.exceptedLayerList() + excepted_layers)
 
     def disallow_local_rasters_with_sentinel(self, raster: QgsRasterLayer) -> None:
         """Override local raster selection if the model is Sentinel-2 Fields."""
@@ -257,21 +275,6 @@ class Mapflow(QObject):
             if cloud_cover is not None:  # may be undefined
                 is_unfit = is_unfit or cloud_cover > max_cloud_cover
             self.dlg.metadataTable.setRowHidden(row, is_unfit)
-
-    def is_valid_local_raster(self, raster: QgsRasterLayer) -> bool:
-        """Return True for a GeoTIFF with a valid CRS that fits into config.MAX_TIF_SIZE.
-        :param raster: A raster layer to test
-        """
-        is_valid = False  # default
-        if not raster.crs().isValid():
-            self.alert(self.tr('The image has an invalid coordintate refeference system.'))
-        elif not os.path.splitext(raster.dataProvider().dataSourceUri())[-1] in ('.tif', '.tiff'):
-            self.alert(self.tr('Please, select a GeoTIFF layer'))
-        elif os.path.getsize(raster.publicSource()) / 2**20 > config.MAX_TIF_SIZE:
-            self.alert(self.tr('Image size cannot exceed 2GB'))
-        else:
-            is_valid = True
-        return is_valid
 
     def set_up_login_dialog(self) -> None:
         """Create a login dialog, set its title and signal-slot connections."""
@@ -1155,7 +1158,7 @@ class Mapflow(QObject):
 
         :param layer: The current raster layer
         """
-        if layer and self.is_valid_local_raster(layer):
+        if layer:
             geometry = QgsGeometry.collectGeometry([QgsGeometry.fromRect(layer.extent())])
             self.calculate_aoi_area(geometry, layer.crs())
         else:
@@ -1302,8 +1305,6 @@ class Mapflow(QObject):
             ).show()
             return
         imagery = self.dlg.rasterCombo.currentLayer()
-        if imagery and not self.is_valid_local_raster(imagery):
-            return
         processing_params = {
             'name': processing_name,
             'wdName': self.dlg.modelCombo.currentText(),
@@ -1908,6 +1909,9 @@ class Mapflow(QObject):
         plugin_button.triggered.connect(self.main)
         self.toolbar.addAction(plugin_button)
         self.project.readProject.connect(self.set_layer_group)
+        self.project.readProject.connect(lambda: self.filter_non_tif_rasters(
+            list(filter(bool, [self.dlg.rasterCombo.layer(index) for index in range(self.dlg.rasterCombo.count())]))
+        ))
         self.dlg.processingsTable.sortByColumn(config.PROCESSING_TABLE_SORT_COLUMN_INDEX, Qt.DescendingOrder)
 
     def set_layer_group(self) -> None:
