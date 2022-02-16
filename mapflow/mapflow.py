@@ -124,7 +124,6 @@ class Mapflow(QObject):
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
         self.dlg.modelCombo.currentTextChanged.connect(self.set_available_imagery_sources)
-        self.dlg.rasterCombo.currentTextChanged.connect(self.set_available_wds)
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
         self.dlg_connect_id.accepted.connect(self.edit_connect_id)
@@ -135,6 +134,7 @@ class Mapflow(QObject):
         self.dlg.selectTif.clicked.connect(self.select_tif)
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.rasterCombo.layerChanged.connect(self.toggle_processing_checkboxes)
+        self.dlg.rasterCombo.layerChanged.connect(self.disallow_local_rasters_with_sentinel)
         self.dlg.rasterCombo.currentTextChanged.connect(self.toggle_processing_checkboxes)
         self.dlg.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
         self.dlg.startProcessing.clicked.connect(self.create_processing)
@@ -182,20 +182,28 @@ class Mapflow(QObject):
             )
         )
 
-    def set_available_imagery_sources(self, wd: str) -> None:
-        """"""
-        if wd == config.SENTINEL_WD_NAME:
+    def disallow_local_rasters_with_sentinel(self, raster: QgsRasterLayer) -> None:
+        """Override local raster selection if the model is Sentinel-2 Fields."""
+        if raster and self.dlg.modelCombo.currentText() == config.SENTINEL_WD_NAME:
+            self.alert(self.tr(
+                "Currently, Mapflow doesn't support uploading own Sentinel-2 imagery. "
+                'To process Sentinel-2, go to the Providers tab and either search for your image '
+                'in the catalog or paste its ID in the Image ID field.'
+            ))
             self.dlg.rasterCombo.setCurrentText(config.SENTINEL_OPTION_NAME)
-            self.dlg.tabWidget.setCurrentWidget(self.dlg.tabWidget.findChild(QWidget, 'providersTab'))
-        elif self.dlg.rasterCombo.currentText() == config.SENTINEL_OPTION_NAME:
-            self.dlg.rasterCombo.setCurrentText('Mapbox')
 
-    def set_available_wds(self, provider_name: str) -> None:
-        """Restrict the list of workflow defintions (models) based on the imagery provider."""
-        if provider_name == config.SENTINEL_OPTION_NAME:
-            self.dlg.modelCombo.setCurrentText(config.SENTINEL_WD_NAME)
-        elif self.dlg.modelCombo.currentText() == config.SENTINEL_WD_NAME:
-            self.dlg.modelCombo.setCurrentIndex(0)
+    def set_available_imagery_sources(self, wd: str) -> None:
+        """Restrict the list of imagery sources according to the selected model."""
+        if wd == config.SENTINEL_WD_NAME:
+            # Prevent disallow_local_rasters_with_sentinel() from being triggered
+            self.dlg.rasterCombo.blockSignals(True)
+            self.dlg.rasterCombo.setAdditionalItems([config.SENTINEL_OPTION_NAME])
+            self.dlg.rasterCombo.setCurrentText(config.SENTINEL_OPTION_NAME)
+            self.dlg.rasterCombo.blockSignals(False)
+        else:
+            web_providers = [*self.settings.value('providers'), 'Mapbox']
+            web_providers.remove(config.SENTINEL_OPTION_NAME)
+            self.dlg.rasterCombo.setAdditionalItems(web_providers)
 
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
         """Filter out the metadata table and layer every time user changes a filter."""
