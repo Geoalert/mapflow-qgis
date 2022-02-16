@@ -343,7 +343,7 @@ class Mapflow(QObject):
                 21 if self.is_premium_user or self.dlg.providerAuthGroup.isChecked()
                 else config.MAXAR_MAX_FREE_ZOOM
             )
-            image_id_placeholder = self.tr('e.g. a3b154c4-0cc7-4f3b-934c-0ffc9b34ecd1')
+            image_id_placeholder = self.tr('e.g. a3b154c40cc74f3b934c0ffc9b34ecd1')
             self.dlg.providerAuthGroup.setEnabled(True)
             additional_filters_enabled = provider == 'Maxar SecureWatch'
         else:  # another provider, tear down the table and deactivate the panel
@@ -1130,7 +1130,7 @@ class Mapflow(QObject):
         elif provider in config.MAXAR_PRODUCTS:
             if not helpers.UUID_REGEX.match(image_id):
                 self.dlg.imageId.clear()
-                self.alert('A Maxar image ID should look like a3b154c4-0cc7-4f3b-934c-0ffc9b34ecd1')
+                self.alert('A Maxar image ID should look like a3b154c40cc74f3b934c0ffc9b34ecd1')
                 return
         items = self.dlg.metadataTable.findItems(image_id, Qt.MatchExactly)
         if not items:
