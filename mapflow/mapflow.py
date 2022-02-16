@@ -267,11 +267,6 @@ class Mapflow(QObject):
             self.alert(self.tr('The image has an invalid coordintate refeference system.'))
         elif not os.path.splitext(raster.dataProvider().dataSourceUri())[-1] in ('.tif', '.tiff'):
             self.alert(self.tr('Please, select a GeoTIFF layer'))
-            self.dlg.rasterCombo.setCurrentText(
-                config.SENTINEL_OPTION_NAME 
-                if self.dlg.modelCombo.currentText() == config.SENTINEL_WD_NAME
-                else 'Mapbox'
-            )
         elif os.path.getsize(raster.publicSource()) / 2**20 > config.MAX_TIF_SIZE:
             self.alert(self.tr('Image size cannot exceed 2GB'))
         else:
