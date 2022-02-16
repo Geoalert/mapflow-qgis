@@ -265,9 +265,14 @@ class Mapflow(QObject):
         is_valid = False  # default
         if not raster.crs().isValid():
             self.alert(self.tr('The image has an invalid coordintate refeference system.'))
-        if not os.path.splitext(raster.dataProvider().dataSourceUri())[-1] in ('.tif', '.tiff'):
+        elif not os.path.splitext(raster.dataProvider().dataSourceUri())[-1] in ('.tif', '.tiff'):
             self.alert(self.tr('Please, select a GeoTIFF layer'))
-        if os.path.getsize(raster.publicSource()) / 2**20 > config.MAX_TIF_SIZE:
+            self.dlg.rasterCombo.setCurrentText(
+                config.SENTINEL_OPTION_NAME 
+                if self.dlg.modelCombo.currentText() == config.SENTINEL_WD_NAME
+                else 'Mapbox'
+            )
+        elif os.path.getsize(raster.publicSource()) / 2**20 > config.MAX_TIF_SIZE:
             self.alert(self.tr('Image size cannot exceed 2GB'))
         else:
             is_valid = True
@@ -308,6 +313,7 @@ class Mapflow(QObject):
         :param provider: The currently selected provider
         """
         self.dlg.metadataTable.clear()
+        self.dlg.imageId.clear()
         more_button = self.dlg.findChild(QPushButton, config.METADATA_MORE_BUTTON_OBJECT_NAME)
         if more_button:
             self.dlg.layoutMetadataTable.removeWidget(more_button)
@@ -518,7 +524,9 @@ class Mapflow(QObject):
         """
         enabled = isinstance(provider, QgsRasterLayer)
         self.dlg.useImageExtentAsAoi.setEnabled(enabled)
+        self.dlg.useImageExtentAsAoi.blockSignals(True)
         self.dlg.useImageExtentAsAoi.setChecked(enabled)
+        self.dlg.useImageExtentAsAoi.blockSignals(False)
         self.dlg.useCache.setEnabled(not enabled)
         self.dlg.useCache.setChecked(not enabled)
 
