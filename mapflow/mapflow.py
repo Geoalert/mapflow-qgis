@@ -331,6 +331,8 @@ class Mapflow(QObject):
             image_id_placeholder = self.tr('e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00')
             self.dlg.providerAuthGroup.setChecked(False)
             self.dlg.providerAuthGroup.setDisabled(True)
+            self.dlg.providerAuthGroup.setCollapsed(True)
+            additional_filters_enabled = True 
         elif provider in config.MAXAR_PRODUCTS:
             is_max_zoom_enabled = True
             columns = config.MAXAR_METADATA_ATTRIBUTES
@@ -343,6 +345,7 @@ class Mapflow(QObject):
             )
             image_id_placeholder = self.tr('e.g. a3b154c4-0cc7-4f3b-934c-0ffc9b34ecd1')
             self.dlg.providerAuthGroup.setEnabled(True)
+            additional_filters_enabled = provider == 'Maxar SecureWatch'
         else:  # another provider, tear down the table and deactivate the panel
             is_max_zoom_enabled = True
             provider_name = 'Provider'
@@ -354,9 +357,11 @@ class Mapflow(QObject):
             # Forced to int bc somehow used to be stored as str, so for backward compatability
             self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom', config.DEFAULT_ZOOM)))
             image_id_placeholder = self.tr(f'Leave this field empty for {provider_name}')
+            additional_filters_enabled = False
             image_id_tooltip = self.tr(f"{provider_name} doesn't allow processing single images.")
             self.dlg.providerAuthGroup.setEnabled(True)
 
+        self.dlg.metadataFilters.setEnabled(additional_filters_enabled)
         self.dlg.maxZoom.setEnabled(is_max_zoom_enabled)
         self.dlg.maxZoom.setMaximum(max_zoom)
         self.dlg.metadataTable.setRowCount(0)
