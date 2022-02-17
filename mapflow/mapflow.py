@@ -1024,7 +1024,7 @@ class Mapflow(QObject):
         self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
         self.add_layer(self.metadata_layer)
         # Memorize IDs and extents to be able to clip the user's AOI to image on processing creation
-        self.maxar_metadata_extents = {
+        self.maxar_metadata_footprints = {
             feature['id']: feature
             for feature in self.metadata_layer.getFeatures()
         }
@@ -1371,10 +1371,7 @@ class Mapflow(QObject):
                 self.alert(self.tr('Image and processing area do not intersect'))
                 return
         elif is_maxar and selected_image:  # Single SW image
-            feature_id = selected_image[config.MAXAR_ID_COLUMN_INDEX].text()
-            extent = self.maxar_metadata_extents[feature_id]
-            extent_4326 = helpers.to_wgs84(extent.geometry(), helpers.WEB_MERCATOR)
-            extent.setGeometry(extent_4326)
+            extent = self.maxar_metadata_footprints[selected_image[config.MAXAR_ID_COLUMN_INDEX].text()]
             try:
                 self.aoi = next(self.clip_aoi_to_image_extent(self.aoi, extent)).geometry()
             except StopIteration:
