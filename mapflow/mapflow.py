@@ -188,17 +188,21 @@ class Mapflow(QObject):
             )
         )
 
-    def filter_non_tif_rasters(self, layers: List[QgsMapLayer]) -> None:
+    def filter_non_tif_rasters(self, _: List[QgsMapLayer]) -> None:
         """Leave only GeoTIFF layers in the Imagery Source combo box."""
-        excepted_layers = [
-            layer for layer in layers if layer.type() == QgsMapLayerType.RasterLayer 
+        # (!) Instead of going thru all project layers each time
+        # it'd be better to filter the new layers, then add them to
+        # the already filtered ones like rasterCombo.exceptedLayerList() + new_layers
+        # but calling exceptedLayerList() crashes when it contains deleted layers
+        self.dlg.rasterCombo.setExceptedLayerList([
+            layer for layer in self.project.mapLayers().values() 
+            if layer.type() == QgsMapLayerType.RasterLayer 
             and not (
                 layer.crs().isValid()
                 and os.path.splitext(layer.dataProvider().dataSourceUri())[-1] in ('.tif', '.tiff')
                 and os.path.getsize(layer.publicSource()) / 2**20 < config.MAX_TIF_SIZE
             )
-        ]
-        self.dlg.rasterCombo.setExceptedLayerList(self.dlg.rasterCombo.exceptedLayerList() + excepted_layers)
+        ])
 
     def disallow_local_rasters_with_sentinel(self, raster: QgsRasterLayer) -> None:
         """Override local raster selection if the model is Sentinel-2 Fields."""
