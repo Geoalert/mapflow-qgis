@@ -91,7 +91,7 @@ class Mapflow(QObject):
         metadata_parser.read(os.path.join(self.plugin_dir, 'metadata.txt'))
         self.plugin_version = metadata_parser.get('general', 'version')
         self.dlg.help.setText(
-            self.dlg.help.text().replace('Mapflow', f'{self.plugin_name} {self.plugin_version}')
+            self.dlg.help.text().replace('Mapflow', f'{self.plugin_name} {self.plugin_version}', 1)
         )
         # Initialize HTTP request sender
         self.http = Http(self.plugin_version, self.default_error_handler)
