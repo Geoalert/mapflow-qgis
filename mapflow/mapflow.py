@@ -224,7 +224,7 @@ class Mapflow(QObject):
             self.dlg.providerCombo.clear()
             self.dlg.providerCombo.addItem(config.SENTINEL_OPTION_NAME)
             self.dlg.rasterCombo.blockSignals(False)
-        else:
+        elif config.SENTINEL_OPTION_NAME in self.dlg.rasterCombo.additionalItems():
             web_providers = list(self.settings.value('providers'))
             web_providers.remove(config.SENTINEL_OPTION_NAME)
             self.dlg.rasterCombo.setAdditionalItems([*web_providers, 'Mapbox'])
@@ -2071,6 +2071,8 @@ class Mapflow(QObject):
         self.wds = [wd['name'] for wd in response['workflowDefs']]
         self.dlg.modelCombo.clear()
         self.dlg.modelCombo.addItems(self.wds)
+        self.dlg.modelCombo.setCurrentText('🏠 Buildings')
+        self.dlg.rasterCombo.setCurrentText('Mapbox')
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
