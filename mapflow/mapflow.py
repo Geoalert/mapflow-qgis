@@ -535,9 +535,7 @@ class Mapflow(QObject):
         """
         enabled = isinstance(provider, QgsRasterLayer)
         self.dlg.useImageExtentAsAoi.setEnabled(enabled)
-        self.dlg.useImageExtentAsAoi.blockSignals(True)
         self.dlg.useImageExtentAsAoi.setChecked(enabled)
-        self.dlg.useImageExtentAsAoi.blockSignals(False)
         self.dlg.useCache.setEnabled(not enabled)
         self.dlg.useCache.setChecked(not enabled)
 
