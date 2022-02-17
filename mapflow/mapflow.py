@@ -2069,6 +2069,7 @@ class Mapflow(QObject):
         self.on_provider_change(self.dlg.providerCombo.currentText())
         self.aoi_area_limit = response['user']['aoiAreaLimit'] * 1e-6
         self.wds = [wd['name'] for wd in response['workflowDefs']]
+        self.dlg.modelCombo.clear()
         self.dlg.modelCombo.addItems(self.wds)
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
