@@ -217,11 +217,15 @@ class Mapflow(QObject):
             self.dlg.rasterCombo.blockSignals(True)
             self.dlg.rasterCombo.setAdditionalItems([config.SENTINEL_OPTION_NAME])
             self.dlg.rasterCombo.setCurrentText(config.SENTINEL_OPTION_NAME)
+            self.dlg.providerCombo.clear()
+            self.dlg.providerCombo.addItem(config.SENTINEL_OPTION_NAME)
             self.dlg.rasterCombo.blockSignals(False)
         else:
-            web_providers = [*self.settings.value('providers'), 'Mapbox']
+            web_providers = list(self.settings.value('providers'))
             web_providers.remove(config.SENTINEL_OPTION_NAME)
-            self.dlg.rasterCombo.setAdditionalItems(web_providers)
+            self.dlg.rasterCombo.setAdditionalItems([*web_providers, 'Mapbox'])
+            self.dlg.providerCombo.clear()
+            self.dlg.providerCombo.addItems(web_providers)
 
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
         """Filter out the metadata table and layer every time user changes a filter."""
