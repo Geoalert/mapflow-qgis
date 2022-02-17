@@ -1626,13 +1626,12 @@ class Mapflow(QObject):
                     ))
                 except AttributeError:  # the table is empty
                     layer_name = f'{layer_name} {image_id}'
-                # Get the image extent to set the correct extent on the raster layer
-                try:
-                    extent = next(
-                        self.metadata_layer.getFeatures(f"id = '{image_id}'")
-                    ).geometry().boundingBox()
+                try:  # Get the image extent to set the correct extent on the raster layer
+                    footprint = next(self.metadata_layer.getFeatures(f"id = '{image_id}'"))
                 except (RuntimeError, AttributeError):  # layer doesn't exist or has been deleted
                     extent = None
+                else:
+                    extent = helpers.from_wgs84(footprint.geometry(), helpers.WEB_MERCATOR).boundingBox()
         # Can use urllib.parse but have to specify safe='/?:{}' which sort of defeats the purpose
         url = url.replace('&', '%26').replace('=', '%3D')
         params = {
