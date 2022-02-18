@@ -29,6 +29,7 @@ MAXAR_PRODUCTS = {
     for name in ('SecureWatch', 'Vivid', 'Basemaps')
 }
 # MISC
+MAPBOX = 'Mapbox'
 SKYWATCH_METADATA_MAX_AREA = 1e11  # 100,000 sq.km
 SKYWATCH_METADATA_MAX_SIDE_LENGTH = 1e6  # 1,000 km
 INVALID_TOKEN_WARNING_OBJECT_NAME = 'invalidToken'
@@ -45,6 +46,7 @@ MAX_TIF_SIZE = 2000  # MB
 MAX_ZOOM = 21
 DEFAULT_ZOOM = MAXAR_MAX_FREE_ZOOM
 BUILTIN_PROVIDERS = {
+    MAPBOX: {'url': 'http://', 'type': 'xyz'},
     **MAXAR_PRODUCTS,
     SENTINEL_OPTION_NAME: {
         'url': 'http://',

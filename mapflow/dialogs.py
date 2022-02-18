@@ -23,9 +23,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.rasterCombo.setFilters(QgsMapLayerProxyModel.RasterLayer)
         # Set icons (can be done in .ui but brings about the resources_rc import bug)
         self.setWindowIcon(plugin_icon)
-        self.addProvider.setIcon(QIcon(str(icon_path/'add_provider.svg')))
-        self.removeProvider.setIcon(QIcon(str(icon_path/'remove_provider.svg')))
-        self.editProvider.setIcon(QIcon(str(icon_path/'edit_provider.svg')))
 
 
 class LoginDialog(*uic.loadUiType(ui_path/'login_dialog.ui')):
@@ -34,21 +31,6 @@ class LoginDialog(*uic.loadUiType(ui_path/'login_dialog.ui')):
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(plugin_icon)
-
-
-class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
-    def __init__(self, parent: QWidget) -> None:
-        """A dialog for adding or editing an imagery provider."""
-        super().__init__(parent)
-        self.setupUi(self)
-        self.setWindowIcon(plugin_icon)
-        ok = self.buttonBox.button(QDialogButtonBox.Ok)
-        ok.setEnabled(False)
-        self.name.textChanged.connect(lambda: ok.setEnabled(helpers.validate_provider_form(self)))
-        self.url.textChanged.connect(lambda: ok.setEnabled(helpers.validate_provider_form(self)))
-        self.type.currentTextChanged.connect(lambda: ok.setEnabled(helpers.validate_provider_form(self)))
-        self.finished.connect(self.name.clear)
-        self.finished.connect(self.url.clear)
 
 
 class ConnectIdDialog(*uic.loadUiType(ui_path/'connect_id_dialog.ui')):

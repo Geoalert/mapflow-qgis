@@ -27,7 +27,7 @@ from qgis.core import (
     QgsFeatureIterator, QgsWkbTypes, QgsPoint, QgsMapLayerType
 )
 
-from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, SentinelAuthDialog, ErrorMessage
+from .dialogs import MainDialog, LoginDialog, ConnectIdDialog, SentinelAuthDialog, ErrorMessage
 from .http import Http
 from . import helpers, config
 
@@ -82,8 +82,6 @@ class Mapflow(QObject):
         # Init dialogs
         self.dlg = MainDialog(self.main_window)
         self.set_up_login_dialog()
-        self.dlg_provider = ProviderDialog(self.dlg)
-        self.dlg_provider.accepted.connect(self.add_or_edit_provider)
         self.dlg_connect_id = ConnectIdDialog(self.dlg)
         self.dlg_sentinel_auth = SentinelAuthDialog(self.dlg)
         # Display the plugin's version
@@ -109,11 +107,7 @@ class Mapflow(QObject):
             self.dlg.providerSaveAuth.setChecked(True)
             self.dlg.providerUsername.setText(self.settings.value('providerUsername'))
             self.dlg.providerPassword.setText(self.settings.value('providerPassword'))
-        providers = self.settings.value('providers', config.BUILTIN_PROVIDERS)
-        if config.SENTINEL_OPTION_NAME not in providers:
-            providers[config.SENTINEL_OPTION_NAME] = config.BUILTIN_PROVIDERS[config.SENTINEL_OPTION_NAME]
-        self.update_providers(providers)
-        self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
+        self.dlg.rasterCombo.setCurrentText(config.MAPBOX)  # otherwise SW will be set due to combo sync
         self.dlg.minIntersection.setValue(int(self.settings.value('metadataMinIntersection', 0)))
         self.dlg.maxCloudCover.setValue(int(self.settings.value('metadataMaxCloudCover', 100)))
         # Set default metadata dates
@@ -159,16 +153,12 @@ class Mapflow(QObject):
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Providers
+        self.dlg.providerCombo.addItems([*config.MAXAR_PRODUCTS, config.SENTINEL_OPTION_NAME])
         self.dlg.minIntersectionSpinBox.valueChanged.connect(self.filter_metadata)
         self.dlg.maxCloudCoverSpinBox.valueChanged.connect(self.filter_metadata)
         self.dlg.metadataFrom.dateChanged.connect(self.filter_metadata)
         self.dlg.metadataTo.dateChanged.connect(self.filter_metadata)
         self.dlg.preview.clicked.connect(self.preview)
-        self.dlg.addProvider.clicked.connect(self.dlg_provider.show)
-        self.dlg.addProvider.clicked.connect(lambda: self.dlg_provider.setProperty('mode', 'add'))
-        self.dlg.editProvider.clicked.connect(self.edit_provider)
-        self.dlg.editProvider.clicked.connect(lambda: self.dlg_provider.setProperty('mode', 'edit'))
-        self.dlg.removeProvider.clicked.connect(self.remove_provider)
         self.dlg.maxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
         self.dlg.providerAuthGroup.toggled.connect(self.limit_zoom_auth_toggled)
         # Maxar
@@ -194,15 +184,19 @@ class Mapflow(QObject):
         # it'd be better to filter the new layers, then add them to
         # the already filtered ones like rasterCombo.exceptedLayerList() + new_layers
         # but calling exceptedLayerList() crashes when it contains deleted layers
-        self.dlg.rasterCombo.setExceptedLayerList([
-            layer for layer in self.project.mapLayers().values() 
-            if layer.type() == QgsMapLayerType.RasterLayer 
-            and not (
+        excepted_layers = []
+        for layer in self.project.mapLayers().values(): 
+            if layer.type() != QgsMapLayerType.RasterLayer:
+                continue
+            if not layer.isValid():
+                excepted_layers.append(layer)
+            elif layer.dataProvider().name() == 'gdal' and not (
                 layer.crs().isValid()
                 and os.path.splitext(layer.dataProvider().dataSourceUri())[-1] in ('.tif', '.tiff')
                 and os.path.getsize(layer.publicSource()) / 2**20 < config.MAX_TIF_SIZE
-            )
-        ])
+            ):
+                excepted_layers.append(layer)
+        self.dlg.rasterCombo.setExceptedLayerList(excepted_layers)
 
     def disallow_local_rasters_with_sentinel(self, raster: QgsRasterLayer) -> None:
         """Override local raster selection if the model is Sentinel-2 Fields."""
@@ -221,15 +215,11 @@ class Mapflow(QObject):
             self.dlg.rasterCombo.blockSignals(True)
             self.dlg.rasterCombo.setAdditionalItems([config.SENTINEL_OPTION_NAME])
             self.dlg.rasterCombo.setCurrentText(config.SENTINEL_OPTION_NAME)
-            self.dlg.providerCombo.clear()
-            self.dlg.providerCombo.addItem(config.SENTINEL_OPTION_NAME)
             self.dlg.rasterCombo.blockSignals(False)
         elif config.SENTINEL_OPTION_NAME in self.dlg.rasterCombo.additionalItems():
-            web_providers = list(self.settings.value('providers'))
+            web_providers = list(config.BUILTIN_PROVIDERS)
             web_providers.remove(config.SENTINEL_OPTION_NAME)
-            self.dlg.rasterCombo.setAdditionalItems([*web_providers, 'Mapbox'])
-            self.dlg.providerCombo.clear()
-            self.dlg.providerCombo.addItems(web_providers)
+            self.dlg.rasterCombo.setAdditionalItems(web_providers)
 
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
         """Filter out the metadata table and layer every time user changes a filter."""
@@ -324,9 +314,8 @@ class Mapflow(QObject):
         if more_button:
             self.dlg.layoutMetadataTable.removeWidget(more_button)
             more_button.deleteLater()
-        provider_name = provider
         image_id_tooltip = self.tr(
-            f'If you already know which {provider_name} image you want to process,\n'
+            f'If you already know which {provider} image you want to process,\n'
             'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
         )
         if provider == config.SENTINEL_OPTION_NAME:
@@ -341,34 +330,16 @@ class Mapflow(QObject):
             self.dlg.providerAuthGroup.setDisabled(True)
             self.dlg.providerAuthGroup.setCollapsed(True)
             additional_filters_enabled = True 
-        elif provider in config.MAXAR_PRODUCTS:
+        else:  # Maxar
             is_max_zoom_enabled = True
             columns = config.MAXAR_METADATA_ATTRIBUTES
             hidden_column_index = None
             sort_by = config.MAXAR_DATETIME_COLUMN_INDEX
             enabled = True
-            max_zoom = (
-                21 if self.is_premium_user or self.dlg.providerAuthGroup.isChecked()
-                else config.MAXAR_MAX_FREE_ZOOM
-            )
+            max_zoom = 21 if self.is_premium_user or self.dlg.providerAuthGroup.isChecked() else config.MAXAR_MAX_FREE_ZOOM
             image_id_placeholder = self.tr('e.g. a3b154c40cc74f3b934c0ffc9b34ecd1')
             self.dlg.providerAuthGroup.setEnabled(True)
             additional_filters_enabled = provider == 'Maxar SecureWatch'
-        else:  # another provider, tear down the table and deactivate the panel
-            is_max_zoom_enabled = True
-            provider_name = 'Provider'
-            columns = tuple()  # empty
-            hidden_column_index = None
-            sort_by = None
-            enabled = False
-            max_zoom = config.MAX_ZOOM
-            # Forced to int bc somehow used to be stored as str, so for backward compatability
-            self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom', config.DEFAULT_ZOOM)))
-            image_id_placeholder = self.tr(f'Leave this field empty for {provider_name}')
-            additional_filters_enabled = False
-            image_id_tooltip = self.tr(f"{provider_name} doesn't allow processing single images.")
-            self.dlg.providerAuthGroup.setEnabled(True)
-
         self.dlg.metadataFilters.setEnabled(additional_filters_enabled)
         self.dlg.maxZoom.setEnabled(is_max_zoom_enabled)
         self.dlg.maxZoom.setMaximum(max_zoom)
@@ -381,7 +352,7 @@ class Mapflow(QObject):
             self.dlg.metadataTable.setColumnHidden(hidden_column_index, True)
         if sort_by is not None:
             self.dlg.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
-        self.dlg.metadata.setTitle(provider_name + self.tr(' Imagery Catalog'))
+        self.dlg.metadata.setTitle(provider + self.tr(' Imagery Catalog'))
         self.dlg.metadata.setEnabled(enabled)
         self.dlg.imageId.setPlaceholderText(image_id_placeholder)
         self.dlg.labelImageId.setToolTip(image_id_tooltip)
@@ -419,66 +390,6 @@ class Mapflow(QObject):
             self.layer_group.setExpanded(True)
         else:  # assume user opted to not use a group, add layers as usual
             self.project.addMapLayer(layer)
-
-    def remove_provider(self) -> None:
-        """Delete a web tile provider from the list of registered providers.
-
-        Is called by clicking the red minus button near the provider dropdown list.
-        """
-        provider = self.dlg.providerCombo.currentText()
-        # Ask for confirmation
-        if self.alert(self.tr('Permanently remove {}?').format(provider), QMessageBox.Question):
-            providers = self.settings.value('providers')
-            del providers[provider]
-            self.settings.setValue('providers', providers)
-            self.dlg.providerCombo.removeItem(self.dlg.providerCombo.currentIndex())
-            self.dlg.rasterCombo.setAdditionalItems(('Mapbox', *providers))
-
-    def add_or_edit_provider(self) -> None:
-        """Add a web imagery provider or commit edits to an existing one."""
-        providers = self.settings.value('providers')
-        if self.dlg_provider.property('mode') == 'edit':  # remove the old definition
-            del providers[self.dlg.providerCombo.currentText()]
-        name = self.dlg_provider.name.text()
-        # Add the new one
-        providers[name] = {
-            'url': self.dlg_provider.url.text(),
-            'type': self.dlg_provider.type.currentText()
-        }
-        # Update the combos
-        self.update_providers(providers)
-        self.dlg.providerCombo.setCurrentText(name)
-        self.dlg.rasterCombo.setCurrentText(name)
-
-    def edit_provider(self) -> None:
-        """Prepare and show the provider edit dialog.
-
-        Is called by the corresponding button.
-        """
-        provider = self.dlg.providerCombo.currentText()
-        if provider in config.MAXAR_PRODUCTS:
-            self.show_connect_id_dialog(provider)
-        elif provider == config.SENTINEL_OPTION_NAME:
-            self.show_sentinel_token_dialog()
-        else:
-            self.dlg_provider.setWindowTitle(provider)
-            # Fill out the edit dialog with the current data
-            providers = self.settings.value('providers')
-            self.dlg_provider.name.setText(provider)
-            self.dlg_provider.url.setText(providers[provider]['url'])
-            self.dlg_provider.type.setCurrentText(providers[provider]['type'])
-            # Open the edit dialog
-            self.dlg_provider.show()
-
-    def update_providers(self, providers: dict) -> None:
-        """Update imagery & providers dropdown list after editing or adding a new one.
-
-        :param providers: the new provider config to use
-        """
-        self.dlg.rasterCombo.setAdditionalItems((*providers, 'Mapbox'))
-        self.dlg.providerCombo.clear()
-        self.dlg.providerCombo.addItems(providers)
-        self.settings.setValue('providers', providers)
 
     def show_sentinel_token_dialog(self) -> None:
         """Prepare and display a dialog to edit the SkyWatch token."""
@@ -1301,9 +1212,9 @@ class Mapflow(QObject):
                 'Try splitting your area(s) into several processings.'
             ).format(self.aoi_area_limit))
             return
-        raster_option = self.dlg.rasterCombo.currentText()
+        source = self.dlg.rasterCombo.currentText()
         use_auth = self.dlg.providerAuthGroup.isChecked()
-        is_maxar = raster_option in config.MAXAR_PRODUCTS
+        is_maxar = source in config.MAXAR_PRODUCTS
         if is_maxar and not self.is_premium_user and not use_auth:
             ErrorMessage(
                 parent=self.dlg,
@@ -1321,42 +1232,43 @@ class Mapflow(QObject):
             'wdName': self.dlg.modelCombo.currentText(),
             'meta': {  # optional metadata
                 'source-app': 'qgis',
-                'source': raster_option.lower()
+                'source': source.lower()
             }
         }
         params = {}  # processing parameters
-        providers = self.settings.value('providers')
-        if raster_option in providers:
-            params['url'] = providers[raster_option]['url']
+        params['cache_raster_update'] = str(not self.dlg.useCache.isChecked()).lower()
+        if source in config.BUILTIN_PROVIDERS:
+            providers = self.settings.value('providers')
+            image_id = self.dlg.imageId.text()
+            params['url'] = providers[source]['url']
             if use_auth:
                 params['raster_login'] = self.dlg.providerUsername.text()
                 params['raster_password'] = self.dlg.providerPassword.text()
-            if raster_option == config.SENTINEL_OPTION_NAME:
-                image_id = self.dlg.imageId.text()
-                if image_id:
-                    params['url'] += image_id
-                else:
+            if source == config.SENTINEL_OPTION_NAME:
+                if not image_id:
                     self.alert(self.tr('Search the Sentinel-2 catalog for a suitable image'))
                     self.dlg.tabWidget.setCurrentWidget(self.dlg.tabWidget.findChild(QWidget, 'providersTab'))
                     return
-            elif is_maxar:  # add Connect ID and Image ID
+                params['url'] += image_id
+            else:  # Maxar
                 processing_params['meta']['source'] = 'maxar'
                 if use_auth:  # user's own account
-                    connect_id = providers[raster_option]['connectId']
-                    if not helpers.UUID_REGEX.match(connect_id):
-                        self.show_connect_id_dialog(raster_option)
+                    if not providers[source]['connectId']:
+                        self.show_connect_id_dialog(source)
                         return
-                    params['url'] += '&CONNECTID=' + providers[raster_option]['connectId']
+                    params['url'] += '&CONNECTID=' + providers[source]['connectId']
                 else:  # our account
-                    processing_params['meta']['maxar_product'] = raster_option.split()[1].lower()
-                image_id = self.dlg.imageId.text()
+                    processing_params['meta']['maxar_product'] = source.split()[1].lower()
                 if image_id:
                     params['url'] += f'&CQL_FILTER=feature_id=\'{image_id}\''
-            params['source_type'] = providers[raster_option]['type']
+            params['source_type'] = 'xyz'
+        else:
+            uri = source.dataProvider().dataSourceUri()
+            params['url'] = uri.param('url')
+            params['source_type'] = uri.param('type')
             if params['source_type'] == 'wms':
                 params['target_resolution'] = 0.000005  # for the 18th zoom
-            params['cache_raster_update'] = str(not self.dlg.useCache.isChecked()).lower()
-            self.save_provider_auth()
+        self.save_provider_auth()
         processing_params['params'] = params
         # Clip AOI to image extent if a single Maxar image is requested
         selected_image = self.dlg.metadataTable.selectedItems()
@@ -1934,7 +1846,7 @@ class Mapflow(QObject):
         """Remove the plugin icon & toolbar from QGIS GUI."""
         self.processing_fetch_timer.stop()
         self.processing_fetch_timer.deleteLater()
-        for dlg in self.dlg, self.dlg_login, self.dlg_connect_id, self.dlg_provider:
+        for dlg in self.dlg, self.dlg_login, self.dlg_connect_id:
             dlg.close()
         del self.toolbar
         self.settings.setValue('metadataMinIntersection', self.dlg.minIntersection.value())
@@ -2064,13 +1976,12 @@ class Mapflow(QObject):
         user = response['user']
         self.set_processing_limit(user=user)
         self.is_premium_user = user['isPremium']
-        self.on_provider_change(self.dlg.providerCombo.currentText())
         self.aoi_area_limit = response['user']['aoiAreaLimit'] * 1e-6
         self.wds = [wd['name'] for wd in response['workflowDefs']]
         self.dlg.modelCombo.clear()
         self.dlg.modelCombo.addItems(self.wds)
         self.dlg.modelCombo.setCurrentText('🏠 Buildings')
-        self.dlg.rasterCombo.setCurrentText('Mapbox')
+        self.dlg.rasterCombo.setCurrentText(config.MAPBOX)
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
