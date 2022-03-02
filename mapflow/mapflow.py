@@ -102,11 +102,9 @@ class Mapflow(QObject):
         self.calculator = QgsDistanceArea()
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
-        self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or config.DEFAULT_ZOOM))
-        if self.settings.value('providerSaveAuth'):
-            self.dlg.providerSaveAuth.setChecked(True)
-            self.dlg.providerUsername.setText(self.settings.value('providerUsername'))
-            self.dlg.providerPassword.setText(self.settings.value('providerPassword'))
+        self.dlg.maxarMaxZoom.setValue(int(self.settings.value('maxZoom') or config.DEFAULT_ZOOM))
+        self.dlg.maxarUsername.setText(self.settings.value('providerUsername'))
+        self.dlg.maxarPassword.setText(self.settings.value('providerPassword'))
         self.dlg.rasterCombo.setCurrentText(config.MAPBOX)  # otherwise SW will be set due to combo sync
         self.dlg.minIntersection.setValue(int(self.settings.value('metadataMinIntersection', 0)))
         self.dlg.maxCloudCover.setValue(int(self.settings.value('metadataMaxCloudCover', 100)))
@@ -159,8 +157,7 @@ class Mapflow(QObject):
         self.dlg.metadataFrom.dateChanged.connect(self.filter_metadata)
         self.dlg.metadataTo.dateChanged.connect(self.filter_metadata)
         self.dlg.preview.clicked.connect(self.preview)
-        self.dlg.maxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
-        self.dlg.providerAuthGroup.toggled.connect(self.limit_zoom_auth_toggled)
+        self.dlg.maxarMaxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
         # Maxar
         self.dlg.imageId.textChanged.connect(self.sync_image_id_with_table_and_layer)
         self.dlg.metadataTable.itemSelectionChanged.connect(self.sync_table_selection_with_image_id_and_layer)
@@ -288,20 +285,6 @@ class Mapflow(QObject):
         self.dlg.polygonCombo.setEnabled(not use_image_extent)
         self.dlg.maxarAoiCombo.setEnabled(not use_image_extent)
 
-    def limit_zoom_auth_toggled(self, enabled: bool) -> None:
-        """Limit zoom for Maxar when our account is to be used.
-
-        :param enabled: Whether the authorization has been enabled or disabled
-        """
-        if (
-            self.dlg.providerCombo.currentText() in config.MAXAR_PRODUCTS
-            and not (enabled or self.is_premium_user)
-        ):
-            self.dlg.maxZoom.setMaximum(config.MAXAR_MAX_FREE_ZOOM)
-        else:
-            self.dlg.maxZoom.setMaximum(config.MAX_ZOOM)
-            self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom', config.DEFAULT_ZOOM)))
-
     def on_provider_change(self, provider: str) -> None:
         """Adjust max and current zoom, and update the metadata table when user selects another
         provider.
@@ -319,30 +302,20 @@ class Mapflow(QObject):
             'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
         )
         if provider == config.SENTINEL_OPTION_NAME:
-            is_max_zoom_enabled = False
             columns = config.SENTINEL_ATTRIBUTES
             hidden_column_index = len(config.SENTINEL_ATTRIBUTES) - 1
             sort_by = config.SENTINEL_DATETIME_COLUMN_INDEX
             enabled = True
-            max_zoom = config.MAX_ZOOM
             image_id_placeholder = self.tr('e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00')
-            self.dlg.providerAuthGroup.setChecked(False)
-            self.dlg.providerAuthGroup.setDisabled(True)
-            self.dlg.providerAuthGroup.setCollapsed(True)
             additional_filters_enabled = True 
         else:  # Maxar
-            is_max_zoom_enabled = True
             columns = config.MAXAR_METADATA_ATTRIBUTES
             hidden_column_index = None
             sort_by = config.MAXAR_DATETIME_COLUMN_INDEX
             enabled = True
-            max_zoom = 21 if self.is_premium_user or self.dlg.providerAuthGroup.isChecked() else config.MAXAR_MAX_FREE_ZOOM
             image_id_placeholder = self.tr('e.g. a3b154c40cc74f3b934c0ffc9b34ecd1')
-            self.dlg.providerAuthGroup.setEnabled(True)
             additional_filters_enabled = provider == 'Maxar SecureWatch'
         self.dlg.metadataFilters.setEnabled(additional_filters_enabled)
-        self.dlg.maxZoom.setEnabled(is_max_zoom_enabled)
-        self.dlg.maxZoom.setMaximum(max_zoom)
         self.dlg.metadataTable.setRowCount(0)
         self.dlg.metadataTable.setColumnCount(len(columns))
         self.dlg.metadataTable.setHorizontalHeaderLabels(columns)
@@ -862,15 +835,15 @@ class Mapflow(QObject):
                 </ogc:SortBy>
                 </Query>
             </GetFeature>"""
-        if self.dlg.providerAuthGroup.isChecked():  # user's own account
+        if self.dlg.maxarAuth.isChecked():  # user's own account
             connect_id = self.settings.value('providers')[product]['connectId']
             if not helpers.UUID_REGEX.match(connect_id):
                 self.show_connect_id_dialog(product)
                 return
             url += '&connectid=' + connect_id
             encoded_credentials = b64encode(':'.join((
-                self.dlg.providerUsername.text(),
-                self.dlg.providerPassword.text()
+                self.dlg.maxarUsername.text(),
+                self.dlg.maxarPassword.text()
             )).encode())
             self.http.post(
                 url=url,
@@ -1213,7 +1186,7 @@ class Mapflow(QObject):
             ).format(self.aoi_area_limit))
             return
         source = self.dlg.rasterCombo.currentText()
-        use_auth = self.dlg.providerAuthGroup.isChecked()
+        use_auth = self.dlg.maxarAuth.isChecked()
         is_maxar = source in config.MAXAR_PRODUCTS
         if is_maxar and not self.is_premium_user and not use_auth:
             ErrorMessage(
@@ -1242,8 +1215,8 @@ class Mapflow(QObject):
             image_id = self.dlg.imageId.text()
             params['url'] = providers[source]['url']
             if use_auth:
-                params['raster_login'] = self.dlg.providerUsername.text()
-                params['raster_password'] = self.dlg.providerPassword.text()
+                params['raster_login'] = self.dlg.maxarUsername.text()
+                params['raster_password'] = self.dlg.maxarPassword.text()
             if source == config.SENTINEL_OPTION_NAME:
                 if not image_id:
                     self.alert(self.tr('Search the Sentinel-2 catalog for a suitable image'))
@@ -1407,12 +1380,8 @@ class Mapflow(QObject):
 
         Is called at three occasions: preview, processing creation and metadata request.
         """
-        # Save the checkbox state itself
-        self.settings.setValue('providerSaveAuth', self.dlg.providerSaveAuth.isChecked())
-        # If checked, save the credentials
-        if self.dlg.providerSaveAuth.isChecked():
-            self.settings.setValue('providerUsername', self.dlg.providerUsername.text())
-            self.settings.setValue('providerPassword', self.dlg.providerPassword.text())
+        self.settings.setValue('providerUsername', self.dlg.maxarUsername.text())
+        self.settings.setValue('providerPassword', self.dlg.maxarPassword.text())
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
         """Save and open the preview image as a layer."""
@@ -1499,14 +1468,16 @@ class Mapflow(QObject):
             )
             return
         self.save_provider_auth()
-        username = self.dlg.providerUsername.text()
-        password = self.dlg.providerPassword.text()
-        max_zoom = self.dlg.maxZoom.value()
+        username = password = ''
+        max_zoom = self.dlg.maxarMaxZoom.value() if 
         layer_name = provider
         provider_info = self.settings.value('providers')[provider]
         url = provider_info['url']
         if provider in config.MAXAR_PRODUCTS:
-            if self.dlg.providerAuthGroup.isChecked():  # own account
+            username = self.dlg.maxarUsername.text()
+            password = self.dlg.maxarPassword.text()
+            max_zoom = self.dlg.maxarMaxZoom.value() if 
+            if self.dlg.maxarAuth.isChecked():  # own account
                 connect_id = provider_info['connectId']
                 if helpers.UUID_REGEX.match(connect_id):
                     url += '&CONNECTID=' + provider_info['connectId']
@@ -1873,10 +1844,10 @@ class Mapflow(QObject):
     def logout(self) -> None:
         """Close the plugin and clear credentials from cache."""
         self.processing_fetch_timer.stop()
-        for setting in ('token', 'providerPassword', 'providerUsername', 'providerSaveAuth'):
+        for setting in ('token', 'providerPassword', 'providerUsername'):
             self.settings.remove(setting)
-        self.dlg.providerUsername.clear()
-        self.dlg.providerPassword.clear()
+        self.dlg.maxarUsername.clear()
+        self.dlg.maxarPassword.clear()
         self.logged_in = False
         self.dlg.close()
         self.set_up_login_dialog()  # recreate the login dialog
@@ -1994,6 +1965,7 @@ class Mapflow(QObject):
         except:  # incorrect padding
             self.username, self.password = b64decode(token + '==').decode().split(':')
         self.dlg_login.close()
+        self.on_provider_change(self.dlg.providerCombo.currentText())
         self.dlg.show()
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
