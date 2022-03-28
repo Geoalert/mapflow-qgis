@@ -579,6 +579,11 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <source>We couldn&apos;t load a preview for this image</source>
         <translation>Мы не смогли осуществить предпросмотр этого снимка</translation>
     </message>
+    <message>
+        <location filename="../mapflow.py" line="2041"/>
+        <source>Unknown error</source>
+        <translation>Неизвестная ошибка</translation>
+    </message>
 </context>
 <context>
     <name>ProviderDialog</name>

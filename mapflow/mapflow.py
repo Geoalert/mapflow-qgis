@@ -2038,7 +2038,7 @@ class Mapflow(QObject):
         if response.error() == QNetworkReply.OperationCanceledError:
             error_text = 'Request timed out'
         else:
-            error_text = response.errorString()
+            error_text = json.loads(response.readAll().data()).get('message', self.tr('Unknown error'))
         report = {
             'Error': error_text,
             'URL': response.request().url().toDisplayString(),
