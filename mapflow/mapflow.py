@@ -2036,20 +2036,26 @@ class Mapflow(QObject):
         :param title: The error message's title.
         """
         if response.error() == QNetworkReply.OperationCanceledError:
-            error_text = 'Request timed out'
+            error_summary = error_text = 'Request timed out'
         else:
-            error_text = json.loads(response.readAll().data()).get('message', self.tr('Unknown error'))
+            response_body = response.readAll().data().decode()
+            try:  # handled standardized backend exception ({"code": <int>, "message": <str>})
+                error_summary = error_text = json.loads(response_body)['message']
+            except:  # unhandled error - plain text
+                error_summary = self.tr('Unknown error')
+                error_text = response_body
         report = {
-            'Error': error_text,
+            'Error summary': error_summary,
             'URL': response.request().url().toDisplayString(),
             'HTTP code': response.attribute(QNetworkRequest.HttpStatusCodeAttribute),
             'Qt code': response.error(),
             'Plugin version': self.plugin_version,
             'QGIS version': Qgis.QGIS_VERSION,
             'Qt version': qVersion(),
+            'Error message': error_text[:5000]  # too long body => 400 (not sure what's the limit exactly)
         }
         email_body = '%0a'.join(f'{key}: {value}' for key, value in report.items())
-        ErrorMessage(QApplication.activeWindow(), error_text, title, email_body).show()
+        ErrorMessage(QApplication.activeWindow(), error_summary, title, email_body).show()
 
     def log_in_callback(self, response: QNetworkReply) -> None:
         """Fetch user info, models and processings.
