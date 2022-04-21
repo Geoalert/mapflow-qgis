@@ -62,6 +62,9 @@
          </item>
          <item row="1" column="1">
           <widget class="QgsMapLayerComboBox" name="polygonCombo">
+           <property name="maxVisibleItems">
+            <number>30</number>
+           </property>
            <property name="allowEmptyLayer">
             <bool>false</bool>
            </property>
