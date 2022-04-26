@@ -1791,16 +1791,17 @@ class Mapflow(QObject):
         """
         self.report_error(response, self.tr('Error loading results'))
 
-    def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical) -> None:
+    def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """Display a minimalistic modal dialog with some info or a question.
 
         :param message: A text to display
         :param icon: Info/Warning/Critical/Question
+        :param blocking: Opened as modal - code below will only be executed when the alert is closed
         """
         box = QMessageBox(icon, self.plugin_name, message, parent=QApplication.activeWindow())
         if icon == QMessageBox.Question:  # by default, only OK is added
             box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
-        return box.exec() == QMessageBox.Ok
+        return box.exec() == QMessageBox.Ok if blocking else box.open()
 
     def get_processings_callback(self, response: QNetworkReply) -> None:
         """Update the processing table and user limit.
@@ -1848,7 +1849,8 @@ class Mapflow(QObject):
                     self.alert(
                         processing['name'] +
                         self.tr(' finished. Double-click it in the table to download the results.'),
-                        QMessageBox.Information
+                        QMessageBox.Information,
+                        blocking=False  # don't repeat if user doesn't close the alert
                     )
             # Serialize datetime and drop seconds for brevity
             processing['created'] = processing['created'].strftime('%Y-%m-%d %H:%M')
