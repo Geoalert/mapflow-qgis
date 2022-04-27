@@ -9,10 +9,13 @@ about=Mapflow provides AI models for automatic feature extraction from satellite
 		- roads
 		- construction sites
 	For a step-by-step user guide, go to https://docs.mapflow.ai/api/qgis_mapflow#user-interface
-version=1.6.2
+version=1.6.3
 author=Geoalert
 email=hello@geoalert.io
 changelog:
+	1.6.3:
+		- Improve error reporting
+		- Fix repeating alerts on processing completion
 	1.6.2:
 		- Make model & source choice more intuitive
 		- Improve catalog filters & UX
