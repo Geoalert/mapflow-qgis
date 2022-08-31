@@ -1384,7 +1384,7 @@ class Mapflow(QObject):
             return
         # Upload the image to the server
         processing_params['meta']['source'] = 'tif'
-        processing_params['params']['source_type'] = 'local'
+        processing_params['params']['source_type'] = 'tif'
         body = QHttpMultiPart(QHttpMultiPart.FormDataType)
         tif = QHttpPart()
         tif.setHeader(QNetworkRequest.ContentTypeHeader, 'image/tiff')
