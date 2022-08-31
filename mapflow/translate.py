@@ -1,4 +1,4 @@
-from mapflow import config
+from .config import PLUGIN_NAME
 from PyQt5.QtCore import QCoreApplication
 
 
@@ -8,4 +8,4 @@ def tr(message: str) -> str:
     :param message: A text to translate
     """
     # Don't use self.plugin_name as context since it'll be overriden in supermodules
-    return QCoreApplication.translate(config.PLUGIN_NAME, message)
+    return QCoreApplication.translate(PLUGIN_NAME, message)

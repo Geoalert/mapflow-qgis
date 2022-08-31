@@ -5,13 +5,14 @@ from ..errors import ErrorMessage
 
 
 class Processing:
-    def __init__(self, id_, name, status, workflow_def, aoi_area, created, errors=None, **kwargs):
+    def __init__(self, id_, name, status, workflow_def, aoi_area, created, percent_completed, errors=None,  **kwargs):
         self.id_ = id_
         self.name = name
         self.status = status
         self.workflow_def = workflow_def
         self.aoi_area = aoi_area
         self.created = created.astimezone()
+        self.percent_completed = int(percent_completed)
         self.errors = errors
 
     @classmethod
@@ -25,14 +26,14 @@ class Processing:
         if sys.version_info.minor < 7:  # python 3.6 doesn't understand 'Z' as UTC
             created = processing['created'].replace('Z', '+0000')
         else:
-            created = processing.created
+            created = processing['created']
         created = datetime.strptime(
             created, '%Y-%m-%dT%H:%M:%S.%f%z'
         ).astimezone()
-
+        percent_completed = processing['percentCompleted']
         messages = processing.get('messages', [])
         errors = [ErrorMessage.from_response(message) for message in messages]
-        return cls(id_, name, status, workflow_def, aoi_area, created, errors)
+        return cls(id_, name, status, workflow_def, aoi_area, created, percent_completed, errors)
 
     @property
     def is_new(self):
@@ -54,6 +55,7 @@ class Processing:
             'status': self.status,
             'workflowDef': self.workflow_def,
             'aoiArea': self.aoi_area,
+            'percentCompleted': self.percent_completed,
             'errors': self.errors,
             # Serialize datetime and drop seconds for brevity
             'created': self.created.strftime('%Y-%m-%d %H:%M')

@@ -27,11 +27,10 @@ from qgis.core import (
 )
 
 from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, SentinelAuthDialog, ErrorMessage
-from mapflow.requests.http import Http
+from .http import Http, update_processing_limit
 from . import helpers, config
 from .processings.saved_processing import parse_processings_request, Processing
 from .processings.history import updated_processings, ProcessingHistory
-from .requests.http import update_processing_limit
 from .translate import tr
 
 

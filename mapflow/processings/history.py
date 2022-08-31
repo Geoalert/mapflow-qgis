@@ -38,7 +38,7 @@ def updated_processings(processings: List[Processing],
             if processing.id_ not in history.failed:
                 failed.append(processing)
     # Find recently finished processings and alert the user
-        elif processing['percentCompleted'] == 100:
+        elif processing.percent_completed == 100:
             finished_ids.append(processing.id_)
             if processing.id_ not in history.finished:
                 finished.append(processing)
