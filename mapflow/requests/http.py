@@ -4,7 +4,7 @@ from PyQt5.QtCore import QObject, QTimer, QUrl
 from PyQt5.QtNetwork import QHttpMultiPart, QNetworkReply, QNetworkRequest
 from qgis.core import QgsNetworkAccessManager
 
-from . import config
+from mapflow import config
 
 
 class Http(QObject):
@@ -101,3 +101,7 @@ class Http(QObject):
             )
         )
         return response
+
+
+def update_processing_limit():
+    pass
