@@ -44,8 +44,7 @@ class Processing:
     @property
     def error_message(self):
         if not self.errors:
-            # todo: write sample error message
-            return "Empty message"
+            return ""
         return "\n".join([str(error) for error in self.errors])
 
     def asdict(self):

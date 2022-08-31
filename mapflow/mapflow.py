@@ -1830,7 +1830,7 @@ class Mapflow(QObject):
             if p.is_new:
                 self.alert(
                     p.name +
-                    tr(' failed.') + p.error_message,
+                    tr(' failed. ') + p.error_message,
                     QMessageBox.Critical
                     )
         for p in finished_processings:
