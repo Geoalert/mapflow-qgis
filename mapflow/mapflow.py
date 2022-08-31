@@ -1870,6 +1870,8 @@ class Mapflow(QObject):
             for col, attr in enumerate(config.PROCESSING_ATTRIBUTES):
                 table_item = QTableWidgetItem()
                 table_item.setData(Qt.DisplayRole, processing_dict[attr])
+                if processing.status == 'FAILED':
+                    table_item.setToolTip(processing.error_message)
                 self.dlg.processingsTable.setItem(row, col, table_item)
             if processing.id_ in selected_processings:
                 self.dlg.processingsTable.selectRow(row)
