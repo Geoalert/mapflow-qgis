@@ -5,7 +5,9 @@ from ..errors import ErrorMessage
 
 
 class Processing:
-    def __init__(self, id_, name, status, workflow_def, aoi_area, created, percent_completed, errors=None,  **kwargs):
+    def __init__(self, id_, name, status,
+                 workflow_def, aoi_area, created,
+                 percent_completed, raster_layer, errors=None,  **kwargs):
         self.id_ = id_
         self.name = name
         self.status = status
@@ -14,6 +16,7 @@ class Processing:
         self.created = created.astimezone()
         self.percent_completed = int(percent_completed)
         self.errors = errors
+        self.raster_layer = raster_layer
 
     @classmethod
     def from_response(cls, processing):
@@ -33,7 +36,8 @@ class Processing:
         percent_completed = processing['percentCompleted']
         messages = processing.get('messages', [])
         errors = [ErrorMessage.from_response(message) for message in messages]
-        return cls(id_, name, status, workflow_def, aoi_area, created, percent_completed, errors)
+        raster_layer = processing['rasterLayer']
+        return cls(id_, name, status, workflow_def, aoi_area, created, percent_completed, raster_layer, errors)
 
     @property
     def is_new(self):
@@ -57,7 +61,8 @@ class Processing:
             'percentCompleted': self.percent_completed,
             'errors': self.errors,
             # Serialize datetime and drop seconds for brevity
-            'created': self.created.strftime('%Y-%m-%d %H:%M')
+            'created': self.created.strftime('%Y-%m-%d %H:%M'),
+            'rasterLayer': self.raster_layer
         }
 
 

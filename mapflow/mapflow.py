@@ -1676,9 +1676,9 @@ class Mapflow(QObject):
         :param response: The HTTP response.
         :param pid: ID of the inspected processing.
         """
-        processing = next(filter(lambda p: p['id'] == pid, self.processings))
+        processing = next(filter(lambda p: p.id_ == pid, self.processings))
         # Avoid overwriting existing files by adding (n) to their names
-        output_path = os.path.join(self.dlg.outputDirectory.text(), processing['name'])
+        output_path = os.path.join(self.dlg.outputDirectory.text(), processing.name)
         extension = '.gpkg'
         if os.path.exists(output_path + extension):
             count = 1
@@ -1722,15 +1722,15 @@ class Mapflow(QObject):
             self.alert(tr('Error loading results. Error code: ' + str(error)))
             return
         # Load the results into QGIS
-        results_layer = QgsVectorLayer(output_path, processing['name'], 'ogr')
+        results_layer = QgsVectorLayer(output_path, processing.name, 'ogr')
         results_layer.loadNamedStyle(os.path.join(
             self.plugin_dir,
             'static',
             'styles',
-            config.STYLES.get(processing['workflowDef'], 'default') + '.qml'
+            config.STYLES.get(processing.workflow_def, 'default') + '.qml'
         ))
         # Add the source raster (COG) if it has been created
-        raster_url = processing['rasterLayer'].get('tileUrl')
+        raster_url = processing.raster_layer.get('tileUrl')
         if raster_url:
             params = {
                 'type': 'xyz',
@@ -1742,7 +1742,7 @@ class Mapflow(QObject):
             }
             raster = QgsRasterLayer(
                 '&'.join(f'{key}={val}' for key, val in params.items()),  # don't URL-encode it
-                processing['name'] + ' image',
+                processing.name + ' image',
                 'wms'
             )
         # Set image extent explicitly because as XYZ, it doesn't have one by default
