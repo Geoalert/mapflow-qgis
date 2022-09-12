@@ -57,7 +57,7 @@ class ErrorMessage:
     def __init__(self, code: str, parameters: Dict[str, str]):
         self.code = code
         self.parameters = parameters
-        self.message = error_descriptions.get(code, "Unknown error. Contact us to resolve the issue!")
+        self.message = error_descriptions.get(code, tr("Unknown error. Contact us to resolve the issue! help@geoalert.io"))
 
     @classmethod
     def from_response(cls, response: Dict):
