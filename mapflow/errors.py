@@ -1,5 +1,5 @@
 from typing import Dict
-from .translate import tr
+from .mapflow import tr
 """
 ["messages":[{"code":"source-validator.PixelSizeTooHigh","parameters":{"max_res":"1.2","level":"error","actual_res":"5.620983603290215"}}]}]
 """

@@ -31,10 +31,16 @@ from .http import Http, update_processing_limit
 from . import helpers, config
 from .processings.saved_processing import parse_processings_request, Processing
 from .processings.history import updated_processings, ProcessingHistory
-from .translate import tr
 
+def tr(message: str) -> str:
+    """Localize a UI element text.
+    :param message: A text to translate
+    """
+    # Don't use self.plugin_name as context since it'll be overriden in supermodules
+    return QCoreApplication.translate(config.PLUGIN_NAME, message)
 
 class Mapflow(QObject):
+
     """This class represents the plugin. It is instantiated by QGIS."""
 
     def __init__(self, iface) -> None:
