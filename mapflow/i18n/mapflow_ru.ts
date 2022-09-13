@@ -452,8 +452,8 @@ Please, upgrade to make sure everything works as expected. Go to Plugins -&gt; M
     </message>
     <message>
         <location filename="../errors.py" line="45"/>
-        <source>Tile at location {tilSSe_location} cannot be loaded, server response is {status}</source>
-        <translation>Изображение по адресу {tilSSe_location} не может быть загружено, ответ сервера {status}</translation>
+        <source>Tile at location {tile_location} cannot be loaded, server response is {status}</source>
+        <translation>Изображение по адресу {tile_location} не может быть загружено, ответ сервера {status}</translation>
     </message>
     <message>
         <location filename="../errors.py" line="46"/>

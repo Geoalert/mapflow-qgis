@@ -42,7 +42,7 @@ error_descriptions = {
     "dataloader.LoaderArgsError": tr("Dataloader argument {argument_name} has type {argument_type}, excpected to be {expected_type}"),
     "dataloader.WrongChannelsNum": tr("Loaded tile has {real_nchannels} channels, required number is {expected_nchannels}"),
     "dataloader.WrongTileSize": tr("Loaded tile has size {real_size}, expected tile size is {expected_size}"),
-    "dataloader.TileNotLoaded": tr("Tile at location {tilSSe_location} cannot be loaded, server response is {status}"),
+    "dataloader.TileNotLoaded": tr("Tile at location {tile_location} cannot be loaded, server response is {status}"),
     "dataloader.TileNotReadable": tr("Response content at {tile_location} cannot be decoded as an image"),
     "dataloader.CrsIsNotSupported": tr("Internal error in process of loading data. We are working on the fix, our support will contact you."),
     "dataloader.MaploaderInternalError": tr("Internal error in process of loading data. We are working on the fix, our support will contact you."),
