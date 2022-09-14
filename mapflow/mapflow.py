@@ -32,12 +32,6 @@ from . import helpers, config
 from .processings.saved_processing import parse_processings_request, Processing
 from .processings.history import updated_processings, ProcessingHistory
 
-def tr(message: str) -> str:
-    """Localize a UI element text.
-    :param message: A text to translate
-    """
-    # Don't use self.plugin_name as context since it'll be overriden in supermodules
-    return QCoreApplication.translate(config.PLUGIN_NAME, message)
 
 class Mapflow(QObject):
 
@@ -215,7 +209,7 @@ class Mapflow(QObject):
     def disallow_local_rasters_with_sentinel(self, raster: QgsRasterLayer) -> None:
         """Override local raster selection if the model is Sentinel-2 Fields."""
         if raster and self.dlg.modelCombo.currentText() == config.SENTINEL_WD_NAME:
-            self.alert(tr(
+            self.alert(self.tr(
                 "Currently, Mapflow doesn't support uploading own Sentinel-2 imagery. "
                 'To process Sentinel-2, go to the Providers tab and either search for your image '
                 'in the catalog or paste its ID in the Image ID field.'
@@ -295,7 +289,7 @@ class Mapflow(QObject):
     def set_up_login_dialog(self) -> None:
         """Create a login dialog, set its title and signal-slot connections."""
         self.dlg_login = LoginDialog(self.main_window)
-        self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + tr('Log in'))
+        self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
         self.dlg_login.logIn.clicked.connect(self.read_mapflow_token)
 
     def toggle_polygon_combos(self, use_image_extent: bool) -> None:
@@ -333,7 +327,7 @@ class Mapflow(QObject):
             self.dlg.layoutMetadataTable.removeWidget(more_button)
             more_button.deleteLater()
         provider_name = provider
-        image_id_tooltip = tr(
+        image_id_tooltip = self.tr(
             f'If you already know which {provider_name} image you want to process,\n'
             'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
         )
@@ -344,7 +338,7 @@ class Mapflow(QObject):
             sort_by = config.SENTINEL_DATETIME_COLUMN_INDEX
             enabled = True
             max_zoom = config.MAX_ZOOM
-            image_id_placeholder = tr('e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00')
+            image_id_placeholder = self.tr('e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00')
             self.dlg.providerAuthGroup.setChecked(False)
             self.dlg.providerAuthGroup.setDisabled(True)
             self.dlg.providerAuthGroup.setCollapsed(True)
@@ -359,7 +353,7 @@ class Mapflow(QObject):
                 21 if self.is_premium_user or self.dlg.providerAuthGroup.isChecked()
                 else config.MAXAR_MAX_FREE_ZOOM
             )
-            image_id_placeholder = tr('e.g. a3b154c40cc74f3b934c0ffc9b34ecd1')
+            image_id_placeholder = self.tr('e.g. a3b154c40cc74f3b934c0ffc9b34ecd1')
             self.dlg.providerAuthGroup.setEnabled(True)
             additional_filters_enabled = provider == 'Maxar SecureWatch'
         else:  # another provider, tear down the table and deactivate the panel
@@ -372,9 +366,9 @@ class Mapflow(QObject):
             max_zoom = config.MAX_ZOOM
             # Forced to int bc somehow used to be stored as str, so for backward compatability
             self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom', config.DEFAULT_ZOOM)))
-            image_id_placeholder = tr(f'Leave this field empty for {provider_name}')
+            image_id_placeholder = self.tr(f'Leave this field empty for {provider_name}')
             additional_filters_enabled = False
-            image_id_tooltip = tr(f"{provider_name} doesn't allow processing single images.")
+            image_id_tooltip = self.tr(f"{provider_name} doesn't allow processing single images.")
             self.dlg.providerAuthGroup.setEnabled(True)
 
         self.dlg.metadataFilters.setEnabled(additional_filters_enabled)
@@ -389,7 +383,7 @@ class Mapflow(QObject):
             self.dlg.metadataTable.setColumnHidden(hidden_column_index, True)
         if sort_by is not None:
             self.dlg.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
-        self.dlg.metadata.setTitle(provider_name + tr(' Imagery Catalog'))
+        self.dlg.metadata.setTitle(provider_name + self.tr(' Imagery Catalog'))
         self.dlg.metadata.setEnabled(enabled)
         self.dlg.imageId.setPlaceholderText(image_id_placeholder)
         self.dlg.labelImageId.setToolTip(image_id_tooltip)
@@ -435,7 +429,7 @@ class Mapflow(QObject):
         """
         provider = self.dlg.providerCombo.currentText()
         # Ask for confirmation
-        if self.alert(tr('Permanently remove {}?').format(provider), QMessageBox.Question):
+        if self.alert(self.tr('Permanently remove {}?').format(provider), QMessageBox.Question):
             providers = self.settings.value('providers')
             del providers[provider]
             self.settings.setValue('providers', providers)
@@ -554,7 +548,7 @@ class Mapflow(QObject):
         """
         path = QFileDialog.getExistingDirectory(
             QApplication.activeWindow(),
-            tr('Select output directory')
+            self.tr('Select output directory')
         )
         if path:
             self.dlg.outputDirectory.setText(path)
@@ -568,7 +562,7 @@ class Mapflow(QObject):
         """
         if os.path.exists(self.dlg.outputDirectory.text()) or self.select_output_directory():
             return True
-        self.alert(tr('Please, specify an existing output directory'))
+        self.alert(self.tr('Please, specify an existing output directory'))
         return False
 
     def select_tif(self) -> None:
@@ -576,7 +570,7 @@ class Mapflow(QObject):
 
         Is called by clicking the 'selectTif' button in the main dialog.
         """
-        dlg = QFileDialog(QApplication.activeWindow(), tr('Select GeoTIFF'))
+        dlg = QFileDialog(QApplication.activeWindow(), self.tr('Select GeoTIFF'))
         dlg.setFileMode(QFileDialog.ExistingFile)
         dlg.setMimeTypeFilters(['image/tiff'])
         if dlg.exec():
@@ -603,7 +597,7 @@ class Mapflow(QObject):
         elif self.aoi:
             aoi = self.aoi
         else:
-            self.alert(tr('Please, select an area of interest'))
+            self.alert(self.tr('Please, select an area of interest'))
             return
         provider = self.dlg.providerCombo.currentText()
         from_ = self.dlg.metadataFrom.date().toString(Qt.ISODate)
@@ -632,7 +626,7 @@ class Mapflow(QObject):
         aoi_bbox = aoi.boundingBox()
         aoi_bbox_geom = QgsGeometry.fromRect(aoi_bbox)
         # Check the area
-        aoi_too_large_message = tr('Your area of interest is too large.')
+        aoi_too_large_message = self.tr('Your area of interest is too large.')
         if self.calculator.measureArea(aoi_bbox_geom) > config.SKYWATCH_METADATA_MAX_AREA:
             self.alert(aoi_too_large_message)
             return
@@ -734,9 +728,9 @@ class Mapflow(QObject):
         self.dlg.getMetadata.setDown(False)
         error = response.error()
         if error == QNetworkReply.ContentAccessDenied:
-            self.alert(tr('Please, check your credentials'))
+            self.alert(self.tr('Please, check your credentials'))
         else:
-            self.report_error(response, tr("We couldn't fetch Sentinel metadata"))
+            self.report_error(response, self.tr("We couldn't fetch Sentinel metadata"))
 
     def fetch_skywatch_metadata(
         self,
@@ -847,7 +841,7 @@ class Mapflow(QObject):
             except (AttributeError, RuntimeError):  # metadata layer has been deleted
                 pass
             self.alert(
-                tr('No images match your criteria. Try relaxing the filters.'),
+                self.tr('No images match your criteria. Try relaxing the filters.'),
                 QMessageBox.Information
             )
             self.dlg.getMetadata.blockSignals(False)
@@ -855,7 +849,7 @@ class Mapflow(QObject):
             return
         if next_page_start_index is not None:
             # Create a 'More' button
-            more_button = QPushButton(tr('More'))
+            more_button = QPushButton(self.tr('More'))
             more_button.setObjectName(config.METADATA_MORE_BUTTON_OBJECT_NAME)
             self.dlg.layoutMetadataTable.addWidget(more_button)
             # Set the button to fetch more metadata on click
@@ -886,7 +880,7 @@ class Mapflow(QObject):
             timer.deleteLater()
         except (RuntimeError, AttributeError):  # None or has been destroyed
             pass
-        self.report_error(response, tr("We couldn't fetch Sentinel metadata"))
+        self.report_error(response, self.tr("We couldn't fetch Sentinel metadata"))
 
     def get_maxar_metadata(
         self,
@@ -1007,7 +1001,7 @@ class Mapflow(QObject):
         metadata = json.loads(response.readAll().data())
         if metadata['totalFeatures'] == 0:
             self.alert(
-                tr('No images match your criteria. Try relaxing the filters.'),
+                self.tr('No images match your criteria. Try relaxing the filters.'),
                 QMessageBox.Information
             )
             return
@@ -1059,9 +1053,9 @@ class Mapflow(QObject):
         """
         error = response.error()
         if error == QNetworkReply.ContentAccessDenied:
-            self.alert(tr('Please, check your credentials'))
+            self.alert(self.tr('Please, check your credentials'))
         else:
-            self.report_error(response, tr("We couldn't get metadata from Maxar"))
+            self.report_error(response, self.tr("We couldn't get metadata from Maxar"))
 
     def sync_table_selection_with_image_id_and_layer(self) -> str:
         """
@@ -1134,7 +1128,7 @@ class Mapflow(QObject):
                 and helpers.SENTINEL_COORDINATE_REGEX.search(image_id)
             ) or (helpers.SENTINEL_PRODUCT_NAME_REGEX.search(image_id)
                   )):
-                self.alert(tr(
+                self.alert(self.tr(
                     'A Sentinel image ID should look like '
                     'S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 '
                     'or /36/S/XA/2022/02/09/0/'
@@ -1221,7 +1215,7 @@ class Mapflow(QObject):
         self.calculator.setEllipsoid(helpers.WGS84_ELLIPSOID)
         self.calculator.setSourceCrs(helpers.WGS84, self.project.transformContext())
         self.aoi_size = self.calculator.measureArea(aoi) / 10**6  # sq. m to sq.km
-        self.dlg.labelAoiArea.setText(tr('Area: {:.2f} sq.km').format(self.aoi_size))
+        self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
 
     def delete_processings(self) -> None:
         """Delete one or more processings from the server.
@@ -1237,7 +1231,7 @@ class Mapflow(QObject):
         ]
         # Ask for confirmation if there are selected rows
         if selected_ids and self.alert(
-            tr('Delete selected processings?'), QMessageBox.Question
+            self.tr('Delete selected processings?'), QMessageBox.Question
         ):
             for id_ in selected_ids:
                 self.http.delete(
@@ -1261,7 +1255,7 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        self.report_error(response, tr("Error deleting a processing"))
+        self.report_error(response, self.tr("Error deleting a processing"))
 
     def clip_aoi_to_image_extent(self, aoi_geometry: QgsGeometry, extent: QgsFeature) -> QgsFeatureIterator:
         """Clip user AOI to image extent if the image doesn't cover the entire AOI."""
@@ -1288,23 +1282,23 @@ class Mapflow(QObject):
         """
         processing_name = self.dlg.processingName.text()
         if not processing_name:
-            self.alert(tr('Please, specify a name for your processing'))
+            self.alert(self.tr('Please, specify a name for your processing'))
             return
         use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
         if not self.aoi:
             if use_image_extent_as_aoi:
-                self.alert(tr('GeoTIFF has invalid projection'))
+                self.alert(self.tr('GeoTIFF has invalid projection'))
             elif self.dlg.polygonCombo.currentLayer():
-                self.alert(tr('Processing area has invalid projection'))
+                self.alert(self.tr('Processing area has invalid projection'))
             else:
-                self.alert(tr('Please, select an area of interest'))
+                self.alert(self.tr('Please, select an area of interest'))
             return
         if self.remaining_limit < self.aoi_size:
             if self.plugin_name == 'Mapflow':  # don't alert in TechInspection
-                self.alert(tr('Processing limit exceeded'))
+                self.alert(self.tr('Processing limit exceeded'))
             return
         if self.aoi_area_limit < self.aoi_size:
-            self.alert(tr(
+            self.alert(self.tr(
                 'Up to {} sq km can be processed at a time. '
                 'Try splitting your area(s) into several processings.'
             ).format(self.aoi_area_limit))
@@ -1315,9 +1309,9 @@ class Mapflow(QObject):
         if is_maxar and not self.is_premium_user and not use_auth:
             ErrorMessage(
                 parent=self.dlg,
-                text=tr('Click on the link below to send us an email'),
-                title=tr('Upgrade your subscription to process Maxar imagery'),
-                email_body=tr(
+                text=self.tr('Click on the link below to send us an email'),
+                title=self.tr('Upgrade your subscription to process Maxar imagery'),
+                email_body=self.tr(
                     "I'd like to upgrade my subscription to Mapflow Processing API "
                     'to be able to process Maxar imagery.'
                 )
@@ -1344,7 +1338,7 @@ class Mapflow(QObject):
                 if image_id:
                     params['url'] += image_id
                 else:
-                    self.alert(tr('Search the Sentinel-2 catalog for a suitable image'))
+                    self.alert(self.tr('Search the Sentinel-2 catalog for a suitable image'))
                     self.dlg.tabWidget.setCurrentWidget(self.dlg.tabWidget.findChild(QWidget, 'providersTab'))
                     return
             elif is_maxar:  # add Connect ID and Image ID
@@ -1374,17 +1368,17 @@ class Mapflow(QObject):
             try:
                 self.aoi = next(self.clip_aoi_to_image_extent(self.aoi, extent)).geometry()
             except StopIteration:
-                self.alert(tr('Image and processing area do not intersect'))
+                self.alert(self.tr('Image and processing area do not intersect'))
                 return
         elif is_maxar and selected_image:  # Single SW image
             extent = self.maxar_metadata_footprints[selected_image[config.MAXAR_ID_COLUMN_INDEX].text()]
             try:
                 self.aoi = next(self.clip_aoi_to_image_extent(self.aoi, extent)).geometry()
             except StopIteration:
-                self.alert(tr('Image and processing area do not intersect'))
+                self.alert(self.tr('Image and processing area do not intersect'))
                 return
         processing_params['geometry'] = json.loads(self.aoi.asJson())
-        self.message_bar.pushInfo(self.plugin_name, tr('Starting the processing...'))
+        self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
         if not imagery:
             self.post_processing(processing_params)
             return
@@ -1410,7 +1404,7 @@ class Mapflow(QObject):
         body.setParent(response)
         progress_message = QgsMessageBarItem(
             self.plugin_name,
-            tr('Uploading image to Mapflow...'),
+            self.tr('Uploading image to Mapflow...'),
             QProgressBar(self.message_bar),
             parent=self.message_bar
         )
@@ -1441,7 +1435,7 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        self.report_error(response, tr("We couldn't upload your GeoTIFF"))
+        self.report_error(response, self.tr("We couldn't upload your GeoTIFF"))
 
     def post_processing(self, request_body: dict) -> None:
         """Submit a processing to Mapflow.
@@ -1461,12 +1455,12 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        self.report_error(response, tr('Processing creation failed'))
+        self.report_error(response, self.tr('Processing creation failed'))
 
     def post_processing_callback(self, _: QNetworkReply, processing_name: str) -> None:
         """Display a success message and clear the processing name field."""
         self.alert(
-            tr("Success! We'll notify you when the processing has finished."),
+            self.tr("Success! We'll notify you when the processing has finished."),
             QMessageBox.Information
         )
         if self.dlg.processingName.text() == processing_name:
@@ -1496,7 +1490,7 @@ class Mapflow(QObject):
             self.remaining_limit = (user['areaLimit'] - user['processedArea']) * 1e-6
         if self.plugin_name == 'Mapflow':
             self.dlg.remainingLimit.setText(
-                tr('Processing limit: {} sq.km').format(round(self.remaining_limit, 2))
+                self.tr('Processing limit: {} sq.km').format(round(self.remaining_limit, 2))
             )
 
     def save_provider_auth(self) -> None:
@@ -1556,8 +1550,8 @@ class Mapflow(QObject):
                 error_handler=self.preview_sentinel_error_handler
             )
             return
-        self.alert(tr("Sorry, we couldn't load the image"))
-        self.report_error(response, tr('Error previewing Sentinel imagery'))
+        self.alert(self.tr("Sorry, we couldn't load the image"))
+        self.report_error(response, self.tr('Error previewing Sentinel imagery'))
 
     def preview(self) -> None:
         """Display raster tiles served over the Web."""
@@ -1569,7 +1563,7 @@ class Mapflow(QObject):
                 datetime_ = selected_cells[config.SENTINEL_DATETIME_COLUMN_INDEX]
                 url = self.dlg.metadataTable.item(datetime_.row(), config.SENTINEL_PREVIEW_COLUMN_INDEX).text()
                 if not url:
-                    self.alert(tr("Sorry, there's no preview for this image"), QMessageBox.Information)
+                    self.alert(self.tr("Sorry, there's no preview for this image"), QMessageBox.Information)
                     return
                 datetime_ = datetime_.text()
                 guess_format = False
@@ -1580,11 +1574,11 @@ class Mapflow(QObject):
                     datetime_ = datetime.strptime(datetime_.group(0), '%Y%m%dT%H%M%S')\
                         .astimezone().strftime('%Y-%m-%d %H:%M')
                 else:
-                    self.alert(tr("We couldn't load a preview for this image"))
+                    self.alert(self.tr("We couldn't load a preview for this image"))
                     return
                 guess_format = True
             else:
-                self.alert(tr('Please, select an image to preview'), QMessageBox.Information)
+                self.alert(self.tr('Please, select an image to preview'), QMessageBox.Information)
                 return
             callback_kwargs = {'datetime_': datetime_, 'image_id': image_id}
             self.http.get(
@@ -1653,7 +1647,7 @@ class Mapflow(QObject):
                 layer.setExtent(extent)
             self.add_layer(layer)
         else:
-            self.alert(tr("We couldn't load a preview for this image"))
+            self.alert(self.tr("We couldn't load a preview for this image"))
 
     def download_results(self, row: int) -> None:
         """Download and display processing results along with the source raster, if available.
@@ -1725,7 +1719,7 @@ class Mapflow(QObject):
                     write_options
                 )
         if error:
-            self.alert(tr('Error loading results. Error code: ' + str(error)))
+            self.alert(self.tr('Error loading results. Error code: ' + str(error)))
             return
         # Load the results into QGIS
         results_layer = QgsVectorLayer(output_path, processing.name, 'ogr')
@@ -1767,7 +1761,7 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        self.report_error(response, tr('Error downloading results'))
+        self.report_error(response, self.tr('Error downloading results'))
 
     def set_raster_extent(
         self,
@@ -1798,7 +1792,7 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        self.report_error(response, tr('Error loading results'))
+        self.report_error(response, self.tr('Error loading results'))
 
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """Display a minimalistic modal dialog with some info or a question.
@@ -1836,14 +1830,14 @@ class Mapflow(QObject):
             if p.is_new:
                 self.alert(
                     p.name +
-                    tr(' failed. ') + p.error_message,
+                    self.tr(' failed. ') + p.error_message,
                     QMessageBox.Critical
                     )
         for p in finished_processings:
             if p.is_new:
                 self.alert(
                     p.name +
-                    tr(' finished. Double-click it in the table to download the results.'),
+                    self.tr(' finished. Double-click it in the table to download the results.'),
                     QMessageBox.Information,
                     blocking=False  # don't repeat if user doesn't close the alert
                 )
@@ -1958,7 +1952,7 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        self.report_error(response, tr("Can't log in to Mapflow"))
+        self.report_error(response, self.tr("Can't log in to Mapflow"))
 
     def default_error_handler(self, response: QNetworkReply) -> bool:
         """Handle general networking errors: offline, timeout, server errors.
@@ -1976,7 +1970,7 @@ class Mapflow(QObject):
                 self.dlg_login.show()
             # Wrong token entered - display a message
             elif not self.dlg_login.findChild(QLabel, config.INVALID_TOKEN_WARNING_OBJECT_NAME):
-                invalid_token_label = QLabel(tr('Invalid token'), self.dlg_login)
+                invalid_token_label = QLabel(self.tr('Invalid token'), self.dlg_login)
                 invalid_token_label.setObjectName(config.INVALID_TOKEN_WARNING_OBJECT_NAME)
                 invalid_token_label.setStyleSheet('color: rgb(239, 41, 41);')
                 self.dlg_login.layout().insertWidget(1, invalid_token_label, alignment=Qt.AlignCenter)
@@ -1992,13 +1986,13 @@ class Mapflow(QObject):
             QNetworkReply.RemoteHostClosedError,
             QNetworkReply.NetworkSessionFailedError,
         ):
-            self.report_error(response, tr(
+            self.report_error(response, self.tr(
                 service + ' is not responding. Please, try again.\n\n'
                 'If you are behind a proxy or firewall,\ncheck your QGIS proxy settings.\n'
             ))
             return True
         elif error == QNetworkReply.HostNotFoundError:  # offline
-            self.alert(tr(service + ' requires Internet connection'))
+            self.alert(self.tr(service + ' requires Internet connection'))
             return True
         elif error in (
             QNetworkReply.UnknownNetworkError,
@@ -2008,7 +2002,7 @@ class Mapflow(QObject):
             QNetworkReply.ProxyTimeoutError,
             QNetworkReply.ProxyAuthenticationRequiredError,
         ):
-            self.report_error(response, tr('Proxy error. Please, check your proxy settings.'))
+            self.report_error(response, self.tr('Proxy error. Please, check your proxy settings.'))
             return True
         return False
 
@@ -2025,7 +2019,7 @@ class Mapflow(QObject):
             try:  # handled standardized backend exception ({"code": <int>, "message": <str>})
                 error_summary = error_text = json.loads(response_body)['message']
             except:  # unhandled error - plain text
-                error_summary = tr('Unknown error')
+                error_summary = self.tr('Unknown error')
                 error_text = response_body
         report = {
             'Error summary': error_summary,
@@ -2081,13 +2075,21 @@ class Mapflow(QObject):
         """
         if int(response.readAll().data()) > 1:
             self.alert(
-                tr(
+                self.tr(
                     'There is a new version of Mapflow for QGIS available.\n'
                     'Please, upgrade to make sure everything works as expected. '
                     'Go to Plugins -> Manage and Install Plugins -> Upgradable.'
                 ),
                 QMessageBox.Warning
             )
+
+    def tr(self, message: str) -> str:
+        """Localize a UI element text.
+        :param message: A text to translate
+        """
+        # Don't use self.plugin_name as context since it'll be overriden in supermodules
+        return QCoreApplication.translate(config.PLUGIN_NAME, message)
+
 
     def main(self) -> None:
         """Plugin entrypoint."""
@@ -2101,5 +2103,7 @@ class Mapflow(QObject):
         else:
             self.set_up_login_dialog()
             self.dlg_login.show()
+
+
 
 
