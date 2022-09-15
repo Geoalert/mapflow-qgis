@@ -1,12 +1,12 @@
-import sys  # Python version check for ensuring compatibility
 import json
 import os.path
 import tempfile
 from base64 import b64encode, b64decode
 from typing import List, Optional, Union
-from datetime import datetime, timedelta  # processing creation datetime formatting
+from datetime import datetime  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
+import pylab as p
 from osgeo import gdal
 from PyQt5.QtXml import QDomDocument
 from PyQt5.QtGui import QColor, QIcon
@@ -28,11 +28,15 @@ from qgis.core import (
 )
 
 from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, SentinelAuthDialog, ErrorMessage
-from .http import Http
+from .http import Http, update_processing_limit
 from . import helpers, config
+from .processings.saved_processing import parse_processings_request, Processing
+from .processings.history import updated_processings, ProcessingHistory
+from .errors import ErrorMessageList
 
 
 class Mapflow(QObject):
+
     """This class represents the plugin. It is instantiated by QGIS."""
 
     def __init__(self, iface) -> None:
@@ -187,6 +191,8 @@ class Mapflow(QObject):
                 use_default_error_handler=False  # ignore errors to prevent repetitive alerts
             )
         )
+        self.error_messages = ErrorMessageList()
+
 
     def filter_non_tif_rasters(self, _: List[QgsMapLayer]) -> None:
         """Leave only GeoTIFF layers in the Imagery Source combo box."""
@@ -1382,6 +1388,7 @@ class Mapflow(QObject):
             return
         # Upload the image to the server
         processing_params['meta']['source'] = 'tif'
+        processing_params['params']['source_type'] = 'tif'
         body = QHttpMultiPart(QHttpMultiPart.FormDataType)
         tif = QHttpPart()
         tif.setHeader(QNetworkRequest.ContentTypeHeader, 'image/tiff')
@@ -1673,9 +1680,9 @@ class Mapflow(QObject):
         :param response: The HTTP response.
         :param pid: ID of the inspected processing.
         """
-        processing = next(filter(lambda p: p['id'] == pid, self.processings))
+        processing = next(filter(lambda p: p.id_ == pid, self.processings))
         # Avoid overwriting existing files by adding (n) to their names
-        output_path = os.path.join(self.dlg.outputDirectory.text(), processing['name'])
+        output_path = os.path.join(self.dlg.outputDirectory.text(), processing.name)
         extension = '.gpkg'
         if os.path.exists(output_path + extension):
             count = 1
@@ -1719,15 +1726,15 @@ class Mapflow(QObject):
             self.alert(self.tr('Error loading results. Error code: ' + str(error)))
             return
         # Load the results into QGIS
-        results_layer = QgsVectorLayer(output_path, processing['name'], 'ogr')
+        results_layer = QgsVectorLayer(output_path, processing.name, 'ogr')
         results_layer.loadNamedStyle(os.path.join(
             self.plugin_dir,
             'static',
             'styles',
-            config.STYLES.get(processing['workflowDef'], 'default') + '.qml'
+            config.STYLES.get(processing.workflow_def, 'default') + '.qml'
         ))
         # Add the source raster (COG) if it has been created
-        raster_url = processing['rasterLayer'].get('tileUrl')
+        raster_url = processing.raster_layer.get('tileUrl')
         if raster_url:
             params = {
                 'type': 'xyz',
@@ -1739,7 +1746,7 @@ class Mapflow(QObject):
             }
             raster = QgsRasterLayer(
                 '&'.join(f'{key}={val}' for key, val in params.items()),  # don't URL-encode it
-                processing['name'] + ' image',
+                processing.name + ' image',
                 'wms'
             )
         # Set image extent explicitly because as XYZ, it doesn't have one by default
@@ -1808,67 +1815,46 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        processings: list[dict] = json.loads(response.readAll().data())
-        if not [p for p in processings if p['status'] == 'IN_PROGRESS']:  # stop polling
+        raw_processings: list[dict] = json.loads(response.readAll().data())
+        if all([p['status'] != 'IN_PROGRESS' for p in raw_processings]):  # stop polling
             self.processing_fetch_timer.stop()
-        if sys.version_info.minor < 7:  # python 3.6 doesn't understand 'Z' as UTC
-            for processing in processings:
-                processing['created'] = processing['created'].replace('Z', '+0000')
+
+        processings = parse_processings_request(raw_processings)
+
         env = QgsSettings().value('variables/mapflow_env') or 'production'
         processing_history = self.settings.value('processings')
-        user_processing_history = processing_history.get(env, {}).get(self.username, {})
-        now = datetime.now().astimezone()
-        one_day = timedelta(1)
-        update_processing_limit = False
-        finished, failed = [], []
-        for processing in processings:
-            # Extract workflow definition (model) names
-            processing['workflowDef'] = processing['workflowDef']['name']
-            # Convert area to sq.km
-            processing['aoiArea'] = round(processing['aoiArea'] / 10**6, 2)
-            # Localize creation datetime
-            processing['created'] = datetime.strptime(
-                processing['created'], '%Y-%m-%dT%H:%M:%S.%f%z'
-            ).astimezone()
-            # Find newly failed processings and alert the user
-            is_new = now - processing['created'] < one_day
-            if processing['status'] == 'FAILED':
-                failed.append(processing)
-                if processing['id'] not in user_processing_history.get('failed', []):
-                    update_processing_limit = True
-                    if is_new:
-                        self.alert(
-                            processing['name'] +
-                            self.tr(' failed.'),
-                            QMessageBox.Critical
-                        )
-            # Find recently finished processings and alert the user
-            elif processing['percentCompleted'] == 100:
-                finished.append(processing)
-                if is_new and processing['id'] not in user_processing_history.get('finished', []):
-                    self.alert(
-                        processing['name'] +
-                        self.tr(' finished. Double-click it in the table to download the results.'),
-                        QMessageBox.Information,
-                        blocking=False  # don't repeat if user doesn't close the alert
+        user_processing_history = ProcessingHistory.from_settings(processing_history.get(env, {}).get(self.username, {}))
+        # get updated processings (newly failed and newly finished) and updated user processing history
+        failed_processings, finished_processings, user_processing_history = updated_processings(processings, user_processing_history)
+
+        if failed_processings:
+            # this means that some of processings have failed since last update and the limit must have been returned
+            update_processing_limit()
+        for proc in failed_processings:
+            if proc.is_new:
+                self.alert(
+                    proc.name +
+                    self.tr(' failed.\n') + proc.error_message(self.error_messages),
+                    QMessageBox.Critical
                     )
-            # Serialize datetime and drop seconds for brevity
-            processing['created'] = processing['created'].strftime('%Y-%m-%d %H:%M')
-        if update_processing_limit:  # return the limit that was reserved for the failed processings
-            self.http.get(
-                url=f'{self.server}/projects/default',
-                callback=self.set_processing_limit
-            )
-        # Update the history for the given account
-        processing_ids = {
-            'finished': [processing['id'] for processing in finished],
-            'failed': [processing['id'] for processing in failed]
-        }
+        for proc in finished_processings:
+            if proc.is_new:
+                self.alert(
+                    proc.name +
+                    self.tr(' finished. Double-click it in the table to download the results.'),
+                    QMessageBox.Information,
+                    blocking=False  # don't repeat if user doesn't close the alert
+                )
+        self.update_processing_table(processings)
+        self.processings = processings
+
         try:  # use try-except bc this will only error once
-            processing_history[env][self.username] = processing_ids
+            processing_history[env][self.username] = user_processing_history.asdict()
         except KeyError:  # history for the current env hasn't been initialized yet
-            processing_history[env] = {self.username: processing_ids}
+            processing_history[env] = {self.username: user_processing_history.asdict()}
         self.settings.setValue('processings', processing_history)
+
+    def update_processing_table(self, processings: List[Processing]):
         # UPDATE THE TABLE
         # Memorize the selection to restore it after table update
         selected_processings = [
@@ -1883,26 +1869,22 @@ class Mapflow(QObject):
         self.dlg.processingsTable.setSortingEnabled(False)
         self.dlg.processingsTable.setRowCount(len(processings))
         # Fill out the table
-        for row, processing in enumerate(processings):
+        for row, proc in enumerate(processings):
+            processing_dict = proc.asdict()
             for col, attr in enumerate(config.PROCESSING_ATTRIBUTES):
                 table_item = QTableWidgetItem()
-                table_item.setData(Qt.DisplayRole, processing[attr])
+                table_item.setData(Qt.DisplayRole, processing_dict[attr])
+                if proc.status == 'FAILED':
+                    table_item.setToolTip(proc.error_message(self.error_messages))
+                        #self.error_messages
+                        #                            .get(e.code)
+                        #                            .format(**e.parameters) for e in processing.errors]))
                 self.dlg.processingsTable.setItem(row, col, table_item)
-            if processing['id'] in selected_processings:
+            if proc.id_ in selected_processings:
                 self.dlg.processingsTable.selectRow(row)
         self.dlg.processingsTable.setSortingEnabled(True)
         # Restore extended selection
         self.dlg.processingsTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        # Save for reuse
-        self.processings = processings
-
-    def tr(self, message: str) -> str:
-        """Localize a UI element text.
-
-        :param message: A text to translate
-        """
-        # Don't use self.plugin_name as context since it'll be overriden in supermodules
-        return QCoreApplication.translate(config.PLUGIN_NAME, message)
 
     def initGui(self) -> None:
         """Create the menu entries and toolbar icons inside the QGIS GUI.
@@ -2108,6 +2090,14 @@ class Mapflow(QObject):
                 QMessageBox.Warning
             )
 
+    def tr(self, message: str) -> str:
+        """Localize a UI element text.
+        :param message: A text to translate
+        """
+        # Don't use self.plugin_name as context since it'll be overriden in supermodules
+        return QCoreApplication.translate(config.PLUGIN_NAME, message)
+
+
     def main(self) -> None:
         """Plugin entrypoint."""
         token = self.settings.value('token')
@@ -2120,3 +2110,7 @@ class Mapflow(QObject):
         else:
             self.set_up_login_dialog()
             self.dlg_login.show()
+
+
+
+
