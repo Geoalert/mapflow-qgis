@@ -26,7 +26,7 @@ MAXAR_MAX_FREE_ZOOM = 12
 MAXAR_WMTS_URL = 'https://securewatch.digitalglobe.com/earthservice/wmtsaccess?SERVICE=WMTS&VERSION=1.0.0&STYLE=&REQUEST=GetTile&LAYER=DigitalGlobe:ImageryTileService&FORMAT=image/jpeg&TileRow={y}&TileCol={x}&TileMatrixSet=EPSG:3857&TileMatrix=EPSG:3857:{z}'
 MAXAR_PRODUCTS = {
     f'Maxar {name}': {'url': MAXAR_WMTS_URL, 'type': 'xyz', 'connectId': ''} 
-    for name in ('SecureWatch', 'Vivid', 'Basemaps')
+    for name in ('SecureWatch', 'Vivid')
 }
 # MISC
 SKYWATCH_METADATA_MAX_AREA = 1e11  # 100,000 sq.km
