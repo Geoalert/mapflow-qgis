@@ -3,16 +3,19 @@ name=Mapflow
 qgisMinimumVersion=3.10
 description=Extract real-world objects from satellite imagery with Mapflow by Geoalert. Mapflow provides AI mapping pipelines for building footprints, roads, fields, forest and construction sites.
 about=Mapflow provides AI models for automatic feature extraction from satellite imagery. Choose a web imagery provider or upload you own image, select what type of features you want to extract and your area of interest, and Mapflow will do the rest. Currently, we can extract:
-		- buildings (optionally, with height)
-		- agricultural fields
+		- buildings
+		- agricultural fields (separate models for high-resolutoion RGB and for multispectral Sentinel-2 imagery)
 		- forest (optionally, with height)
 		- roads
 		- construction sites
 	For a step-by-step user guide, go to https://docs.mapflow.ai/api/qgis_mapflow#user-interface
-version=1.6.3
+version=1.6.4
 author=Geoalert
 email=hello@geoalert.io
 changelog:
+	1.6.4:
+		- Show error description in failed processings message box and in the tooltip over the processing table row
+		- Exclude Maxar Basemaps from the list of default basemaps for new installations (not supported anymore)
 	1.6.3:
 		- Improve error reporting
 		- Fix repeating alerts on processing completion
