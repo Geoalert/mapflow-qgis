@@ -6,6 +6,7 @@ from typing import List, Optional, Union
 from datetime import datetime  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
+import pylab as p
 from osgeo import gdal
 from PyQt5.QtXml import QDomDocument
 from PyQt5.QtGui import QColor, QIcon
@@ -31,6 +32,7 @@ from .http import Http, update_processing_limit
 from . import helpers, config
 from .processings.saved_processing import parse_processings_request, Processing
 from .processings.history import updated_processings, ProcessingHistory
+from .errors import ErrorMessageList
 
 
 class Mapflow(QObject):
@@ -189,6 +191,8 @@ class Mapflow(QObject):
                 use_default_error_handler=False  # ignore errors to prevent repetitive alerts
             )
         )
+        self.error_messages = ErrorMessageList()
+
 
     def filter_non_tif_rasters(self, _: List[QgsMapLayer]) -> None:
         """Leave only GeoTIFF layers in the Imagery Source combo box."""
@@ -1826,17 +1830,17 @@ class Mapflow(QObject):
         if failed_processings:
             # this means that some of processings have failed since last update and the limit must have been returned
             update_processing_limit()
-        for p in failed_processings:
-            if p.is_new:
+        for proc in failed_processings:
+            if proc.is_new:
                 self.alert(
-                    p.name +
-                    self.tr(' failed. ') + p.error_message,
+                    proc.name +
+                    self.tr(' failed.\n') + proc.error_message(self.error_messages),
                     QMessageBox.Critical
                     )
-        for p in finished_processings:
-            if p.is_new:
+        for proc in finished_processings:
+            if proc.is_new:
                 self.alert(
-                    p.name +
+                    proc.name +
                     self.tr(' finished. Double-click it in the table to download the results.'),
                     QMessageBox.Information,
                     blocking=False  # don't repeat if user doesn't close the alert
@@ -1865,15 +1869,18 @@ class Mapflow(QObject):
         self.dlg.processingsTable.setSortingEnabled(False)
         self.dlg.processingsTable.setRowCount(len(processings))
         # Fill out the table
-        for row, processing in enumerate(processings):
-            processing_dict = processing.asdict()
+        for row, proc in enumerate(processings):
+            processing_dict = proc.asdict()
             for col, attr in enumerate(config.PROCESSING_ATTRIBUTES):
                 table_item = QTableWidgetItem()
                 table_item.setData(Qt.DisplayRole, processing_dict[attr])
-                if processing.status == 'FAILED':
-                    table_item.setToolTip(processing.error_message)
+                if proc.status == 'FAILED':
+                    table_item.setToolTip(proc.error_message(self.error_messages))
+                        #self.error_messages
+                        #                            .get(e.code)
+                        #                            .format(**e.parameters) for e in processing.errors]))
                 self.dlg.processingsTable.setItem(row, col, table_item)
-            if processing.id_ in selected_processings:
+            if proc.id_ in selected_processings:
                 self.dlg.processingsTable.selectRow(row)
         self.dlg.processingsTable.setSortingEnabled(True)
         # Restore extended selection

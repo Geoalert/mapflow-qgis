@@ -2,691 +2,211 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="ru_RU" sourcelanguage="en">
 <context>
-    <name>@default</name>
+    <name>ErrorMessageList</name>
     <message>
-        <location filename="../mapflow.py" line="218"/>
-        <source>Currently, Mapflow doesn&apos;t support uploading own Sentinel-2 imagery. To process Sentinel-2, go to the Providers tab and either search for your image in the catalog or paste its ID in the Image ID field.</source>
-        <translation type="obsolete">Mapflow пока не поддерживает загрузку пользовательских снимков Sentinel-2. Чтобы обработать Sentinel-2, пожалуйста, перейдите во вкладку &quot;Источники данных&quot; и либо найдите ваш снимок в каталоге либо вставьте его ID в поле &quot;ID Снимка&quot;.</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="298"/>
-        <source>Log in</source>
-        <translation type="obsolete">Вход</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="336"/>
-        <source>If you already know which {provider_name} image you want to process,
-simply paste its ID here. Otherwise, search suitable images in the catalog below.</source>
-        <translation type="obsolete">Если вы уже знаете ID снимка {provider_name} который вы хотите обработать, просто вставьте его в это поле. Иначе, используйте каталог ниже чтобы найти подходящий снимок.</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="347"/>
-        <source>e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00</source>
-        <translation type="obsolete">например S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="362"/>
-        <source>e.g. a3b154c40cc74f3b934c0ffc9b34ecd1</source>
-        <translation type="obsolete">например a3b154c40cc74f3b934c0ffc9b34ecd1</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="375"/>
-        <source>Leave this field empty for {provider_name}</source>
-        <translation type="obsolete">Оставьте это поле пустым для {provider_name}</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="377"/>
-        <source>{provider_name} doesn&apos;t allow processing single images.</source>
-        <translation type="obsolete">{provider_name} не поддерживает обработку отдельных снимков.</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="392"/>
-        <source> Imagery Catalog</source>
-        <translation type="obsolete"> - Каталог снимков</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="438"/>
-        <source>Permanently remove {}?</source>
-        <translation type="obsolete">Удалить {}?</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="555"/>
-        <source>Select output directory</source>
-        <translation type="obsolete">Выберите папку для сохранения данных</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="571"/>
-        <source>Please, specify an existing output directory</source>
-        <translation type="obsolete">Пожалуйста, выберите папку для сохранения данных</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="579"/>
-        <source>Select GeoTIFF</source>
-        <translation type="obsolete">Выберите GeoTIFF</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1300"/>
-        <source>Please, select an area of interest</source>
-        <translation type="obsolete">Пожалуйста, выберите слой с областью обработки</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="635"/>
-        <source>Your area of interest is too large.</source>
-        <translation type="obsolete">Слишком большая область запроса метаданных.</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1062"/>
-        <source>Please, check your credentials</source>
-        <translation type="obsolete">Пожалуйста, проверьте реквизиты</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="889"/>
-        <source>We couldn&apos;t fetch Sentinel metadata</source>
-        <translation type="obsolete">Мы не смогли получить метаданные Сентинел</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1009"/>
-        <source>No images match your criteria. Try relaxing the filters.</source>
-        <translation type="obsolete">Нет подходящий снимков. Попробуйте изменить параметры поиска.</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="858"/>
-        <source>More</source>
-        <translation type="obsolete">Еще</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1064"/>
-        <source>We couldn&apos;t get metadata from Maxar</source>
-        <translation type="obsolete">Мы не смогли получить метаданные от Максар</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1137"/>
-        <source>A Sentinel image ID should look like S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 or /36/S/XA/2022/02/09/0/</source>
-        <translation type="obsolete">ID снимка Sentinel должен иметь формат S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 или /36/S/XA/2022/02/09/0/</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1224"/>
-        <source>Area: {:.2f} sq.km</source>
-        <translation type="obsolete">Площадь: {:.2f} кв.км</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1239"/>
-        <source>Delete selected processings?</source>
-        <translation type="obsolete">Удалить выбранные обработки?</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1264"/>
-        <source>Error deleting a processing</source>
-        <translation type="obsolete">Ошибка удаления обработки</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1291"/>
-        <source>Please, specify a name for your processing</source>
-        <translation type="obsolete">Пожалуйста, выберите название обработки</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1296"/>
-        <source>GeoTIFF has invalid projection</source>
-        <translation type="obsolete">Мы не смогли распознать проекцию снимка</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1298"/>
-        <source>Processing area has invalid projection</source>
-        <translation type="obsolete">Мы не смогли распознать проекцию области обработки</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1304"/>
-        <source>Processing limit exceeded</source>
-        <translation type="obsolete">Превышен доступный лимит обработки</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1307"/>
-        <source>Up to {} sq km can be processed at a time. Try splitting your area(s) into several processings.</source>
-        <translation type="obsolete">За раз можно обработать не более {} кв км. Попробуйте разделить область обработки на части.</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1316"/>
-        <source>Click on the link below to send us an email</source>
-        <translation type="obsolete">Нажмите на ссылку ниже чтобы отправить нам отчет об ошибке</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1316"/>
-        <source>Upgrade your subscription to process Maxar imagery</source>
-        <translation type="obsolete">Чтобы обрабатывать по Максар, нужно стать Премиум пользователем Mapflow</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1316"/>
-        <source>I&apos;d like to upgrade my subscription to Mapflow Processing API to be able to process Maxar imagery.</source>
-        <translation type="obsolete">Я хотел бы стать премиум пользователем Mapflow чтобы обрабатывать по Максар.</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1347"/>
-        <source>Search the Sentinel-2 catalog for a suitable image</source>
-        <translation type="obsolete">Выберите подходящий снимок Sentinel-2 в каталоге</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1384"/>
-        <source>Image and processing area do not intersect</source>
-        <translation type="obsolete">Снимок и область обработки не пересекаются</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1387"/>
-        <source>Starting the processing...</source>
-        <translation type="obsolete">Создаем обработку...</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1411"/>
-        <source>Uploading image to Mapflow...</source>
-        <translation type="obsolete">Загружаем ваш снимок на Mapflow...</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1444"/>
-        <source>We couldn&apos;t upload your GeoTIFF</source>
-        <translation type="obsolete">Мы не смогли загрузить ваш снимок</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1464"/>
-        <source>Processing creation failed</source>
-        <translation type="obsolete">Мы не смогли создать обработку</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1468"/>
-        <source>Success! We&apos;ll notify you when the processing has finished.</source>
-        <translation type="obsolete">Обработка создана! Мы оповестим вас когда она завершится.</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1498"/>
-        <source>Processing limit: {} sq.km</source>
-        <translation type="obsolete">Доступный лимит: {} кв.км</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1559"/>
-        <source>Sorry, we couldn&apos;t load the image</source>
-        <translation type="obsolete">Ошибка предпросмотра снимка</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1560"/>
-        <source>Error previewing Sentinel imagery</source>
-        <translation type="obsolete">Ошибка предпросмотра снимка</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1572"/>
-        <source>Sorry, there&apos;s no preview for this image</source>
-        <translation type="obsolete">К сожалению, для этого снимка нет предпросмотра</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1656"/>
-        <source>We couldn&apos;t load a preview for this image</source>
-        <translation type="obsolete">Мы не смогли осуществить предпросмотр этого снимка</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1587"/>
-        <source>Please, select an image to preview</source>
-        <translation type="obsolete">Пожалуйста, выберите снимок</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1728"/>
-        <source>Error loading results. Error code: </source>
-        <translation type="obsolete">Ошибка загрузки результатов. Код ошибки: </translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1770"/>
-        <source>Error downloading results</source>
-        <translation type="obsolete">Мы не смогли скачать результаты обработки</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1801"/>
-        <source>Error loading results</source>
-        <translation type="obsolete">Мы не смогли загрузить результаты</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1837"/>
-        <source> failed. </source>
-        <translation type="obsolete"> завершилась с ошибкой. </translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1844"/>
-        <source> finished. Double-click it in the table to download the results.</source>
-        <translation type="obsolete"> завершилась. Дважды кликните на нее в таблице чтобы загрузить результаты.</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1961"/>
-        <source>Can&apos;t log in to Mapflow</source>
-        <translation type="obsolete">Мы не смогли подключиться к Mapflow</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1979"/>
-        <source>Invalid token</source>
-        <translation type="obsolete">Неверный токен</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="2011"/>
-        <source>Proxy error. Please, check your proxy settings.</source>
-        <translation type="obsolete">Ошибка прокси. Пожалуйста, проверьте настройки прокси в QGIS.</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="2028"/>
-        <source>Unknown error</source>
-        <translation type="obsolete">Неизвестная ошибка</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="2083"/>
-        <source>There is a new version of Mapflow for QGIS available.
-Please, upgrade to make sure everything works as expected. Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable.</source>
-        <translation type="obsolete">Пожалуйста, обновите версию плагина чтобы все работало как нужно. Модули -&gt; Управление модулями -&gt; Обновляемые.</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="9"/>
+        <location filename="../errors.py" line="12"/>
         <source>Key &apos;url&apos; in your request must be a string, got {url_type} instead.</source>
         <translation>Ключ &apos;url&apos; в запросе должен быть строкой, не {url_type}.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="10"/>
+        <location filename="../errors.py" line="13"/>
         <source>Your URL must be a link starting with &quot;http://&quot; or &quot;https://&quot;.</source>
         <translation>URL должен начинаться с &quot;http://&quot; или &quot;https://&quot;.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="11"/>
+        <location filename="../errors.py" line="14"/>
         <source>Format of &apos;url&apos; is invalid and cannot be parsed. Error: {parse_error_message}</source>
         <translation>Невалидный формат URL. Ошибка {parse_error_message}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="12"/>
+        <location filename="../errors.py" line="15"/>
         <source>Zoom must be either empty, or integer, got {actual_zoom}</source>
         <translation>Поле „zoom“ должно быть либо пустым, либо целым числом. Получено {actual_zoom}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="14"/>
+        <location filename="../errors.py" line="17"/>
         <source>Zoom must be between 0 and 22, got {actual_zoom}</source>
         <translation>Значение поля „zoom“ в вашем запросе должно быть в интервале от 0 до 22. Получено {actual_zoom}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="15"/>
+        <location filename="../errors.py" line="18"/>
         <source>Zoom must be not lower than {min_zoom}, got {actual_zoom}</source>
         <translation>Значение поля „zoom“ в вашем запросе должно быть не менее {min_zoom}. Получено {actual_zoom}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="16"/>
+        <location filename="../errors.py" line="19"/>
         <source>Image metadata must be a dict (json)</source>
         <translation>Метаданные вашего изображения должны быть типа &quot;словарь&quot; (json)</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="17"/>
+        <location filename="../errors.py" line="20"/>
         <source>Image metadata must have keys: crs, transform, dtype, count</source>
         <translation>Метаданные вашего изображения должны содержать ключи: crs, transform, dtype, count</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="18"/>
+        <location filename="../errors.py" line="21"/>
         <source>URL of the image at s3 storage must be a string starting with s3://, got {actual_s3_link}</source>
         <translation>URL изображения на хранилище S3 должен быть строкой и начинаться с S3://. Получено {actual_s3_link}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="19"/>
+        <location filename="../errors.py" line="22"/>
         <source>Request must contain either &apos;profile&apos; or &apos;url&apos; keys</source>
         <translation>Запрос должен содержать либо „profile“, либо „url“</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="20"/>
+        <location filename="../errors.py" line="23"/>
         <source>Failed to read file from {s3_link}.</source>
         <translation>Ошибка чтения файла из {s3_link}.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="21"/>
+        <location filename="../errors.py" line="24"/>
         <source>Image data type (Dtype) must be one of {required_dtypes}, got {request_dtype}</source>
         <translation>Тип данных изображения (Dtype) должен быть одним из {required_dtypes}. Получено {request_dtype}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="22"/>
+        <location filename="../errors.py" line="25"/>
         <source>Number of channels in image must be one of {required_nchannels}. Got {real_nchannels}</source>
         <translation>Изображение имеет {real_nchannels} каналов, требуемое количество каналов {required_nchannels}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="23"/>
+        <location filename="../errors.py" line="26"/>
         <source>Spatial resolution of you image is too high: pixel size is {actual_res}, minimum allowed pixel size is {min_res}</source>
         <translation>Пространственное разрешение вашего изображения слишком высокое: размер пикселя {actual_res}, минимальный допустимый размер пикселя равен {min_res}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="24"/>
+        <location filename="../errors.py" line="27"/>
         <source>Spatial resolution of you image is too low: pixel size is {actual_res}, maximum allowed pixel size is {max_res}</source>
         <translation>Пространственное разрешение вашего изображения слишком низкое: размер пикселя равен {actual_res}, максимально допустимый размер пикселя равен {max_res}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="25"/>
+        <location filename="../errors.py" line="28"/>
         <source>Error occurred during image {checked_param} check: {message}. Image metadata = {metadata}.</source>
         <translation>Ошибка произошла во время проверки параметра {checked_param} изображения: {message}. Метаданные изображения = {metadata}.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="26"/>
+        <location filename="../errors.py" line="29"/>
         <source>Your &apos;url&apos; doesn&apos;t match the format, Quadkey basemap must be a link containing &quot;q&quot; placeholder.</source>
         <translation>Ссылка на Quadkey подложку не соответствует формату. Это должна быть ссылка, содержащая поле «q».</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="27"/>
+        <location filename="../errors.py" line="30"/>
         <source>Input string {input_string} is of unknown format. It must represent Sentinel-2 granule ID.</source>
         <translation>Строка {input_string} неизвестного формата. Она должна представлять собой ID гранулы снимка Sentinel-2.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="28"/>
+        <location filename="../errors.py" line="31"/>
         <source>Selected Sentinel-2 image cell is {actual_cell}, this model is for the cells: {allowed_cells}</source>
         <translation>Выбранная ячейка {actual_cell} не подходит для обработки, модель рассчитана на ячейки: {allowed_cells}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="29"/>
+        <location filename="../errors.py" line="32"/>
         <source>Selected Sentinel-2 image month is {actual_month}, this model is for: {allowed_months}</source>
         <translation>Выбранный месяц {actual_month} не подходит для обработки, модель рассчитана на месяцы: {allowed_months}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="30"/>
+        <location filename="../errors.py" line="33"/>
         <source>You request TMS basemap link doesn&apos;t match the format, it must be a link containing &apos;{x}&apos;, &apos;{y}&apos;, &apos;{z}&apos; placeholders, correct it and start processing again.</source>
         <translation>Ссылка на TMS подложку не соответствует формату. Это должна быть ссылка, содержащая поля &quot;{x}&quot;, &quot;{y}&quot;, &quot;{z}&quot;.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="31"/>
+        <location filename="../errors.py" line="34"/>
         <source>Requirements must be dict, got {requirements_type}.</source>
         <translation>Секция «requirements» в запросе должна быть словарем (dict), а не {requirements_type}.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="32"/>
+        <location filename="../errors.py" line="35"/>
         <source>Request must be dict, got {request_type}.</source>
         <translation>Секция «request» в запросе должна быть словарем (dict), а не {request_type}.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="33"/>
+        <location filename="../errors.py" line="36"/>
         <source>Request must contain &quot;source_type&quot; key</source>
         <translation>Запрос должен содержать тип источника спутниковых снимков (ключ «source_type»)</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="34"/>
+        <location filename="../errors.py" line="37"/>
         <source>Source type {source_type} is not allowed. Use one of: {allowed_sources}</source>
         <translation>Источник данных {source_type}, не поддерживется платформой. Ипользуйте один из разрешенных: {allowed_sources}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="35"/>
+        <location filename="../errors.py" line="38"/>
         <source>&quot;Required&quot; section of the requirements must contain dict, not {required_section_type}</source>
         <translation>Секция «Required» в требованиях к данным должна быть словарем (dict), а не {required_section_type}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="36"/>
+        <location filename="../errors.py" line="39"/>
         <source>&quot;Recommended&quot; section of the requirements must contain dict, not {recommended_section_type}</source>
         <translation>Секция «recommended» в требованиях к данным должна быть словарем (dict), а не {recommended_section_type}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="37"/>
+        <location filename="../errors.py" line="40"/>
         <source>You XYZ basemap link doesn&apos;t match the format, it must be a link containing &apos;{x}&apos;, &apos;{y}&apos;, &apos;{z}&apos; placeholders.</source>
         <translation>Ссылка на XYZ подложку не соответствует формату. Это должна быть ссылка, содержащая поля &quot;{x}&quot;, &quot;{y}&quot;, &quot;{z}&quot;.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="39"/>
+        <location filename="../errors.py" line="42"/>
         <source>Internal error in process of data source validation. We are working on the fix, our support will contact you.</source>
         <translation>Произошла ошибка в процессе проверки источника данных. Мы работаем над исправлением и свяжемся с вами.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="50"/>
+        <location filename="../errors.py" line="53"/>
         <source>Internal error in process of loading data. We are working on the fix, our support will contact you.</source>
         <translation>Произошла ошибка в процессе загрузки данных. Мы работаем над исправлением и свяжемся с вами.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="41"/>
+        <location filename="../errors.py" line="44"/>
         <source>Wrong source type {real_source_type}. Specify one of the allowed types {allowed_source_types}.</source>
         <translation>Неправильный тип источника данных {real_source_type}. Используйте один из допустимых {allowed_source_types}.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="42"/>
+        <location filename="../errors.py" line="45"/>
         <source>Your data loading task requires {estimated_size} MB of memory, which exceeded allowed memory limit {allowed_size}</source>
         <translation>Ваш запрос на загрузку данных требует {estimated_size} MB, что превышает лимит в {allowed_size}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="43"/>
+        <location filename="../errors.py" line="46"/>
         <source>Dataloader argument {argument_name} has type {argument_type}, excpected to be {expected_type}</source>
         <translation>Функция загрузки данных {argument_name} имеет тип {argument_type}, допустимый тип {expected_type}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="44"/>
+        <location filename="../errors.py" line="47"/>
         <source>Loaded tile has {real_nchannels} channels, required number is {expected_nchannels}</source>
         <translation>Загруженное изображение имеет {real_nchannels} каналов, требуемое количество каналов {expected_nchannels}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="45"/>
+        <location filename="../errors.py" line="48"/>
         <source>Loaded tile has size {real_size}, expected tile size is {expected_size}</source>
         <translation>Загруженное изображение имеет размер {real_size}, допустимый размер {expected_size}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="46"/>
+        <location filename="../errors.py" line="49"/>
         <source>Tile at location {tile_location} cannot be loaded, server response is {status}</source>
         <translation>Изображение по адресу {tile_location} не может быть загружено, ответ сервера {status}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="47"/>
+        <location filename="../errors.py" line="50"/>
         <source>Response content at {tile_location} cannot be decoded as an image</source>
         <translation>Ответ сервера {tile_location} не представляет собой изображение</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="51"/>
+        <location filename="../errors.py" line="54"/>
         <source>Internal error in process of data preparation. We are working on the fix, our support will contact you.</source>
         <translation>Произошла ошибка в процессе предобработки данных. Мы работаем над исправлением и свяжемся с вами.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="52"/>
+        <location filename="../errors.py" line="55"/>
         <source>Internal error in process of data processing. We are working on the fix, our support will contact you.</source>
         <translation>Произошла ошибка в процессе обработки данных. Мы работаем над исправлением и свяжемся с вами.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="53"/>
+        <location filename="../errors.py" line="56"/>
         <source>Internal error in process of saving the results. We are working on the fix, our support will contact you.</source>
         <translation>Произошла ошибка в процессе сохранения результатов обработки. Мы работаем над исправлением и свяжемся с вами.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="62"/>
+        <location filename="../errors.py" line="61"/>
         <source>Unknown error. Contact us to resolve the issue! help@geoalert.io</source>
-        <translation>Неизвестная ошибка. Напишите нам, мы поможем разобраться - help@geoalert.io</translation>
-    </message>
-</context>
-<context>
-    <name>ErrorMessages</name>
-    <message>
-        <location filename="../errors.py" line="12"/>
-        <source>Key &apos;url&apos; in your request must be a string, got {url_type} instead.</source>
-        <translation type="obsolete">Ключ &apos;url&apos; в запросе должен быть строкой, не {url_type}.</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="13"/>
-        <source>Your URL must be a link starting with &quot;http://&quot; or &quot;https://&quot;.</source>
-        <translation type="obsolete">URL должен начинаться с &quot;http://&quot; или &quot;https://&quot;.</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="14"/>
-        <source>Format of &apos;url&apos; is invalid and cannot be parsed. Error: {parse_error_message}</source>
-        <translation type="obsolete">Невалидный формат URL. Ошибка {parse_error_message}</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="15"/>
-        <source>Zoom must be either empty, or integer, got {actual_zoom}</source>
-        <translation type="obsolete">Поле „zoom“ должно быть либо пустым, либо целым числом. Получено {actual_zoom}</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="17"/>
-        <source>Zoom must be between 0 and 22, got {actual_zoom}</source>
-        <translation type="obsolete">Значение поля „zoom“ в вашем запросе должно быть в интервале от 0 до 22. Получено {actual_zoom}</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="18"/>
-        <source>Zoom must be not lower than {min_zoom}, got {actual_zoom}</source>
-        <translation type="obsolete">Значение поля „zoom“ в вашем запросе должно быть не менее {min_zoom}. Получено {actual_zoom}</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="19"/>
-        <source>Image metadata must be a dict (json)</source>
-        <translation type="obsolete">Метаданные вашего изображения должны быть типа - словарь {json}</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="20"/>
-        <source>Image metadata must have keys: crs, transform, dtype, count</source>
-        <translation type="obsolete">Метаданные вашего изображения должны содержать: crs, transform, dtype, count</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="21"/>
-        <source>URL of the image at s3 storage must be a string starting with s3://, got {actual_s3_link}</source>
-        <translation type="obsolete">URL изображения на хранилище S3 должен быть строкой и начинаться с S3://. Получено {actact_s3_link}</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="22"/>
-        <source>Request must contain either &apos;profile&apos; or &apos;url&apos; keys</source>
-        <translation type="obsolete">Запрос должен содержать либо „profile“, либо „url“</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="23"/>
-        <source>Failed to read file from {s3_link}.</source>
-        <translation type="obsolete">Ошибка чтения файла из {s3_link}.</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="24"/>
-        <source>Image data type (Dtype) must be one of {required_dtypes}, got {request_dtype}</source>
-        <translation type="obsolete">Тип данных изображения (Dtype) должен быть одним из {required_dtypes}. Получено {request_dtype}</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="25"/>
-        <source>Number of channels in image must be one of {required_nchannels}. Got {real_nchannels}</source>
-        <translation type="obsolete">Изображение имеет {real_nchannels} каналов, требуемое количество каналов {required_nchannels}</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="26"/>
-        <source>Spatial resolution of you image is too high: pixel size is {actual_res}, minimum allowed pixel size is {min_res}</source>
-        <translation type="obsolete">Пространственное разрешение вашего изображения слишком высокое: размер пикселя {actual_res}, минимальный допустимый размер пикселя равен {min_res}</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="27"/>
-        <source>Spatial resolution of you image is too low: pixel size is {actual_res}, maximum allowed pixel size is {max_res}</source>
-        <translation type="obsolete">Пространственное разрешение вашего изображения слишком низкое: размер пикселя равен {actual_res}, максимально допустимый размер пикселя равен {max_res}</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="28"/>
-        <source>Error occurred during image {checked_param} check: {message}. Image metadata = {metadata}.</source>
-        <translation type="obsolete">Ошибка произошла во время проверки параметра {checked_param} изображения: {message}. Метаданные изображения = {metadata}.</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="29"/>
-        <source>Your &apos;url&apos; doesn&apos;t match the format, Quadkey basemap must be a link containing &quot;q&quot; placeholder.</source>
-        <translation type="obsolete">Ссылка на Quadkeyподложку не соответствует формату. Это должна быть ссылка, содержащая поле «q».</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="30"/>
-        <source>Input string {input_string} is of unknown format. It must represent Sentinel-2 granule ID.</source>
-        <translation type="obsolete">Запрос на обработку Sentinel_L2A должен содержать поле «url» со строкой.</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="31"/>
-        <source>Selected Sentinel-2 image cell is {actual_cell}, this model is for the cells: {allowed_cells}</source>
-        <translation type="obsolete">Строка {input_string} неизвестного формата. Она должна представлять собой ID гранулы снимка Sentinel-2</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="32"/>
-        <source>Selected Sentinel-2 image month is {actual_month}, this model is for: {allowed_months}</source>
-        <translation type="obsolete">Выбранная ячейка {actual_cell} не подходит для обработки, модель рассчитана на ячейки: {allowed_cells}</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="33"/>
-        <source>You request TMS basemap link doesn&apos;t match the format, it must be a link containing &apos;{x}&apos;, &apos;{y}&apos;, &apos;{z}&apos; placeholders, correct it and start processing again.</source>
-        <translation type="obsolete">Ссылка на TMS подложку не соответствует формату. Это должна быть ссылка, содержащая поля &quot;{x}“, &quot;{y}“, &quot;{z}“.</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="34"/>
-        <source>Requirements must be dict, got {requirements_type}.</source>
-        <translation type="obsolete">Секция «requirements» в запросе должна быть словарем (dict), а не {requirements_type}.</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="35"/>
-        <source>Request must be dict, got {request_type}.</source>
-        <translation type="obsolete">Секция «request» в запросе должна быть словарем (dict), а не {request_type}.</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="36"/>
-        <source>Request must contain &quot;source_type&quot; key</source>
-        <translation type="obsolete">Запрос должен содержать тип источника спутниковых снимков (ключ «source_type»)</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="37"/>
-        <source>Source type {source_type} is not allowed. Use one of: {allowed_sources}</source>
-        <translation type="obsolete">Источник данных {source_type}, не поддерживется платформой. Ипользуйте один из разрешенных: {allowed_sources}</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="38"/>
-        <source>&quot;Required&quot; section of the requirements must contain dict, not {required_section_type}</source>
-        <translation type="obsolete">Секция «Required» в требованиях к данным должна быть словарем (dict), а не {required_section_type}</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="39"/>
-        <source>&quot;Recommended&quot; section of the requirements must contain dict, not {recommended_section_type}</source>
-        <translation type="obsolete">Секция «recommended» в требованиях к данным должна быть словарем (dict), а не {recommended_section_type}</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="40"/>
-        <source>You XYZ basemap link doesn&apos;t match the format, it must be a link containing &apos;{x}&apos;, &apos;{y}&apos;, &apos;{z}&apos; placeholders.</source>
-        <translation type="obsolete">Ссылка на XYZ подложку не соответствует формату. Это должна быть ссылка, содержащая поля &quot;{x}“, &quot;{y}“, &quot;{z}“.</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="42"/>
-        <source>Internal error in process of data source validation. We are working on the fix, our support will contact you.</source>
-        <translation type="obsolete">Произошла ошибка в процессе проверки источника данных. Мы работаем над исправлением и свяжемся с вами.</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="53"/>
-        <source>Internal error in process of loading data. We are working on the fix, our support will contact you.</source>
-        <translation type="obsolete">Произошла ошибка в процессе загрузки данных. Мы работаем над исправлением и свяжемся с вами.</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="44"/>
-        <source>Wrong source type {real_source_type}. Specify one of the allowed types {allowed_source_types}.</source>
-        <translation type="obsolete">Неправильный тип источника данных {real_source_type}. Используйте один из допустимых {allowed_source_types}.</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="45"/>
-        <source>Your data loading task requires {estimated_size} MB of memory, which exceeded allowed memory limit {allowed_size}</source>
-        <translation type="obsolete">Ваш запрос на загрузку данных требует {estimated_size} MB, что превышает лимит в {allowed_size}</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="46"/>
-        <source>Dataloader argument {argument_name} has type {argument_type}, excpected to be {expected_type}</source>
-        <translation type="obsolete">Функция загрузки данных {argument_name} имеет тип {argument_type}, допустимый тип {expected_type}</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="47"/>
-        <source>Loaded tile has {real_nchannels} channels, required number is {expected_nchannels}</source>
-        <translation type="obsolete">Загруженное изображение имеет {real_nchannels} каналов, требуемое количество каналов {expected_nchannels}</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="48"/>
-        <source>Loaded tile has size {real_size}, expected tile size is {expected_size}</source>
-        <translation type="obsolete">Загруженное изображение имеет размер {real_size}, допустимый размер {expected_size}</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="49"/>
-        <source>Tile at location {tile_location} cannot be loaded, server response is {status}</source>
-        <translation type="obsolete">Изображение по адресу {tile_location} не может быть загружено, ответ сервера {status}</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="50"/>
-        <source>Response content at {tile_location} cannot be decoded as an image</source>
-        <translation type="obsolete">Ответ сервера {tile_location} не представляет собой изображение</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="54"/>
-        <source>Internal error in process of data preparation. We are working on the fix, our support will contact you.</source>
-        <translation type="obsolete">Произошла ошибка в процессе предобработки данных. Мы работаем над исправлением и свяжемся с вами.</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="55"/>
-        <source>Internal error in process of data processing. We are working on the fix, our support will contact you.</source>
-        <translation type="obsolete">Произошла ошибка в процессе обработки данных. Мы работаем над исправлением и свяжемся с вами.</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="56"/>
-        <source>Internal error in process of saving the results. We are working on the fix, our support will contact you.</source>
-        <translation type="obsolete">Произошла ошибка в процессе сохранения результатов обработки. Мы работаем над исправлением и свяжемся с вами.</translation>
-    </message>
-    <message>
-        <location filename="../errors.py" line="57"/>
-        <source>Unknown error. Contact us to resolve the issue! help@geoalert.io</source>
-        <translation type="obsolete">Неизвестная ошибка. Напишите нам, мы поможем разобраться - help@geoalert.io</translation>
+        <translation>Неизвестная ошибка. Свяжитесь с нами чтобы решить проблему! help@geoalert.io</translation>
     </message>
 </context>
 <context>
@@ -998,273 +518,275 @@ Please, upgrade to make sure everything works as expected. Go to Plugins -&gt; M
 <context>
     <name>Mapflow</name>
     <message>
-        <location filename="../mapflow.py" line="212"/>
+        <location filename="../mapflow.py" line="216"/>
         <source>Currently, Mapflow doesn&apos;t support uploading own Sentinel-2 imagery. To process Sentinel-2, go to the Providers tab and either search for your image in the catalog or paste its ID in the Image ID field.</source>
         <translation>Mapflow пока не поддерживает загрузку пользовательских снимков Sentinel-2. Чтобы обработать Sentinel-2, пожалуйста, перейдите во вкладку &quot;Источники данных&quot; и либо найдите ваш снимок в каталоге либо вставьте его ID в поле &quot;ID Снимка&quot;.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="292"/>
+        <location filename="../mapflow.py" line="296"/>
         <source>Log in</source>
         <translation>Вход</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="330"/>
+        <location filename="../mapflow.py" line="334"/>
         <source>If you already know which {provider_name} image you want to process,
 simply paste its ID here. Otherwise, search suitable images in the catalog below.</source>
         <translation>Если вы уже знаете ID снимка {provider_name} который вы хотите обработать, просто вставьте его в это поле. Иначе, используйте каталог ниже чтобы найти подходящий снимок.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="341"/>
+        <location filename="../mapflow.py" line="345"/>
         <source>e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00</source>
         <translation>например S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="356"/>
+        <location filename="../mapflow.py" line="360"/>
         <source>e.g. a3b154c40cc74f3b934c0ffc9b34ecd1</source>
         <translation>например a3b154c40cc74f3b934c0ffc9b34ecd1</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="369"/>
+        <location filename="../mapflow.py" line="373"/>
         <source>Leave this field empty for {provider_name}</source>
         <translation>Оставьте это поле пустым для {provider_name}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="371"/>
+        <location filename="../mapflow.py" line="375"/>
         <source>{provider_name} doesn&apos;t allow processing single images.</source>
         <translation>{provider_name} не поддерживает обработку отдельных снимков.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="386"/>
+        <location filename="../mapflow.py" line="390"/>
         <source> Imagery Catalog</source>
         <translation> - Каталог снимков</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="432"/>
+        <location filename="../mapflow.py" line="436"/>
         <source>Permanently remove {}?</source>
         <translation>Удалить {}?</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="549"/>
+        <location filename="../mapflow.py" line="553"/>
         <source>Select output directory</source>
         <translation>Выберите папку для сохранения данных</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="565"/>
+        <location filename="../mapflow.py" line="569"/>
         <source>Please, specify an existing output directory</source>
         <translation>Пожалуйста, выберите папку для сохранения данных</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="573"/>
+        <location filename="../mapflow.py" line="577"/>
         <source>Select GeoTIFF</source>
         <translation>Выберите GeoTIFF</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1294"/>
+        <location filename="../mapflow.py" line="1298"/>
         <source>Please, select an area of interest</source>
         <translation>Пожалуйста, выберите слой с областью обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="629"/>
+        <location filename="../mapflow.py" line="633"/>
         <source>Your area of interest is too large.</source>
         <translation>Слишком большая область запроса метаданных.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1056"/>
+        <location filename="../mapflow.py" line="1060"/>
         <source>Please, check your credentials</source>
         <translation>Пожалуйста, проверьте реквизиты</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="883"/>
+        <location filename="../mapflow.py" line="887"/>
         <source>We couldn&apos;t fetch Sentinel metadata</source>
         <translation>Мы не смогли получить метаданные Сентинел</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1003"/>
+        <location filename="../mapflow.py" line="1007"/>
         <source>No images match your criteria. Try relaxing the filters.</source>
         <translation>Нет подходящий снимков. Попробуйте изменить параметры поиска.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="852"/>
+        <location filename="../mapflow.py" line="856"/>
         <source>More</source>
         <translation>Еще</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1058"/>
+        <location filename="../mapflow.py" line="1062"/>
         <source>We couldn&apos;t get metadata from Maxar</source>
         <translation>Мы не смогли получить метаданные от Максар</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1131"/>
+        <location filename="../mapflow.py" line="1135"/>
         <source>A Sentinel image ID should look like S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 or /36/S/XA/2022/02/09/0/</source>
         <translation>ID снимка Sentinel должен иметь формат S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 или /36/S/XA/2022/02/09/0/</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1218"/>
+        <location filename="../mapflow.py" line="1222"/>
         <source>Area: {:.2f} sq.km</source>
         <translation>Площадь: {:.2f} кв.км</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1233"/>
+        <location filename="../mapflow.py" line="1237"/>
         <source>Delete selected processings?</source>
         <translation>Удалить выбранные обработки?</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1258"/>
+        <location filename="../mapflow.py" line="1262"/>
         <source>Error deleting a processing</source>
         <translation>Ошибка удаления обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1285"/>
+        <location filename="../mapflow.py" line="1289"/>
         <source>Please, specify a name for your processing</source>
         <translation>Пожалуйста, выберите название обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1290"/>
+        <location filename="../mapflow.py" line="1294"/>
         <source>GeoTIFF has invalid projection</source>
         <translation>Мы не смогли распознать проекцию снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1292"/>
+        <location filename="../mapflow.py" line="1296"/>
         <source>Processing area has invalid projection</source>
         <translation>Мы не смогли распознать проекцию области обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1298"/>
+        <location filename="../mapflow.py" line="1302"/>
         <source>Processing limit exceeded</source>
         <translation>Превышен доступный лимит обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1301"/>
+        <location filename="../mapflow.py" line="1305"/>
         <source>Up to {} sq km can be processed at a time. Try splitting your area(s) into several processings.</source>
         <translation>За раз можно обработать не более {} кв км. Попробуйте разделить область обработки на части.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1310"/>
+        <location filename="../mapflow.py" line="1314"/>
         <source>Click on the link below to send us an email</source>
         <translation>Нажмите на ссылку ниже чтобы отправить нам отчет об ошибке</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1310"/>
+        <location filename="../mapflow.py" line="1314"/>
         <source>Upgrade your subscription to process Maxar imagery</source>
         <translation>Чтобы обрабатывать по Максар, нужно стать Премиум пользователем Mapflow</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1310"/>
+        <location filename="../mapflow.py" line="1314"/>
         <source>I&apos;d like to upgrade my subscription to Mapflow Processing API to be able to process Maxar imagery.</source>
         <translation>Я хотел бы стать премиум пользователем Mapflow чтобы обрабатывать по Максар.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1341"/>
+        <location filename="../mapflow.py" line="1345"/>
         <source>Search the Sentinel-2 catalog for a suitable image</source>
         <translation>Выберите подходящий снимок Sentinel-2 в каталоге</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1378"/>
+        <location filename="../mapflow.py" line="1382"/>
         <source>Image and processing area do not intersect</source>
         <translation>Снимок и область обработки не пересекаются</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1381"/>
+        <location filename="../mapflow.py" line="1385"/>
         <source>Starting the processing...</source>
         <translation>Создаем обработку...</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1405"/>
+        <location filename="../mapflow.py" line="1409"/>
         <source>Uploading image to Mapflow...</source>
         <translation>Загружаем ваш снимок на Mapflow...</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1438"/>
+        <location filename="../mapflow.py" line="1442"/>
         <source>We couldn&apos;t upload your GeoTIFF</source>
         <translation>Мы не смогли загрузить ваш снимок</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1458"/>
+        <location filename="../mapflow.py" line="1462"/>
         <source>Processing creation failed</source>
         <translation>Мы не смогли создать обработку</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1462"/>
+        <location filename="../mapflow.py" line="1466"/>
         <source>Success! We&apos;ll notify you when the processing has finished.</source>
         <translation>Обработка создана! Мы оповестим вас когда она завершится.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1492"/>
+        <location filename="../mapflow.py" line="1496"/>
         <source>Processing limit: {} sq.km</source>
         <translation>Доступный лимит: {} кв.км</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1553"/>
+        <location filename="../mapflow.py" line="1557"/>
         <source>Sorry, we couldn&apos;t load the image</source>
         <translation>Ошибка предпросмотра снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1554"/>
+        <location filename="../mapflow.py" line="1558"/>
         <source>Error previewing Sentinel imagery</source>
         <translation>Ошибка предпросмотра снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1566"/>
+        <location filename="../mapflow.py" line="1570"/>
         <source>Sorry, there&apos;s no preview for this image</source>
         <translation>К сожалению, для этого снимка нет предпросмотра</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1650"/>
+        <location filename="../mapflow.py" line="1654"/>
         <source>We couldn&apos;t load a preview for this image</source>
         <translation>Мы не смогли осуществить предпросмотр этого снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1581"/>
+        <location filename="../mapflow.py" line="1585"/>
         <source>Please, select an image to preview</source>
         <translation>Пожалуйста, выберите снимок</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1722"/>
+        <location filename="../mapflow.py" line="1726"/>
         <source>Error loading results. Error code: </source>
         <translation>Ошибка загрузки результатов. Код ошибки: </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1764"/>
+        <location filename="../mapflow.py" line="1768"/>
         <source>Error downloading results</source>
         <translation>Мы не смогли скачать результаты обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1795"/>
+        <location filename="../mapflow.py" line="1799"/>
         <source>Error loading results</source>
         <translation>Мы не смогли загрузить результаты</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1831"/>
-        <source> failed. </source>
-        <translation> завершилась с ошибкой. </translation>
+        <location filename="../mapflow.py" line="1835"/>
+        <source> failed.
+</source>
+        <translation> завершилась с ошибкой.
+</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1838"/>
+        <location filename="../mapflow.py" line="1842"/>
         <source> finished. Double-click it in the table to download the results.</source>
         <translation> завершилась. Дважды кликните на нее в таблице чтобы загрузить результаты.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1955"/>
+        <location filename="../mapflow.py" line="1962"/>
         <source>Can&apos;t log in to Mapflow</source>
         <translation>Мы не смогли подключиться к Mapflow</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1973"/>
+        <location filename="../mapflow.py" line="1980"/>
         <source>Invalid token</source>
         <translation>Неверный токен</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2005"/>
+        <location filename="../mapflow.py" line="2012"/>
         <source>Proxy error. Please, check your proxy settings.</source>
         <translation>Ошибка прокси. Пожалуйста, проверьте настройки прокси в QGIS.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2022"/>
+        <location filename="../mapflow.py" line="2029"/>
         <source>Unknown error</source>
         <translation>Неизвестная ошибка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2077"/>
+        <location filename="../mapflow.py" line="2084"/>
         <source>There is a new version of Mapflow for QGIS available.
 Please, upgrade to make sure everything works as expected. Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable.</source>
         <translation>Пожалуйста, обновите версию плагина чтобы все работало как нужно. Модули -&gt; Управление модулями -&gt; Обновляемые.</translation>
@@ -1286,17 +808,17 @@ Please, upgrade to make sure everything works as expected. Go to Plugins -&gt; M
 <context>
     <name>QPlatformTheme</name>
     <message>
-        <location filename="../mapflow.py" line="77"/>
+        <location filename="../mapflow.py" line="79"/>
         <source>Cancel</source>
         <translation>Отмена</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="78"/>
+        <location filename="../mapflow.py" line="80"/>
         <source>&amp;Yes</source>
         <translation>Да</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="79"/>
+        <location filename="../mapflow.py" line="81"/>
         <source>&amp;No</source>
         <translation>Нет</translation>
     </message>

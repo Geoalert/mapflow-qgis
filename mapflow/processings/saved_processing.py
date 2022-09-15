@@ -45,11 +45,10 @@ class Processing:
         one_day = timedelta(1)
         return now - self.created < one_day
 
-    @property
-    def error_message(self):
+    def error_message(self, error_message_list):
         if not self.errors:
             return ""
-        return "\n".join([str(error) for error in self.errors])
+        return "\n".join([error.to_str(error_message_list) for error in self.errors])
 
     def asdict(self):
         return {
