@@ -192,7 +192,14 @@ class Mapflow(QObject):
             )
         )
         self.error_messages = ErrorMessageList()
-
+        # data catalog
+        self.dlg.selectTifCatalog.clicked.connect(self.select_tif_catalog)
+        self.dlg.uploadButton.clicked.connect(self.upload_user_raster)
+        self.upload_filename = ''
+        self.dlg.loadMosaicsButton.clicked.connect(self.load_user_mosaics)
+        self.selected_mosaic_row = None
+        # data catalog mosaics
+        self.dlg.mosaics_table_widget.cellClicked.connect(self.load_mosaic_images)
 
     def filter_non_tif_rasters(self, _: List[QgsMapLayer]) -> None:
         """Leave only GeoTIFF layers in the Imagery Source combo box."""
@@ -2097,6 +2104,126 @@ class Mapflow(QObject):
         # Don't use self.plugin_name as context since it'll be overriden in supermodules
         return QCoreApplication.translate(config.PLUGIN_NAME, message)
 
+    # Data catalog methods
+    def select_tif_catalog(self) -> None:
+        """
+        Open file selection dialog of data catalog, for the user to select a GeoTIFF for processing.
+
+        """
+        dlg = QFileDialog(QApplication.activeWindow(), self.tr('Select GeoTIFF'))
+        dlg.setFileMode(QFileDialog.ExistingFile)
+        dlg.setMimeTypeFilters(['image/tiff'])
+        if dlg.exec():
+            path = dlg.selectedFiles()[0]
+            layer = QgsRasterLayer(path, os.path.splitext(os.path.basename(path))[0])
+            self.add_layer(layer)
+            self.dlg.rasterCombo.setLayer(layer)
+            self.dlg.filePathEdit.setText(path)
+            self.upload_filename = os.path.basename(path)
+
+    def upload_user_raster(self) -> None:
+        if not self.upload_filename:
+            self.alert(
+                self.tr("Please, specify file for uploading!"),
+                QMessageBox.Information
+            )
+            return
+        filename = self.upload_filename
+        imagery = self.dlg.rasterCombo.currentLayer()
+        # Upload the image to the server
+        body = QHttpMultiPart(QHttpMultiPart.FormDataType)
+        tif = QHttpPart()
+        tif.setHeader(QNetworkRequest.ContentTypeHeader, 'image/tiff')
+        tif.setHeader(QNetworkRequest.ContentDispositionHeader, f'form-data; name="files"; filename={filename}')
+        image = QFile(imagery.dataProvider().dataSourceUri(), body)
+        image.open(QIODevice.ReadOnly)
+        tif.setBodyDevice(image)
+        body.append(tif)
+        response = self.http.post(
+            url=f'{self.server}/rasters/mosaic/image',
+            callback=self.upload_user_raster_callback,
+            # callback_kwargs={'params': ""},
+            error_handler=self.upload_tif_error_handler,
+            body=body,
+            timeout=3600  # one hour
+        )
+        body.setParent(response)
+        progress_message = QgsMessageBarItem(
+            self.plugin_name,
+            self.tr('Uploading image to Mapflow...'),
+            QProgressBar(self.message_bar),
+            parent=self.message_bar
+        )
+        self.message_bar.pushItem(progress_message)
+
+        def display_upload_progress(bytes_sent: int, bytes_total: int):
+            try:
+                progress_message.widget().setValue(round(bytes_sent / bytes_total * 100))
+            except ZeroDivisionError:  # may happen for some reason
+                return
+            if bytes_sent == bytes_total:
+                self.message_bar.popWidget(progress_message)
+        connection = response.uploadProgress.connect(display_upload_progress)
+        # Tear this connection if the user closes the progress message
+        progress_message.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
+
+    def upload_user_raster_callback(self, response: QNetworkReply) -> None:
+        mosaic_id = json.loads(response.readAll().data())['mosaic_id']
+        self.alert(
+            self.tr(f"File successfully uploaded, mosaic_id: {mosaic_id}"),
+            QMessageBox.Information
+        )
+        # clear after uploading file
+        self.dlg.filePathEdit.setText('')
+        self.upload_filename = ''
+
+    def load_user_mosaics(self):
+        get_mosaics_url = f'{self.server}/rasters/mosaic'
+        mosaics = self.http.get(
+            url=get_mosaics_url,
+            callback=self.load_user_mosaics_callback
+        )
+
+    def load_user_mosaics_callback(self, response: QNetworkReply) -> None:
+        mosaics = json.loads(response.readAll().data())
+        rowCount = 0
+        columnCount = 2
+        self.dlg.mosaics_table_widget.setColumnCount(columnCount)
+        self.dlg.mosaics_table_widget.setHorizontalHeaderLabels(['mosaic', 'tags'])
+        for mosaic in mosaics:
+            rowCount += 1
+            self.dlg.mosaics_table_widget.setRowCount(rowCount)
+            self.dlg.mosaics_table_widget.setItem(rowCount - 1, 0, QTableWidgetItem(str(mosaic.get('id'))))
+            self.dlg.mosaics_table_widget.setItem(rowCount - 1, 1, QTableWidgetItem(str(mosaic.get('tags'))))
+
+    def load_mosaic_images(self) -> None:
+        """
+        Loads list of images for a selected mosaic.
+        Click on any mosaic, to load the list of images.
+        """
+        selected_mosaic_row_number = self.dlg.mosaics_table_widget.currentRow()
+        selected_mosaic_id = self.dlg.mosaics_table_widget.item(selected_mosaic_row_number, 0).text()
+        response = self.http.get(
+            url=f'{self.server}/rasters/mosaic/{selected_mosaic_id}/image',
+            callback=self.get_mosaic_images_callback
+        )
+        # clear mosaic images table content
+        self.dlg.mosaic_images_table.clearContents()
+        self.dlg.mosaic_images_table.setRowCount(0)
+
+    def get_mosaic_images_callback(self, response: QNetworkReply):
+        # response consists of list of images for a given mosaic_id
+        # construct table with the list of images
+        images = json.loads(response.readAll().data())
+        rowCount = 0
+        columnCount = 2
+        self.dlg.mosaic_images_table.setColumnCount(columnCount)
+        self.dlg.mosaic_images_table.setHorizontalHeaderLabels(['image id', 'filename'])
+        for image in images:
+            rowCount += 1
+            self.dlg.mosaic_images_table.setRowCount(rowCount)
+            self.dlg.mosaic_images_table.setItem(rowCount - 1, 0, QTableWidgetItem(str(image.get('id'))))
+            self.dlg.mosaic_images_table.setItem(rowCount - 1, 1, QTableWidgetItem(str(image.get('filename'))))
 
     def main(self) -> None:
         """Plugin entrypoint."""
