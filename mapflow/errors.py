@@ -10,6 +10,12 @@ class ErrorMessageList(QObject):
     def __init__(self):
         super().__init__()
         self.error_descriptions = {
+            "source-validator.TaskMustContainAoi": self.tr("Task for source-validation must contain area of interest "
+                                                           "(`geometry` section)"),
+            "source-validator.ImageReadError": self.tr("We could not open and read the image you have uploaded"),
+            "source-validator.BadImageProfile": self.tr("Image profile (metadata) must have keys "
+                                                        "{required_keys}, got profile {profile}"),
+            "source-validator.AOINotInCell": self.tr("AOI does not intersect the selected Sentinel-2 granule {actual_cell}"),
             "source-validator.UrlMustBeString":  self.tr("Key \'url\' in your request must be a string, "
                                                          "got {url_type} instead."),
             "source-validator.UrlBlacklisted":  self.tr("The specified basemap {url} is forbidden for processing"

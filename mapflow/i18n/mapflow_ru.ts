@@ -4,209 +4,235 @@
 <context>
     <name>ErrorMessageList</name>
     <message>
-        <location filename="../errors.py" line="12"/>
+        <location filename="../errors.py" line="19"/>
         <source>Key &apos;url&apos; in your request must be a string, got {url_type} instead.</source>
         <translation>Ключ &apos;url&apos; в запросе должен быть строкой, не {url_type}.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="13"/>
+        <location filename="../errors.py" line="24"/>
         <source>Your URL must be a link starting with &quot;http://&quot; or &quot;https://&quot;.</source>
         <translation>URL должен начинаться с &quot;http://&quot; или &quot;https://&quot;.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="14"/>
+        <location filename="../errors.py" line="26"/>
         <source>Format of &apos;url&apos; is invalid and cannot be parsed. Error: {parse_error_message}</source>
         <translation>Невалидный формат URL. Ошибка {parse_error_message}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="15"/>
+        <location filename="../errors.py" line="28"/>
         <source>Zoom must be either empty, or integer, got {actual_zoom}</source>
         <translation>Поле „zoom“ должно быть либо пустым, либо целым числом. Получено {actual_zoom}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="17"/>
+        <location filename="../errors.py" line="30"/>
         <source>Zoom must be between 0 and 22, got {actual_zoom}</source>
         <translation>Значение поля „zoom“ в вашем запросе должно быть в интервале от 0 до 22. Получено {actual_zoom}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="18"/>
+        <location filename="../errors.py" line="31"/>
         <source>Zoom must be not lower than {min_zoom}, got {actual_zoom}</source>
         <translation>Значение поля „zoom“ в вашем запросе должно быть не менее {min_zoom}. Получено {actual_zoom}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="19"/>
+        <location filename="../errors.py" line="32"/>
         <source>Image metadata must be a dict (json)</source>
         <translation>Метаданные вашего изображения должны быть типа &quot;словарь&quot; (json)</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="20"/>
+        <location filename="../errors.py" line="33"/>
         <source>Image metadata must have keys: crs, transform, dtype, count</source>
         <translation>Метаданные вашего изображения должны содержать ключи: crs, transform, dtype, count</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="21"/>
+        <location filename="../errors.py" line="35"/>
         <source>URL of the image at s3 storage must be a string starting with s3://, got {actual_s3_link}</source>
         <translation>URL изображения на хранилище S3 должен быть строкой и начинаться с S3://. Получено {actual_s3_link}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="22"/>
+        <location filename="../errors.py" line="37"/>
         <source>Request must contain either &apos;profile&apos; or &apos;url&apos; keys</source>
         <translation>Запрос должен содержать либо „profile“, либо „url“</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="23"/>
+        <location filename="../errors.py" line="38"/>
         <source>Failed to read file from {s3_link}.</source>
         <translation>Ошибка чтения файла из {s3_link}.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="24"/>
+        <location filename="../errors.py" line="39"/>
         <source>Image data type (Dtype) must be one of {required_dtypes}, got {request_dtype}</source>
         <translation>Тип данных изображения (Dtype) должен быть одним из {required_dtypes}. Получено {request_dtype}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="25"/>
+        <location filename="../errors.py" line="41"/>
         <source>Number of channels in image must be one of {required_nchannels}. Got {real_nchannels}</source>
         <translation>Изображение имеет {real_nchannels} каналов, требуемое количество каналов {required_nchannels}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="26"/>
+        <location filename="../errors.py" line="43"/>
         <source>Spatial resolution of you image is too high: pixel size is {actual_res}, minimum allowed pixel size is {min_res}</source>
         <translation>Пространственное разрешение вашего изображения слишком высокое: размер пикселя {actual_res}, минимальный допустимый размер пикселя равен {min_res}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="27"/>
+        <location filename="../errors.py" line="46"/>
         <source>Spatial resolution of you image is too low: pixel size is {actual_res}, maximum allowed pixel size is {max_res}</source>
         <translation>Пространственное разрешение вашего изображения слишком низкое: размер пикселя равен {actual_res}, максимально допустимый размер пикселя равен {max_res}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="28"/>
+        <location filename="../errors.py" line="49"/>
         <source>Error occurred during image {checked_param} check: {message}. Image metadata = {metadata}.</source>
         <translation>Ошибка произошла во время проверки параметра {checked_param} изображения: {message}. Метаданные изображения = {metadata}.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="29"/>
+        <location filename="../errors.py" line="51"/>
         <source>Your &apos;url&apos; doesn&apos;t match the format, Quadkey basemap must be a link containing &quot;q&quot; placeholder.</source>
         <translation>Ссылка на Quadkey подложку не соответствует формату. Это должна быть ссылка, содержащая поле «q».</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="30"/>
+        <location filename="../errors.py" line="54"/>
         <source>Input string {input_string} is of unknown format. It must represent Sentinel-2 granule ID.</source>
         <translation>Строка {input_string} неизвестного формата. Она должна представлять собой ID гранулы снимка Sentinel-2.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="31"/>
+        <location filename="../errors.py" line="56"/>
         <source>Selected Sentinel-2 image cell is {actual_cell}, this model is for the cells: {allowed_cells}</source>
         <translation>Выбранная ячейка {actual_cell} не подходит для обработки, модель рассчитана на ячейки: {allowed_cells}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="32"/>
+        <location filename="../errors.py" line="58"/>
         <source>Selected Sentinel-2 image month is {actual_month}, this model is for: {allowed_months}</source>
         <translation>Выбранный месяц {actual_month} не подходит для обработки, модель рассчитана на месяцы: {allowed_months}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="33"/>
+        <location filename="../errors.py" line="60"/>
         <source>You request TMS basemap link doesn&apos;t match the format, it must be a link containing &apos;{x}&apos;, &apos;{y}&apos;, &apos;{z}&apos; placeholders, correct it and start processing again.</source>
         <translation>Ссылка на TMS подложку не соответствует формату. Это должна быть ссылка, содержащая поля &quot;{x}&quot;, &quot;{y}&quot;, &quot;{z}&quot;.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="34"/>
+        <location filename="../errors.py" line="63"/>
         <source>Requirements must be dict, got {requirements_type}.</source>
         <translation>Секция «requirements» в запросе должна быть словарем (dict), а не {requirements_type}.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="35"/>
+        <location filename="../errors.py" line="64"/>
         <source>Request must be dict, got {request_type}.</source>
         <translation>Секция «request» в запросе должна быть словарем (dict), а не {request_type}.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="36"/>
+        <location filename="../errors.py" line="65"/>
         <source>Request must contain &quot;source_type&quot; key</source>
         <translation>Запрос должен содержать тип источника спутниковых снимков (ключ «source_type»)</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="37"/>
+        <location filename="../errors.py" line="66"/>
         <source>Source type {source_type} is not allowed. Use one of: {allowed_sources}</source>
         <translation>Источник данных {source_type}, не поддерживется платформой. Ипользуйте один из разрешенных: {allowed_sources}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="38"/>
+        <location filename="../errors.py" line="68"/>
         <source>&quot;Required&quot; section of the requirements must contain dict, not {required_section_type}</source>
         <translation>Секция «Required» в требованиях к данным должна быть словарем (dict), а не {required_section_type}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="39"/>
+        <location filename="../errors.py" line="70"/>
         <source>&quot;Recommended&quot; section of the requirements must contain dict, not {recommended_section_type}</source>
         <translation>Секция «recommended» в требованиях к данным должна быть словарем (dict), а не {recommended_section_type}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="40"/>
+        <location filename="../errors.py" line="72"/>
         <source>You XYZ basemap link doesn&apos;t match the format, it must be a link containing &apos;{x}&apos;, &apos;{y}&apos;, &apos;{z}&apos; placeholders.</source>
         <translation>Ссылка на XYZ подложку не соответствует формату. Это должна быть ссылка, содержащая поля &quot;{x}&quot;, &quot;{y}&quot;, &quot;{z}&quot;.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="42"/>
+        <location filename="../errors.py" line="77"/>
         <source>Internal error in process of data source validation. We are working on the fix, our support will contact you.</source>
         <translation>Произошла ошибка в процессе проверки источника данных. Мы работаем над исправлением и свяжемся с вами.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="53"/>
+        <location filename="../errors.py" line="98"/>
         <source>Internal error in process of loading data. We are working on the fix, our support will contact you.</source>
         <translation>Произошла ошибка в процессе загрузки данных. Мы работаем над исправлением и свяжемся с вами.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="44"/>
+        <location filename="../errors.py" line="81"/>
         <source>Wrong source type {real_source_type}. Specify one of the allowed types {allowed_source_types}.</source>
         <translation>Неправильный тип источника данных {real_source_type}. Используйте один из допустимых {allowed_source_types}.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="45"/>
+        <location filename="../errors.py" line="83"/>
         <source>Your data loading task requires {estimated_size} MB of memory, which exceeded allowed memory limit {allowed_size}</source>
         <translation>Ваш запрос на загрузку данных требует {estimated_size} MB, что превышает лимит в {allowed_size}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="46"/>
+        <location filename="../errors.py" line="85"/>
         <source>Dataloader argument {argument_name} has type {argument_type}, excpected to be {expected_type}</source>
         <translation>Функция загрузки данных {argument_name} имеет тип {argument_type}, допустимый тип {expected_type}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="47"/>
+        <location filename="../errors.py" line="87"/>
         <source>Loaded tile has {real_nchannels} channels, required number is {expected_nchannels}</source>
         <translation>Загруженное изображение имеет {real_nchannels} каналов, требуемое количество каналов {expected_nchannels}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="48"/>
+        <location filename="../errors.py" line="89"/>
         <source>Loaded tile has size {real_size}, expected tile size is {expected_size}</source>
         <translation>Загруженное изображение имеет размер {real_size}, допустимый размер {expected_size}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="49"/>
+        <location filename="../errors.py" line="91"/>
         <source>Tile at location {tile_location} cannot be loaded, server response is {status}</source>
         <translation>Изображение по адресу {tile_location} не может быть загружено, ответ сервера {status}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="50"/>
+        <location filename="../errors.py" line="93"/>
         <source>Response content at {tile_location} cannot be decoded as an image</source>
         <translation>Ответ сервера {tile_location} не представляет собой изображение</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="54"/>
+        <location filename="../errors.py" line="100"/>
         <source>Internal error in process of data preparation. We are working on the fix, our support will contact you.</source>
         <translation>Произошла ошибка в процессе предобработки данных. Мы работаем над исправлением и свяжемся с вами.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="55"/>
+        <location filename="../errors.py" line="102"/>
         <source>Internal error in process of data processing. We are working on the fix, our support will contact you.</source>
         <translation>Произошла ошибка в процессе обработки данных. Мы работаем над исправлением и свяжемся с вами.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="56"/>
+        <location filename="../errors.py" line="104"/>
         <source>Internal error in process of saving the results. We are working on the fix, our support will contact you.</source>
         <translation>Произошла ошибка в процессе сохранения результатов обработки. Мы работаем над исправлением и свяжемся с вами.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="61"/>
+        <location filename="../errors.py" line="110"/>
         <source>Unknown error. Contact us to resolve the issue! help@geoalert.io</source>
         <translation>Неизвестная ошибка. Свяжитесь с нами чтобы решить проблему! help@geoalert.io</translation>
+    </message>
+    <message>
+        <location filename="../errors.py" line="16"/>
+        <source>Image profile (metadata) must have keys {required_keys}, got profile {profile}</source>
+        <translatorcomment>Метаданные изображения должны содержать следующие теги: {required_keys}, метаданные загруженного изображения: {profile}</translatorcomment>
+        <translation>Метаданные изображения должны содержать следующие теги: {required_keys}, метаданные загруженного изображения: {profile}</translation>
+    </message>
+    <message>
+        <location filename="../errors.py" line="13"/>
+        <source>Task for source-validation must contain area of interest (`geometry` section)</source>
+        <translation>Задача на проверку источника данных должна содержать область интереса (ключ `geometry`)</translation>
+    </message>
+    <message>
+        <location filename="../errors.py" line="15"/>
+        <source>We could not open and read the image you have uploaded</source>
+        <translation>Мы не смогли открыть и прочитать загруженное изображение</translation>
+    </message>
+    <message>
+        <location filename="../errors.py" line="18"/>
+        <source>AOI does not intersect the selected Sentinel-2 granule {actual_cell}</source>
+        <translation>Области интереса не пересекает выбранное изображение Sentinel-2 (код ячейки {actual_cell} )</translation>
+    </message>
+    <message>
+        <location filename="../errors.py" line="21"/>
+        <source>The specified basemap {url} is forbidden for processing because it contains a map, not satellite image. Our models are suited for satellite imagery.</source>
+        <translation>Указанная подложка {url} запрещена к обработке, так как содержит карту, а не спутниковый снимок. Наши модели предназначены для обработки спутниковых снимков.</translation>
     </message>
 </context>
 <context>
