@@ -9,11 +9,11 @@ from configparser import ConfigParser  # parse metadata.txt -> QGIS version chec
 import pylab as p
 from osgeo import gdal
 from PyQt5.QtXml import QDomDocument
-from PyQt5.QtGui import QColor, QIcon
+from PyQt5.QtGui import QColor, QIcon, QDesktopServices
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
     QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion,
-    QTextStream, QByteArray
+    QTextStream, QByteArray, QUrl
 )
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction,
@@ -85,6 +85,8 @@ class Mapflow(QObject):
             self.settings.setValue('processings', {})
         # Init dialogs
         self.dlg = MainDialog(self.main_window)
+        if mapflow_env != 'production':
+            self.dlg.setWindowTitle(f'Mapflow {mapflow_env}')
         self.set_up_login_dialog()
         self.dlg_provider = ProviderDialog(self.dlg)
         self.dlg_provider.accepted.connect(self.add_or_edit_provider)
@@ -192,7 +194,24 @@ class Mapflow(QObject):
             )
         )
         self.error_messages = ErrorMessageList()
+        self.aoi_layer_counter = 0
+        self.dlg.addLayer.clicked.connect(self.create_aoi_layer_from_map)
 
+    def create_aoi_layer_from_map(self):
+        aoi_geometry = helpers.to_wgs84(
+            QgsGeometry.fromRect(self.iface.mapCanvas().extent()),
+            self.project.crs()
+        )
+        aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326',
+                                   f'AOI_{self.aoi_layer_counter}',
+                                   'memory')
+        aoi = QgsFeature()
+        aoi.setGeometry(aoi_geometry)
+        aoi_layer.dataProvider().addFeatures([aoi])
+        aoi_layer.updateExtents()
+        aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
+        self.aoi_layer_counter += 1
+        self.add_layer(aoi_layer)
 
     def filter_non_tif_rasters(self, _: List[QgsMapLayer]) -> None:
         """Leave only GeoTIFF layers in the Imagery Source combo box."""
@@ -295,6 +314,7 @@ class Mapflow(QObject):
         self.dlg_login = LoginDialog(self.main_window)
         self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
         self.dlg_login.logIn.clicked.connect(self.read_mapflow_token)
+
 
     def toggle_polygon_combos(self, use_image_extent: bool) -> None:
         """Disable polygon combos when Use image extent is checked.
@@ -1024,6 +1044,7 @@ class Mapflow(QObject):
             json.dump(metadata, file)
             file.seek(0)
             self.metadata_layer = QgsVectorLayer(file.name, f'{product} metadata', 'ogr')
+
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
         self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
         self.add_layer(self.metadata_layer)
@@ -1557,42 +1578,40 @@ class Mapflow(QObject):
         self.alert(self.tr("Sorry, we couldn't load the image"))
         self.report_error(response, self.tr('Error previewing Sentinel imagery'))
 
-    def preview(self) -> None:
-        """Display raster tiles served over the Web."""
-        provider = self.dlg.providerCombo.currentText()
-        image_id = self.dlg.imageId.text()
-        if provider == config.SENTINEL_OPTION_NAME:
-            selected_cells = self.dlg.metadataTable.selectedItems()
-            if selected_cells:
-                datetime_ = selected_cells[config.SENTINEL_DATETIME_COLUMN_INDEX]
-                url = self.dlg.metadataTable.item(datetime_.row(), config.SENTINEL_PREVIEW_COLUMN_INDEX).text()
-                if not url:
-                    self.alert(self.tr("Sorry, there's no preview for this image"), QMessageBox.Information)
-                    return
-                datetime_ = datetime_.text()
-                guess_format = False
-            elif image_id:
-                datetime_ = helpers.SENTINEL_DATETIME_REGEX.search(image_id)
-                if datetime_ and helpers.SENTINEL_COORDINATE_REGEX.search(image_id):
-                    url = f'https://preview.skywatch.com/esa/sentinel-2/{image_id}.jp2'
-                    datetime_ = datetime.strptime(datetime_.group(0), '%Y%m%dT%H%M%S')\
-                        .astimezone().strftime('%Y-%m-%d %H:%M')
-                else:
-                    self.alert(self.tr("We couldn't load a preview for this image"))
-                    return
-                guess_format = True
-            else:
-                self.alert(self.tr('Please, select an image to preview'), QMessageBox.Information)
+    def preview_sentinel(self, image_id):
+        selected_cells = self.dlg.metadataTable.selectedItems()
+        if selected_cells:
+            datetime_ = selected_cells[config.SENTINEL_DATETIME_COLUMN_INDEX]
+            url = self.dlg.metadataTable.item(datetime_.row(), config.SENTINEL_PREVIEW_COLUMN_INDEX).text()
+            if not url:
+                self.alert(self.tr("Sorry, there's no preview for this image"), QMessageBox.Information)
                 return
-            callback_kwargs = {'datetime_': datetime_, 'image_id': image_id}
-            self.http.get(
-                url=url,
-                callback=self.preview_sentinel_callback,
-                callback_kwargs=callback_kwargs,
-                error_handler=self.preview_sentinel_error_handler,
-                error_handler_kwargs={'guess_format': guess_format, **callback_kwargs}
-            )
+            datetime_ = datetime_.text()
+            guess_format = False
+        elif image_id:
+            datetime_ = helpers.SENTINEL_DATETIME_REGEX.search(image_id)
+            if datetime_ and helpers.SENTINEL_COORDINATE_REGEX.search(image_id):
+                url = f'https://preview.skywatch.com/esa/sentinel-2/{image_id}.jp2'
+                datetime_ = datetime.strptime(datetime_.group(0), '%Y%m%dT%H%M%S') \
+                    .astimezone().strftime('%Y-%m-%d %H:%M')
+            else:
+                self.alert(self.tr("We couldn't load a preview for this image"))
+                return
+            guess_format = True
+        else:
+            self.alert(self.tr('Please, select an image to preview'), QMessageBox.Information)
             return
+        callback_kwargs = {'datetime_': datetime_, 'image_id': image_id}
+        self.http.get(
+            url=url,
+            callback=self.preview_sentinel_callback,
+            callback_kwargs=callback_kwargs,
+            error_handler=self.preview_sentinel_error_handler,
+            error_handler_kwargs={'guess_format': guess_format, **callback_kwargs}
+        )
+        return
+
+    def preview_xyz(self, provider, image_id):
         self.save_provider_auth()
         username = self.dlg.providerUsername.text()
         password = self.dlg.providerPassword.text()
@@ -1652,6 +1671,15 @@ class Mapflow(QObject):
             self.add_layer(layer)
         else:
             self.alert(self.tr("We couldn't load a preview for this image"))
+
+    def preview(self) -> None:
+        """Display raster tiles served over the Web."""
+        provider = self.dlg.providerCombo.currentText()
+        image_id = self.dlg.imageId.text()
+        if provider == config.SENTINEL_OPTION_NAME:
+            self.preview_sentinel(image_id=image_id)
+        else:  # XYZ providers
+            self.preview_xyz(provider=provider, image_id=image_id)
 
     def download_results(self, row: int) -> None:
         """Download and display processing results along with the source raster, if available.
@@ -1893,7 +1921,11 @@ class Mapflow(QObject):
         Since there are submodules, the various UI texts are set dynamically.
         """
         # Set main dialog title dynamically so it could be overridden when used as a submodule
-        self.dlg.setWindowTitle(self.plugin_name)
+        mapflow_env = QgsSettings().value('variables/mapflow_env') or 'production'
+        if mapflow_env == 'production':
+            self.dlg.setWindowTitle(self.plugin_name)
+        else:
+            self.dlg.setWindowTitle(self.plugin_name + f' {mapflow_env}')
         # Display plugin icon in own toolbar
         icon = QIcon(os.path.join(self.plugin_dir, 'icon.png'))
         plugin_button = QAction(icon, self.plugin_name, self.main_window)

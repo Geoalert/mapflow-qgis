@@ -28,40 +28,19 @@
       </attribute>
       <layout class="QGridLayout" name="layoutProcessing">
        <item row="0" column="0">
-        <layout class="QGridLayout" name="processingOptions" columnstretch="0,1,0,1">
-         <item row="0" column="0">
-          <widget class="QLabel" name="labelProcessingName">
-           <property name="text">
-            <string>Name:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="1">
-          <widget class="QLineEdit" name="processingName">
-           <property name="text">
-            <string/>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="2">
+        <layout class="QGridLayout" name="processingOptions" columnstretch="0,0,0,0,0">
+         <item row="0" column="3">
           <widget class="QLabel" name="labelAiModel">
            <property name="text">
             <string>Mapflow model:</string>
            </property>
           </widget>
          </item>
-         <item row="0" column="3">
-          <widget class="QComboBox" name="modelCombo"/>
-         </item>
-         <item row="1" column="0">
-          <widget class="QLabel" name="labelAoiLayer">
-           <property name="text">
-            <string>Area:</string>
-           </property>
-          </widget>
-         </item>
          <item row="1" column="1">
           <widget class="QgsMapLayerComboBox" name="polygonCombo">
+           <property name="toolTip">
+            <string>Create or load vector layer with your area of interest</string>
+           </property>
            <property name="maxVisibleItems">
             <number>30</number>
            </property>
@@ -73,14 +52,28 @@
            </property>
           </widget>
          </item>
-         <item row="1" column="2">
+         <item row="1" column="3">
           <widget class="QLabel" name="labelImagerySource">
            <property name="text">
             <string>Imagery source:</string>
            </property>
           </widget>
          </item>
-         <item row="1" column="3">
+         <item row="1" column="2">
+          <widget class="QPushButton" name="addLayer">
+           <property name="text">
+            <string>Add layer</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="labelAoiLayer">
+           <property name="text">
+            <string>Area:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="4">
           <layout class="QHBoxLayout" name="imagerySource" stretch="1,0">
            <property name="spacing">
             <number>0</number>
@@ -128,6 +121,23 @@
             </widget>
            </item>
           </layout>
+         </item>
+         <item row="0" column="0">
+          <widget class="QLabel" name="labelProcessingName">
+           <property name="text">
+            <string>Name:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="4">
+          <widget class="QComboBox" name="modelCombo"/>
+         </item>
+         <item row="0" column="1">
+          <widget class="QLineEdit" name="processingName">
+           <property name="text">
+            <string/>
+           </property>
+          </widget>
          </item>
         </layout>
        </item>
@@ -229,6 +239,48 @@
          </item>
         </layout>
        </item>
+       <item row="4" column="0">
+        <layout class="QHBoxLayout" name="processingFooter" stretch="0,1,0">
+         <item>
+          <widget class="QPushButton" name="logoutButton">
+           <property name="text">
+            <string>Log out</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="remainingLimit">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="font">
+            <font>
+             <italic>true</italic>
+            </font>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="deleteProcessings">
+           <property name="styleSheet">
+            <string notr="true"/>
+           </property>
+           <property name="text">
+            <string>Delete</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
        <item row="3" column="0">
         <widget class="QTableWidget" name="processingsTable">
          <property name="focusPolicy">
@@ -324,48 +376,6 @@
           </property>
          </column>
         </widget>
-       </item>
-       <item row="4" column="0">
-        <layout class="QHBoxLayout" name="processingFooter" stretch="0,1,0">
-         <item>
-          <widget class="QPushButton" name="logoutButton">
-           <property name="text">
-            <string>Log out</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QLabel" name="remainingLimit">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="font">
-            <font>
-             <italic>true</italic>
-            </font>
-           </property>
-           <property name="text">
-            <string/>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignCenter</set>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="deleteProcessings">
-           <property name="styleSheet">
-            <string notr="true"/>
-           </property>
-           <property name="text">
-            <string>Delete</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
        </item>
       </layout>
      </widget>
