@@ -85,8 +85,6 @@ class Mapflow(QObject):
             self.settings.setValue('processings', {})
         # Init dialogs
         self.dlg = MainDialog(self.main_window)
-        if mapflow_env != 'production':
-            self.dlg.setWindowTitle(f'Mapflow {mapflow_env}')
         self.set_up_login_dialog()
         self.dlg_provider = ProviderDialog(self.dlg)
         self.dlg_provider.accepted.connect(self.add_or_edit_provider)
@@ -312,9 +310,12 @@ class Mapflow(QObject):
     def set_up_login_dialog(self) -> None:
         """Create a login dialog, set its title and signal-slot connections."""
         self.dlg_login = LoginDialog(self.main_window)
-        self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
+        env = QgsSettings().value('variables/mapflow_env') or 'production'
+        if env == 'production':
+            self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
+        else:
+            self.dlg_login.setWindowTitle(self.plugin_name + f' {env} - ' + self.tr('Log in'))
         self.dlg_login.logIn.clicked.connect(self.read_mapflow_token)
-
 
     def toggle_polygon_combos(self, use_image_extent: bool) -> None:
         """Disable polygon combos when Use image extent is checked.
@@ -2105,6 +2106,13 @@ class Mapflow(QObject):
         except:  # incorrect padding
             self.username, self.password = b64decode(token + '==').decode().split(':')
         self.dlg_login.close()
+        # setup window title for different envs
+        mapflow_env = QgsSettings().value('variables/mapflow_env') or 'production'
+        if mapflow_env == 'production':
+            self.dlg.setWindowTitle(self.plugin_name)
+        else:
+            self.dlg.setWindowTitle(self.plugin_name + f' {mapflow_env}')
+
         self.dlg.show()
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
