@@ -207,7 +207,7 @@ class Mapflow(QObject):
         aoi.setGeometry(aoi_geometry)
         aoi_layer.dataProvider().addFeatures([aoi])
         aoi_layer.updateExtents()
-        aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
+        aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
         self.aoi_layer_counter += 1
         self.add_layer(aoi_layer)
 
