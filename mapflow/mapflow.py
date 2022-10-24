@@ -17,7 +17,7 @@ from PyQt5.QtCore import (
 )
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction,
-    QAbstractItemView, QLabel, QProgressBar
+    QAbstractItemView, QLabel, QProgressBar, QMenu
 )
 from qgis import processing as qgis_processing  # to avoid collisions
 from qgis.gui import QgsMessageBarItem
@@ -192,10 +192,22 @@ class Mapflow(QObject):
             )
         )
         self.error_messages = ErrorMessageList()
+        # Add layer menu
+        self.add_layer_menu = QMenu()
+        self.create_aoi_from_map_action = QAction("Create a new AOI layer from map extent")
+        self.add_aoi_from_file_action = QAction("Add AOI from vector file")
         self.aoi_layer_counter = 0
-        self.dlg.addLayer.clicked.connect(self.create_aoi_layer_from_map)
+        self.setup_add_layer_menu()
 
-    def create_aoi_layer_from_map(self):
+    def setup_add_layer_menu(self):
+        self.add_layer_menu.addAction(self.create_aoi_from_map_action)
+        self.add_layer_menu.addAction(self.add_aoi_from_file_action)
+
+        self.create_aoi_from_map_action.triggered.connect(self.create_aoi_layer_from_map)
+        self.add_aoi_from_file_action.triggered.connect(self.open_vector_file)
+        self.dlg.toolButton.setMenu(self.add_layer_menu)
+
+    def create_aoi_layer_from_map(self, action: QAction):
         aoi_geometry = helpers.to_wgs84(
             QgsGeometry.fromRect(self.iface.mapCanvas().extent()),
             self.project.crs()
@@ -210,6 +222,23 @@ class Mapflow(QObject):
         aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
         self.aoi_layer_counter += 1
         self.add_layer(aoi_layer)
+        self.iface.setActiveLayer(aoi_layer)
+        self.dlg.polygonCombo.setLayer(aoi_layer)
+
+    def open_vector_file(self):
+        """Open a file selection dialog for the user to select a vector file as AOI
+        Is called by clicking the 'Open vector file menu' button in the main dialog.
+        """
+        dlg = QFileDialog(QApplication.activeWindow(), self.tr('Select vector file'))
+        dlg.setFileMode(QFileDialog.ExistingFile)
+        if dlg.exec():
+            path = dlg.selectedFiles()[0]
+            aoi_layer = QgsVectorLayer(path, os.path.splitext(os.path.basename(path))[0])
+            aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
+            self.add_layer(aoi_layer)
+            self.iface.setActiveLayer(aoi_layer)
+            self.iface.zoomToActiveLayer()
+            self.dlg.polygonCombo.setLayer(aoi_layer)
 
     def filter_non_tif_rasters(self, _: List[QgsMapLayer]) -> None:
         """Leave only GeoTIFF layers in the Imagery Source combo box."""

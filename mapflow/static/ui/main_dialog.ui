@@ -27,120 +27,6 @@
        <string>Processing</string>
       </attribute>
       <layout class="QGridLayout" name="layoutProcessing">
-       <item row="0" column="0">
-        <layout class="QGridLayout" name="processingOptions" columnstretch="0,0,0,0,0">
-         <item row="0" column="3">
-          <widget class="QLabel" name="labelAiModel">
-           <property name="text">
-            <string>Mapflow model:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="1">
-          <widget class="QgsMapLayerComboBox" name="polygonCombo">
-           <property name="toolTip">
-            <string>Create or load vector layer with your area of interest</string>
-           </property>
-           <property name="maxVisibleItems">
-            <number>30</number>
-           </property>
-           <property name="allowEmptyLayer">
-            <bool>false</bool>
-           </property>
-           <property name="showCrs">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="3">
-          <widget class="QLabel" name="labelImagerySource">
-           <property name="text">
-            <string>Imagery source:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="2">
-          <widget class="QPushButton" name="addLayer">
-           <property name="text">
-            <string>Add layer</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="0">
-          <widget class="QLabel" name="labelAoiLayer">
-           <property name="text">
-            <string>Area:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="4">
-          <layout class="QHBoxLayout" name="imagerySource" stretch="1,0">
-           <property name="spacing">
-            <number>0</number>
-           </property>
-           <item>
-            <widget class="QgsMapLayerComboBox" name="rasterCombo">
-             <property name="showCrs">
-              <bool>true</bool>
-             </property>
-             <property name="excludedProviders">
-              <stringlist notr="true">
-               <string>wms</string>
-               <string>postgresraster</string>
-               <string>grassraster</string>
-              </stringlist>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QPushButton" name="selectTif">
-             <property name="enabled">
-              <bool>true</bool>
-             </property>
-             <property name="sizePolicy">
-              <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-               <horstretch>0</horstretch>
-               <verstretch>0</verstretch>
-              </sizepolicy>
-             </property>
-             <property name="maximumSize">
-              <size>
-               <width>29</width>
-               <height>29</height>
-              </size>
-             </property>
-             <property name="text">
-              <string notr="true">...</string>
-             </property>
-             <property name="iconSize">
-              <size>
-               <width>16</width>
-               <height>16</height>
-              </size>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </item>
-         <item row="0" column="0">
-          <widget class="QLabel" name="labelProcessingName">
-           <property name="text">
-            <string>Name:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="4">
-          <widget class="QComboBox" name="modelCombo"/>
-         </item>
-         <item row="0" column="1">
-          <widget class="QLineEdit" name="processingName">
-           <property name="text">
-            <string/>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </item>
        <item row="1" column="0">
         <layout class="QHBoxLayout" name="additionalOptions" stretch="0,1,0,0">
          <item>
@@ -278,6 +164,137 @@
             <string>Delete</string>
            </property>
           </widget>
+         </item>
+        </layout>
+       </item>
+       <item row="0" column="0">
+        <layout class="QGridLayout" name="processingOptions" columnstretch="0,0,0,0">
+         <item row="1" column="2">
+          <widget class="QLabel" name="labelImagerySource">
+           <property name="text">
+            <string>Imagery source:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="2">
+          <widget class="QLabel" name="labelAiModel">
+           <property name="text">
+            <string>Mapflow model:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="0">
+          <widget class="QLabel" name="labelProcessingName">
+           <property name="text">
+            <string>Name:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="labelAoiLayer">
+           <property name="text">
+            <string>Area:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QLineEdit" name="processingName">
+           <property name="text">
+            <string/>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="3">
+          <layout class="QHBoxLayout" name="imagerySource" stretch="1,0">
+           <property name="spacing">
+            <number>0</number>
+           </property>
+           <item>
+            <widget class="QgsMapLayerComboBox" name="rasterCombo">
+             <property name="showCrs">
+              <bool>true</bool>
+             </property>
+             <property name="excludedProviders">
+              <stringlist notr="true">
+               <string>wms</string>
+               <string>postgresraster</string>
+               <string>grassraster</string>
+              </stringlist>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="selectTif">
+             <property name="enabled">
+              <bool>true</bool>
+             </property>
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>29</width>
+               <height>29</height>
+              </size>
+             </property>
+             <property name="text">
+              <string notr="true">...</string>
+             </property>
+             <property name="iconSize">
+              <size>
+               <width>16</width>
+               <height>16</height>
+              </size>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+         <item row="1" column="1">
+          <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="6,0">
+           <item>
+            <widget class="QgsMapLayerComboBox" name="polygonCombo">
+             <property name="toolTip">
+              <string>Create or load vector layer with your area of interest</string>
+             </property>
+             <property name="maxVisibleItems">
+              <number>30</number>
+             </property>
+             <property name="allowEmptyLayer">
+              <bool>false</bool>
+             </property>
+             <property name="showCrs">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QToolButton" name="toolButton">
+             <property name="contextMenuPolicy">
+              <enum>Qt::DefaultContextMenu</enum>
+             </property>
+             <property name="acceptDrops">
+              <bool>false</bool>
+             </property>
+             <property name="text">
+              <string>...</string>
+             </property>
+             <property name="icon">
+              <iconset>
+               <normaloff>../icons/add_provider.svg</normaloff>../icons/add_provider.svg</iconset>
+             </property>
+             <property name="popupMode">
+              <enum>QToolButton::InstantPopup</enum>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+         <item row="0" column="3">
+          <widget class="QComboBox" name="modelCombo"/>
          </item>
         </layout>
        </item>
