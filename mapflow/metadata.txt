@@ -9,10 +9,16 @@ about=Mapflow provides AI models for automatic feature extraction from satellite
 		- roads
 		- construction sites
 	For a step-by-step user guide, go to https://docs.mapflow.ai/api/qgis_mapflow#user-interface
-version=1.6.4
+version=1.6.5
 author=Geoalert
 email=hello@geoalert.io
 changelog:
+    1.6.5:
+        - Remove WMS raster layer support
+        - Fix raster provider preview for tms and quadkey
+        - Add new tool: creation of AOI layer from map extent and from vector file
+        - Improve description and links in login dialog
+        - Add more processing errors descriptions
 	1.6.4:
 		- Show error description in failed processings message box and in the tooltip over the processing table row
 		- Exclude Maxar Basemaps from the list of default basemaps for new installations (not supported anymore)
