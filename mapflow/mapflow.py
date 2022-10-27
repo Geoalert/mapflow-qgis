@@ -33,7 +33,7 @@ from . import helpers, config
 from .processings.saved_processing import parse_processings_request, Processing
 from .processings.history import updated_processings, ProcessingHistory
 from .errors import ErrorMessageList
-
+from .layer_utils import generate_maxar_layer_definition, generate_xyz_layer_definition
 
 class Mapflow(QObject):
 
@@ -1641,6 +1641,30 @@ class Mapflow(QObject):
         )
         return
 
+    def maxar_layer_name(self, layer_name, image_id):
+        row = self.dlg.metadataTable.currentRow()
+        attrs = tuple(config.MAXAR_METADATA_ATTRIBUTES.values())
+        try:
+            layer_name = ' '.join((
+                layer_name,
+                self.dlg.metadataTable.item(row, attrs.index('acquisitionDate')).text(),
+                self.dlg.metadataTable.item(row, attrs.index('productType')).text()
+            ))
+        except AttributeError:  # the table is empty
+            layer_name = f'{layer_name} {image_id}'
+        return layer_name
+
+    def maxar_extent(self, image_id):
+        if not image_id:
+            return None
+        try:  # Get the image extent to set the correct extent on the raster layer
+            footprint = next(self.metadata_layer.getFeatures(f"id = '{image_id}'"))
+        except (RuntimeError, AttributeError, StopIteration):  # layer doesn't exist or has been deleted, or empty
+            extent = None
+        else:
+            extent = helpers.from_wgs84(footprint.geometry(), helpers.WEB_MERCATOR).boundingBox()
+        return extent
+
     def preview_xyz(self, provider, image_id):
         self.save_provider_auth()
         username = self.dlg.providerUsername.text()
@@ -1649,54 +1673,32 @@ class Mapflow(QObject):
         layer_name = provider
         provider_info = self.settings.value('providers')[provider]
         url = provider_info['url']
+        proxy = None
         if provider in config.MAXAR_PRODUCTS:
-            if self.dlg.providerAuthGroup.isChecked():  # own account
-                connect_id = provider_info['connectId']
-                if helpers.UUID_REGEX.match(connect_id):
-                    url += '&CONNECTID=' + provider_info['connectId']
-                    url = url.replace('jpeg', 'png')  # for transparency support
-                else:
-                    self.show_connect_id_dialog(provider)
-                    return
-            else:  # our account; send to our endpoint
-                url = self.server + '/png?TileRow={y}&TileCol={x}&TileMatrix={z}'
-                url += '&CONNECTID=' + provider.split()[1].lower()
+            if not self.dlg.providerAuthGroup.isChecked():
+                proxy = self.server
                 username = self.username
                 password = self.password
-                if not self.is_premium_user:
-                    max_zoom = config.MAXAR_MAX_FREE_ZOOM
-            if image_id:
-                url += f'&CQL_FILTER=feature_id=\'{image_id}\''
-                row = self.dlg.metadataTable.currentRow()
-                attrs = tuple(config.MAXAR_METADATA_ATTRIBUTES.values())
-                try:
-                    layer_name = ' '.join((
-                        layer_name,
-                        self.dlg.metadataTable.item(row, attrs.index('acquisitionDate')).text(),
-                        self.dlg.metadataTable.item(row, attrs.index('productType')).text()
-                    ))
-                except AttributeError:  # the table is empty
-                    layer_name = f'{layer_name} {image_id}'
-                try:  # Get the image extent to set the correct extent on the raster layer
-                    footprint = next(self.metadata_layer.getFeatures(f"id = '{image_id}'"))
-                except (RuntimeError, AttributeError):  # layer doesn't exist or has been deleted
-                    extent = None
-                else:
-                    extent = helpers.from_wgs84(footprint.geometry(), helpers.WEB_MERCATOR).boundingBox()
-        # Can use urllib.parse but have to specify safe='/?:{}' which sort of defeats the purpose
-        url = url.replace('&', '%26').replace('=', '%3D')
-        params = {
-            'type': provider_info['type'],
-            'url': url,
-            'zmin': 0,
-            'zmax':  max_zoom,
-            'username': username,
-            'password': password
-        }
-        uri = '&'.join(f'{key}={val}' for key, val in params.items())  # don't url-encode it
+                connect_id = provider.split()[1].lower()  # vivid or securewatch
+            else:
+                connect_id = provider_info['connectId']
+                if not helpers.UUID_REGEX.match(connect_id):
+                    self.show_connect_id_dialog(provider)
+                    return
+            uri = generate_maxar_layer_definition(url,
+                                                  username, password,
+                                                  max_zoom, connect_id,
+                                                  image_id, proxy)
+            extent = self.maxar_extent(image_id)
+            layer_name = self.maxar_layer_name(layer_name, image_id)
+        else:
+            uri = generate_xyz_layer_definition(url,
+                                                username, password,
+                                                max_zoom, provider_info['type'])
+
         layer = QgsRasterLayer(uri, layer_name, 'wms')
         if layer.isValid():
-            if provider in (config.SENTINEL_OPTION_NAME, *config.MAXAR_PRODUCTS) and image_id and extent:
+            if provider in config.MAXAR_PRODUCTS and image_id and extent:
                 layer.setExtent(extent)
             self.add_layer(layer)
         else:
@@ -1720,7 +1722,7 @@ class Mapflow(QObject):
 
         Is called by double-clicking on a row in the processings table.
 
-        :param int: Row number in the processings table (0-based)
+        :param row: int Row number in the processings table (0-based)
         """
         if self.check_if_output_directory_is_selected():
             pid = self.dlg.processingsTable.item(row, config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()

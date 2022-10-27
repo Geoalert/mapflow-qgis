@@ -50,7 +50,8 @@ def from_wgs84(geometry: QgsGeometry, target_crs: QgsCoordinateReferenceSystem) 
 
 
 def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
-    """Get a layer's bounding box aka extent/envelope/bounds.
+    """Get a layer's bounding box aka extent/envelope
+    /bounds.
 
     :param layer: The layer of interest
     """
