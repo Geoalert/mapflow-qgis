@@ -1411,7 +1411,7 @@ class Mapflow(QObject):
                     params['url'] += f'&CQL_FILTER=feature_id=\'{image_id}\''
             params['source_type'] = providers[raster_option]['type']
             if params['source_type'] == 'wms':
-                params['target_resolution'] = 0.000005  # for the 18th zoom
+                self.alert('WMS providers are not supported any more.')
             params['cache_raster_update'] = str(not self.dlg.useCache.isChecked()).lower()
             self.save_provider_auth()
         processing_params['params'] = params
