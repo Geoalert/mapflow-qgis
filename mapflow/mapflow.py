@@ -361,7 +361,7 @@ class Mapflow(QObject):
         """
         if (
             self.dlg.providerCombo.currentText() in config.MAXAR_PRODUCTS
-            and not (enabled or self.is_premium_user)
+            and not enabled
         ):
             self.dlg.maxZoom.setMaximum(config.MAXAR_MAX_FREE_ZOOM)
         else:
@@ -404,7 +404,7 @@ class Mapflow(QObject):
             sort_by = config.MAXAR_DATETIME_COLUMN_INDEX
             enabled = True
             max_zoom = (
-                21 if self.is_premium_user or self.dlg.providerAuthGroup.isChecked()
+                21 if self.dlg.providerAuthGroup.isChecked()
                 else config.MAXAR_MAX_FREE_ZOOM
             )
             image_id_placeholder = self.tr('e.g. a3b154c40cc74f3b934c0ffc9b34ecd1')
