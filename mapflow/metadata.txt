@@ -16,6 +16,7 @@ changelog:
     1.6.5:
         - Remove WMS raster layer support
         - Fix raster provider preview for tms and quadkey
+        - Remove previous Maxar and Sentinel-2 search results layer before the new search
         - Add new tool: creation of AOI layer from map extent and from vector file
         - Improve description and links in login dialog
         - Add more processing errors descriptions

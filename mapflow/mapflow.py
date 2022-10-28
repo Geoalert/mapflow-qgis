@@ -745,6 +745,11 @@ class Mapflow(QObject):
         """
         request_id = json.loads(response.readAll().data())['data']['id']
         self.sentinel_metadata_coords = {}
+        # Delete previous search
+        try:
+            self.project.removeMapLayer(self.metadata_layer)
+        except (AttributeError, RuntimeError):  # metadata layer has been deleted
+            pass
         # Prepare a layer
         self.metadata_layer = QgsVectorLayer(
             'polygon?crs=epsg:4326&index=yes&' +
@@ -1070,6 +1075,12 @@ class Mapflow(QObject):
                 feature['properties']['offNadirAngle'] = round(feature['properties']['offNadirAngle'])
             if feature['properties']['cloudCover']:
                 feature['properties']['cloudCover'] = round(feature['properties']['cloudCover'] * 100)
+
+        # Delete previous search
+        try:
+            self.project.removeMapLayer(self.metadata_layer)
+        except (AttributeError, RuntimeError):  # metadata layer has been deleted
+            pass
         with open(os.path.join(self.temp_dir, os.urandom(32).hex()) + '.geojson', 'w') as file:
             json.dump(metadata, file)
             file.seek(0)
