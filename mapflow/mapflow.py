@@ -194,8 +194,8 @@ class Mapflow(QObject):
         self.error_messages = ErrorMessageList()
         # Add layer menu
         self.add_layer_menu = QMenu()
-        self.create_aoi_from_map_action = QAction("Create a new AOI layer from map extent")
-        self.add_aoi_from_file_action = QAction("Add AOI from vector file")
+        self.create_aoi_from_map_action = QAction(self.tr("Create a new AOI layer from map extent"))
+        self.add_aoi_from_file_action = QAction(self.tr("Add AOI from vector file"))
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
 
@@ -235,10 +235,13 @@ class Mapflow(QObject):
             path = dlg.selectedFiles()[0]
             aoi_layer = QgsVectorLayer(path, os.path.splitext(os.path.basename(path))[0])
             aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
-            self.add_layer(aoi_layer)
-            self.iface.setActiveLayer(aoi_layer)
-            self.iface.zoomToActiveLayer()
-            self.dlg.polygonCombo.setLayer(aoi_layer)
+            if aoi_layer.isValid():
+                self.add_layer(aoi_layer)
+                self.iface.setActiveLayer(aoi_layer)
+                self.iface.zoomToActiveLayer()
+                self.dlg.polygonCombo.setLayer(aoi_layer)
+            else:
+                self.alert(self.tr(f'Your file is not valid vector data source!'))
 
     def filter_non_tif_rasters(self, _: List[QgsMapLayer]) -> None:
         """Leave only GeoTIFF layers in the Imagery Source combo box."""
