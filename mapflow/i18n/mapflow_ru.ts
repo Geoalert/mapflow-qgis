@@ -843,7 +843,7 @@ Please, upgrade to make sure everything works as expected. Go to Plugins -&gt; M
     </message>
     <message>
         <location filename="../mapflow.py" line="197"/>
-        <source>Create a new AOI layer from map extent</source>
+        <source>Create` new AOI layer from map extent</source>
         <translation>Создать новый слой области интереса из видимой области карты</translation>
     </message>
     <message>

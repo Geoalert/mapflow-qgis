@@ -194,7 +194,7 @@ class Mapflow(QObject):
         self.error_messages = ErrorMessageList()
         # Add layer menu
         self.add_layer_menu = QMenu()
-        self.create_aoi_from_map_action = QAction(self.tr("Create a new AOI layer from map extent"))
+        self.create_aoi_from_map_action = QAction(self.tr("Create new AOI layer from map extent"))
         self.add_aoi_from_file_action = QAction(self.tr("Add AOI from vector file"))
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
