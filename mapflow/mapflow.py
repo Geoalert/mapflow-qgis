@@ -587,7 +587,7 @@ class Mapflow(QObject):
             layer.editingStopped.connect(self.calculate_aoi_area_layer_edited)
 
     def toggle_processing_checkboxes(self, provider: Union[QgsRasterLayer, str, None]) -> None:
-        """Toggle 'Use image extent' & 'Use cache' depending on the item in the imagery combo box.
+        """Toggle 'Use image extent' depending on the item in the imagery combo box.
 
         :param provider: Provider name or None, depending on the signal, if one of the
             tile providers, otherwise the selected raster layer
@@ -595,8 +595,6 @@ class Mapflow(QObject):
         enabled = isinstance(provider, QgsRasterLayer)
         self.dlg.useImageExtentAsAoi.setEnabled(enabled)
         self.dlg.useImageExtentAsAoi.setChecked(enabled)
-        self.dlg.useCache.setEnabled(not enabled)
-        self.dlg.useCache.setChecked(not enabled)
 
     def select_output_directory(self) -> str:
         """Open a file dialog for the user to select a directory where plugin files will be stored.
@@ -976,6 +974,7 @@ class Mapflow(QObject):
                 xmlns:ogc="http://www.opengis.net/ogc">
                 <Query typeName="DigitalGlobe:FinishedFeature" srsName="EPSG:4326">
                 <PropertyName>productType</PropertyName>
+                <PropertyName>source</PropertyName>
                 <PropertyName>colorBandOrder</PropertyName>
                 <PropertyName>cloudCover</PropertyName>
                 <PropertyName>offNadirAngle</PropertyName>
@@ -1426,7 +1425,6 @@ class Mapflow(QObject):
             params['source_type'] = providers[raster_option]['type']
             if params['source_type'] == 'wms':
                 self.alert('WMS providers are not supported any more.')
-            params['cache_raster_update'] = str(not self.dlg.useCache.isChecked()).lower()
             self.save_provider_auth()
         processing_params['params'] = params
         # Clip AOI to image extent if a single Maxar image is requested

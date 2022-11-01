@@ -13,6 +13,7 @@ PROCESSING_TABLE_SORT_COLUMN_INDEX = PROCESSING_ATTRIBUTES.index('created')
 # MAXAR
 MAXAR_METADATA_ATTRIBUTES = {
     'Product Type': 'productType',
+    'Sensor': 'source',
     'Band Order': 'colorBandOrder',
     'Cloud %': 'cloudCover',
     f'\N{DEGREE SIGN} Off Nadir': 'offNadirAngle',

@@ -19,7 +19,8 @@ changelog:
         - Remove previous Maxar and Sentinel-2 search results layer before the new search
         - Add new tool: creation of AOI layer from map extent and from vector file
         - Improve description and links in login dialog
-        - Add more processing errors descriptions
+        - Add more processing errors descriptions, fix some translations
+        - Remove "use cache" option which did not work properly
 	1.6.4:
 		- Show error description in failed processings message box and in the tooltip over the processing table row
 		- Exclude Maxar Basemaps from the list of default basemaps for new installations (not supported anymore)

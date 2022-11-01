@@ -28,7 +28,7 @@
       </attribute>
       <layout class="QGridLayout" name="layoutProcessing">
        <item row="1" column="0">
-        <layout class="QHBoxLayout" name="additionalOptions" stretch="0,1,0,0">
+        <layout class="QHBoxLayout" name="additionalOptions" stretch="0,1">
          <item>
           <widget class="QCheckBox" name="useImageExtentAsAoi">
            <property name="enabled">
@@ -51,29 +51,6 @@
             </size>
            </property>
           </spacer>
-         </item>
-         <item>
-          <widget class="QCheckBox" name="useCache">
-           <property name="toolTip">
-            <string>Cached imagery will be reused if you've previously processed the exact same area with the same imagery source</string>
-           </property>
-           <property name="text">
-            <string>Use cache</string>
-           </property>
-           <property name="checked">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QLabel" name="label">
-           <property name="text">
-            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#caching&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How caching works&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-           </property>
-           <property name="openExternalLinks">
-            <bool>true</bool>
-           </property>
-          </widget>
          </item>
         </layout>
        </item>
