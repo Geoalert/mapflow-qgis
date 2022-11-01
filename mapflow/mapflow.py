@@ -385,9 +385,9 @@ class Mapflow(QObject):
             more_button.deleteLater()
         provider_name = provider
         image_id_tooltip = self.tr(
-            f'If you already know which {provider_name} image you want to process,\n'
+            'If you already know which {provider_name} image you want to process,\n'
             'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
-        )
+        ).format(provider_name=provider_name)
         if provider == config.SENTINEL_OPTION_NAME:
             is_max_zoom_enabled = False
             columns = config.SENTINEL_ATTRIBUTES
@@ -415,7 +415,7 @@ class Mapflow(QObject):
             additional_filters_enabled = provider == 'Maxar SecureWatch'
         else:  # another provider, tear down the table and deactivate the panel
             is_max_zoom_enabled = True
-            provider_name = 'Provider'
+            #provider_name = 'Provider'
             columns = tuple()  # empty
             hidden_column_index = None
             sort_by = None
@@ -423,9 +423,9 @@ class Mapflow(QObject):
             max_zoom = config.MAX_ZOOM
             # Forced to int bc somehow used to be stored as str, so for backward compatability
             self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom', config.DEFAULT_ZOOM)))
-            image_id_placeholder = self.tr(f'Leave this field empty for {provider_name}')
+            image_id_placeholder = self.tr(f'Leave this field empty for ') + provider_name
             additional_filters_enabled = False
-            image_id_tooltip = self.tr(f"{provider_name} doesn't allow processing single images.")
+            image_id_tooltip = provider_name + self.tr(f" doesn't allow processing single images.")
             self.dlg.providerAuthGroup.setEnabled(True)
 
         self.dlg.metadataFilters.setEnabled(additional_filters_enabled)
