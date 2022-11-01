@@ -1948,9 +1948,8 @@ class Mapflow(QObject):
                 table_item.setData(Qt.DisplayRole, processing_dict[attr])
                 if proc.status == 'FAILED':
                     table_item.setToolTip(proc.error_message(self.error_messages))
-                        #self.error_messages
-                        #                            .get(e.code)
-                        #                            .format(**e.parameters) for e in processing.errors]))
+                elif proc.status == 'OK':
+                    table_item.setToolTip(self.tr("Double click to add results to the map"))
                 self.dlg.processingsTable.setItem(row, col, table_item)
             if proc.id_ in selected_processings:
                 self.dlg.processingsTable.selectRow(row)
