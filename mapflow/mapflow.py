@@ -9,15 +9,15 @@ from configparser import ConfigParser  # parse metadata.txt -> QGIS version chec
 import pylab as p
 from osgeo import gdal
 from PyQt5.QtXml import QDomDocument
-from PyQt5.QtGui import QColor, QIcon
+from PyQt5.QtGui import QColor, QIcon, QDesktopServices
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
     QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion,
-    QTextStream, QByteArray
+    QTextStream, QByteArray, QUrl
 )
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction,
-    QAbstractItemView, QLabel, QProgressBar
+    QAbstractItemView, QLabel, QProgressBar, QMenu
 )
 from qgis import processing as qgis_processing  # to avoid collisions
 from qgis.gui import QgsMessageBarItem
@@ -33,7 +33,7 @@ from . import helpers, config
 from .processings.saved_processing import parse_processings_request, Processing
 from .processings.history import updated_processings, ProcessingHistory
 from .errors import ErrorMessageList
-
+from .layer_utils import generate_maxar_layer_definition, generate_xyz_layer_definition
 
 class Mapflow(QObject):
 
@@ -192,7 +192,56 @@ class Mapflow(QObject):
             )
         )
         self.error_messages = ErrorMessageList()
+        # Add layer menu
+        self.add_layer_menu = QMenu()
+        self.create_aoi_from_map_action = QAction(self.tr("Create new AOI layer from map extent"))
+        self.add_aoi_from_file_action = QAction(self.tr("Add AOI from vector file"))
+        self.aoi_layer_counter = 0
+        self.setup_add_layer_menu()
 
+    def setup_add_layer_menu(self):
+        self.add_layer_menu.addAction(self.create_aoi_from_map_action)
+        self.add_layer_menu.addAction(self.add_aoi_from_file_action)
+
+        self.create_aoi_from_map_action.triggered.connect(self.create_aoi_layer_from_map)
+        self.add_aoi_from_file_action.triggered.connect(self.open_vector_file)
+        self.dlg.toolButton.setMenu(self.add_layer_menu)
+
+    def create_aoi_layer_from_map(self, action: QAction):
+        aoi_geometry = helpers.to_wgs84(
+            QgsGeometry.fromRect(self.iface.mapCanvas().extent()),
+            self.project.crs()
+        )
+        aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326',
+                                   f'AOI_{self.aoi_layer_counter}',
+                                   'memory')
+        aoi = QgsFeature()
+        aoi.setGeometry(aoi_geometry)
+        aoi_layer.dataProvider().addFeatures([aoi])
+        aoi_layer.updateExtents()
+        aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
+        self.aoi_layer_counter += 1
+        self.add_layer(aoi_layer)
+        self.iface.setActiveLayer(aoi_layer)
+        self.dlg.polygonCombo.setLayer(aoi_layer)
+
+    def open_vector_file(self):
+        """Open a file selection dialog for the user to select a vector file as AOI
+        Is called by clicking the 'Open vector file menu' button in the main dialog.
+        """
+        dlg = QFileDialog(QApplication.activeWindow(), self.tr('Select vector file'))
+        dlg.setFileMode(QFileDialog.ExistingFile)
+        if dlg.exec():
+            path = dlg.selectedFiles()[0]
+            aoi_layer = QgsVectorLayer(path, os.path.splitext(os.path.basename(path))[0])
+            aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
+            if aoi_layer.isValid():
+                self.add_layer(aoi_layer)
+                self.iface.setActiveLayer(aoi_layer)
+                self.iface.zoomToActiveLayer()
+                self.dlg.polygonCombo.setLayer(aoi_layer)
+            else:
+                self.alert(self.tr(f'Your file is not valid vector data source!'))
 
     def filter_non_tif_rasters(self, _: List[QgsMapLayer]) -> None:
         """Leave only GeoTIFF layers in the Imagery Source combo box."""
@@ -293,7 +342,11 @@ class Mapflow(QObject):
     def set_up_login_dialog(self) -> None:
         """Create a login dialog, set its title and signal-slot connections."""
         self.dlg_login = LoginDialog(self.main_window)
-        self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
+        env = QgsSettings().value('variables/mapflow_env') or 'production'
+        if env == 'production':
+            self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
+        else:
+            self.dlg_login.setWindowTitle(self.plugin_name + f' {env} - ' + self.tr('Log in'))
         self.dlg_login.logIn.clicked.connect(self.read_mapflow_token)
 
     def toggle_polygon_combos(self, use_image_extent: bool) -> None:
@@ -311,7 +364,7 @@ class Mapflow(QObject):
         """
         if (
             self.dlg.providerCombo.currentText() in config.MAXAR_PRODUCTS
-            and not (enabled or self.is_premium_user)
+            and not enabled
         ):
             self.dlg.maxZoom.setMaximum(config.MAXAR_MAX_FREE_ZOOM)
         else:
@@ -332,9 +385,9 @@ class Mapflow(QObject):
             more_button.deleteLater()
         provider_name = provider
         image_id_tooltip = self.tr(
-            f'If you already know which {provider_name} image you want to process,\n'
+            'If you already know which {provider_name} image you want to process,\n'
             'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
-        )
+        ).format(provider_name=provider_name)
         if provider == config.SENTINEL_OPTION_NAME:
             is_max_zoom_enabled = False
             columns = config.SENTINEL_ATTRIBUTES
@@ -354,7 +407,7 @@ class Mapflow(QObject):
             sort_by = config.MAXAR_DATETIME_COLUMN_INDEX
             enabled = True
             max_zoom = (
-                21 if self.is_premium_user or self.dlg.providerAuthGroup.isChecked()
+                21 if self.dlg.providerAuthGroup.isChecked()
                 else config.MAXAR_MAX_FREE_ZOOM
             )
             image_id_placeholder = self.tr('e.g. a3b154c40cc74f3b934c0ffc9b34ecd1')
@@ -362,7 +415,7 @@ class Mapflow(QObject):
             additional_filters_enabled = provider == 'Maxar SecureWatch'
         else:  # another provider, tear down the table and deactivate the panel
             is_max_zoom_enabled = True
-            provider_name = 'Provider'
+            #provider_name = 'Provider'
             columns = tuple()  # empty
             hidden_column_index = None
             sort_by = None
@@ -370,9 +423,9 @@ class Mapflow(QObject):
             max_zoom = config.MAX_ZOOM
             # Forced to int bc somehow used to be stored as str, so for backward compatability
             self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom', config.DEFAULT_ZOOM)))
-            image_id_placeholder = self.tr(f'Leave this field empty for {provider_name}')
+            image_id_placeholder = self.tr(f'Leave this field empty for ') + provider_name
             additional_filters_enabled = False
-            image_id_tooltip = self.tr(f"{provider_name} doesn't allow processing single images.")
+            image_id_tooltip = provider_name + self.tr(f" doesn't allow processing single images.")
             self.dlg.providerAuthGroup.setEnabled(True)
 
         self.dlg.metadataFilters.setEnabled(additional_filters_enabled)
@@ -534,7 +587,7 @@ class Mapflow(QObject):
             layer.editingStopped.connect(self.calculate_aoi_area_layer_edited)
 
     def toggle_processing_checkboxes(self, provider: Union[QgsRasterLayer, str, None]) -> None:
-        """Toggle 'Use image extent' & 'Use cache' depending on the item in the imagery combo box.
+        """Toggle 'Use image extent' depending on the item in the imagery combo box.
 
         :param provider: Provider name or None, depending on the signal, if one of the
             tile providers, otherwise the selected raster layer
@@ -542,8 +595,6 @@ class Mapflow(QObject):
         enabled = isinstance(provider, QgsRasterLayer)
         self.dlg.useImageExtentAsAoi.setEnabled(enabled)
         self.dlg.useImageExtentAsAoi.setChecked(enabled)
-        self.dlg.useCache.setEnabled(not enabled)
-        self.dlg.useCache.setChecked(not enabled)
 
     def select_output_directory(self) -> str:
         """Open a file dialog for the user to select a directory where plugin files will be stored.
@@ -695,6 +746,11 @@ class Mapflow(QObject):
         """
         request_id = json.loads(response.readAll().data())['data']['id']
         self.sentinel_metadata_coords = {}
+        # Delete previous search
+        try:
+            self.project.removeMapLayer(self.metadata_layer)
+        except (AttributeError, RuntimeError):  # metadata layer has been deleted
+            pass
         # Prepare a layer
         self.metadata_layer = QgsVectorLayer(
             'polygon?crs=epsg:4326&index=yes&' +
@@ -918,6 +974,7 @@ class Mapflow(QObject):
                 xmlns:ogc="http://www.opengis.net/ogc">
                 <Query typeName="DigitalGlobe:FinishedFeature" srsName="EPSG:4326">
                 <PropertyName>productType</PropertyName>
+                <PropertyName>source</PropertyName>
                 <PropertyName>colorBandOrder</PropertyName>
                 <PropertyName>cloudCover</PropertyName>
                 <PropertyName>offNadirAngle</PropertyName>
@@ -1020,10 +1077,17 @@ class Mapflow(QObject):
                 feature['properties']['offNadirAngle'] = round(feature['properties']['offNadirAngle'])
             if feature['properties']['cloudCover']:
                 feature['properties']['cloudCover'] = round(feature['properties']['cloudCover'] * 100)
+
+        # Delete previous search
+        try:
+            self.project.removeMapLayer(self.metadata_layer)
+        except (AttributeError, RuntimeError):  # metadata layer has been deleted
+            pass
         with open(os.path.join(self.temp_dir, os.urandom(32).hex()) + '.geojson', 'w') as file:
             json.dump(metadata, file)
             file.seek(0)
             self.metadata_layer = QgsVectorLayer(file.name, f'{product} metadata', 'ogr')
+
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
         self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
         self.add_layer(self.metadata_layer)
@@ -1360,8 +1424,7 @@ class Mapflow(QObject):
                     params['url'] += f'&CQL_FILTER=feature_id=\'{image_id}\''
             params['source_type'] = providers[raster_option]['type']
             if params['source_type'] == 'wms':
-                params['target_resolution'] = 0.000005  # for the 18th zoom
-            params['cache_raster_update'] = str(not self.dlg.useCache.isChecked()).lower()
+                self.alert('WMS providers are not supported any more.')
             self.save_provider_auth()
         processing_params['params'] = params
         # Clip AOI to image extent if a single Maxar image is requested
@@ -1557,42 +1620,64 @@ class Mapflow(QObject):
         self.alert(self.tr("Sorry, we couldn't load the image"))
         self.report_error(response, self.tr('Error previewing Sentinel imagery'))
 
-    def preview(self) -> None:
-        """Display raster tiles served over the Web."""
-        provider = self.dlg.providerCombo.currentText()
-        image_id = self.dlg.imageId.text()
-        if provider == config.SENTINEL_OPTION_NAME:
-            selected_cells = self.dlg.metadataTable.selectedItems()
-            if selected_cells:
-                datetime_ = selected_cells[config.SENTINEL_DATETIME_COLUMN_INDEX]
-                url = self.dlg.metadataTable.item(datetime_.row(), config.SENTINEL_PREVIEW_COLUMN_INDEX).text()
-                if not url:
-                    self.alert(self.tr("Sorry, there's no preview for this image"), QMessageBox.Information)
-                    return
-                datetime_ = datetime_.text()
-                guess_format = False
-            elif image_id:
-                datetime_ = helpers.SENTINEL_DATETIME_REGEX.search(image_id)
-                if datetime_ and helpers.SENTINEL_COORDINATE_REGEX.search(image_id):
-                    url = f'https://preview.skywatch.com/esa/sentinel-2/{image_id}.jp2'
-                    datetime_ = datetime.strptime(datetime_.group(0), '%Y%m%dT%H%M%S')\
-                        .astimezone().strftime('%Y-%m-%d %H:%M')
-                else:
-                    self.alert(self.tr("We couldn't load a preview for this image"))
-                    return
-                guess_format = True
-            else:
-                self.alert(self.tr('Please, select an image to preview'), QMessageBox.Information)
+    def preview_sentinel(self, image_id):
+        selected_cells = self.dlg.metadataTable.selectedItems()
+        if selected_cells:
+            datetime_ = selected_cells[config.SENTINEL_DATETIME_COLUMN_INDEX]
+            url = self.dlg.metadataTable.item(datetime_.row(), config.SENTINEL_PREVIEW_COLUMN_INDEX).text()
+            if not url:
+                self.alert(self.tr("Sorry, there's no preview for this image"), QMessageBox.Information)
                 return
-            callback_kwargs = {'datetime_': datetime_, 'image_id': image_id}
-            self.http.get(
-                url=url,
-                callback=self.preview_sentinel_callback,
-                callback_kwargs=callback_kwargs,
-                error_handler=self.preview_sentinel_error_handler,
-                error_handler_kwargs={'guess_format': guess_format, **callback_kwargs}
-            )
+            datetime_ = datetime_.text()
+            guess_format = False
+        elif image_id:
+            datetime_ = helpers.SENTINEL_DATETIME_REGEX.search(image_id)
+            if datetime_ and helpers.SENTINEL_COORDINATE_REGEX.search(image_id):
+                url = f'https://preview.skywatch.com/esa/sentinel-2/{image_id}.jp2'
+                datetime_ = datetime.strptime(datetime_.group(0), '%Y%m%dT%H%M%S') \
+                    .astimezone().strftime('%Y-%m-%d %H:%M')
+            else:
+                self.alert(self.tr("We couldn't load a preview for this image"))
+                return
+            guess_format = True
+        else:
+            self.alert(self.tr('Please, select an image to preview'), QMessageBox.Information)
             return
+        callback_kwargs = {'datetime_': datetime_, 'image_id': image_id}
+        self.http.get(
+            url=url,
+            callback=self.preview_sentinel_callback,
+            callback_kwargs=callback_kwargs,
+            error_handler=self.preview_sentinel_error_handler,
+            error_handler_kwargs={'guess_format': guess_format, **callback_kwargs}
+        )
+        return
+
+    def maxar_layer_name(self, layer_name, image_id):
+        row = self.dlg.metadataTable.currentRow()
+        attrs = tuple(config.MAXAR_METADATA_ATTRIBUTES.values())
+        try:
+            layer_name = ' '.join((
+                layer_name,
+                self.dlg.metadataTable.item(row, attrs.index('acquisitionDate')).text(),
+                self.dlg.metadataTable.item(row, attrs.index('productType')).text()
+            ))
+        except AttributeError:  # the table is empty
+            layer_name = f'{layer_name} {image_id}'
+        return layer_name
+
+    def maxar_extent(self, image_id):
+        if not image_id:
+            return None
+        try:  # Get the image extent to set the correct extent on the raster layer
+            footprint = next(self.metadata_layer.getFeatures(f"id = '{image_id}'"))
+        except (RuntimeError, AttributeError, StopIteration):  # layer doesn't exist or has been deleted, or empty
+            extent = None
+        else:
+            extent = helpers.from_wgs84(footprint.geometry(), helpers.WEB_MERCATOR).boundingBox()
+        return extent
+
+    def preview_xyz(self, provider, image_id):
         self.save_provider_auth()
         username = self.dlg.providerUsername.text()
         password = self.dlg.providerPassword.text()
@@ -1600,58 +1685,45 @@ class Mapflow(QObject):
         layer_name = provider
         provider_info = self.settings.value('providers')[provider]
         url = provider_info['url']
+        proxy = None
         if provider in config.MAXAR_PRODUCTS:
-            if self.dlg.providerAuthGroup.isChecked():  # own account
-                connect_id = provider_info['connectId']
-                if helpers.UUID_REGEX.match(connect_id):
-                    url += '&CONNECTID=' + provider_info['connectId']
-                    url = url.replace('jpeg', 'png')  # for transparency support
-                else:
-                    self.show_connect_id_dialog(provider)
-                    return
-            else:  # our account; send to our endpoint
-                url = self.server + '/png?TileRow={y}&TileCol={x}&TileMatrix={z}'
-                url += '&CONNECTID=' + provider.split()[1].lower()
+            if not self.dlg.providerAuthGroup.isChecked():
+                proxy = self.server
                 username = self.username
                 password = self.password
-                if not self.is_premium_user:
-                    max_zoom = config.MAXAR_MAX_FREE_ZOOM
-            if image_id:
-                url += f'&CQL_FILTER=feature_id=\'{image_id}\''
-                row = self.dlg.metadataTable.currentRow()
-                attrs = tuple(config.MAXAR_METADATA_ATTRIBUTES.values())
-                try:
-                    layer_name = ' '.join((
-                        layer_name,
-                        self.dlg.metadataTable.item(row, attrs.index('acquisitionDate')).text(),
-                        self.dlg.metadataTable.item(row, attrs.index('productType')).text()
-                    ))
-                except AttributeError:  # the table is empty
-                    layer_name = f'{layer_name} {image_id}'
-                try:  # Get the image extent to set the correct extent on the raster layer
-                    footprint = next(self.metadata_layer.getFeatures(f"id = '{image_id}'"))
-                except (RuntimeError, AttributeError):  # layer doesn't exist or has been deleted
-                    extent = None
-                else:
-                    extent = helpers.from_wgs84(footprint.geometry(), helpers.WEB_MERCATOR).boundingBox()
-        # Can use urllib.parse but have to specify safe='/?:{}' which sort of defeats the purpose
-        url = url.replace('&', '%26').replace('=', '%3D')
-        params = {
-            'type': provider_info['type'],
-            'url': url,
-            'zmin': 0,
-            'zmax':  max_zoom,
-            'username': username,
-            'password': password
-        }
-        uri = '&'.join(f'{key}={val}' for key, val in params.items())  # don't url-encode it
+                connect_id = provider.split()[1].lower()  # vivid or securewatch
+            else:
+                connect_id = provider_info['connectId']
+                if not helpers.UUID_REGEX.match(connect_id):
+                    self.show_connect_id_dialog(provider)
+                    return
+            uri = generate_maxar_layer_definition(url,
+                                                  username, password,
+                                                  max_zoom, connect_id,
+                                                  image_id, proxy)
+            extent = self.maxar_extent(image_id)
+            layer_name = self.maxar_layer_name(layer_name, image_id)
+        else:
+            uri = generate_xyz_layer_definition(url,
+                                                username, password,
+                                                max_zoom, provider_info['type'])
+
         layer = QgsRasterLayer(uri, layer_name, 'wms')
         if layer.isValid():
-            if provider in (config.SENTINEL_OPTION_NAME, *config.MAXAR_PRODUCTS) and image_id and extent:
+            if provider in config.MAXAR_PRODUCTS and image_id and extent:
                 layer.setExtent(extent)
             self.add_layer(layer)
         else:
             self.alert(self.tr("We couldn't load a preview for this image"))
+
+    def preview(self) -> None:
+        """Display raster tiles served over the Web."""
+        provider = self.dlg.providerCombo.currentText()
+        image_id = self.dlg.imageId.text()
+        if provider == config.SENTINEL_OPTION_NAME:
+            self.preview_sentinel(image_id=image_id)
+        else:  # XYZ providers
+            self.preview_xyz(provider=provider, image_id=image_id)
 
     def download_results(self, row: int) -> None:
         """Download and display processing results along with the source raster, if available.
@@ -1662,7 +1734,7 @@ class Mapflow(QObject):
 
         Is called by double-clicking on a row in the processings table.
 
-        :param int: Row number in the processings table (0-based)
+        :param row: int Row number in the processings table (0-based)
         """
         if self.check_if_output_directory_is_selected():
             pid = self.dlg.processingsTable.item(row, config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
@@ -1876,9 +1948,8 @@ class Mapflow(QObject):
                 table_item.setData(Qt.DisplayRole, processing_dict[attr])
                 if proc.status == 'FAILED':
                     table_item.setToolTip(proc.error_message(self.error_messages))
-                        #self.error_messages
-                        #                            .get(e.code)
-                        #                            .format(**e.parameters) for e in processing.errors]))
+                elif proc.status == 'OK':
+                    table_item.setToolTip(self.tr("Double click to add results to the map"))
                 self.dlg.processingsTable.setItem(row, col, table_item)
             if proc.id_ in selected_processings:
                 self.dlg.processingsTable.selectRow(row)
@@ -1893,7 +1964,11 @@ class Mapflow(QObject):
         Since there are submodules, the various UI texts are set dynamically.
         """
         # Set main dialog title dynamically so it could be overridden when used as a submodule
-        self.dlg.setWindowTitle(self.plugin_name)
+        mapflow_env = QgsSettings().value('variables/mapflow_env') or 'production'
+        if mapflow_env == 'production':
+            self.dlg.setWindowTitle(self.plugin_name)
+        else:
+            self.dlg.setWindowTitle(self.plugin_name + f' {mapflow_env}')
         # Display plugin icon in own toolbar
         icon = QIcon(os.path.join(self.plugin_dir, 'icon.png'))
         plugin_button = QAction(icon, self.plugin_name, self.main_window)
@@ -2073,6 +2148,13 @@ class Mapflow(QObject):
         except:  # incorrect padding
             self.username, self.password = b64decode(token + '==').decode().split(':')
         self.dlg_login.close()
+        # setup window title for different envs
+        mapflow_env = QgsSettings().value('variables/mapflow_env') or 'production'
+        if mapflow_env == 'production':
+            self.dlg.setWindowTitle(self.plugin_name)
+        else:
+            self.dlg.setWindowTitle(self.plugin_name + f' {mapflow_env}')
+
         self.dlg.show()
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
