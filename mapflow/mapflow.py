@@ -198,6 +198,13 @@ class Mapflow(QObject):
         self.add_aoi_from_file_action = QAction(self.tr("Add AOI from vector file"))
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
+        self.dlg.imageId.textChanged.connect(self.set_image_id_label)
+
+    def set_image_id_label(self, text):
+        if text:
+            self.dlg.imageId_label.setText(self.tr('Selected Image ID: {text}').format(text=text))
+        else:
+            self.dlg.imageId_label.setText("")
 
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.create_aoi_from_map_action)
@@ -1902,21 +1909,9 @@ class Mapflow(QObject):
         if failed_processings:
             # this means that some of processings have failed since last update and the limit must have been returned
             update_processing_limit()
-        for proc in failed_processings:
-            if proc.is_new:
-                self.alert(
-                    proc.name +
-                    self.tr(' failed.\n') + proc.error_message(self.error_messages),
-                    QMessageBox.Critical
-                    )
-        for proc in finished_processings:
-            if proc.is_new:
-                self.alert(
-                    proc.name +
-                    self.tr(' finished. Double-click it in the table to download the results.'),
-                    QMessageBox.Information,
-                    blocking=False  # don't repeat if user doesn't close the alert
-                )
+        self.alert_failed_processings(failed_processings)
+        self.alert_finished_processings(finished_processings)
+
         self.update_processing_table(processings)
         self.processings = processings
 
@@ -1925,6 +1920,57 @@ class Mapflow(QObject):
         except KeyError:  # history for the current env hasn't been initialized yet
             processing_history[env] = {self.username: user_processing_history.asdict()}
         self.settings.setValue('processings', processing_history)
+
+    def alert_failed_processings(self, failed_processings):
+        if not failed_processings:
+            return
+            # this means that some of processings have failed since last update and the limit must have been returned
+        if len(failed_processings) == 1:
+            # Print error message from first failed processing
+            proc = failed_processings[0]
+            self.alert(
+                proc.name +
+                self.tr(' failed with error:\n') + proc.error_message(self.error_messages),
+                QMessageBox.Critical)
+        elif 1 < len(failed_processings) < 10:
+            # If there are more than one failed processing, we will not
+            self.alert(
+                '{} processings failed: \n'.format(len(failed_processings)) +
+                '\n'.join((proc.name for proc in failed_processings)) +
+                'See tooltip over the processings table for error details',
+                QMessageBox.Critical)
+        else:  # >= 10
+            self.alert(
+                '{} processings failed: \n'.format(len(failed_processings)) +
+                'See tooltip over the processings table for error details',
+                QMessageBox.Critical)
+
+    def alert_finished_processings(self, finished_processings):
+        if not finished_processings:
+            return
+        if len(finished_processings) == 1:
+            # Print error message from first failed processing
+            proc = finished_processings[0]
+            self.alert(
+                proc.name +
+                self.tr(' finished. Double-click it in the table to download the results.'),
+                QMessageBox.Information,
+                blocking=False  # don't repeat if user doesn't close the alert
+            )
+        elif 1 < len(finished_processings) < 10:
+            # If there are more than one failed processing, we will not
+            self.alert(
+                '{} processings finished: \n'.format(len(finished_processings)) +
+                '\n'.join((proc.name for proc in finished_processings)) +
+                '\n Double-click it in the table to download the results',
+                QMessageBox.Information,
+                blocking=False)
+        else:  # >= 10
+            self.alert(
+                '{} processings finished. \n '
+                'Double-click it in the table to download the results'.format(len(finished_processings)),
+                QMessageBox.Information,
+                blocking=False)
 
     def update_processing_table(self, processings: List[Processing]):
         # UPDATE THE TABLE
