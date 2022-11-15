@@ -85,3 +85,10 @@ class ErrorMessage(*uic.loadUiType(ui_path/'error_message.ui')):
             email_body +
             '"><span style=" text-decoration: underline; color:#0057ae;">Let us know</span></a></p></body></html>'
         )
+
+
+class CreateCatalogDialog(*uic.loadUiType(ui_path/'create_new_catalog_dialog.ui')):
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setupUi(self)
+        self.setWindowIcon(plugin_icon)

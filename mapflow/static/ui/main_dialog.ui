@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>806</width>
+    <width>848</width>
     <height>632</height>
    </rect>
   </property>
@@ -372,72 +372,72 @@
        </item>
       </layout>
      </widget>
-     <widget class="QWidget" name="DataCatalogTab">
+     <widget class="QWidget" name="catalogTab">
       <attribute name="title">
-       <string>Data</string>
+       <string>Catalog</string>
       </attribute>
-      <widget class="QPushButton" name="uploadButton">
+      <widget class="QPushButton" name="createCatalogButton">
        <property name="geometry">
         <rect>
-         <x>425</x>
-         <y>10</y>
-         <width>90</width>
-         <height>25</height>
+         <x>559</x>
+         <y>14</y>
+         <width>125</width>
+         <height>50</height>
         </rect>
        </property>
        <property name="text">
-        <string>Upload</string>
+        <string>Create catalog</string>
        </property>
       </widget>
-      <widget class="QLineEdit" name="filePathEdit">
-       <property name="enabled">
-        <bool>true</bool>
-       </property>
+      <widget class="QPushButton" name="uploadImageToCatalogButton">
        <property name="geometry">
         <rect>
-         <x>10</x>
-         <y>10</y>
-         <width>351</width>
-         <height>25</height>
-        </rect>
-       </property>
-       <property name="readOnly">
-        <bool>true</bool>
-       </property>
-      </widget>
-      <widget class="QPushButton" name="selectTifCatalog">
-       <property name="geometry">
-        <rect>
-         <x>368</x>
-         <y>10</y>
-         <width>51</width>
-         <height>25</height>
+         <x>559</x>
+         <y>78</y>
+         <width>125</width>
+         <height>50</height>
         </rect>
        </property>
        <property name="text">
-        <string>...</string>
+        <string>Upload image to
+selected catalog</string>
        </property>
       </widget>
-      <widget class="QTableWidget" name="mosaics_table_widget">
+      <widget class="QPushButton" name="uploadImageToNewCatalogButton">
+       <property name="geometry">
+        <rect>
+         <x>691</x>
+         <y>78</y>
+         <width>125</width>
+         <height>50</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Upload image to
+new catalog</string>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="deleteCatalogButton">
+       <property name="geometry">
+        <rect>
+         <x>559</x>
+         <y>141</y>
+         <width>125</width>
+         <height>50</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Delete catalog</string>
+       </property>
+      </widget>
+      <widget class="QTableWidget" name="mosaicsTableWidget">
        <property name="geometry">
         <rect>
          <x>10</x>
-         <y>80</y>
-         <width>640</width>
-         <height>192</height>
+         <y>14</y>
+         <width>541</width>
+         <height>181</height>
         </rect>
-       </property>
-       <property name="editTriggers">
-        <set>QAbstractItemView::NoEditTriggers</set>
-       </property>
-       <property name="tabKeyNavigation">
-        <bool>false</bool>
-       </property>
-       <property name="showDropIndicator" stdset="0">
-        <bool>false</bool>
-       </property>
-       <property name="dragDropOverwriteMode">
-        <bool>false</bool>
        </property>
        <property name="selectionMode">
         <enum>QAbstractItemView::SingleSelection</enum>
@@ -445,151 +445,167 @@
        <property name="selectionBehavior">
         <enum>QAbstractItemView::SelectRows</enum>
        </property>
-       <property name="rowCount">
-        <number>0</number>
-       </property>
-       <attribute name="horizontalHeaderMinimumSectionSize">
-        <number>200</number>
-       </attribute>
        <attribute name="horizontalHeaderDefaultSectionSize">
-        <number>300</number>
+        <number>120</number>
        </attribute>
        <attribute name="horizontalHeaderStretchLastSection">
         <bool>true</bool>
        </attribute>
-       <attribute name="verticalHeaderMinimumSectionSize">
-        <number>30</number>
-       </attribute>
-       <attribute name="verticalHeaderDefaultSectionSize">
-        <number>30</number>
-       </attribute>
        <column>
         <property name="text">
-         <string>mosaic</string>
+         <string>Catalog id</string>
         </property>
        </column>
        <column>
         <property name="text">
-         <string>tags</string>
+         <string>Name</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>Tags</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>Created at</string>
         </property>
        </column>
       </widget>
-      <widget class="QPushButton" name="loadMosaicsButton">
+      <widget class="QPushButton" name="editSelectedCatalogButton">
        <property name="geometry">
         <rect>
-         <x>660</x>
-         <y>80</y>
-         <width>111</width>
-         <height>25</height>
+         <x>691</x>
+         <y>14</y>
+         <width>125</width>
+         <height>50</height>
         </rect>
        </property>
        <property name="text">
-        <string>Load mosaics</string>
+        <string>Edit selected
+catalog</string>
        </property>
       </widget>
-      <widget class="QTableWidget" name="mosaic_images_table">
+      <widget class="QPushButton" name="loadUserMosaicsButton">
+       <property name="geometry">
+        <rect>
+         <x>692</x>
+         <y>141</y>
+         <width>125</width>
+         <height>50</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Show catalogs</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="selectedCatalogImagesLabel">
        <property name="geometry">
         <rect>
          <x>10</x>
-         <y>320</y>
-         <width>430</width>
-         <height>190</height>
+         <y>210</y>
+         <width>491</width>
+         <height>17</height>
         </rect>
        </property>
-       <property name="editTriggers">
-        <set>QAbstractItemView::NoEditTriggers</set>
+       <property name="text">
+        <string>Catalog: # images</string>
        </property>
-       <property name="tabKeyNavigation">
-        <bool>false</bool>
+      </widget>
+      <widget class="QTableWidget" name="mosaicImagesTableWidget">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>230</y>
+         <width>491</width>
+         <height>181</height>
+        </rect>
        </property>
        <property name="selectionMode">
-        <enum>QAbstractItemView::ExtendedSelection</enum>
+        <enum>QAbstractItemView::SingleSelection</enum>
        </property>
        <property name="selectionBehavior">
         <enum>QAbstractItemView::SelectRows</enum>
        </property>
-       <attribute name="horizontalHeaderMinimumSectionSize">
-        <number>90</number>
-       </attribute>
        <attribute name="horizontalHeaderDefaultSectionSize">
         <number>150</number>
        </attribute>
        <attribute name="horizontalHeaderStretchLastSection">
         <bool>true</bool>
        </attribute>
+       <column>
+        <property name="text">
+         <string>Image id</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>Filename</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>Uploaded at</string>
+        </property>
+       </column>
       </widget>
-      <widget class="QLabel" name="mosaic_images_label">
+      <widget class="QPushButton" name="useSelectedImageButton">
        <property name="geometry">
         <rect>
          <x>10</x>
-         <y>300</y>
-         <width>111</width>
+         <y>420</y>
+         <width>130</width>
+         <height>50</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Use selected
+image/images</string>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="deleteImageButton">
+       <property name="geometry">
+        <rect>
+         <x>150</x>
+         <y>420</y>
+         <width>130</width>
+         <height>50</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Delete image</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="imagePreviewTextLabel">
+       <property name="geometry">
+        <rect>
+         <x>510</x>
+         <y>210</y>
+         <width>271</width>
          <height>17</height>
         </rect>
        </property>
        <property name="text">
-        <string>Mosaic Images</string>
+        <string>Image preview</string>
        </property>
       </widget>
-      <widget class="QLabel" name="image_preview_label">
+      <widget class="QLabel" name="imagePreviewRasterLabel">
        <property name="geometry">
         <rect>
-         <x>460</x>
-         <y>320</y>
-         <width>190</width>
-         <height>190</height>
+         <x>510</x>
+         <y>230</y>
+         <width>256</width>
+         <height>256</height>
         </rect>
        </property>
-       <property name="text">
-        <string/>
-       </property>
-      </widget>
-      <widget class="QLineEdit" name="mosaic_id_to_update">
-       <property name="enabled">
-        <bool>false</bool>
-       </property>
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>40</y>
-         <width>351</width>
-         <height>25</height>
-        </rect>
+       <property name="minimumSize">
+        <size>
+         <width>256</width>
+         <height>256</height>
+        </size>
        </property>
        <property name="text">
-        <string/>
-       </property>
-       <property name="readOnly">
-        <bool>false</bool>
-       </property>
-       <property name="placeholderText">
-        <string>type here mosaic id to be updated </string>
-       </property>
-      </widget>
-      <widget class="QCheckBox" name="uploadToExistingMosaic">
-       <property name="geometry">
-        <rect>
-         <x>370</x>
-         <y>42</y>
-         <width>251</width>
-         <height>23</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Upload image to existing mosaic</string>
-       </property>
-      </widget>
-      <widget class="QPushButton" name="deleteMosaicButton">
-       <property name="geometry">
-        <rect>
-         <x>660</x>
-         <y>113</y>
-         <width>111</width>
-         <height>25</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Delete mosaic</string>
+        <string>Here must go image preview</string>
        </property>
       </widget>
      </widget>
@@ -1209,18 +1225,18 @@
  <resources/>
  <connections>
   <connection>
-   <sender>providerCombo</sender>
-   <signal>currentTextChanged(QString)</signal>
-   <receiver>rasterCombo</receiver>
-   <slot>setCurrentText(QString)</slot>
+   <sender>logoutButton</sender>
+   <signal>clicked()</signal>
+   <receiver>MainDialog</receiver>
+   <slot>close()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>120</x>
-     <y>128</y>
+     <x>64</x>
+     <y>548</y>
     </hint>
     <hint type="destinationlabel">
-     <x>521</x>
-     <y>111</y>
+     <x>324</x>
+     <y>294</y>
     </hint>
    </hints>
   </connection>
@@ -1241,18 +1257,50 @@
    </hints>
   </connection>
   <connection>
-   <sender>logoutButton</sender>
-   <signal>clicked()</signal>
-   <receiver>MainDialog</receiver>
-   <slot>close()</slot>
+   <sender>minIntersection</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>minIntersectionSpinBox</receiver>
+   <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>64</x>
-     <y>548</y>
+     <x>487</x>
+     <y>202</y>
     </hint>
     <hint type="destinationlabel">
-     <x>324</x>
-     <y>294</y>
+     <x>595</x>
+     <y>203</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>providerCombo</sender>
+   <signal>currentTextChanged(QString)</signal>
+   <receiver>rasterCombo</receiver>
+   <slot>setCurrentText(QString)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>120</x>
+     <y>128</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>521</x>
+     <y>111</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>minIntersectionSpinBox</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>minIntersection</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>601</x>
+     <y>221</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>495</x>
+     <y>205</y>
     </hint>
    </hints>
   </connection>
@@ -1301,38 +1349,6 @@
     <hint type="destinationlabel">
      <x>540</x>
      <y>261</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>minIntersection</sender>
-   <signal>valueChanged(int)</signal>
-   <receiver>minIntersectionSpinBox</receiver>
-   <slot>setValue(int)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>487</x>
-     <y>202</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>595</x>
-     <y>203</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>minIntersectionSpinBox</sender>
-   <signal>valueChanged(int)</signal>
-   <receiver>minIntersection</receiver>
-   <slot>setValue(int)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>601</x>
-     <y>221</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>495</x>
-     <y>205</y>
     </hint>
    </hints>
   </connection>

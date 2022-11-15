@@ -27,7 +27,8 @@ from qgis.core import (
     QgsFeatureIterator, QgsWkbTypes, QgsPoint, QgsMapLayerType
 )
 
-from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, SentinelAuthDialog, ErrorMessage
+from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, SentinelAuthDialog, ErrorMessage, \
+    CreateCatalogDialog
 from .http import Http, update_processing_limit
 from . import helpers, config
 from .processings.saved_processing import parse_processings_request, Processing
@@ -193,13 +194,16 @@ class Mapflow(QObject):
         )
         self.error_messages = ErrorMessageList()
         # data catalog
-        self.dlg.selectTifCatalog.clicked.connect(self.select_tif_catalog)
-        self.dlg.uploadButton.clicked.connect(self.upload_user_raster)
         self.upload_filename = ''
-        self.dlg.loadMosaicsButton.clicked.connect(self.load_user_mosaics)
+        self.dlg.loadUserMosaicsButton.clicked.connect(self.load_user_mosaics)
+        self.dlg.createCatalogButton.clicked.connect(self.show_create_catalog_dialog)
         self.selected_mosaic_row = None
         # data catalog mosaics
-        self.dlg.mosaics_table_widget.cellClicked.connect(self.load_mosaic_images)
+        self.dlg.mosaicsTableWidget.cellClicked.connect(self.load_mosaic_images)
+        # self.dlg.mosaics_table_widget.cellClicked.connect(self.load_mosaic_images)
+        self.dlg_create_catalog = CreateCatalogDialog(self.dlg)
+        self.dlg_create_catalog.createCatalogDialogbuttonBox.accepted.connect(self.create_new_catalog)
+        self.dlg_create_catalog.createCatalogDialogbuttonBox.rejected.connect(self.close_create_catalog_dialog)
 
     def filter_non_tif_rasters(self, _: List[QgsMapLayer]) -> None:
         """Leave only GeoTIFF layers in the Imagery Source combo box."""
@@ -2187,43 +2191,75 @@ class Mapflow(QObject):
     def load_user_mosaics_callback(self, response: QNetworkReply) -> None:
         mosaics = json.loads(response.readAll().data())
         rowCount = 0
-        columnCount = 2
-        self.dlg.mosaics_table_widget.setColumnCount(columnCount)
-        self.dlg.mosaics_table_widget.setHorizontalHeaderLabels(['mosaic', 'tags'])
+        columnCount = 4
+        self.dlg.mosaicsTableWidget.setColumnCount(columnCount)
+        self.dlg.mosaicsTableWidget.setHorizontalHeaderLabels(['Catalog id', 'Name', 'Tags', 'Created at'])
         for mosaic in mosaics:
             rowCount += 1
-            self.dlg.mosaics_table_widget.setRowCount(rowCount)
-            self.dlg.mosaics_table_widget.setItem(rowCount - 1, 0, QTableWidgetItem(str(mosaic.get('id'))))
-            self.dlg.mosaics_table_widget.setItem(rowCount - 1, 1, QTableWidgetItem(str(mosaic.get('tags'))))
+            self.dlg.mosaicsTableWidget.setRowCount(rowCount)
+            self.dlg.mosaicsTableWidget.setItem(rowCount - 1, 0, QTableWidgetItem(str(mosaic.get('id'))))
+            self.dlg.mosaicsTableWidget.setItem(rowCount - 1, 1, QTableWidgetItem(str(mosaic.get('name'))))
+            self.dlg.mosaicsTableWidget.setItem(rowCount - 1, 2, QTableWidgetItem(str(mosaic.get('tags'))))
+            self.dlg.mosaicsTableWidget.setItem(rowCount - 1, 3, QTableWidgetItem(str(mosaic.get('created_at'))))
 
     def load_mosaic_images(self) -> None:
         """
         Loads list of images for a selected mosaic.
         Click on any mosaic, to load the list of images.
         """
-        selected_mosaic_row_number = self.dlg.mosaics_table_widget.currentRow()
-        selected_mosaic_id = self.dlg.mosaics_table_widget.item(selected_mosaic_row_number, 0).text()
+        selected_mosaic_row_number = self.dlg.mosaicsTableWidget.currentRow()
+        selected_mosaic_id = self.dlg.mosaicsTableWidget.item(selected_mosaic_row_number, 0).text()
+        # self.dlg.mosaic_id_to_update.setText(selected_mosaic_id)
         response = self.http.get(
             url=f'{self.server}/rasters/mosaic/{selected_mosaic_id}/image',
             callback=self.get_mosaic_images_callback
         )
         # clear mosaic images table content
-        self.dlg.mosaic_images_table.clearContents()
-        self.dlg.mosaic_images_table.setRowCount(0)
+        self.dlg.mosaicImagesTableWidget.clearContents()
+        self.dlg.mosaicImagesTableWidget.setRowCount(0)
 
     def get_mosaic_images_callback(self, response: QNetworkReply):
         # response consists of list of images for a given mosaic_id
         # construct table with the list of images
         images = json.loads(response.readAll().data())
         rowCount = 0
-        columnCount = 2
-        self.dlg.mosaic_images_table.setColumnCount(columnCount)
-        self.dlg.mosaic_images_table.setHorizontalHeaderLabels(['image id', 'filename'])
+        columnCount = 3
+        self.dlg.mosaicImagesTableWidget.setColumnCount(columnCount)
+        self.dlg.mosaicImagesTableWidget.setHorizontalHeaderLabels(['Image id', 'Filename', 'Uploaded at'])
         for image in images:
             rowCount += 1
-            self.dlg.mosaic_images_table.setRowCount(rowCount)
-            self.dlg.mosaic_images_table.setItem(rowCount - 1, 0, QTableWidgetItem(str(image.get('id'))))
-            self.dlg.mosaic_images_table.setItem(rowCount - 1, 1, QTableWidgetItem(str(image.get('filename'))))
+            self.dlg.mosaicImagesTableWidget.setRowCount(rowCount)
+            self.dlg.mosaicImagesTableWidget.setItem(rowCount - 1, 0, QTableWidgetItem(str(image.get('id'))))
+            self.dlg.mosaicImagesTableWidget.setItem(rowCount - 1, 1, QTableWidgetItem(str(image.get('filename'))))
+            self.dlg.mosaicImagesTableWidget.setItem(rowCount - 1, 2, QTableWidgetItem(str(image.get('uploaded_at'))))
+
+    def show_create_catalog_dialog(self):
+        self.dlg_create_catalog.show()
+
+    def create_new_catalog(self):
+        if self.dlg_create_catalog.newCatalogNameEdit1.text() == '':
+            ErrorMessage(
+                parent=self.dlg_create_catalog,
+                text=self.tr("Please specify catalog name"),
+                title=self.tr("Catalog name is not specified")
+            ).show()
+            pass
+        else:
+            mosaic_name = self.dlg_create_catalog.newCatalogNameEdit1.text()
+            mosaic_name = mosaic_name.replace(" ", "_")
+            self.http.post(
+                url=f'{self.server}/rasters/mosaic?name={mosaic_name}&tags=winter',
+                callback=self.create_new_catalog_callback
+            )
+            self.close_create_catalog_dialog()
+
+    def create_new_catalog_callback(self, *args):
+        pass
+
+    def close_create_catalog_dialog(self):
+        self.dlg_create_catalog.newCatalogNameEdit1.clear()
+        self.dlg_create_catalog.newCatalogTagsEdit1.clear()
+        self.dlg_create_catalog.close()
 
     def main(self) -> None:
         """Plugin entrypoint."""
