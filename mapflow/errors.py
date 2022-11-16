@@ -1,6 +1,7 @@
 from typing import Dict
 from PyQt5.QtCore import QObject
 
+
 """
 ["messages":[{"code":"source-validator.PixelSizeTooHigh","parameters":{"max_res":"1.2","level":"error","actual_res":"5.620983603290215"}}]}]
 """
@@ -105,10 +106,10 @@ class ErrorMessageList(QObject):
                                                       "We are working on the fix, our support will contact you.")
         }
 
-    def get(self, key, default = None):
+    def get(self, key, default=None):
         if not default:
             default = self.tr("Unknown error. Contact us to resolve the issue! help@geoalert.io")
-        return self.error_descriptions.get(key,default)
+        return self.error_descriptions.get(key, default)
 
 
 class ErrorMessage(QObject):
@@ -123,4 +124,14 @@ class ErrorMessage(QObject):
 
     def to_str(self, message_list):
         message = message_list.get(self.code)
-        return message.format(**self.parameters)
+        try:
+            message = message.format(**self.parameters)
+        except KeyError as e:
+            message = message \
+                      + self.tr("\n Warning: some error parameters were not loaded : {}!").format(str(e))
+        except Exception as e:
+            message = self.tr('Unknown error while fetching processing errors: {exception}'
+                              '\n Error code: {code}'
+                              '\n Contact us to resolve the issue! help@geoalert.io').format(exception=str(e),
+                                                                                             code=self.code)
+        return message
