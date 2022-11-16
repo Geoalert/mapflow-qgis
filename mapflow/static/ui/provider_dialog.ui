@@ -61,20 +61,23 @@
      <item row="1" column="1">
       <widget class="QLineEdit" name="url"/>
      </item>
-     <item row="2" column="0">
+     <item row="3" column="0">
       <widget class="QLabel" name="labelType">
        <property name="text">
         <string>Type</string>
        </property>
       </widget>
      </item>
-     <item row="2" column="1">
+     <item row="3" column="1">
       <widget class="QComboBox" name="type">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
          <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
+       </property>
+       <property name="toolTip">
+        <string>Tile coordinate scheme. XYZ is the most popular format, use it if you are not sure</string>
        </property>
        <item>
         <property name="text">
@@ -91,6 +94,48 @@
          <string notr="true">quadkey</string>
         </property>
        </item>
+      </widget>
+     </item>
+     <item row="4" column="1">
+      <widget class="QComboBox" name="comboBox">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>120</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>220</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="toolTip">
+        <string>Projection of the tile layer. The most popular is Web Mercator, use it if you are not sure</string>
+       </property>
+       <item>
+        <property name="text">
+         <string>Web Mercator [EPSG:3857]</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>World Mercator [EPSG:3395]</string>
+        </property>
+       </item>
+      </widget>
+     </item>
+     <item row="4" column="0">
+      <widget class="QLabel" name="label">
+       <property name="text">
+        <string>CRS</string>
+       </property>
       </widget>
      </item>
     </layout>
