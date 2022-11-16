@@ -97,9 +97,9 @@
       </widget>
      </item>
      <item row="4" column="1">
-      <widget class="QComboBox" name="comboBox">
+      <widget class="QComboBox" name="crs">
        <property name="sizePolicy">
-        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+        <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
          <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
@@ -112,7 +112,7 @@
        </property>
        <property name="maximumSize">
         <size>
-         <width>220</width>
+         <width>120</width>
          <height>16777215</height>
         </size>
        </property>
@@ -121,12 +121,12 @@
        </property>
        <item>
         <property name="text">
-         <string>Web Mercator [EPSG:3857]</string>
+         <string>EPSG:3857</string>
         </property>
        </item>
        <item>
         <property name="text">
-         <string>World Mercator [EPSG:3395]</string>
+         <string>EPSG:3395</string>
         </property>
        </item>
       </widget>

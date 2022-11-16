@@ -62,18 +62,3 @@ def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
     if layer_crs != WGS84:
         extent_geometry = to_wgs84(extent_geometry, layer_crs)
     return extent_geometry
-
-
-def validate_provider_form(form) -> bool:
-    """Return True if input looks valid otherwise return False."""
-    name = form.name.text()
-    url = form.url.text()
-    type_ = form.type.currentText()
-    if name and url:  # non-empty
-        if type_ in ('xyz', 'tms'):
-            return bool(XYZ_REGEX.match(url))
-        elif type_ == 'wms':
-            return bool(URL_REGEX.match(url))
-        else:  # Quad Key
-            return bool(QUAD_KEY_REGEX.match(url))
-    return False

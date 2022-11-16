@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>806</width>
-    <height>632</height>
+    <height>575</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,7 +17,7 @@
    <item row="0" column="0">
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
-      <number>0</number>
+      <number>1</number>
      </property>
      <property name="movable">
       <bool>true</bool>
@@ -617,139 +617,6 @@
           <bool>false</bool>
          </property>
          <layout class="QGridLayout" name="gridLayout">
-          <item row="0" column="0">
-           <layout class="QHBoxLayout" name="layoutMetadataAoi" stretch="0,1,0">
-            <item>
-             <widget class="QLabel" name="labelMaxarAoi">
-              <property name="text">
-               <string>Area:</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QgsMapLayerComboBox" name="maxarAoiCombo">
-              <property name="toolTip">
-               <string>Any (multi-)polygon(s)</string>
-              </property>
-              <property name="showCrs">
-               <bool>true</bool>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QCheckBox" name="metadataUseCanvasExtent">
-              <property name="toolTip">
-               <string>Use your current screen area</string>
-              </property>
-              <property name="text">
-               <string>Use canvas extent</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item row="1" column="0">
-           <layout class="QHBoxLayout" name="layoutMetadataDatetime" stretch="0,0,1,0,0">
-            <item>
-             <widget class="QLabel" name="labelFrom">
-              <property name="toolTip">
-               <string>Earlier images won't be shown</string>
-              </property>
-              <property name="text">
-               <string>From:</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QDateEdit" name="metadataFrom">
-              <property name="toolTip">
-               <string>Dates are inclusive</string>
-              </property>
-              <property name="maximumDate">
-               <date>
-                <year>2030</year>
-                <month>1</month>
-                <day>1</day>
-               </date>
-              </property>
-              <property name="minimumDate">
-               <date>
-                <year>1970</year>
-                <month>1</month>
-                <day>1</day>
-               </date>
-              </property>
-              <property name="displayFormat">
-               <string>yyyy-MM-dd</string>
-              </property>
-              <property name="calendarPopup">
-               <bool>true</bool>
-              </property>
-              <property name="date">
-               <date>
-                <year>2020</year>
-                <month>12</month>
-                <day>21</day>
-               </date>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="getMetadata">
-              <property name="toolTip">
-               <string>Click and wait for a few seconds until the table below is filled out</string>
-              </property>
-              <property name="text">
-               <string>Search imagery</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="labelTo">
-              <property name="toolTip">
-               <string>More recent images won't be shown</string>
-              </property>
-              <property name="text">
-               <string>To:</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QDateEdit" name="metadataTo">
-              <property name="toolTip">
-               <string>Dates are inclusive</string>
-              </property>
-              <property name="maximumDate">
-               <date>
-                <year>2030</year>
-                <month>1</month>
-                <day>1</day>
-               </date>
-              </property>
-              <property name="minimumDate">
-               <date>
-                <year>1970</year>
-                <month>1</month>
-                <day>1</day>
-               </date>
-              </property>
-              <property name="displayFormat">
-               <string>yyyy-MM-dd</string>
-              </property>
-              <property name="calendarPopup">
-               <bool>true</bool>
-              </property>
-              <property name="date">
-               <date>
-                <year>2021</year>
-                <month>12</month>
-                <day>21</day>
-               </date>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
           <item row="2" column="0">
            <widget class="QgsCollapsibleGroupBox" name="metadataFilters">
             <property name="toolTip">
@@ -901,6 +768,139 @@
               <attribute name="horizontalHeaderStretchLastSection">
                <bool>true</bool>
               </attribute>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item row="1" column="0">
+           <layout class="QHBoxLayout" name="layoutMetadataDatetime" stretch="0,0,1,0,0">
+            <item>
+             <widget class="QLabel" name="labelFrom">
+              <property name="toolTip">
+               <string>Earlier images won't be shown</string>
+              </property>
+              <property name="text">
+               <string>From:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QDateEdit" name="metadataFrom">
+              <property name="toolTip">
+               <string>Dates are inclusive</string>
+              </property>
+              <property name="maximumDate">
+               <date>
+                <year>2030</year>
+                <month>1</month>
+                <day>1</day>
+               </date>
+              </property>
+              <property name="minimumDate">
+               <date>
+                <year>1970</year>
+                <month>1</month>
+                <day>1</day>
+               </date>
+              </property>
+              <property name="displayFormat">
+               <string>yyyy-MM-dd</string>
+              </property>
+              <property name="calendarPopup">
+               <bool>true</bool>
+              </property>
+              <property name="date">
+               <date>
+                <year>2020</year>
+                <month>12</month>
+                <day>21</day>
+               </date>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="getMetadata">
+              <property name="toolTip">
+               <string>Click and wait for a few seconds until the table below is filled out</string>
+              </property>
+              <property name="text">
+               <string>Search imagery</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="labelTo">
+              <property name="toolTip">
+               <string>More recent images won't be shown</string>
+              </property>
+              <property name="text">
+               <string>To:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QDateEdit" name="metadataTo">
+              <property name="toolTip">
+               <string>Dates are inclusive</string>
+              </property>
+              <property name="maximumDate">
+               <date>
+                <year>2030</year>
+                <month>1</month>
+                <day>1</day>
+               </date>
+              </property>
+              <property name="minimumDate">
+               <date>
+                <year>1970</year>
+                <month>1</month>
+                <day>1</day>
+               </date>
+              </property>
+              <property name="displayFormat">
+               <string>yyyy-MM-dd</string>
+              </property>
+              <property name="calendarPopup">
+               <bool>true</bool>
+              </property>
+              <property name="date">
+               <date>
+                <year>2021</year>
+                <month>12</month>
+                <day>21</day>
+               </date>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item row="0" column="0">
+           <layout class="QHBoxLayout" name="layoutMetadataAoi" stretch="0,1,0">
+            <item>
+             <widget class="QLabel" name="labelMaxarAoi">
+              <property name="text">
+               <string>Area:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QgsMapLayerComboBox" name="maxarAoiCombo">
+              <property name="toolTip">
+               <string>Any (multi-)polygon(s)</string>
+              </property>
+              <property name="showCrs">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="metadataUseCanvasExtent">
+              <property name="toolTip">
+               <string>Use your current screen area</string>
+              </property>
+              <property name="text">
+               <string>Use canvas extent</string>
+              </property>
              </widget>
             </item>
            </layout>

@@ -6,7 +6,6 @@ from typing import List, Optional, Union
 from datetime import datetime  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
-import pylab as p
 from osgeo import gdal
 from PyQt5.QtXml import QDomDocument
 from PyQt5.QtGui import QColor, QIcon, QDesktopServices
@@ -30,8 +29,8 @@ from qgis.core import (
 from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, SentinelAuthDialog, ErrorMessage
 from .http import Http, update_processing_limit
 from . import helpers, config
-from .processings.saved_processing import parse_processings_request, Processing
-from .processings.history import updated_processings, ProcessingHistory
+from .entity.processing import parse_processings_request, Processing, ProcessingHistory, updated_processings
+from .entity.provider import Provider, ProvidersDict, PROVIDERS_KEY
 from .errors import ErrorMessageList
 from .layer_utils import generate_maxar_layer_definition, generate_xyz_layer_definition
 
@@ -87,7 +86,7 @@ class Mapflow(QObject):
         self.dlg = MainDialog(self.main_window)
         self.set_up_login_dialog()
         self.dlg_provider = ProviderDialog(self.dlg)
-        self.dlg_provider.accepted.connect(self.add_or_edit_provider)
+        self.dlg_provider.accepted.connect(self.edit_provider_callback)
         self.dlg_connect_id = ConnectIdDialog(self.dlg)
         self.dlg_sentinel_auth = SentinelAuthDialog(self.dlg)
         # Display the plugin's version
@@ -113,9 +112,7 @@ class Mapflow(QObject):
             self.dlg.providerSaveAuth.setChecked(True)
             self.dlg.providerUsername.setText(self.settings.value('providerUsername'))
             self.dlg.providerPassword.setText(self.settings.value('providerPassword'))
-        providers = self.settings.value('providers', config.BUILTIN_PROVIDERS)
-        if config.SENTINEL_OPTION_NAME not in providers:
-            providers[config.SENTINEL_OPTION_NAME] = config.BUILTIN_PROVIDERS[config.SENTINEL_OPTION_NAME]
+        providers = ProvidersDict.from_settings(self.settings)
         self.update_providers(providers)
         self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
         self.dlg.minIntersection.setValue(int(self.settings.value('metadataMinIntersection', 0)))
@@ -168,10 +165,8 @@ class Mapflow(QObject):
         self.dlg.metadataFrom.dateChanged.connect(self.filter_metadata)
         self.dlg.metadataTo.dateChanged.connect(self.filter_metadata)
         self.dlg.preview.clicked.connect(self.preview)
-        self.dlg.addProvider.clicked.connect(self.dlg_provider.show)
-        self.dlg.addProvider.clicked.connect(lambda: self.dlg_provider.setProperty('mode', 'add'))
+        self.dlg.addProvider.clicked.connect(self.dlg_provider.setup)
         self.dlg.editProvider.clicked.connect(self.edit_provider)
-        self.dlg.editProvider.clicked.connect(lambda: self.dlg_provider.setProperty('mode', 'edit'))
         self.dlg.removeProvider.clicked.connect(self.remove_provider)
         self.dlg.maxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
         self.dlg.providerAuthGroup.toggled.connect(self.limit_zoom_auth_toggled)
@@ -491,87 +486,105 @@ class Mapflow(QObject):
 
         Is called by clicking the red minus button near the provider dropdown list.
         """
-        provider = self.dlg.providerCombo.currentText()
+        providers = ProvidersDict.from_settings(self.settings)
+        provider_name = self.dlg.providerCombo.currentText()
+        provider = providers[provider_name]
+        if provider.protected:
+            # We want to protect built in providers!
+            self.alert(self.tr("This provider cannot be removed"), QMessageBox.Warning)
+            return
         # Ask for confirmation
-        if self.alert(self.tr('Permanently remove {}?').format(provider), QMessageBox.Question):
-            providers = self.settings.value('providers')
-            del providers[provider]
-            self.settings.setValue('providers', providers)
-            self.dlg.providerCombo.removeItem(self.dlg.providerCombo.currentIndex())
-            self.dlg.rasterCombo.setAdditionalItems(('Mapbox', *providers))
+        elif self.alert(self.tr('Permanently remove {}?').format(provider.name), QMessageBox.Question):
+            providers.pop(provider_name)
+            self.update_providers(providers)
 
-    def add_or_edit_provider(self) -> None:
+    def edit_provider_callback(self) -> None:
         """Add a web imagery provider or commit edits to an existing one."""
-        providers = self.settings.value('providers')
-        if self.dlg_provider.property('mode') == 'edit':  # remove the old definition
-            del providers[self.dlg.providerCombo.currentText()]
-        name = self.dlg_provider.name.text()
-        # Add the new one
-        providers[name] = {
-            'url': self.dlg_provider.url.text(),
-            'type': self.dlg_provider.type.currentText()
-        }
-        # Update the combos
+        old_provider = self.dlg_provider.current_provider
+        new_provider = self.dlg_provider.result_provider
+
+        if not new_provider:
+            raise AssertionError('Empty provider!')
+        providers = ProvidersDict.from_settings(self.settings)
+        if not old_provider:
+            # we have added new one - without current one
+            if new_provider.name in providers:
+                self.alert("Provider name must be unique. {name} already exists, select another or delete/edit existing")
+                self.dlg_provider.setup(new_provider)
+            else:
+                providers.update({new_provider.name: new_provider})
+                providers.to_settings(self.settings)
+        else:
+            # we replace old provider with a new one
+            # if self.dlg_provider.property('mode') == 'edit':  #
+            if new_provider.name != old_provider.name and new_provider.name in providers:
+                # we do not want user to replace another provider when editing this one
+                self.alert("Provider name must be unique. {name} already exists, select another or delete/edit existing")
+                self.dlg_provider.setup(new_provider)
+            else:
+                providers.pop(old_provider.name)
+                providers.update({new_provider.name: new_provider})
+
         self.update_providers(providers)
-        self.dlg.providerCombo.setCurrentText(name)
-        self.dlg.rasterCombo.setCurrentText(name)
+        self.dlg.providerCombo.setCurrentText(new_provider.name)
 
     def edit_provider(self) -> None:
         """Prepare and show the provider edit dialog.
 
         Is called by the corresponding button.
         """
-        provider = self.dlg.providerCombo.currentText()
-        if provider in config.MAXAR_PRODUCTS:
-            self.show_connect_id_dialog(provider)
-        elif provider == config.SENTINEL_OPTION_NAME:
+        name = self.dlg.providerCombo.currentText()
+        if name in config.MAXAR_PRODUCTS:
+            self.show_connect_id_dialog(name)
+        elif name == config.SENTINEL_OPTION_NAME:
             self.show_sentinel_token_dialog()
         else:
-            self.dlg_provider.setWindowTitle(provider)
-            # Fill out the edit dialog with the current data
-            providers = self.settings.value('providers')
-            self.dlg_provider.name.setText(provider)
-            self.dlg_provider.url.setText(providers[provider]['url'])
-            self.dlg_provider.type.setCurrentText(providers[provider]['type'])
-            # Open the edit dialog
-            self.dlg_provider.show()
+            self.show_provider_edit_dialog(name)
 
-    def update_providers(self, providers: dict) -> None:
+    def update_providers(self, providers: ProvidersDict = None) -> None:
         """Update imagery & providers dropdown list after editing or adding a new one.
+        It works both ways: if providers is specified, it updates the settings;
+        otherwise loads providers list from settings
 
-        :param providers: the new provider config to use
+        args:
+         providers: optional ProvidersDict to update settings with
         """
-        self.dlg.rasterCombo.setAdditionalItems((*providers, 'Mapbox'))
+        if providers is None:
+            providers = ProvidersDict.from_settings(self.settings)
+        elif isinstance(providers, ProvidersDict):
+            providers.to_settings(self.settings)
+        else:
+            providers = ProvidersDict(providers)
+            providers.to_settings(self.settings)
+        self.dlg.rasterCombo.setAdditionalItems((*providers.keys(), 'Mapbox'))
         self.dlg.providerCombo.clear()
-        self.dlg.providerCombo.addItems(providers)
-        self.settings.setValue('providers', providers)
+        self.dlg.providerCombo.addItems(providers.keys())
 
     def show_sentinel_token_dialog(self) -> None:
         """Prepare and display a dialog to edit the SkyWatch token."""
-        api_key = self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']
-        self.dlg_sentinel_auth.apiKey.setText(api_key)
-        self.dlg_sentinel_auth.show()
+        api_key = Provider.from_settings(self.settings, config.SENTINEL_OPTION_NAME).api_key
+        self.dlg_sentinel_auth.setup(api_key)
 
     def show_connect_id_dialog(self, product: str) -> None:
         """Prepare and show the Connect ID editing dialog.
-
         :param product: Maxar product whose Connect ID will be edited.
         """
         # Display the current Connect ID
-        providers = self.settings.value('providers')
-        self.dlg_connect_id.connectId.setText(providers[product]['connectId'])
-        self.dlg_connect_id.connectId.setCursorPosition(0)
-        # Specify the product being edited in the window title
-        self.dlg_connect_id.setWindowTitle(f'Connect ID - {product}')
-        self.dlg_connect_id.show()
+        provider = ProvidersDict.from_settings(self.settings).get(product)
+        self.dlg_connect_id.setup(product, provider.connect_id)
+
+    def show_provider_edit_dialog(self, name) -> None:
+        try:
+            provider = Provider.from_settings(self.settings, name)
+        except KeyError:
+            provider = None
+        self.dlg_provider.setup(provider)
 
     def edit_connect_id(self) -> None:
         """Change the Connect ID for the given Maxar product."""
-        provider = self.dlg.providerCombo.currentText()
-        providers = self.settings.value('providers')
+        name = self.dlg.providerCombo.currentText()
         connect_id = self.dlg_connect_id.connectId.text()
-        providers[provider]['connectId'] = connect_id
-        self.settings.setValue('providers', providers)
+        Provider.from_settings(self.settings, name).update(connect_id=connect_id).to_settings()
 
     def edit_sentinel_auth(self) -> None:
         """Change the Sentinel Hub Access Token."""
