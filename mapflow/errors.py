@@ -103,7 +103,20 @@ class ErrorMessageList(QObject):
             "inference.internalError": self.tr("Internal error in process of data processing. "
                                                "We are working on the fix, our support will contact you."),
             "vector-processor.internalError": self.tr("Internal error in process of saving the results. "
-                                                      "We are working on the fix, our support will contact you.")
+                                                      "We are working on the fix, our support will contact you."),
+            # todo: change when we normalize data-catalog errors
+            "MemoryLimitExceeded": self.tr("You have exceeded your available memory limit. "
+                                           "Your file takes {memory_requested} bytes, "
+                                           "while your available memory is {available_memory} bytes"
+                                           " Upgrade to Mapflow Premium to get more memory or delete unused data"),
+            "FileTooBig": self.tr("Max upload file size limit exceeded."
+                                  "Max upload file size = {max_file_size} bytes"
+                                  "got file size = {actual_file_size} bytes)"),
+            "FileCheckFailed": self.tr("File {filename} can't be processed."),
+            "ItemNotFound": self.tr("Item {uid} not found"),
+            "AccessDenied": self.tr("Access to item {uid} denied! "),
+            "PreviewNotFound": self.tr("Preview not found for image: {image_id}")
+
         }
 
     def get(self, key, default=None):

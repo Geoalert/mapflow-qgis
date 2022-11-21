@@ -27,12 +27,12 @@ from qgis.core import (
     QgsFeatureIterator, QgsWkbTypes, QgsPoint, QgsMapLayerType
 )
 
-from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, SentinelAuthDialog, ErrorMessage
+from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, SentinelAuthDialog, ErrorMessageDialog
 from .http import Http, update_processing_limit
 from . import helpers, config
 from .processings.saved_processing import parse_processings_request, Processing
 from .processings.history import updated_processings, ProcessingHistory
-from .errors import ErrorMessageList
+from .errors import ErrorMessageList, ErrorMessage
 from .layer_utils import generate_maxar_layer_definition, generate_xyz_layer_definition
 
 class Mapflow(QObject):
@@ -1382,7 +1382,7 @@ class Mapflow(QObject):
         use_auth = self.dlg.providerAuthGroup.isChecked()
         is_maxar = raster_option in config.MAXAR_PRODUCTS
         if is_maxar and not self.is_premium_user and not use_auth:
-            ErrorMessage(
+            ErrorMessageDialog(
                 parent=self.dlg,
                 text=self.tr('Click on the link below to send us an email'),
                 title=self.tr('Upgrade your subscription to process Maxar imagery'),
@@ -1509,7 +1509,14 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        self.report_error(response, self.tr("We couldn't upload your GeoTIFF"))
+        try:
+            # todo: change when we normalize the data-catalog api responses
+            error = ErrorMessage.from_response(json.loads(response.readAll().data()).get("detail", {}))
+            message = error.to_str(self.error_messages)
+        except:
+            message = self.tr("We couldn't upload your GeoTIFF, response code: "
+                              "{code}").format(code=response.attribute(QNetworkRequest.HttpStatusCodeAttribute))
+        self.report_error(response, message)
 
     def post_processing(self, request_body: dict) -> None:
         """Submit a processing to Mapflow.
@@ -2160,7 +2167,7 @@ class Mapflow(QObject):
             'Error message': error_text[:5000]  # too long body => 400 (not sure what's the limit exactly)
         }
         email_body = '%0a'.join(f'{key}: {value}' for key, value in report.items())
-        ErrorMessage(QApplication.activeWindow(), error_summary, title, email_body).show()
+        ErrorMessageDialog(QApplication.activeWindow(), error_summary, title, email_body).show()
 
     def log_in_callback(self, response: QNetworkReply) -> None:
         """Fetch user info, models and processings.

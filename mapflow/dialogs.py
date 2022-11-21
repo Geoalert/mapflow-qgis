@@ -71,7 +71,7 @@ class SentinelAuthDialog(*uic.loadUiType(ui_path/'sentinel_auth_dialog.ui')):
         self.setWindowIcon(plugin_icon)
 
 
-class ErrorMessage(*uic.loadUiType(ui_path/'error_message.ui')):
+class ErrorMessageDialog(*uic.loadUiType(ui_path / 'error_message.ui')):
     def __init__(self,  parent: QWidget, text: str, title: str = None, email_body: str = '') -> None:
         """An message box notifying user about a plugin error, with a 'Send a report' button."""
         super().__init__(parent)
