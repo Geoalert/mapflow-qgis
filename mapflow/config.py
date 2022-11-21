@@ -60,3 +60,14 @@ STYLES = {
     'Forest Detection With Heights': 'forest_with_heights',
     'Roads Detection': 'roads'
 }
+
+default_providers = [
+    {"provider_class": "sentinel"},
+    {"provider_class": "proxy_vivid"},
+    {"provider_class": "proxy_securewatch"},
+    {"provider_class": "xyz",
+     "name": "Mapbox",
+     "url": 'https://api.tiles.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.jpg?'
+            'access_token=pk.eyJ1Ijoib3BlbnN0cmVldG1hcCIsImEiOiJja2w5YWt5bnYwNjZmMnFwZjhtbHk1MnA1In0.eq2aumBK6JuRoIuBMm6Gew',
+     "crs": "EPSG:3857"}
+]

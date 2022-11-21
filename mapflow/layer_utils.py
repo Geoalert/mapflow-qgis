@@ -25,6 +25,25 @@ def proxy_maxar_url(server, connect_id):
     return f'{server}/png?TileRow={{y}}&TileCol={{x}}&TileMatrix={{z}}' + '&CONNECTID=' + connect_id
 
 
+def maxar_tile_url(base_url):
+    """
+    base_url is copied from maxar website and looks like
+    https://securewatch.digitalglobe.com/earthservice/wmtsaccess?connectid=<UUID>
+    we need to return TileUrl with TileMatrix set and so on
+    """
+    return base_url + "&SERVICE=WMTS" \
+                      "&VERSION=1.0.0" \
+                      "&STYLE=" \
+                      "&REQUEST=GetTile" \
+                      "&LAYER=DigitalGlobe:ImageryTileService" \
+                      "&FORMAT=image/jpeg" \
+                      "&TileRow={y}" \
+                      "&TileCol={x}" \
+                      "&TileMatrixSet=EPSG:3857" \
+                      "&TileMatrix=EPSG:3857:{z}"
+
+
+
 def users_maxar_url(url, connect_id):
     return f'{url}&CONNECTID={connect_id}'
 

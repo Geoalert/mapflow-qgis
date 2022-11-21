@@ -15,6 +15,7 @@ URL_PATTERN = r'https?://(www\.)?([-\w]{1,256}\.)+[a-zA-Z0-9]{1,6}'  # schema + 
 URL_REGEX = re.compile(URL_PATTERN)
 XYZ_REGEX = re.compile(URL_PATTERN + r'(.*\{[xyz]\}){3}.*', re.I)
 QUAD_KEY_REGEX = re.compile(URL_PATTERN + r'(.*\{q\}).*', re.I)
+MAXAR_PROVIDER_REGEX = re.compile(URL_PATTERN)  # todo: make actual regex
 SENTINEL_DATETIME_REGEX = re.compile(r'\d{8}T\d{6}', re.I)
 SENTINEL_COORDINATE_REGEX = re.compile(r'T\d{2}[A-Z]{3}', re.I)
 SENTINEL_PRODUCT_NAME_REGEX = re.compile(r'\/(?:20[0-2][0-9])\/(?:1[0-2]|0?[1-9])\/(?:0?[1-9]|[1-2]\d|3[0-1])\/(\d{1,2})\/$')

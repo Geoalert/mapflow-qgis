@@ -8,14 +8,14 @@ from configparser import ConfigParser  # parse metadata.txt -> QGIS version chec
 
 from osgeo import gdal
 from PyQt5.QtXml import QDomDocument
-from PyQt5.QtGui import QColor, QIcon, QDesktopServices
+from PyQt5.QtGui import QColor, QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
     QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion,
-    QTextStream, QByteArray, QUrl
+    QTextStream, QByteArray
 )
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction,
+    QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction,
     QAbstractItemView, QLabel, QProgressBar, QMenu
 )
 from qgis import processing as qgis_processing  # to avoid collisions
@@ -26,11 +26,13 @@ from qgis.core import (
     QgsFeatureIterator, QgsWkbTypes, QgsPoint, QgsMapLayerType
 )
 
-from .dialogs import MainDialog, LoginDialog, ProviderDialog, ConnectIdDialog, SentinelAuthDialog, ErrorMessage
+from mapflow.dialogs.dialogs import MainDialog, LoginDialog, ConnectIdDialog, SentinelAuthDialog, ErrorMessage
+from .dialogs.provider_dialog import ProviderDialog
 from .http import Http, update_processing_limit
 from . import helpers, config
 from .entity.processing import parse_processings_request, Processing, ProcessingHistory, updated_processings
-from .entity.provider import Provider, ProvidersDict, PROVIDERS_KEY
+from mapflow.entity.provider.provider import Provider
+from .entity.provider.collection import ProvidersDict
 from .errors import ErrorMessageList
 from .layer_utils import generate_maxar_layer_definition, generate_xyz_layer_definition
 
@@ -112,8 +114,11 @@ class Mapflow(QObject):
             self.dlg.providerSaveAuth.setChecked(True)
             self.dlg.providerUsername.setText(self.settings.value('providerUsername'))
             self.dlg.providerPassword.setText(self.settings.value('providerPassword'))
-        providers = ProvidersDict.from_settings(self.settings)
-        self.update_providers(providers)
+
+        # save default providers - they will not be changed during the execution
+        self.default_providers = ProvidersDict.default_providers()
+        self.update_providers()
+
         self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
         self.dlg.minIntersection.setValue(int(self.settings.value('metadataMinIntersection', 0)))
         self.dlg.maxCloudCover.setValue(int(self.settings.value('metadataMaxCloudCover', 100)))
@@ -530,14 +535,11 @@ class Mapflow(QObject):
 
     def edit_provider(self) -> None:
         """Prepare and show the provider edit dialog.
-
         Is called by the corresponding button.
         """
         name = self.dlg.providerCombo.currentText()
-        if name in config.MAXAR_PRODUCTS:
-            self.show_connect_id_dialog(name)
-        elif name == config.SENTINEL_OPTION_NAME:
-            self.show_sentinel_token_dialog()
+        if name in self.default_providers:
+            self.alert("This is a default provider, it cannot be edited")
         else:
             self.show_provider_edit_dialog(name)
 
@@ -551,27 +553,16 @@ class Mapflow(QObject):
         """
         if providers is None:
             providers = ProvidersDict.from_settings(self.settings)
+            providers.update(self.default_providers)
         elif isinstance(providers, ProvidersDict):
+            # todo: not save default providers to settings
             providers.to_settings(self.settings)
         else:
             providers = ProvidersDict(providers)
             providers.to_settings(self.settings)
-        self.dlg.rasterCombo.setAdditionalItems((*providers.keys(), 'Mapbox'))
+        self.dlg.rasterCombo.setAdditionalItems(*providers.keys())
         self.dlg.providerCombo.clear()
         self.dlg.providerCombo.addItems(providers.keys())
-
-    def show_sentinel_token_dialog(self) -> None:
-        """Prepare and display a dialog to edit the SkyWatch token."""
-        api_key = Provider.from_settings(self.settings, config.SENTINEL_OPTION_NAME).api_key
-        self.dlg_sentinel_auth.setup(api_key)
-
-    def show_connect_id_dialog(self, product: str) -> None:
-        """Prepare and show the Connect ID editing dialog.
-        :param product: Maxar product whose Connect ID will be edited.
-        """
-        # Display the current Connect ID
-        provider = ProvidersDict.from_settings(self.settings).get(product)
-        self.dlg_connect_id.setup(product, provider.connect_id)
 
     def show_provider_edit_dialog(self, name) -> None:
         try:
@@ -579,18 +570,6 @@ class Mapflow(QObject):
         except KeyError:
             provider = None
         self.dlg_provider.setup(provider)
-
-    def edit_connect_id(self) -> None:
-        """Change the Connect ID for the given Maxar product."""
-        name = self.dlg.providerCombo.currentText()
-        connect_id = self.dlg_connect_id.connectId.text()
-        Provider.from_settings(self.settings, name).update(connect_id=connect_id).to_settings()
-
-    def edit_sentinel_auth(self) -> None:
-        """Change the Sentinel Hub Access Token."""
-        providers = self.settings.value('providers')
-        providers[config.SENTINEL_OPTION_NAME]['token'] = self.dlg_sentinel_auth.apiKey.text()
-        self.settings.setValue('providers', providers)
 
     def monitor_polygon_layer_feature_selection(self, layers: List[QgsMapLayer]) -> None:
         """Set up connection between feature selection in polygon layers and AOI area calculation.
@@ -1363,12 +1342,81 @@ class Mapflow(QObject):
         )['OUTPUT']
         return intersection.getFeatures()
 
+    def create_processing_from_provider(self, name, provider, aoi):
+        pass
+
+    def create_processing_from_raster_layer(self, name, layer, aoi=None):
+        if not aoi:
+            pass
+        pass
+
+    def upload_image(self, layer, processing_params=None, mosaic=None):
+        """
+        if processing_params are None, we do not call processing after upload;
+        this is a stub for further data-catalog usage
+        Also, mosaic can be specified to upload to specific mosaic
+        """
+        body = QHttpMultiPart(QHttpMultiPart.FormDataType)
+        tif = QHttpPart()
+        tif.setHeader(QNetworkRequest.ContentTypeHeader, 'image/tiff')
+        tif.setHeader(QNetworkRequest.ContentDispositionHeader, 'form-data; name="file"; filename=""')
+        image = QFile(layer.dataProvider().dataSourceUri(), body)
+        image.open(QIODevice.ReadOnly)
+        tif.setBodyDevice(image)
+        body.append(tif)
+        if processing_params:
+            callback = self.upload_tif_callback,
+            callback_kwargs = {'processing_params': processing_params}
+        else:
+            callback = None
+            callback_kwargs = None
+        if mosaic:
+            url = f'{self.server}/mosaic/{mosaic}/image'
+        else:
+            url = f'{self.server}/rasters'
+        response = self.http.post(
+            url=url,
+            callback=callback,
+            callback_kwargs=callback_kwargs,
+            error_handler=self.upload_tif_error_handler,
+            body=body,
+            timeout=3600  # one hour
+        )
+        body.setParent(response)
+        progress_message = QgsMessageBarItem(
+            self.plugin_name,
+            self.tr('Uploading image to Mapflow...'),
+            QProgressBar(self.message_bar),
+            parent=self.message_bar
+        )
+        self.message_bar.pushItem(progress_message)
+
+        def display_upload_progress(bytes_sent: int, bytes_total: int):
+            try:
+                progress_message.widget().setValue(round(bytes_sent / bytes_total * 100))
+            except ZeroDivisionError:  # may happen for some reason
+                return
+            if bytes_sent == bytes_total:
+                self.message_bar.popWidget(progress_message)
+        connection = response.uploadProgress.connect(display_upload_progress)
+        # Tear this connection if the user closes the progress message
+        progress_message.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
+
     def create_processing(self) -> None:
         """Create and start a processing on the server.
 
         Is called by clicking the 'Create processing' button.
         """
+
+        # get the data from UI
         processing_name = self.dlg.processingName.text()
+        raster_option = self.dlg.rasterCombo.currentText()
+        imagery = self.dlg.rasterCombo.currentLayer()
+        use_auth = self.dlg.providerAuthGroup.isChecked()
+        is_maxar = raster_option in config.MAXAR_PRODUCTS
+        use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
+
+        # Alert if UI form is unfilled
         if not processing_name:
             self.alert(self.tr('Please, specify a name for your processing'))
             return
@@ -1391,9 +1439,6 @@ class Mapflow(QObject):
                 'Try splitting your area(s) into several processings.'
             ).format(self.aoi_area_limit))
             return
-        raster_option = self.dlg.rasterCombo.currentText()
-        use_auth = self.dlg.providerAuthGroup.isChecked()
-        is_maxar = raster_option in config.MAXAR_PRODUCTS
         if is_maxar and not self.is_premium_user and not use_auth:
             ErrorMessage(
                 parent=self.dlg,
@@ -1405,7 +1450,7 @@ class Mapflow(QObject):
                 )
             ).show()
             return
-        imagery = self.dlg.rasterCombo.currentLayer()
+
         processing_params = {
             'name': processing_name,
             'wdName': self.dlg.modelCombo.currentText(),
@@ -1415,36 +1460,11 @@ class Mapflow(QObject):
             }
         }
         params = {}  # processing parameters
-        providers = self.settings.value('providers')
+        providers = ProvidersDict.from_settings(self.settings)
         if raster_option in providers:
-            params['url'] = providers[raster_option]['url']
-            if use_auth:
-                params['raster_login'] = self.dlg.providerUsername.text()
-                params['raster_password'] = self.dlg.providerPassword.text()
-            if raster_option == config.SENTINEL_OPTION_NAME:
-                image_id = self.dlg.imageId.text()
-                if image_id:
-                    params['url'] += image_id
-                else:
-                    self.alert(self.tr('Search the Sentinel-2 catalog for a suitable image'))
-                    self.dlg.tabWidget.setCurrentWidget(self.dlg.tabWidget.findChild(QWidget, 'providersTab'))
-                    return
-            elif is_maxar:  # add Connect ID and Image ID
-                processing_params['meta']['source'] = 'maxar'
-                if use_auth:  # user's own account
-                    connect_id = providers[raster_option]['connectId']
-                    if not helpers.UUID_REGEX.match(connect_id):
-                        self.show_connect_id_dialog(raster_option)
-                        return
-                    params['url'] += '&CONNECTID=' + providers[raster_option]['connectId']
-                else:  # our account
-                    processing_params['meta']['maxar_product'] = raster_option.split()[1].lower()
-                image_id = self.dlg.imageId.text()
-                if image_id:
-                    params['url'] += f'&CQL_FILTER=feature_id=\'{image_id}\''
-            params['source_type'] = providers[raster_option]['type']
-            if params['source_type'] == 'wms':
-                self.alert('WMS providers are not supported any more.')
+            provider = providers[raster_option]
+            params = provider.to_params()
+
             self.save_provider_auth()
         processing_params['params'] = params
         # Clip AOI to image extent if a single Maxar image is requested
@@ -1472,41 +1492,6 @@ class Mapflow(QObject):
         # Upload the image to the server
         processing_params['meta']['source'] = 'tif'
         processing_params['params']['source_type'] = 'tif'
-        body = QHttpMultiPart(QHttpMultiPart.FormDataType)
-        tif = QHttpPart()
-        tif.setHeader(QNetworkRequest.ContentTypeHeader, 'image/tiff')
-        tif.setHeader(QNetworkRequest.ContentDispositionHeader, 'form-data; name="file"; filename=""')
-        image = QFile(imagery.dataProvider().dataSourceUri(), body)
-        image.open(QIODevice.ReadOnly)
-        tif.setBodyDevice(image)
-        body.append(tif)
-        response = self.http.post(
-            url=f'{self.server}/rasters',
-            callback=self.upload_tif_callback,
-            callback_kwargs={'processing_params': processing_params},
-            error_handler=self.upload_tif_error_handler,
-            body=body,
-            timeout=3600  # one hour
-        )
-        body.setParent(response)
-        progress_message = QgsMessageBarItem(
-            self.plugin_name,
-            self.tr('Uploading image to Mapflow...'),
-            QProgressBar(self.message_bar),
-            parent=self.message_bar
-        )
-        self.message_bar.pushItem(progress_message)
-
-        def display_upload_progress(bytes_sent: int, bytes_total: int):
-            try:
-                progress_message.widget().setValue(round(bytes_sent / bytes_total * 100))
-            except ZeroDivisionError:  # may happen for some reason
-                return
-            if bytes_sent == bytes_total:
-                self.message_bar.popWidget(progress_message)
-        connection = response.uploadProgress.connect(display_upload_progress)
-        # Tear this connection if the user closes the progress message
-        progress_message.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
 
     def upload_tif_callback(self, response: QNetworkReply, processing_params: dict) -> None:
         """Start processing upon a successful GeoTIFF upload.

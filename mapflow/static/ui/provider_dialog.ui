@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>325</width>
-    <height>175</height>
+    <height>285</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -22,53 +22,39 @@
   <property name="minimumSize">
    <size>
     <width>325</width>
-    <height>175</height>
+    <height>225</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
     <width>325</width>
-    <height>175</height>
+    <height>325</height>
    </size>
   </property>
   <property name="windowTitle">
    <string notr="true">Provider</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
+   <item row="1" column="0">
+    <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+     </property>
+    </widget>
+   </item>
    <item row="0" column="0">
     <layout class="QFormLayout" name="formLayout">
      <item row="0" column="0">
-      <widget class="QLabel" name="labelName">
-       <property name="text">
-        <string>Name</string>
-       </property>
-      </widget>
-     </item>
-     <item row="0" column="1">
-      <widget class="QLineEdit" name="name">
-       <property name="placeholderText">
-        <string/>
-       </property>
-      </widget>
-     </item>
-     <item row="1" column="0">
-      <widget class="QLabel" name="labelUrl">
-       <property name="text">
-        <string notr="true">URL</string>
-       </property>
-      </widget>
-     </item>
-     <item row="1" column="1">
-      <widget class="QLineEdit" name="url"/>
-     </item>
-     <item row="3" column="0">
       <widget class="QLabel" name="labelType">
        <property name="text">
         <string>Type</string>
        </property>
       </widget>
      </item>
-     <item row="3" column="1">
+     <item row="0" column="1">
       <widget class="QComboBox" name="type">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -94,9 +80,65 @@
          <string notr="true">quadkey</string>
         </property>
        </item>
+       <item>
+        <property name="text">
+         <string>Maxar WMTS</string>
+        </property>
+       </item>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="labelName">
+       <property name="text">
+        <string>Name</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QLineEdit" name="name">
+       <property name="placeholderText">
+        <string/>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="0">
+      <widget class="QLabel" name="labelUrl">
+       <property name="text">
+        <string notr="true">URL</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="1">
+      <widget class="QLineEdit" name="url"/>
+     </item>
+     <item row="3" column="0">
+      <widget class="QLabel" name="label_2">
+       <property name="text">
+        <string>Login</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="1">
+      <widget class="QLineEdit" name="login"/>
+     </item>
+     <item row="4" column="0">
+      <widget class="QLabel" name="label_3">
+       <property name="text">
+        <string>Password</string>
+       </property>
       </widget>
      </item>
      <item row="4" column="1">
+      <widget class="QLineEdit" name="password"/>
+     </item>
+     <item row="5" column="0">
+      <widget class="QLabel" name="label">
+       <property name="text">
+        <string>CRS</string>
+       </property>
+      </widget>
+     </item>
+     <item row="5" column="1">
       <widget class="QComboBox" name="crs">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
@@ -131,24 +173,7 @@
        </item>
       </widget>
      </item>
-     <item row="4" column="0">
-      <widget class="QLabel" name="label">
-       <property name="text">
-        <string>CRS</string>
-       </property>
-      </widget>
-     </item>
     </layout>
-   </item>
-   <item row="1" column="0">
-    <widget class="QDialogButtonBox" name="buttonBox">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-     <property name="standardButtons">
-      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
-     </property>
-    </widget>
    </item>
   </layout>
  </widget>
