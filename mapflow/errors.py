@@ -105,18 +105,17 @@ class ErrorMessageList(QObject):
             "vector-processor.internalError": self.tr("Internal error in process of saving the results. "
                                                       "We are working on the fix, our support will contact you."),
             # todo: change when we normalize data-catalog errors
-            "MemoryLimitExceeded": self.tr("You have exceeded your available memory limit. "
+            "data-catalog.MemoryLimitExceeded": self.tr("You have exceeded your available memory limit. "
                                            "Your file takes {memory_requested} bytes, "
                                            "while your available memory is {available_memory} bytes"
                                            " Upgrade to Mapflow Premium to get more memory or delete unused data"),
-            "FileTooBig": self.tr("Max upload file size limit exceeded."
-                                  "Max upload file size = {max_file_size} bytes"
+            "data-catalog.FileTooBig": self.tr("Max upload file size limit exceeded."
+                                  "Max upload file size = {max_file_size} bytes, "
                                   "got file size = {actual_file_size} bytes)"),
-            "FileCheckFailed": self.tr("File {filename} can't be processed."),
-            "ItemNotFound": self.tr("Item {uid} not found"),
-            "AccessDenied": self.tr("Access to item {uid} denied! "),
-            "PreviewNotFound": self.tr("Preview not found for image: {image_id}")
-
+            "data-catalog.FileCheckFailed": self.tr("File {filename} can't be processed."),
+            "data-catalog.ItemNotFound": self.tr("{instance_type} with ID={uid} not found"),
+            "data-catalog.AccessDenied": self.tr("Access to {instance_type} with ID={uid} denied!"),
+            "data-catalog.PreviewNotFound": self.tr("Preview not found for image: {image_id}")
         }
 
     def get(self, key, default=None):
