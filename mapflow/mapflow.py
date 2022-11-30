@@ -44,6 +44,7 @@ class Mapflow(QObject):
 
         :param iface: an instance of the QGIS interface.
         """
+        project_id = QgsSettings().value('variables/project_id') or 'default'
         # Save refs to key variables used throughout the plugin
         self.iface = iface
         self.main_window = self.iface.mainWindow()
@@ -186,7 +187,7 @@ class Mapflow(QObject):
         self.processing_fetch_timer.setInterval(config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
         self.processing_fetch_timer.timeout.connect(
             lambda: self.http.get(
-                url=f'{self.server}/processings',
+                url=f'{self.server}/projects/{project_id}/processings',
                 callback=self.get_processings_callback,
                 use_default_error_handler=False  # ignore errors to prevent repetitive alerts
             )
@@ -2010,7 +2011,7 @@ class Mapflow(QObject):
         Since there are submodules, the various UI texts are set dynamically.
         """
         # Set main dialog title dynamically so it could be overridden when used as a submodule
-        mapflow_env = QgsSettings().value('variables/mapflow_env') or 'production'
+        mapflow_env = QgsSettings().value('variables/mapflow_env') or 'production'     
         if mapflow_env == 'production':
             self.dlg.setWindowTitle(self.plugin_name)
         else:
@@ -2056,9 +2057,10 @@ class Mapflow(QObject):
     def log_in(self) -> None:
         """Log into Mapflow."""
         mapflow_env = QgsSettings().value('variables/mapflow_env') or 'production'
+        project_id = QgsSettings().value('variables/project_id') or 'default'   
         self.server = f'https://whitemaps-{mapflow_env}.mapflow.ai/rest'
         self.http.get(
-            url=f'{self.server}/projects/default',
+            url=f'{self.server}/projects/{project_id}',
             callback=self.log_in_callback,
             error_handler=self.log_in_error_handler
         )
@@ -2167,8 +2169,9 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
+        project_id = QgsSettings().value('variables/project_id') or 'default'   
         # Fetch processings at startup and start the timer to keep fetching them afterwards
-        self.http.get(url=f'{self.server}/processings', callback=self.get_processings_callback)
+        self.http.get(url=f'{self.server}/projects/{project_id}/processings', callback=self.get_processings_callback)
         self.processing_fetch_timer.start()
         # Set up the UI with the received data
         response = json.loads(response.readAll().data())
