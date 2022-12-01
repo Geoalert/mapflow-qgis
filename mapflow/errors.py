@@ -1,7 +1,6 @@
 from typing import Dict
 from PyQt5.QtCore import QObject
 
-
 """
 ["messages":[{"code":"source-validator.PixelSizeTooHigh","parameters":{"max_res":"1.2","level":"error","actual_res":"5.620983603290215"}}]}]
 """
@@ -16,12 +15,13 @@ class ErrorMessageList(QObject):
             "source-validator.ImageReadError": self.tr("We could not open and read the image you have uploaded"),
             "source-validator.BadImageProfile": self.tr("Image profile (metadata) must have keys "
                                                         "{required_keys}, got profile {profile}"),
-            "source-validator.AOINotInCell": self.tr("AOI does not intersect the selected Sentinel-2 granule {actual_cell}"),
-            "source-validator.UrlMustBeString":  self.tr("Key \'url\' in your request must be a string, "
-                                                         "got {url_type} instead."),
-            "source-validator.UrlBlacklisted":  self.tr("The specified basemap {url} is forbidden for processing"
-                                                        " because it contains a map, not satellite image. "
-                                                        "Our models are suited for satellite imagery."),
+            "source-validator.AOINotInCell": self.tr(
+                "AOI does not intersect the selected Sentinel-2 granule {actual_cell}"),
+            "source-validator.UrlMustBeString": self.tr("Key \'url\' in your request must be a string, "
+                                                        "got {url_type} instead."),
+            "source-validator.UrlBlacklisted": self.tr("The specified basemap {url} is forbidden for processing"
+                                                       " because it contains a map, not satellite image. "
+                                                       "Our models are suited for satellite imagery."),
             "source-validator.UrlMustBeLink": self.tr("Your URL must be a link "
                                                       "starting with \"http://\" or \"https://\"."),
             "source-validator.UrlFormatInvalid": self.tr("Format of \'url\' is invalid and cannot be parsed. "
@@ -106,12 +106,13 @@ class ErrorMessageList(QObject):
                                                       "We are working on the fix, our support will contact you."),
             # todo: change when we normalize data-catalog errors
             "data-catalog.MemoryLimitExceeded": self.tr("You have exceeded your available memory limit. "
-                                           "Your file takes {memory_requested} bytes, "
-                                           "while your available memory is {available_memory} bytes"
-                                           " Upgrade to Mapflow Premium to get more memory or delete unused data"),
+                                                        "Your file takes {memory_requested} bytes, "
+                                                        "while your available memory is {available_memory} bytes"
+                                                        " Upgrade to Mapflow Premium"
+                                                        " to get more memory or delete unused data"),
             "data-catalog.FileTooBig": self.tr("Max upload file size limit exceeded."
-                                  "Max upload file size = {max_file_size} bytes, "
-                                  "got file size = {actual_file_size} bytes)"),
+                                               "Max upload file size = {max_file_size} bytes, "
+                                               "got file size = {actual_file_size} bytes)"),
             "data-catalog.FileCheckFailed": self.tr("File {filename} can't be processed."),
             "data-catalog.ItemNotFound": self.tr("{instance_type} with ID={uid} not found"),
             "data-catalog.AccessDenied": self.tr("Access to {instance_type} with ID={uid} denied!"),

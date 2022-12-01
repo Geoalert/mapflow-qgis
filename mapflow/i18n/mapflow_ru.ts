@@ -4,14 +4,14 @@
 <context>
     <name>ErrorMessage</name>
     <message>
-        <location filename="../errors.py" line="143"/>
+        <location filename="../errors.py" line="144"/>
         <source>
  Warning: some error parameters were not loaded : {}!</source>
         <translation>
  Предупреждение: некототорые параметры ошибки не загружены: {}!</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="145"/>
+        <location filename="../errors.py" line="146"/>
         <source>Unknown error while fetching processing errors: {exception}
  Error code: {code}
  Contact us to resolve the issue! help@geoalert.io</source>
@@ -223,27 +223,27 @@
         <translation>Произошла ошибка в процессе сохранения результатов обработки. Мы работаем над исправлением и свяжемся с вами.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="123"/>
+        <location filename="../errors.py" line="124"/>
         <source>Unknown error. Contact us to resolve the issue! help@geoalert.io</source>
         <translation>Неизвестная ошибка. Свяжитесь с нами чтобы решить проблему! help@geoalert.io</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="17"/>
+        <location filename="../errors.py" line="16"/>
         <source>Image profile (metadata) must have keys {required_keys}, got profile {profile}</source>
         <translation>Метаданные изображения должны содержать следующие теги: {required_keys}, метаданные загруженного изображения: {profile}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="14"/>
+        <location filename="../errors.py" line="13"/>
         <source>Task for source-validation must contain area of interest (`geometry` section)</source>
         <translation>Задача на проверку источника данных должна содержать область интереса (ключ `geometry`)</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="16"/>
+        <location filename="../errors.py" line="15"/>
         <source>We could not open and read the image you have uploaded</source>
         <translation>Мы не смогли открыть и прочитать загруженное изображение</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="19"/>
+        <location filename="../errors.py" line="18"/>
         <source>AOI does not intersect the selected Sentinel-2 granule {actual_cell}</source>
         <translation>Области интереса не пересекает выбранное изображение Sentinel-2 (код ячейки {actual_cell} )</translation>
     </message>
@@ -260,27 +260,32 @@
     <message>
         <location filename="../errors.py" line="112"/>
         <source>Max upload file size limit exceeded.Max upload file size = {max_file_size} bytesgot file size = {actual_file_size} bytes)</source>
-        <translation>Максимальный объем файла превышен. Допустимы файлы до {max_file_size} байт, получен файл размером {actual_file_size} байт</translation>
+        <translation type="obsolete">Максимальный объем файла превышен. Допустимы файлы до {max_file_size} байт, получен файл размером {actual_file_size} байт</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="115"/>
+        <location filename="../errors.py" line="116"/>
         <source>File {filename} can&apos;t be processed.</source>
         <translation>Не получилось обработать файл {filename}.</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="116"/>
+        <location filename="../errors.py" line="117"/>
         <source>{instance_type} with ID={uid} not found</source>
         <translation>Не найдено: {instance_type}, ID={uid}</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="117"/>
+        <location filename="../errors.py" line="118"/>
         <source>Access to {instance_type} with ID={uid} denied!</source>
         <translation>Доступ закрыт: {instance_type}, ID ={uid}!</translation>
     </message>
     <message>
-        <location filename="../errors.py" line="118"/>
+        <location filename="../errors.py" line="119"/>
         <source>Preview not found for image: {image_id}</source>
         <translation>Предпросмотр изображения {image_id} не найден</translation>
+    </message>
+    <message>
+        <location filename="../errors.py" line="113"/>
+        <source>Max upload file size limit exceeded.Max upload file size = {max_file_size} bytes, got file size = {actual_file_size} bytes)</source>
+        <translation>Максимальный объем файла превышен. Допустимы файлы до {max_file_size} байт, получен файл размером {actual_file_size} байт</translation>
     </message>
 </context>
 <context>
