@@ -262,6 +262,7 @@ class Mapflow(QObject):
             and not (
                 layer.crs().isValid()
                 and os.path.splitext(layer.dataProvider().dataSourceUri())[-1] in ('.tif', '.tiff')
+                and os.path.exists(layer.publicSource())
                 and os.path.getsize(layer.publicSource()) / 2**20 < config.MAX_TIF_SIZE
             )
         ])
