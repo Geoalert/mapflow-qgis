@@ -3,10 +3,9 @@ from typing import Optional
 from PyQt5 import uic
 from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 
-from mapflow.dialogs.dialogs import ui_path, plugin_icon
-from mapflow.entity.provider import Provider
-from mapflow.entity.provider.provider import SourceType, CRS
-from mapflow.helpers import QUAD_KEY_REGEX, XYZ_REGEX, MAXAR_PROVIDER_REGEX
+from .dialogs import ui_path, plugin_icon
+from ..entity.provider.provider import SourceType, CRS, Provider
+from ..helpers import QUAD_KEY_REGEX, XYZ_REGEX, MAXAR_PROVIDER_REGEX
 
 MAXAR_PROVIDER_NAME = "Maxar WMTS"
 
@@ -22,7 +21,7 @@ class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
 
         self.name.textChanged.connect(lambda: ok.setEnabled(self.validate_provider_form()))
         self.url.textChanged.connect(lambda: ok.setEnabled(self.validate_provider_form()))
-        self.type.currentTextChanged.connect(self.on_provider_change)
+        self.type.currentTextChanged.connect(lambda: ok.setEnabled(self.validate_provider_form()))
 
         self.finished.connect(self.name.clear)
         self.finished.connect(self.url.clear)

@@ -4,6 +4,8 @@ import time
 TIMEZONE = time.localtime().tm_zone
 PLUGIN_NAME = 'Mapflow'
 MAPFLOW_DEFAULT_TIMEOUT = 5  # in seconds
+DEFAULT_MODEL = '🏠 Buildings'
+SERVER = "https://whitemaps-{env}.mapflow.ai/rest"
 
 # PROCESSINGS
 PROCESSING_TABLE_REFRESH_INTERVAL = 6  # in seconds
@@ -35,7 +37,7 @@ SKYWATCH_METADATA_MAX_SIDE_LENGTH = 1e6  # 1,000 km
 INVALID_TOKEN_WARNING_OBJECT_NAME = 'invalidToken'
 METADATA_MORE_BUTTON_OBJECT_NAME = 'getMoreMetadata'
 SENTINEL_OPTION_NAME = 'Sentinel-2'
-SENTINEL_WD_NAME = '🚜 Fields (Sentinel-2)'
+SENTINEL_WD_NAMES = ['🚜 Fields (Sentinel-2)']
 SENTINEL_ATTRIBUTES = f'Date & Time ({TIMEZONE})', 'Cloud %', 'Image ID', 'Preview'
 SENTINEL_ID_COLUMN_INDEX = SENTINEL_ATTRIBUTES.index('Image ID')
 SENTINEL_PREVIEW_COLUMN_INDEX = SENTINEL_ATTRIBUTES.index('Preview')

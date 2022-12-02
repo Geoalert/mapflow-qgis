@@ -1,4 +1,4 @@
-from typing import Iterable, Union
+from typing import Iterable, Union, Optional
 from enum import Enum
 
 PROVIDERS_KEY = 'providers'
@@ -28,16 +28,40 @@ def provider_factory(**kwargs):
     return Provider.from_params(kwargs)
 
 
+class BasicAuth:
+    def __init__(self, login: str = "", password: str = ""):
+        if not isinstance(login, str) or not isinstance(password, str):
+            raise TypeError("Login and password must be string")
+        self.login = login
+        self.password = password
+
+    @property
+    def tuple(self):
+        return self.login, self.password
+
+    def __bool__(self):
+        return bool(self.login) or bool(self.password)
+
+
 class Provider:
     def __init__(self,
                  name: str,
                  url: str,
                  source_type: Union[SourceType, str] = SourceType.xyz,
+                 crs: Optional[Union[CRS, str]] = None,
                  editable_fields: Iterable[str] = ('name', 'url', 'type'),
+                 credentials: BasicAuth = BasicAuth(),
                  **kwargs):
         self.name = name
         self.source_type = SourceType(source_type)
         self.url = url
+        if not crs and self.source_type.requires_crs:
+            self.crs = CRS.web_mercator
+        elif not self.source_type.requires_crs:
+            self.crs = None
+        else:
+            self.crs = CRS(crs)
+        self.credentials = credentials
         self.editable_fields = editable_fields
 
     def to_dict(self):
@@ -45,12 +69,25 @@ class Provider:
             'name': self.name,
             'source_type': self.source_type.value,
             'url': self.url,
+            'credentials': self.credentials,
             'editable_fields': list(self.editable_fields)
             }
         return data
 
     @property
+    def is_default(self):
+        raise NotImplementedError
+
+    @property
+    def is_proxy(self):
+        raise NotImplementedError
+
+    @property
     def requires_image_id(self):
+        raise NotImplementedError
+
+    @property
+    def meta_url(self):
         raise NotImplementedError
 
     @classmethod
@@ -77,7 +114,7 @@ class Provider:
                 params['crs'] = CRS.web_mercator
         return cls(**params)
 
-    def to_processing_params(self):
+    def to_processing_params(self, image_id=None):
         """ You cannot create a processing with generic provider without implementation"""
         raise NotImplementedError
 

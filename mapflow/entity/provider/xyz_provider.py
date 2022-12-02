@@ -2,25 +2,10 @@
 Basic, non-authentification XYZ provider
 """
 from typing import Union, Iterable
-from provider import SourceType, CRS, Provider
+from .provider import SourceType, CRS, Provider, BasicAuth
 
 
-class BasicAuth:
-    def __init__(self, login: str = "", password: str = ""):
-        if not isinstance(login, str) or not isinstance(password, str):
-            raise TypeError("Login and password must be string")
-        self.login = login
-        self.password = password
-
-    @property
-    def tuple(self):
-        return self.login, self.password
-
-    def __bool__(self):
-        return bool(self.login) or bool(self.password)
-
-
-class BasemapProvider:
+class BasemapProvider(Provider):
     def __init__(self,
                  name: str,
                  url: str,
@@ -28,18 +13,15 @@ class BasemapProvider:
                  crs: [Union[CRS, str]] = CRS.web_mercator,
                  credentials: BasicAuth = BasicAuth(),
                  editable_fields: Iterable[str] = ('name', 'url', 'source_type', 'crs', 'credentials')):
-        self.name = name
-        self.source_type = SourceType(source_type)
-        self.url = url
+        super().__init__(name=name,
+                         url=url,
+                         source_type=source_type,
+                         crs=crs,
+                         is_default=False,
+                         credentials=credentials,
+                         editable_fields=editable_fields)
         # default value is Web Mercator
-        if not crs and self.source_type.requires_crs:
-            self.crs = CRS.web_mercator
-        elif not self.source_type.requires_crs:
-            self.crs = None
-        else:
-            self.crs = CRS(crs)
         self.credentials = credentials
-        self.editable_fields = editable_fields
 
     def to_dict(self):
         data = {
@@ -62,6 +44,14 @@ class BasemapProvider:
 
     @property
     def requires_image_id(self):
+        return False
+
+    @property
+    def is_proxy(self):
+        return False
+
+    @property
+    def is_default(self):
         return False
 
 
@@ -108,3 +98,15 @@ class QuadkeyProvider(BasemapProvider):
                          crs=crs,
                          credentials=credentials,
                          editable_fields=editable_fields)
+
+
+class MapboxProvider(XYZProvider):
+    def __init__(self):
+        super().__init__(name="Mapbox",
+                         url="https://api.tiles.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.jpg?access_token="
+                             "pk.eyJ1Ijoib3BlbnN0cmVldG1hcCIsImEiOiJja2w5YWt5bnYwNjZmMnFwZjhtbHk1MnA1In0.eq2aumBK6JuRoIuBMm6Gew",
+                         crs=CRS.web_mercator)
+
+    @property
+    def is_default(self):
+        return True
