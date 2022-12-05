@@ -59,7 +59,7 @@ class ErrorMessageList(QObject):
             "source-validator.MonthOutOfBounds": self.tr("Selected Sentinel-2 image month is {actual_month}, "
                                                          "this model is for: {allowed_months}"),
             "source-validator.TMSLinkFormatError": self.tr("You request TMS basemap link doesn't match the format, "
-                                                           "it must be a link containing '{x}', '{y}', '{z}' "
+                                                           "it must be a link containing \"x\", \"y\", \"z\" "
                                                            "placeholders, correct it and start processing again."),
             "source-validator.RequirementsMustBeDict": self.tr("Requirements must be dict, got {requirements_type}."),
             "source-validator.RequestMustBeDict": self.tr("Request must be dict, got {request_type}."),
@@ -72,7 +72,7 @@ class ErrorMessageList(QObject):
                                                                      "must contain dict, not {recommended_section_type}"),
             "source-validator.XYZLinkFormatError": self.tr("You XYZ basemap link doesn't match the format, "
                                                            "it must be a link "
-                                                           "containing '{x}', '{y}', '{z}' placeholders."),
+                                                           "containing \"x\", \"y\", \"z\"  placeholders."),
             "source-validator.UnhandledException": self.tr("Internal error in process of data source validation."
                                                            " We are working on the fix, our support will contact you."),
             "source-validator.internalError": self.tr("Internal error in process of data source validation."
