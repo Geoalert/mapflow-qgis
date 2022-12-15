@@ -2320,11 +2320,12 @@ class Mapflow(QObject):
         self.dlg_create_catalog.show()
 
     def create_new_catalog(self):
-        if self.dlg_create_catalog.newCatalogNameEdit1.text() == '':
+        if self.dlg_create_catalog.newCatalogNameEdit1.text() == '' or \
+                self.dlg_create_catalog.newCatalogTagsEdit1.text() == '':
             ErrorMessage(
                 parent=self.dlg_create_catalog,
-                text=self.tr("Please specify catalog name"),
-                title=self.tr("Catalog name is not specified")
+                text=self.tr("Please specify catalog name and/or tags"),
+                title=self.tr("Catalog name and/or tags are not specified")
             ).show()
             pass
         else:
@@ -2332,6 +2333,7 @@ class Mapflow(QObject):
             mosaic_name = mosaic_name.replace(" ", "_")
             self.http.post(
                 url=f'{self.server}/rasters/mosaic?name={mosaic_name}&tags=winter',
+                body=''.encode(),
                 callback=self.create_new_catalog_callback
             )
             self.close_create_catalog_dialog()
