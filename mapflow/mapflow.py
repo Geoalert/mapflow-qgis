@@ -18,12 +18,12 @@ from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction,
     QAbstractItemView, QLabel, QProgressBar, QMenu
 )
-from qgis import processing as qgis_processing  # to avoid collisions
+
 from qgis.gui import QgsMessageBarItem
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
     QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter,
-    QgsFeatureIterator, QgsWkbTypes, QgsPoint, QgsMapLayerType
+    QgsWkbTypes, QgsPoint, QgsMapLayerType
 )
 
 from .dialogs.dialogs import MainDialog, LoginDialog, ErrorMessage
@@ -32,18 +32,15 @@ from .http import Http, update_processing_limit
 from . import helpers, config
 from .entity.processing import parse_processings_request, Processing, ProcessingHistory, updated_processings
 from .entity.provider import (Provider,
+                              MaxarProvider,
                               MaxarProxyProvider,
                               ProvidersDict,
                               SentinelProvider,
-                              MaxarProvider,
-                              MaxarSecureWatchProvider,
-                              MaxarSecureWatchProxyProvider)
-from .errors import ErrorMessageList
-from .layer_utils import generate_maxar_layer_definition, generate_xyz_layer_definition
+                              create_provider)
 
-import logging
-logging.basicConfig(filename="/home/trekin/Desktop/plugin_log.txt", level=logging.DEBUG)
-logging.debug("Debug logging test...")
+from .functional.geometry import clip_aoi_to_image_extent
+from .errors import ErrorMessageList
+from .layer_utils import generate_xyz_layer_definition
 
 
 class Mapflow(QObject):
@@ -56,8 +53,6 @@ class Mapflow(QObject):
         :param iface: an instance of the QGIS interface.
         """
         # Save refs to key variables used throughout the plugin
-        logging.debug("Setup started")
-
         self.iface = iface
         self.main_window = self.iface.mainWindow()
         super().__init__(self.main_window)
@@ -96,6 +91,7 @@ class Mapflow(QObject):
         self.settings.beginGroup(self.plugin_name.lower())
         if self.settings.value('processings') is None:
             self.settings.setValue('processings', {})
+
         # Init dialogs
         self.dlg = MainDialog(self.main_window)
         self.set_up_login_dialog()
@@ -108,9 +104,6 @@ class Mapflow(QObject):
         self.dlg.help.setText(
             self.dlg.help.text().replace('Mapflow', f'{self.plugin_name} {self.plugin_version}', 1)
         )
-
-        logging.debug("Plugin version set up")
-
         # Initialize HTTP request sender
         self.http = Http(self.plugin_version, self.default_error_handler)
         # Check plugin version for compatibility with Processing API
@@ -123,14 +116,15 @@ class Mapflow(QObject):
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or config.DEFAULT_ZOOM))
-        logging.debug("zoom and out_dir restored")
 
         # load providers from settings
-        self.providers = ProvidersDict.from_settings(settings=self.settings)
+        try:
+            self.providers, errors = ProvidersDict.from_settings(settings=self.settings, env=mapflow_env)
+        except Exception as e:
+            self.alert(self.tr("Error during loading the data providers: {e}").format(str(e)))
+        if errors:
+            self.alert(self.tr('We failed to import providers {errors} from the settings. Please add them again').format(errors))
         self.update_providers()
-
-        logging.debug(f"Providers set up: {list(self.providers.keys())}")
-
         self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
         self.dlg.minIntersection.setValue(int(self.settings.value('metadataMinIntersection', 0)))
         self.dlg.maxCloudCover.setValue(int(self.settings.value('metadataMaxCloudCover', 100)))
@@ -180,7 +174,7 @@ class Mapflow(QObject):
         self.dlg.metadataFrom.dateChanged.connect(self.filter_metadata)
         self.dlg.metadataTo.dateChanged.connect(self.filter_metadata)
         self.dlg.preview.clicked.connect(self.preview)
-        self.dlg.addProvider.clicked.connect(self.dlg_provider.setup)
+        self.dlg.addProvider.clicked.connect(self.add_provider)
         self.dlg.editProvider.clicked.connect(self.edit_provider)
         self.dlg.removeProvider.clicked.connect(self.remove_provider)
         self.dlg.maxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
@@ -287,13 +281,12 @@ class Mapflow(QObject):
 
     def set_available_imagery_sources(self, wd: str) -> None:
         """Restrict the list of imagery sources according to the selected model."""
-        logging.debug("Checking and setting imagery sources")
         sentinel_providers = [provider.name for provider in self.providers.values() if
                               isinstance(provider, SentinelProvider)]
         web_providers = [provider.name for provider in self.providers.values() if
                          not isinstance(provider, SentinelProvider)]
-
-        if wd in config.SENTINEL_WD_NAMES:
+        current_sources = self.dlg.rasterCombo.additionalItems()
+        if wd in config.SENTINEL_WD_NAMES and not set(current_sources) == set(sentinel_providers):
             # Prevent disallow_local_rasters_with_sentinel() from being triggered
             self.dlg.rasterCombo.blockSignals(True)
             self.dlg.rasterCombo.setAdditionalItems(sentinel_providers)
@@ -302,7 +295,9 @@ class Mapflow(QObject):
             self.dlg.providerCombo.clear()
             self.dlg.providerCombo.addItems(sentinel_providers)
             self.dlg.rasterCombo.blockSignals(False)
-        else:
+        elif not set(current_sources) == set(web_providers):
+            # skip update in case source list did not change.
+            # This prevents the current selected item from being discarded
             self.dlg.rasterCombo.setAdditionalItems(web_providers)
             self.dlg.providerCombo.clear()
             self.dlg.providerCombo.addItems(web_providers)
@@ -383,7 +378,6 @@ class Mapflow(QObject):
         Limit zoom for Maxar when our account is to be used.
         """
         current_provider = self.providers.get(self.dlg.providerCombo.currentText())
-        logging.debug(str(current_provider))
         if isinstance(current_provider, MaxarProxyProvider):
             max_zoom = config.MAXAR_MAX_FREE_ZOOM
             value = max_zoom
@@ -422,7 +416,7 @@ class Mapflow(QObject):
             enabled = True
             image_id_placeholder = self.tr('e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00')
             additional_filters_enabled = True
-        elif isinstance(provider, (MaxarSecureWatchProvider, MaxarSecureWatchProxyProvider)):
+        elif isinstance(provider, (MaxarProvider, MaxarProxyProvider)):
             is_max_zoom_enabled = True
             columns = config.MAXAR_METADATA_ATTRIBUTES
             hidden_column_index = None
@@ -431,7 +425,7 @@ class Mapflow(QObject):
             image_id_placeholder = self.tr('e.g. a3b154c40cc74f3b934c0ffc9b34ecd1')
             additional_filters_enabled = True
         else:
-            # other providers (including Vivid) do not support imagery search,
+            # other providers do not support imagery search,
             # tear down the table and deactivate the panel
             is_max_zoom_enabled = True
             columns = tuple()  # empty
@@ -500,7 +494,7 @@ class Mapflow(QObject):
         """
         provider_name = self.dlg.providerCombo.currentText()
         provider = self.providers[provider_name]
-        if provider.protected:
+        if provider.is_default:
             # We want to protect built in providers!
             self.alert(self.tr("This provider cannot be removed"), QMessageBox.Warning)
             return
@@ -512,15 +506,19 @@ class Mapflow(QObject):
     def edit_provider_callback(self) -> None:
         """Add a web imagery provider or commit edits to an existing one."""
         old_provider = self.dlg_provider.current_provider
-        new_provider = self.dlg_provider.result_provider
+        if self.dlg_provider.result:
+            new_provider = create_provider(**self.dlg_provider.result)
+        else:
+            # returned empty provider - i.e nothing was changed
+            return
 
-        if not new_provider:
-            raise AssertionError('Empty provider!')
         if not old_provider:
             # we have added new one - without current one
             if new_provider.name in self.providers:
-                self.alert("Provider name must be unique. {name} already exists, select another or delete/edit existing")
-                self.dlg_provider.setup(new_provider)
+                self.alert(self.tr("Provider name must be unique. {name} already exists, "
+                                   "select another or delete/edit existing").format(name=new_provider.name))
+                self.dlg_provider.show()
+                return
             else:
                 self.providers.update({new_provider.name: new_provider})
         else:
@@ -528,14 +526,19 @@ class Mapflow(QObject):
             # if self.dlg_provider.property('mode') == 'edit':  #
             if new_provider.name != old_provider.name and new_provider.name in self.providers:
                 # we do not want user to replace another provider when editing this one
-                self.alert("Provider name must be unique. {name} already exists, select another or delete/edit existing")
-                self.dlg_provider.setup(new_provider)
+                self.alert(self.tr("Provider name must be unique. {name} already exists,"
+                                   " select another or delete/edit existing").format(name=new_provider.name))
+                self.dlg_provider.show()
+                return
             else:
                 self.providers.pop(old_provider.name)
                 self.providers.update({new_provider.name: new_provider})
 
         self.update_providers()
         self.dlg.providerCombo.setCurrentText(new_provider.name)
+
+    def add_provider(self) -> None:
+        self.dlg_provider.setup(None)
 
     def edit_provider(self) -> None:
         """Prepare and show the provider edit dialog.
@@ -555,16 +558,10 @@ class Mapflow(QObject):
         args:
          providers: optional ProvidersDict to update settings with
         """
-        logging.debug("Saving to settings")
         self.providers.to_settings(self.settings)
-        logging.debug(f"saved; updating rasterCombo with {list(self.providers.keys())}")
-        logging.debug(f"rasterCombo: {self.dlg.rasterCombo.count()}")
-#        self.dlg.rasterCombo.setAdditionalItems(list(self.providers.keys()))
-        logging.debug("OK; updating providerCombp")
         self.dlg.providerCombo.clear()
         self.dlg.providerCombo.addItems(self.providers.keys())
-        logging.debug("Done updating providers")
-
+        self.dlg.modelCombo.currentTextChanged.emit(self.dlg.modelCombo.currentText())
 
     def show_provider_edit_dialog(self, name) -> None:
         provider = self.providers.get(name, None)
@@ -657,7 +654,7 @@ class Mapflow(QObject):
         to = self.dlg.metadataTo.date().toString(Qt.ISODate)
         max_cloud_cover = self.dlg.maxCloudCover.value()
         min_intersection = self.dlg.minIntersection.value()
-        if isinstance(provider,(MaxarSecureWatchProxyProvider, MaxarSecureWatchProvider)):
+        if isinstance(provider, (MaxarProxyProvider, MaxarProvider)):
             self.get_maxar_metadata(aoi, provider, from_, to, max_cloud_cover, min_intersection)
         elif isinstance(provider, SentinelProvider):
             self.request_skywatch_metadata(aoi, from_, to, max_cloud_cover, min_intersection)
@@ -707,13 +704,8 @@ class Mapflow(QObject):
                 aoi.convertToSingleType()
             else:  # use the BBOX of the parts
                 aoi = aoi_bbox_geom
-        token = self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']
-        if token:  # own account
-            url = 'https://api.skywatch.co/earthcache/archive/search'
-            headers = {'x-api_key': token}
-        else:  # our account
-            url = self.server + '/meta/skywatch/id'
-            headers = {}
+        url = self.server + '/meta/skywatch/id'
+        headers = {}
         self.http.post(
             url=url,
             body=json.dumps({
@@ -806,12 +798,8 @@ class Mapflow(QObject):
         :param request_id: The UUID of the submitted SkyWatch request.
         :param max_cloud_cover: All metadata with a higher cloud cover % will be discarded.
         """
-        if is_proxied:
-            url = f'{self.server}/meta/skywatch/page?id={request_id}&cursor={start_index}'
-            headers = {}
-        else:
-            url = f'https://api.skywatch.co/earthcache/archive/search/{request_id}/search_results?cursor={start_index}'
-            headers = {'x-api-key': self.settings.value('providers')[config.SENTINEL_OPTION_NAME]['token']}
+        url = f'{self.server}/meta/skywatch/page?id={request_id}&cursor={start_index}'
+        headers = {}
         self.http.get(
             url=url,
             headers=headers,
@@ -963,13 +951,11 @@ class Mapflow(QObject):
         elem = aoi.get().asGml3(QDomDocument(), precision=5, ns="http://www.opengis.net/gml")
         elem.save(stream, 0)  # 0 = no indentation (minimize request size)
         stream.seek(0)  # rewind to the start
+        request_body = provider.meta_request(from_=from_, to=to, max_cloud_cover=max_cloud_cover/100,geometry=stream.readAll())
         if provider.is_proxy:  # assume user wants to use our account, proxy thru Mapflow
             self.http.post(
                 url=provider.meta_url,
-                body=provider.meta_request(from_ = from_,
-                                           to=to,
-                                           max_cloud_cover=max_cloud_cover/100,
-                                           geometry=stream.readAll()),
+                body=request_body,
                 callback=self.get_maxar_metadata_callback,
                 callback_kwargs=callback_kwargs,
                 timeout=7
@@ -981,10 +967,7 @@ class Mapflow(QObject):
             )).encode())
             self.http.post(
                 url=provider.meta_url,
-                body=provider.meta_request(from_ = from_,
-                                           to=to,
-                                           max_cloud_cover=max_cloud_cover/100,
-                                           geometry=stream.readAll()),
+                body=request_body,
                 auth=f'Basic {encoded_credentials.decode()}'.encode(),
                 callback=self.get_maxar_metadata_callback,
                 callback_kwargs=callback_kwargs,
@@ -1005,7 +988,8 @@ class Mapflow(QObject):
         :param product: Maxar product whose metadata was requested.
         """
         self.dlg.metadataTable.clearContents()
-        metadata = json.loads(response.readAll().data())
+        response_data = response.readAll().data()
+        metadata = json.loads(response_data)
         if metadata['totalFeatures'] == 0:
             self.alert(
                 self.tr('No images match your criteria. Try relaxing the filters.'),
@@ -1135,8 +1119,9 @@ class Mapflow(QObject):
         if not image_id:
             self.dlg.metadataTable.clearSelection()
             return
-        provider = self.dlg.providerCombo.currentText()
-        if provider == config.SENTINEL_OPTION_NAME:
+        provider = self.providers.get(self.dlg.providerCombo.currentText())
+
+        if isinstance(provider, SentinelProvider):
             if not ((
                 helpers.SENTINEL_DATETIME_REGEX.search(image_id)
                 and helpers.SENTINEL_COORDINATE_REGEX.search(image_id)
@@ -1149,7 +1134,7 @@ class Mapflow(QObject):
                 ))
                 self.dlg.imageId.clear()
                 return
-        elif provider in config.MAXAR_PRODUCTS:
+        elif isinstance(provider, (MaxarProvider, MaxarProxyProvider)):
             if not helpers.UUID_REGEX.match(image_id):
                 self.dlg.imageId.clear()
                 self.alert('A Maxar image ID should look like a3b154c40cc74f3b934c0ffc9b34ecd1')
@@ -1271,24 +1256,6 @@ class Mapflow(QObject):
         """
         self.report_error(response, self.tr("Error deleting a processing"))
 
-    def clip_aoi_to_image_extent(self, aoi_geometry: QgsGeometry, extent: QgsFeature) -> QgsFeatureIterator:
-        """Clip user AOI to image extent if the image doesn't cover the entire AOI."""
-        aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
-        aoi = QgsFeature()
-        aoi.setGeometry(aoi_geometry)
-        aoi_layer.dataProvider().addFeatures([aoi])
-        aoi_layer.updateExtents()
-        # Create a temp layer for the image extent
-        image_extent_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
-        image_extent_layer.dataProvider().addFeatures([extent])
-        aoi_layer.updateExtents()
-        # Find the intersection
-        intersection = qgis_processing.run(
-            'qgis:intersection',
-            {'INPUT': aoi_layer, 'OVERLAY': image_extent_layer, 'OUTPUT': 'memory:'}
-        )['OUTPUT']
-        return intersection.getFeatures()
-
     def upload_image(self, layer, processing_params=None, mosaic=None):
         """
         if processing_params are None, we do not call processing after upload;
@@ -1304,9 +1271,10 @@ class Mapflow(QObject):
         tif.setBodyDevice(image)
         body.append(tif)
         if processing_params:
-            callback = self.upload_tif_callback,
+            callback = self.upload_tif_callback
             callback_kwargs = {'processing_params': processing_params}
         else:
+            # uploading without processing creation
             callback = None
             callback_kwargs = None
         if mosaic:
@@ -1341,19 +1309,25 @@ class Mapflow(QObject):
         # Tear this connection if the user closes the progress message
         progress_message.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
 
-    def create_processing_from_provider(self, provider, aoi, image_id, params):
-        params.update(params=provider.to_processing_params())
-        if provider.requires_image_id:
-            if not image_id:
-                raise ValueError(self.tr("Provider {} requires selected Image ID").format(provider.name))
-            aoi = self.crop_aoi_with_maxar_image_footprint(aoi, image_id)
+    def create_processing_from_provider(self, provider, aoi, image_id, params, selected_image):
+        provider_params, processing_meta = provider.to_processing_params(image_id=image_id)
+        params.update(params=provider_params)
+        params['meta'].update(**processing_meta)
+        if selected_image:
+            if isinstance(provider, (MaxarProvider, MaxarProxyProvider)):
+                aoi = self.crop_aoi_with_maxar_image_footprint(aoi, selected_image)
+            elif isinstance(provider, SentinelProvider):
+                # todo: crop sentinel aoi with image footprint?
+                pass
+        elif provider.requires_image_id:
+            self.alert(self.tr("Provider {} requires selected Image ID").format(provider.name))
         params.update(geometry=json.loads(aoi.asJson()))
-        logging.debug(str(params))
         self.post_processing(params)
 
     def create_processing_from_local_file(self, imagery, aoi, params):
-        params['meta']['source'] = 'tif'
-        params['params']['source_type'] = 'tif'
+        params['meta'].update(source='tif')
+        params['params'].update(source_type='tif')
+        params.update(geometry=json.loads(aoi.asJson()))
         self.upload_image(layer=imagery, processing_params=params)
 
     def check_processing_ui(self):
@@ -1386,7 +1360,7 @@ class Mapflow(QObject):
     def crop_aoi_with_maxar_image_footprint(self, aoi, image_id):
         extent = self.maxar_metadata_footprints[image_id[config.MAXAR_ID_COLUMN_INDEX].text()]
         try:
-            aoi = next(self.clip_aoi_to_image_extent(aoi, extent)).geometry()
+            aoi = next(clip_aoi_to_image_extent(aoi, extent)).geometry()
         except StopIteration:
             raise ValueError('Image and processing area do not intersect')
         return aoi
@@ -1402,8 +1376,8 @@ class Mapflow(QObject):
         raster_option = self.dlg.rasterCombo.currentText()
         imagery = self.dlg.rasterCombo.currentLayer()
         use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
+        image_id = self.dlg.imageId.text()
         selected_image = self.dlg.metadataTable.selectedItems()
-
         if not self.check_processing_ui():
             return
 
@@ -1414,19 +1388,22 @@ class Mapflow(QObject):
                 'source-app': 'qgis',
                 'version': self.plugin_version,
                 'source': raster_option.lower()
-            }
+            },
+            'params': {}
         }
-        logging.debug(f"Params:{processing_params}")
         self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
         if imagery:
-            layer_extent=QgsFeature()
+            layer_extent = QgsFeature()
             layer_extent.setGeometry(helpers.get_layer_extent(imagery))
             if not use_image_extent_as_aoi:
                 # If we do not use the layer extent as aoi, we still create it and use it to crop the selected AOI
                 try:
-                    aoi = next(self.clip_aoi_to_image_extent(aoi_geometry=self.aoi, extent=layer_extent)).geometry()
+                    aoi = next(clip_aoi_to_image_extent(aoi_geometry=self.aoi, extent=layer_extent)).geometry()
                 except StopIteration:
                     self.alert(self.tr('Image and processing area do not intersect'))
+                    return
+            else:
+                aoi = self.aoi
             try:
                 self.create_processing_from_local_file(imagery,
                                                        aoi=aoi,
@@ -1436,7 +1413,6 @@ class Mapflow(QObject):
             return
         else:
             provider = self.providers[raster_option]
-            logging.debug(f"Starting with provider {provider.name}: {provider.url}")
             if isinstance(provider, MaxarProxyProvider) and not self.is_premium_user:
                 ErrorMessage(
                     parent=self.dlg,
@@ -1447,15 +1423,16 @@ class Mapflow(QObject):
                         'to be able to process Maxar imagery.'
                     )
                 ).show()
+                return
             try:
                 self.create_processing_from_provider(provider,
                                                      aoi=self.aoi,
-                                                     image_id=selected_image,
-                                                     params=processing_params)
+                                                     image_id=image_id,
+                                                     params=processing_params,
+                                                     selected_image=selected_image)
             except Exception as e:
                 self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
             return
-
 
     def upload_tif_callback(self, response: QNetworkReply, processing_params: dict) -> None:
         """Start processing upon a successful GeoTIFF upload.
@@ -1639,22 +1616,22 @@ class Mapflow(QObject):
         password = provider.credentials.password
         max_zoom = self.dlg.maxZoom.value()
         layer_name = provider.name
-        url = provider.url
+        url = provider.preview_url(image_id=image_id)
+        if not url:
+            self.alert(f"Provider {provider.name} does not support previews!")
+            return
         if provider.is_proxy:
-            proxy = self.server
             username = self.username
             password = self.password
-            uri = generate_maxar_layer_definition(url,
-                                                  username, password,
-                                                  max_zoom, image_id, proxy)
+            uri = generate_xyz_layer_definition(url,
+                                                username, password,
+                                                max_zoom, image_id)
             extent = self.maxar_extent(image_id)
             layer_name = self.maxar_layer_name(layer_name, image_id)
         else:
-            logging.debug(url)
             uri = generate_xyz_layer_definition(url,
                                                 username, password,
                                                 max_zoom, provider.source_type)
-            logging.debug(uri)
             extent = None
         layer = QgsRasterLayer(uri, layer_name, 'wms')
         if layer.isValid():
@@ -2070,6 +2047,11 @@ class Mapflow(QObject):
         ):
             self.report_error(response, self.tr('Proxy error. Please, check your proxy settings.'))
             return True
+        elif error == QNetworkReply.ContentAccessDenied:
+            self.report_error(response, self.tr("This operation is forbidden for your account, contact us"))
+            return True
+        else:
+            self.report_error(response, f"Unknown error: {error}")
         return False
 
     def report_error(self, response: QNetworkReply, title: str = None):

@@ -1,10 +1,10 @@
 import json
 from abc import ABC
-from typing import Union, Iterable
-from .provider import Provider, CRS, SourceType
-from ...config import SERVER, SENTINEL_OPTION_NAME
+from typing import Union
+from .provider import Provider, SourceType, staticproperty
+from ...config import MAXAR_BASE_URL, MAXAR_META_URL
+from ...layer_utils import add_image_id, add_connect_id, maxar_tile_url
 from ...requests.maxar_metadata_request import MAXAR_REQUEST_BODY
-from ...layer_utils import add_image_id
 
 
 class ProxyProvider(Provider, ABC):
@@ -17,19 +17,20 @@ class ProxyProvider(Provider, ABC):
     def __init__(self,
                  name: str,
                  source_type: Union[SourceType, str],
+                 proxy: str,
                  **kwargs):
         super().__init__(name=name,
-                         url=SERVER.format(env='production'),
                          source_type=source_type,
-                         editable_fields=(),
-                         is_default=False)
+                         is_default=False,
+                         **kwargs)
+        self.proxy = proxy
 
-    def to_processing_params(self):
+    def to_processing_params(self, image_id=None):
         params = {
             'url': self.url,
-            'source_type': self.source_type
+            'source_type': self.source_type.value
         }
-        return params
+        return params, {}
 
     @property
     def is_proxy(self):
@@ -39,72 +40,65 @@ class ProxyProvider(Provider, ABC):
     def is_default(self):
         return True
 
-
-class SentinelProvider(ProxyProvider):
-    def __init__(self,
-                 **kwargs):
-        name = SENTINEL_OPTION_NAME
-        super().__init__(name=name, source_type=SourceType.sentinel_l2a)
-
-    @property
-    def requires_image_id(self):
-        return True
-
-    def to_processing_params(self, image_id):
-        return{'url': image_id,
-               'source_type': self.source_type}
+    @staticproperty
+    def option_name():
+        return None
 
 
 class MaxarProxyProvider(ProxyProvider, ABC):
     # Abstract class
-    def __init__(self, name: str,
-                 **kwargs):
-        super().__init__(name=name, source_type=SourceType.xyz)
-
-
-class MaxarVividProxyProvider(MaxarProxyProvider):
     def __init__(self,
+                 name: str,
+                 proxy: str,
                  **kwargs):
-        super().__init__(name="Maxar Vivid",
+        super().__init__(name=name,
+                         source_type=SourceType.xyz,
+                         proxy=proxy,
+                         url=maxar_tile_url(MAXAR_BASE_URL),
                          **kwargs)
 
     @property
-    def requires_image_id(self):
-        return False
+    def connect_id(self):
+        raise NotImplementedError
+
+    def preview_url(self, image_id=None):
+        if self.requires_image_id and not image_id:
+            raise ValueError("Preview unavailable without image ID!")
+        url = add_connect_id(f'{self.proxy}/png?TileRow={{y}}&TileCol={{x}}&TileMatrix={{z}}', self.connect_id)
+        return add_image_id(url, image_id)
+
+    def proxy_maxar_url(server, image_id):
+        """
+        When we process a particular image, we use SecureWatch, otherwise - Vivid.
+        The name of the service is passed as CONNECTID to our proxy server
+        """
+        url = f'{server}/png?TileRow={{y}}&TileCol={{x}}&TileMatrix={{z}}' + '&CONNECTID='
+        if image_id:
+            return add_image_id(url + 'securewatch', image_id)
+        else:
+            return url + 'vivid'
 
     def to_processing_params(self, image_id=None):
-        return{'url': self.url,
-               'connectid': 'vivid',
-               'source_type': self.source_type,
-               'crs': self.crs.value}
-
-
-class MaxarSecureWatchProxyProvider(MaxarProxyProvider):
-    def __init__(self,
-                 **kwargs):
-        super().__init__(name="Maxar SecureWatch",
-                 **kwargs)
-
-    @property
-    def requires_image_id(self):
-        return True
+        if self.requires_image_id and not image_id:
+            raise ValueError("Cannot start processing without image ID!")
+        params = {'url': add_image_id(self.url, image_id),
+                  'source_type': self.source_type.value,
+                  'crs': self.crs.value}
+        meta = {'source': 'maxar',
+                'maxar_product': self.connect_id}
+        return params, meta
 
     @property
     def meta_url(self):
-        return self.url + "/meta"
+        return self.proxy + "/meta"
 
-    @property
-    def meta_request(self):
-        return json.dumps({
-            'url': "",
-            'body': MAXAR_REQUEST_BODY,
-            'connectId': 'securewatch'
-        }).encode()
-
-    def to_processing_params(self, image_id=None):
-        if not image_id:
-            raise ValueError("SecureWatch requires image id")
-        return{'url': add_image_id(self.url, image_id),
-               'connectid': 'securewatch',
-               'source_type': self.source_type,
-               'crs': self.crs.value}
+    def meta_request(self, from_, to, max_cloud_cover, geometry):
+        body = json.dumps({
+                    'url': MAXAR_META_URL,
+                    'body': MAXAR_REQUEST_BODY.format(from_=from_,
+                                                      to=to,
+                                                      max_cloud_cover=max_cloud_cover,
+                                                      geometry=geometry),
+                    'connectId': self.connect_id
+                }).encode()
+        return body

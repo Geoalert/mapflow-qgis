@@ -1,43 +1,44 @@
-from .xyz_provider import XYZProvider, TMSProvider, QuadkeyProvider
-from .proxy_provider import SentinelProvider, MaxarVividProxyProvider, MaxarSecureWatchProxyProvider
+from .xyz_provider import XYZProvider, TMSProvider, QuadkeyProvider, MaxarProvider
+provider_options = {XYZProvider.option_name: XYZProvider,
+                    TMSProvider.option_name: TMSProvider,
+                    QuadkeyProvider.option_name: QuadkeyProvider,
+                    MaxarProvider.option_name: MaxarProvider}
+
+from ...config import MAXAR_BASE_URL
+from ...layer_utils import add_connect_id
 
 
-def create_provider(provider_class,
+def create_provider(option_name,
                     **kwargs):
-    providers = {
-        "xyz": XYZProvider,
-        "tms": TMSProvider,
-        "quadkey": QuadkeyProvider,
-        "sentinel": SentinelProvider,
-        "proxy_vivid": MaxarVividProxyProvider,
-        "proxy_securewatch": MaxarSecureWatchProxyProvider
-    }
-    provider = providers[provider_class]
+    provider = provider_options[option_name]
     return provider(**kwargs)
 
 
-def create_provider_old(name,
-                        url,
-                        source_type,
-                        credentials,
-                        connect_id,
-                        is_maxar: bool,
-                        **kwargs):
+def create_provider_old(name, source_type, url, login, password, connect_id):
     """
     Load the list of the providers saved in old format, to not remove old user's providers
     """
+    # connectid, login and password are only for maxar providers with user's own credentials
 
-    if source_type == "sentinel_l2a":
-        return SentinelProvider()
-
-    if "vivid" in name.lower() and is_maxar:
-        return MaxarVividProxyProvider()
-    elif "securewatch" in name.lower and is_maxar:
-        return MaxarSecureWatchProxyProvider()
+    has_maxar_creds = bool(login) and bool(password) and bool(connect_id)
+    if "securewatch" in name.lower() or "vivid" in name.lower():
+        if has_maxar_creds:
+            return MaxarProvider(name=name,
+                                 url=add_connect_id(MAXAR_BASE_URL, connect_id),
+                                 credentials=(login, password),
+                                 save_credentials=True)
+        else:
+            # this means default provider Maxar SecureWatch which now is not saved in settings
+            return None
+    elif "sentinel" in name.lower():
+        # Sentinel provider is a default one and is not allowed for adding
+        return None
     else:  # not proxied XYZ provider
         if source_type == 'xyz':
-            return XYZProvider(name=name, url=url, credentials=credentials)
+            return XYZProvider(name=name, url=url)
         elif source_type == 'tms':
-            return TMSProvider(name=name, url=url, credentials=credentials)
+            return TMSProvider(name=name, url=url)
         elif source_type == "quadkey":
-            return QuadkeyProvider(name=name, url=url, credentials=credentials)
+            return QuadkeyProvider(name=name, url=url)
+        else:
+            return None

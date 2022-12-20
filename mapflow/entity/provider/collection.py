@@ -1,9 +1,22 @@
 from typing import List
-from .provider import Provider, SourceType, CRS, PROVIDERS_KEY
-from .proxy_provider import SentinelProvider, MaxarVividProxyProvider, MaxarSecureWatchProxyProvider
-from .xyz_provider import MapboxProvider
 from .factory import create_provider, create_provider_old
-import logging
+from .provider import Provider
+from .default import SentinelProvider, MaxarVividProxyProvider, MaxarSecureWatchProxyProvider, MapboxProvider
+from ...config import SERVER, PROVIDERS_KEY, LEGACY_PROVIDERS_KEY, LEGACY_PROVIDER_LOGIN_KEY, LEGACY_PROVIDER_PASSWORD_KEY
+
+import json
+
+
+def decorate(base_name, existing_names):
+    """
+    Transform `name` -> `name (i)` with first non-occupied i
+    """
+    i = 1
+    name = base_name + f' ({i})'
+    while name in existing_names:
+        name = base_name + f' ({i})'
+        i += 1
+    return name
 
 
 class ProvidersDict(dict):
@@ -13,25 +26,53 @@ class ProvidersDict(dict):
         return cls({p.name: p for p in providers})
 
     @classmethod
-    def create_default_providers(cls):
+    def create_default_providers(cls, env):
         return cls.from_list([MapboxProvider(),
-                              MaxarVividProxyProvider(),
-                              MaxarSecureWatchProxyProvider(),
-                              SentinelProvider()])
+                              MaxarVividProxyProvider(proxy=SERVER.format(env=env)),
+                              MaxarSecureWatchProxyProvider(proxy=SERVER.format(env=env)),
+                              SentinelProvider(proxy=SERVER.format(env=env))])
 
     @classmethod
-    def from_settings(cls, settings):
-        logging.debug("Creating default providers")
-        providers = ProvidersDict.create_default_providers()
-        logging.debug(f"Default: {list(providers.keys())}")
-        providers_settings = settings.value(PROVIDERS_KEY, None)
-        logging.debug(f"Settings: {providers_settings}")
+    def from_settings(cls, settings, env):
+        errors = []
+        providers = ProvidersDict.create_default_providers(env)
+        providers_settings = json.loads(settings.value(PROVIDERS_KEY, "{}"))
         if providers_settings:
-            dict_ = {name: Provider.from_params(params, name) for name, params in providers_settings.items()
-                     if name not in providers}  # we don not allow to replace default providers
-            providers.update(cls(dict_))
-        logging.debug(f"All providers: {list(providers.keys())}")
-        return providers
+            for name, params in providers_settings.items():
+                if name in providers.keys():
+                    name = decorate(name, providers.keys())
+                    params["name"] = name
+                try:
+                    providers.update({name: create_provider(**params)})
+                except Exception as e:
+                    errors.append(name)
+        # Importing providers from old plugin settings
+        old_login = settings.value(LEGACY_PROVIDER_LOGIN_KEY, "")
+        old_password = settings.value(LEGACY_PROVIDER_PASSWORD_KEY, "")
+        old_providers = settings.value(LEGACY_PROVIDERS_KEY, {})
+        for name, params in old_providers.items():
+            if any(key not in params.keys() for key in ('type', 'url')):
+                # settings are not understandable
+                errors.append(name)
+            provider = create_provider_old(name=name,
+                                           source_type=params.get("type"),
+                                           url=params.get("url"),
+                                           login=old_login,
+                                           password=old_password,
+                                           connect_id=params.get("connectId", ""))
+            if not provider:
+                # this means that the provider should not be added
+                continue
+            if name in providers.keys():
+                name = decorate(name, providers.keys())
+                provider.name = name
+            providers.update({name: provider})
+        # clear old providers so that they will not be loaded again
+        settings.remove(LEGACY_PROVIDERS_KEY)
+        settings.remove(LEGACY_PROVIDER_PASSWORD_KEY)
+        settings.remove(LEGACY_PROVIDER_LOGIN_KEY)
+
+        return providers, errors
 
     def dict(self):
         return {name: provider.to_dict() for name, provider in self.items()}
@@ -45,4 +86,5 @@ class ProvidersDict(dict):
         return ProvidersDict({k: v for k, v in self.items() if not v.is_default})
 
     def to_settings(self, settings):
-        settings.setValue(PROVIDERS_KEY, self.users_providers.dict())
+        users_providers = self.users_providers.dict()
+        settings.setValue(PROVIDERS_KEY, json.dumps(users_providers))

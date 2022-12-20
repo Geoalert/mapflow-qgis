@@ -26,11 +26,9 @@ MAXAR_ID_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.values()).index('id')
 MAXAR_DATETIME_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.keys()).index(f'Date & Time ({TIMEZONE})')
 MAXAR_CLOUD_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.keys()).index(f'Cloud %')
 MAXAR_MAX_FREE_ZOOM = 12
-MAXAR_WMTS_URL = 'https://securewatch.digitalglobe.com/earthservice/wmtsaccess?SERVICE=WMTS&VERSION=1.0.0&STYLE=&REQUEST=GetTile&LAYER=DigitalGlobe:ImageryTileService&FORMAT=image/jpeg&TileRow={y}&TileCol={x}&TileMatrixSet=EPSG:3857&TileMatrix=EPSG:3857:{z}'
-MAXAR_PRODUCTS = {
-    f'Maxar {name}': {'url': MAXAR_WMTS_URL, 'type': 'xyz', 'connectId': ''} 
-    for name in ('SecureWatch', 'Vivid')
-}
+MAXAR_BASE_URL = 'https://securewatch.digitalglobe.com/earthservice/wmtsaccess?'
+MAXAR_META_URL = 'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?width=3000&height=3000'
+
 # MISC
 SKYWATCH_METADATA_MAX_AREA = 1e11  # 100,000 sq.km
 SKYWATCH_METADATA_MAX_SIDE_LENGTH = 1e6  # 1,000 km
@@ -47,14 +45,12 @@ SKYWATCH_POLL_INTERVAL = 2
 MAX_TIF_SIZE = 2000  # MB
 MAX_ZOOM = 21
 DEFAULT_ZOOM = MAXAR_MAX_FREE_ZOOM
-BUILTIN_PROVIDERS = {
-    **MAXAR_PRODUCTS,
-    SENTINEL_OPTION_NAME: {
-        'url': 'http://',
-        'type': 'sentinel_l2a',
-        'token': ''
-    }
-}
+
+PROVIDERS_KEY = 'mapflow_data_providers'
+LEGACY_PROVIDERS_KEY = 'providers'
+LEGACY_PROVIDER_LOGIN_KEY = 'providerUsername'
+LEGACY_PROVIDER_PASSWORD_KEY = 'providerPassword'
+
 STYLES = {
     'Buildings Detection': 'buildings',
     'Buildings Detection With Heights': 'buildings',
@@ -62,14 +58,3 @@ STYLES = {
     'Forest Detection With Heights': 'forest_with_heights',
     'Roads Detection': 'roads'
 }
-
-default_providers = [
-    {"provider_class": "sentinel"},
-    {"provider_class": "proxy_vivid"},
-    {"provider_class": "proxy_securewatch"},
-    {"provider_class": "xyz",
-     "name": "Mapbox",
-     "url": 'https://api.tiles.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.jpg?'
-            'access_token=pk.eyJ1Ijoib3BlbnN0cmVldG1hcCIsImEiOiJja2w5YWt5bnYwNjZmMnFwZjhtbHk1MnA1In0.eq2aumBK6JuRoIuBMm6Gew',
-     "crs": "EPSG:3857"}
-]

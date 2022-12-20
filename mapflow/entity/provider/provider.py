@@ -1,7 +1,10 @@
 from typing import Iterable, Union, Optional
 from enum import Enum
 
-PROVIDERS_KEY = 'providers'
+
+class staticproperty(staticmethod):
+    def __get__(self, *_):
+        return self.__func__()
 
 
 class StrEnum(str, Enum):
@@ -24,10 +27,6 @@ class CRS(StrEnum):
     world_mercator = 'EPSG:3395'
 
 
-def provider_factory(**kwargs):
-    return Provider.from_params(kwargs)
-
-
 class BasicAuth:
     def __init__(self, login: str = "", password: str = ""):
         if not isinstance(login, str) or not isinstance(password, str):
@@ -35,12 +34,16 @@ class BasicAuth:
         self.login = login
         self.password = password
 
-    @property
-    def tuple(self):
-        return self.login, self.password
+    def __iter__(self):
+        # to convert to tuple/list
+        yield self.login
+        yield self.password
 
     def __bool__(self):
         return bool(self.login) or bool(self.password)
+
+    def __str__(self):
+        return f'{self.login}:{self.password}'
 
 
 class Provider:
@@ -49,8 +52,8 @@ class Provider:
                  url: str,
                  source_type: Union[SourceType, str] = SourceType.xyz,
                  crs: Optional[Union[CRS, str]] = None,
-                 editable_fields: Iterable[str] = ('name', 'url', 'type'),
-                 credentials: BasicAuth = BasicAuth(),
+                 credentials: Union[BasicAuth, Iterable[str]] = BasicAuth(),
+                 save_credentials: bool=True,
                  **kwargs):
         self.name = name
         self.source_type = SourceType(source_type)
@@ -61,16 +64,24 @@ class Provider:
             self.crs = None
         else:
             self.crs = CRS(crs)
-        self.credentials = credentials
-        self.editable_fields = editable_fields
+        if isinstance(credentials, BasicAuth):
+            self.credentials = credentials
+        else:
+            self.credentials = BasicAuth(*credentials)
+        self.save_credentials = save_credentials
 
     def to_dict(self):
+        if self.save_credentials:
+            credentials = tuple(self.credentials)
+        else:
+            credentials = ("", "")
         data = {
             'name': self.name,
             'source_type': self.source_type.value,
+            'option_name': self.option_name,
             'url': self.url,
-            'credentials': self.credentials,
-            'editable_fields': list(self.editable_fields)
+            'credentials': credentials,
+            'save_credentials': self.save_credentials
             }
         return data
 
@@ -90,59 +101,14 @@ class Provider:
     def meta_url(self):
         raise NotImplementedError
 
-    @classmethod
-    def from_params(cls, params: dict, name=None):
-        """
-        a method that fixes old and deprecated params before creating class; necessary for seamless migration of user's
-        current providers
-        """
-        if not name and 'name' not in params:
-            raise ValueError('Must have name in params keys or separately')
-        elif 'name' not in params:
-            params.update(name=name)
-        if 'connectId' in params:
-            params['connect_id'] = params.pop('connectId')
-        if 'type' in params:
-            params['source_type'] = params.pop('type')
-        if 'token' in params:
-            params['api_key'] = params.pop('token')
-        if 'crs' in params:
-            # truncate invalid CRS and replace with web mercator
-            try:
-                CRS('crs')
-            except:
-                params['crs'] = CRS.web_mercator
-        return cls(**params)
+    @staticproperty
+    def option_name():
+        # option for interface and settings
+        raise NotImplementedError
+
+    def preview_url(self, image_id=None):
+        raise NotImplementedError
 
     def to_processing_params(self, image_id=None):
         """ You cannot create a processing with generic provider without implementation"""
         raise NotImplementedError
-
-    @classmethod
-    def from_settings(cls, settings, name):
-        params = settings.value(PROVIDERS_KEY).get(name)
-        if not params:
-            raise KeyError('Unknown provider {name}')
-        return provider_factory(**params)
-
-    def to_settings(self, settings):
-        providers = settings.value(PROVIDERS_KEY)
-        providers.update({self.name: self.to_dict()})
-        settings.setValue(PROVIDERS_KEY, providers)
-
-    def remove_from_settings(self, settings):
-        providers = settings.value(PROVIDERS_KEY)
-        providers.pop(self.name)
-        settings.setValue(PROVIDERS_KEY, providers)
-
-    def update(self, **kwargs):
-        non_editable_keys = [k for k in kwargs.keys() if k not in self.editable_fields]
-        if non_editable_keys:
-            raise PermissionError("You are not allowed to change"
-                                  " {non_editable_keys} in {provider}".format(non_editable_keys=non_editable_keys,
-                                                                              provider=self.name))
-        params = self.to_dict()
-        params.update(kwargs)
-        return provider_factory(**params)
-
-

@@ -4,10 +4,14 @@ from PyQt5 import uic
 from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 
 from .dialogs import ui_path, plugin_icon
-from ..entity.provider.provider import SourceType, CRS, Provider
+from ..entity.provider import (CRS,
+                               BasicAuth,
+                               Provider,
+                               XYZProvider,
+                               TMSProvider,
+                               QuadkeyProvider,
+                               MaxarProvider)
 from ..helpers import QUAD_KEY_REGEX, XYZ_REGEX, MAXAR_PROVIDER_REGEX
-
-MAXAR_PROVIDER_NAME = "Maxar WMTS"
 
 
 class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
@@ -19,67 +23,89 @@ class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
         ok = self.buttonBox.button(QDialogButtonBox.Ok)
         ok.setEnabled(False)
 
-        self.name.textChanged.connect(lambda: ok.setEnabled(self.validate_provider_form()))
-        self.url.textChanged.connect(lambda: ok.setEnabled(self.validate_provider_form()))
-        self.type.currentTextChanged.connect(lambda: ok.setEnabled(self.validate_provider_form()))
+        self.type.currentTextChanged.connect(self.on_type_change)
+        self.name.textChanged.connect(lambda: ok.setEnabled(self.validate_and_create_provider()))
+        self.url.textChanged.connect(lambda: ok.setEnabled(self.validate_and_create_provider()))
+        self.login.textChanged.connect(lambda: ok.setEnabled(self.validate_and_create_provider()))
+        self.password.textChanged.connect(lambda: ok.setEnabled(self.validate_and_create_provider()))
+        self.crs.currentTextChanged.connect(lambda: ok.setEnabled(self.validate_and_create_provider()))
+        self.save_credentials.toggled.connect(lambda: ok.setEnabled(self.validate_and_create_provider()))
 
-        self.finished.connect(self.name.clear)
-        self.finished.connect(self.url.clear)
         # we store here the provider that we are editing right now
         self.current_provider = None
-        self.result_provider = None
+        self.result = None
 
     def setup(self, provider: Optional[Provider] = None):
         self.current_provider = provider
-        self.result_provider = None
+        self.result = None
+
         if provider:
             name = provider.name
             url = provider.url
-            source_type = provider.source_type
+            source_type = provider.option_name
             crs = provider.crs
-            self.setWindowTitle(name)
+            title = name
+            login = provider.credentials.login
+            password = provider.credentials.password
+            save_credentials = provider.save_credentials
         else:
             name = ""
             url = ""
-            source_type = SourceType.xyz
+            source_type = "xyz"
             crs = CRS.web_mercator
-            self.setWindowTitle("Add new provider")
+            title = "Add new provider"
+            login = ""
+            password = ""
+            save_credentials = False
+
 
         # Fill out the edit dialog with the current data
+        self.setWindowTitle(title)
+        self.type.setCurrentText(source_type)
         self.name.setText(name)
         self.url.setText(url)
-        self.type.setCurrentText(source_type.value)
         self.crs.setCurrentText(crs.value)
+        self.login.setText(login)
+        self.password.setText(password)
+        self.save_credentials.setChecked(save_credentials)
+
         self.show()
 
     def on_type_change(self):
-        if self.type.currentText == MAXAR_PROVIDER_NAME:
+        if self.type.currentText == MaxarProvider.option_name:
             self.crs.setCurrentText('EPSG:3857')
-            self.crs.setDisabled()
+            self.crs.setDisabled(True)
         else:  # ['xyz', 'tms', 'quadkey']
-            self.url.setEnabled()
-        self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(self.validate_provider_form())
+            self.url.setEnabled(True)
+        self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(self.validate_and_create_provider())
 
-    def validate_provider_form(self):
+    def validate_and_create_provider(self):
         name = self.name.text()
         url = self.url.text()
         source_type = self.type.currentText()
         crs = self.crs.currentText()
         login = self.login.text()
         password = self.password.text()
+        save_credentials = self.save_credentials.isChecked()
 
         res = False
         if name and url:  # non-empty
-            if SourceType(source_type) in (SourceType.xyz, SourceType.tms):
+            if source_type in (TMSProvider.option_name, XYZProvider.option_name):
                 res = bool(XYZ_REGEX.match(url))
-            elif SourceType(source_type) == SourceType.quadkey:
+            elif source_type == QuadkeyProvider.option_name:
                 res = bool(QUAD_KEY_REGEX.match(url))
-            elif source_type == MAXAR_PROVIDER_NAME:
+            elif source_type == MaxarProvider.option_name:
                 res = bool(MAXAR_PROVIDER_REGEX.match(url)) and bool(login) and bool(password)
             else:
                 raise AssertionError("Unexpected source type")
         if res:
-            self.result_provider = Provider(name=name, url=url, source_type=source_type, crs=crs)
+            self.result = dict(option_name=source_type,
+                               name=name,
+                               url=url,
+                               crs=crs,
+                               credentials=BasicAuth(login, password),
+                               save_credentials=save_credentials)
+
         else:
-            self.result_provider = None
+            self.result = None
         return res
