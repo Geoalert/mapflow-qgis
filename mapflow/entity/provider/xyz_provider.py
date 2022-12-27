@@ -2,8 +2,9 @@
 Basic, non-authentification XYZ provider
 """
 from typing import Union, Iterable
+from urllib.parse import urlparse, parse_qs
 from .provider import SourceType, CRS, Provider, BasicAuth, staticproperty
-from ...layer_utils import maxar_tile_url, add_image_id
+from ...layer_utils import maxar_tile_url, add_image_id, add_connect_id
 from ...requests.maxar_metadata_request import MAXAR_REQUEST_BODY, MAXAR_META_URL
 
 
@@ -134,17 +135,25 @@ class MaxarProvider(XYZProvider):
                          credentials=credentials,
                          save_credentials=save_credentials)
 
+        try:
+            self.connect_id = parse_qs(urlparse(self.url.lower()).query)['connectid'][0]
+        except (KeyError, IndexError):
+            # could not extract connectId from URL!
+            raise ValueError("Maxar provider link must contain your ConnectID parameter")
+
     @staticproperty
     def option_name():
         return 'Maxar WMTS'
 
     @property
     def meta_url(self):
-        return MAXAR_META_URL
+        return add_connect_id(MAXAR_META_URL, self.connect_id)
 
-    @property
-    def meta_request(self, **kwargs):
-        return MAXAR_REQUEST_BODY.format(**kwargs).encode()
+    def meta_request(self, from_, to, max_cloud_cover, geometry):
+        return MAXAR_REQUEST_BODY.format(from_=from_,
+                                         to=to,
+                                         max_cloud_cover=max_cloud_cover,
+                                         geometry=geometry).encode()
 
     def to_processing_params(self, image_id=None):
         url = add_image_id(self.url, image_id)

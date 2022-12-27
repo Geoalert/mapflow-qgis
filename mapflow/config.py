@@ -27,7 +27,6 @@ MAXAR_DATETIME_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.keys()).index(f'Da
 MAXAR_CLOUD_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.keys()).index(f'Cloud %')
 MAXAR_MAX_FREE_ZOOM = 12
 MAXAR_BASE_URL = 'https://securewatch.digitalglobe.com/earthservice/wmtsaccess?'
-MAXAR_META_URL = 'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?width=3000&height=3000'
 
 # MISC
 SKYWATCH_METADATA_MAX_AREA = 1e11  # 100,000 sq.km

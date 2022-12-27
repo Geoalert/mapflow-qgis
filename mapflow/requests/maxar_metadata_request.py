@@ -1,5 +1,5 @@
 
-MAXAR_META_URL = ""
+MAXAR_META_URL = 'https://securewatch.digitalglobe.com/catalogservice/wfsaccess?width=3000&height=3000'
 
 MAXAR_REQUEST_BODY = """<?xml version="1.0" encoding="utf-8"?>
     <GetFeature 

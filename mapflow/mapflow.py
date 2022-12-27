@@ -265,6 +265,7 @@ class Mapflow(QObject):
             and not (
                 layer.crs().isValid()
                 and os.path.splitext(layer.dataProvider().dataSourceUri())[-1] in ('.tif', '.tiff')
+                and os.path.exists(layer.dataProvider().dataSourceUri())
                 and os.path.getsize(layer.publicSource()) / 2**20 < config.MAX_TIF_SIZE
             )
         ])
@@ -590,6 +591,7 @@ class Mapflow(QObject):
         enabled = isinstance(raster_source, QgsRasterLayer)
         self.dlg.useImageExtentAsAoi.setEnabled(enabled)
         self.dlg.useImageExtentAsAoi.setChecked(enabled)
+        self.dlg.imageId_label.setText("")
 
     def select_output_directory(self) -> str:
         """Open a file dialog for the user to select a directory where plugin files will be stored.
@@ -951,7 +953,10 @@ class Mapflow(QObject):
         elem = aoi.get().asGml3(QDomDocument(), precision=5, ns="http://www.opengis.net/gml")
         elem.save(stream, 0)  # 0 = no indentation (minimize request size)
         stream.seek(0)  # rewind to the start
-        request_body = provider.meta_request(from_=from_, to=to, max_cloud_cover=max_cloud_cover/100,geometry=stream.readAll())
+        request_body = provider.meta_request(from_=from_,
+                                             to=to,
+                                             max_cloud_cover=max_cloud_cover/100,
+                                             geometry=stream.readAll())
         if provider.is_proxy:  # assume user wants to use our account, proxy thru Mapflow
             self.http.post(
                 url=provider.meta_url,
@@ -1053,7 +1058,7 @@ class Mapflow(QObject):
         if error == QNetworkReply.ContentAccessDenied:
             self.alert(self.tr('Please, check your credentials'))
         else:
-            self.report_error(response, self.tr("We couldn't get metadata from Maxar"))
+            self.report_error(response, self.tr("We couldn't get metadata from Maxar, error {error}").format(error=error))
 
     def sync_table_selection_with_image_id_and_layer(self) -> str:
         """
@@ -1648,6 +1653,8 @@ class Mapflow(QObject):
         provider = self.providers[provider_name]
         if isinstance(provider, SentinelProvider):
             self.preview_sentinel(image_id=image_id)
+        elif not provider.preview_url:
+            self.alert(self.tr("Preview is unavailable for the provider {}").format(provider_name))
         else:  # XYZ providers
             self.preview_xyz(provider=provider, image_id=image_id)
 
@@ -2128,7 +2135,24 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
+        """
+        
+        server_version = str(response.readAll().data())
+        if server_version == "1":
+            # Old version, legacy check, all OK
+            return
+        
+        
+        server_version = server_version.split('.')
+        if len(server_version) != 3:
+            level = 'error'
+            message = self.tr('Server returned version in unexpected format. Please upgrade your plugin version contact us')
+        elif server_version == self.plugin_version:
+            # New versioning, all OK
+        """
+
         if int(response.readAll().data()) > 1:
+            # Major version change
             self.alert(
                 self.tr(
                     'There is a new version of Mapflow for QGIS available.\n'
@@ -2137,6 +2161,7 @@ class Mapflow(QObject):
                 ),
                 QMessageBox.Warning
             )
+
 
     def tr(self, message: str) -> str:
         """Localize a UI element text.

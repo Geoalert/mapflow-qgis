@@ -2,9 +2,9 @@ import json
 from abc import ABC
 from typing import Union
 from .provider import Provider, SourceType, staticproperty
-from ...config import MAXAR_BASE_URL, MAXAR_META_URL
+from ...config import MAXAR_BASE_URL
 from ...layer_utils import add_image_id, add_connect_id, maxar_tile_url
-from ...requests.maxar_metadata_request import MAXAR_REQUEST_BODY
+from ...requests.maxar_metadata_request import MAXAR_REQUEST_BODY, MAXAR_META_URL
 
 
 class ProxyProvider(Provider, ABC):
