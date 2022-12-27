@@ -162,5 +162,8 @@ class MaxarProvider(XYZProvider):
                'crs': self.crs.value,
                'credentials': tuple(self.credentials)}, {}
 
+    def preview_url(self, image_id=None):
+        return maxar_tile_url(add_image_id(self.url, image_id))
+
 
 
