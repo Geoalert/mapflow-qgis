@@ -1687,7 +1687,7 @@ class Mapflow(QObject):
         """
         processing = next(filter(lambda p: p.id_ == pid, self.processings))
         # Avoid overwriting existing files by adding (n) to their names
-        output_path = os.path.join(self.dlg.outputDirectory.text(), processing.name)
+        output_path = os.path.join(self.dlg.outputDirectory.text(), processing.id_)
         extension = '.gpkg'
         if os.path.exists(output_path + extension):
             count = 1
