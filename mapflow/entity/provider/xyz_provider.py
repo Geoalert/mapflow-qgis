@@ -32,7 +32,8 @@ class BasemapProvider(Provider):
             'source_type': self.source_type.value
         }
         if self.credentials:
-            params.update(credentials=self.credentials.tuple)
+            params.update(raster_login=self.credentials.login,
+                          raster_password=self.credential.password)
         return params, {}
 
     @property
@@ -156,14 +157,14 @@ class MaxarProvider(XYZProvider):
                                          geometry=geometry).encode()
 
     def to_processing_params(self, image_id=None):
-        url = add_image_id(self.url, image_id)
-        return{'url': maxar_tile_url(url, image_id),
+        return{'url': maxar_tile_url(self.url, image_id),
                'source_type': self.source_type,
                'crs': self.crs.value,
-               'credentials': tuple(self.credentials)}, {}
+               'raster_login': self.credentials.login,
+               'raster_password': self.credentials.password}, {}
 
     def preview_url(self, image_id=None):
-        return maxar_tile_url(add_image_id(self.url, image_id))
+        return maxar_tile_url(self.url, image_id)
 
 
 

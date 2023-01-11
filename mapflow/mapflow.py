@@ -1465,6 +1465,7 @@ class Mapflow(QObject):
             callback=self.post_processing_callback,
             callback_kwargs={'processing_name': request_body['name']},
             error_handler=self.post_processing_error_handler,
+            use_default_error_handler=False,
             body=json.dumps(request_body).encode()
         )
 
@@ -1473,7 +1474,8 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        self.report_error(response, self.tr('Processing creation failed'))
+        self.report_error(response,
+                         self.tr('Processing creation failed'))
 
     def post_processing_callback(self, _: QNetworkReply, processing_name: str) -> None:
         """Display a success message and clear the processing name field."""
