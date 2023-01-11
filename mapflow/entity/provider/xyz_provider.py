@@ -33,7 +33,7 @@ class BasemapProvider(Provider):
         }
         if self.credentials:
             params.update(raster_login=self.credentials.login,
-                          raster_password=self.credential.password)
+                          raster_password=self.credentials.password)
         return params, {}
 
     @property
