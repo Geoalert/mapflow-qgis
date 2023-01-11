@@ -66,6 +66,7 @@ class Mapflow(QObject):
         # Get the server environment to connect to (for admins)
         mapflow_env = self.settings.value('variables/mapflow_env') or 'production'
         self.server = config.SERVER.format(env=mapflow_env)
+        self.project_id = QgsSettings().value('variables/project_id') or 'default'
         # By default, plugin adds layers to a group unless user explicitly deletes it
         self.add_layers_to_group = True
         self.layer_tree_root = self.project.layerTreeRoot()
@@ -189,7 +190,7 @@ class Mapflow(QObject):
         self.processing_fetch_timer.setInterval(config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
         self.processing_fetch_timer.timeout.connect(
             lambda: self.http.get(
-                url=f'{self.server}/processings',
+                url=f'{self.server}/projects/{self.project_id}/processings',
                 callback=self.get_processings_callback,
                 use_default_error_handler=False  # ignore errors to prevent repetitive alerts
             )
@@ -1460,6 +1461,8 @@ class Mapflow(QObject):
 
         :param request_body: Processing parameters.
         """
+        if self.project_id != 'default':
+            request_body.update(projectId=self.project_id)
         self.http.post(
             url=f'{self.server}/processings',
             callback=self.post_processing_callback,
@@ -1488,30 +1491,36 @@ class Mapflow(QObject):
         self.processing_fetch_timer.start()  # start monitoring
         # Do an extra fetch immediately
         self.http.get(
-            url=f'{self.server}/processings',
+            url=f'{self.server}/projects/{self.project_id}/processings',
             callback=self.get_processings_callback
         )
         self.http.get(
-            url=f'{self.server}/projects/default',
+            url=f'{self.server}/projects/{self.project_id}',
             callback=self.set_processing_limit
         )
 
     def set_processing_limit(
         self,
         response: Optional[QNetworkReply] = None,
-        user: Optional[dict] = None
-    ) -> None:
+        response_data: Optional[dict] = None) -> None:
         """Set the user's processing limit as reported by Mapflow."""
+        if not response and not response_data:
+            raise AssertionError("Either response or response data must be specified")
         if response:
-            user = json.loads(response.readAll().data())['user']
+            # prefer raw response for no reason
+            response_data = json.loads(response.readAll().data())
+        user = response_data['user']
+        project_name = response_data['name']
+
         if user['role'] == 'ADMIN':
             self.remaining_limit = 1e5  # 100K sq.km
         else:
             self.remaining_limit = (user['areaLimit'] - user['processedArea']) * 1e-6
         if self.plugin_name == 'Mapflow':
-            self.dlg.remainingLimit.setText(
-                self.tr('Processing limit: {} sq.km').format(round(self.remaining_limit, 2))
-            )
+            footer = self.tr('Processing limit: {} sq.km').format(round(self.remaining_limit, 2))
+            if self.project_id != 'default':
+                footer += self.tr('.  Project name: {}').format(project_name)
+            self.dlg.remainingLimit.setText(footer)
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
         """Save and open the preview image as a layer."""
@@ -1985,8 +1994,9 @@ class Mapflow(QObject):
         """Log into Mapflow."""
         mapflow_env = QgsSettings().value('variables/mapflow_env') or 'production'
         self.server = config.SERVER.format(env=mapflow_env)
+        self.project_id = QgsSettings().value('variables/project_id') or 'default'
         self.http.get(
-            url=f'{self.server}/projects/default',
+            url=f'{self.server}/projects/{self.project_id}',
             callback=self.log_in_callback,
             error_handler=self.log_in_error_handler
         )
@@ -2097,13 +2107,12 @@ class Mapflow(QObject):
         :param response: The HTTP response.
         """
         # Fetch processings at startup and start the timer to keep fetching them afterwards
-        self.http.get(url=f'{self.server}/processings', callback=self.get_processings_callback)
+        self.http.get(url=f'{self.server}/projects/{self.project_id}/processings', callback=self.get_processings_callback)
         self.processing_fetch_timer.start()
         # Set up the UI with the received data
         response = json.loads(response.readAll().data())
-        user = response['user']
-        self.set_processing_limit(user=user)
-        self.is_premium_user = user['isPremium']
+        self.set_processing_limit(response_data=response)
+        self.is_premium_user = response['user']['isPremium']
         self.on_provider_change(self.dlg.providerCombo.currentText())
         self.aoi_area_limit = response['user']['aoiAreaLimit'] * 1e-6
         self.wds = [wd['name'] for wd in response['workflowDefs']]
