@@ -29,7 +29,7 @@
    </size>
   </property>
   <property name="windowTitle">
-   <string>Create new catalog</string>
+   <string>Create new mosaic</string>
   </property>
   <widget class="QDialogButtonBox" name="createCatalogDialogbuttonBox">
    <property name="geometry">
@@ -79,7 +79,7 @@
     </rect>
    </property>
    <property name="text">
-    <string>Catalog name: without whitespaces 
+    <string>Mosaic name: without whitespaces 
 Tags: comma separated list of tags</string>
    </property>
   </widget>
@@ -96,7 +96,7 @@ Tags: comma separated list of tags</string>
     <item>
      <widget class="QLabel" name="newCatalogNameLabel1">
       <property name="text">
-       <string>Catalog name</string>
+       <string>Mosaic name</string>
       </property>
      </widget>
     </item>

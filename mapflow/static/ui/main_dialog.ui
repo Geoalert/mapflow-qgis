@@ -406,7 +406,7 @@
      </widget>
      <widget class="QWidget" name="catalogTab">
       <attribute name="title">
-       <string>Catalog</string>
+       <string>Users data</string>
       </attribute>
       <widget class="QPushButton" name="createCatalogButton">
        <property name="geometry">
@@ -418,7 +418,7 @@
         </rect>
        </property>
        <property name="text">
-        <string>Create catalog</string>
+        <string>Create mosaic</string>
        </property>
       </widget>
       <widget class="QPushButton" name="uploadImageToCatalogButton">
@@ -432,7 +432,7 @@
        </property>
        <property name="text">
         <string>Upload image to
-selected catalog</string>
+selected mosaic</string>
        </property>
       </widget>
       <widget class="QPushButton" name="uploadImageToNewCatalogButton">
@@ -446,7 +446,7 @@ selected catalog</string>
        </property>
        <property name="text">
         <string>Upload image to
-new catalog</string>
+new mosaic</string>
        </property>
       </widget>
       <widget class="QPushButton" name="deleteCatalogButton">
@@ -459,7 +459,7 @@ new catalog</string>
         </rect>
        </property>
        <property name="text">
-        <string>Delete catalog</string>
+        <string>Delete mosaic</string>
        </property>
       </widget>
       <widget class="QTableWidget" name="mosaicsTableWidget">
@@ -515,7 +515,7 @@ new catalog</string>
        </property>
        <property name="text">
         <string>Edit selected
-catalog</string>
+mosaic</string>
        </property>
       </widget>
       <widget class="QPushButton" name="loadUserMosaicsButton">
@@ -528,7 +528,7 @@ catalog</string>
         </rect>
        </property>
        <property name="text">
-        <string>Show catalogs</string>
+        <string>Show mosaics</string>
        </property>
       </widget>
       <widget class="QLabel" name="selectedCatalogImagesLabel">
@@ -541,7 +541,7 @@ catalog</string>
         </rect>
        </property>
        <property name="text">
-        <string>Catalog: # images</string>
+        <string>Mosaic: # images</string>
        </property>
       </widget>
       <widget class="QTableWidget" name="mosaicImagesTableWidget">
