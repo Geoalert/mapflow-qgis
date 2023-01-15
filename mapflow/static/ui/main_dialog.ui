@@ -20,7 +20,7 @@
       <enum>QTabWidget::Rounded</enum>
      </property>
      <property name="currentIndex">
-      <number>0</number>
+      <number>1</number>
      </property>
      <property name="movable">
       <bool>true</bool>
@@ -581,7 +581,7 @@ mosaic</string>
         </property>
        </column>
       </widget>
-      <widget class="QPushButton" name="useSelectedImageButton">
+      <widget class="QPushButton" name="useSelectedMosaicButton">
        <property name="geometry">
         <rect>
          <x>10</x>
@@ -592,7 +592,7 @@ mosaic</string>
        </property>
        <property name="text">
         <string>Use selected
-image/images</string>
+mosaic</string>
        </property>
       </widget>
       <widget class="QPushButton" name="deleteImageButton">

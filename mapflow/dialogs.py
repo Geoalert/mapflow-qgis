@@ -92,3 +92,24 @@ class CreateCatalogDialog(*uic.loadUiType(ui_path/'create_new_catalog_dialog.ui'
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(plugin_icon)
+
+
+class UpdateCatalogDialog(*uic.loadUiType(ui_path/'update_catalog_dialog.ui')):
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setupUi(self)
+        self.setWindowIcon(plugin_icon)
+
+
+class CreateCatalogAndFileUpload(*uic.loadUiType(ui_path/'create_catalog_upload_file_dialog.ui')):
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setupUi(self)
+        self.setWindowIcon(plugin_icon)
+
+
+class UploadImageToExistingMosaic(*uic.loadUiType(ui_path/'upload_image_to_existing_mosaic_dialog.ui')):
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setupUi(self)
+        self.setWindowIcon(plugin_icon)
