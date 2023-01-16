@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>806</width>
-    <height>632</height>
+    <height>575</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -308,6 +308,9 @@
          <property name="focusPolicy">
           <enum>Qt::NoFocus</enum>
          </property>
+         <property name="contextMenuPolicy">
+          <enum>Qt::DefaultContextMenu</enum>
+         </property>
          <property name="autoScroll">
           <bool>false</bool>
          </property>
@@ -405,7 +408,7 @@
       <attribute name="title">
        <string>Providers</string>
       </attribute>
-      <layout class="QVBoxLayout" name="settingsLayout" stretch="0,0,1">
+      <layout class="QVBoxLayout" name="settingsLayout" stretch="0,0">
        <item>
         <layout class="QHBoxLayout" name="provider" stretch="1,0,0,2,0,0,0">
          <item>
@@ -540,72 +543,6 @@
         </layout>
        </item>
        <item>
-        <widget class="QgsCollapsibleGroupBox" name="providerAuthGroup">
-         <property name="title">
-          <string>Use imagery provider credentials</string>
-         </property>
-         <property name="flat">
-          <bool>true</bool>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-         <property name="checked">
-          <bool>false</bool>
-         </property>
-         <property name="collapsed">
-          <bool>true</bool>
-         </property>
-         <property name="saveCollapsedState">
-          <bool>true</bool>
-         </property>
-         <property name="saveCheckedState">
-          <bool>false</bool>
-         </property>
-         <layout class="QGridLayout" name="layourCustomProviderAuthGroup" columnstretch="1,0">
-          <item row="0" column="0">
-           <layout class="QFormLayout" name="providerAuth">
-            <item row="0" column="0">
-             <widget class="QLabel" name="labelProviderUsername">
-              <property name="text">
-               <string>Login:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="0" column="1">
-             <widget class="QLineEdit" name="providerUsername">
-              <property name="text">
-               <string/>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="0">
-             <widget class="QLabel" name="labelProviderPassword">
-              <property name="text">
-               <string>Password:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="1">
-             <widget class="QgsPasswordLineEdit" name="providerPassword">
-              <property name="text">
-               <string/>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item row="0" column="1">
-           <widget class="QCheckBox" name="providerSaveAuth">
-            <property name="text">
-             <string>Save Login/Password</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
         <widget class="QGroupBox" name="metadata">
          <property name="toolTip">
           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Here, you can search Maxar or Sentinel imagery for your area and timespan.&lt;/p&gt;&lt;p&gt;Additional filters are also available below.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
@@ -617,139 +554,6 @@
           <bool>false</bool>
          </property>
          <layout class="QGridLayout" name="gridLayout">
-          <item row="0" column="0">
-           <layout class="QHBoxLayout" name="layoutMetadataAoi" stretch="0,1,0">
-            <item>
-             <widget class="QLabel" name="labelMaxarAoi">
-              <property name="text">
-               <string>Area:</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QgsMapLayerComboBox" name="maxarAoiCombo">
-              <property name="toolTip">
-               <string>Any (multi-)polygon(s)</string>
-              </property>
-              <property name="showCrs">
-               <bool>true</bool>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QCheckBox" name="metadataUseCanvasExtent">
-              <property name="toolTip">
-               <string>Use your current screen area</string>
-              </property>
-              <property name="text">
-               <string>Use canvas extent</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item row="1" column="0">
-           <layout class="QHBoxLayout" name="layoutMetadataDatetime" stretch="0,0,1,0,0">
-            <item>
-             <widget class="QLabel" name="labelFrom">
-              <property name="toolTip">
-               <string>Earlier images won't be shown</string>
-              </property>
-              <property name="text">
-               <string>From:</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QDateEdit" name="metadataFrom">
-              <property name="toolTip">
-               <string>Dates are inclusive</string>
-              </property>
-              <property name="maximumDate">
-               <date>
-                <year>2030</year>
-                <month>1</month>
-                <day>1</day>
-               </date>
-              </property>
-              <property name="minimumDate">
-               <date>
-                <year>1970</year>
-                <month>1</month>
-                <day>1</day>
-               </date>
-              </property>
-              <property name="displayFormat">
-               <string>yyyy-MM-dd</string>
-              </property>
-              <property name="calendarPopup">
-               <bool>true</bool>
-              </property>
-              <property name="date">
-               <date>
-                <year>2020</year>
-                <month>12</month>
-                <day>21</day>
-               </date>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="getMetadata">
-              <property name="toolTip">
-               <string>Click and wait for a few seconds until the table below is filled out</string>
-              </property>
-              <property name="text">
-               <string>Search imagery</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="labelTo">
-              <property name="toolTip">
-               <string>More recent images won't be shown</string>
-              </property>
-              <property name="text">
-               <string>To:</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QDateEdit" name="metadataTo">
-              <property name="toolTip">
-               <string>Dates are inclusive</string>
-              </property>
-              <property name="maximumDate">
-               <date>
-                <year>2030</year>
-                <month>1</month>
-                <day>1</day>
-               </date>
-              </property>
-              <property name="minimumDate">
-               <date>
-                <year>1970</year>
-                <month>1</month>
-                <day>1</day>
-               </date>
-              </property>
-              <property name="displayFormat">
-               <string>yyyy-MM-dd</string>
-              </property>
-              <property name="calendarPopup">
-               <bool>true</bool>
-              </property>
-              <property name="date">
-               <date>
-                <year>2021</year>
-                <month>12</month>
-                <day>21</day>
-               </date>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
           <item row="2" column="0">
            <widget class="QgsCollapsibleGroupBox" name="metadataFilters">
             <property name="toolTip">
@@ -905,6 +709,139 @@
             </item>
            </layout>
           </item>
+          <item row="1" column="0">
+           <layout class="QHBoxLayout" name="layoutMetadataDatetime" stretch="0,0,1,0,0">
+            <item>
+             <widget class="QLabel" name="labelFrom">
+              <property name="toolTip">
+               <string>Earlier images won't be shown</string>
+              </property>
+              <property name="text">
+               <string>From:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QDateEdit" name="metadataFrom">
+              <property name="toolTip">
+               <string>Dates are inclusive</string>
+              </property>
+              <property name="maximumDate">
+               <date>
+                <year>2030</year>
+                <month>1</month>
+                <day>1</day>
+               </date>
+              </property>
+              <property name="minimumDate">
+               <date>
+                <year>1970</year>
+                <month>1</month>
+                <day>1</day>
+               </date>
+              </property>
+              <property name="displayFormat">
+               <string>yyyy-MM-dd</string>
+              </property>
+              <property name="calendarPopup">
+               <bool>true</bool>
+              </property>
+              <property name="date">
+               <date>
+                <year>2020</year>
+                <month>12</month>
+                <day>21</day>
+               </date>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="getMetadata">
+              <property name="toolTip">
+               <string>Click and wait for a few seconds until the table below is filled out</string>
+              </property>
+              <property name="text">
+               <string>Search imagery</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="labelTo">
+              <property name="toolTip">
+               <string>More recent images won't be shown</string>
+              </property>
+              <property name="text">
+               <string>To:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QDateEdit" name="metadataTo">
+              <property name="toolTip">
+               <string>Dates are inclusive</string>
+              </property>
+              <property name="maximumDate">
+               <date>
+                <year>2030</year>
+                <month>1</month>
+                <day>1</day>
+               </date>
+              </property>
+              <property name="minimumDate">
+               <date>
+                <year>1970</year>
+                <month>1</month>
+                <day>1</day>
+               </date>
+              </property>
+              <property name="displayFormat">
+               <string>yyyy-MM-dd</string>
+              </property>
+              <property name="calendarPopup">
+               <bool>true</bool>
+              </property>
+              <property name="date">
+               <date>
+                <year>2021</year>
+                <month>12</month>
+                <day>21</day>
+               </date>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item row="0" column="0">
+           <layout class="QHBoxLayout" name="layoutMetadataAoi" stretch="0,1,0">
+            <item>
+             <widget class="QLabel" name="labelMaxarAoi">
+              <property name="text">
+               <string>Area:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QgsMapLayerComboBox" name="maxarAoiCombo">
+              <property name="toolTip">
+               <string>Any (multi-)polygon(s)</string>
+              </property>
+              <property name="showCrs">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="metadataUseCanvasExtent">
+              <property name="toolTip">
+               <string>Use your current screen area</string>
+              </property>
+              <property name="text">
+               <string>Use canvas extent</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
          </layout>
         </widget>
        </item>
@@ -1007,11 +944,6 @@
    <class>QgsMapLayerComboBox</class>
    <extends>QComboBox</extends>
    <header>qgsmaplayercombobox.h</header>
-  </customwidget>
-  <customwidget>
-   <class>QgsPasswordLineEdit</class>
-   <extends>QLineEdit</extends>
-   <header>qgspasswordlineedit.h</header>
   </customwidget>
  </customwidgets>
  <resources/>
