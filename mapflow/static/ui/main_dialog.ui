@@ -627,7 +627,7 @@ mosaic</string>
         <string>Image preview</string>
        </property>
       </widget>
-      <widget class="QLabel" name="imagePreviewRasterLabel">
+      <widget class="QLabel" name="imagePreviewLabel">
        <property name="geometry">
         <rect>
          <x>510</x>
@@ -642,8 +642,14 @@ mosaic</string>
          <height>256</height>
         </size>
        </property>
+       <property name="maximumSize">
+        <size>
+         <width>256</width>
+         <height>256</height>
+        </size>
+       </property>
        <property name="text">
-        <string>Here must go image preview</string>
+        <string/>
        </property>
       </widget>
      </widget>

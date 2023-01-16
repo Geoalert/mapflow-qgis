@@ -1,6 +1,7 @@
 import json
 import os.path
 import tempfile
+import time
 from base64 import b64encode, b64decode
 from typing import List, Optional, Union
 from datetime import datetime  # processing creation datetime formatting
@@ -9,7 +10,7 @@ from configparser import ConfigParser  # parse metadata.txt -> QGIS version chec
 import pylab as p
 from osgeo import gdal
 from PyQt5.QtXml import QDomDocument
-from PyQt5.QtGui import QColor, QIcon, QDesktopServices
+from PyQt5.QtGui import QColor, QIcon, QDesktopServices, QPixmap
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
     QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion,
@@ -213,6 +214,7 @@ class Mapflow(QObject):
         self.dlg_upload_image_to_catalog.selectFileButton.clicked.connect(self.select_tif_catalog)
         self.dlg_create_catalog_and_file_upload.buttonBox.accepted.connect(self.create_new_catalog_and_file_upload)
         self.dlg.mosaicsTableWidget.cellClicked.connect(self.load_mosaic_images)
+        self.dlg.mosaicImagesTableWidget.cellClicked.connect(self.get_image_by_id)
         self.dlg_create_catalog.createCatalogDialogbuttonBox.accepted.connect(self.create_new_catalog)
         self.dlg_create_catalog.createCatalogDialogbuttonBox.rejected.connect(self.close_create_catalog_dialog)
         self.dlg_update_catalog.updateCatalogButtonBox.accepted.connect(self.update_catalog)
@@ -2373,7 +2375,6 @@ class Mapflow(QObject):
         """
         selected_mosaic_row_number = self.dlg.mosaicsTableWidget.currentRow()
         selected_mosaic_id = self.dlg.mosaicsTableWidget.item(selected_mosaic_row_number, 0).text()
-        # self.dlg.mosaic_id_to_update.setText(selected_mosaic_id)
         response = self.http.get(
             url=f'{self.server}/rasters/mosaic/{selected_mosaic_id}/image',
             callback=self.get_mosaic_images_callback
@@ -2569,6 +2570,32 @@ class Mapflow(QObject):
         self.dlg_create_catalog.newCatalogNameEdit1.clear()
         self.dlg_create_catalog.newCatalogTagsEdit1.clear()
         self.dlg_create_catalog.close()
+
+    def get_image_by_id(self):
+        # request image by id
+        selected_image_row_number = self.dlg.mosaicImagesTableWidget.currentRow()
+        image_id = self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 0).text()
+        response = self.http.get(
+            url=f'{self.server}/rasters/image/{image_id}',
+            callback=self.get_image_by_id_callback
+        )
+
+    def get_image_by_id_callback(self, response: QNetworkReply):
+        # take image preview url from response
+        # request image preview and pass it to next callback, which shows it
+        res = json.loads(response.readAll().data())
+        preview_url = res.get('preview_url_s')
+        response = self.http.get(
+            url=preview_url,
+            callback=self.show_image_preview
+        )
+
+    def show_image_preview(self, response: QNetworkReply):
+        # take response, write it to tempfile and show preview
+        with tempfile.NamedTemporaryFile('wb', suffix='.jpg') as f:
+            f.write(response.readAll().data())
+            pixmap = QPixmap(f.name)
+            self.dlg.imagePreviewLabel.setPixmap(pixmap)
 
     def main(self) -> None:
         """Plugin entrypoint."""
