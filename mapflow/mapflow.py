@@ -1353,7 +1353,9 @@ class Mapflow(QObject):
             return False
         if self.remaining_limit < self.aoi_size:
             if self.plugin_name == 'Mapflow':  # don't alert in TechInspection
-                self.alert(self.tr('Processing limit exceeded'))
+                self.alert(self.tr('Processing limit exceeded. '
+                                   'Visit "<a href=\"https://app.mapflow.ai/account/balance\">Mapflow</a>" '
+                                   'to top up your balance'))
             return False
         if self.aoi_area_limit < self.aoi_size:
             self.alert(self.tr(
