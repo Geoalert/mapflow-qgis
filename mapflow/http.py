@@ -5,6 +5,7 @@ from PyQt5.QtNetwork import QHttpMultiPart, QNetworkReply, QNetworkRequest
 from qgis.core import QgsNetworkAccessManager
 
 from .config import MAPFLOW_DEFAULT_TIMEOUT
+import logging
 
 
 class Http(QObject):

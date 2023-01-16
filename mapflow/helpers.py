@@ -15,6 +15,7 @@ URL_PATTERN = r'https?://(www\.)?([-\w]{1,256}\.)+[a-zA-Z0-9]{1,6}'  # schema + 
 URL_REGEX = re.compile(URL_PATTERN)
 XYZ_REGEX = re.compile(URL_PATTERN + r'(.*\{[xyz]\}){3}.*', re.I)
 QUAD_KEY_REGEX = re.compile(URL_PATTERN + r'(.*\{q\}).*', re.I)
+MAXAR_PROVIDER_REGEX = re.compile(URL_PATTERN)  # todo: make actual regex
 SENTINEL_DATETIME_REGEX = re.compile(r'\d{8}T\d{6}', re.I)
 SENTINEL_COORDINATE_REGEX = re.compile(r'T\d{2}[A-Z]{3}', re.I)
 SENTINEL_PRODUCT_NAME_REGEX = re.compile(r'\/(?:20[0-2][0-9])\/(?:1[0-2]|0?[1-9])\/(?:0?[1-9]|[1-2]\d|3[0-1])\/(\d{1,2})\/$')
@@ -62,18 +63,3 @@ def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
     if layer_crs != WGS84:
         extent_geometry = to_wgs84(extent_geometry, layer_crs)
     return extent_geometry
-
-
-def validate_provider_form(form) -> bool:
-    """Return True if input looks valid otherwise return False."""
-    name = form.name.text()
-    url = form.url.text()
-    type_ = form.type.currentText()
-    if name and url:  # non-empty
-        if type_ in ('xyz', 'tms'):
-            return bool(XYZ_REGEX.match(url))
-        elif type_ == 'wms':
-            return bool(URL_REGEX.match(url))
-        else:  # Quad Key
-            return bool(QUAD_KEY_REGEX.match(url))
-    return False
