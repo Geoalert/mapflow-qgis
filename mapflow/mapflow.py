@@ -206,6 +206,7 @@ class Mapflow(QObject):
         self.dlg.createCatalogButton.clicked.connect(self.show_create_catalog_dialog)
         self.dlg.editSelectedCatalogButton.clicked.connect(self.show_update_catalog_dialog)
         self.dlg.deleteCatalogButton.clicked.connect(self.delete_selected_catalog)
+        self.dlg.deleteImageButton.clicked.connect(self.delete_selected_image)
         self.dlg.uploadImageToNewCatalogButton.clicked.connect(self.show_create_catalog_and_file_upload_dialog)
         self.dlg.uploadImageToCatalogButton.clicked.connect(self.show_upload_image_to_catalog_dialog)
         self.dlg_create_catalog_and_file_upload.selectFileButton.clicked.connect(self.select_tif_catalog)
@@ -2545,10 +2546,19 @@ class Mapflow(QObject):
             selected_mosaic_id = self.dlg.mosaicsTableWidget.item(selected_mosaic_row_number, 0).text()
             response = self.http.delete(
                 url=f'{self.server}/rasters/mosaic/{selected_mosaic_id}',
-                callback=self.delete_selected_catalog_callback
+                callback=self.delete_selected_item_callback
             )
 
-    def delete_selected_catalog_callback(self, *args):
+    def delete_selected_image(self):
+        selected_image_row_number = self.dlg.mosaicImagesTableWidget.currentRow()
+        if self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 0):
+            image_id = self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 0).text()
+            response = self.http.delete(
+                url=f'{self.server}/rasters/image/{image_id}',
+                callback=self.delete_selected_item_callback
+            )
+
+    def delete_selected_item_callback(self, *args):
         # refresh mosaics list
         self.load_user_mosaics()
 
