@@ -1,6 +1,7 @@
 import json
 import os.path
 import tempfile
+import time
 from base64 import b64encode, b64decode
 from typing import List, Optional, Union
 from datetime import datetime  # processing creation datetime formatting
@@ -2023,6 +2024,7 @@ class Mapflow(QObject):
         mapflow_env = QgsSettings().value('variables/mapflow_env') or 'production'
         self.server = config.SERVER.format(env=mapflow_env)
         self.project_id = QgsSettings().value('variables/project_id') or 'default'
+        self.load_user_mosaics()
         self.http.get(
             url=f'{self.server}/projects/{self.project_id}',
             callback=self.log_in_callback,
