@@ -52,6 +52,8 @@ class Mapflow(QObject):
 
         :param iface: an instance of the QGIS interface.
         """
+        # init empty params
+        self.username = self.password = ''
         # Save refs to key variables used throughout the plugin
         self.iface = iface
         self.main_window = self.iface.mainWindow()
@@ -119,6 +121,7 @@ class Mapflow(QObject):
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or config.DEFAULT_ZOOM))
 
         # load providers from settings
+        errors = []
         try:
             self.providers, errors = ProvidersDict.from_settings(settings=self.settings, env=mapflow_env)
         except Exception as e:
@@ -1292,6 +1295,7 @@ class Mapflow(QObject):
             callback=callback,
             callback_kwargs=callback_kwargs,
             error_handler=self.upload_tif_error_handler,
+            use_default_error_handler=False,
             body=body,
             timeout=3600  # one hour
         )
@@ -1988,35 +1992,57 @@ class Mapflow(QObject):
 
     def read_mapflow_token(self) -> None:
         """Compose and memorize the user's credentils as Basic Auth."""
-        self.mapflow_auth = f'Basic {self.dlg_login.token.text()}'
-        self.http.basic_auth = self.mapflow_auth
-        self.log_in()
+        token = self.dlg_login.token.text().strip()
+        if token:
+            # to add paddind for the token len to be multiple of 4
+            token += "="*((4 - len(token)%4)%4)
+            self.log_in(token)
 
-    def log_in(self) -> None:
+    def log_in(self, token) -> None:
         """Log into Mapflow."""
+        # save new token to settings immediately to overwrite old one, if any
+        self.settings.setValue('token', token)
+        # keep login/password from token
+        try:
+            self.username, self.password = b64decode(token).decode().split(':')
+        except:
+            self.username = self.password = ''
+            self.dlg_login.show()
+            self.log_in_error_handler()
+            return
+        self.http.basic_auth = f'Basic {token}'
+
         mapflow_env = QgsSettings().value('variables/mapflow_env') or 'production'
         self.server = config.SERVER.format(env=mapflow_env)
         self.project_id = QgsSettings().value('variables/project_id') or 'default'
         self.http.get(
             url=f'{self.server}/projects/{self.project_id}',
             callback=self.log_in_callback,
+            use_default_error_handler=False,
             error_handler=self.log_in_error_handler
         )
 
     def logout(self) -> None:
         """Close the plugin and clear credentials from cache."""
+        # set token to empty to delete it from settings
+        self.settings.setValue('token', '')
         self.processing_fetch_timer.stop()
         self.logged_in = False
         self.dlg.close()
         self.set_up_login_dialog()  # recreate the login dialog
         self.dlg_login.show()  # assume user wants to log into another account
 
-    def log_in_error_handler(self, response: QNetworkReply) -> None:
+    def log_in_error_handler(self, response: Optional[QNetworkReply]=None) -> None:
         """Error handler for the login request.
 
         :param response: The HTTP response.
         """
-        self.report_error(response, self.tr("Can't log in to Mapflow"))
+        self.dlg_login.show()
+        self.alert(self.tr('Wrong token. '
+                           'Visit "<a href=\"https://app.mapflow.ai/account/api\">mapflow.ai</a>" '
+                           'to get a new one'),
+                   icon=QMessageBox.Warning)
+
 
     def default_error_handler(self, response: QNetworkReply) -> bool:
         """Handle general networking errors: offline, timeout, server errors.
@@ -2127,12 +2153,6 @@ class Mapflow(QObject):
         self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
         # Authenticate and keep user logged in
         self.logged_in = True
-        token = self.mapflow_auth.split()[1]
-        self.settings.setValue('token', token)
-        try:
-            self.username, self.password = b64decode(token).decode().split(':')
-        except:  # incorrect padding
-            self.username, self.password = b64decode(token + '==').decode().split(':')
         self.dlg_login.close()
         # setup window title for different envs
         mapflow_env = QgsSettings().value('variables/mapflow_env') or 'production'
@@ -2175,7 +2195,6 @@ class Mapflow(QObject):
                 QMessageBox.Warning
             )
 
-
     def tr(self, message: str) -> str:
         """Localize a UI element text.
         :param message: A text to translate
@@ -2183,16 +2202,14 @@ class Mapflow(QObject):
         # Don't use self.plugin_name as context since it'll be overriden in supermodules
         return QCoreApplication.translate(config.PLUGIN_NAME, message)
 
-
     def main(self) -> None:
         """Plugin entrypoint."""
         token = self.settings.value('token')
         if self.logged_in:
             self.dlg.show()
         elif token:  # token saved
-            self.mapflow_auth = f'Basic {token}'
-            self.http.basic_auth = self.mapflow_auth
-            self.log_in()
+            self.http.basic_auth = f'Basic {token}'
+            self.log_in(token)
         else:
             self.set_up_login_dialog()
             self.dlg_login.show()
