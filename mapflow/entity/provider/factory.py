@@ -20,13 +20,12 @@ def create_provider_old(name, source_type, url, login, password, connect_id):
     """
     # connectid, login and password are only for maxar providers with user's own credentials
 
-    has_maxar_creds = bool(login) and bool(password) and bool(connect_id)
-    if "securewatch" in name.lower() or "vivid" in name.lower():
-        if has_maxar_creds:
+    if "securewatch" in name.lower() or "vivid" in name.lower() or "basemaps" in name.lower():
+        if bool(connect_id):
             return MaxarProvider(name=name,
                                  url=add_connect_id(MAXAR_BASE_URL, connect_id),
                                  credentials=(login, password),
-                                 save_credentials=True)
+                                 save_credentials=bool(login) and bool(password))
         else:
             # this means default provider Maxar SecureWatch which now is not saved in settings
             return None
