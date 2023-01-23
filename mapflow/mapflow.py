@@ -2168,32 +2168,34 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        """
         
         server_version = str(response.readAll().data())
         if server_version == "1":
             # Old version, legacy check, all OK
             return
-        
-        
-        server_version = server_version.split('.')
-        if len(server_version) != 3:
-            level = 'error'
-            message = self.tr('Server returned version in unexpected format. Please upgrade your plugin version contact us')
-        elif server_version == self.plugin_version:
-            # New versioning, all OK
-        """
+        loc_major, loc_minor, loc_patch = self.plugin_version.split('.')
+        try:
+            srv_major, srv_minor, srv_patch = server_version.split('.')
+        except ValueError:
+            self.alert('Server returned version in unexpected format.'
+                       ' Please upgrade your plugin version or contact us')
+            self.dlg.close()
+            return
 
-        if int(response.readAll().data()) > 1:
-            # Major version change
-            self.alert(
-                self.tr(
-                    'There is a new version of Mapflow for QGIS available.\n'
-                    'Please, upgrade to make sure everything works as expected. '
-                    'Go to Plugins -> Manage and Install Plugins -> Upgradable.'
-                ),
-                QMessageBox.Warning
-            )
+        new_major = srv_major > loc_major
+        new_minor = loc_major == srv_major and loc_minor < srv_minor
+        new_patch = loc_major == srv_major and loc_minor == srv_minor and loc_patch < srv_patch
+        if new_major:
+            self.alert("Upgrade plugin please! Your plugin is of version {local_version}, "
+                       "There is new major version {server_version} \n."
+                       "Go to Plugins -> Manage and Install Plugins -> Upgradable")
+            return
+        elif new_minor or new_patch:
+            if suppressed_upgrade_version != server_version:
+                self.alert("We recommend you to upgrade the plugin, "
+                           "there is a new minor version {server_version} available. \n"
+                           "Go to Plugins -> Manage and Install Plugins -> Upgradable")
+                # save suppressed version if "do not remind" is checked
 
     def tr(self, message: str) -> str:
         """Localize a UI element text.
