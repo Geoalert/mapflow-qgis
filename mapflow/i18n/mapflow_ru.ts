@@ -900,7 +900,7 @@ Please, upgrade to make sure everything works as expected. Go to Plugins -&gt; M
     <message>
         <location filename="../mapflow.py" line="277"/>
         <source>Currently, Mapflow doesn&apos;t support uploading own Sentinel-2 imagery. To process Sentinel-2, go to the Providers tab andSENTINEL_WD_NAME either search for your image in the catalog or paste its ID in the Image ID field.</source>
-        <translation>Mapflow пока не поддерживает загрузку пользовательских снимков Sentinel-2. Чтобы обработать Sentinel-2, пожалуйста, перейдите во вкладку &amp;quot;Источники данных&amp;quot; и либо найдите ваш снимок в каталоге либо вставьте его ID в поле &amp;quot;ID Снимка&amp;quot;.</translation>
+        <translation>Mapflow пока не поддерживает загрузку пользовательских снимков Sentinel-2. Чтобы обработать Sentinel-2, пожалуйста, перейдите во вкладку &quot;Источники данных&quot; и либо найдите ваш снимок в каталоге либо вставьте его ID в поле &quot;ID Снимка&quot;.</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="501"/>
@@ -952,7 +952,7 @@ Please, upgrade to make sure everything works as expected. Go to Plugins -&gt; M
     <message>
         <location filename="../mapflow.py" line="1356"/>
         <source>Processing limit exceeded. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; to top up your balance</source>
-        <translation>Превышен доступный лимит обработки. Посетите &amp;quot;&amp;lt;a href=&amp;quot;https://app.mapflow.ai/account/balance&amp;quot;&amp;gt;Mapflow&amp;lt;/a&amp;gt;&amp;quot; для пополнения баланса</translation>
+        <translation>Превышен доступный лимит обработки. Посетите &quot;&amp;lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&amp;gt;Mapflow&amp;lt;/a&amp;gt;&quot; для пополнения баланса</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1524"/>
