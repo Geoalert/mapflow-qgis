@@ -4,6 +4,7 @@ from qgis.core import (
     QgsMapLayer, QgsGeometry, QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
     QgsMapLayerType, QgsWkbTypes
 )
+from typing import Tuple
 
 
 PROJECT = QgsProject.instance()
@@ -63,3 +64,32 @@ def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
     if layer_crs != WGS84:
         extent_geometry = to_wgs84(extent_geometry, layer_crs)
     return extent_geometry
+
+
+def check_version(local_version: str,
+                  server_version: str,
+                  latest_reported_version: str) -> Tuple[bool, bool]:
+    """
+    Returns: (force_upgrade, recommend_upgrade)
+        force_upgrade is True if the user MUST reinstall/upgrade plugin to work with the server
+        recommend_upgrade is True if the user MAY reinstall if he wants to have fixes/new features
+    """
+    if server_version == 1:
+        return False, False
+        # Legacy for current, before-versioning server behavior
+    if server_version == latest_reported_version:
+        # we have already reported the version on the server
+        # should we expect the situation when the reported version can be higher than the current server version?
+        # probably not
+        return False, False
+
+    loc_major, loc_minor, loc_patch = self.plugin_version.split('.')
+    try:
+        srv_major, srv_minor, srv_patch = server_version.split('.')
+    except ValueError:
+        return True, False
+
+    major_changed = srv_major > loc_major
+    minor_changed = loc_major == srv_major and loc_minor < srv_minor
+    patch_changed = loc_major == srv_major and loc_minor == srv_minor and loc_patch < srv_patch
+    return major_changed, minor_changed or patch_changed

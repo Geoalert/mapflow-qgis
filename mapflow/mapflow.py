@@ -41,6 +41,7 @@ from .entity.provider import (Provider,
 from .functional.geometry import clip_aoi_to_image_extent
 from .errors import ErrorMessageList
 from .layer_utils import generate_xyz_layer_definition
+from .helpers import check_version
 
 
 class Mapflow(QObject):
@@ -2164,38 +2165,40 @@ class Mapflow(QObject):
         self.dlg.show()
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
-        """Inspect the backend version and show a warning if it is incompatible w/ the plugin.
+        """Inspect the plugin version backend expects and show a warning if it is incompatible w/ the plugin.
 
+        If the major version differs, we force the user to reinstall and exit the plugin
+        If the minor/patch differs, we recommend the user to reinstall, and if do it only once for the version,
+         so in case user dismisses the recommendation, w save the "last recommended version" in settings
+         and do not show the reminder until the even newer version is released
         :param response: The HTTP response.
         """
         
         server_version = str(response.readAll().data())
-        if server_version == "1":
-            # Old version, legacy check, all OK
-            return
-        loc_major, loc_minor, loc_patch = self.plugin_version.split('.')
-        try:
-            srv_major, srv_minor, srv_patch = server_version.split('.')
-        except ValueError:
-            self.alert('Server returned version in unexpected format.'
-                       ' Please upgrade your plugin version or contact us')
-            self.dlg.close()
-            return
+        latest_reported_version = self.settings.value('latest_reported_version', self.plugin_version)
 
-        new_major = srv_major > loc_major
-        new_minor = loc_major == srv_major and loc_minor < srv_minor
-        new_patch = loc_major == srv_major and loc_minor == srv_minor and loc_patch < srv_patch
-        if new_major:
-            self.alert("Upgrade plugin please! Your plugin is of version {local_version}, "
-                       "There is new major version {server_version} \n."
-                       "Go to Plugins -> Manage and Install Plugins -> Upgradable")
-            return
-        elif new_minor or new_patch:
-            if suppressed_upgrade_version != server_version:
-                self.alert("We recommend you to upgrade the plugin, "
-                           "there is a new minor version {server_version} available. \n"
-                           "Go to Plugins -> Manage and Install Plugins -> Upgradable")
-                # save suppressed version if "do not remind" is checked
+        force_upgrade, recommend_upgrade = check_version(local_version=self.plugin_version,
+                                                         server_version=server_version,
+                                                         latest_reported_version=latest_reported_version)
+
+        if force_upgrade:
+            self.alert(self.tr("You must upgrade your plugin version to continue work with Mapflow. \n"
+                               "The server requires version {server_version}, your plugin is {local_version}\n"
+                               "Go to Plugins -> Manage and Install Plugins -> Upgradable").format(
+                server_version=server_version,
+                local_version=self.plugin_version))
+            self.dlg.exit()
+        elif recommend_upgrade:
+            self.alert(self.tr("A new version of Mapflow plugin {server_version} is released \n"
+                               "We recommend you to upgrade to get all the latest features\n"
+                               "Go to Plugins -> Manage and Install Plugins -> Upgradable").format(
+                server_version=server_version,
+                local_version=self.plugin_version))
+            # saving the requested version to not bother the user next time, if he decides not to upgrade
+            self.settings.setValue('latest_reported_version', server_version)
+        else:
+            # it is if the upgrade is not needed, we want to save it
+            self.settings.setValue('latest_reported_version', server_version)
 
     def tr(self, message: str) -> str:
         """Localize a UI element text.
