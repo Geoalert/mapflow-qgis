@@ -952,7 +952,7 @@ Please, upgrade to make sure everything works as expected. Go to Plugins -&gt; M
     <message>
         <location filename="../mapflow.py" line="1356"/>
         <source>Processing limit exceeded. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; to top up your balance</source>
-        <translation>Превышен доступный лимит обработки. Посетите &quot;&amp;lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&amp;gt;Mapflow&amp;lt;/a&amp;gt;&quot; для пополнения баланса</translation>
+        <translation>Превышен доступный лимит обработки. Посетите &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; для пополнения баланса</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1524"/>
