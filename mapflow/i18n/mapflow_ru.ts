@@ -895,78 +895,79 @@ Please, upgrade to make sure everything works as expected. Go to Plugins -&gt; M
     <message>
         <location filename="../mapflow.py" line="209"/>
         <source>Selected Image ID: {text}</source>
-        <translation type="unfinished"></translation>
+        <translation>Выберите ID снимка: {text}</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="277"/>
         <source>Currently, Mapflow doesn&apos;t support uploading own Sentinel-2 imagery. To process Sentinel-2, go to the Providers tab andSENTINEL_WD_NAME either search for your image in the catalog or paste its ID in the Image ID field.</source>
-        <translation type="unfinished"></translation>
+        <translation>Mapflow пока не поддерживает загрузку пользовательских снимков Sentinel-2. Чтобы обработать Sentinel-2, пожалуйста, перейдите во вкладку &amp;quot;Источники данных&amp;quot; и либо найдите ваш снимок в каталоге либо вставьте его ID в поле &amp;quot;ID Снимка&amp;quot;.</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="501"/>
         <source>This provider cannot be removed</source>
-        <translation type="unfinished"></translation>
+        <translation>Данный источник данных не может быть удален</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="665"/>
         <source>Provider {name} does not support metadata requests</source>
-        <translation type="unfinished"></translation>
+        <translation>Источник данных {name} не поддерживает запрос метаданных</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1329"/>
         <source>Provider {} requires selected Image ID</source>
-        <translation type="unfinished"></translation>
+        <translation>Провайдеру {} требуется выбранный ID снимка</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1442"/>
         <source>Could not launch processing! Error: {}.</source>
-        <translation type="unfinished"></translation>
+        <translation>Не удалось запустить обработку! Ошибка: {}.</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1870"/>
         <source> failed with error:
 </source>
-        <translation type="unfinished"></translation>
+        <translation> завершилась с ошибкой:
+</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="125"/>
         <source>Error during loading the data providers: {e}</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка при загрузке источников данных: {e}</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="127"/>
         <source>We failed to import providers {errors} from the settings. Please add them again</source>
-        <translation type="unfinished"></translation>
+        <translation>Нам не удалось импортировать провайдеров из настроек {errors}. Пожалуйста, добавьте их снова</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="531"/>
         <source>Provider name must be unique. {name} already exists, select another or delete/edit existing</source>
-        <translation type="unfinished"></translation>
+        <translation>Название источника данных должен быть уникальным. {name} уже существует, выберите другое название или удалите/измените существующий</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1062"/>
         <source>We couldn&apos;t get metadata from Maxar, error {error}</source>
-        <translation type="unfinished"></translation>
+        <translation>Мы не смогли получить метаданные от Maxar, ошибка {error}</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1356"/>
         <source>Processing limit exceeded. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; to top up your balance</source>
-        <translation type="unfinished"></translation>
+        <translation>Превышен доступный лимит обработки. Посетите &amp;quot;&amp;lt;a href=&amp;quot;https://app.mapflow.ai/account/balance&amp;quot;&amp;gt;Mapflow&amp;lt;/a&amp;gt;&amp;quot; для пополнения баланса</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1524"/>
         <source>.  Project name: {}</source>
-        <translation type="unfinished"></translation>
+        <translation>. Название проекта: {}</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1670"/>
         <source>Preview is unavailable for the provider {}</source>
-        <translation type="unfinished"></translation>
+        <translation>Просмотр недоступен для провайдера {}</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="2072"/>
         <source>This operation is forbidden for your account, contact us</source>
-        <translation type="unfinished"></translation>
+        <translation>Эта операция запрещена для вашего аккаунта, свяжитесь с нами</translation>
     </message>
 </context>
 <context>
@@ -1024,12 +1025,17 @@ Please, upgrade to make sure everything works as expected. Go to Plugins -&gt; M
     <message>
         <location filename="../dialogs/static/ui/provider_dialog.ui" line="176"/>
         <source>Warninig! Login and password, if saved, will be stored in QGIS settings without encryption!</source>
-        <translation type="unfinished"></translation>
+        <translation>Предупреждение! Логин и пароль, в случае сохранения, будут храниться в настройках QGIS без шифрования!</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/provider_dialog.ui" line="179"/>
         <source>Save login and password</source>
-        <translation type="unfinished"></translation>
+        <translation>Сохранить логин и пароль</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/provider_dialog.ui" line="35"/>
+        <source>Provider</source>
+        <translation>Источник данных</translation>
     </message>
 </context>
 <context>
