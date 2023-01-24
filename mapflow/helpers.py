@@ -87,7 +87,8 @@ def check_version(local_version: str,
     try:
         srv_major, srv_minor, srv_patch = server_version.split('.')
     except ValueError:
-        return True, False
+        # Means that server has wrong format of version, so we ignore this message
+        return False, False
 
     major_changed = srv_major > loc_major
     minor_changed = loc_major == srv_major and loc_minor < srv_minor
