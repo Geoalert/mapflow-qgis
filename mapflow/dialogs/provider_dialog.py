@@ -35,7 +35,7 @@ class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
         self.current_provider = None
         self.result = None
 
-    def setup(self, provider: Optional[Provider] = None):
+    def setup(self, provider: Optional[Provider] = None, title: str = ''):
         self.current_provider = provider
         self.result = None
 
@@ -53,7 +53,7 @@ class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
             url = ""
             source_type = "xyz"
             crs = CRS.web_mercator
-            title = "Add new provider"
+            title = title
             login = ""
             password = ""
             save_credentials = False

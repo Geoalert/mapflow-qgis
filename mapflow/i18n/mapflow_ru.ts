@@ -303,82 +303,82 @@
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="27"/>
         <source>Processing</source>
-        <translation type="unfinished">Обработка</translation>
+        <translation>Обработка</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="194"/>
         <source>Name:</source>
-        <translation type="unfinished">Название:</translation>
+        <translation>Название:</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="187"/>
         <source>Mapflow model:</source>
-        <translation type="unfinished">Модель Mapflow:</translation>
+        <translation>Модель Mapflow:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="816"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="819"/>
         <source>Area:</source>
-        <translation type="unfinished">Область:</translation>
+        <translation>Область:</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="180"/>
         <source>Imagery source:</source>
-        <translation type="unfinished">Данные ДЗЗ:</translation>
+        <translation>Данные ДЗЗ:</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="38"/>
         <source>Use image extent</source>
-        <translation type="unfinished">Использовать охват снимка</translation>
+        <translation>Использовать охват снимка</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="111"/>
         <source>Start processing</source>
-        <translation type="unfinished">Начать обработку</translation>
+        <translation>Начать обработку</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="346"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="349"/>
         <source>Name</source>
-        <translation type="unfinished">Название</translation>
+        <translation>Название</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="354"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="357"/>
         <source>Model</source>
-        <translation type="unfinished">Модель</translation>
+        <translation>Модель</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="362"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="365"/>
         <source>Status</source>
-        <translation type="unfinished">Состояние</translation>
+        <translation>Состояние</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="386"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="389"/>
         <source>Created</source>
-        <translation type="unfinished">Дата</translation>
+        <translation>Дата</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="138"/>
         <source>Log out</source>
-        <translation type="unfinished">Выйти</translation>
+        <translation>Выйти</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="169"/>
         <source>Delete</source>
-        <translation type="unfinished">Удалить</translation>
+        <translation>Удалить</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="857"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="860"/>
         <source>Output directory:</source>
-        <translation type="unfinished">Рабочая папка:</translation>
+        <translation>Рабочая папка:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="516"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="519"/>
         <source>Max zoom:</source>
-        <translation type="unfinished">Макс зум:</translation>
+        <translation>Макс зум:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="536"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="539"/>
         <source>Preview</source>
-        <translation type="unfinished">Просмотр</translation>
+        <translation>Просмотр</translation>
     </message>
     <message>
         <location filename="../static/ui/main_dialog.ui" line="517"/>
@@ -401,34 +401,34 @@
         <translation type="obsolete">Запомнить</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="908"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="911"/>
         <source>Help</source>
-        <translation type="unfinished">Помощь</translation>
+        <translation>Помощь</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="224"/>
         <source>wms</source>
-        <translation type="unfinished">wms</translation>
+        <translation>wms</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="225"/>
         <source>postgresraster</source>
-        <translation type="unfinished">postgresraster</translation>
+        <translation>postgresraster</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="226"/>
         <source>grassraster</source>
-        <translation type="unfinished">grassraster</translation>
+        <translation>grassraster</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="406"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="409"/>
         <source>Providers</source>
-        <translation type="unfinished">Источники данных</translation>
+        <translation>Источники данных</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="378"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="381"/>
         <source>Area, sq. km</source>
-        <translation type="unfinished">Площадь, кв. км</translation>
+        <translation>Площадь, кв. км</translation>
     </message>
     <message>
         <location filename="../static/ui/main_dialog.ui" line="58"/>
@@ -446,144 +446,149 @@
         <translation type="obsolete">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#caching&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как это работает&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="370"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="373"/>
         <source>Progress %</source>
-        <translation type="unfinished">Прогресс %</translation>
+        <translation>Прогресс %</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="502"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="505"/>
         <source>Image ID:</source>
-        <translation type="unfinished">ID снимка:</translation>
+        <translation>ID снимка:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="509"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="512"/>
         <source>Select in the table below or paste here</source>
-        <translation type="unfinished">Выберите в таблице ниже или вставьте сюда</translation>
+        <translation>Выберите в таблице ниже или вставьте сюда</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="551"/>
+        <source>Provider Imagery Catalog</source>
+        <translation>Каталог снимков</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="839"/>
+        <source>Use canvas extent</source>
+        <translation>Использовать охват экрана</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="720"/>
+        <source>From:</source>
+        <translation>С:</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="798"/>
+        <source>yyyy-MM-dd</source>
+        <translation>yyyy-MM-dd</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="764"/>
+        <source>Search imagery</source>
+        <translation>Искать снимки</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="774"/>
+        <source>To:</source>
+        <translation>По:</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="563"/>
+        <source>Additional filters</source>
+        <translation>Дополнительные фильтры</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="575"/>
+        <source>Min intersection:</source>
+        <translation>Минимальное пересечение:</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="652"/>
+        <source>%</source>
+        <translation>%</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="620"/>
+        <source>Cloud cover up to:</source>
+        <translation>Облачность не более:</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="852"/>
+        <source>Settings</source>
+        <translation>Настройки</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="443"/>
+        <source>Add your own web imagery provider</source>
+        <translation>Добавьте собственный источник снимков</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="548"/>
-        <source>Provider Imagery Catalog</source>
-        <translation type="unfinished">Каталог снимков</translation>
+        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Here, you can search Maxar or Sentinel imagery for your area and timespan.&lt;/p&gt;&lt;p&gt;Additional filters are also available below.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
+        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Здесь вы можете искать подходящие для ваших области и времени снимки Maxar и Sentinel-2.&lt;/p&gt;&lt;p&gt;Дополнительные параметры поиска находятся во вкладке ниже.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="826"/>
+        <source>Any (multi-)polygon(s)</source>
+        <translation>Любые (мульти-)полигон(ы)</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="836"/>
-        <source>Use canvas extent</source>
-        <translation type="unfinished">Использовать охват экрана</translation>
+        <source>Use your current screen area</source>
+        <translation>Область ограниченная вашим экраном</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="717"/>
-        <source>From:</source>
-        <translation type="unfinished">С:</translation>
+        <source>Earlier images won&apos;t be shown</source>
+        <translation>Более ранние снимки не будут показаны</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="795"/>
-        <source>yyyy-MM-dd</source>
-        <translation type="unfinished">yyyy-MM-dd</translation>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="781"/>
+        <source>Dates are inclusive</source>
+        <translation>Даты включительны</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="761"/>
-        <source>Search imagery</source>
-        <translation type="unfinished">Искать снимки</translation>
+        <source>Click and wait for a few seconds until the table below is filled out</source>
+        <translation>Нажмите и подождите несколько секунд пока данные загрузятся</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="771"/>
-        <source>To:</source>
-        <translation type="unfinished">По:</translation>
+        <source>More recent images won&apos;t be shown</source>
+        <translation>Более поздние снимки не будут показаны</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="560"/>
-        <source>Additional filters</source>
-        <translation type="unfinished">Дополнительные фильтры</translation>
-    </message>
-    <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="572"/>
-        <source>Min intersection:</source>
-        <translation type="unfinished">Минимальное пересечение:</translation>
-    </message>
-    <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="649"/>
-        <source>%</source>
-        <translation type="unfinished">%</translation>
-    </message>
-    <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="617"/>
-        <source>Cloud cover up to:</source>
-        <translation type="unfinished">Облачность не более:</translation>
-    </message>
-    <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="849"/>
-        <source>Settings</source>
-        <translation type="unfinished">Настройки</translation>
-    </message>
-    <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="440"/>
-        <source>Add your own web imagery provider</source>
-        <translation type="unfinished">Добавьте собственный источник снимков</translation>
-    </message>
-    <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="545"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Here, you can search Maxar or Sentinel imagery for your area and timespan.&lt;/p&gt;&lt;p&gt;Additional filters are also available below.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="unfinished">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Здесь вы можете искать подходящие для ваших области и времени снимки Maxar и Sentinel-2.&lt;/p&gt;&lt;p&gt;Дополнительные параметры поиска находятся во вкладке ниже.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
-    </message>
-    <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="823"/>
-        <source>Any (multi-)polygon(s)</source>
-        <translation type="unfinished">Любые (мульти-)полигон(ы)</translation>
-    </message>
-    <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="833"/>
-        <source>Use your current screen area</source>
-        <translation type="unfinished">Область ограниченная вашим экраном</translation>
-    </message>
-    <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="714"/>
-        <source>Earlier images won&apos;t be shown</source>
-        <translation type="unfinished">Более ранние снимки не будут показаны</translation>
-    </message>
-    <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="778"/>
-        <source>Dates are inclusive</source>
-        <translation type="unfinished">Даты включительны</translation>
-    </message>
-    <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="758"/>
-        <source>Click and wait for a few seconds until the table below is filled out</source>
-        <translation type="unfinished">Нажмите и подождите несколько секунд пока данные загрузятся</translation>
-    </message>
-    <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="768"/>
-        <source>More recent images won&apos;t be shown</source>
-        <translation type="unfinished">Более поздние снимки не будут показаны</translation>
-    </message>
-    <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="557"/>
         <source>Click to specify additional search criteria</source>
-        <translation type="unfinished">Нажмите чтобы указать дополнительные условия поиска</translation>
+        <translation>Нажмите чтобы указать дополнительные условия поиска</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="579"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="582"/>
         <source>Images that cover fewer % of your area won&apos;t be shown</source>
-        <translation type="unfinished">Снимки покрывающие меньший % вашей области не будут показаны</translation>
+        <translation>Снимки покрывающие меньший % вашей области не будут показаны</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="676"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="679"/>
         <source>Double-click on a row to preview its image</source>
-        <translation type="unfinished">Двойной щелчок мыши загрузит предпросмотр снимка</translation>
+        <translation>Двойной щелчок мыши загрузит предпросмотр снимка</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="917"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;User Interface walkthrough&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-process-your-own-imagery&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to process your own image&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to use a different imagery tileset&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect to Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow Agro&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://agro.geoalert.io/&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;About&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow.html#sentinel-2&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Sentinel imagery&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/userguides/iterative_mapping.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Iterative mapping workflow for cropland maps&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;If you have a feature request or have spotted a bug,&lt;br/&gt;create an issue on our &lt;/span&gt;&lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="unfinished">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Пользовательский интерфейс&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/userguides/prices.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Тарифы&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#id19&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать собственный снимок для обработки&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#id17&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать снимки из других источников&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как подключить Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow Agro&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://agro.geoalert.io/&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;О проекте&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow.html#sentinel-2&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Снимки Sentinel&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/userguides/iterative_mapping.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Пошаговый способ картирования полей&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Если у вас есть предложения или замечания по работе плагина,&lt;br/&gt;мы будем рады если вы создадите задачу на нашем &lt;/span&gt;&lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+        <translation type="obsolete">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Пользовательский интерфейс&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/userguides/prices.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Тарифы&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#id19&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать собственный снимок для обработки&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#id17&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать снимки из других источников&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как подключить Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow Agro&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://agro.geoalert.io/&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;О проекте&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow.html#sentinel-2&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Снимки Sentinel&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/userguides/iterative_mapping.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Пошаговый способ картирования полей&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Если у вас есть предложения или замечания по работе плагина,&lt;br/&gt;мы будем рады если вы создадите задачу на нашем &lt;/span&gt;&lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="266"/>
         <source>Create or load vector layer with your area of interest</source>
-        <translation type="unfinished">Создать или загрузить векторный слой с вашей областью интереса</translation>
+        <translation>Создать или загрузить векторный слой с вашей областью интереса</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="288"/>
         <source>...</source>
-        <translation type="unfinished">...</translation>
+        <translation>...</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="920"/>
+        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;User Interface walkthrough&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/userguides/prices.html#mapflow-qgis-pricing-model&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Pricing&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-process-your-own-imagery&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to process your own image&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to use a different imagery tileset&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect to Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow Agro&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://agro.geoalert.io/&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;About&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow.html#sentinel-2&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Sentinel imagery&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/userguides/iterative_mapping.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Iterative mapping workflow for cropland maps&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;If you have a feature request or have spotted a bug,&lt;br/&gt;create an issue on our &lt;/span&gt;&lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
+        <translation></translation>
     </message>
 </context>
 <context>
@@ -594,153 +599,153 @@
         <translation type="obsolete">Mapflow пока не поддерживает загрузку пользовательских снимков Sentinel-2. Чтобы обработать Sentinel-2, пожалуйста, перейдите во вкладку &quot;Источники данных&quot; и либо найдите ваш снимок в каталоге либо вставьте его ID в поле &quot;ID Снимка&quot;.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="361"/>
+        <location filename="../mapflow.py" line="370"/>
         <source>Log in</source>
         <translation>Вход</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="402"/>
+        <location filename="../mapflow.py" line="411"/>
         <source>If you already know which {provider_name} image you want to process,
 simply paste its ID here. Otherwise, search suitable images in the catalog below.</source>
         <translation>Если вы уже знаете ID снимка {provider_name} который вы хотите обработать, просто вставьте его в это поле. Иначе, используйте каталог ниже чтобы найти подходящий снимок.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="413"/>
+        <location filename="../mapflow.py" line="422"/>
         <source>e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00</source>
         <translation>например S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="421"/>
+        <location filename="../mapflow.py" line="430"/>
         <source>e.g. a3b154c40cc74f3b934c0ffc9b34ecd1</source>
         <translation>например a3b154c40cc74f3b934c0ffc9b34ecd1</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="431"/>
+        <location filename="../mapflow.py" line="440"/>
         <source>Leave this field empty for </source>
         <translation>Оставьте это поле пустым для </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="433"/>
+        <location filename="../mapflow.py" line="442"/>
         <source> doesn&apos;t allow processing single images.</source>
         <translation> не поддерживает обработку отдельных снимков.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="447"/>
+        <location filename="../mapflow.py" line="456"/>
         <source> Imagery Catalog</source>
         <translation> - Каталог снимков</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="498"/>
+        <location filename="../mapflow.py" line="507"/>
         <source>Permanently remove {}?</source>
         <translation>Удалить {}?</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="587"/>
+        <location filename="../mapflow.py" line="605"/>
         <source>Select output directory</source>
         <translation>Выберите папку для сохранения данных</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="603"/>
+        <location filename="../mapflow.py" line="621"/>
         <source>Please, specify an existing output directory</source>
         <translation>Пожалуйста, выберите папку для сохранения данных</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="611"/>
+        <location filename="../mapflow.py" line="629"/>
         <source>Select GeoTIFF</source>
         <translation>Выберите GeoTIFF</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1359"/>
+        <location filename="../mapflow.py" line="1356"/>
         <source>Please, select an area of interest</source>
         <translation>Пожалуйста, выберите слой с областью обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="669"/>
+        <location filename="../mapflow.py" line="687"/>
         <source>Your area of interest is too large.</source>
         <translation>Слишком большая область запроса метаданных.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1055"/>
+        <location filename="../mapflow.py" line="1063"/>
         <source>Please, check your credentials</source>
         <translation>Пожалуйста, проверьте реквизиты</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="928"/>
+        <location filename="../mapflow.py" line="937"/>
         <source>We couldn&apos;t fetch Sentinel metadata</source>
         <translation>Мы не смогли получить метаданные Сентинел</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="995"/>
+        <location filename="../mapflow.py" line="1003"/>
         <source>No images match your criteria. Try relaxing the filters.</source>
         <translation>Нет подходящий снимков. Попробуйте изменить параметры поиска.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="897"/>
+        <location filename="../mapflow.py" line="906"/>
         <source>More</source>
         <translation>Еще</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1057"/>
         <source>We couldn&apos;t get metadata from Maxar</source>
-        <translation>Мы не смогли получить метаданные от Максар</translation>
+        <translation type="obsolete">Мы не смогли получить метаданные от Максар</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1130"/>
+        <location filename="../mapflow.py" line="1139"/>
         <source>A Sentinel image ID should look like S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 or /36/S/XA/2022/02/09/0/</source>
         <translation>ID снимка Sentinel должен иметь формат S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 или /36/S/XA/2022/02/09/0/</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1217"/>
+        <location filename="../mapflow.py" line="1226"/>
         <source>Area: {:.2f} sq.km</source>
         <translation>Площадь: {:.2f} кв.км</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1232"/>
+        <location filename="../mapflow.py" line="1241"/>
         <source>Delete selected processings?</source>
         <translation>Удалить выбранные обработки?</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1257"/>
+        <location filename="../mapflow.py" line="1266"/>
         <source>Error deleting a processing</source>
         <translation>Ошибка удаления обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1350"/>
+        <location filename="../mapflow.py" line="1347"/>
         <source>Please, specify a name for your processing</source>
         <translation>Пожалуйста, выберите название обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1355"/>
+        <location filename="../mapflow.py" line="1352"/>
         <source>GeoTIFF has invalid projection</source>
         <translation>Мы не смогли распознать проекцию снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1357"/>
+        <location filename="../mapflow.py" line="1354"/>
         <source>Processing area has invalid projection</source>
         <translation>Мы не смогли распознать проекцию области обработки</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1363"/>
         <source>Processing limit exceeded</source>
-        <translation>Превышен доступный лимит обработки</translation>
+        <translation type="obsolete">Превышен доступный лимит обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1366"/>
+        <location filename="../mapflow.py" line="1365"/>
         <source>Up to {} sq km can be processed at a time. Try splitting your area(s) into several processings.</source>
         <translation>За раз можно обработать не более {} кв км. Попробуйте разделить область обработки на части.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1428"/>
+        <location filename="../mapflow.py" line="1429"/>
         <source>Click on the link below to send us an email</source>
         <translation>Нажмите на ссылку ниже чтобы отправить нам отчет об ошибке</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1428"/>
+        <location filename="../mapflow.py" line="1429"/>
         <source>Upgrade your subscription to process Maxar imagery</source>
         <translation>Чтобы обрабатывать по Максар, нужно стать Премиум пользователем Mapflow</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1428"/>
+        <location filename="../mapflow.py" line="1429"/>
         <source>I&apos;d like to upgrade my subscription to Mapflow Processing API to be able to process Maxar imagery.</source>
         <translation>Я хотел бы стать премиум пользователем Mapflow чтобы обрабатывать по Максар.</translation>
     </message>
@@ -750,77 +755,77 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Выберите подходящий снимок Sentinel-2 в каталоге</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1416"/>
+        <location filename="../mapflow.py" line="1415"/>
         <source>Image and processing area do not intersect</source>
         <translation>Снимок и область обработки не пересекаются</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1407"/>
+        <location filename="../mapflow.py" line="1406"/>
         <source>Starting the processing...</source>
         <translation>Создаем обработку...</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1310"/>
+        <location filename="../mapflow.py" line="1303"/>
         <source>Uploading image to Mapflow...</source>
         <translation>Загружаем ваш снимок на Mapflow...</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1461"/>
+        <location filename="../mapflow.py" line="1463"/>
         <source>We couldn&apos;t upload your GeoTIFF</source>
         <translation>Мы не смогли загрузить ваш снимок</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1481"/>
+        <location filename="../mapflow.py" line="1486"/>
         <source>Processing creation failed</source>
         <translation>Мы не смогли создать обработку</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1485"/>
+        <location filename="../mapflow.py" line="1491"/>
         <source>Success! We&apos;ll notify you when the processing has finished.</source>
         <translation>Обработка создана! Мы оповестим вас когда она завершится.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1515"/>
+        <location filename="../mapflow.py" line="1526"/>
         <source>Processing limit: {} sq.km</source>
         <translation>Доступный лимит: {} кв.км</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1564"/>
+        <location filename="../mapflow.py" line="1576"/>
         <source>Sorry, we couldn&apos;t load the image</source>
         <translation>Ошибка предпросмотра снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1565"/>
+        <location filename="../mapflow.py" line="1577"/>
         <source>Error previewing Sentinel imagery</source>
         <translation>Ошибка предпросмотра снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1573"/>
+        <location filename="../mapflow.py" line="1585"/>
         <source>Sorry, there&apos;s no preview for this image</source>
         <translation>К сожалению, для этого снимка нет предпросмотра</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1650"/>
+        <location filename="../mapflow.py" line="1664"/>
         <source>We couldn&apos;t load a preview for this image</source>
         <translation>Мы не смогли осуществить предпросмотр этого снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1588"/>
+        <location filename="../mapflow.py" line="1600"/>
         <source>Please, select an image to preview</source>
         <translation>Пожалуйста, выберите снимок</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1732"/>
+        <location filename="../mapflow.py" line="1748"/>
         <source>Error loading results. Error code: </source>
         <translation>Ошибка загрузки результатов. Код ошибки: </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1774"/>
+        <location filename="../mapflow.py" line="1790"/>
         <source>Error downloading results</source>
         <translation>Мы не смогли скачать результаты обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1805"/>
+        <location filename="../mapflow.py" line="1821"/>
         <source>Error loading results</source>
         <translation>Мы не смогли загрузить результаты</translation>
     </message>
@@ -832,96 +837,152 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
 </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1881"/>
+        <location filename="../mapflow.py" line="1897"/>
         <source> finished. Double-click it in the table to download the results.</source>
         <translation> завершилась. Дважды кликните на нее в таблице чтобы загрузить результаты.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2006"/>
+        <location filename="../mapflow.py" line="2019"/>
         <source>Can&apos;t log in to Mapflow</source>
-        <translation>Мы не смогли подключиться к Mapflow</translation>
+        <translation type="obsolete">Мы не смогли подключиться к Mapflow</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2024"/>
+        <location filename="../mapflow.py" line="2063"/>
         <source>Invalid token</source>
         <translation>Неверный токен</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2056"/>
+        <location filename="../mapflow.py" line="2095"/>
         <source>Proxy error. Please, check your proxy settings.</source>
         <translation>Ошибка прокси. Пожалуйста, проверьте настройки прокси в QGIS.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2073"/>
+        <location filename="../mapflow.py" line="2117"/>
         <source>Unknown error</source>
         <translation>Неизвестная ошибка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2135"/>
+        <location filename="../mapflow.py" line="2189"/>
         <source>There is a new version of Mapflow for QGIS available.
 Please, upgrade to make sure everything works as expected. Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable.</source>
         <translation>Пожалуйста, обновите версию плагина чтобы все работало как нужно. Модули -&gt; Управление модулями -&gt; Обновляемые.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="240"/>
+        <location filename="../mapflow.py" line="246"/>
         <source>Select vector file</source>
         <translation>Выберите векторный файл</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="198"/>
+        <location filename="../mapflow.py" line="204"/>
         <source>Create new AOI layer from map extent</source>
         <translation>Создать новый слой области интереса из видимой области карты</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="199"/>
+        <location filename="../mapflow.py" line="205"/>
         <source>Add AOI from vector file</source>
         <translation>Добавить AOI из векторного файла</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="252"/>
+        <location filename="../mapflow.py" line="258"/>
         <source>Your file is not valid vector data source!</source>
         <translation>Ваш файл не подходит как источник векторных данных!</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1925"/>
+        <location filename="../mapflow.py" line="1941"/>
         <source>Double click to add results to the map</source>
         <translation>Двойной клик добавит результаты на карту</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="206"/>
+        <location filename="../mapflow.py" line="212"/>
         <source>Selected Image ID: {text}</source>
-        <translation type="unfinished"></translation>
+        <translation>Выберите ID снимка: {text}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="273"/>
+        <location filename="../mapflow.py" line="280"/>
         <source>Currently, Mapflow doesn&apos;t support uploading own Sentinel-2 imagery. To process Sentinel-2, go to the Providers tab andSENTINEL_WD_NAME either search for your image in the catalog or paste its ID in the Image ID field.</source>
-        <translation type="unfinished"></translation>
+        <translation>Mapflow пока не поддерживает загрузку пользовательских снимков Sentinel-2. Чтобы обработать Sentinel-2, пожалуйста, перейдите во вкладку &quot;Источники данных&quot; и либо найдите ваш снимок в каталоге либо вставьте его ID в поле &quot;ID Снимка&quot;.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="495"/>
+        <location filename="../mapflow.py" line="504"/>
         <source>This provider cannot be removed</source>
-        <translation type="unfinished"></translation>
+        <translation>Данный источник данных не может быть удален</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="650"/>
+        <location filename="../mapflow.py" line="668"/>
         <source>Provider {name} does not support metadata requests</source>
-        <translation type="unfinished"></translation>
+        <translation>Источник данных {name} не поддерживает запрос метаданных</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1335"/>
+        <location filename="../mapflow.py" line="1333"/>
         <source>Provider {} requires selected Image ID</source>
-        <translation type="unfinished"></translation>
+        <translation>Провайдеру {} требуется выбранный ID снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1443"/>
+        <location filename="../mapflow.py" line="1446"/>
         <source>Could not launch processing! Error: {}.</source>
-        <translation type="unfinished"></translation>
+        <translation>Не удалось запустить обработку! Ошибка: {}.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1858"/>
+        <location filename="../mapflow.py" line="1874"/>
         <source> failed with error:
 </source>
-        <translation type="unfinished"></translation>
+        <translation> завершилась с ошибкой:
+</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="128"/>
+        <source>Error during loading the data providers: {e}</source>
+        <translation>Ошибка при загрузке источников данных: {e}</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="130"/>
+        <source>We failed to import providers {errors} from the settings. Please add them again</source>
+        <translation>Нам не удалось импортировать провайдеров из настроек {errors}. Пожалуйста, добавьте их снова</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="534"/>
+        <source>Provider name must be unique. {name} already exists, select another or delete/edit existing</source>
+        <translation>Название источника данных должен быть уникальным. {name} уже существует, выберите другое название или удалите/измените существующий</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="1065"/>
+        <source>We couldn&apos;t get metadata from Maxar, error {error}</source>
+        <translation>Мы не смогли получить метаданные от Maxar, ошибка {error}</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="1360"/>
+        <source>Processing limit exceeded. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; to top up your balance</source>
+        <translation>Превышен доступный лимит обработки. Посетите &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; для пополнения баланса</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="1528"/>
+        <source>.  Project name: {}</source>
+        <translation>. Название проекта: {}</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="1674"/>
+        <source>Preview is unavailable for the provider {}</source>
+        <translation>Просмотр недоступен для провайдера {}</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="2098"/>
+        <source>This operation is forbidden for your account, contact us</source>
+        <translation>Эта операция запрещена для вашего аккаунта, свяжитесь с нами</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="546"/>
+        <source>Add new provider</source>
+        <translation>Добавить новый источник данных</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="554"/>
+        <source>This is a default provider, it cannot be edited</source>
+        <translation>Это источник данных по умолчанию, его нельзя изменить</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="2041"/>
+        <source>Wrong token. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/api&quot;&gt;mapflow.ai&lt;/a&gt;&quot; to get a new one</source>
+        <translation>Неправильный токе. Посетите &quot;&lt;a href=&quot;https://app.mapflow.ai/account/api&quot;&gt;mapflow.ai&lt;/a&gt;&quot; чтобы получить новый</translation>
     </message>
 </context>
 <context>
@@ -957,24 +1018,39 @@ Please, upgrade to make sure everything works as expected. Go to Plugins -&gt; M
         <translation>Пароль</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/provider_dialog.ui" line="137"/>
+        <location filename="../dialogs/static/ui/provider_dialog.ui" line="134"/>
         <source>CRS</source>
         <translation>CRS</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/provider_dialog.ui" line="162"/>
+        <location filename="../dialogs/static/ui/provider_dialog.ui" line="159"/>
         <source>Projection of the tile layer. The most popular is Web Mercator, use it if you are not sure</source>
         <translation>Проекция тайлового слоя. Самая популярная - Web Mercator (EPSG:3857), используйте её если не уверены</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/provider_dialog.ui" line="166"/>
+        <location filename="../dialogs/static/ui/provider_dialog.ui" line="163"/>
         <source>EPSG:3857</source>
         <translation>EPSG:3857</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/provider_dialog.ui" line="171"/>
+        <location filename="../dialogs/static/ui/provider_dialog.ui" line="168"/>
         <source>EPSG:3395</source>
         <translation>EPSG:3395</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/provider_dialog.ui" line="176"/>
+        <source>Warninig! Login and password, if saved, will be stored in QGIS settings without encryption!</source>
+        <translation>Предупреждение! Логин и пароль, в случае сохранения, будут храниться в настройках QGIS без шифрования!</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/provider_dialog.ui" line="179"/>
+        <source>Save login and password</source>
+        <translation>Сохранить логин и пароль</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/provider_dialog.ui" line="35"/>
+        <source>Provider</source>
+        <translation>Источник данных</translation>
     </message>
 </context>
 <context>
