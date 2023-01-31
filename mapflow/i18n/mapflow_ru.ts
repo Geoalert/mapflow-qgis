@@ -1,20 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.1" language="ru_RU" sourcelanguage="en">
+<TS version="2.1" language="ru_RU" sourcelanguage="en_US">
 <context>
     <name>ErrorMessage</name>
     <message>
         <location filename="../errors.py" line="131"/>
         <source>
  Warning: some error parameters were not loaded : {}!</source>
-        <translation></translation>
+        <translation>
+ Внимание: часть параметров не были загружены: {}!</translation>
     </message>
     <message>
         <location filename="../errors.py" line="133"/>
         <source>Unknown error while fetching processing errors: {exception}
  Error code: {code}
  Contact us to resolve the issue! help@geoalert.io</source>
-        <translation></translation>
+        <translation>Неизвестная ошибка при загрузке ошибок обработки: {exception}
+ Код ошибки: {}
+ Свяжитесь с нами, мы поможем решить проблему! help@geoalert.io</translation>
     </message>
 </context>
 <context>
@@ -599,88 +602,88 @@
         <translation type="obsolete">Mapflow пока не поддерживает загрузку пользовательских снимков Sentinel-2. Чтобы обработать Sentinel-2, пожалуйста, перейдите во вкладку &quot;Источники данных&quot; и либо найдите ваш снимок в каталоге либо вставьте его ID в поле &quot;ID Снимка&quot;.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="370"/>
+        <location filename="../mapflow.py" line="367"/>
         <source>Log in</source>
         <translation>Вход</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="411"/>
+        <location filename="../mapflow.py" line="408"/>
         <source>If you already know which {provider_name} image you want to process,
 simply paste its ID here. Otherwise, search suitable images in the catalog below.</source>
         <translation>Если вы уже знаете ID снимка {provider_name} который вы хотите обработать, просто вставьте его в это поле. Иначе, используйте каталог ниже чтобы найти подходящий снимок.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="422"/>
+        <location filename="../mapflow.py" line="419"/>
         <source>e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00</source>
         <translation>например S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="430"/>
+        <location filename="../mapflow.py" line="427"/>
         <source>e.g. a3b154c40cc74f3b934c0ffc9b34ecd1</source>
         <translation>например a3b154c40cc74f3b934c0ffc9b34ecd1</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="440"/>
+        <location filename="../mapflow.py" line="437"/>
         <source>Leave this field empty for </source>
         <translation>Оставьте это поле пустым для </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="442"/>
+        <location filename="../mapflow.py" line="439"/>
         <source> doesn&apos;t allow processing single images.</source>
         <translation> не поддерживает обработку отдельных снимков.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="456"/>
+        <location filename="../mapflow.py" line="453"/>
         <source> Imagery Catalog</source>
         <translation> - Каталог снимков</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="507"/>
+        <location filename="../mapflow.py" line="504"/>
         <source>Permanently remove {}?</source>
         <translation>Удалить {}?</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="605"/>
+        <location filename="../mapflow.py" line="602"/>
         <source>Select output directory</source>
         <translation>Выберите папку для сохранения данных</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="621"/>
+        <location filename="../mapflow.py" line="618"/>
         <source>Please, specify an existing output directory</source>
         <translation>Пожалуйста, выберите папку для сохранения данных</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="629"/>
+        <location filename="../mapflow.py" line="626"/>
         <source>Select GeoTIFF</source>
         <translation>Выберите GeoTIFF</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1356"/>
+        <location filename="../mapflow.py" line="1353"/>
         <source>Please, select an area of interest</source>
         <translation>Пожалуйста, выберите слой с областью обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="687"/>
+        <location filename="../mapflow.py" line="684"/>
         <source>Your area of interest is too large.</source>
         <translation>Слишком большая область запроса метаданных.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1063"/>
+        <location filename="../mapflow.py" line="1060"/>
         <source>Please, check your credentials</source>
         <translation>Пожалуйста, проверьте реквизиты</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="937"/>
+        <location filename="../mapflow.py" line="934"/>
         <source>We couldn&apos;t fetch Sentinel metadata</source>
         <translation>Мы не смогли получить метаданные Сентинел</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1003"/>
+        <location filename="../mapflow.py" line="1000"/>
         <source>No images match your criteria. Try relaxing the filters.</source>
         <translation>Нет подходящий снимков. Попробуйте изменить параметры поиска.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="906"/>
+        <location filename="../mapflow.py" line="903"/>
         <source>More</source>
         <translation>Еще</translation>
     </message>
@@ -690,39 +693,39 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Мы не смогли получить метаданные от Максар</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1139"/>
+        <location filename="../mapflow.py" line="1136"/>
         <source>A Sentinel image ID should look like S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 or /36/S/XA/2022/02/09/0/</source>
         <translation>ID снимка Sentinel должен иметь формат S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 или /36/S/XA/2022/02/09/0/</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1226"/>
+        <location filename="../mapflow.py" line="1223"/>
         <source>Area: {:.2f} sq.km</source>
         <translation>Площадь: {:.2f} кв.км</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1241"/>
+        <location filename="../mapflow.py" line="1238"/>
         <source>Delete selected processings?</source>
         <translation>Удалить выбранные обработки?</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1266"/>
+        <location filename="../mapflow.py" line="1263"/>
         <source>Error deleting a processing</source>
         <translation>Ошибка удаления обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1347"/>
+        <location filename="../mapflow.py" line="1344"/>
         <source>Please, specify a name for your processing</source>
         <translation>Пожалуйста, выберите название обработки</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1352"/>
         <source>GeoTIFF has invalid projection</source>
-        <translation>Мы не смогли распознать проекцию снимка</translation>
+        <translation type="obsolete">Мы не смогли распознать проекцию снимка</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1354"/>
         <source>Processing area has invalid projection</source>
-        <translation>Мы не смогли распознать проекцию области обработки</translation>
+        <translation type="obsolete">Мы не смогли распознать проекцию области обработки</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1363"/>
@@ -730,22 +733,22 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Превышен доступный лимит обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1365"/>
+        <location filename="../mapflow.py" line="1362"/>
         <source>Up to {} sq km can be processed at a time. Try splitting your area(s) into several processings.</source>
         <translation>За раз можно обработать не более {} кв км. Попробуйте разделить область обработки на части.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1429"/>
+        <location filename="../mapflow.py" line="1426"/>
         <source>Click on the link below to send us an email</source>
         <translation>Нажмите на ссылку ниже чтобы отправить нам отчет об ошибке</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1429"/>
+        <location filename="../mapflow.py" line="1426"/>
         <source>Upgrade your subscription to process Maxar imagery</source>
         <translation>Чтобы обрабатывать по Максар, нужно стать Премиум пользователем Mapflow</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1429"/>
+        <location filename="../mapflow.py" line="1426"/>
         <source>I&apos;d like to upgrade my subscription to Mapflow Processing API to be able to process Maxar imagery.</source>
         <translation>Я хотел бы стать премиум пользователем Mapflow чтобы обрабатывать по Максар.</translation>
     </message>
@@ -755,77 +758,77 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Выберите подходящий снимок Sentinel-2 в каталоге</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1415"/>
+        <location filename="../mapflow.py" line="1412"/>
         <source>Image and processing area do not intersect</source>
         <translation>Снимок и область обработки не пересекаются</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1406"/>
+        <location filename="../mapflow.py" line="1403"/>
         <source>Starting the processing...</source>
         <translation>Создаем обработку...</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1303"/>
+        <location filename="../mapflow.py" line="1300"/>
         <source>Uploading image to Mapflow...</source>
         <translation>Загружаем ваш снимок на Mapflow...</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1463"/>
+        <location filename="../mapflow.py" line="1460"/>
         <source>We couldn&apos;t upload your GeoTIFF</source>
         <translation>Мы не смогли загрузить ваш снимок</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1486"/>
+        <location filename="../mapflow.py" line="1483"/>
         <source>Processing creation failed</source>
         <translation>Мы не смогли создать обработку</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1491"/>
+        <location filename="../mapflow.py" line="1488"/>
         <source>Success! We&apos;ll notify you when the processing has finished.</source>
         <translation>Обработка создана! Мы оповестим вас когда она завершится.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1526"/>
+        <location filename="../mapflow.py" line="1523"/>
         <source>Processing limit: {} sq.km</source>
         <translation>Доступный лимит: {} кв.км</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1576"/>
+        <location filename="../mapflow.py" line="1573"/>
         <source>Sorry, we couldn&apos;t load the image</source>
         <translation>Ошибка предпросмотра снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1577"/>
+        <location filename="../mapflow.py" line="1574"/>
         <source>Error previewing Sentinel imagery</source>
         <translation>Ошибка предпросмотра снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1585"/>
+        <location filename="../mapflow.py" line="1582"/>
         <source>Sorry, there&apos;s no preview for this image</source>
         <translation>К сожалению, для этого снимка нет предпросмотра</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1664"/>
+        <location filename="../mapflow.py" line="1661"/>
         <source>We couldn&apos;t load a preview for this image</source>
         <translation>Мы не смогли осуществить предпросмотр этого снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1600"/>
+        <location filename="../mapflow.py" line="1597"/>
         <source>Please, select an image to preview</source>
         <translation>Пожалуйста, выберите снимок</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1748"/>
+        <location filename="../mapflow.py" line="1745"/>
         <source>Error loading results. Error code: </source>
         <translation>Ошибка загрузки результатов. Код ошибки: </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1790"/>
+        <location filename="../mapflow.py" line="1787"/>
         <source>Error downloading results</source>
         <translation>Мы не смогли скачать результаты обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1821"/>
+        <location filename="../mapflow.py" line="1818"/>
         <source>Error loading results</source>
         <translation>Мы не смогли загрузить результаты</translation>
     </message>
@@ -837,7 +840,7 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
 </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1897"/>
+        <location filename="../mapflow.py" line="1894"/>
         <source> finished. Double-click it in the table to download the results.</source>
         <translation> завершилась. Дважды кликните на нее в таблице чтобы загрузить результаты.</translation>
     </message>
@@ -847,17 +850,17 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Мы не смогли подключиться к Mapflow</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2063"/>
+        <location filename="../mapflow.py" line="2060"/>
         <source>Invalid token</source>
         <translation>Неверный токен</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2095"/>
+        <location filename="../mapflow.py" line="2092"/>
         <source>Proxy error. Please, check your proxy settings.</source>
         <translation>Ошибка прокси. Пожалуйста, проверьте настройки прокси в QGIS.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2117"/>
+        <location filename="../mapflow.py" line="2114"/>
         <source>Unknown error</source>
         <translation>Неизвестная ошибка</translation>
     </message>
@@ -865,124 +868,148 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <location filename="../mapflow.py" line="2189"/>
         <source>There is a new version of Mapflow for QGIS available.
 Please, upgrade to make sure everything works as expected. Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable.</source>
-        <translation>Пожалуйста, обновите версию плагина чтобы все работало как нужно. Модули -&gt; Управление модулями -&gt; Обновляемые.</translation>
+        <translation type="obsolete">Пожалуйста, обновите версию плагина чтобы все работало как нужно. Модули -&gt; Управление модулями -&gt; Обновляемые.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="246"/>
+        <location filename="../mapflow.py" line="243"/>
         <source>Select vector file</source>
         <translation>Выберите векторный файл</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="204"/>
+        <location filename="../mapflow.py" line="200"/>
         <source>Create new AOI layer from map extent</source>
         <translation>Создать новый слой области интереса из видимой области карты</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="205"/>
+        <location filename="../mapflow.py" line="201"/>
         <source>Add AOI from vector file</source>
         <translation>Добавить AOI из векторного файла</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="258"/>
+        <location filename="../mapflow.py" line="255"/>
         <source>Your file is not valid vector data source!</source>
         <translation>Ваш файл не подходит как источник векторных данных!</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1941"/>
+        <location filename="../mapflow.py" line="1938"/>
         <source>Double click to add results to the map</source>
         <translation>Двойной клик добавит результаты на карту</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="212"/>
+        <location filename="../mapflow.py" line="209"/>
         <source>Selected Image ID: {text}</source>
         <translation>Выберите ID снимка: {text}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="280"/>
+        <location filename="../mapflow.py" line="277"/>
         <source>Currently, Mapflow doesn&apos;t support uploading own Sentinel-2 imagery. To process Sentinel-2, go to the Providers tab andSENTINEL_WD_NAME either search for your image in the catalog or paste its ID in the Image ID field.</source>
-        <translation>Mapflow пока не поддерживает загрузку пользовательских снимков Sentinel-2. Чтобы обработать Sentinel-2, пожалуйста, перейдите во вкладку &quot;Источники данных&quot; и либо найдите ваш снимок в каталоге либо вставьте его ID в поле &quot;ID Снимка&quot;.</translation>
+        <translation>Mapflow пока не поддерживает загрузку пользовательских снимков Sentinel-2. Чтобы обработать Sentinel-2, пожалуйста, перейдите во вкладку &amp;quot;Источники данных&amp;quot; и либо найдите ваш снимок в каталоге либо вставьте его ID в поле &amp;quot;ID Снимка&amp;quot;.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="504"/>
+        <location filename="../mapflow.py" line="501"/>
         <source>This provider cannot be removed</source>
         <translation>Данный источник данных не может быть удален</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="668"/>
+        <location filename="../mapflow.py" line="665"/>
         <source>Provider {name} does not support metadata requests</source>
         <translation>Источник данных {name} не поддерживает запрос метаданных</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1333"/>
+        <location filename="../mapflow.py" line="1330"/>
         <source>Provider {} requires selected Image ID</source>
         <translation>Провайдеру {} требуется выбранный ID снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1446"/>
+        <location filename="../mapflow.py" line="1443"/>
         <source>Could not launch processing! Error: {}.</source>
         <translation>Не удалось запустить обработку! Ошибка: {}.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1874"/>
+        <location filename="../mapflow.py" line="1871"/>
         <source> failed with error:
 </source>
         <translation> завершилась с ошибкой:
 </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="128"/>
+        <location filename="../mapflow.py" line="124"/>
         <source>Error during loading the data providers: {e}</source>
         <translation>Ошибка при загрузке источников данных: {e}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="130"/>
+        <location filename="../mapflow.py" line="126"/>
         <source>We failed to import providers {errors} from the settings. Please add them again</source>
         <translation>Нам не удалось импортировать провайдеров из настроек {errors}. Пожалуйста, добавьте их снова</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="534"/>
+        <location filename="../mapflow.py" line="531"/>
         <source>Provider name must be unique. {name} already exists, select another or delete/edit existing</source>
         <translation>Название источника данных должен быть уникальным. {name} уже существует, выберите другое название или удалите/измените существующий</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1065"/>
+        <location filename="../mapflow.py" line="1062"/>
         <source>We couldn&apos;t get metadata from Maxar, error {error}</source>
         <translation>Мы не смогли получить метаданные от Maxar, ошибка {error}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1360"/>
+        <location filename="../mapflow.py" line="1357"/>
         <source>Processing limit exceeded. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; to top up your balance</source>
-        <translation>Превышен доступный лимит обработки. Посетите &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; для пополнения баланса</translation>
+        <translation>Превышен доступный лимит обработки. Посетите &amp;quot;&amp;lt;a href=&amp;quot;https://app.mapflow.ai/account/balance&amp;quot;&amp;gt;Mapflow&amp;lt;/a&amp;gt;&amp;quot; для пополнения баланса</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1528"/>
+        <location filename="../mapflow.py" line="1525"/>
         <source>.  Project name: {}</source>
         <translation>. Название проекта: {}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1674"/>
+        <location filename="../mapflow.py" line="1671"/>
         <source>Preview is unavailable for the provider {}</source>
-        <translation>Просмотр недоступен для провайдера {}</translation>
+        <translation>Просмотр недоступен для источника данных {}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2098"/>
+        <location filename="../mapflow.py" line="2095"/>
         <source>This operation is forbidden for your account, contact us</source>
         <translation>Эта операция запрещена для вашего аккаунта, свяжитесь с нами</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="546"/>
+        <location filename="../mapflow.py" line="2038"/>
+        <source>Wrong token. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/api&quot;&gt;mapflow.ai&lt;/a&gt;&quot; to get a new one</source>
+        <translation>Неправильный токен. Перейдите на &quot;&lt;a href=&quot;https://app.mapflow.ai/account/api&quot;&gt;mapflow.ai&lt;/a&gt;&quot; чтообы получить новый</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="1349"/>
+        <source>GeoTIFF is corrupted or has invalid projection</source>
+        <translation>Geotiff файл повржден или имеет некорректную проекцию</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="1351"/>
+        <source>Processing area layer is corrupted or has invalid projection</source>
+        <translation>Слой области обработки поврежден или имеет некорректную проекцию</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="2179"/>
+        <source>You must upgrade your plugin version to continue work with Mapflow. 
+The server requires version {server_version}, your plugin is {local_version}
+Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
+        <translation>Обновите версию плагина чтобы продолжить работать с Mapflow. Требуется версия {server_version}, установлена версия {local_version}. Выберите меню Модули -&gt; Управление модулями -&gt; Обновляемые</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="2188"/>
+        <source>A new version of Mapflow plugin {server_version} is released 
+We recommend you to upgrade to get all the latest features
+Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
+        <translation>Появилась новая версия mapflow {server_version}. Реомендуем обновить версию чтобы получить доступ к новым возможностям. Выберите меню Модули -&gt; Управление модулями -&gt; Обновляемые</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="543"/>
         <source>Add new provider</source>
         <translation>Добавить новый источник данных</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="554"/>
+        <location filename="../mapflow.py" line="551"/>
         <source>This is a default provider, it cannot be edited</source>
-        <translation>Это источник данных по умолчанию, его нельзя изменить</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="2041"/>
-        <source>Wrong token. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/api&quot;&gt;mapflow.ai&lt;/a&gt;&quot; to get a new one</source>
-        <translation>Неправильный токе. Посетите &quot;&lt;a href=&quot;https://app.mapflow.ai/account/api&quot;&gt;mapflow.ai&lt;/a&gt;&quot; чтобы получить новый</translation>
+        <translation>Этот источник данных встроен в mapflow, его нельзя редактировать</translation>
     </message>
 </context>
 <context>
@@ -1056,17 +1083,17 @@ Please, upgrade to make sure everything works as expected. Go to Plugins -&gt; M
 <context>
     <name>QPlatformTheme</name>
     <message>
-        <location filename="../mapflow.py" line="90"/>
+        <location filename="../mapflow.py" line="92"/>
         <source>Cancel</source>
         <translation>Отмена</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="91"/>
+        <location filename="../mapflow.py" line="93"/>
         <source>&amp;Yes</source>
         <translation>Да</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="92"/>
+        <location filename="../mapflow.py" line="94"/>
         <source>&amp;No</source>
         <translation>Нет</translation>
     </message>
