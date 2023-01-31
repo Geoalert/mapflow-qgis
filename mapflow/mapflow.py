@@ -55,6 +55,7 @@ class Mapflow(QObject):
         """
         # init empty params
         self.username = self.password = ''
+        self.version_ok = True
         # Save refs to key variables used throughout the plugin
         self.iface = iface
         self.main_window = self.iface.mainWindow()
@@ -110,12 +111,6 @@ class Mapflow(QObject):
         )
         # Initialize HTTP request sender
         self.http = Http(self.plugin_version, self.default_error_handler)
-        # Check plugin version for compatibility with Processing API
-        self.http.get(
-            url=f'{self.server}/version',
-            callback=self.check_plugin_version_callback,
-            use_default_error_handler=False  # ignore errors
-        )
         self.calculator = QgsDistanceArea()
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
@@ -207,6 +202,7 @@ class Mapflow(QObject):
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
         self.dlg.imageId.textChanged.connect(self.set_image_id_label)
+
 
     def set_image_id_label(self, text):
         if text:
@@ -1350,9 +1346,9 @@ class Mapflow(QObject):
         use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
         if not self.aoi:
             if use_image_extent_as_aoi:
-                self.alert(self.tr('GeoTIFF has invalid projection'))
+                self.alert(self.tr('GeoTIFF is corrupted or has invalid projection'))
             elif self.dlg.polygonCombo.currentLayer():
-                self.alert(self.tr('Processing area has invalid projection'))
+                self.alert(self.tr('Processing area layer is corrupted or has invalid projection'))
             else:
                 self.alert(self.tr('Please, select an area of interest'))
             return False
@@ -2161,7 +2157,6 @@ class Mapflow(QObject):
             self.dlg.setWindowTitle(self.plugin_name)
         else:
             self.dlg.setWindowTitle(self.plugin_name + f' {mapflow_env}')
-
         self.dlg.show()
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
@@ -2174,20 +2169,21 @@ class Mapflow(QObject):
         :param response: The HTTP response.
         """
         
-        server_version = str(response.readAll().data())
+        server_version = response.readAll().data().decode('utf-8')
         latest_reported_version = self.settings.value('latest_reported_version', self.plugin_version)
 
         force_upgrade, recommend_upgrade = check_version(local_version=self.plugin_version,
                                                          server_version=server_version,
                                                          latest_reported_version=latest_reported_version)
-
         if force_upgrade:
             self.alert(self.tr("You must upgrade your plugin version to continue work with Mapflow. \n"
                                "The server requires version {server_version}, your plugin is {local_version}\n"
                                "Go to Plugins -> Manage and Install Plugins -> Upgradable").format(
                 server_version=server_version,
                 local_version=self.plugin_version))
-            self.dlg.exit()
+            self.version_ok = False
+            self.dlg.close()
+
         elif recommend_upgrade:
             self.alert(self.tr("A new version of Mapflow plugin {server_version} is released \n"
                                "We recommend you to upgrade to get all the latest features\n"
@@ -2196,9 +2192,11 @@ class Mapflow(QObject):
                 local_version=self.plugin_version))
             # saving the requested version to not bother the user next time, if he decides not to upgrade
             self.settings.setValue('latest_reported_version', server_version)
+            self.version_ok = True
         else:
             # it is if the upgrade is not needed, we want to save it
             self.settings.setValue('latest_reported_version', server_version)
+            self.version_ok = True
 
     def tr(self, message: str) -> str:
         """Localize a UI element text.
@@ -2209,6 +2207,16 @@ class Mapflow(QObject):
 
     def main(self) -> None:
         """Plugin entrypoint."""
+
+        # check plugin version first
+        self.http.get(
+            url=f'{self.server}/version',
+            callback=self.check_plugin_version_callback,
+            use_default_error_handler=False  # ignore errors
+        )
+        if not self.version_ok:
+            self.dlg.close()
+            return
         token = self.settings.value('token')
         if self.logged_in:
             self.dlg.show()

@@ -83,14 +83,14 @@ def check_version(local_version: str,
         # probably not
         return False, False
 
-    loc_major, loc_minor, loc_patch = self.plugin_version.split('.')
+    loc_major, loc_minor, loc_patch = local_version.split('.')
     try:
         srv_major, srv_minor, srv_patch = server_version.split('.')
-    except ValueError:
+    except ValueError as e:
         # Means that server has wrong format of version, so we ignore this message
         return False, False
 
     major_changed = srv_major > loc_major
     minor_changed = loc_major == srv_major and loc_minor < srv_minor
     patch_changed = loc_major == srv_major and loc_minor == srv_minor and loc_patch < srv_patch
-    return major_changed, minor_changed or patch_changed
+    return major_changed, (minor_changed or patch_changed)
