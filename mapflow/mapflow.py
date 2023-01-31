@@ -2508,12 +2508,14 @@ class Mapflow(QObject):
             tags_list = tags.replace(' ', '').split(',')
 
             # construct url including tags and mosaic_name
-            url = f'{self.server}/rasters/mosaic?name={mosaic_name}'
-            for tag in tags_list:
-                url = url + f'&tags={tag}'
+            url = f'{self.server}/rasters/mosaic'
+            body = json.dumps({
+                'name': mosaic_name,
+                'tags': tags_list
+            })
             self.http.post(
                 url=url,
-                body=''.encode(),
+                body=body.encode(),
                 callback=self.create_new_catalog_callback
             )
             self.close_create_catalog_dialog()
