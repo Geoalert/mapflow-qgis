@@ -540,7 +540,7 @@ class Mapflow(QObject):
         self.dlg.providerCombo.setCurrentText(new_provider.name)
 
     def add_provider(self) -> None:
-        self.dlg_provider.setup(None)
+        self.dlg_provider.setup(None, self.tr("Add new provider"))
 
     def edit_provider(self) -> None:
         """Prepare and show the provider edit dialog.
@@ -548,7 +548,7 @@ class Mapflow(QObject):
         """
         name = self.dlg.providerCombo.currentText()
         if self.providers[name].is_default:
-            self.alert("This is a default provider, it cannot be edited")
+            self.alert(self.tr("This is a default provider, it cannot be edited"))
         else:
             self.show_provider_edit_dialog(name)
 

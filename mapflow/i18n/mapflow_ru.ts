@@ -7,14 +7,17 @@
         <location filename="../errors.py" line="131"/>
         <source>
  Warning: some error parameters were not loaded : {}!</source>
-        <translation></translation>
+        <translation>
+ Внимание: часть параметров не были загружены: {}!</translation>
     </message>
     <message>
         <location filename="../errors.py" line="133"/>
         <source>Unknown error while fetching processing errors: {exception}
  Error code: {code}
  Contact us to resolve the issue! help@geoalert.io</source>
-        <translation></translation>
+        <translation>Неизвестная ошибка при загрузке ошибок обработки: {exception}
+ Код ошибки: {}
+ Свяжитесь с нами, мы поможем решить проблему! help@geoalert.io</translation>
     </message>
 </context>
 <context>
@@ -962,7 +965,7 @@ Please, upgrade to make sure everything works as expected. Go to Plugins -&gt; M
     <message>
         <location filename="../mapflow.py" line="1671"/>
         <source>Preview is unavailable for the provider {}</source>
-        <translation>Просмотр недоступен для провайдера {}</translation>
+        <translation>Просмотр недоступен для источника данных {}</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="2095"/>
@@ -997,6 +1000,16 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
 We recommend you to upgrade to get all the latest features
 Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation>Появилась новая версия mapflow {server_version}. Реомендуем обновить версию чтобы получить доступ к новым возможностям. Выберите меню Модули -&gt; Управление модулями -&gt; Обновляемые</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="543"/>
+        <source>Add new provider</source>
+        <translation>Добавить новый источник данных</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="551"/>
+        <source>This is a default provider, it cannot be edited</source>
+        <translation>Этот источник данных встроен в mapflow, его нельзя редактировать</translation>
     </message>
 </context>
 <context>
@@ -1064,7 +1077,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
     <message>
         <location filename="../dialogs/static/ui/provider_dialog.ui" line="35"/>
         <source>Provider</source>
-        <translation type="obsolete">Источник данных</translation>
+        <translation>Источник данных</translation>
     </message>
 </context>
 <context>
