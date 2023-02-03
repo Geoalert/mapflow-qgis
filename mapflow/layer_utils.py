@@ -21,31 +21,38 @@ def generate_xyz_layer_definition(url, username, password, max_zoom, source_type
     return uri
 
 
-def proxy_maxar_url(server, connect_id):
-    return f'{server}/png?TileRow={{y}}&TileCol={{x}}&TileMatrix={{z}}' + '&CONNECTID=' + connect_id
-
-
-def users_maxar_url(url, connect_id):
-    return f'{url}&CONNECTID={connect_id}'
+def maxar_tile_url(base_url, image_id=None):
+    """
+    base_url is copied from maxar website and looks like
+    https://securewatch.digitalglobe.com/earthservice/wmtsaccess?connectid=<UUID>
+    we need to return TileUrl with TileMatrix set and so on
+    """
+    if not base_url.endswith('?'):
+        # case when this is not the first arguments in layer
+        base_url = base_url + '&'
+    url = base_url + "SERVICE=WMTS" \
+                      "&VERSION=1.0.0" \
+                      "&STYLE=" \
+                      "&REQUEST=GetTile" \
+                      "&LAYER=DigitalGlobe:ImageryTileService" \
+                      "&FORMAT=image/jpeg" \
+                      "&TileRow={y}" \
+                      "&TileCol={x}" \
+                      "&TileMatrixSet=EPSG:3857" \
+                      "&TileMatrix=EPSG:3857:{z}"
+    url = add_image_id(url, image_id)
+    return url
 
 
 def add_image_id(url: str, image_id: str):
-    return f'{url}&CQL_FILTER=feature_id=\'{image_id}\''
+    if not image_id:
+        return url
+    if not url.endswith('?'):
+        url = url + '&'
+    return url + f'CQL_FILTER=feature_id=\'{image_id}\''
 
 
-def generate_maxar_layer_definition(url: str,
-                                    username: str, password: str,
-                                    max_zoom: int, connect_id: str,
-                                    image_id: Optional[str] = None,
-                                    proxy: Optional[str] = None):
-    if proxy:
-        url = proxy_maxar_url(proxy, connect_id)
-    else:
-        url = users_maxar_url(url, connect_id)
-    if image_id:
-        url = add_image_id(url, image_id)
-    return generate_xyz_layer_definition(url=url,
-                                         username=username,
-                                         password=password,
-                                         max_zoom=max_zoom,
-                                         source_type='xyz')
+def add_connect_id(url: str, connect_id: str):
+    if not url.endswith('?'):
+        url = url + '&'
+    return url + f'CONNECTID={connect_id}'

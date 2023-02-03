@@ -4,6 +4,7 @@ from qgis.core import (
     QgsMapLayer, QgsGeometry, QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
     QgsMapLayerType, QgsWkbTypes
 )
+from typing import Tuple
 
 
 PROJECT = QgsProject.instance()
@@ -15,6 +16,7 @@ URL_PATTERN = r'https?://(www\.)?([-\w]{1,256}\.)+[a-zA-Z0-9]{1,6}'  # schema + 
 URL_REGEX = re.compile(URL_PATTERN)
 XYZ_REGEX = re.compile(URL_PATTERN + r'(.*\{[xyz]\}){3}.*', re.I)
 QUAD_KEY_REGEX = re.compile(URL_PATTERN + r'(.*\{q\}).*', re.I)
+MAXAR_PROVIDER_REGEX = re.compile(URL_PATTERN)  # todo: make actual regex
 SENTINEL_DATETIME_REGEX = re.compile(r'\d{8}T\d{6}', re.I)
 SENTINEL_COORDINATE_REGEX = re.compile(r'T\d{2}[A-Z]{3}', re.I)
 SENTINEL_PRODUCT_NAME_REGEX = re.compile(r'\/(?:20[0-2][0-9])\/(?:1[0-2]|0?[1-9])\/(?:0?[1-9]|[1-2]\d|3[0-1])\/(\d{1,2})\/$')
@@ -64,16 +66,31 @@ def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
     return extent_geometry
 
 
-def validate_provider_form(form) -> bool:
-    """Return True if input looks valid otherwise return False."""
-    name = form.name.text()
-    url = form.url.text()
-    type_ = form.type.currentText()
-    if name and url:  # non-empty
-        if type_ in ('xyz', 'tms'):
-            return bool(XYZ_REGEX.match(url))
-        elif type_ == 'wms':
-            return bool(URL_REGEX.match(url))
-        else:  # Quad Key
-            return bool(QUAD_KEY_REGEX.match(url))
-    return False
+def check_version(local_version: str,
+                  server_version: str,
+                  latest_reported_version: str) -> Tuple[bool, bool]:
+    """
+    Returns: (force_upgrade, recommend_upgrade)
+        force_upgrade is True if the user MUST reinstall/upgrade plugin to work with the server
+        recommend_upgrade is True if the user MAY reinstall if he wants to have fixes/new features
+    """
+    if server_version == 1:
+        return False, False
+        # Legacy for current, before-versioning server behavior
+    if server_version == latest_reported_version:
+        # we have already reported the version on the server
+        # should we expect the situation when the reported version can be higher than the current server version?
+        # probably not
+        return False, False
+
+    loc_major, loc_minor, loc_patch = local_version.split('.')
+    try:
+        srv_major, srv_minor, srv_patch = server_version.split('.')
+    except ValueError as e:
+        # Means that server has wrong format of version, so we ignore this message
+        return False, False
+
+    major_changed = srv_major > loc_major
+    minor_changed = loc_major == srv_major and loc_minor < srv_minor
+    patch_changed = loc_major == srv_major and loc_minor == srv_minor and loc_patch < srv_patch
+    return major_changed, (minor_changed or patch_changed)
