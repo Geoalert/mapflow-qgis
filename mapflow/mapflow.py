@@ -1874,15 +1874,15 @@ class Mapflow(QObject):
                 QMessageBox.Critical)
         elif 1 < len(failed_processings) < 10:
             # If there are more than one failed processing, we will not
-            self.alert(
-                '{} processings failed: \n'.format(len(failed_processings)) +
-                '\n'.join((proc.name for proc in failed_processings)) +
-                'See tooltip over the processings table for error details',
+            self.alert(self.tr('{} processings failed: \n {} \n '
+                               'See tooltip over the processings table'
+                               ' for error details').format(len(failed_processings),
+                                                            '\n'.join((proc.name for proc in failed_processings))),
                 QMessageBox.Critical)
         else:  # >= 10
-            self.alert(
-                '{} processings failed: \n'.format(len(failed_processings)) +
-                'See tooltip over the processings table for error details',
+            self.alert(self.tr(
+                '{} processings failed: \n '
+                'See tooltip over the processings table for error details').format(len(failed_processings)),
                 QMessageBox.Critical)
 
     def alert_finished_processings(self, finished_processings):
@@ -1899,16 +1899,17 @@ class Mapflow(QObject):
             )
         elif 1 < len(finished_processings) < 10:
             # If there are more than one failed processing, we will not
-            self.alert(
-                '{} processings finished: \n'.format(len(finished_processings)) +
-                '\n'.join((proc.name for proc in finished_processings)) +
-                '\n Double-click it in the table to download the results',
+            self.alert( self.tr(
+                '{} processings finished: \n {} \n '
+                'Double-click it in the table '
+                'to download the results').format(len(finished_processings),
+                                                  '\n'.join((proc.name for proc in finished_processings))),
                 QMessageBox.Information,
                 blocking=False)
         else:  # >= 10
-            self.alert(
+            self.alert(self.tr(
                 '{} processings finished. \n '
-                'Double-click it in the table to download the results'.format(len(finished_processings)),
+                'Double-click it in the table to download the results').format(len(finished_processings)),
                 QMessageBox.Information,
                 blocking=False)
 
