@@ -589,6 +589,16 @@ mosaic</string>
          <string>Uploaded at</string>
         </property>
        </column>
+       <column>
+        <property name="text">
+         <string>File url</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>Footprint</string>
+        </property>
+       </column>
       </widget>
       <widget class="QPushButton" name="useSelectedImageButton">
        <property name="geometry">
@@ -600,7 +610,7 @@ mosaic</string>
         </rect>
        </property>
        <property name="text">
-        <string>Add image
+        <string>Use image
 for processing</string>
        </property>
       </widget>

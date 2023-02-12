@@ -63,3 +63,22 @@ def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
     if layer_crs != WGS84:
         extent_geometry = to_wgs84(extent_geometry, layer_crs)
     return extent_geometry
+
+
+class MosaicImage:
+    def __init__(self, image_id, image_url, filename, footprint, crs):
+        self.image_id = image_id
+        self.image_url = image_url
+        self.filename = filename
+        self.footprint = footprint  # wkt
+        self.geometry = None
+        self.make_geometry_from_footprint()
+        self.crs = QgsCoordinateReferenceSystem(crs)
+
+    def __eq__(self, other):
+        return self.image_id == other.image_id
+
+    def make_geometry_from_footprint(self):
+        # make QgsGeometry from footprint
+        geometry = QgsGeometry.fromWkt(wkt=self.footprint)
+        self.geometry = geometry

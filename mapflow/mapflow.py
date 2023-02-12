@@ -44,6 +44,7 @@ from .entity.provider import (Provider,
 from .functional.geometry import clip_aoi_to_image_extent
 from .errors import ErrorMessageList
 from .layer_utils import generate_xyz_layer_definition
+from .helpers import MosaicImage
 
 
 class Mapflow(QObject):
@@ -226,6 +227,9 @@ class Mapflow(QObject):
         self.dlg_create_catalog.createCatalogDialogbuttonBox.rejected.connect(self.close_create_catalog_dialog)
         self.dlg_update_catalog.updateCatalogButtonBox.accepted.connect(self.update_catalog)
         self.dlg_upload_image_to_catalog.buttonBox.accepted.connect(self.upload_file_to_existing_catalog)
+        self.dlg.useSelectedImageButton.clicked.connect(self.add_image_for_processing)
+        # init selected image as None
+        self.selected_image_from_mosaic = None
         # Add layer menu
         self.add_layer_menu = QMenu()
         self.create_aoi_from_map_action = QAction(self.tr("Create new AOI layer from map extent"))
@@ -333,6 +337,16 @@ class Mapflow(QObject):
             self.dlg.rasterCombo.setAdditionalItems(web_providers)
             self.dlg.providerCombo.clear()
             self.dlg.providerCombo.addItems(web_providers)
+        if self.selected_image_from_mosaic:
+            # remove previously added label from current sources (later, will skip this check)
+            for item in current_sources:
+                try:
+                    if item.startswith("#"):
+                        current_sources.remove(item)
+                except Exception:
+                    pass
+            current_sources.append(f'#{self.selected_image_from_mosaic.filename}')
+            self.dlg.rasterCombo.setAdditionalItems(current_sources)
 
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
         """Filter out the metadata table and layer every time user changes a filter."""
@@ -1206,6 +1220,11 @@ class Mapflow(QObject):
 
         :param layer: The current raster layer
         """
+        if self.dlg.rasterCombo.currentText().startswith("#"):
+            geometry = self.selected_image_from_mosaic.geometry
+            crs = self.selected_image_from_mosaic.crs
+            self.calculate_aoi_area(geometry, crs)
+            return
         if layer:
             geometry = QgsGeometry.collectGeometry([QgsGeometry.fromRect(layer.extent())])
             self.calculate_aoi_area(geometry, layer.crs())
@@ -1450,6 +1469,18 @@ class Mapflow(QObject):
             except Exception as e:
                 self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
             return
+        elif self.selected_image_from_mosaic and self.dlg.rasterCombo.currentText().startswith("#"):
+            # create processing with source_type = 'local'
+            try:
+                aoi = json.loads(self.selected_image_from_mosaic.geometry.asJson())
+                processing_params['geometry'] = aoi
+                processing_params['params']['source_type'] = 'tif'
+                processing_params['params']['url'] = self.selected_image_from_mosaic.image_url
+                print(processing_params['geometry'])
+                self.post_processing(processing_params)
+                return
+            except:
+                return
         else:
             provider = self.providers[raster_option]
             if isinstance(provider, MaxarProxyProvider) and not self.is_premium_user:
@@ -2365,15 +2396,20 @@ class Mapflow(QObject):
         # construct table with the list of images
         images = json.loads(response.readAll().data())
         rowCount = 0
-        columnCount = 3
+        columnCount = 6
         self.dlg.mosaicImagesTableWidget.setColumnCount(columnCount)
-        self.dlg.mosaicImagesTableWidget.setHorizontalHeaderLabels(['Image id', 'Filename', 'Uploaded at'])
+        self.dlg.mosaicImagesTableWidget.setHorizontalHeaderLabels(['Image id', 'Filename', 'Uploaded at',
+                                                                    'File url', 'Footprint', 'crs'])
         for image in images:
             rowCount += 1
             self.dlg.mosaicImagesTableWidget.setRowCount(rowCount)
             self.dlg.mosaicImagesTableWidget.setItem(rowCount - 1, 0, QTableWidgetItem(str(image.get('id'))))
             self.dlg.mosaicImagesTableWidget.setItem(rowCount - 1, 1, QTableWidgetItem(str(image.get('filename'))))
             self.dlg.mosaicImagesTableWidget.setItem(rowCount - 1, 2, QTableWidgetItem(str(image.get('uploaded_at'))))
+            self.dlg.mosaicImagesTableWidget.setItem(rowCount - 1, 3, QTableWidgetItem(str(image.get('image_url'))))
+            self.dlg.mosaicImagesTableWidget.setItem(rowCount - 1, 4, QTableWidgetItem(str(image.get('footprint'))))
+            self.dlg.mosaicImagesTableWidget.setItem(rowCount - 1, 5, QTableWidgetItem(str(image.get('meta_data').get('crs'))))
+
 
     def show_create_catalog_dialog(self):
         self.dlg_create_catalog.show()
@@ -2575,6 +2611,30 @@ class Mapflow(QObject):
             f.write(response.readAll().data())
             pixmap = QPixmap(f.name)
             self.dlg.imagePreviewLabel.setPixmap(pixmap)
+
+    def add_image_for_processing(self):
+        """ Adds selected image from users-data tab for processing """
+        selected_image_row_number = self.dlg.mosaicImagesTableWidget.currentRow()
+        if not self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 0):
+            return
+        image_id = self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 0).text()
+
+        image_url = self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 3).text()
+
+        footprint = self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 4).text()
+
+        filename = self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 1).text()
+
+        crs = self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 5).text()
+
+        image = MosaicImage(image_id=image_id,
+                            image_url=image_url,
+                            filename=filename,
+                            footprint=footprint,
+                            crs=crs)
+        # print(f'{str(image.geometry)}')
+        self.selected_image_from_mosaic = image
+        self.set_available_imagery_sources(wd='')
 
     def main(self) -> None:
         """Plugin entrypoint."""
