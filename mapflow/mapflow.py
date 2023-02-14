@@ -1,12 +1,12 @@
 import json
 import os.path
 import tempfile
-import time
 from base64 import b64encode, b64decode
 from typing import List, Optional, Union
 from datetime import datetime  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
+from pyproj import Proj, transform
 from osgeo import gdal
 from PyQt5.QtXml import QDomDocument
 from PyQt5.QtGui import QColor, QIcon, QDesktopServices, QPixmap
@@ -25,7 +25,7 @@ from qgis.gui import QgsMessageBarItem
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
     QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter,
-    QgsWkbTypes, QgsPoint, QgsMapLayerType
+    QgsWkbTypes, QgsPoint, QgsMapLayerType, QgsRectangle
 )
 from .dialogs.dialogs import MainDialog, LoginDialog, ErrorMessage, \
                              CreateCatalogDialog, UpdateCatalogDialog, CreateCatalogAndFileUpload, \
@@ -154,7 +154,7 @@ class Mapflow(QObject):
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.rasterCombo.layerChanged.connect(self.toggle_processing_checkboxes)
         self.dlg.rasterCombo.layerChanged.connect(self.disallow_local_rasters_with_sentinel)
-        self.dlg.rasterCombo.currentTextChanged.connect(self.toggle_processing_checkboxes)
+        #self.dlg.rasterCombo.currentTextChanged.connect(self.toggle_processing_checkboxes)
         self.dlg.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
         self.dlg.startProcessing.clicked.connect(self.create_processing)
         # Sync polygon layer combos
@@ -224,6 +224,7 @@ class Mapflow(QObject):
         self.dlg_update_catalog.updateCatalogButtonBox.accepted.connect(self.update_catalog)
         self.dlg_upload_image_to_catalog.buttonBox.accepted.connect(self.upload_file_to_existing_catalog)
         self.dlg.useSelectedImageButton.clicked.connect(self.add_image_for_processing)
+        self.dlg.previewMosaicButton.clicked.connect(self.preview_selected_mosaic)
         # init selected image as None
         self.selected_image_from_mosaic = None
         # Add layer menu
@@ -630,10 +631,18 @@ class Mapflow(QObject):
         :param raster_source: Provider name or None, depending on the signal, if one of the
             tile providers, otherwise the selected raster layer
         """
-        enabled = isinstance(raster_source, QgsRasterLayer)
-        self.dlg.useImageExtentAsAoi.setEnabled(enabled)
-        self.dlg.useImageExtentAsAoi.setChecked(enabled)
-        self.dlg.imageId_label.setText("")
+        if isinstance(raster_source, QgsRasterLayer):
+            self.dlg.useImageExtentAsAoi.setEnabled(True)
+            self.dlg.useImageExtentAsAoi.setChecked(True)
+            self.dlg.imageId_label.setText("")
+        else:
+            self.toggle_processing_checkboxes_on_str()
+
+    def toggle_processing_checkboxes_on_str(self):
+        value = self.dlg.rasterCombo.currentText()
+        if value.startswith("#"):
+            self.dlg.useImageExtentAsAoi.setEnabled(True)
+            self.dlg.useImageExtentAsAoi.setChecked(True)
 
     def select_output_directory(self) -> str:
         """Open a file dialog for the user to select a directory where plugin files will be stored.
@@ -1469,14 +1478,18 @@ class Mapflow(QObject):
         elif self.selected_image_from_mosaic and self.dlg.rasterCombo.currentText().startswith("#"):
             # create processing with source_type = 'local'
             try:
-                aoi = json.loads(self.selected_image_from_mosaic.geometry.asJson())
+                if self.dlg.useImageExtentAsAoi.isChecked():
+                    aoi = json.loads(self.selected_image_from_mosaic.geometry.asJson())
+                else:
+                    aoi = json.loads(self.aoi.asJson())
                 processing_params['geometry'] = aoi
                 processing_params['params']['source_type'] = 'tif'
                 processing_params['params']['url'] = self.selected_image_from_mosaic.image_url
                 print(processing_params['geometry'])
                 self.post_processing(processing_params)
                 return
-            except:
+            except Exception as e:
+                self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
                 return
         else:
             provider = self.providers[raster_option]
@@ -2369,16 +2382,20 @@ class Mapflow(QObject):
     def load_user_mosaics_callback(self, response: QNetworkReply) -> None:
         mosaics = json.loads(response.readAll().data())
         rowCount = 0
-        columnCount = 4
+        columnCount = 6
         self.dlg.mosaicsTableWidget.setColumnCount(columnCount)
-        self.dlg.mosaicsTableWidget.setHorizontalHeaderLabels(['Catalog id', 'Name', 'Tags', 'Created at'])
+        self.dlg.mosaicsTableWidget.setHorizontalHeaderLabels(['Catalog id', 'Name', 'Tags', 'Created at', 'tileUrl'])
         for mosaic in mosaics:
+            tile_url = mosaic.get('rasterLayer').get('tileUrl')
+            tile_json_url = mosaic.get('rasterLayer').get('tileJsonUrl')
             rowCount += 1
             self.dlg.mosaicsTableWidget.setRowCount(rowCount)
             self.dlg.mosaicsTableWidget.setItem(rowCount - 1, 0, QTableWidgetItem(str(mosaic.get('id'))))
             self.dlg.mosaicsTableWidget.setItem(rowCount - 1, 1, QTableWidgetItem(str(mosaic.get('name'))))
             self.dlg.mosaicsTableWidget.setItem(rowCount - 1, 2, QTableWidgetItem(str(mosaic.get('tags'))))
             self.dlg.mosaicsTableWidget.setItem(rowCount - 1, 3, QTableWidgetItem(str(mosaic.get('created_at'))))
+            self.dlg.mosaicsTableWidget.setItem(rowCount - 1, 4, QTableWidgetItem(str(tile_url)))
+            self.dlg.mosaicsTableWidget.setItem(rowCount - 1, 5, QTableWidgetItem(str(tile_json_url)))
 
     def load_mosaic_images(self) -> None:
         """
@@ -2639,6 +2656,49 @@ class Mapflow(QObject):
         # print(f'{str(image.geometry)}')
         self.selected_image_from_mosaic = image
         self.set_available_imagery_sources(wd='')
+
+    def preview_selected_mosaic(self):
+        selected_mosaic_row_number = self.dlg.mosaicsTableWidget.currentRow()
+        if not self.dlg.mosaicsTableWidget.item(selected_mosaic_row_number, 0):
+            return
+        mosaic_name = self.dlg.mosaicsTableWidget.item(
+            selected_mosaic_row_number, 1).text()
+        selected_mosaic_tile_url = self.dlg.mosaicsTableWidget.item(
+            selected_mosaic_row_number, 4).text()
+
+        mosaic_layer_uri = generate_xyz_layer_definition(url=selected_mosaic_tile_url,
+                                                         username='', # self.username,
+                                                         password='', # self.password,
+                                                         max_zoom=18, source_type='xyz')
+        layer = QgsRasterLayer(mosaic_layer_uri, mosaic_name, 'wms')
+        # extent = QgsGeometry.fromRect(QgsVectorLayer(f.name, '', 'ogr').extent())
+        # raster.setExtent(helpers.from_wgs84(extent, raster.crs()).boundingBox())
+        tile_json_url = self.dlg.mosaicsTableWidget.item(selected_mosaic_row_number, 5).text()
+        self.http.get(
+            url=tile_json_url,
+            callback=self.preview_selected_mosaic_callback,
+            callback_kwargs={
+                'layer': layer
+            }
+        )
+
+    def preview_selected_mosaic_callback(self,
+                                         response: QNetworkReply,
+                                         layer: QgsRasterLayer):
+        bounds = json.loads(response.readAll().data()).get('bounds')
+        print(type(bounds))
+        outProj = Proj(init='epsg:3857')
+        inProj = Proj(init='epsg:4326')
+
+        xmin, ymin = transform(inProj, outProj, bounds[0], bounds[1])
+        xmax, ymax = transform(inProj, outProj, bounds[2], bounds[3])
+
+        bounding_box = QgsRectangle(xmin, ymin, xmax, ymax)
+        if layer.isValid():
+            layer.setExtent(rect=bounding_box)
+            self.add_layer(layer)
+        else:
+            self.alert(self.tr("We couldn't load mosaic preview"))
 
     def main(self) -> None:
         """Plugin entrypoint."""

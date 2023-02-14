@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>856</width>
-    <height>575</height>
+    <width>859</width>
+    <height>631</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -541,7 +541,7 @@ mosaic</string>
        <property name="geometry">
         <rect>
          <x>10</x>
-         <y>210</y>
+         <y>270</y>
          <width>491</width>
          <height>17</height>
         </rect>
@@ -554,7 +554,7 @@ mosaic</string>
        <property name="geometry">
         <rect>
          <x>10</x>
-         <y>230</y>
+         <y>290</y>
          <width>491</width>
          <height>181</height>
         </rect>
@@ -604,7 +604,7 @@ mosaic</string>
        <property name="geometry">
         <rect>
          <x>10</x>
-         <y>420</y>
+         <y>480</y>
          <width>130</width>
          <height>50</height>
         </rect>
@@ -618,7 +618,7 @@ for processing</string>
        <property name="geometry">
         <rect>
          <x>150</x>
-         <y>420</y>
+         <y>480</y>
          <width>130</width>
          <height>50</height>
         </rect>
@@ -631,7 +631,7 @@ for processing</string>
        <property name="geometry">
         <rect>
          <x>510</x>
-         <y>210</y>
+         <y>270</y>
          <width>271</width>
          <height>17</height>
         </rect>
@@ -644,7 +644,7 @@ for processing</string>
        <property name="geometry">
         <rect>
          <x>510</x>
-         <y>230</y>
+         <y>290</y>
          <width>256</width>
          <height>256</height>
         </rect>
@@ -663,6 +663,19 @@ for processing</string>
        </property>
        <property name="text">
         <string/>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="previewMosaicButton">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>201</y>
+         <width>130</width>
+         <height>50</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Mosaic preview</string>
        </property>
       </widget>
      </widget>
