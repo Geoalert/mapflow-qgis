@@ -2671,8 +2671,6 @@ class Mapflow(QObject):
                                                          password='', # self.password,
                                                          max_zoom=18, source_type='xyz')
         layer = QgsRasterLayer(mosaic_layer_uri, mosaic_name, 'wms')
-        # extent = QgsGeometry.fromRect(QgsVectorLayer(f.name, '', 'ogr').extent())
-        # raster.setExtent(helpers.from_wgs84(extent, raster.crs()).boundingBox())
         tile_json_url = self.dlg.mosaicsTableWidget.item(selected_mosaic_row_number, 5).text()
         self.http.get(
             url=tile_json_url,
@@ -2686,7 +2684,6 @@ class Mapflow(QObject):
                                          response: QNetworkReply,
                                          layer: QgsRasterLayer):
         bounds = json.loads(response.readAll().data()).get('bounds')
-        print(type(bounds))
         outProj = Proj(init='epsg:3857')
         inProj = Proj(init='epsg:4326')
 
