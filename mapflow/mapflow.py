@@ -643,6 +643,9 @@ class Mapflow(QObject):
         if value.startswith("#"):
             self.dlg.useImageExtentAsAoi.setEnabled(True)
             self.dlg.useImageExtentAsAoi.setChecked(True)
+        else:
+            self.dlg.useImageExtentAsAoi.setEnabled(False)
+            self.dlg.useImageExtentAsAoi.setChecked(False)
 
     def select_output_directory(self) -> str:
         """Open a file dialog for the user to select a directory where plugin files will be stored.
@@ -1229,6 +1232,7 @@ class Mapflow(QObject):
         if self.dlg.rasterCombo.currentText().startswith("#"):
             geometry = self.selected_image_from_mosaic.geometry
             crs = self.selected_image_from_mosaic.crs
+            crs = QgsCoordinateReferenceSystem(crs)
             self.calculate_aoi_area(geometry, crs)
             return
         if layer:
