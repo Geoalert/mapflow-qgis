@@ -1232,7 +1232,6 @@ class Mapflow(QObject):
         if self.dlg.rasterCombo.currentText().startswith("#"):
             geometry = self.selected_image_from_mosaic.geometry
             crs = self.selected_image_from_mosaic.crs
-            crs = QgsCoordinateReferenceSystem(crs)
             self.calculate_aoi_area(geometry, crs)
             return
         if layer:
@@ -1272,6 +1271,7 @@ class Mapflow(QObject):
         :param aoi: the processing area.
         :param crs: the CRS of the processing area.
         """
+        print(str(aoi), str(crs))
         if crs != helpers.WGS84:
             aoi = helpers.to_wgs84(aoi, crs)
         self.aoi = aoi  # save for reuse in processing creation or metadata requests
@@ -1489,7 +1489,6 @@ class Mapflow(QObject):
                 processing_params['geometry'] = aoi
                 processing_params['params']['source_type'] = 'tif'
                 processing_params['params']['url'] = self.selected_image_from_mosaic.image_url
-                print(processing_params['geometry'])
                 self.post_processing(processing_params)
                 return
             except Exception as e:
@@ -2643,21 +2642,16 @@ class Mapflow(QObject):
         if not self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 0):
             return
         image_id = self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 0).text()
-
         image_url = self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 3).text()
-
         footprint = self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 4).text()
-
         filename = self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 1).text()
-
-        crs = self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 5).text()
+        crs = 'EPSG:4326'
 
         image = MosaicImage(image_id=image_id,
                             image_url=image_url,
                             filename=filename,
                             footprint=footprint,
                             crs=crs)
-        # print(f'{str(image.geometry)}')
         self.selected_image_from_mosaic = image
         self.set_available_imagery_sources(wd='')
 
