@@ -434,7 +434,7 @@
         </rect>
        </property>
        <property name="text">
-        <string>Upload image to
+        <string>Upload images to
 selected mosaic</string>
        </property>
       </widget>
@@ -563,7 +563,7 @@ mosaic</string>
         <set>QAbstractItemView::NoEditTriggers</set>
        </property>
        <property name="selectionMode">
-        <enum>QAbstractItemView::SingleSelection</enum>
+        <enum>QAbstractItemView::ExtendedSelection</enum>
        </property>
        <property name="selectionBehavior">
         <enum>QAbstractItemView::SelectRows</enum>
@@ -624,7 +624,8 @@ for processing</string>
         </rect>
        </property>
        <property name="text">
-        <string>Delete image</string>
+        <string>Delete selected 
+image/images</string>
        </property>
       </widget>
       <widget class="QLabel" name="imagePreviewTextLabel">

@@ -211,11 +211,11 @@ class Mapflow(QObject):
         self.dlg.createCatalogButton.clicked.connect(self.show_create_catalog_dialog)
         self.dlg.editSelectedCatalogButton.clicked.connect(self.show_update_catalog_dialog)
         self.dlg.deleteCatalogButton.clicked.connect(self.delete_selected_catalog)
-        self.dlg.deleteImageButton.clicked.connect(self.delete_selected_image)
+        self.dlg.deleteImageButton.clicked.connect(self.delete_selected_images)
         self.dlg.uploadImageToNewCatalogButton.clicked.connect(self.show_create_catalog_and_file_upload_dialog)
         self.dlg.uploadImageToCatalogButton.clicked.connect(self.show_upload_image_to_catalog_dialog)
         self.dlg_create_catalog_and_file_upload.selectFileButton.clicked.connect(self.select_tif_catalog)
-        self.dlg_upload_image_to_catalog.selectFileButton.clicked.connect(self.select_tif_catalog)
+        self.dlg_upload_image_to_catalog.selectFileButton.clicked.connect(self.select_tif_to_upload_existing_catalog)
         self.dlg_create_catalog_and_file_upload.buttonBox.accepted.connect(self.create_new_catalog_and_file_upload)
         self.dlg.mosaicsTableWidget.cellClicked.connect(self.load_mosaic_images)
         self.dlg.mosaicImagesTableWidget.cellClicked.connect(self.get_image_by_id)
@@ -225,6 +225,7 @@ class Mapflow(QObject):
         self.dlg_upload_image_to_catalog.buttonBox.accepted.connect(self.upload_file_to_existing_catalog)
         self.dlg.useSelectedImageButton.clicked.connect(self.add_image_for_processing)
         self.dlg.previewMosaicButton.clicked.connect(self.preview_selected_mosaic)
+        self.selected_files_to_upload = None
         # init selected image as None
         self.selected_image_from_mosaic = None
         # Add layer menu
@@ -2297,7 +2298,16 @@ class Mapflow(QObject):
             self.upload_filename = os.path.basename(path)
             # TODO empty the following two when showing corresponding dialog
             self.dlg_create_catalog_and_file_upload.selectFileEdit.setText(path)
-            self.dlg_upload_image_to_catalog.selectFileEdit.setText(path)
+            # self.dlg_upload_image_to_catalog.selectFileEdit.setText(path)
+
+    def select_tif_to_upload_existing_catalog(self) -> None:
+        dlg = QFileDialog(QApplication.activeWindow(), self.tr('Select GeoTIFF/GeoTIFFs'))
+        dlg.setFileMode(QFileDialog.ExistingFiles)
+        dlg.setMimeTypeFilters(['image/tiff'])
+        if dlg.exec():
+            paths = dlg.selectedFiles()
+            self.selected_files_to_upload = paths
+            self.dlg_upload_image_to_catalog.selectFileEdit.setText(str(paths))
 
     def create_new_catalog_and_file_upload(self):
         if self.dlg_create_catalog_and_file_upload.mosaicName.text() == '' or \
@@ -2357,6 +2367,9 @@ class Mapflow(QObject):
         connection = response.uploadProgress.connect(display_upload_progress)
         # Tear this connection if the user closes the progress message
         progress_message.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
+
+    def package_files_upload_callback(self, response: QNetworkReply) -> None:
+        self.selected_files_to_upload = None
 
     def file_upload_callback(self, response: QNetworkReply) -> None:
         # clear variables after uploading the file:
@@ -2474,57 +2487,63 @@ class Mapflow(QObject):
         self.dlg_upload_image_to_catalog.show()
 
     def upload_file_to_existing_catalog(self):
-        if self.upload_file_layer is None:
+        if self.selected_files_to_upload is None:
             ErrorMessage(
                 parent=self.dlg_upload_image_to_catalog,
-                text=self.tr("Please select file to upload"),
+                text=self.tr("Please select file/files to upload"),
                 title=self.tr("File is not selected")
             ).show()
             return
-        mosaic_id = self.dlg_upload_image_to_catalog.mosaicID.text()
-        filename = self.upload_filename
 
-        # collect request body
-        imagery = self.upload_file_layer
-        body = QHttpMultiPart(QHttpMultiPart.FormDataType)
-        tif = QHttpPart()
-        tif.setHeader(QNetworkRequest.ContentTypeHeader, 'image/tiff')
-        tif.setHeader(QNetworkRequest.ContentDispositionHeader, f'form-data; name="file"; filename={filename}')
-        image = QFile(imagery.dataProvider().dataSourceUri(), body)
-        image.open(QIODevice.ReadOnly)
-        tif.setBodyDevice(image)
-        body.append(tif)
+        try:
+            mosaic_id = self.dlg_upload_image_to_catalog.mosaicID.text()
+            for path in self.selected_files_to_upload:
+                filename = os.path.basename(path)
 
-        url = f'{self.server}/rasters/mosaic/{mosaic_id}/image'
+                # collect request body
+                imagery = QgsRasterLayer(path, os.path.splitext(filename)[0])
+                body = QHttpMultiPart(QHttpMultiPart.FormDataType)
+                tif = QHttpPart()
+                tif.setHeader(QNetworkRequest.ContentTypeHeader, 'image/tiff')
+                tif.setHeader(QNetworkRequest.ContentDispositionHeader, f'form-data; name="file"; filename={filename}')
+                image = QFile(imagery.dataProvider().dataSourceUri(), body)
+                image.open(QIODevice.ReadOnly)
+                tif.setBodyDevice(image)
+                body.append(tif)
 
-        # upload raster to server
-        response = self.http.post(
-            url=url,
-            callback=self.file_upload_callback,
-            error_handler=self.upload_tif_to_mosaic_error_handler,
-            body=body,
-            timeout=3600
-        )
-        body.setParent(response)
-        progress_message = QgsMessageBarItem(
-            self.plugin_name,
-            self.tr('Uploading image to Mapflow...'),
-            QProgressBar(self.message_bar),
-            parent=self.message_bar
-        )
-        self.message_bar.pushItem(progress_message)
+                url = f'{self.server}/rasters/mosaic/{mosaic_id}/image'
 
-        def display_upload_progress(bytes_sent: int, bytes_total: int):
-            try:
-                progress_message.widget().setValue(round(bytes_sent / bytes_total * 100))
-            except ZeroDivisionError:  # may happen for some reason
-                return
-            if bytes_sent == bytes_total:
-                self.message_bar.popWidget(progress_message)
+                # upload raster to server
+                response = self.http.post(
+                    url=url,
+                    callback=self.package_files_upload_callback,
+                    error_handler=self.upload_tif_to_mosaic_error_handler,
+                    body=body,
+                    timeout=3600
+                )
+                body.setParent(response)
+                progress_message = QgsMessageBarItem(
+                    self.plugin_name,
+                    self.tr('Uploading image to Mapflow...'),
+                    QProgressBar(self.message_bar),
+                    parent=self.message_bar
+                )
+                self.message_bar.pushItem(progress_message)
 
-        connection = response.uploadProgress.connect(display_upload_progress)
-        # Tear this connection if the user closes the progress message
-        progress_message.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
+                def display_upload_progress(bytes_sent: int, bytes_total: int):
+                    try:
+                        progress_message.widget().setValue(round(bytes_sent / bytes_total * 100))
+                    except ZeroDivisionError:  # may happen for some reason
+                        return
+                    if bytes_sent == bytes_total:
+                        pass
+                connection = response.uploadProgress.connect(display_upload_progress)
+                # Tear this connection if the user closes the progress message
+                # progress_message.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
+            self.alert('Files uploaded!')
+            self.load_user_mosaics()
+        finally:
+            self.dlg_upload_image_to_catalog.selectFileEdit.setText('')
 
     def update_catalog(self):
         if self.dlg_update_catalog.updatedCatalogNameEdit1.text() == '' or \
@@ -2589,11 +2608,20 @@ class Mapflow(QObject):
                 callback=self.delete_selected_item_callback
             )
 
-    def delete_selected_image(self):
-        selected_image_row_number = self.dlg.mosaicImagesTableWidget.currentRow()
-        if self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 0):
-            image_id = self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 0).text()
-            response = self.http.delete(
+    def delete_selected_images(self):
+        selected_items = self.dlg.mosaicImagesTableWidget.selectedRanges()
+        if not selected_items:
+            return
+        # for some reason selectedRanges returns list (of length = 1) containing QTableWidgetSelectionRange object
+        selected_items = selected_items[0]
+        ids_to_delete = []
+        for row in range(selected_items.topRow(), selected_items.topRow() + selected_items.rowCount()):
+            ids_to_delete.append(
+                self.dlg.mosaicImagesTableWidget.item(row, 0).text()
+            )
+        print(ids_to_delete)
+        for image_id in ids_to_delete:
+            self.http.delete(
                 url=f'{self.server}/rasters/image/{image_id}',
                 callback=self.delete_selected_item_callback
             )
