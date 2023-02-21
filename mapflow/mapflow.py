@@ -2381,6 +2381,7 @@ class Mapflow(QObject):
         self.load_user_mosaics()
         self.upload_filename = ''
         self.upload_file_layer = None
+        self.selected_files_to_upload = None
 
     def load_user_mosaics(self):
         # clear mosaic images table content
@@ -2538,7 +2539,7 @@ class Mapflow(QObject):
             except ZeroDivisionError:  # may happen for some reason
                 return
             if bytes_sent == bytes_total:
-                self.message_bar.popWidget(progress_message)
+                pass
 
         connection = response.uploadProgress.connect(display_upload_progress)
         # Tear this connection if the user closes the progress message
