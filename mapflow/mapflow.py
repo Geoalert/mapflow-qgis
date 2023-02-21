@@ -2368,9 +2368,6 @@ class Mapflow(QObject):
         # Tear this connection if the user closes the progress message
         progress_message.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
 
-    def package_files_upload_callback(self, response: QNetworkReply) -> None:
-        self.selected_files_to_upload = None
-
     def file_upload_callback(self, response: QNetworkReply) -> None:
         # clear variables after uploading the file:
         self.upload_file_layer = None
@@ -2486,7 +2483,7 @@ class Mapflow(QObject):
         self.dlg_upload_image_to_catalog.mosaicName.setText(selected_mosaic_name)
         self.dlg_upload_image_to_catalog.show()
 
-    def upload_file_to_existing_catalog(self):
+    def upload_file_to_existing_catalog(self, response: QNetworkReply = None):
         if self.selected_files_to_upload is None:
             ErrorMessage(
                 parent=self.dlg_upload_image_to_catalog,
@@ -2494,56 +2491,58 @@ class Mapflow(QObject):
                 title=self.tr("File is not selected")
             ).show()
             return
-
-        try:
-            mosaic_id = self.dlg_upload_image_to_catalog.mosaicID.text()
-            for path in self.selected_files_to_upload:
-                filename = os.path.basename(path)
-
-                # collect request body
-                imagery = QgsRasterLayer(path, os.path.splitext(filename)[0])
-                body = QHttpMultiPart(QHttpMultiPart.FormDataType)
-                tif = QHttpPart()
-                tif.setHeader(QNetworkRequest.ContentTypeHeader, 'image/tiff')
-                tif.setHeader(QNetworkRequest.ContentDispositionHeader, f'form-data; name="file"; filename={filename}')
-                image = QFile(imagery.dataProvider().dataSourceUri(), body)
-                image.open(QIODevice.ReadOnly)
-                tif.setBodyDevice(image)
-                body.append(tif)
-
-                url = f'{self.server}/rasters/mosaic/{mosaic_id}/image'
-
-                # upload raster to server
-                response = self.http.post(
-                    url=url,
-                    callback=self.package_files_upload_callback,
-                    error_handler=self.upload_tif_to_mosaic_error_handler,
-                    body=body,
-                    timeout=3600
-                )
-                body.setParent(response)
-                progress_message = QgsMessageBarItem(
-                    self.plugin_name,
-                    self.tr('Uploading image to Mapflow...'),
-                    QProgressBar(self.message_bar),
-                    parent=self.message_bar
-                )
-                self.message_bar.pushItem(progress_message)
-
-                def display_upload_progress(bytes_sent: int, bytes_total: int):
-                    try:
-                        progress_message.widget().setValue(round(bytes_sent / bytes_total * 100))
-                    except ZeroDivisionError:  # may happen for some reason
-                        return
-                    if bytes_sent == bytes_total:
-                        pass
-                connection = response.uploadProgress.connect(display_upload_progress)
-                # Tear this connection if the user closes the progress message
-                # progress_message.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
+        mosaic_id = self.dlg_upload_image_to_catalog.mosaicID.text()
+        if self.selected_files_to_upload == []:
             self.alert('Files uploaded!')
             self.load_user_mosaics()
-        finally:
             self.dlg_upload_image_to_catalog.selectFileEdit.setText('')
+            self.selected_files_to_upload = None
+            return
+
+        next_filepath_to_upload = self.selected_files_to_upload.pop()
+        filename = os.path.basename(next_filepath_to_upload)
+
+        # collect request body
+        imagery = QgsRasterLayer(next_filepath_to_upload, os.path.splitext(filename)[0])
+        body = QHttpMultiPart(QHttpMultiPart.FormDataType)
+        tif = QHttpPart()
+        tif.setHeader(QNetworkRequest.ContentTypeHeader, 'image/tiff')
+        tif.setHeader(QNetworkRequest.ContentDispositionHeader, f'form-data; name="file"; filename={filename}')
+        image = QFile(imagery.dataProvider().dataSourceUri(), body)
+        image.open(QIODevice.ReadOnly)
+        tif.setBodyDevice(image)
+        body.append(tif)
+
+        url = f'{self.server}/rasters/mosaic/{mosaic_id}/image'
+
+        # upload raster to server
+        response = self.http.post(
+            url=url,
+            callback=self.upload_file_to_existing_catalog,
+            error_handler=self.upload_tif_to_mosaic_error_handler,
+            body=body,
+            timeout=3600
+        )
+        body.setParent(response)
+        progress_message = QgsMessageBarItem(
+            self.plugin_name,
+            self.tr('Uploading image to Mapflow...'),
+            QProgressBar(self.message_bar),
+            parent=self.message_bar
+        )
+        self.message_bar.pushItem(progress_message)
+
+        def display_upload_progress(bytes_sent: int, bytes_total: int):
+            try:
+                progress_message.widget().setValue(round(bytes_sent / bytes_total * 100))
+            except ZeroDivisionError:  # may happen for some reason
+                return
+            if bytes_sent == bytes_total:
+                self.message_bar.popWidget(progress_message)
+
+        connection = response.uploadProgress.connect(display_upload_progress)
+        # Tear this connection if the user closes the progress message
+        progress_message.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
 
     def update_catalog(self):
         if self.dlg_update_catalog.updatedCatalogNameEdit1.text() == '' or \
