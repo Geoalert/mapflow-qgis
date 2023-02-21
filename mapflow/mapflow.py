@@ -6,8 +6,10 @@ from typing import List, Optional, Union
 from datetime import datetime  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
+from pyproj import Proj, transform
 from osgeo import gdal
 from PyQt5.QtXml import QDomDocument
+from PyQt5.QtGui import QColor, QIcon, QDesktopServices, QPixmap
 from PyQt5.QtGui import QColor, QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
@@ -23,10 +25,11 @@ from qgis.gui import QgsMessageBarItem
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
     QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter,
-    QgsWkbTypes, QgsPoint, QgsMapLayerType
+    QgsWkbTypes, QgsPoint, QgsMapLayerType, QgsRectangle
 )
-
-from .dialogs.dialogs import MainDialog, LoginDialog, ErrorMessage
+from .dialogs.dialogs import MainDialog, LoginDialog, ErrorMessage, \
+                             CreateCatalogDialog, UpdateCatalogDialog, CreateCatalogAndFileUpload, \
+                             UploadImageToExistingMosaic
 from .dialogs.provider_dialog import ProviderDialog
 from .http import Http, update_processing_limit
 from . import helpers, config
@@ -41,6 +44,7 @@ from .entity.provider import (Provider,
 from .functional.geometry import clip_aoi_to_image_extent
 from .errors import ErrorMessageList
 from .layer_utils import generate_xyz_layer_definition
+from .helpers import MosaicImage
 from .helpers import check_version
 
 
@@ -150,7 +154,7 @@ class Mapflow(QObject):
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.rasterCombo.layerChanged.connect(self.toggle_processing_checkboxes)
         self.dlg.rasterCombo.layerChanged.connect(self.disallow_local_rasters_with_sentinel)
-        self.dlg.rasterCombo.currentTextChanged.connect(self.toggle_processing_checkboxes)
+        #self.dlg.rasterCombo.currentTextChanged.connect(self.toggle_processing_checkboxes)
         self.dlg.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
         self.dlg.startProcessing.clicked.connect(self.create_processing)
         # Sync polygon layer combos
@@ -195,6 +199,35 @@ class Mapflow(QObject):
             )
         )
         self.error_messages = ErrorMessageList()
+        # data catalog
+        self.dlg_create_catalog = CreateCatalogDialog(self.dlg)
+        self.dlg_update_catalog = UpdateCatalogDialog(self.dlg)
+        self.dlg_create_catalog_and_file_upload = CreateCatalogAndFileUpload(self.dlg)
+        self.dlg_upload_image_to_catalog = UploadImageToExistingMosaic(self.dlg)
+        self.selected_mosaic_row = None
+        self.upload_file_layer = None
+        self.upload_filename = ''
+        self.dlg.loadUserMosaicsButton.clicked.connect(self.load_user_mosaics)
+        self.dlg.createCatalogButton.clicked.connect(self.show_create_catalog_dialog)
+        self.dlg.editSelectedCatalogButton.clicked.connect(self.show_update_catalog_dialog)
+        self.dlg.deleteCatalogButton.clicked.connect(self.delete_selected_catalog)
+        self.dlg.deleteImageButton.clicked.connect(self.delete_selected_images)
+        self.dlg.uploadImageToNewCatalogButton.clicked.connect(self.show_create_catalog_and_file_upload_dialog)
+        self.dlg.uploadImageToCatalogButton.clicked.connect(self.show_upload_image_to_catalog_dialog)
+        self.dlg_create_catalog_and_file_upload.selectFileButton.clicked.connect(self.select_tif_catalog)
+        self.dlg_upload_image_to_catalog.selectFileButton.clicked.connect(self.select_tif_to_upload_existing_catalog)
+        self.dlg_create_catalog_and_file_upload.buttonBox.accepted.connect(self.create_new_catalog_and_file_upload)
+        self.dlg.mosaicsTableWidget.cellClicked.connect(self.load_mosaic_images)
+        self.dlg.mosaicImagesTableWidget.cellClicked.connect(self.get_image_by_id)
+        self.dlg_create_catalog.createCatalogDialogbuttonBox.accepted.connect(self.create_new_catalog)
+        self.dlg_create_catalog.createCatalogDialogbuttonBox.rejected.connect(self.close_create_catalog_dialog)
+        self.dlg_update_catalog.updateCatalogButtonBox.accepted.connect(self.update_catalog)
+        self.dlg_upload_image_to_catalog.buttonBox.accepted.connect(self.upload_file_to_existing_catalog)
+        self.dlg.useSelectedImageButton.clicked.connect(self.add_image_for_processing)
+        self.dlg.previewMosaicButton.clicked.connect(self.preview_selected_mosaic)
+        self.selected_files_to_upload = None
+        # init selected image as None
+        self.selected_image_from_mosaic = None
         # Add layer menu
         self.add_layer_menu = QMenu()
         self.create_aoi_from_map_action = QAction(self.tr("Create new AOI layer from map extent"))
@@ -303,6 +336,16 @@ class Mapflow(QObject):
             self.dlg.rasterCombo.setAdditionalItems(web_providers)
             self.dlg.providerCombo.clear()
             self.dlg.providerCombo.addItems(web_providers)
+        if self.selected_image_from_mosaic:
+            # remove previously added label from current sources (later, will skip this check)
+            for item in current_sources:
+                try:
+                    if item.startswith("#"):
+                        current_sources.remove(item)
+                except Exception:
+                    pass
+            current_sources.append(f'#{self.selected_image_from_mosaic.filename}')
+            self.dlg.rasterCombo.setAdditionalItems(current_sources)
 
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
         """Filter out the metadata table and layer every time user changes a filter."""
@@ -589,10 +632,21 @@ class Mapflow(QObject):
         :param raster_source: Provider name or None, depending on the signal, if one of the
             tile providers, otherwise the selected raster layer
         """
-        enabled = isinstance(raster_source, QgsRasterLayer)
-        self.dlg.useImageExtentAsAoi.setEnabled(enabled)
-        self.dlg.useImageExtentAsAoi.setChecked(enabled)
-        self.dlg.imageId_label.setText("")
+        if isinstance(raster_source, QgsRasterLayer):
+            self.dlg.useImageExtentAsAoi.setEnabled(True)
+            self.dlg.useImageExtentAsAoi.setChecked(True)
+            self.dlg.imageId_label.setText("")
+        else:
+            self.toggle_processing_checkboxes_on_str()
+
+    def toggle_processing_checkboxes_on_str(self):
+        value = self.dlg.rasterCombo.currentText()
+        if value.startswith("#"):
+            self.dlg.useImageExtentAsAoi.setEnabled(True)
+            self.dlg.useImageExtentAsAoi.setChecked(True)
+        else:
+            self.dlg.useImageExtentAsAoi.setEnabled(False)
+            self.dlg.useImageExtentAsAoi.setChecked(False)
 
     def select_output_directory(self) -> str:
         """Open a file dialog for the user to select a directory where plugin files will be stored.
@@ -1176,6 +1230,11 @@ class Mapflow(QObject):
 
         :param layer: The current raster layer
         """
+        if self.dlg.rasterCombo.currentText().startswith("#"):
+            geometry = self.selected_image_from_mosaic.geometry
+            crs = self.selected_image_from_mosaic.crs
+            self.calculate_aoi_area(geometry, crs)
+            return
         if layer:
             geometry = QgsGeometry.collectGeometry([QgsGeometry.fromRect(layer.extent())])
             self.calculate_aoi_area(geometry, layer.crs())
@@ -1213,6 +1272,7 @@ class Mapflow(QObject):
         :param aoi: the processing area.
         :param crs: the CRS of the processing area.
         """
+        print(str(aoi), str(crs))
         if crs != helpers.WGS84:
             aoi = helpers.to_wgs84(aoi, crs)
         self.aoi = aoi  # save for reuse in processing creation or metadata requests
@@ -1420,6 +1480,21 @@ class Mapflow(QObject):
             except Exception as e:
                 self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
             return
+        elif self.selected_image_from_mosaic and self.dlg.rasterCombo.currentText().startswith("#"):
+            # create processing with source_type = 'local'
+            try:
+                if self.dlg.useImageExtentAsAoi.isChecked():
+                    aoi = json.loads(self.selected_image_from_mosaic.geometry.asJson())
+                else:
+                    aoi = json.loads(self.aoi.asJson())
+                processing_params['geometry'] = aoi
+                processing_params['params']['source_type'] = 'tif'
+                processing_params['params']['url'] = self.selected_image_from_mosaic.image_url
+                self.post_processing(processing_params)
+                return
+            except Exception as e:
+                self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
+                return
         else:
             provider = self.providers[raster_option]
             if isinstance(provider, MaxarProxyProvider) and not self.is_premium_user:
@@ -2013,6 +2088,7 @@ class Mapflow(QObject):
         mapflow_env = QgsSettings().value('variables/mapflow_env') or 'production'
         self.server = config.SERVER.format(env=mapflow_env)
         self.project_id = QgsSettings().value('variables/project_id') or 'default'
+        self.load_user_mosaics()
         self.http.get(
             url=f'{self.server}/projects/{self.project_id}',
             callback=self.log_in_callback,
@@ -2206,6 +2282,447 @@ class Mapflow(QObject):
         # Don't use self.plugin_name as context since it'll be overriden in supermodules
         return QCoreApplication.translate(config.PLUGIN_NAME, message)
 
+    # Data catalog methods
+    def select_tif_catalog(self) -> None:
+        """
+        Open file selection dialog of data catalog, for the user to select a GeoTIFF for uploading.
+        """
+
+        dlg = QFileDialog(QApplication.activeWindow(), self.tr('Select GeoTIFF'))
+        dlg.setFileMode(QFileDialog.ExistingFile)
+        dlg.setMimeTypeFilters(['image/tiff'])
+        if dlg.exec():
+            path = dlg.selectedFiles()[0]
+            layer = QgsRasterLayer(path, os.path.splitext(os.path.basename(path))[0])
+            self.upload_file_layer = layer
+            self.upload_filename = os.path.basename(path)
+            # TODO empty the following two when showing corresponding dialog
+            self.dlg_create_catalog_and_file_upload.selectFileEdit.setText(path)
+            # self.dlg_upload_image_to_catalog.selectFileEdit.setText(path)
+
+    def select_tif_to_upload_existing_catalog(self) -> None:
+        dlg = QFileDialog(QApplication.activeWindow(), self.tr('Select GeoTIFF/GeoTIFFs'))
+        dlg.setFileMode(QFileDialog.ExistingFiles)
+        dlg.setMimeTypeFilters(['image/tiff'])
+        if dlg.exec():
+            paths = dlg.selectedFiles()
+            self.selected_files_to_upload = paths
+            self.dlg_upload_image_to_catalog.selectFileEdit.setText(str(paths))
+
+    def create_new_catalog_and_file_upload(self):
+        if self.dlg_create_catalog_and_file_upload.mosaicName.text() == '' or \
+                self.dlg_create_catalog_and_file_upload.mosaicTags.text() == '' or \
+                self.upload_file_layer is None:
+            ErrorMessage(
+                parent=self.dlg_create_catalog_and_file_upload,
+                text=self.tr("Please specify mosaic name and/or tags"),
+                title=self.tr("Mosaic name and/or tags are not specified")
+            ).show()
+            return
+        mosaic_name = self.dlg_create_catalog_and_file_upload.mosaicName.text()
+        tags = self.dlg_create_catalog_and_file_upload.mosaicTags.text()
+        filename = self.upload_filename
+
+        # collect request body
+        imagery = self.upload_file_layer
+        body = QHttpMultiPart(QHttpMultiPart.FormDataType)
+        tif = QHttpPart()
+        tif.setHeader(QNetworkRequest.ContentTypeHeader, 'image/tiff')
+        tif.setHeader(QNetworkRequest.ContentDispositionHeader, f'form-data; name="file"; filename={filename}')
+        image = QFile(imagery.dataProvider().dataSourceUri(), body)
+        image.open(QIODevice.ReadOnly)
+        tif.setBodyDevice(image)
+        body.append(tif)
+
+        # construct url and tags:
+        tags_list = tags.replace(' ', '').split(',')
+        url = f'{self.server}/rasters/mosaic/image?name={mosaic_name}'
+        for tag in tags_list:
+            url = url + f'&tags={tag}'
+
+        # upload raster to server
+        response = self.http.post(
+            url=url,
+            callback=self.file_upload_callback,
+            error_handler=self.upload_tif_to_mosaic_error_handler,
+            body=body,
+            timeout=3600
+        )
+        body.setParent(response)
+        progress_message = QgsMessageBarItem(
+            self.plugin_name,
+            self.tr('Uploading image to Mapflow...'),
+            QProgressBar(self.message_bar),
+            parent=self.message_bar
+        )
+        self.message_bar.pushItem(progress_message)
+
+        def display_upload_progress(bytes_sent: int, bytes_total: int):
+            try:
+                progress_message.widget().setValue(round(bytes_sent / bytes_total * 100))
+            except ZeroDivisionError:  # may happen for some reason
+                return
+            if bytes_sent == bytes_total:
+                self.message_bar.popWidget(progress_message)
+        connection = response.uploadProgress.connect(display_upload_progress)
+        # Tear this connection if the user closes the progress message
+        progress_message.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
+
+    def file_upload_callback(self, response: QNetworkReply) -> None:
+        # clear variables after uploading the file:
+        self.upload_file_layer = None
+        self.upload_filename = ''
+
+        # refresh mosaics list
+        self.load_user_mosaics()
+
+    def upload_tif_to_mosaic_error_handler(self, response: QNetworkReply):
+        self.report_error(response, self.tr("We couldn't upload your GeoTIFF"))
+        self.load_user_mosaics()
+        self.upload_filename = ''
+        self.upload_file_layer = None
+        self.selected_files_to_upload = None
+
+    def load_user_mosaics(self):
+        # clear mosaic images table content
+        self.dlg.mosaicImagesTableWidget.clearContents()
+        self.dlg.mosaicImagesTableWidget.setRowCount(0)
+        get_mosaics_url = f'{self.server}/rasters/mosaic'
+        mosaics = self.http.get(
+            url=get_mosaics_url,
+            callback=self.load_user_mosaics_callback
+        )
+
+    def load_user_mosaics_callback(self, response: QNetworkReply) -> None:
+        mosaics = json.loads(response.readAll().data())
+        rowCount = 0
+        columnCount = 6
+        self.dlg.mosaicsTableWidget.setColumnCount(columnCount)
+        self.dlg.mosaicsTableWidget.setHorizontalHeaderLabels(['Catalog id', 'Name', 'Tags', 'Created at', 'tileUrl'])
+        for mosaic in mosaics:
+            tile_url = mosaic.get('rasterLayer').get('tileUrl')
+            tile_json_url = mosaic.get('rasterLayer').get('tileJsonUrl')
+            rowCount += 1
+            self.dlg.mosaicsTableWidget.setRowCount(rowCount)
+            self.dlg.mosaicsTableWidget.setItem(rowCount - 1, 0, QTableWidgetItem(str(mosaic.get('id'))))
+            self.dlg.mosaicsTableWidget.setItem(rowCount - 1, 1, QTableWidgetItem(str(mosaic.get('name'))))
+            self.dlg.mosaicsTableWidget.setItem(rowCount - 1, 2, QTableWidgetItem(str(mosaic.get('tags'))))
+            self.dlg.mosaicsTableWidget.setItem(rowCount - 1, 3, QTableWidgetItem(str(mosaic.get('created_at'))))
+            self.dlg.mosaicsTableWidget.setItem(rowCount - 1, 4, QTableWidgetItem(str(tile_url)))
+            self.dlg.mosaicsTableWidget.setItem(rowCount - 1, 5, QTableWidgetItem(str(tile_json_url)))
+
+    def load_mosaic_images(self) -> None:
+        """
+        Loads list of images for a selected mosaic.
+        Click on any mosaic, to load the list of images.
+        """
+        selected_mosaic_row_number = self.dlg.mosaicsTableWidget.currentRow()
+        selected_mosaic_id = self.dlg.mosaicsTableWidget.item(selected_mosaic_row_number, 0).text()
+        response = self.http.get(
+            url=f'{self.server}/rasters/mosaic/{selected_mosaic_id}/image',
+            callback=self.get_mosaic_images_callback
+        )
+        # clear mosaic images table content
+        self.dlg.mosaicImagesTableWidget.clearContents()
+        self.dlg.mosaicImagesTableWidget.setRowCount(0)
+
+    def get_mosaic_images_callback(self, response: QNetworkReply):
+        # response consists of list of images for a given mosaic_id
+        # construct table with the list of images
+        images = json.loads(response.readAll().data())
+        rowCount = 0
+        columnCount = 6
+        self.dlg.mosaicImagesTableWidget.setColumnCount(columnCount)
+        self.dlg.mosaicImagesTableWidget.setHorizontalHeaderLabels(['Image id', 'Filename', 'Uploaded at',
+                                                                    'File url', 'Footprint', 'crs'])
+        for image in images:
+            rowCount += 1
+            self.dlg.mosaicImagesTableWidget.setRowCount(rowCount)
+            self.dlg.mosaicImagesTableWidget.setItem(rowCount - 1, 0, QTableWidgetItem(str(image.get('id'))))
+            self.dlg.mosaicImagesTableWidget.setItem(rowCount - 1, 1, QTableWidgetItem(str(image.get('filename'))))
+            self.dlg.mosaicImagesTableWidget.setItem(rowCount - 1, 2, QTableWidgetItem(str(image.get('uploaded_at'))))
+            self.dlg.mosaicImagesTableWidget.setItem(rowCount - 1, 3, QTableWidgetItem(str(image.get('image_url'))))
+            self.dlg.mosaicImagesTableWidget.setItem(rowCount - 1, 4, QTableWidgetItem(str(image.get('footprint'))))
+            self.dlg.mosaicImagesTableWidget.setItem(rowCount - 1, 5, QTableWidgetItem(str(image.get('meta_data').get('crs'))))
+
+
+    def show_create_catalog_dialog(self):
+        self.dlg_create_catalog.show()
+
+    def show_update_catalog_dialog(self):
+        selected_mosaic_row_number = self.dlg.mosaicsTableWidget.currentRow()
+        if self.dlg.mosaicsTableWidget.item(selected_mosaic_row_number, 0):
+            selected_mosaic_id = self.dlg.mosaicsTableWidget.item(selected_mosaic_row_number, 0).text()
+            selected_mosaic_name = self.dlg.mosaicsTableWidget.item(selected_mosaic_row_number, 1).text()
+            self.dlg_update_catalog.show()
+            self.dlg_update_catalog.oldCatalogNameEditBox1.setText(selected_mosaic_name)
+            self.dlg_update_catalog.selected_mosaic_id.setText(selected_mosaic_id)
+            self.dlg_update_catalog.updatedCatalogNameEdit1.setText('')
+            self.dlg_update_catalog.updatedCatalogTagsEdit1.setText('')
+
+    def show_create_catalog_and_file_upload_dialog(self):
+        self.dlg_create_catalog_and_file_upload.show()
+        self.dlg_create_catalog_and_file_upload.mosaicName.setText('')
+        self.dlg_create_catalog_and_file_upload.mosaicTags.setText('')
+        self.dlg_create_catalog_and_file_upload.selectFileEdit.setText('')
+        self.upload_file_layer = None
+        self.upload_filename = ''
+
+    def show_upload_image_to_catalog_dialog(self):
+        # initialize variables
+        self.dlg_upload_image_to_catalog.mosaicID.setText('')
+        self.dlg_upload_image_to_catalog.mosaicName.setText('')
+        self.upload_filename = ''
+        self.upload_file_layer = None
+        # if not any mosaic selected: return
+        selected_mosaic_row_number = self.dlg.mosaicsTableWidget.currentRow()
+        if not self.dlg.mosaicsTableWidget.item(selected_mosaic_row_number, 0):
+            return
+        selected_mosaic_id = self.dlg.mosaicsTableWidget.item(selected_mosaic_row_number, 0).text()
+        selected_mosaic_name = self.dlg.mosaicsTableWidget.item(selected_mosaic_row_number, 1).text()
+        self.dlg_upload_image_to_catalog.mosaicID.setText(selected_mosaic_id)
+        self.dlg_upload_image_to_catalog.mosaicName.setText(selected_mosaic_name)
+        self.dlg_upload_image_to_catalog.show()
+
+    def upload_file_to_existing_catalog(self, response: QNetworkReply = None):
+        if self.selected_files_to_upload is None:
+            ErrorMessage(
+                parent=self.dlg_upload_image_to_catalog,
+                text=self.tr("Please select file/files to upload"),
+                title=self.tr("File is not selected")
+            ).show()
+            return
+        mosaic_id = self.dlg_upload_image_to_catalog.mosaicID.text()
+        if self.selected_files_to_upload == []:
+            self.alert('Files uploaded!')
+            self.load_user_mosaics()
+            self.dlg_upload_image_to_catalog.selectFileEdit.setText('')
+            self.selected_files_to_upload = None
+            return
+
+        next_filepath_to_upload = self.selected_files_to_upload.pop()
+        filename = os.path.basename(next_filepath_to_upload)
+
+        # collect request body
+        imagery = QgsRasterLayer(next_filepath_to_upload, os.path.splitext(filename)[0])
+        body = QHttpMultiPart(QHttpMultiPart.FormDataType)
+        tif = QHttpPart()
+        tif.setHeader(QNetworkRequest.ContentTypeHeader, 'image/tiff')
+        tif.setHeader(QNetworkRequest.ContentDispositionHeader, f'form-data; name="file"; filename={filename}')
+        image = QFile(imagery.dataProvider().dataSourceUri(), body)
+        image.open(QIODevice.ReadOnly)
+        tif.setBodyDevice(image)
+        body.append(tif)
+
+        url = f'{self.server}/rasters/mosaic/{mosaic_id}/image'
+
+        # upload raster to server
+        response = self.http.post(
+            url=url,
+            callback=self.upload_file_to_existing_catalog,
+            error_handler=self.upload_tif_to_mosaic_error_handler,
+            body=body,
+            timeout=3600
+        )
+        body.setParent(response)
+        progress_message = QgsMessageBarItem(
+            self.plugin_name,
+            self.tr('Uploading image to Mapflow...'),
+            QProgressBar(self.message_bar),
+            parent=self.message_bar
+        )
+        self.message_bar.pushItem(progress_message)
+
+        def display_upload_progress(bytes_sent: int, bytes_total: int):
+            try:
+                progress_message.widget().setValue(round(bytes_sent / bytes_total * 100))
+            except ZeroDivisionError:  # may happen for some reason
+                return
+            if bytes_sent == bytes_total:
+                pass
+
+        connection = response.uploadProgress.connect(display_upload_progress)
+        # Tear this connection if the user closes the progress message
+        progress_message.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
+
+    def update_catalog(self):
+        if self.dlg_update_catalog.updatedCatalogNameEdit1.text() == '' or \
+           self.dlg_update_catalog.updatedCatalogTagsEdit1.text() == '':
+            ErrorMessage(
+                parent=self.dlg_update_catalog,
+                text=self.tr("Please specify updated name and/or tags for mosaic"),
+                title=self.tr("Mosaic name and/or tags are not specified")
+            )
+        else:
+            updated_name = self.dlg_update_catalog.updatedCatalogNameEdit1.text()
+            tags = self.dlg_update_catalog.updatedCatalogTagsEdit1.text()
+            tags_list = tags.replace(' ', '').split(',')
+            mosaic_id = self.dlg_update_catalog.selected_mosaic_id.text()
+            url = f'{self.server}/rasters/mosaic/{mosaic_id}'
+            body = json.dumps({
+                'name': updated_name,
+                'tags': tags_list
+            })
+            self.http.put(
+                url=url,
+                body=body.encode(),
+                callback=self.create_new_catalog_callback
+            )
+
+    def create_new_catalog(self):
+        if self.dlg_create_catalog.newCatalogNameEdit1.text() == '' or \
+                self.dlg_create_catalog.newCatalogTagsEdit1.text() == '':
+            ErrorMessage(
+                parent=self.dlg_create_catalog,
+                text=self.tr("Please specify mosaic name and/or tags"),
+                title=self.tr("Mosaic name and/or tags are not specified")
+            ).show()
+            pass
+        else:
+            mosaic_name = self.dlg_create_catalog.newCatalogNameEdit1.text()
+            mosaic_name = mosaic_name.replace(" ", "_")
+            tags = self.dlg_create_catalog.newCatalogTagsEdit1.text()
+
+            # remove whitespaces from tags, and split
+            tags_list = tags.replace(' ', '').split(',')
+
+            # construct url including tags and mosaic_name
+            url = f'{self.server}/rasters/mosaic'
+            body = json.dumps({
+                'name': mosaic_name,
+                'tags': tags_list
+            })
+            self.http.post(
+                url=url,
+                body=body.encode(),
+                callback=self.create_new_catalog_callback
+            )
+            self.close_create_catalog_dialog()
+
+    def delete_selected_catalog(self):
+        selected_mosaic_row_number = self.dlg.mosaicsTableWidget.currentRow()
+        if self.dlg.mosaicsTableWidget.item(selected_mosaic_row_number, 0):
+            selected_mosaic_id = self.dlg.mosaicsTableWidget.item(selected_mosaic_row_number, 0).text()
+            response = self.http.delete(
+                url=f'{self.server}/rasters/mosaic/{selected_mosaic_id}',
+                callback=self.delete_selected_item_callback
+            )
+
+    def delete_selected_images(self):
+        selected_items = self.dlg.mosaicImagesTableWidget.selectedRanges()
+        if not selected_items:
+            return
+        # for some reason selectedRanges returns list (of length = 1) containing QTableWidgetSelectionRange object
+        selected_items = selected_items[0]
+        ids_to_delete = []
+        for row in range(selected_items.topRow(), selected_items.topRow() + selected_items.rowCount()):
+            ids_to_delete.append(
+                self.dlg.mosaicImagesTableWidget.item(row, 0).text()
+            )
+        print(ids_to_delete)
+        for image_id in ids_to_delete:
+            self.http.delete(
+                url=f'{self.server}/rasters/image/{image_id}',
+                callback=self.delete_selected_item_callback
+            )
+
+    def delete_selected_item_callback(self, *args):
+        # refresh mosaics list
+        self.load_user_mosaics()
+
+    def create_new_catalog_callback(self, *args):
+        self.load_user_mosaics()
+
+    def close_create_catalog_dialog(self):
+        self.dlg_create_catalog.newCatalogNameEdit1.clear()
+        self.dlg_create_catalog.newCatalogTagsEdit1.clear()
+        self.dlg_create_catalog.close()
+
+    def get_image_by_id(self):
+        # request image by id
+        selected_image_row_number = self.dlg.mosaicImagesTableWidget.currentRow()
+        image_id = self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 0).text()
+        response = self.http.get(
+            url=f'{self.server}/rasters/image/{image_id}',
+            callback=self.get_image_by_id_callback
+        )
+
+    def get_image_by_id_callback(self, response: QNetworkReply):
+        # take image preview url from response
+        # request image preview and pass it to next callback, which shows it
+        res = json.loads(response.readAll().data())
+        preview_url = res.get('preview_url_s')
+        response = self.http.get(
+            url=preview_url,
+            callback=self.show_image_preview
+        )
+
+    def show_image_preview(self, response: QNetworkReply):
+        # take response, write it to tempfile and show preview
+        with tempfile.NamedTemporaryFile('wb', suffix='.jpg') as f:
+            f.write(response.readAll().data())
+            pixmap = QPixmap(f.name)
+            self.dlg.imagePreviewLabel.setPixmap(pixmap)
+
+    def add_image_for_processing(self):
+        """ Adds selected image from users-data tab for processing """
+        selected_image_row_number = self.dlg.mosaicImagesTableWidget.currentRow()
+        if not self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 0):
+            return
+        image_id = self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 0).text()
+        image_url = self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 3).text()
+        footprint = self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 4).text()
+        filename = self.dlg.mosaicImagesTableWidget.item(selected_image_row_number, 1).text()
+        crs = 'EPSG:4326'
+
+        image = MosaicImage(image_id=image_id,
+                            image_url=image_url,
+                            filename=filename,
+                            footprint=footprint,
+                            crs=crs)
+        self.selected_image_from_mosaic = image
+        self.set_available_imagery_sources(wd='')
+
+    def preview_selected_mosaic(self):
+        selected_mosaic_row_number = self.dlg.mosaicsTableWidget.currentRow()
+        if not self.dlg.mosaicsTableWidget.item(selected_mosaic_row_number, 0):
+            return
+        mosaic_name = self.dlg.mosaicsTableWidget.item(
+            selected_mosaic_row_number, 1).text()
+        selected_mosaic_tile_url = self.dlg.mosaicsTableWidget.item(
+            selected_mosaic_row_number, 4).text()
+
+        mosaic_layer_uri = generate_xyz_layer_definition(url=selected_mosaic_tile_url,
+                                                         username='', # self.username,
+                                                         password='', # self.password,
+                                                         max_zoom=18, source_type='xyz')
+        layer = QgsRasterLayer(mosaic_layer_uri, mosaic_name, 'wms')
+        tile_json_url = self.dlg.mosaicsTableWidget.item(selected_mosaic_row_number, 5).text()
+        self.http.get(
+            url=tile_json_url,
+            callback=self.preview_selected_mosaic_callback,
+            callback_kwargs={
+                'layer': layer
+            }
+        )
+
+    def preview_selected_mosaic_callback(self,
+                                         response: QNetworkReply,
+                                         layer: QgsRasterLayer):
+        bounds = json.loads(response.readAll().data()).get('bounds')
+        outProj = Proj(init='epsg:3857')
+        inProj = Proj(init='epsg:4326')
+
+        xmin, ymin = transform(inProj, outProj, bounds[0], bounds[1])
+        xmax, ymax = transform(inProj, outProj, bounds[2], bounds[3])
+
+        bounding_box = QgsRectangle(xmin, ymin, xmax, ymax)
+        if layer.isValid():
+            layer.setExtent(rect=bounding_box)
+            self.add_layer(layer)
+        else:
+            self.alert(self.tr("We couldn't load mosaic preview"))
+
     def main(self) -> None:
         """Plugin entrypoint."""
 
@@ -2227,7 +2744,3 @@ class Mapflow(QObject):
         else:
             self.set_up_login_dialog()
             self.dlg_login.show()
-
-
-
-

@@ -94,3 +94,22 @@ def check_version(local_version: str,
     minor_changed = loc_major == srv_major and loc_minor < srv_minor
     patch_changed = loc_major == srv_major and loc_minor == srv_minor and loc_patch < srv_patch
     return major_changed, (minor_changed or patch_changed)
+
+
+class MosaicImage:
+    def __init__(self, image_id, image_url, filename, footprint, crs):
+        self.image_id = image_id
+        self.image_url = image_url
+        self.filename = filename
+        self.footprint = footprint  # wkt
+        self.geometry = None
+        self.make_geometry_from_footprint()
+        self.crs = QgsCoordinateReferenceSystem(crs)
+
+    def __eq__(self, other):
+        return self.image_id == other.image_id
+
+    def make_geometry_from_footprint(self):
+        # make QgsGeometry from footprint
+        geometry = QgsGeometry.fromWkt(wkt=self.footprint)
+        self.geometry = geometry
