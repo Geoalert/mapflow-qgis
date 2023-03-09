@@ -1,6 +1,7 @@
 import json
 import os.path
 import tempfile
+from time import time
 from base64 import b64encode, b64decode
 from typing import List, Optional, Union
 from datetime import datetime  # processing creation datetime formatting
@@ -135,11 +136,7 @@ class Mapflow(QObject):
         # Hide the ID columns as only needed for table operations, not the user
         self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
-        imagery_sources = [
-            self.dlg.rasterCombo.layer(index)
-            for index in range(self.dlg.rasterCombo.count())
-        ]
-        self.filter_non_tif_rasters(list(filter(bool, imagery_sources)))
+        self.filter_bad_rasters()
         self.dlg.modelCombo.currentTextChanged.connect(self.set_available_imagery_sources)
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
@@ -149,7 +146,6 @@ class Mapflow(QObject):
         self.dlg.selectTif.clicked.connect(self.select_tif)
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.rasterCombo.layerChanged.connect(self.toggle_processing_checkboxes)
-        self.dlg.rasterCombo.layerChanged.connect(self.disallow_local_rasters_with_sentinel)
         self.dlg.rasterCombo.currentTextChanged.connect(self.toggle_processing_checkboxes)
         self.dlg.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
         self.dlg.startProcessing.clicked.connect(self.create_processing)
@@ -164,7 +160,7 @@ class Mapflow(QObject):
             self.project.mapLayer(layer_id) for layer_id in self.project.mapLayers(validOnly=True)
         ])
         self.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
-        self.project.layersAdded.connect(self.filter_non_tif_rasters)
+        self.project.layersAdded.connect(self.filter_bad_rasters)
         # Processings
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
@@ -202,7 +198,6 @@ class Mapflow(QObject):
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
         self.dlg.imageId.textChanged.connect(self.set_image_id_label)
-
 
     def set_image_id_label(self, text):
         if text:
@@ -254,32 +249,35 @@ class Mapflow(QObject):
             else:
                 self.alert(self.tr(f'Your file is not valid vector data source!'))
 
-    def filter_non_tif_rasters(self, _: List[QgsMapLayer]) -> None:
+    #def remove_raster_layers_from_filter(self, removed_layers):
+    #    current_layers = self.dlg.rasterCombo.exceptedLayerList()
+    #    for layer in removed_layers:
+    #        current_layers.pop(layer)
+        self.dlg.rasterCombo.setExceptedLayerList(current_layers)
+
+    def filter_bad_rasters(self, changed_layers: Optional[List[QgsRasterLayer]] = None) -> None:
         """Leave only GeoTIFF layers in the Imagery Source combo box."""
         # (!) Instead of going thru all project layers each time
         # it'd be better to filter the new layers, then add them to
         # the already filtered ones like rasterCombo.exceptedLayerList() + new_layers
         # but calling exceptedLayerList() crashes when it contains deleted layers
-        self.dlg.rasterCombo.setExceptedLayerList([
-            layer for layer in self.project.mapLayers().values() 
-            if layer.type() == QgsMapLayerType.RasterLayer 
-            and not (
-                layer.crs().isValid()
-                and os.path.splitext(layer.dataProvider().dataSourceUri())[-1] in ('.tif', '.tiff')
-                and os.path.exists(layer.dataProvider().dataSourceUri())
-                and os.path.getsize(layer.publicSource()) / 2**20 < config.MAX_TIF_SIZE
-            )
-        ])
 
-    def disallow_local_rasters_with_sentinel(self, raster: QgsRasterLayer) -> None:
-        """Override local raster selection if the model is Sentinel-2 Fields."""
-        if raster and self.dlg.modelCombo.currentText() in config.SENTINEL_WD_NAMES:
-            self.alert(self.tr(
-                "Currently, Mapflow doesn't support uploading own Sentinel-2 imagery. "
-                'To process Sentinel-2, go to the Providers tab andSENTINEL_WD_NAME either search for your image '
-                'in the catalog or paste its ID in the Image ID field.'
-            ))
-            self.dlg.rasterCombo.setCurrentText(config.SENTINEL_OPTION_NAME)
+        # so we will need to add new function like "remove_filtered_layers" to handle this.
+        # However, current implementation takes 4 ms when 100 files are opened, which is OK
+
+        raster_layers = (layer for layer in self.project.mapLayers().values()
+                         if layer.type() == QgsMapLayerType.RasterLayer)
+        if self.dlg.modelCombo.currentText() in config.SENTINEL_WD_NAMES:
+            filtered_raster_layers = raster_layers
+        else:
+            try:
+                filtered_raster_layers = [
+                layer for layer in raster_layers
+                if not helpers.raster_layer_is_allowed(layer)
+                ]
+            except Exception as e:
+                self.alert(f"Error checking raster layers validity: {e}")
+        self.dlg.rasterCombo.setExceptedLayerList(filtered_raster_layers)
 
     def set_available_imagery_sources(self, wd: str) -> None:
         """Restrict the list of imagery sources according to the selected model."""
@@ -289,20 +287,19 @@ class Mapflow(QObject):
                          not isinstance(provider, SentinelProvider)]
         current_sources = self.dlg.rasterCombo.additionalItems()
         if wd in config.SENTINEL_WD_NAMES and not set(current_sources) == set(sentinel_providers):
-            # Prevent disallow_local_rasters_with_sentinel() from being triggered
-            self.dlg.rasterCombo.blockSignals(True)
             self.dlg.rasterCombo.setAdditionalItems(sentinel_providers)
             if sentinel_providers:
                 self.dlg.rasterCombo.setCurrentText(sentinel_providers[0])
             self.dlg.providerCombo.clear()
             self.dlg.providerCombo.addItems(sentinel_providers)
-            self.dlg.rasterCombo.blockSignals(False)
+            self.filter_bad_rasters() # filter rasters for sentinel
         elif not set(current_sources) == set(web_providers):
             # skip update in case source list did not change.
             # This prevents the current selected item from being discarded
             self.dlg.rasterCombo.setAdditionalItems(web_providers)
             self.dlg.providerCombo.clear()
             self.dlg.providerCombo.addItems(web_providers)
+            self.filter_bad_rasters()
 
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
         """Filter out the metadata table and layer every time user changes a filter."""
@@ -1962,9 +1959,8 @@ class Mapflow(QObject):
         plugin_button.triggered.connect(self.main)
         self.toolbar.addAction(plugin_button)
         self.project.readProject.connect(self.set_layer_group)
-        self.project.readProject.connect(lambda: self.filter_non_tif_rasters(
-            list(filter(bool, [self.dlg.rasterCombo.layer(index) for index in range(self.dlg.rasterCombo.count())]))
-        ))
+        self.project.readProject.connect(self.filter_bad_rasters)
+            # list(filter(bool, [self.dlg.rasterCombo.layer(index) for index in range(self.dlg.rasterCombo.count())]))
         self.dlg.processingsTable.sortByColumn(config.PROCESSING_TABLE_SORT_COLUMN_INDEX, Qt.DescendingOrder)
 
     def set_layer_group(self) -> None:
