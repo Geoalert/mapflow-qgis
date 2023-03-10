@@ -1,11 +1,15 @@
-from typing import Callable, Union
+import html
+import json
+from typing import Callable, Union, Optional
 
-from PyQt5.QtCore import QObject, QTimer, QUrl
+from PyQt5.QtCore import QObject, QTimer, QUrl, qVersion
 from PyQt5.QtNetwork import QHttpMultiPart, QNetworkReply, QNetworkRequest
-from qgis.core import QgsNetworkAccessManager
+from qgis.core import QgsNetworkAccessManager, Qgis
+
 
 import logging
 from .constants import DEFAULT_HTTP_TIMEOUT_SECONDS
+from .errors import ErrorMessage, ErrorMessageList
 
 
 class Http(QObject):
@@ -106,3 +110,47 @@ class Http(QObject):
 
 def update_processing_limit():
     pass
+
+
+def default_message_parser(response_body: str) -> str:
+    return json.loads(response_body)['message']
+
+
+def data_catalog_message_parser(response_body: str) -> str:
+    error_data = json.loads(response_body)['detail']
+    message = ErrorMessage.from_response(error_data)
+    return message.to_str()
+
+
+def securewatch_message_parser(response_body: str) -> str:
+    # todo: parse this HTML page for useful info, or display it as is?
+    return response_body
+
+
+def get_error_report_body(response: QNetworkReply,
+                          plugin_version: str,
+                          error_message_parser: Optional[Callable] = None):
+    if error_message_parser is None:
+        error_message_parser = default_message_parser
+    if response.error() == QNetworkReply.OperationCanceledError:
+        send_error_text = show_error_text = 'Request timed out'
+    else:
+        response_body = response.readAll().data().decode()
+        try:  # handled standardized backend exception ({"code": <int>, "message": <str>})
+            show_error_text = error_message_parser(response_body=response_body)
+        except:  # unhandled error - plain text
+            show_error_text = 'Error reading response body'
+        send_error_text = response_body
+    report = {
+        # escape in case the error text is HTML
+        'Error summary': html.escape(send_error_text),
+        'URL': response.request().url().toDisplayString(),
+        'HTTP code': response.attribute(QNetworkRequest.HttpStatusCodeAttribute),
+        'Qt code': response.error(),
+        'Plugin version': plugin_version,
+        'QGIS version': Qgis.QGIS_VERSION,
+        'Qt version': qVersion(),
+    }
+    email_body = '%0a'.join(f'{key}: {value}' for key, value in report.items())
+
+    return show_error_text, email_body

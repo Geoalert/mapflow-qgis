@@ -1,9 +1,10 @@
 import json
+from pathlib import Path
 import os.path
 import tempfile
 from time import time
 from base64 import b64encode, b64decode
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Callable
 from datetime import datetime  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
@@ -13,7 +14,7 @@ from PyQt5.QtGui import QColor, QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
     QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion,
-    QTextStream, QByteArray
+    QTextStream, QByteArray, QVariant
 )
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction,
@@ -27,9 +28,13 @@ from qgis.core import (
     QgsWkbTypes, QgsPoint, QgsMapLayerType
 )
 
-from .dialogs.dialogs import MainDialog, LoginDialog, ErrorMessage
+from .dialogs.dialogs import MainDialog, LoginDialog, ErrorMessageWidget
 from .dialogs.provider_dialog import ProviderDialog
-from .http import Http, update_processing_limit
+from .http import (Http,
+                   update_processing_limit,
+                   get_error_report_body,
+                   data_catalog_message_parser,
+                   securewatch_message_parser)
 from .config import Config
 from .entity.processing import parse_processings_request, Processing, ProcessingHistory, updated_processings
 from .entity.provider import (Provider,
@@ -40,7 +45,6 @@ from .entity.provider import (Provider,
                               create_provider)
 
 from .functional.geometry import clip_aoi_to_image_extent
-from .errors import ErrorMessageList
 from .layer_utils import generate_xyz_layer_definition
 from . import helpers, constants
 
@@ -190,7 +194,6 @@ class Mapflow(QObject):
                 use_default_error_handler=False  # ignore errors to prevent repetitive alerts
             )
         )
-        self.error_messages = ErrorMessageList()
         # Add layer menu
         self.add_layer_menu = QMenu()
         self.create_aoi_from_map_action = QAction(self.tr("Create new AOI layer from map extent"))
@@ -781,7 +784,7 @@ class Mapflow(QObject):
         if error == QNetworkReply.ContentAccessDenied:
             self.alert(self.tr('Please, check your credentials'))
         else:
-            self.report_error(response, self.tr("We couldn't fetch Sentinel metadata"))
+            self.report_http_error(response, self.tr("We couldn't fetch Sentinel metadata"))
 
     def fetch_skywatch_metadata(
         self,
@@ -927,7 +930,7 @@ class Mapflow(QObject):
             timer.deleteLater()
         except (RuntimeError, AttributeError):  # None or has been destroyed
             pass
-        self.report_error(response, self.tr("We couldn't fetch Sentinel metadata"))
+        self.report_http_error(response, self.tr("We couldn't fetch Sentinel metadata"))
 
     def get_maxar_metadata(
         self,
@@ -1052,10 +1055,13 @@ class Mapflow(QObject):
         :param response: The HTTP response.
         """
         error = response.error()
-        if error == QNetworkReply.ContentAccessDenied:
+        if error in [QNetworkReply.ContentAccessDenied]: #, QNetworkReply.AuthenticationRequiredError):
             self.alert(self.tr('Please, check your credentials'))
         else:
-            self.report_error(response, self.tr("We couldn't get metadata from Maxar, error {error}").format(error=error))
+            self.report_http_error(response,
+                                   self.tr("We couldn't get metadata from Maxar, "
+                                           "error {error}").format(error=response.attribute(QNetworkRequest.HttpStatusCodeAttribute)),
+                                   error_message_parser=securewatch_message_parser)
 
     def sync_table_selection_with_image_id_and_layer(self) -> str:
         """
@@ -1256,7 +1262,7 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        self.report_error(response, self.tr("Error deleting a processing"))
+        self.report_http_error(response, self.tr("Error deleting a processing"))
 
     def upload_image(self, layer, processing_params=None, mosaic=None):
         """
@@ -1267,7 +1273,8 @@ class Mapflow(QObject):
         body = QHttpMultiPart(QHttpMultiPart.FormDataType)
         tif = QHttpPart()
         tif.setHeader(QNetworkRequest.ContentTypeHeader, 'image/tiff')
-        tif.setHeader(QNetworkRequest.ContentDispositionHeader, 'form-data; name="file"; filename=""')
+        filename = Path(layer.dataProvider().dataSourceUri()).name
+        tif.setHeader(QNetworkRequest.ContentDispositionHeader, f'form-data; name="file"; filename="{filename}"')
         image = QFile(layer.dataProvider().dataSourceUri(), body)
         image.open(QIODevice.ReadOnly)
         tif.setBodyDevice(image)
@@ -1419,7 +1426,7 @@ class Mapflow(QObject):
         else:
             provider = self.providers[raster_option]
             if isinstance(provider, MaxarProxyProvider) and not self.is_premium_user:
-                ErrorMessage(
+                ErrorMessageWidget(
                     parent=self.dlg,
                     text=self.tr('Click on the link below to send us an email'),
                     title=self.tr('Upgrade your subscription to process Maxar imagery'),
@@ -1449,11 +1456,12 @@ class Mapflow(QObject):
         self.post_processing(processing_params)
 
     def upload_tif_error_handler(self, response: QNetworkReply) -> None:
-        """Error handler for GeoTIFF upload request.
+        """Error handler for GeoTIFF upload request, made for data-catalog API
 
-        :param response: The HTTP response.
         """
-        self.report_error(response, self.tr("We couldn't upload your GeoTIFF"))
+        self.report_http_error(response=response,
+                               title=self.tr("We couldn't upload your GeoTIFF"),
+                               error_message_parser=data_catalog_message_parser)
 
     def post_processing(self, request_body: dict) -> None:
         """Submit a processing to Mapflow.
@@ -1476,8 +1484,8 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        self.report_error(response,
-                         self.tr('Processing creation failed'))
+        self.report_http_error(response,
+                               self.tr('Processing creation failed'))
 
     def post_processing_callback(self, _: QNetworkReply, processing_name: str) -> None:
         """Display a success message and clear the processing name field."""
@@ -1567,7 +1575,7 @@ class Mapflow(QObject):
             )
             return
         self.alert(self.tr("Sorry, we couldn't load the image"))
-        self.report_error(response, self.tr('Error previewing Sentinel imagery'))
+        self.report_http_error(response, self.tr('Error previewing Sentinel imagery'))
 
     def preview_sentinel(self, image_id):
         selected_cells = self.dlg.metadataTable.selectedItems()
@@ -1780,7 +1788,7 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        self.report_error(response, self.tr('Error downloading results'))
+        self.report_http_error(response, self.tr('Error downloading results'))
 
     def set_raster_extent(
         self,
@@ -1811,7 +1819,7 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        self.report_error(response, self.tr('Error loading results'))
+        self.report_http_error(response, self.tr('Error loading results'))
 
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """Display a minimalistic modal dialog with some info or a question.
@@ -1866,7 +1874,7 @@ class Mapflow(QObject):
             proc = failed_processings[0]
             self.alert(
                 proc.name +
-                self.tr(' failed with error:\n') + proc.error_message(self.error_messages),
+                self.tr(' failed with error:\n') + proc.error_message(),
                 QMessageBox.Critical)
         elif 1 < len(failed_processings) < 10:
             # If there are more than one failed processing, we will not
@@ -1930,7 +1938,7 @@ class Mapflow(QObject):
                 table_item = QTableWidgetItem()
                 table_item.setData(Qt.DisplayRole, processing_dict[attr])
                 if proc.status == 'FAILED':
-                    table_item.setToolTip(proc.error_message(self.error_messages))
+                    table_item.setToolTip(proc.error_message())
                 elif proc.status == 'OK':
                     table_item.setToolTip(self.tr("Double click to add results to the map"))
                 self.dlg.processingsTable.setItem(row, col, table_item)
@@ -2000,14 +2008,16 @@ class Mapflow(QObject):
         except:
             self.username = self.password = ''
             self.dlg_login.show()
-            self.log_in_error_handler()
+            self.alert(self.tr('Wrong token. '
+                               'Visit "<a href=\"https://app.mapflow.ai/account/api\">mapflow.ai</a>" '
+                               'to get a new one'),
+                       icon=QMessageBox.Warning)
             return
         self.http.basic_auth = f'Basic {token}'
         self.http.get(
             url=f'{self.config.SERVER}/projects/{self.config.PROJECT_ID}',
             callback=self.log_in_callback,
-            use_default_error_handler=False,
-            error_handler=self.log_in_error_handler
+            use_default_error_handler=True
         )
 
     def logout(self) -> None:
@@ -2019,18 +2029,6 @@ class Mapflow(QObject):
         self.dlg.close()
         self.set_up_login_dialog()  # recreate the login dialog
         self.dlg_login.show()  # assume user wants to log into another account
-
-    def log_in_error_handler(self, response: Optional[QNetworkReply]=None) -> None:
-        """Error handler for the login request.
-
-        :param response: The HTTP response.
-        """
-        self.dlg_login.show()
-        self.alert(self.tr('Wrong token. '
-                           'Visit "<a href=\"https://app.mapflow.ai/account/api\">mapflow.ai</a>" '
-                           'to get a new one'),
-                   icon=QMessageBox.Warning)
-
 
     def default_error_handler(self, response: QNetworkReply) -> bool:
         """Handle general networking errors: offline, timeout, server errors.
@@ -2045,6 +2043,10 @@ class Mapflow(QObject):
             if self.logged_in:  # token re-issued during a plugin session
                 self.logout()
             elif self.settings.value('token'):  # env changed w/out logging out (admin)
+                self.alert(self.tr('Wrong token. '
+                                   'Visit "<a href=\"https://app.mapflow.ai/account/api\">mapflow.ai</a>" '
+                                   'to get a new one'),
+                           icon=QMessageBox.Warning)
                 self.dlg_login.show()
             # Wrong token entered - display a message
             elif not self.dlg_login.findChild(QLabel, self.config.INVALID_TOKEN_WARNING_OBJECT_NAME):
@@ -2064,13 +2066,13 @@ class Mapflow(QObject):
             QNetworkReply.RemoteHostClosedError,
             QNetworkReply.NetworkSessionFailedError,
         ):
-            self.report_error(response, self.tr(
+            self.report_http_error(response, self.tr(
                 service + ' is not responding. Please, try again.\n\n'
                 'If you are behind a proxy or firewall,\ncheck your QGIS proxy settings.\n'
             ))
             return True
         elif error == QNetworkReply.HostNotFoundError:  # offline
-            self.alert(self.tr(service + ' requires Internet connection'))
+            self.alert(self.tr(service + ' not found. Check your Internet connection'))
             return True
         elif error in (
             QNetworkReply.UnknownNetworkError,
@@ -2080,42 +2082,33 @@ class Mapflow(QObject):
             QNetworkReply.ProxyTimeoutError,
             QNetworkReply.ProxyAuthenticationRequiredError,
         ):
-            self.report_error(response, self.tr('Proxy error. Please, check your proxy settings.'))
+            self.report_http_error(response, self.tr('Proxy error. Please, check your proxy settings.'))
             return True
         elif error == QNetworkReply.ContentAccessDenied:
-            self.report_error(response, self.tr("This operation is forbidden for your account, contact us"))
+            self.report_http_error(response, self.tr("This operation is forbidden for your account, contact us"))
             return True
         else:
-            self.report_error(response, f"Unknown error: {error}")
+            self.report_http_error(response, self.tr("Unknown error"))
         return False
 
-    def report_error(self, response: QNetworkReply, title: str = None):
+    def report_http_error(self,
+                          response: QNetworkReply,
+                          title: str = None,
+                          error_message_parser: Optional[Callable] = None):
         """Prepare and show an error message for the supplied response.
 
         :param response: The HTTP response.
         :param title: The error message's title.
+        :param error_message_parser: function to parse error message, depends on server which is requested.
+            Default parser (if None) searches for 'message' section in response json
         """
-        if response.error() == QNetworkReply.OperationCanceledError:
-            error_summary = error_text = 'Request timed out'
-        else:
-            response_body = response.readAll().data().decode()
-            try:  # handled standardized backend exception ({"code": <int>, "message": <str>})
-                error_summary = error_text = json.loads(response_body)['message']
-            except:  # unhandled error - plain text
-                error_summary = self.tr('Unknown error')
-                error_text = response_body
-        report = {
-            'Error summary': error_summary,
-            'URL': response.request().url().toDisplayString(),
-            'HTTP code': response.attribute(QNetworkRequest.HttpStatusCodeAttribute),
-            'Qt code': response.error(),
-            'Plugin version': self.plugin_version,
-            'QGIS version': Qgis.QGIS_VERSION,
-            'Qt version': qVersion(),
-            'Error message': error_text[:5000]  # too long body => 400 (not sure what's the limit exactly)
-        }
-        email_body = '%0a'.join(f'{key}: {value}' for key, value in report.items())
-        ErrorMessage(QApplication.activeWindow(), error_summary, title, email_body).show()
+        error_summary, email_body = get_error_report_body(response=response,
+                                                          plugin_version=self.plugin_version,
+                                                          error_message_parser=error_message_parser)
+        ErrorMessageWidget(parent=QApplication.activeWindow(),
+                           text=error_summary,
+                           title=title,
+                           email_body=email_body).show()
 
     def log_in_callback(self, response: QNetworkReply) -> None:
         """Fetch user info, models and processings.

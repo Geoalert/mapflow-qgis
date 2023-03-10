@@ -55,7 +55,7 @@ class Config:
         'Roads Detection': 'roads'
     }
 
-    MAX_FILE_SIZE_PIXELS = 30_000
+    MAX_FILE_SIZE_PIXELS = 80_000
     MAX_FILE_SIZE_BYTES = 1024**3
 
 config = Config()

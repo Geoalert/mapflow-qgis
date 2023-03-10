@@ -1,13 +1,7 @@
-from typing import Dict
-from PyQt5.QtCore import QObject
+from .error_message_list import ErrorMessageList
 
 
-"""
-["messages":[{"code":"source-validator.PixelSizeTooHigh","parameters":{"max_res":"1.2","level":"error","actual_res":"5.620983603290215"}}]}]
-"""
-
-
-class ErrorMessageList(QObject):
+class ProcessingErrors(ErrorMessageList):
     def __init__(self):
         super().__init__()
         self.error_descriptions = {
@@ -16,12 +10,13 @@ class ErrorMessageList(QObject):
             "source-validator.ImageReadError": self.tr("We could not open and read the image you have uploaded"),
             "source-validator.BadImageProfile": self.tr("Image profile (metadata) must have keys "
                                                         "{required_keys}, got profile {profile}"),
-            "source-validator.AOINotInCell": self.tr("AOI does not intersect the selected Sentinel-2 granule {actual_cell}"),
-            "source-validator.UrlMustBeString":  self.tr("Key \'url\' in your request must be a string, "
-                                                         "got {url_type} instead."),
-            "source-validator.UrlBlacklisted":  self.tr("The specified basemap {url} is forbidden for processing"
-                                                        " because it contains a map, not satellite image. "
-                                                        "Our models are suited for satellite imagery."),
+            "source-validator.AOINotInCell": self.tr(
+                "AOI does not intersect the selected Sentinel-2 granule {actual_cell}"),
+            "source-validator.UrlMustBeString": self.tr("Key \'url\' in your request must be a string, "
+                                                        "got {url_type} instead."),
+            "source-validator.UrlBlacklisted": self.tr("The specified basemap {url} is forbidden for processing"
+                                                       " because it contains a map, not satellite image. "
+                                                       "Our models are suited for satellite imagery."),
             "source-validator.UrlMustBeLink": self.tr("Your URL must be a link "
                                                       "starting with \"http://\" or \"https://\"."),
             "source-validator.UrlFormatInvalid": self.tr("Format of \'url\' is invalid and cannot be parsed. "
@@ -105,33 +100,3 @@ class ErrorMessageList(QObject):
             "vector-processor.internalError": self.tr("Internal error in process of saving the results. "
                                                       "We are working on the fix, our support will contact you.")
         }
-
-    def get(self, key, default=None):
-        if not default:
-            default = self.tr("Unknown error. Contact us to resolve the issue! help@geoalert.io")
-        return self.error_descriptions.get(key, default)
-
-
-class ErrorMessage(QObject):
-    def __init__(self, code: str, parameters: Dict[str, str]):
-        super().__init__()
-        self.code = code
-        self.parameters = parameters
-
-    @classmethod
-    def from_response(cls, response: Dict):
-        return cls(response["code"], response["parameters"])
-
-    def to_str(self, message_list):
-        message = message_list.get(self.code)
-        try:
-            message = message.format(**self.parameters)
-        except KeyError as e:
-            message = message \
-                      + self.tr("\n Warning: some error parameters were not loaded : {}!").format(str(e))
-        except Exception as e:
-            message = self.tr('Unknown error while fetching processing errors: {exception}'
-                              '\n Error code: {code}'
-                              '\n Contact us to resolve the issue! help@geoalert.io').format(exception=str(e),
-                                                                                             code=self.code)
-        return message
