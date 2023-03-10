@@ -4,8 +4,8 @@ from PyQt5.QtCore import QObject, QTimer, QUrl
 from PyQt5.QtNetwork import QHttpMultiPart, QNetworkReply, QNetworkRequest
 from qgis.core import QgsNetworkAccessManager
 
-from .config import MAPFLOW_DEFAULT_TIMEOUT
 import logging
+from .constants import DEFAULT_HTTP_TIMEOUT_SECONDS
 
 
 class Http(QObject):
@@ -70,7 +70,7 @@ class Http(QObject):
         error_handler: Callable = None,
         error_handler_kwargs: dict = None,
         use_default_error_handler: bool = True,
-        timeout: int = MAPFLOW_DEFAULT_TIMEOUT,
+        timeout: int = DEFAULT_HTTP_TIMEOUT_SECONDS,
         body: Union[QHttpMultiPart, bytes] = None
     ) -> QNetworkReply:
         """Send an actual request."""

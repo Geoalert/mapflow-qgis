@@ -2,7 +2,7 @@ from typing import List
 from .factory import create_provider, create_provider_old
 from .provider import Provider
 from .default import SentinelProvider, MaxarVividProxyProvider, MaxarSecureWatchProxyProvider, MapboxProvider
-from ...config import SERVER, PROVIDERS_KEY, LEGACY_PROVIDERS_KEY, LEGACY_PROVIDER_LOGIN_KEY, LEGACY_PROVIDER_PASSWORD_KEY
+from ...constants import PROVIDERS_KEY, LEGACY_PROVIDERS_KEY, LEGACY_PROVIDER_LOGIN_KEY, LEGACY_PROVIDER_PASSWORD_KEY
 
 import json
 
@@ -26,16 +26,16 @@ class ProvidersDict(dict):
         return cls({p.name: p for p in providers})
 
     @classmethod
-    def create_default_providers(cls, env):
+    def create_default_providers(cls, server):
         return cls.from_list([MapboxProvider(),
-                              MaxarVividProxyProvider(proxy=SERVER.format(env=env)),
-                              MaxarSecureWatchProxyProvider(proxy=SERVER.format(env=env)),
-                              SentinelProvider(proxy=SERVER.format(env=env))])
+                              MaxarVividProxyProvider(proxy=server),
+                              MaxarSecureWatchProxyProvider(proxy=server),
+                              SentinelProvider(proxy=server)])
 
     @classmethod
-    def from_settings(cls, settings, env):
+    def from_settings(cls, settings, server):
         errors = []
-        providers = ProvidersDict.create_default_providers(env)
+        providers = ProvidersDict.create_default_providers(server=server)
         providers_settings = json.loads(settings.value(PROVIDERS_KEY, "{}"))
         if providers_settings:
             for name, params in providers_settings.items():

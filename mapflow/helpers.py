@@ -6,7 +6,7 @@ from qgis.core import (
     QgsMapLayerType, QgsWkbTypes, QgsRasterLayer
 )
 from typing import Tuple
-from .config import MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_PIXELS
+from .config import config
 
 PROJECT = QgsProject.instance()
 WGS84 = QgsCoordinateReferenceSystem('EPSG:4326')
@@ -100,9 +100,9 @@ def check_version(local_version: str,
 def raster_layer_is_allowed(layer: QgsRasterLayer):
     filepath = Path(layer.dataProvider().dataSourceUri())
     res = layer.crs().isValid() \
-        and (layer.width() < MAX_FILE_SIZE_PIXELS) \
-        and (layer.height() < MAX_FILE_SIZE_PIXELS) \
+        and (layer.width() < config.MAX_FILE_SIZE_PIXELS) \
+        and (layer.height() < config.MAX_FILE_SIZE_PIXELS) \
         and filepath.suffix.lower() in ('.tif', '.tiff') \
         and filepath.exists() \
-        and filepath.stat().st_size < MAX_FILE_SIZE_BYTES
+        and filepath.stat().st_size < config.MAX_FILE_SIZE_BYTES
     return res
