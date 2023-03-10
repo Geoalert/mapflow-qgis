@@ -139,7 +139,7 @@ def get_error_report_body(response: QNetworkReply,
         try:  # handled standardized backend exception ({"code": <int>, "message": <str>})
             show_error_text = error_message_parser(response_body=response_body)
         except:  # unhandled error - plain text
-            show_error_text = 'Error reading response body'
+            show_error_text = 'Unknown error'
         send_error_text = response_body
     report = {
         # escape in case the error text is HTML

@@ -2088,7 +2088,7 @@ class Mapflow(QObject):
             self.report_http_error(response, self.tr("This operation is forbidden for your account, contact us"))
             return True
         else:
-            self.report_http_error(response, self.tr("Unknown error"))
+            self.report_http_error(response, self.tr("Error"))
         return False
 
     def report_http_error(self,
