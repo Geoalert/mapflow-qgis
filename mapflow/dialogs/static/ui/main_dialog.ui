@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1060</width>
+    <width>1139</width>
     <height>704</height>
    </rect>
   </property>
@@ -738,12 +738,12 @@
       <property name="frameShadow">
        <enum>QFrame::Raised</enum>
       </property>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
-         <x>10</x>
+         <x>4</x>
          <y>10</y>
-         <width>370</width>
+         <width>380</width>
          <height>221</height>
         </rect>
        </property>
