@@ -1503,26 +1503,25 @@ class Mapflow(QObject):
         )
 
     def set_processing_limit(
-        self,
-        response: Optional[QNetworkReply] = None,
-        response_data: Optional[dict] = None) -> None:
+            self,
+            response: Optional[QNetworkReply] = None,
+            response_data: Optional[dict] = None) -> None:
         """Set the user's processing limit as reported by Mapflow."""
-        if not response and not response_data:
-            raise AssertionError("Either response or response data must be specified")
-        if response:
-            # prefer raw response for no reason
-            response_data = json.loads(response.readAll().data())
-        user = response_data['user']
-        project_name = response_data['name']
+        self.dlg.remainingLimit.setText(self.tr('Updating remaining limit'))
+        self.http.get(
+            url=f'{self.server}/user/status',
+            callback=self.set_processing_limit_callback
+        )
 
-        if user['role'] == 'ADMIN':
+    def set_processing_limit_callback(self, response: QNetworkReply) -> None:
+        response_data = json.loads(response.readAll().data())
+        # check here, if user is admin:
+        if response_data.get('admin'):
             self.remaining_limit = 1e5  # 100K sq.km
         else:
-            self.remaining_limit = (user['areaLimit'] - user['processedArea']) * 1e-6
-        if self.plugin_name == 'Mapflow':
+            self.remaining_limit = response_data.get('remainingLimit')
+        if self.plugin_name == "Mapflow":
             footer = self.tr('Processing limit: {} sq.km').format(round(self.remaining_limit, 2))
-            if self.project_id != 'default':
-                footer += self.tr('.  Project name: {}').format(project_name)
             self.dlg.remainingLimit.setText(footer)
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
@@ -2221,6 +2220,7 @@ class Mapflow(QObject):
         token = self.settings.value('token')
         if self.logged_in:
             self.dlg.show()
+            self.set_processing_limit()
         elif token:  # token saved
             self.http.basic_auth = f'Basic {token}'
             self.log_in(token)
