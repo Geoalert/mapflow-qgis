@@ -82,6 +82,8 @@ class Mapflow(QObject):
         # Set up authentication flags
         self.logged_in = False
         # Store user's current processing
+        self.processing_history = ProcessingHistory.from_settings(
+            self.settings.value('processings', {}).get(self.config.MAPFLOW_ENV, {}).get(self.username, {}))
         self.processings = []
         # Init toolbar and toolbar buttons
         self.toolbar = self.iface.addToolBar(self.plugin_name)
@@ -1687,15 +1689,21 @@ class Mapflow(QObject):
 
         :param row: int Row number in the processings table (0-based)
         """
-        if self.check_if_output_directory_is_selected():
-            pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
-            self.http.get(
-                url=f'{self.server}/processings/{pid}/result',
-                callback=self.download_results_callback,
-                callback_kwargs={'pid': pid},
-                error_handler=self.download_results_error_handler,
-                timeout=300
-            )
+
+        if not self.check_if_output_directory_is_selected():
+            return
+        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+        if not pid in self.processing_history.finished:
+            self.alert(self.tr("Only the results of correctly finished processing can be loaded"))
+            return
+        self.dlg.processingsTable.setEnabled(False)
+        self.http.get(
+            url=f'{self.server}/processings/{pid}/result',
+            callback=self.download_results_callback,
+            callback_kwargs={'pid': pid},
+            error_handler=self.download_results_error_handler,
+            timeout=300
+        )
 
     def download_results_callback(self, response: QNetworkReply, pid: str) -> None:
         """Display processing results upon their successful fetch.
@@ -1703,6 +1711,7 @@ class Mapflow(QObject):
         :param response: The HTTP response.
         :param pid: ID of the inspected processing.
         """
+        self.dlg.processingsTable.setEnabled(True)
         processing = next(filter(lambda p: p.id_ == pid, self.processings))
         # Avoid overwriting existing files by adding (n) to their names
         output_path = os.path.join(self.dlg.outputDirectory.text(), processing.id_)
@@ -1788,6 +1797,7 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
+        self.dlg.processingsTable.setEnabled(True)
         self.report_http_error(response, self.tr('Error downloading results'))
 
     def set_raster_extent(
@@ -1846,23 +1856,23 @@ class Mapflow(QObject):
 
         env = self.config.MAPFLOW_ENV
         processing_history = self.settings.value('processings')
-        user_processing_history = ProcessingHistory.from_settings(processing_history.get(env, {}).get(self.username, {}))
+        self.processing_history = ProcessingHistory.from_settings(processing_history.get(env, {}).get(self.username, {}))
         # get updated processings (newly failed and newly finished) and updated user processing history
-        failed_processings, finished_processings, user_processing_history = updated_processings(processings, user_processing_history)
+        failed_processings, finished_processings, self.processing_history = updated_processings(processings,
+                                                                                                self.processing_history)
 
         if failed_processings:
             # this means that some of processings have failed since last update and the limit must have been returned
             update_processing_limit()
         self.alert_failed_processings(failed_processings)
         self.alert_finished_processings(finished_processings)
-
         self.update_processing_table(processings)
         self.processings = processings
 
         try:  # use try-except bc this will only error once
-            processing_history[env][self.username] = user_processing_history.asdict()
+            processing_history[env][self.username] = self.processing_history.asdict()
         except KeyError:  # history for the current env hasn't been initialized yet
-            processing_history[env] = {self.username: user_processing_history.asdict()}
+            processing_history[env] = {self.username: self.processing_history.asdict()}
         self.settings.setValue('processings', processing_history)
 
     def alert_failed_processings(self, failed_processings):
@@ -2110,14 +2120,37 @@ class Mapflow(QObject):
                            title=title,
                            email_body=email_body).show()
 
+    def setup_processings_table(self):
+
+        table_item = QTableWidgetItem("Loading...")
+        table_item.setToolTip('Fetching your processings from server, please wait')
+        self.dlg.processingsTable.setRowCount(1)
+        self.dlg.processingsTable.setDisabled(True)
+        self.dlg.processingsTable.setItem(0, 0, table_item)
+        for column in range(1, self.dlg.processingsTable.columnCount()):
+            empty_item = QTableWidgetItem("")
+            self.dlg.processingsTable.setItem(0, column, empty_item)
+
+        # Fetch processings at startup and start the timer to keep fetching them afterwards
+        self.http.get(url=f'{self.server}/projects/{self.config.PROJECT_ID}/processings',
+                      callback=self.enable_processings_table,
+                      use_default_error_handler=False)
+        self.processing_fetch_timer.start()
+
+    def enable_processings_table(self, response: QNetworkReply) -> None:
+        """
+        Do the regular table update, then enable the table widget as it was disabled before the first load,
+        """
+        self.dlg.processingsTable.setEnabled(True)
+        self.get_processings_callback(response=response)
+
     def log_in_callback(self, response: QNetworkReply) -> None:
         """Fetch user info, models and processings.
 
         :param response: The HTTP response.
         """
-        # Fetch processings at startup and start the timer to keep fetching them afterwards
-        self.http.get(url=f'{self.server}/projects/{self.config.PROJECT_ID}/processings', callback=self.get_processings_callback)
-        self.processing_fetch_timer.start()
+        # Show history of processings at startup to get non-empty table immediately, and setup the table update
+        self.setup_processings_table()
         # Set up the UI with the received data
         response = json.loads(response.readAll().data())
         self.set_processing_limit(response_data=response)
