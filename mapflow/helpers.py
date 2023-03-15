@@ -1,11 +1,12 @@
 import re
+from pathlib import Path
 
 from qgis.core import (
     QgsMapLayer, QgsGeometry, QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
-    QgsMapLayerType, QgsWkbTypes
+    QgsMapLayerType, QgsWkbTypes, QgsRasterLayer
 )
 from typing import Tuple
-
+from .config import config
 
 PROJECT = QgsProject.instance()
 WGS84 = QgsCoordinateReferenceSystem('EPSG:4326')
@@ -94,3 +95,14 @@ def check_version(local_version: str,
     minor_changed = loc_major == srv_major and loc_minor < srv_minor
     patch_changed = loc_major == srv_major and loc_minor == srv_minor and loc_patch < srv_patch
     return major_changed, (minor_changed or patch_changed)
+
+
+def raster_layer_is_allowed(layer: QgsRasterLayer):
+    filepath = Path(layer.dataProvider().dataSourceUri())
+    res = layer.crs().isValid() \
+        and (layer.width() < config.MAX_FILE_SIZE_PIXELS) \
+        and (layer.height() < config.MAX_FILE_SIZE_PIXELS) \
+        and filepath.suffix.lower() in ('.tif', '.tiff') \
+        and filepath.exists() \
+        and filepath.stat().st_size < config.MAX_FILE_SIZE_BYTES
+    return res
