@@ -1497,15 +1497,14 @@ class Mapflow(QObject):
             url=f'{self.server}/projects/{self.project_id}/processings',
             callback=self.get_processings_callback
         )
-        self.http.get(
-            url=f'{self.server}/projects/{self.project_id}',
-            callback=self.set_processing_limit
-        )
 
-    def set_processing_limit(
-            self,
-            response: Optional[QNetworkReply] = None,
-            response_data: Optional[dict] = None) -> None:
+    def set_project_name(self, response_data) -> None:
+        project_name = response_data['name']
+        if self.plugin_name == 'Mapflow' and self.project_id != 'default':
+            footer = self.tr('Project name: {}').format(project_name)
+            self.dlg.projectNameLabel.setText(footer)
+
+    def set_processing_limit(self) -> None:
         """Set the user's processing limit as reported by Mapflow."""
         self.dlg.remainingLimit.setText(self.tr('Updating remaining limit'))
         self.http.get(
@@ -1520,7 +1519,7 @@ class Mapflow(QObject):
             self.remaining_limit = 1e5  # 100K sq.km
         else:
             self.remaining_limit = response_data.get('remainingLimit')
-        if self.plugin_name == "Mapflow":
+        if self.plugin_name == 'Mapflow':
             footer = self.tr('Processing limit: {} sq.km').format(round(self.remaining_limit, 2))
             self.dlg.remainingLimit.setText(footer)
 
@@ -1845,9 +1844,9 @@ class Mapflow(QObject):
         # get updated processings (newly failed and newly finished) and updated user processing history
         failed_processings, finished_processings, user_processing_history = updated_processings(processings, user_processing_history)
 
-        if failed_processings:
-            # this means that some of processings have failed since last update and the limit must have been returned
-            update_processing_limit()
+        # update processing limit of user
+        self.set_processing_limit()
+
         self.alert_failed_processings(failed_processings)
         self.alert_finished_processings(finished_processings)
 
@@ -2136,7 +2135,8 @@ class Mapflow(QObject):
         self.processing_fetch_timer.start()
         # Set up the UI with the received data
         response = json.loads(response.readAll().data())
-        self.set_processing_limit(response_data=response)
+        self.set_project_name(response_data=response)
+        self.set_processing_limit()
         self.is_premium_user = response['user']['isPremium']
         self.on_provider_change(self.dlg.providerCombo.currentText())
         self.aoi_area_limit = response['user']['aoiAreaLimit'] * 1e-6

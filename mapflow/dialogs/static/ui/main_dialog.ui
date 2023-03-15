@@ -131,7 +131,7 @@
         </layout>
        </item>
        <item row="4" column="0">
-        <layout class="QHBoxLayout" name="processingFooter" stretch="0,1,0">
+        <layout class="QHBoxLayout" name="processingFooter" stretch="0,1,0,0">
          <item>
           <widget class="QPushButton" name="logoutButton">
            <property name="text">
@@ -151,6 +151,28 @@
             <font>
              <italic>true</italic>
             </font>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="projectNameLabel">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="minimumSize">
+            <size>
+             <width>200</width>
+             <height>0</height>
+            </size>
            </property>
            <property name="text">
             <string/>
