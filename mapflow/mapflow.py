@@ -1507,7 +1507,6 @@ class Mapflow(QObject):
 
     def set_processing_limit(self) -> None:
         """Set the user's processing limit as reported by Mapflow."""
-        self.dlg.remainingLimit.setText(self.tr('Updating remaining limit'))
         self.http.get(
             url=f'{self.server}/user/status',
             callback=self.set_processing_limit_callback
@@ -1671,7 +1670,7 @@ class Mapflow(QObject):
         else:  # XYZ providers
             self.preview_xyz(provider=provider, image_id=image_id)
 
-    def download_results(self, row: Optional[int] = None) -> None:
+    def download_results(self) -> None:
         """Download and display processing results along with the source raster, if available.
 
         Results will be downloaded into the user's output directory.
@@ -1682,6 +1681,9 @@ class Mapflow(QObject):
 
         :param row: int Row number in the processings table (0-based)
         """
+        row = self.dlg.processingsTable.currentRow()
+        if row < 0:  # for some reason, if nothing is selected, returns -1
+            return
         if self.check_if_output_directory_is_selected():
             pid = self.dlg.processingsTable.item(row, config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
             self.http.get(
