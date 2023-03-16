@@ -62,6 +62,7 @@ class Mapflow(QObject):
         self.version_ok = True
         # init configs
         self.config = Config()
+        self.remaining_limit = 0
         # Save refs to key variables used throughout the plugin
         self.iface = iface
         self.main_window = self.iface.mainWindow()
@@ -151,6 +152,7 @@ class Mapflow(QObject):
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         self.dlg.selectTif.clicked.connect(self.select_tif)
+        self.dlg.downloadResultsButton.clicked.connect(self.download_results)
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.rasterCombo.layerChanged.connect(self.toggle_processing_checkboxes)
         self.dlg.rasterCombo.currentTextChanged.connect(self.toggle_processing_checkboxes)
@@ -207,7 +209,7 @@ class Mapflow(QObject):
 
     def set_image_id_label(self, text):
         if text:
-            self.dlg.imageId_label.setText(self.tr('Selected Image ID: {text}').format(text=text))
+            self.dlg.imageId_label.setText(self.tr('Selected Image ID:\n {text}').format(text=text))
         else:
             self.dlg.imageId_label.setText("")
 
@@ -254,12 +256,6 @@ class Mapflow(QObject):
                 self.dlg.polygonCombo.setLayer(aoi_layer)
             else:
                 self.alert(self.tr(f'Your file is not valid vector data source!'))
-
-        # def remove_raster_layers_from_filter(self, removed_layers):
-        #    current_layers = self.dlg.rasterCombo.exceptedLayerList()
-        #    for layer in removed_layers:
-        #        current_layers.pop(layer)
-        self.dlg.rasterCombo.setExceptedLayerList(current_layers)
 
     def filter_bad_rasters(self, changed_layers: Optional[List[QgsRasterLayer]] = None) -> None:
         """Leave only GeoTIFF layers in the Imagery Source combo box."""
@@ -1508,32 +1504,29 @@ class Mapflow(QObject):
             url=f'{self.server}/projects/{self.config.PROJECT_ID}/processings',
             callback=self.get_processings_callback
         )
+
+    def set_project_name(self, response_data) -> None:
+        project_name = response_data['name']
+        if self.plugin_name == 'Mapflow' and self.project_id != 'default':
+            footer = self.tr('Project name: {}').format(project_name)
+            self.dlg.projectNameLabel.setText(footer)
+
+    def update_processing_limit(self) -> None:
+        """Set the user's processing limit as reported by Mapflow."""
         self.http.get(
-            url=f'{self.server}/projects/{self.config.PROJECT_ID}',
+            url=f'{self.server}/user/status',
             callback=self.set_processing_limit
         )
 
-    def set_processing_limit(
-            self,
-            response: Optional[QNetworkReply] = None,
-            response_data: Optional[dict] = None) -> None:
-        """Set the user's processing limit as reported by Mapflow."""
-        if not response and not response_data:
-            raise AssertionError("Either response or response data must be specified")
-        if response:
-            # prefer raw response for no reason
-            response_data = json.loads(response.readAll().data())
-        user = response_data['user']
-        project_name = response_data['name']
-
-        if user['role'] == 'ADMIN':
+    def set_processing_limit(self, response: QNetworkReply) -> None:
+        response_data = json.loads(response.readAll().data())
+        # check here, if user is admin:
+        if response_data.get('admin'):
             self.remaining_limit = 1e5  # 100K sq.km
         else:
-            self.remaining_limit = (user['areaLimit'] - user['processedArea']) * 1e-6
+            self.remaining_limit = response_data.get('remainingLimit', 0)
         if self.plugin_name == 'Mapflow':
-            footer = self.tr('Processing limit: {} sq.km').format(round(self.remaining_limit, 2))
-            if self.config.PROJECT_ID != 'default':
-                footer += self.tr('.  Project name: {}').format(project_name)
+            footer = self.tr(f'Processing limit: {self.remaining_limit:.2f} sq.km')
             self.dlg.remainingLimit.setText(footer)
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
@@ -1683,7 +1676,7 @@ class Mapflow(QObject):
         else:  # XYZ providers
             self.preview_xyz(provider=provider, image_id=image_id)
 
-    def download_results(self, row: int) -> None:
+    def download_results(self) -> None:
         """Download and display processing results along with the source raster, if available.
 
         Results will be downloaded into the user's output directory.
@@ -1694,8 +1687,10 @@ class Mapflow(QObject):
 
         :param row: int Row number in the processings table (0-based)
         """
-
         if not self.check_if_output_directory_is_selected():
+            return
+        row = self.dlg.processingsTable.currentRow()
+        if row < 0:  # for some reason, if nothing is selected, returns -1
             return
         pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
         if not pid in self.processing_history.finished:
@@ -1867,12 +1862,9 @@ class Mapflow(QObject):
         failed_processings, finished_processings, self.processing_history = updated_processings(processings,
                                                                                                 self.processing_history)
 
-        if failed_processings:
-            # this means that some of processings have failed since last update and the limit must have been returned
-            update_processing_limit()
-        print('ALERT')
-        print(f'{finished_processings=}')
-        print(f'{failed_processings=}')
+        # update processing limit of user
+        self.update_processing_limit()
+
         self.alert_failed_processings(failed_processings)
         self.alert_finished_processings(finished_processings)
         self.update_processing_table(processings)
@@ -1882,7 +1874,6 @@ class Mapflow(QObject):
             processing_history[env][self.username] = self.processing_history.asdict()
         except KeyError:  # history for the current env hasn't been initialized yet
             processing_history[env] = {self.username: self.processing_history.asdict()}
-        print('UPDATE HISTORY')
         self.settings.setValue('processings', processing_history)
 
     def alert_failed_processings(self, failed_processings):
@@ -2166,7 +2157,8 @@ class Mapflow(QObject):
         self.setup_processings_table()
         # Set up the UI with the received data
         response = json.loads(response.readAll().data())
-        self.set_processing_limit(response_data=response)
+        self.set_project_name(response_data=response)
+        self.update_processing_limit()
         self.is_premium_user = response['user']['isPremium']
         self.on_provider_change(self.dlg.providerCombo.currentText())
         self.aoi_area_limit = response['user']['aoiAreaLimit'] * 1e-6
@@ -2251,6 +2243,7 @@ class Mapflow(QObject):
         token = self.settings.value('token')
         if self.logged_in:
             self.dlg.show()
+            self.update_processing_limit()
         elif token:  # token saved
             self.http.basic_auth = f'Basic {token}'
             self.log_in(token)
