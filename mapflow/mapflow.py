@@ -196,7 +196,7 @@ class Mapflow(QObject):
         self.processing_fetch_timer.timeout.connect(
             lambda: self.http.get(
                 url=f'{self.server}/projects/{self.config.PROJECT_ID}/processings',
-                callback=self.get_processings_callback,
+                callback=self.enable_processings_table,
                 use_default_error_handler=False  # ignore errors to prevent repetitive alerts
             )
         )
