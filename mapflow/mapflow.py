@@ -1507,7 +1507,7 @@ class Mapflow(QObject):
 
     def set_project_name(self, response_data) -> None:
         project_name = response_data['name']
-        if self.plugin_name == 'Mapflow' and self.project_id != 'default':
+        if self.plugin_name == 'Mapflow' and self.config.PROJECT_ID != 'default':
             footer = self.tr('Project name: {}').format(project_name)
             self.dlg.projectNameLabel.setText(footer)
 
