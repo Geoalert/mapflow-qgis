@@ -56,6 +56,7 @@ class Mapflow(QObject):
         # init empty params
         self.username = self.password = ''
         self.version_ok = True
+        self.remaining_limit = 0
         # Save refs to key variables used throughout the plugin
         self.iface = iface
         self.main_window = self.iface.mainWindow()
@@ -207,7 +208,7 @@ class Mapflow(QObject):
 
     def set_image_id_label(self, text):
         if text:
-            self.dlg.imageId_label.setText(self.tr('Selected Image ID: {text}').format(text=text))
+            self.dlg.imageId_label.setText(self.tr('Selected Image ID:\n {text}').format(text=text))
         else:
             self.dlg.imageId_label.setText("")
 
@@ -1505,14 +1506,14 @@ class Mapflow(QObject):
             footer = self.tr('Project name: {}').format(project_name)
             self.dlg.projectNameLabel.setText(footer)
 
-    def set_processing_limit(self) -> None:
+    def update_processing_limit(self) -> None:
         """Set the user's processing limit as reported by Mapflow."""
         self.http.get(
             url=f'{self.server}/user/status',
-            callback=self.set_processing_limit_callback
+            callback=self.set_processing_limit
         )
 
-    def set_processing_limit_callback(self, response: QNetworkReply) -> None:
+    def set_processing_limit(self, response: QNetworkReply) -> None:
         response_data = json.loads(response.readAll().data())
         # check here, if user is admin:
         if response_data.get('admin'):
@@ -1520,7 +1521,7 @@ class Mapflow(QObject):
         else:
             self.remaining_limit = response_data.get('remainingLimit')
         if self.plugin_name == 'Mapflow':
-            footer = self.tr('Processing limit: {} sq.km').format(round(self.remaining_limit, 2))
+            footer = self.tr(f'Processing limit: {self.remaining_limit:.2f} sq.km')
             self.dlg.remainingLimit.setText(footer)
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
@@ -1848,7 +1849,7 @@ class Mapflow(QObject):
         failed_processings, finished_processings, user_processing_history = updated_processings(processings, user_processing_history)
 
         # update processing limit of user
-        self.set_processing_limit()
+        self.update_processing_limit()
 
         self.alert_failed_processings(failed_processings)
         self.alert_finished_processings(finished_processings)
@@ -2139,7 +2140,7 @@ class Mapflow(QObject):
         # Set up the UI with the received data
         response = json.loads(response.readAll().data())
         self.set_project_name(response_data=response)
-        self.set_processing_limit()
+        self.update_processing_limit()
         self.is_premium_user = response['user']['isPremium']
         self.on_provider_change(self.dlg.providerCombo.currentText())
         self.aoi_area_limit = response['user']['aoiAreaLimit'] * 1e-6
@@ -2223,7 +2224,7 @@ class Mapflow(QObject):
         token = self.settings.value('token')
         if self.logged_in:
             self.dlg.show()
-            self.set_processing_limit()
+            self.update_processing_limit()
         elif token:  # token saved
             self.http.basic_auth = f'Basic {token}'
             self.log_in(token)
