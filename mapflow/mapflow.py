@@ -1519,7 +1519,7 @@ class Mapflow(QObject):
         if response_data.get('admin'):
             self.remaining_limit = 1e5  # 100K sq.km
         else:
-            self.remaining_limit = response_data.get('remainingLimit')
+            self.remaining_limit = response_data.get('remainingLimit', 0)
         if self.plugin_name == 'Mapflow':
             footer = self.tr(f'Processing limit: {self.remaining_limit:.2f} sq.km')
             self.dlg.remainingLimit.setText(footer)
