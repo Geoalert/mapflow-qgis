@@ -1,1 +1,0 @@
-from .maxar_metadata_request import get_maxar_metadata

@@ -1,7 +1,7 @@
 from .provider import staticproperty
 from .xyz_provider import XYZProvider, SourceType, CRS
 from .proxy_provider import ProxyProvider, MaxarProxyProvider
-from ...config import SENTINEL_OPTION_NAME
+from ...constants import SENTINEL_OPTION_NAME
 
 
 class SentinelProvider(ProxyProvider):
