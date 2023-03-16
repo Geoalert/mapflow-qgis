@@ -147,6 +147,7 @@ class Mapflow(QObject):
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         self.dlg.selectTif.clicked.connect(self.select_tif)
+        self.dlg.downloadResultsButton.clicked.connect(self.download_results)
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.rasterCombo.layerChanged.connect(self.toggle_processing_checkboxes)
         self.dlg.rasterCombo.layerChanged.connect(self.disallow_local_rasters_with_sentinel)
@@ -1670,7 +1671,7 @@ class Mapflow(QObject):
         else:  # XYZ providers
             self.preview_xyz(provider=provider, image_id=image_id)
 
-    def download_results(self, row: int) -> None:
+    def download_results(self, row: Optional[int] = None) -> None:
         """Download and display processing results along with the source raster, if available.
 
         Results will be downloaded into the user's output directory.
