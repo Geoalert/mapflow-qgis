@@ -2125,28 +2125,20 @@ class Mapflow(QObject):
                            email_body=email_body).show()
 
     def setup_processings_table(self):
-
         table_item = QTableWidgetItem("Loading...")
         table_item.setToolTip('Fetching your processings from server, please wait')
         self.dlg.processingsTable.setRowCount(1)
-        self.dlg.processingsTable.setDisabled(True)
         self.dlg.processingsTable.setItem(0, 0, table_item)
         for column in range(1, self.dlg.processingsTable.columnCount()):
             empty_item = QTableWidgetItem("")
             self.dlg.processingsTable.setItem(0, column, empty_item)
-
         # Fetch processings at startup and start the timer to keep fetching them afterwards
         self.http.get(url=f'{self.server}/projects/{self.config.PROJECT_ID}/processings',
-                      callback=self.enable_processings_table,
+                      callback=self.get_processings_callback,
                       use_default_error_handler=False)
         self.processing_fetch_timer.start()
 
-    def enable_processings_table(self, response: QNetworkReply) -> None:
-        """
-        Do the regular table update, then enable the table widget as it was disabled before the first load,
-        """
-        self.dlg.processingsTable.setEnabled(True)
-        self.get_processings_callback(response=response)
+
 
     def log_in_callback(self, response: QNetworkReply) -> None:
         """Fetch user info, models and processings.
