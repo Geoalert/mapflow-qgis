@@ -45,8 +45,9 @@ from .entity.provider import (Provider,
                               create_provider)
 
 from .functional.geometry import clip_aoi_to_image_extent
-from .layer_utils import generate_xyz_layer_definition
 from . import helpers, constants
+from .errors import ErrorMessageList
+from .layer_utils import generate_xyz_layer_definition, get_bounding_box_from_tile_json
 
 
 class Mapflow(QObject):
@@ -1767,6 +1768,7 @@ class Mapflow(QObject):
         ))
         # Add the source raster (COG) if it has been created
         raster_url = processing.raster_layer.get('tileUrl')
+        tile_json_url = processing.raster_layer.get("tileJsonUrl")
         if raster_url:
             params = {
                 'type': 'xyz',
@@ -1781,9 +1783,8 @@ class Mapflow(QObject):
                 processing.name + ' image',
                 'wms'
             )
-        # Set image extent explicitly because as XYZ, it doesn't have one by default
         self.http.get(
-            url=f'{self.server}/processings/{pid}/aois',
+            url=tile_json_url,
             callback=self.set_raster_extent,
             callback_kwargs={
                 'vector': results_layer,
@@ -1810,15 +1811,10 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         :param vector: The downloaded feature layer.
-        :param response: The downloaded raster which was used for processing.
+        :param raster: The downloaded raster which was used for processing.
         """
-        with open(os.path.join(self.temp_dir, os.urandom(32).hex()), 'w') as f:
-            json.dump({
-                'type': 'FeatureCollection',
-                'features': json.loads(response.readAll().data())
-            }, f)
-        extent = QgsGeometry.fromRect(QgsVectorLayer(f.name, '', 'ogr').extent())
-        raster.setExtent(helpers.from_wgs84(extent, raster.crs()).boundingBox())
+        bounding_box = get_bounding_box_from_tile_json(response=response)
+        raster.setExtent(rect=bounding_box)
         # Add the layers to the project
         self.add_layer(raster)
         self.add_layer(vector)
