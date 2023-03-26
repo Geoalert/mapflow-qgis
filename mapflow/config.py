@@ -46,6 +46,7 @@ class Config:
     SKYWATCH_POLL_INTERVAL = 2
     MAX_ZOOM = 21
     DEFAULT_ZOOM = MAXAR_MAX_FREE_ZOOM
+    USER_STATUS_UPDATE_INTERVAL = 30  # seconds
 
     STYLES = {
         'Buildings Detection': 'buildings',
@@ -57,5 +58,6 @@ class Config:
 
     MAX_FILE_SIZE_PIXELS = 30_000
     MAX_FILE_SIZE_BYTES = 1024**3
+
 
 config = Config()
