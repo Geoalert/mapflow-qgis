@@ -1183,6 +1183,7 @@ class Mapflow(QObject):
             self.calculate_aoi_area(aoi, layer.crs())
         else:  # empty layer or combo's itself is empty
             self.dlg.labelAoiArea.clear()
+            self.dlg.processingCostLabel.clear()
             self.aoi = self.aoi_size = None
 
     def calculate_aoi_area_raster(self, layer: Union[QgsRasterLayer, None]) -> None:
@@ -1235,6 +1236,7 @@ class Mapflow(QObject):
         self.calculator.setSourceCrs(helpers.WGS84, self.project.transformContext())
         self.aoi_size = self.calculator.measureArea(aoi) / 10 ** 6  # sq. m to sq.km
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
+        self.dlg.processingCostLabel.clear()
         # get workflow def if for selected model
         workflow_def_id = self.workflow_def_ids.get(
             self.dlg.modelCombo.currentText()
@@ -1254,7 +1256,7 @@ class Mapflow(QObject):
 
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         response_data = response.readAll().data().decode()
-        self.dlg.labelAoiArea.setText(f'{self.dlg.labelAoiArea.text()}\n{response_data} credits')
+        self.dlg.processingCostLabel.setText(self.tr(f'Processing cost: {response_data} credits'))
 
     def delete_processings(self) -> None:
         """Delete one or more processings from the server.
