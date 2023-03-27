@@ -1,4 +1,5 @@
 import json
+import uuid
 from pathlib import Path
 import os.path
 import tempfile
@@ -31,7 +32,6 @@ from qgis.core import (
 from .dialogs.dialogs import MainDialog, LoginDialog, ErrorMessageWidget
 from .dialogs.provider_dialog import ProviderDialog
 from .http import (Http,
-                   update_processing_limit,
                    get_error_report_body,
                    data_catalog_message_parser,
                    securewatch_message_parser)
@@ -46,7 +46,6 @@ from .entity.provider import (Provider,
 
 from .functional.geometry import clip_aoi_to_image_extent
 from . import helpers, constants
-from .errors import ErrorMessageList
 from .layer_utils import generate_xyz_layer_definition, get_bounding_box_from_tile_json
 
 
@@ -197,6 +196,16 @@ class Mapflow(QObject):
             lambda: self.http.get(
                 url=f'{self.server}/projects/{self.config.PROJECT_ID}/processings',
                 callback=self.get_processings_callback,
+                use_default_error_handler=False  # ignore errors to prevent repetitive alerts
+            )
+        )
+        # Poll user status to get limits
+        self.user_status_update_timer = QTimer(self.dlg)
+        self.user_status_update_timer.setInterval(self.config.USER_STATUS_UPDATE_INTERVAL * 1000)
+        self.user_status_update_timer.timeout.connect(
+            lambda: self.http.get(
+                url=f'{self.server}/user/status',
+                callback=self.set_processing_limit,
                 use_default_error_handler=False  # ignore errors to prevent repetitive alerts
             )
         )
@@ -1174,6 +1183,7 @@ class Mapflow(QObject):
             self.calculate_aoi_area(aoi, layer.crs())
         else:  # empty layer or combo's itself is empty
             self.dlg.labelAoiArea.clear()
+            self.dlg.processingCostLabel.clear()
             self.aoi = self.aoi_size = None
 
     def calculate_aoi_area_raster(self, layer: Union[QgsRasterLayer, None]) -> None:
@@ -1226,6 +1236,27 @@ class Mapflow(QObject):
         self.calculator.setSourceCrs(helpers.WGS84, self.project.transformContext())
         self.aoi_size = self.calculator.measureArea(aoi) / 10 ** 6  # sq. m to sq.km
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
+        self.dlg.processingCostLabel.clear()
+        # get workflow def if for selected model
+        workflow_def_id = self.workflow_def_ids.get(
+            self.dlg.modelCombo.currentText()
+        )
+        self.calculate_processing_cost(aoi=aoi, workflow_def_id=workflow_def_id)
+
+    def calculate_processing_cost(self, aoi: QgsGeometry, workflow_def_id: uuid.UUID) -> None:
+        """:return: calculated aoi area and cost in credits"""
+        geometry = json.loads(aoi.asJson())
+        body = {"wdId": workflow_def_id,
+                "geometry": geometry}
+        self.http.post(
+            url=f"{self.server}/processing/cost",
+            callback=self.calculate_processing_cost_callback,
+            body=json.dumps(body).encode()
+        )
+
+    def calculate_processing_cost_callback(self, response: QNetworkReply):
+        response_data = response.readAll().data().decode()
+        self.dlg.processingCostLabel.setText(self.tr(f'Processing cost: {response_data} credits'))
 
     def delete_processings(self) -> None:
         """Delete one or more processings from the server.
@@ -1525,7 +1556,7 @@ class Mapflow(QObject):
         if response_data.get('admin'):
             self.remaining_limit = 1e5  # 100K sq.km
         else:
-            self.remaining_limit = response_data.get('remainingLimit', 0)
+            self.remaining_limit = int(response_data.get('remainingArea', 0)) / 1e6  # convert into sq.km
         if self.plugin_name == 'Mapflow':
             footer = self.tr(f'Processing limit: {self.remaining_limit:.2f} sq.km')
             self.dlg.remainingLimit.setText(footer)
@@ -1992,6 +2023,7 @@ class Mapflow(QObject):
         """Remove the plugin icon & toolbar from QGIS GUI."""
         self.processing_fetch_timer.stop()
         self.processing_fetch_timer.deleteLater()
+        self.user_status_update_timer.stop()
         for dlg in self.dlg, self.dlg_login, self.dlg_provider:
             dlg.close()
         del self.toolbar
@@ -2035,6 +2067,7 @@ class Mapflow(QObject):
         # set token to empty to delete it from settings
         self.settings.setValue('token', '')
         self.processing_fetch_timer.stop()
+        self.user_status_update_timer.stop()
         self.logged_in = False
         self.dlg.close()
         self.set_up_login_dialog()  # recreate the login dialog
@@ -2134,8 +2167,6 @@ class Mapflow(QObject):
                       use_default_error_handler=False)
         self.processing_fetch_timer.start()
 
-
-
     def log_in_callback(self, response: QNetworkReply) -> None:
         """Fetch user info, models and processings.
 
@@ -2153,6 +2184,12 @@ class Mapflow(QObject):
         self.wds = [wd['name'] for wd in response['workflowDefs']
                     if self.config.ENABLE_SENTINEL or wd['name'] not in self.config.SENTINEL_WD_NAMES]
         # We skip SENTINEL WDs if sentinel is not enabled (normally, it should be not)
+        # wds along with ids in the format: {'model_name': 'workflow_def_id'}
+        self.workflow_def_ids = {}
+        for workflow in response['workflowDefs']:
+            self.workflow_def_ids.update({
+                workflow['name']: workflow['id']
+            })
         self.dlg.modelCombo.clear()
         self.dlg.modelCombo.addItems(self.wds)
         self.dlg.modelCombo.setCurrentText(self.config.DEFAULT_MODEL)
@@ -2169,6 +2206,7 @@ class Mapflow(QObject):
         else:
             self.dlg.setWindowTitle(self.plugin_name + f' {self.config.MAPFLOW_ENV}')
         self.dlg.show()
+        self.user_status_update_timer.start()
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
         """Inspect the plugin version backend expects and show a warning if it is incompatible w/ the plugin.
@@ -2232,6 +2270,7 @@ class Mapflow(QObject):
         if self.logged_in:
             self.dlg.show()
             self.update_processing_limit()
+            self.user_status_update_timer.start()
         elif token:  # token saved
             self.http.basic_auth = f'Basic {token}'
             self.log_in(token)
