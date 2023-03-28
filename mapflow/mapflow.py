@@ -173,6 +173,9 @@ class Mapflow(QObject):
         # Processings
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
+        # Processings ratings
+        self.dlg.processingsTable.cellClicked.connect(self.update_processing_current_rating)
+        self.dlg.ratingSubmitButton.clicked.connect(self.submit_processing_rating)
         # Providers
         self.dlg.minIntersectionSpinBox.valueChanged.connect(self.filter_metadata)
         self.dlg.maxCloudCoverSpinBox.valueChanged.connect(self.filter_metadata)
@@ -1707,6 +1710,63 @@ class Mapflow(QObject):
             self.alert(self.tr("Preview is unavailable for the provider {}").format(provider_name))
         else:  # XYZ providers
             self.preview_xyz(provider=provider, image_id=image_id)
+
+    def reset_processing_rating_labels(self) -> None:
+        self.dlg.selectedProcessingNameLabel.setText(self.tr('Processing name:\n'))
+        self.dlg.processingIdForRatingLabel.setText(self.tr('Processing ID:\n'))
+        self.dlg.selectedProcessingCurrentRatingLabel.setText(self.tr('Current rating:\n'))
+        self.dlg.processingRatingFeedbackText.clear()
+
+    def update_processing_current_rating(self) -> None:
+        # reset labels:
+        self.reset_processing_rating_labels()
+
+        row = self.dlg.processingsTable.currentRow()
+        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+        p_name = self.dlg.processingsTable.item(row, 0).text()
+        self.dlg.selectedProcessingNameLabel.setText(self.tr(f'Processing name:\n{p_name}'))
+        self.dlg.processingIdForRatingLabel.setText(self.tr(f'Processing ID:\n{pid}'))
+        self.http.get(
+            url=f'{self.server}/processings/{pid}',
+            callback=self.update_processing_current_rating_callback
+        )
+
+    def update_processing_current_rating_callback(self, response: QNetworkReply) -> None:
+        response_data = json.loads(response.readAll().data())
+        rating = response_data.get('rating')
+        if not rating:
+            return
+        self.dlg.selectedProcessingCurrentRatingLabel.setText(self.tr(f'Current rating:\n{rating.get("rating", "")}'))
+
+    def submit_processing_rating(self) -> None:
+        row = self.dlg.processingsTable.currentRow()
+        print(row)
+        if not row and (row != 0):
+            return
+        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+
+        rating = self.dlg.processingRatingsCombobox.currentText()
+        feedback_text = self.dlg.processingRatingFeedbackText.toPlainText()
+        if not feedback_text:
+            self.alert(self.tr('Please, provide feedback for rating. Thank you!'))
+            return
+        body = {
+            'rating': rating,
+            'feedback': feedback_text
+        }
+        self.http.put(
+            url=f'{self.server}/processings/{pid}/rate',
+            body=json.dumps(body).encode(),
+            callback=self.submit_processing_rating_callback
+
+        )
+
+    def submit_processing_rating_callback(self, response: QNetworkReply) -> None:
+        self.alert(
+            self.tr("Thank you! Your rating and feedback are submitted!"),
+            QMessageBox.Information
+        )
+        self.update_processing_current_rating()
 
     def download_results(self) -> None:
         """Download and display processing results along with the source raster, if available.
