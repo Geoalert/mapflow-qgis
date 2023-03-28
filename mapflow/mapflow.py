@@ -1441,7 +1441,7 @@ class Mapflow(QObject):
         if not self.check_processing_ui():
             return
         if not helpers.check_aoi(self.aoi):
-            self.alert(self.tr("Wrong AOI. Please select another one."))
+            self.alert(self.tr("Bad AOI. AOI must be inside boundaries: \n[-180, 180] by longitude, [-90, 90] by latitude"))
             return
 
         processing_params = {
