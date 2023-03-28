@@ -1,3 +1,4 @@
+import json
 import re
 from pathlib import Path
 
@@ -5,7 +6,7 @@ from qgis.core import (
     QgsMapLayer, QgsGeometry, QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
     QgsMapLayerType, QgsWkbTypes, QgsRasterLayer
 )
-from typing import Tuple
+from typing import Tuple, Union
 from .config import config
 
 PROJECT = QgsProject.instance()
@@ -106,3 +107,18 @@ def raster_layer_is_allowed(layer: QgsRasterLayer):
         and filepath.exists() \
         and filepath.stat().st_size < config.MAX_FILE_SIZE_BYTES
     return res
+
+
+def check_aoi(aoi: Union[QgsGeometry, None]) -> bool:
+    """Check if aoi is within the limits of [[-360:360] [-90:90]]"""
+    if not aoi:
+        return False
+    coordinates = json.loads(aoi.asJson()).get('coordinates')[0]
+    if not coordinates:
+        return False
+    for coordinate in coordinates:
+        if coordinate[0] > 360 or coordinate[0] < -360:
+            return False
+        if coordinate[1] > 90 or coordinate[1] < -90:
+            return False
+    return True

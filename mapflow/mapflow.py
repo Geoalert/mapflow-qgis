@@ -1440,6 +1440,9 @@ class Mapflow(QObject):
         selected_image = self.dlg.metadataTable.selectedItems()
         if not self.check_processing_ui():
             return
+        if not helpers.check_aoi(self.aoi):
+            self.alert(self.tr("Wrong AOI. Please select another one."))
+            return
 
         processing_params = {
             'name': processing_name,
