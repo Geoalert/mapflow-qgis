@@ -1761,6 +1761,9 @@ class Mapflow(QObject):
         row = self.dlg.processingsTable.currentRow()
         if not row and (row != 0):
             return
+        if self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_STATUS_COLUMN_INDEX).text() != 'OK':
+            self.alert(self.tr('Only finished processings can be rated'))
+            return
         pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
         rating = self.get_checked_processing_rating()
         if rating == 0:
