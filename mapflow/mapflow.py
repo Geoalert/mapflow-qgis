@@ -1730,7 +1730,9 @@ class Mapflow(QObject):
 
     def reset_processing_rating_labels(self) -> None:
         for i in range(5):
+            self.radio_buttons[i].setAutoExclusive(False)
             self.radio_buttons[i].setChecked(False)
+            self.radio_buttons[i].setAutoExclusive(True)
         self.dlg.selectedProcessingNameLabel.clear()
         self.dlg.processingRatingFeedbackText.clear()
 
