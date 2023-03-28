@@ -176,6 +176,14 @@ class Mapflow(QObject):
         # Processings ratings
         self.dlg.processingsTable.cellClicked.connect(self.update_processing_current_rating)
         self.dlg.ratingSubmitButton.clicked.connect(self.submit_processing_rating)
+        # Processings ratings radioButtons
+        self.radio_buttons = [
+            self.dlg.processingRating_1,
+            self.dlg.processingRating_2,
+            self.dlg.processingRating_3,
+            self.dlg.processingRating_4,
+            self.dlg.processingRating_5,
+        ]
         # Providers
         self.dlg.minIntersectionSpinBox.valueChanged.connect(self.filter_metadata)
         self.dlg.maxCloudCoverSpinBox.valueChanged.connect(self.filter_metadata)
@@ -219,6 +227,8 @@ class Mapflow(QObject):
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
         self.dlg.imageId.textChanged.connect(self.set_image_id_label)
+        # misc
+        self.workflow_def_ids = {}
 
     def set_image_id_label(self, text):
         if text:
@@ -1711,10 +1721,17 @@ class Mapflow(QObject):
         else:  # XYZ providers
             self.preview_xyz(provider=provider, image_id=image_id)
 
+    def get_checked_processing_rating(self) -> int:
+        """Get the index of checked radio button and return corresponding rating"""
+        for i in range(5):
+            if self.radio_buttons[i].isChecked():
+                return i + 1
+        return 0
+
     def reset_processing_rating_labels(self) -> None:
-        self.dlg.selectedProcessingNameLabel.setText(self.tr('Processing name:\n'))
-        self.dlg.processingIdForRatingLabel.setText(self.tr('Processing ID:\n'))
-        self.dlg.selectedProcessingCurrentRatingLabel.setText(self.tr('Current rating:\n'))
+        for i in range(5):
+            self.radio_buttons[i].setChecked(False)
+        self.dlg.selectedProcessingNameLabel.clear()
         self.dlg.processingRatingFeedbackText.clear()
 
     def update_processing_current_rating(self) -> None:
@@ -1724,8 +1741,7 @@ class Mapflow(QObject):
         row = self.dlg.processingsTable.currentRow()
         pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
         p_name = self.dlg.processingsTable.item(row, 0).text()
-        self.dlg.selectedProcessingNameLabel.setText(self.tr(f'Processing name:\n{p_name}'))
-        self.dlg.processingIdForRatingLabel.setText(self.tr(f'Processing ID:\n{pid}'))
+        self.dlg.selectedProcessingNameLabel.setText(f'{p_name}')
         self.http.get(
             url=f'{self.server}/processings/{pid}',
             callback=self.update_processing_current_rating_callback
@@ -1736,16 +1752,17 @@ class Mapflow(QObject):
         rating = response_data.get('rating')
         if not rating:
             return
-        self.dlg.selectedProcessingCurrentRatingLabel.setText(self.tr(f'Current rating:\n{rating.get("rating", "")}'))
+        rating = int(rating.get('rating'))
+        self.radio_buttons[rating - 1].setChecked(True)
 
     def submit_processing_rating(self) -> None:
         row = self.dlg.processingsTable.currentRow()
-        print(row)
         if not row and (row != 0):
             return
         pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
-
-        rating = self.dlg.processingRatingsCombobox.currentText()
+        rating = self.get_checked_processing_rating()
+        if rating == 0:
+            return
         feedback_text = self.dlg.processingRatingFeedbackText.toPlainText()
         if not feedback_text:
             self.alert(self.tr('Please, provide feedback for rating. Thank you!'))
