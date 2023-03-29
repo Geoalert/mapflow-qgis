@@ -1298,6 +1298,9 @@
          <height>25</height>
         </rect>
        </property>
+       <property name="toolTip">
+        <string>Please select processing and rating to submit</string>
+       </property>
        <property name="text">
         <string>Submit</string>
        </property>

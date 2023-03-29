@@ -176,6 +176,8 @@ class Mapflow(QObject):
         # Processings ratings
         self.dlg.processingsTable.cellClicked.connect(self.update_processing_current_rating)
         self.dlg.ratingSubmitButton.clicked.connect(self.submit_processing_rating)
+        self.dlg.ratingSubmitButton.setEnabled(False)  # by default disabled
+        self.dlg.processingsTable.cellClicked.connect(self.enable_rating_submit_button)
         # Processings ratings radioButtons
         self.radio_buttons = [
             self.dlg.processingRating_1,
@@ -184,6 +186,9 @@ class Mapflow(QObject):
             self.dlg.processingRating_4,
             self.dlg.processingRating_5,
         ]
+        # connect radio buttons signals
+        for radio in self.radio_buttons:
+            radio.toggled.connect(self.enable_rating_submit_button)
         # Providers
         self.dlg.minIntersectionSpinBox.valueChanged.connect(self.filter_metadata)
         self.dlg.maxCloudCoverSpinBox.valueChanged.connect(self.filter_metadata)
@@ -1440,6 +1445,9 @@ class Mapflow(QObject):
         selected_image = self.dlg.metadataTable.selectedItems()
         if not self.check_processing_ui():
             return
+        if not helpers.check_aoi(self.aoi):
+            self.alert(self.tr("Bad AOI. AOI must be inside boundaries: \n[-180, 180] by longitude, [-90, 90] by latitude"))
+            return
 
         processing_params = {
             'name': processing_name,
@@ -1763,7 +1771,9 @@ class Mapflow(QObject):
         row = self.dlg.processingsTable.currentRow()
         if not row and (row != 0):
             return
-        if self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_STATUS_COLUMN_INDEX).text() != 'OK':
+        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+        processing = next(filter(lambda p: p.id_ == pid, self.processings))
+        if processing.status != 'OK':
             self.alert(self.tr('Only finished processings can be rated'))
             return
         pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
@@ -1791,6 +1801,22 @@ class Mapflow(QObject):
             QMessageBox.Information
         )
         self.update_processing_current_rating()
+
+    def enable_rating_submit_button(self) -> None:
+        row = self.dlg.processingsTable.currentRow()
+        if not row >= 0:
+            return
+        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+        processing = next(filter(lambda p: p.id_ == pid, self.processings))
+        status_ok = (processing.status == 'OK')
+        radio_button_checked = any(radio_button.isChecked() for radio_button in self.radio_buttons)
+        self.dlg.ratingSubmitButton.setEnabled(status_ok and radio_button_checked)
+        if status_ok and radio_button_checked:
+            self.dlg.ratingSubmitButton.setToolTip("")
+        elif not status_ok:
+            self.dlg.ratingSubmitButton.setToolTip(self.tr("Only correctly finished processings (status OK) can be rated"))
+        else:
+            self.dlg.ratingSubmitButton.setToolTip(self.tr("Please select processing and rating to submit"))
 
     def download_results(self) -> None:
         """Download and display processing results along with the source raster, if available.
