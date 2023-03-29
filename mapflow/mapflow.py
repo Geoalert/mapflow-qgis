@@ -1802,15 +1802,13 @@ class Mapflow(QObject):
         )
         self.update_processing_current_rating()
 
-    def enable_rating_submit_button(self, radio_checked: Optional[bool]) -> None:
-        status_ok = False
+    def enable_rating_submit_button(self) -> None:
         row = self.dlg.processingsTable.currentRow()
         if not row >= 0:
             return
         pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
         processing = next(filter(lambda p: p.id_ == pid, self.processings))
-        if processing.status == 'OK':
-            status_ok = True
+        status_ok = (processing.status == 'OK')
         radio_button_checked = any(radio_button.isChecked() for radio_button in self.radio_buttons)
         self.dlg.ratingSubmitButton.setEnabled(status_ok and radio_button_checked)
         if status_ok and radio_button_checked:
