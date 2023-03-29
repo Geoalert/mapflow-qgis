@@ -176,6 +176,8 @@ class Mapflow(QObject):
         # Processings ratings
         self.dlg.processingsTable.cellClicked.connect(self.update_processing_current_rating)
         self.dlg.ratingSubmitButton.clicked.connect(self.submit_processing_rating)
+        self.dlg.ratingSubmitButton.setEnabled(False)  # by default disabled
+        self.dlg.processingsTable.cellClicked.connect(self.enable_rating_submit_button)
         # Processings ratings radioButtons
         self.radio_buttons = [
             self.dlg.processingRating_1,
@@ -184,6 +186,9 @@ class Mapflow(QObject):
             self.dlg.processingRating_4,
             self.dlg.processingRating_5,
         ]
+        # connect radio buttons signals
+        for radio in self.radio_buttons:
+            radio.toggled.connect(self.enable_rating_submit_button)
         # Providers
         self.dlg.minIntersectionSpinBox.valueChanged.connect(self.filter_metadata)
         self.dlg.maxCloudCoverSpinBox.valueChanged.connect(self.filter_metadata)
@@ -1792,6 +1797,19 @@ class Mapflow(QObject):
             QMessageBox.Information
         )
         self.update_processing_current_rating()
+
+    def enable_rating_submit_button(self, radio_checked: Optional[bool]) -> None:
+        status_ok = False
+        radio_button_checked = False
+        row = self.dlg.processingsTable.currentRow()
+        if not row >= 0:
+            return
+        if self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_STATUS_COLUMN_INDEX).text() == 'OK':
+            status_ok = True
+        for radio_button in self.radio_buttons:
+            if radio_button.isChecked():
+                radio_button_checked = True
+        self.dlg.ratingSubmitButton.setEnabled(status_ok and radio_button_checked)
 
     def download_results(self) -> None:
         """Download and display processing results along with the source raster, if available.
