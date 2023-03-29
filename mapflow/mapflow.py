@@ -1759,11 +1759,13 @@ class Mapflow(QObject):
 
     def update_processing_current_rating_callback(self, response: QNetworkReply) -> None:
         response_data = json.loads(response.readAll().data())
-        rating = response_data.get('rating')
-        if not rating:
+        rating_json = response_data.get('rating')
+        if not rating_json:
             return
-        rating = int(rating.get('rating'))
+        rating = int(rating_json.get('rating'))
+        feedback = rating_json.get('feedback')
         self.radio_buttons[rating - 1].setChecked(True)
+        self.dlg.processingRatingFeedbackText.setText(feedback)
 
     def submit_processing_rating(self) -> None:
         row = self.dlg.processingsTable.currentRow()
