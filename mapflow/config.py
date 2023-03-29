@@ -16,7 +16,6 @@ class Config:
     PROCESSING_ATTRIBUTES = 'name', 'workflowDef', 'status', 'percentCompleted', 'aoiArea', 'created', 'id'
     PROCESSING_TABLE_ID_COLUMN_INDEX = PROCESSING_ATTRIBUTES.index('id')
     PROCESSING_TABLE_SORT_COLUMN_INDEX = PROCESSING_ATTRIBUTES.index('created')
-    PROCESSING_TABLE_STATUS_COLUMN_INDEX = PROCESSING_ATTRIBUTES.index('status')
     # MAXAR
     MAXAR_METADATA_ATTRIBUTES = {
         'Product Type': 'productType',

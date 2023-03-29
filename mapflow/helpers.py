@@ -4,7 +4,7 @@ from pathlib import Path
 
 from qgis.core import (
     QgsMapLayer, QgsGeometry, QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
-    QgsMapLayerType, QgsWkbTypes, QgsRasterLayer
+    QgsMapLayerType, QgsWkbTypes, QgsRasterLayer, QgsRectangle
 )
 from typing import Tuple, Union
 from .config import config
@@ -113,12 +113,10 @@ def check_aoi(aoi: Union[QgsGeometry, None]) -> bool:
     """Check if aoi is within the limits of [[-360:360] [-90:90]]"""
     if not aoi:
         return False
-    coordinates = json.loads(aoi.asJson()).get('coordinates')[0]
-    if not coordinates:
+    b_box = aoi.boundingBox()
+    x_max, x_min, y_max, y_min = b_box.xMaximum(), b_box.xMinimum(), b_box.yMaximum(), b_box.yMinimum()
+    if x_max > 360 or x_max < -360 or x_min > 360 or x_min < -360:
         return False
-    for coordinate in coordinates:
-        if coordinate[0] > 360 or coordinate[0] < -360:
-            return False
-        if coordinate[1] > 90 or coordinate[1] < -90:
-            return False
+    if y_max > 90 or y_max < -90 or y_min > 90 or y_min < -90:
+        return False
     return True

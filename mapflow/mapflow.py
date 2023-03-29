@@ -1771,7 +1771,9 @@ class Mapflow(QObject):
         row = self.dlg.processingsTable.currentRow()
         if not row and (row != 0):
             return
-        if self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_STATUS_COLUMN_INDEX).text() != 'OK':
+        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+        processing = next(filter(lambda p: p.id_ == pid, self.processings))
+        if processing.status != 'OK':
             self.alert(self.tr('Only finished processings can be rated'))
             return
         pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
@@ -1802,18 +1804,19 @@ class Mapflow(QObject):
 
     def enable_rating_submit_button(self, radio_checked: Optional[bool]) -> None:
         status_ok = False
-        radio_button_checked = False
         row = self.dlg.processingsTable.currentRow()
         if not row >= 0:
             return
-        if self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_STATUS_COLUMN_INDEX).text() == 'OK':
+        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+        processing = next(filter(lambda p: p.id_ == pid, self.processings))
+        if processing.status == 'OK':
             status_ok = True
-        for radio_button in self.radio_buttons:
-            if radio_button.isChecked():
-                radio_button_checked = True
+        radio_button_checked = any(radio_button.isChecked() for radio_button in self.radio_buttons)
         self.dlg.ratingSubmitButton.setEnabled(status_ok and radio_button_checked)
         if status_ok and radio_button_checked:
             self.dlg.ratingSubmitButton.setToolTip("")
+        elif not status_ok:
+            self.dlg.ratingSubmitButton.setToolTip(self.tr("Only correctly finished processings (status OK) can be rated"))
         else:
             self.dlg.ratingSubmitButton.setToolTip(self.tr("Please select processing and rating to submit"))
 
