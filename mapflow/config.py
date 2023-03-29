@@ -8,7 +8,7 @@ class Config:
     PLUGIN_NAME = 'Mapflow'
     DEFAULT_MODEL = '🏠 Buildings'
     MAPFLOW_ENV = QgsSettings().value('variables/mapflow_env', 'production')
-    PROJECT_ID = QgsSettings().value('variables/mapflow_project_id', 'default')
+    PROJECT_ID = QgsSettings().value("variables/mapflow_project_id", "") or "default"
     SERVER = "https://whitemaps-{env}.mapflow.ai/rest".format(env=MAPFLOW_ENV)
 
     # PROCESSINGS
