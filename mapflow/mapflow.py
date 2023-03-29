@@ -1812,6 +1812,10 @@ class Mapflow(QObject):
             if radio_button.isChecked():
                 radio_button_checked = True
         self.dlg.ratingSubmitButton.setEnabled(status_ok and radio_button_checked)
+        if status_ok and radio_button_checked:
+            self.dlg.ratingSubmitButton.setToolTip("")
+        else:
+            self.dlg.ratingSubmitButton.setToolTip(self.tr("Please select processing and rating to submit"))
 
     def download_results(self) -> None:
         """Download and display processing results along with the source raster, if available.
