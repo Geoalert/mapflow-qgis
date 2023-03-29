@@ -41,6 +41,10 @@ class Http(QObject):
         """Send a POST request."""
         return self.send_request(self.nam.post, **kwargs)
 
+    def put(self, **kwargs) -> QNetworkReply:
+        """Send a PUT request"""
+        return self.send_request(self.nam.put, **kwargs)
+
     def delete(self, **kwargs) -> QNetworkReply:
         """Send a DELETE request."""
         return self.send_request(self.nam.deleteResource, **kwargs)
@@ -86,7 +90,7 @@ class Http(QObject):
                 request.setRawHeader(key.encode(), value.encode())
         request.setRawHeader(b'x-plugin-version', self.plugin_version.encode())
         request.setRawHeader(b'authorization', auth or self._basic_auth)
-        response = method(request, body) if method == self.nam.post else method(request)
+        response = method(request, body) if (method == self.nam.post or method == self.nam.put) else method(request)
         QTimer.singleShot(timeout * 1000, response.abort)
         response.finished.connect(
             lambda

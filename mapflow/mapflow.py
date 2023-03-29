@@ -173,6 +173,17 @@ class Mapflow(QObject):
         # Processings
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
+        # Processings ratings
+        self.dlg.processingsTable.cellClicked.connect(self.update_processing_current_rating)
+        self.dlg.ratingSubmitButton.clicked.connect(self.submit_processing_rating)
+        # Processings ratings radioButtons
+        self.radio_buttons = [
+            self.dlg.processingRating_1,
+            self.dlg.processingRating_2,
+            self.dlg.processingRating_3,
+            self.dlg.processingRating_4,
+            self.dlg.processingRating_5,
+        ]
         # Providers
         self.dlg.minIntersectionSpinBox.valueChanged.connect(self.filter_metadata)
         self.dlg.maxCloudCoverSpinBox.valueChanged.connect(self.filter_metadata)
@@ -216,6 +227,8 @@ class Mapflow(QObject):
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
         self.dlg.imageId.textChanged.connect(self.set_image_id_label)
+        # misc
+        self.workflow_def_ids = {}
 
     def set_image_id_label(self, text):
         if text:
@@ -1707,6 +1720,77 @@ class Mapflow(QObject):
             self.alert(self.tr("Preview is unavailable for the provider {}").format(provider_name))
         else:  # XYZ providers
             self.preview_xyz(provider=provider, image_id=image_id)
+
+    def get_checked_processing_rating(self) -> int:
+        """Get the index of checked radio button and return corresponding rating"""
+        for i in range(5):
+            if self.radio_buttons[i].isChecked():
+                return i + 1
+        return 0
+
+    def reset_processing_rating_labels(self) -> None:
+        for i in range(5):
+            self.radio_buttons[i].setAutoExclusive(False)
+            self.radio_buttons[i].setChecked(False)
+            self.radio_buttons[i].setAutoExclusive(True)
+        self.dlg.selectedProcessingNameLabel.clear()
+        self.dlg.processingRatingFeedbackText.clear()
+
+    def update_processing_current_rating(self) -> None:
+        # reset labels:
+        self.reset_processing_rating_labels()
+
+        row = self.dlg.processingsTable.currentRow()
+        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+        p_name = self.dlg.processingsTable.item(row, 0).text()
+        self.dlg.selectedProcessingNameLabel.setText(f'{p_name}')
+        self.http.get(
+            url=f'{self.server}/processings/{pid}',
+            callback=self.update_processing_current_rating_callback
+        )
+
+    def update_processing_current_rating_callback(self, response: QNetworkReply) -> None:
+        response_data = json.loads(response.readAll().data())
+        rating_json = response_data.get('rating')
+        if not rating_json:
+            return
+        rating = int(rating_json.get('rating'))
+        feedback = rating_json.get('feedback')
+        self.radio_buttons[rating - 1].setChecked(True)
+        self.dlg.processingRatingFeedbackText.setText(feedback)
+
+    def submit_processing_rating(self) -> None:
+        row = self.dlg.processingsTable.currentRow()
+        if not row and (row != 0):
+            return
+        if self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_STATUS_COLUMN_INDEX).text() != 'OK':
+            self.alert(self.tr('Only finished processings can be rated'))
+            return
+        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+        rating = self.get_checked_processing_rating()
+        if rating == 0:
+            return
+        feedback_text = self.dlg.processingRatingFeedbackText.toPlainText()
+        if not feedback_text:
+            self.alert(self.tr('Please, provide feedback for rating. Thank you!'))
+            return
+        body = {
+            'rating': rating,
+            'feedback': feedback_text
+        }
+        self.http.put(
+            url=f'{self.server}/processings/{pid}/rate',
+            body=json.dumps(body).encode(),
+            callback=self.submit_processing_rating_callback
+
+        )
+
+    def submit_processing_rating_callback(self, response: QNetworkReply) -> None:
+        self.alert(
+            self.tr("Thank you! Your rating and feedback are submitted!"),
+            QMessageBox.Information
+        )
+        self.update_processing_current_rating()
 
     def download_results(self) -> None:
         """Download and display processing results along with the source raster, if available.
