@@ -47,6 +47,7 @@ class Config:
     MAX_ZOOM = 21
     DEFAULT_ZOOM = MAXAR_MAX_FREE_ZOOM
     USER_STATUS_UPDATE_INTERVAL = 30  # seconds
+    PROCESSING_COST_LABEL_ENABLED = False
 
     STYLES = {
         'Buildings Detection': 'buildings',

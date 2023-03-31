@@ -234,6 +234,7 @@ class Mapflow(QObject):
         self.dlg.imageId.textChanged.connect(self.set_image_id_label)
         # misc
         self.workflow_def_ids = {}
+        self.dlg.processingCostLabel.setVisible(self.config.PROCESSING_COST_LABEL_ENABLED)
 
     def set_image_id_label(self, text):
         if text:
