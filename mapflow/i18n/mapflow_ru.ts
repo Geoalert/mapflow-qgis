@@ -6,47 +6,47 @@
     <message>
         <location filename="../errors/data_errors.py" line="9"/>
         <source>File {filename} cannot be processed. Parameters {bad_parameters} are incompatible with our catalog. See the documentation for more info.</source>
-        <translation type="unfinished"></translation>
+        <translation>Файл {filename} не может быть обработан. Параметры {bad_parameters} не совместимы с нашим каталогом данных. См. документацию для подробной информации.</translation>
     </message>
     <message>
         <location filename="../errors/data_errors.py" line="12"/>
         <source>Your file has size {memory_requested} bytes, but you have only {available_memory} left. Upgrade your subscription or remove older imagery from your catalog</source>
-        <translation type="unfinished"></translation>
+        <translation>Объем вашего файла {memory_requested} байтов, но у вас осталось только {available_memory} байтов. Обновите подписку или удалите старые изображения из каталога</translation>
     </message>
     <message>
         <location filename="../errors/data_errors.py" line="15"/>
         <source>Max file size allowed to upload is {max_file_size} bytes, your file is {actual_file_size} bytes instead. Compress your file or cut it into smaller parts</source>
-        <translation type="unfinished"></translation>
+        <translation>Максимальный размер файла, разрешенный для загрузки, составляет {max_file_size} байт, размер вашего файла составляет {actual_file_size} байт. Сожмите файл или разрежьте его на более мелкие части</translation>
     </message>
     <message>
         <location filename="../errors/data_errors.py" line="18"/>
         <source>{instance_type} with id: {uid} can&apos;t be found</source>
-        <translation type="unfinished"></translation>
+        <translation>{instance_type} с id {uid} не может быть найден</translation>
     </message>
     <message>
         <location filename="../errors/data_errors.py" line="19"/>
         <source>You do not have access to {instance_type} with id {uid}</source>
-        <translation type="unfinished"></translation>
+        <translation>У вас нет доступа к {instance_type} с id {uid}</translation>
     </message>
     <message>
         <location filename="../errors/data_errors.py" line="20"/>
         <source>File {filename} cannot be uploaded to mosaic: {mosaic_id}. {param_name} of the file is {got_param}, it should be {expected_param} to fit the mosaic. Fix your file, or upload it to another mosaic</source>
-        <translation type="unfinished"></translation>
+        <translation>Файл {filename} не может быть загружен в мозаику: {mosaic_id}. {param_name} файла {got_param}, однако для данной мозаики этот параметр должен быть следующим: {expected_param}. Исправьте ваш файл или загрузите в другую мозаику</translation>
     </message>
     <message>
         <location filename="../errors/data_errors.py" line="24"/>
         <source>File can&apos;t be uploaded, because its extent is out of coordinate range.Check please CRS and transform of the image, they may be invalid</source>
-        <translation type="unfinished"></translation>
+        <translation>Файл не может быть загружен, так как его размер выходит за пределы диапазона координат. Проверьте, пожалуйста, координатную систему изображения, она может быть недействительным</translation>
     </message>
     <message>
         <location filename="../errors/data_errors.py" line="26"/>
         <source>File cannot be opened as a GeoTIFF file. Only valid geotiff files are allowed for uploading. You can use Raster-&gt;Conversion-&gt;Translate to change your file type to GeoTIFF</source>
-        <translation type="unfinished"></translation>
+        <translation>Файл не может быть открыт как файл GeoTIFF. Для загрузки разрешены только действительные файлы GeoTIFF. Вы можете использовать Raster-&gt;Conversion-&gt;Translate, чтобы изменить тип файла на GeoTIFF</translation>
     </message>
     <message>
         <location filename="../errors/data_errors.py" line="29"/>
         <source>File can&apos;t be uploaded, because the geometry of the image is too big, we will not be able to process it properly.Make sure that your image has valid CRS and transform, or cut the image into parts</source>
-        <translation type="unfinished"></translation>
+        <translation>Файл не может быть загружен, так как геометрия изображения слишком велика, мы не сможем его правильно обработать. Убедитесь, что ваше изображение имеет действующую CRS и преобразование, или разрежьте изображение на части</translation>
     </message>
 </context>
 <context>
@@ -73,12 +73,12 @@
     <message>
         <location filename="../errors.py" line="20"/>
         <source>Key &apos;url&apos; in your request must be a string, got {url_type} instead.</source>
-        <translation type="obsolete">Ключ 'url' в запросе должен быть строкой, не {url_type}.</translation>
+        <translation type="obsolete">Ключ &apos;url&apos; в запросе должен быть строкой, не {url_type}.</translation>
     </message>
     <message>
         <location filename="../errors.py" line="25"/>
         <source>Your URL must be a link starting with &quot;http://&quot; or &quot;https://&quot;.</source>
-        <translation type="obsolete">URL должен начинаться с &amp;quot;http://&amp;quot; или &amp;quot;https://&amp;quot;.</translation>
+        <translation type="obsolete">URL должен начинаться с &quot;http://&quot; или &quot;https://&quot;.</translation>
     </message>
     <message>
         <location filename="../errors.py" line="27"/>
@@ -103,7 +103,7 @@
     <message>
         <location filename="../errors.py" line="33"/>
         <source>Image metadata must be a dict (json)</source>
-        <translation type="obsolete">Метаданные вашего изображения должны быть типа &amp;quot;словарь&amp;quot; (json)</translation>
+        <translation type="obsolete">Метаданные вашего изображения должны быть типа &quot;словарь&quot; (json)</translation>
     </message>
     <message>
         <location filename="../errors.py" line="34"/>
@@ -173,7 +173,7 @@
     <message>
         <location filename="../errors.py" line="60"/>
         <source>You request TMS basemap link doesn&apos;t match the format, it must be a link containing &apos;{x}&apos;, &apos;{y}&apos;, &apos;{z}&apos; placeholders, correct it and start processing again.</source>
-        <translation type="obsolete">Ссылка на TMS подложку не соответствует формату. Это должна быть ссылка, содержащая поля &amp;quot;{x}&amp;quot;, &amp;quot;{y}&amp;quot;, &amp;quot;{z}&amp;quot;.</translation>
+        <translation type="obsolete">Ссылка на TMS подложку не соответствует формату. Это должна быть ссылка, содержащая поля &quot;{x}&quot;, &quot;{y}&quot;, &quot;{z}&quot;.</translation>
     </message>
     <message>
         <location filename="../errors.py" line="64"/>
@@ -208,7 +208,7 @@
     <message>
         <location filename="../errors.py" line="72"/>
         <source>You XYZ basemap link doesn&apos;t match the format, it must be a link containing &apos;{x}&apos;, &apos;{y}&apos;, &apos;{z}&apos; placeholders.</source>
-        <translation type="obsolete">Ссылка на XYZ подложку не соответствует формату. Это должна быть ссылка, содержащая поля &amp;quot;{x}&amp;quot;, &amp;quot;{y}&amp;quot;, &amp;quot;{z}&amp;quot;.</translation>
+        <translation type="obsolete">Ссылка на XYZ подложку не соответствует формату. Это должна быть ссылка, содержащая поля &quot;{x}&quot;, &quot;{y}&quot;, &quot;{z}&quot;.</translation>
     </message>
     <message>
         <location filename="../errors.py" line="78"/>
@@ -303,12 +303,12 @@
     <message>
         <location filename="../errors.py" line="61"/>
         <source>You request TMS basemap link doesn&apos;t match the format, it must be a link containing &quot;x&quot;, &quot;y&quot;, &quot;z&quot; placeholders, correct it and start processing again.</source>
-        <translation type="obsolete">Ссылка на TMS подложку не соответствует формату. Это должна быть ссылка, содержащая поля &amp;quot;x&amp;quot;, &amp;quot;y&amp;quot;, &amp;quot;z&amp;quot;.</translation>
+        <translation type="obsolete">Ссылка на TMS подложку не соответствует формату. Это должна быть ссылка, содержащая поля &quot;x&quot;, &quot;y&quot;, &quot;z&quot;.</translation>
     </message>
     <message>
         <location filename="../errors.py" line="73"/>
         <source>You XYZ basemap link doesn&apos;t match the format, it must be a link containing &quot;x&quot;, &quot;y&quot;, &quot;z&quot;  placeholders.</source>
-        <translation type="obsolete">Ссылка на XYZ подложку не соответствует формату. Это должна быть ссылка, содержащая поля &amp;quot;x&amp;quot;, &amp;quot;y&amp;quot;, &amp;quot;z&amp;quot;.</translation>
+        <translation type="obsolete">Ссылка на XYZ подложку не соответствует формату. Это должна быть ссылка, содержащая поля &quot;x&quot;, &quot;y&quot;, &quot;z&quot;.</translation>
     </message>
 </context>
 <context>
@@ -336,7 +336,7 @@
     <message>
         <location filename="../static/ui/login_dialog.ui" line="59"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/userguides/mapflow_auth.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Need an account?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt;&lt;a href=&quot;https://mapflow.ai/terms-of-use-en.pdf&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Terms of use&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="obsolete">&amp;lt;html&amp;gt;&amp;lt;head/&amp;gt;&amp;lt;body&amp;gt;&amp;lt;p&amp;gt;&amp;lt;a href=&amp;quot;https://ru.docs.mapflow.ai/userguides/mapflow_auth.html&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;Зарегистрироваться&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;p&amp;gt;&amp;lt;a href=&amp;quot;https://mapflow.ai/terms-of-use.pdf&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;Условия использования&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;</translation>
+        <translation type="obsolete">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/userguides/mapflow_auth.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Зарегистрироваться&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt;&lt;a href=&quot;https://mapflow.ai/terms-of-use.pdf&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Условия использования&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/login_dialog.ui" line="40"/>
@@ -346,7 +346,7 @@
     <message>
         <location filename="../dialogs/static/ui/login_dialog.ui" line="62"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://app.mapflow.ai/account/api&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Get token&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt;&lt;a href=&quot;https://mapflow.ai/terms-of-use-en.pdf&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Terms of use&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt;Register at &lt;a href=&quot;https://mapflow.ai&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;mapflow.ai&lt;/span&gt;&lt;/a&gt; to use the plugin&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&amp;lt;html&amp;gt;&amp;lt;head/&amp;gt;&amp;lt;body&amp;gt;&amp;lt;p&amp;gt;&amp;lt;a href=&amp;quot;https://app.mapflow.ai/account/api&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;Получить токен&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;p&amp;gt;&amp;lt;a href=&amp;quot;https://mapflow.ai/terms-of-use.pdf&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;Условия использования&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;p&amp;gt;Зарегистрируйтесь на &amp;lt;a href=&amp;quot;https://mapflow.ai&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;mapflow.ai&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;p&amp;gt; чтобы использовать плагин&amp;lt;/p&amp;gt;&amp;lt;p&amp;gt;&amp;lt;br/&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;</translation>
+        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://app.mapflow.ai/account/api&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Получить токен&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt;&lt;a href=&quot;https://mapflow.ai/terms-of-use.pdf&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Условия использования&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt;Зарегистрируйтесь на &lt;a href=&quot;https://mapflow.ai&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;mapflow.ai&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt; чтобы использовать плагин&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
 </context>
 <context>
@@ -494,7 +494,7 @@
     <message>
         <location filename="../static/ui/main_dialog.ui" line="71"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#caching&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How caching works&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="obsolete">&amp;lt;html&amp;gt;&amp;lt;head/&amp;gt;&amp;lt;body&amp;gt;&amp;lt;p&amp;gt;&amp;lt;a href=&amp;quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#caching&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;Как это работает&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;</translation>
+        <translation type="obsolete">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#caching&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как это работает&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="115"/>
@@ -574,7 +574,7 @@
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="324"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Here, you can search Maxar or Sentinel imagery for your area and timespan.&lt;/p&gt;&lt;p&gt;Additional filters are also available below.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&amp;lt;html&amp;gt;&amp;lt;head/&amp;gt;&amp;lt;body&amp;gt;&amp;lt;p&amp;gt;Здесь вы можете искать подходящие для ваших области и времени снимки Maxar и Sentinel-2.&amp;lt;/p&amp;gt;&amp;lt;p&amp;gt;Дополнительные параметры поиска находятся во вкладке ниже.&amp;lt;/p&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;</translation>
+        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Здесь вы можете искать подходящие для ваших области и времени снимки Maxar и Sentinel-2.&lt;/p&gt;&lt;p&gt;Дополнительные параметры поиска находятся во вкладке ниже.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="602"/>
@@ -624,7 +624,7 @@
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="917"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;User Interface walkthrough&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-process-your-own-imagery&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to process your own image&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to use a different imagery tileset&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect to Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow Agro&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://agro.geoalert.io/&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;About&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow.html#sentinel-2&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Sentinel imagery&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/userguides/iterative_mapping.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Iterative mapping workflow for cropland maps&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;If you have a feature request or have spotted a bug,&lt;br/&gt;create an issue on our &lt;/span&gt;&lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="obsolete">&amp;lt;html&amp;gt;&amp;lt;head/&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h3 style=&amp;quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; font-size:large; font-weight:600;&amp;quot;&amp;gt;Mapflow&amp;lt;/span&amp;gt;&amp;lt;/h3&amp;gt;&amp;lt;p align=&amp;quot;center&amp;quot;&amp;gt;&amp;lt;a href=&amp;quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#user-interface&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;Пользовательский интерфейс&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;p align=&amp;quot;center&amp;quot;&amp;gt;&amp;lt;a href=&amp;quot;https://ru.docs.mapflow.ai/userguides/prices.html&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;Тарифы&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;p align=&amp;quot;center&amp;quot;&amp;gt;&amp;lt;a href=&amp;quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#id19&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;Как использовать собственный снимок для обработки&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;p align=&amp;quot;center&amp;quot;&amp;gt;&amp;lt;a href=&amp;quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#id17&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;Как использовать снимки из других источников&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;p align=&amp;quot;center&amp;quot;&amp;gt;&amp;lt;a href=&amp;quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#maxar-securewatch&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;Как подключить Maxar SecureWatch&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;h3 style=&amp;quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; font-size:large; font-weight:600;&amp;quot;&amp;gt;Mapflow Agro&amp;lt;/span&amp;gt;&amp;lt;/h3&amp;gt;&amp;lt;p align=&amp;quot;center&amp;quot;&amp;gt;&amp;lt;a href=&amp;quot;https://agro.geoalert.io/&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;О проекте&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;p align=&amp;quot;center&amp;quot;&amp;gt;&amp;lt;a href=&amp;quot;https://ru.docs.mapflow.ai/api/qgis_mapflow.html#sentinel-2&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;Снимки Sentinel&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;p align=&amp;quot;center&amp;quot;&amp;gt;&amp;lt;a href=&amp;quot;https://ru.docs.mapflow.ai/userguides/iterative_mapping.html&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;Пошаговый способ картирования полей&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;p&amp;gt;&amp;lt;span style=&amp;quot; font-weight:600;&amp;quot;&amp;gt;Если у вас есть предложения или замечания по работе плагина,&amp;lt;br/&amp;gt;мы будем рады если вы создадите задачу на нашем &amp;lt;/span&amp;gt;&amp;lt;a href=&amp;quot;https://github.com/Geoalert/mapflow-qgis&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; font-weight:600; text-decoration: underline; color:#0000ff;&amp;quot;&amp;gt;GitHub&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;</translation>
+        <translation type="obsolete">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Пользовательский интерфейс&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/userguides/prices.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Тарифы&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#id19&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать собственный снимок для обработки&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#id17&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать снимки из других источников&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как подключить Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow Agro&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://agro.geoalert.io/&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;О проекте&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow.html#sentinel-2&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Снимки Sentinel&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/userguides/iterative_mapping.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Пошаговый способ картирования полей&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Если у вас есть предложения или замечания по работе плагина,&lt;br/&gt;мы будем рады если вы создадите задачу на нашем &lt;/span&gt;&lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="872"/>
@@ -639,67 +639,67 @@
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="920"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;User Interface walkthrough&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/userguides/prices.html#mapflow-qgis-pricing-model&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Pricing&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-process-your-own-imagery&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to process your own image&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to use a different imagery tileset&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect to Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow Agro&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://agro.geoalert.io/&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;About&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow.html#sentinel-2&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Sentinel imagery&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/userguides/iterative_mapping.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Iterative mapping workflow for cropland maps&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;If you have a feature request or have spotted a bug,&lt;br/&gt;create an issue on our &lt;/span&gt;&lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="obsolete">&amp;lt;html&amp;gt;&amp;lt;head/&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h3 style=&amp;quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; font-size:large; font-weight:600;&amp;quot;&amp;gt;Mapflow&amp;lt;/span&amp;gt;&amp;lt;/h3&amp;gt;&amp;lt;p align=&amp;quot;center&amp;quot;&amp;gt;&amp;lt;a href=&amp;quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#user-interface&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;Пользовательский интерфейс&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;p align=&amp;quot;center&amp;quot;&amp;gt;&amp;lt;a href=&amp;quot;https://ru.docs.mapflow.ai/userguides/prices.html#mapflow-qgis-pricing-model&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;Тарифы&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;p align=&amp;quot;center&amp;quot;&amp;gt;&amp;lt;a href=&amp;quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#id19&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;Как использовать собственный снимок для обработки&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;p align=&amp;quot;center&amp;quot;&amp;gt;&amp;lt;a href=&amp;quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#id17&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;Как использовать снимки из других источников&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;p align=&amp;quot;center&amp;quot;&amp;gt;&amp;lt;a href=&amp;quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#maxar-securewatch&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;Как подключить Maxar SecureWatch&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;h3 style=&amp;quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; font-size:large; font-weight:600;&amp;quot;&amp;gt;Mapflow Agro&amp;lt;/span&amp;gt;&amp;lt;/h3&amp;gt;&amp;lt;p align=&amp;quot;center&amp;quot;&amp;gt;&amp;lt;a href=&amp;quot;https://agro.geoalert.io/&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;О проекте&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;p align=&amp;quot;center&amp;quot;&amp;gt;&amp;lt;a href=&amp;quot;https://ru.docs.mapflow.ai/api/qgis_mapflow.html#sentinel-2&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;Снимки Sentinel&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;p align=&amp;quot;center&amp;quot;&amp;gt;&amp;lt;a href=&amp;quot;https://ru.docs.mapflow.ai/userguides/iterative_mapping.html&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; text-decoration: underline; color:#0057ae;&amp;quot;&amp;gt;Пошаговый способ картирования полей&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;p&amp;gt;&amp;lt;span style=&amp;quot; font-weight:600;&amp;quot;&amp;gt;Если у вас есть предложения или замечания по работе плагина,&amp;lt;br/&amp;gt;мы будем рады если вы создадите задачу на нашем &amp;lt;/span&amp;gt;&amp;lt;a href=&amp;quot;https://github.com/Geoalert/mapflow-qgis&amp;quot;&amp;gt;&amp;lt;span style=&amp;quot; font-weight:600; text-decoration: underline; color:#0000ff;&amp;quot;&amp;gt;GitHub&amp;lt;/span&amp;gt;&amp;lt;/a&amp;gt;&amp;lt;/p&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;</translation>
+        <translation type="obsolete">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Пользовательский интерфейс&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/userguides/prices.html#mapflow-qgis-pricing-model&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Тарифы&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#id19&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать собственный снимок для обработки&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#id17&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать снимки из других источников&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как подключить Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow Agro&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://agro.geoalert.io/&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;О проекте&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow.html#sentinel-2&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Снимки Sentinel&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/userguides/iterative_mapping.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Пошаговый способ картирования полей&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Если у вас есть предложения или замечания по работе плагина,&lt;br/&gt;мы будем рады если вы создадите задачу на нашем &lt;/span&gt;&lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="152"/>
         <source> Download results </source>
-        <translation type="unfinished"></translation>
+        <translation> Загрузка результатов </translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="754"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;User Interface walkthrough&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/userguides/prices.html#mapflow-qgis-pricing-model&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Pricing&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow.html#how-to-upload-your-image&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to process your own image&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to use a different imagery tileset&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect to Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow Agro&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://agro.geoalert.io/&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;About&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow.html#sentinel-2&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Sentinel imagery&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/userguides/iterative_mapping.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Iterative mapping workflow for cropland maps&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;If you have a feature request or have spotted a bug,&lt;br/&gt;create an issue on our &lt;/span&gt;&lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Пользовательский интерфейс&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/userguides/prices.html#mapflow-qgis-pricing-model&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Тарифы&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow.html#how-to-upload-your-image&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать собственный снимок для обработки&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать снимки из других источников&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как подключить Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow Agro&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://agro.geoalert.io/&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;О проекте&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow.html#sentinel-2&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Снимки Sentinel&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/userguides/iterative_mapping.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Пошаговый способ картирования полей&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Если у вас есть предложения или замечания по работе плагина,&lt;br/&gt;мы будем рады если вы создадите задачу на нашем &lt;/span&gt;&lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="839"/>
         <source>Processing name:</source>
-        <translation type="unfinished"></translation>
+        <translation>Название обработки:</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="1284"/>
         <source>Rate processing</source>
-        <translation type="unfinished"></translation>
+        <translation>Оценить обработку</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="1302"/>
         <source>Please select processing and rating to submit</source>
-        <translation type="unfinished"></translation>
+        <translation>Пожалуйста, выберите обработку и оценку для отправки</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="1305"/>
         <source>Submit</source>
-        <translation type="unfinished"></translation>
+        <translation>Отправить</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="1375"/>
         <source>1</source>
-        <translation type="unfinished"></translation>
+        <translation>1</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="1382"/>
         <source>2</source>
-        <translation type="unfinished"></translation>
+        <translation>2</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="1389"/>
         <source>3</source>
-        <translation type="unfinished"></translation>
+        <translation>3</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="1396"/>
         <source>4</source>
-        <translation type="unfinished"></translation>
+        <translation>4</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="1403"/>
         <source>5</source>
-        <translation type="unfinished"></translation>
+        <translation>5</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="1426"/>
         <source>Type your feedback here</source>
-        <translation type="unfinished"></translation>
+        <translation>Введите свой отзыв здесь</translation>
     </message>
 </context>
 <context>
@@ -707,7 +707,7 @@
     <message>
         <location filename="../mapflow.py" line="265"/>
         <source>Currently, Mapflow doesn&apos;t support uploading own Sentinel-2 imagery. To process Sentinel-2, go to the Providers tab and either search for your image in the catalog or paste its ID in the Image ID field.</source>
-        <translation type="obsolete">Mapflow пока не поддерживает загрузку пользовательских снимков Sentinel-2. Чтобы обработать Sentinel-2, пожалуйста, перейдите во вкладку &amp;quot;Источники данных&amp;quot; и либо найдите ваш снимок в каталоге либо вставьте его ID в поле &amp;quot;ID Снимка&amp;quot;.</translation>
+        <translation type="obsolete">Mapflow пока не поддерживает загрузку пользовательских снимков Sentinel-2. Чтобы обработать Sentinel-2, пожалуйста, перейдите во вкладку &quot;Источники данных&quot; и либо найдите ваш снимок в каталоге либо вставьте его ID в поле &quot;ID Снимка&quot;.</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="394"/>
@@ -977,7 +977,7 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <source>A new version of Mapflow plugin {server_version} is released 
 We recommend you to upgrade to get all the latest features
 Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
-        <translation>Появилась новая версия mapflow {server_version}. Реомендуем обновить версию чтобы получить доступ к новым возможностям. Выберите меню Модули -&amp;gt; Управление модулями -&amp;gt; Обновляемые</translation>
+        <translation>Появилась новая версия mapflow {server_version}. Реомендуем обновить версию чтобы получить доступ к новым возможностям. Выберите меню Модули -&gt; Управление модулями -&gt; Обновляемые</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="275"/>
@@ -1012,7 +1012,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
     <message>
         <location filename="../mapflow.py" line="277"/>
         <source>Currently, Mapflow doesn&apos;t support uploading own Sentinel-2 imagery. To process Sentinel-2, go to the Providers tab andSENTINEL_WD_NAME either search for your image in the catalog or paste its ID in the Image ID field.</source>
-        <translation type="obsolete">Mapflow пока не поддерживает загрузку пользовательских снимков Sentinel-2. Чтобы обработать Sentinel-2, пожалуйста, перейдите во вкладку &amp;quot;Источники данных&amp;quot; и либо найдите ваш снимок в каталоге либо вставьте его ID в поле &amp;quot;ID Снимка&amp;quot;.</translation>
+        <translation type="obsolete">Mapflow пока не поддерживает загрузку пользовательских снимков Sentinel-2. Чтобы обработать Sentinel-2, пожалуйста, перейдите во вкладку &quot;Источники данных&quot; и либо найдите ваш снимок в каталоге либо вставьте его ID в поле &quot;ID Снимка&quot;.</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="528"/>
@@ -1064,7 +1064,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
     <message>
         <location filename="../mapflow.py" line="1417"/>
         <source>Processing limit exceeded. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; to top up your balance</source>
-        <translation>Превышен доступный лимит обработки. Посетите &amp;quot;&amp;lt;a href=&amp;quot;https://app.mapflow.ai/account/balance&amp;quot;&amp;gt;Mapflow&amp;lt;/a&amp;gt;&amp;quot; для пополнения баланса</translation>
+        <translation>Превышен доступный лимит обработки. Посетите &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; для пополнения баланса</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1525"/>
@@ -1084,7 +1084,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
     <message>
         <location filename="../mapflow.py" line="2203"/>
         <source>Wrong token. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/api&quot;&gt;mapflow.ai&lt;/a&gt;&quot; to get a new one</source>
-        <translation>Неправильный токен. Перейдите на &amp;quot;&amp;lt;a href=&amp;quot;https://app.mapflow.ai/account/api&amp;quot;&amp;gt;mapflow.ai&amp;lt;/a&amp;gt;&amp;quot; чтообы получить новый</translation>
+        <translation>Неправильный токен. Перейдите на &quot;&lt;a href=&quot;https://app.mapflow.ai/account/api&quot;&gt;mapflow.ai&lt;/a&gt;&quot; чтообы получить новый</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1411"/>
@@ -1096,7 +1096,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <source>You must upgrade your plugin version to continue work with Mapflow. 
 The server requires version {server_version}, your plugin is {local_version}
 Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
-        <translation>Обновите версию плагина чтобы продолжить работать с Mapflow. Требуется версия {server_version}, установлена версия {local_version}. Выберите меню Модули -&amp;gt; Управление модулями -&amp;gt; Обновляемые</translation>
+        <translation>Обновите версию плагина чтобы продолжить работать с Mapflow. Требуется версия {server_version}, установлена версия {local_version}. Выберите меню Модули -&gt; Управление модулями -&gt; Обновляемые</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="570"/>
@@ -1144,63 +1144,65 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <location filename="../mapflow.py" line="241"/>
         <source>Selected Image ID:
  {text}</source>
-        <translation type="unfinished"></translation>
+        <translation>ID выбранного изображения:
+ {text}</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1281"/>
         <source>Processing cost: {response_data} credits</source>
-        <translation type="unfinished"></translation>
+        <translation>Цена обработки: {response_data} credits</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1453"/>
         <source>Bad AOI. AOI must be inside boundaries: 
 [-180, 180] by longitude, [-90, 90] by latitude</source>
-        <translation type="unfinished"></translation>
+        <translation>Неверный AOI. AOI должен быть в пределах:
+[-180, 180] по долготе, [-90, 90] по широте</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1568"/>
         <source>Project name: {}</source>
-        <translation type="unfinished"></translation>
+        <translation>Название проекта: {}</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1586"/>
         <source>Processing limit: {self.remaining_limit:.2f} sq.km</source>
-        <translation type="unfinished"></translation>
+        <translation>Лимит обработки: {self.remaining_limit:.2f} кв.км</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1781"/>
         <source>Only finished processings can be rated</source>
-        <translation type="unfinished"></translation>
+        <translation>Только законченные обработки могут быть оценены</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1789"/>
         <source>Please, provide feedback for rating. Thank you!</source>
-        <translation type="unfinished"></translation>
+        <translation>Пожалуйста, оставьте отзыв для оценки. Спасибо!</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1803"/>
         <source>Thank you! Your rating and feedback are submitted!</source>
-        <translation type="unfinished"></translation>
+        <translation>Спасибо! Ваша оценка и отзыв отправлены!</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1821"/>
         <source>Only correctly finished processings (status OK) can be rated</source>
-        <translation type="unfinished"></translation>
+        <translation>Только правильно завершенные обработки (состояние OK) могут быть оценены</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1823"/>
         <source>Please select processing and rating to submit</source>
-        <translation type="unfinished"></translation>
+        <translation>Пожалуйста, выберите обработку и рейтинг для отправки</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1843"/>
         <source>Only the results of correctly finished processing can be loaded</source>
-        <translation type="unfinished"></translation>
+        <translation>Загружать можно только результаты корректно законченной обработки</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="2248"/>
         <source>Error</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка</translation>
     </message>
 </context>
 <context>
@@ -1208,227 +1210,227 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
     <message>
         <location filename="../errors/processing_errors.py" line="8"/>
         <source>Task for source-validation must contain area of interest (`geometry` section)</source>
-        <translation type="unfinished">Задача на проверку источника данных должна содержать область интереса (ключ `geometry`)</translation>
+        <translation>Задача на проверку источника данных должна содержать область интереса (ключ `geometry`)</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="10"/>
         <source>We could not open and read the image you have uploaded</source>
-        <translation type="unfinished">Мы не смогли открыть и прочитать загруженное изображение</translation>
+        <translation>Мы не смогли открыть и прочитать загруженное изображение</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="11"/>
         <source>Image profile (metadata) must have keys {required_keys}, got profile {profile}</source>
-        <translation type="unfinished">Метаданные изображения должны содержать следующие теги: {required_keys}, метаданные загруженного изображения: {profile}</translation>
+        <translation>Метаданные изображения должны содержать следующие теги: {required_keys}, метаданные загруженного изображения: {profile}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="13"/>
         <source>AOI does not intersect the selected Sentinel-2 granule {actual_cell}</source>
-        <translation type="unfinished">Области интереса не пересекает выбранное изображение Sentinel-2 (код ячейки {actual_cell} )</translation>
+        <translation>Области интереса не пересекает выбранное изображение Sentinel-2 (код ячейки {actual_cell} )</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="15"/>
         <source>Key &apos;url&apos; in your request must be a string, got {url_type} instead.</source>
-        <translation type="unfinished">Ключ 'url' в запросе должен быть строкой, не {url_type}.</translation>
+        <translation>Ключ &apos;url&apos; в запросе должен быть строкой, не {url_type}.</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="17"/>
         <source>The specified basemap {url} is forbidden for processing because it contains a map, not satellite image. Our models are suited for satellite imagery.</source>
-        <translation type="unfinished">Указанная подложка {url} запрещена к обработке, так как содержит карту, а не спутниковый снимок. Наши модели предназначены для обработки спутниковых снимков.</translation>
+        <translation>Указанная подложка {url} запрещена к обработке, так как содержит карту, а не спутниковый снимок. Наши модели предназначены для обработки спутниковых снимков.</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="20"/>
         <source>Your URL must be a link starting with &quot;http://&quot; or &quot;https://&quot;.</source>
-        <translation type="unfinished">URL должен начинаться с &amp;quot;http://&amp;quot; или &amp;quot;https://&amp;quot;.</translation>
+        <translation>URL должен начинаться с &quot;http://&quot; или &quot;https://&quot;.</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="22"/>
         <source>Format of &apos;url&apos; is invalid and cannot be parsed. Error: {parse_error_message}</source>
-        <translation type="unfinished">Невалидный формат URL. Ошибка {parse_error_message}</translation>
+        <translation>Невалидный формат URL. Ошибка {parse_error_message}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="24"/>
         <source>Zoom must be either empty, or integer, got {actual_zoom}</source>
-        <translation type="unfinished">Поле „zoom“ должно быть либо пустым, либо целым числом. Получено {actual_zoom}</translation>
+        <translation>Поле „zoom“ должно быть либо пустым, либо целым числом. Получено {actual_zoom}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="26"/>
         <source>Zoom must be between 0 and 22, got {actual_zoom}</source>
-        <translation type="unfinished">Значение поля „zoom“ в вашем запросе должно быть в интервале от 0 до 22. Получено {actual_zoom}</translation>
+        <translation>Значение поля „zoom“ в вашем запросе должно быть в интервале от 0 до 22. Получено {actual_zoom}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="27"/>
         <source>Zoom must be not lower than {min_zoom}, got {actual_zoom}</source>
-        <translation type="unfinished">Значение поля „zoom“ в вашем запросе должно быть не менее {min_zoom}. Получено {actual_zoom}</translation>
+        <translation>Значение поля „zoom“ в вашем запросе должно быть не менее {min_zoom}. Получено {actual_zoom}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="28"/>
         <source>Image metadata must be a dict (json)</source>
-        <translation type="unfinished">Метаданные вашего изображения должны быть типа &amp;quot;словарь&amp;quot; (json)</translation>
+        <translation>Метаданные вашего изображения должны быть типа &quot;словарь&quot; (json)</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="29"/>
         <source>Image metadata must have keys: crs, transform, dtype, count</source>
-        <translation type="unfinished">Метаданные вашего изображения должны содержать ключи: crs, transform, dtype, count</translation>
+        <translation>Метаданные вашего изображения должны содержать ключи: crs, transform, dtype, count</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="31"/>
         <source>URL of the image at s3 storage must be a string starting with s3://, got {actual_s3_link}</source>
-        <translation type="unfinished">URL изображения на хранилище S3 должен быть строкой и начинаться с S3://. Получено {actual_s3_link}</translation>
+        <translation>URL изображения на хранилище S3 должен быть строкой и начинаться с S3://. Получено {actual_s3_link}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="33"/>
         <source>Request must contain either &apos;profile&apos; or &apos;url&apos; keys</source>
-        <translation type="unfinished">Запрос должен содержать либо „profile“, либо „url“</translation>
+        <translation>Запрос должен содержать либо „profile“, либо „url“</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="34"/>
         <source>Failed to read file from {s3_link}.</source>
-        <translation type="unfinished">Ошибка чтения файла из {s3_link}.</translation>
+        <translation>Ошибка чтения файла из {s3_link}.</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="35"/>
         <source>Image data type (Dtype) must be one of {required_dtypes}, got {request_dtype}</source>
-        <translation type="unfinished">Тип данных изображения (Dtype) должен быть одним из {required_dtypes}. Получено {request_dtype}</translation>
+        <translation>Тип данных изображения (Dtype) должен быть одним из {required_dtypes}. Получено {request_dtype}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="37"/>
         <source>Number of channels in image must be one of {required_nchannels}. Got {real_nchannels}</source>
-        <translation type="unfinished">Изображение имеет {real_nchannels} каналов, требуемое количество каналов {required_nchannels}</translation>
+        <translation>Изображение имеет {real_nchannels} каналов, требуемое количество каналов {required_nchannels}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="39"/>
         <source>Spatial resolution of you image is too high: pixel size is {actual_res}, minimum allowed pixel size is {min_res}</source>
-        <translation type="unfinished">Пространственное разрешение вашего изображения слишком высокое: размер пикселя {actual_res}, минимальный допустимый размер пикселя равен {min_res}</translation>
+        <translation>Пространственное разрешение вашего изображения слишком высокое: размер пикселя {actual_res}, минимальный допустимый размер пикселя равен {min_res}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="42"/>
         <source>Spatial resolution of you image is too low: pixel size is {actual_res}, maximum allowed pixel size is {max_res}</source>
-        <translation type="unfinished">Пространственное разрешение вашего изображения слишком низкое: размер пикселя равен {actual_res}, максимально допустимый размер пикселя равен {max_res}</translation>
+        <translation>Пространственное разрешение вашего изображения слишком низкое: размер пикселя равен {actual_res}, максимально допустимый размер пикселя равен {max_res}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="45"/>
         <source>Error occurred during image {checked_param} check: {message}. Image metadata = {metadata}.</source>
-        <translation type="unfinished">Ошибка произошла во время проверки параметра {checked_param} изображения: {message}. Метаданные изображения = {metadata}.</translation>
+        <translation>Ошибка произошла во время проверки параметра {checked_param} изображения: {message}. Метаданные изображения = {metadata}.</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="47"/>
         <source>Your &apos;url&apos; doesn&apos;t match the format, Quadkey basemap must be a link containing &quot;q&quot; placeholder.</source>
-        <translation type="unfinished">Ссылка на Quadkey подложку не соответствует формату. Это должна быть ссылка, содержащая поле «q».</translation>
+        <translation>Ссылка на Quadkey подложку не соответствует формату. Это должна быть ссылка, содержащая поле «q».</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="50"/>
         <source>Input string {input_string} is of unknown format. It must represent Sentinel-2 granule ID.</source>
-        <translation type="unfinished">Строка {input_string} неизвестного формата. Она должна представлять собой ID гранулы снимка Sentinel-2.</translation>
+        <translation>Строка {input_string} неизвестного формата. Она должна представлять собой ID гранулы снимка Sentinel-2.</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="52"/>
         <source>Selected Sentinel-2 image cell is {actual_cell}, this model is for the cells: {allowed_cells}</source>
-        <translation type="unfinished">Выбранная ячейка {actual_cell} не подходит для обработки, модель рассчитана на ячейки: {allowed_cells}</translation>
+        <translation>Выбранная ячейка {actual_cell} не подходит для обработки, модель рассчитана на ячейки: {allowed_cells}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="54"/>
         <source>Selected Sentinel-2 image month is {actual_month}, this model is for: {allowed_months}</source>
-        <translation type="unfinished">Выбранный месяц {actual_month} не подходит для обработки, модель рассчитана на месяцы: {allowed_months}</translation>
+        <translation>Выбранный месяц {actual_month} не подходит для обработки, модель рассчитана на месяцы: {allowed_months}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="56"/>
         <source>You request TMS basemap link doesn&apos;t match the format, it must be a link containing &quot;x&quot;, &quot;y&quot;, &quot;z&quot; placeholders, correct it and start processing again.</source>
-        <translation type="unfinished">Ссылка на TMS подложку не соответствует формату. Это должна быть ссылка, содержащая поля &amp;quot;x&amp;quot;, &amp;quot;y&amp;quot;, &amp;quot;z&amp;quot;.</translation>
+        <translation>Ссылка на TMS подложку не соответствует формату. Это должна быть ссылка, содержащая поля &quot;x&quot;, &quot;y&quot;, &quot;z&quot;.</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="59"/>
         <source>Requirements must be dict, got {requirements_type}.</source>
-        <translation type="unfinished">Секция «requirements» в запросе должна быть словарем (dict), а не {requirements_type}.</translation>
+        <translation>Секция «requirements» в запросе должна быть словарем (dict), а не {requirements_type}.</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="60"/>
         <source>Request must be dict, got {request_type}.</source>
-        <translation type="unfinished">Секция «request» в запросе должна быть словарем (dict), а не {request_type}.</translation>
+        <translation>Секция «request» в запросе должна быть словарем (dict), а не {request_type}.</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="61"/>
         <source>Request must contain &quot;source_type&quot; key</source>
-        <translation type="unfinished">Запрос должен содержать тип источника спутниковых снимков (ключ «source_type»)</translation>
+        <translation>Запрос должен содержать тип источника спутниковых снимков (ключ «source_type»)</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="62"/>
         <source>Source type {source_type} is not allowed. Use one of: {allowed_sources}</source>
-        <translation type="unfinished">Источник данных {source_type}, не поддерживется платформой. Ипользуйте один из разрешенных: {allowed_sources}</translation>
+        <translation>Источник данных {source_type}, не поддерживется платформой. Ипользуйте один из разрешенных: {allowed_sources}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="64"/>
         <source>&quot;Required&quot; section of the requirements must contain dict, not {required_section_type}</source>
-        <translation type="unfinished">Секция «Required» в требованиях к данным должна быть словарем (dict), а не {required_section_type}</translation>
+        <translation>Секция «Required» в требованиях к данным должна быть словарем (dict), а не {required_section_type}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="66"/>
         <source>&quot;Recommended&quot; section of the requirements must contain dict, not {recommended_section_type}</source>
-        <translation type="unfinished">Секция «recommended» в требованиях к данным должна быть словарем (dict), а не {recommended_section_type}</translation>
+        <translation>Секция «recommended» в требованиях к данным должна быть словарем (dict), а не {recommended_section_type}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="68"/>
         <source>You XYZ basemap link doesn&apos;t match the format, it must be a link containing &quot;x&quot;, &quot;y&quot;, &quot;z&quot;  placeholders.</source>
-        <translation type="unfinished">Ссылка на XYZ подложку не соответствует формату. Это должна быть ссылка, содержащая поля &amp;quot;x&amp;quot;, &amp;quot;y&amp;quot;, &amp;quot;z&amp;quot;.</translation>
+        <translation>Ссылка на XYZ подложку не соответствует формату. Это должна быть ссылка, содержащая поля &quot;x&quot;, &quot;y&quot;, &quot;z&quot;.</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="73"/>
         <source>Internal error in process of data source validation. We are working on the fix, our support will contact you.</source>
-        <translation type="unfinished">Произошла ошибка в процессе проверки источника данных. Мы работаем над исправлением и свяжемся с вами.</translation>
+        <translation>Произошла ошибка в процессе проверки источника данных. Мы работаем над исправлением и свяжемся с вами.</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="94"/>
         <source>Internal error in process of loading data. We are working on the fix, our support will contact you.</source>
-        <translation type="unfinished">Произошла ошибка в процессе загрузки данных. Мы работаем над исправлением и свяжемся с вами.</translation>
+        <translation>Произошла ошибка в процессе загрузки данных. Мы работаем над исправлением и свяжемся с вами.</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="77"/>
         <source>Wrong source type {real_source_type}. Specify one of the allowed types {allowed_source_types}.</source>
-        <translation type="unfinished">Неправильный тип источника данных {real_source_type}. Используйте один из допустимых {allowed_source_types}.</translation>
+        <translation>Неправильный тип источника данных {real_source_type}. Используйте один из допустимых {allowed_source_types}.</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="79"/>
         <source>Your data loading task requires {estimated_size} MB of memory, which exceeded allowed memory limit {allowed_size}</source>
-        <translation type="unfinished">Ваш запрос на загрузку данных требует {estimated_size} MB, что превышает лимит в {allowed_size}</translation>
+        <translation>Ваш запрос на загрузку данных требует {estimated_size} MB, что превышает лимит в {allowed_size}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="81"/>
         <source>Dataloader argument {argument_name} has type {argument_type}, excpected to be {expected_type}</source>
-        <translation type="unfinished">Функция загрузки данных {argument_name} имеет тип {argument_type}, допустимый тип {expected_type}</translation>
+        <translation>Функция загрузки данных {argument_name} имеет тип {argument_type}, допустимый тип {expected_type}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="83"/>
         <source>Loaded tile has {real_nchannels} channels, required number is {expected_nchannels}</source>
-        <translation type="unfinished">Загруженное изображение имеет {real_nchannels} каналов, требуемое количество каналов {expected_nchannels}</translation>
+        <translation>Загруженное изображение имеет {real_nchannels} каналов, требуемое количество каналов {expected_nchannels}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="85"/>
         <source>Loaded tile has size {real_size}, expected tile size is {expected_size}</source>
-        <translation type="unfinished">Загруженное изображение имеет размер {real_size}, допустимый размер {expected_size}</translation>
+        <translation>Загруженное изображение имеет размер {real_size}, допустимый размер {expected_size}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="87"/>
         <source>Tile at location {tile_location} cannot be loaded, server response is {status}</source>
-        <translation type="unfinished">Изображение по адресу {tile_location} не может быть загружено, ответ сервера {status}</translation>
+        <translation>Изображение по адресу {tile_location} не может быть загружено, ответ сервера {status}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="89"/>
         <source>Response content at {tile_location} cannot be decoded as an image</source>
-        <translation type="unfinished">Ответ сервера {tile_location} не представляет собой изображение</translation>
+        <translation>Ответ сервера {tile_location} не представляет собой изображение</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="96"/>
         <source>Internal error in process of data preparation. We are working on the fix, our support will contact you.</source>
-        <translation type="unfinished">Произошла ошибка в процессе предобработки данных. Мы работаем над исправлением и свяжемся с вами.</translation>
+        <translation>Произошла ошибка в процессе предобработки данных. Мы работаем над исправлением и свяжемся с вами.</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="98"/>
         <source>Internal error in process of data processing. We are working on the fix, our support will contact you.</source>
-        <translation type="unfinished">Произошла ошибка в процессе обработки данных. Мы работаем над исправлением и свяжемся с вами.</translation>
+        <translation>Произошла ошибка в процессе обработки данных. Мы работаем над исправлением и свяжемся с вами.</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="100"/>
         <source>Internal error in process of saving the results. We are working on the fix, our support will contact you.</source>
-        <translation type="unfinished">Произошла ошибка в процессе сохранения результатов обработки. Мы работаем над исправлением и свяжемся с вами.</translation>
+        <translation>Произошла ошибка в процессе сохранения результатов обработки. Мы работаем над исправлением и свяжемся с вами.</translation>
     </message>
 </context>
 <context>
