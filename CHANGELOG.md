@@ -1,4 +1,19 @@
 
+## 1.8.0:
+    - Change UI
+        - processing controls moved to left panel
+        - processings table locks while loading results
+        - not allow to load results of non-finished or failed processings
+        - logout button moved to "settings" tab
+    - Add "rate processing" function
+    - handle errors that happened on data upload
+    - Turn off Sentinel-2 data processing
+    - Improve user data validation:
+        - Not allow upload/processing of too big images
+        - Not allow AOI out of projection bounds
+    - Use tilejson for processing results extent: allows to zoom to raster layers with empty processing results
+    - Changes for API updates on the server-side (team accounts)
+
  ## 1.7.0:
     - Improve data providers management
         - Builtin Maxar and Mapbox providers now cannot be reemoved or edited
