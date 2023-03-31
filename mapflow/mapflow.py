@@ -234,6 +234,7 @@ class Mapflow(QObject):
         self.dlg.imageId.textChanged.connect(self.set_image_id_label)
         # misc
         self.workflow_def_ids = {}
+        self.dlg.processingCostLabel.setVisible(self.config.PROCESSING_COST_LABEL_ENABLED)
 
     def set_image_id_label(self, text):
         if text:
@@ -1263,6 +1264,9 @@ class Mapflow(QObject):
 
     def calculate_processing_cost(self, aoi: QgsGeometry, workflow_def_id: uuid.UUID) -> None:
         """:return: calculated aoi area and cost in credits"""
+        # do not send any request, if PROCESSING_COST_LABEL_ENABLED setting is disabled
+        if not self.config.PROCESSING_COST_LABEL_ENABLED:
+            return
         geometry = json.loads(aoi.asJson())
         body = {"wdId": workflow_def_id,
                 "geometry": geometry}
