@@ -1785,9 +1785,6 @@ class Mapflow(QObject):
         if rating == 0:
             return
         feedback_text = self.dlg.processingRatingFeedbackText.toPlainText()
-        if not feedback_text:
-            self.alert(self.tr('Please, provide feedback for rating. Thank you!'))
-            return
         body = {
             'rating': rating,
             'feedback': feedback_text
@@ -1795,15 +1792,26 @@ class Mapflow(QObject):
         self.http.put(
             url=f'{self.server}/processings/{pid}/rate',
             body=json.dumps(body).encode(),
-            callback=self.submit_processing_rating_callback
+            callback=self.submit_processing_rating_callback,
+            callback_kwargs={'feedback': feedback_text}
 
         )
 
-    def submit_processing_rating_callback(self, response: QNetworkReply) -> None:
-        self.alert(
-            self.tr("Thank you! Your rating and feedback are submitted!"),
-            QMessageBox.Information
-        )
+    def submit_processing_rating_callback(self, response: QNetworkReply, feedback: str) -> None:
+        if not feedback:
+            self.alert(
+                self.tr(
+                    "Thank you! Your rating is submitted!\nWe would appreciate if you add feedback as well."
+                ),
+                QMessageBox.Information
+            )
+        else:
+            self.alert(
+                self.tr(
+                    "Thank you! Your rating and feedback are submitted!"
+                ),
+                QMessageBox.Information
+            )
         self.update_processing_current_rating()
 
     def enable_rating_submit_button(self) -> None:
