@@ -1922,6 +1922,8 @@ class Mapflow(QObject):
         # Add the source raster (COG) if it has been created
         raster_url = processing.raster_layer.get('tileUrl')
         tile_json_url = processing.raster_layer.get("tileJsonUrl")
+        print(raster_url)
+        print(tile_json_url)
         if raster_url:
             params = {
                 'type': 'xyz',
@@ -1936,15 +1938,21 @@ class Mapflow(QObject):
                 processing.name + ' image',
                 'wms'
             )
-        self.http.get(
-            url=tile_json_url,
-            callback=self.set_raster_extent,
-            callback_kwargs={
-                'vector': results_layer,
-                'raster': raster
-            },
-            error_handler=self.set_raster_extent_error_handler
-        )
+            self.http.get(
+                url=tile_json_url,
+                callback=self.set_raster_extent,
+                callback_kwargs={
+                    'vector': results_layer,
+                    'raster': raster
+                },
+                use_default_error_handler=False,
+                error_handler=self.set_raster_extent_error_handler,
+                error_handler_kwargs={
+                    'vector': results_layer,
+                }
+            )
+        else:
+            self.set_raster_extent_error_handler(response=None, vector=results_layer)
 
     def download_results_error_handler(self, response: QNetworkReply) -> None:
         """Error handler for downloading processing results.
@@ -1968,17 +1976,17 @@ class Mapflow(QObject):
         """
         bounding_box = get_bounding_box_from_tile_json(response=response)
         raster.setExtent(rect=bounding_box)
-        # Add the layers to the project
         self.add_layer(raster)
         self.add_layer(vector)
         self.iface.zoomToActiveLayer()
 
-    def set_raster_extent_error_handler(self, response: QNetworkReply) -> None:
-        """Error handler for processing AOI requests.
+    def set_raster_extent_error_handler(self,
+                                        response: QNetworkReply,
+                                        vector: Optional[QgsVectorLayer]):
 
-        :param response: The HTTP response.
+        """Error handler for processing AOI requests. If tilejson can't be loaded, we do not add raster layer, and 
         """
-        self.report_http_error(response, self.tr('Error loading results'))
+        self.add_layer(vector)
 
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """Display a minimalistic modal dialog with some info or a question.
