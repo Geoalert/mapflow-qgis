@@ -1922,8 +1922,6 @@ class Mapflow(QObject):
         # Add the source raster (COG) if it has been created
         raster_url = processing.raster_layer.get('tileUrl')
         tile_json_url = processing.raster_layer.get("tileJsonUrl")
-        print(raster_url)
-        print(tile_json_url)
         if raster_url:
             params = {
                 'type': 'xyz',
