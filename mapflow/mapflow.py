@@ -1583,7 +1583,7 @@ class Mapflow(QObject):
         else:
             self.remaining_limit = int(response_data.get('remainingArea', 0)) / 1e6  # convert into sq.km
         if self.plugin_name == 'Mapflow':
-            footer = self.tr(f'Processing limit: {self.remaining_limit:.2f} sq.km')
+            footer = self.tr('Processing limit: {:.2f} sq.km').format(self.remaining_limit)
             self.dlg.remainingLimit.setText(footer)
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:

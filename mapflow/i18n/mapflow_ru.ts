@@ -1166,8 +1166,8 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
     </message>
     <message>
         <location filename="../mapflow.py" line="1586"/>
-        <source>Processing limit: {self.remaining_limit:.2f} sq.km</source>
-        <translation>Лимит обработки: {self.remaining_limit:.2f} кв.км</translation>
+        <source>Processing limit: {:.2f} sq.km</source>
+        <translation>Лимит обработки: {:.2f} кв.км</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1781"/>
