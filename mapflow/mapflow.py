@@ -225,6 +225,18 @@ class Mapflow(QObject):
                 use_default_error_handler=False  # ignore errors to prevent repetitive alerts
             )
         )
+        # timer for user update at startup, in case get_processings request takes too long
+        # stopped as soon as first /user/status request is made
+        self.app_startup_user_update_timer = QTimer(self.dlg)
+        self.app_startup_user_update_timer.setInterval(500)
+        self.app_startup_user_update_timer.timeout.connect(
+            lambda: self.http.get(
+                url=f'{self.server}/user/status',
+                callback=self.set_processing_limit,
+                callback_kwargs={'app_startup_request': True},
+                use_default_error_handler=False
+            )
+        )
         # Add layer menu
         self.add_layer_menu = QMenu()
         self.create_aoi_from_map_action = QAction(self.tr("Create new AOI layer from map extent"))
@@ -1575,7 +1587,10 @@ class Mapflow(QObject):
             callback=self.set_processing_limit
         )
 
-    def set_processing_limit(self, response: QNetworkReply) -> None:
+    def set_processing_limit(self, response: QNetworkReply,
+                             app_startup_request: Optional[bool] = False) -> None:
+        if app_startup_request:
+            self.app_startup_user_update_timer.stop()
         response_data = json.loads(response.readAll().data())
         # check here, if user is admin:
         if response_data.get('admin'):
@@ -1583,7 +1598,7 @@ class Mapflow(QObject):
         else:
             self.remaining_limit = int(response_data.get('remainingArea', 0)) / 1e6  # convert into sq.km
         if self.plugin_name == 'Mapflow':
-            footer = self.tr(f'Processing limit: {self.remaining_limit:.2f} sq.km')
+            footer = self.tr('Processing limit: {:.2f} sq.km').format(self.remaining_limit)
             self.dlg.remainingLimit.setText(footer)
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
@@ -1785,9 +1800,6 @@ class Mapflow(QObject):
         if rating == 0:
             return
         feedback_text = self.dlg.processingRatingFeedbackText.toPlainText()
-        if not feedback_text:
-            self.alert(self.tr('Please, provide feedback for rating. Thank you!'))
-            return
         body = {
             'rating': rating,
             'feedback': feedback_text
@@ -1795,15 +1807,26 @@ class Mapflow(QObject):
         self.http.put(
             url=f'{self.server}/processings/{pid}/rate',
             body=json.dumps(body).encode(),
-            callback=self.submit_processing_rating_callback
+            callback=self.submit_processing_rating_callback,
+            callback_kwargs={'feedback': feedback_text}
 
         )
 
-    def submit_processing_rating_callback(self, response: QNetworkReply) -> None:
-        self.alert(
-            self.tr("Thank you! Your rating and feedback are submitted!"),
-            QMessageBox.Information
-        )
+    def submit_processing_rating_callback(self, response: QNetworkReply, feedback: str) -> None:
+        if not feedback:
+            self.alert(
+                self.tr(
+                    "Thank you! Your rating is submitted!\nWe would appreciate if you add feedback as well."
+                ),
+                QMessageBox.Information
+            )
+        else:
+            self.alert(
+                self.tr(
+                    "Thank you! Your rating and feedback are submitted!"
+                ),
+                QMessageBox.Information
+            )
         self.update_processing_current_rating()
 
     def enable_rating_submit_button(self) -> None:
@@ -1928,15 +1951,21 @@ class Mapflow(QObject):
                 processing.name + ' image',
                 'wms'
             )
-        self.http.get(
-            url=tile_json_url,
-            callback=self.set_raster_extent,
-            callback_kwargs={
-                'vector': results_layer,
-                'raster': raster
-            },
-            error_handler=self.set_raster_extent_error_handler
-        )
+            self.http.get(
+                url=tile_json_url,
+                callback=self.set_raster_extent,
+                callback_kwargs={
+                    'vector': results_layer,
+                    'raster': raster
+                },
+                use_default_error_handler=False,
+                error_handler=self.set_raster_extent_error_handler,
+                error_handler_kwargs={
+                    'vector': results_layer,
+                }
+            )
+        else:
+            self.set_raster_extent_error_handler(response=None, vector=results_layer)
 
     def download_results_error_handler(self, response: QNetworkReply) -> None:
         """Error handler for downloading processing results.
@@ -1960,17 +1989,17 @@ class Mapflow(QObject):
         """
         bounding_box = get_bounding_box_from_tile_json(response=response)
         raster.setExtent(rect=bounding_box)
-        # Add the layers to the project
         self.add_layer(raster)
         self.add_layer(vector)
         self.iface.zoomToActiveLayer()
 
-    def set_raster_extent_error_handler(self, response: QNetworkReply) -> None:
-        """Error handler for processing AOI requests.
+    def set_raster_extent_error_handler(self,
+                                        response: QNetworkReply,
+                                        vector: Optional[QgsVectorLayer]):
 
-        :param response: The HTTP response.
+        """Error handler for processing AOI requests. If tilejson can't be loaded, we do not add raster layer, and 
         """
-        self.report_http_error(response, self.tr('Error loading results'))
+        self.add_layer(vector)
 
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """Display a minimalistic modal dialog with some info or a question.
@@ -2321,6 +2350,7 @@ class Mapflow(QObject):
             self.dlg.setWindowTitle(self.plugin_name + f' {self.config.MAPFLOW_ENV}')
         self.dlg.show()
         self.user_status_update_timer.start()
+        self.app_startup_user_update_timer.start()
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
         """Inspect the plugin version backend expects and show a warning if it is incompatible w/ the plugin.
@@ -2385,6 +2415,7 @@ class Mapflow(QObject):
             self.dlg.show()
             self.update_processing_limit()
             self.user_status_update_timer.start()
+            self.app_startup_user_update_timer.start()
         elif token:  # token saved
             self.http.basic_auth = f'Basic {token}'
             self.log_in(token)
