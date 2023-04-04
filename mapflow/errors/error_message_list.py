@@ -1,0 +1,18 @@
+from typing import Dict
+from PyQt5.QtCore import QObject
+
+
+class ErrorMessageList(QObject):
+    def __init__(self):
+        super().__init__()
+        self.error_descriptions = {}
+
+    def update(self, other):
+        # sanity check
+        assert set(self.error_descriptions.keys()).intersection(set(other.error_descriptions.keys())) == set()
+        self.error_descriptions.update(other.error_descriptions)
+
+    def get(self, key, default=None):
+        if not default:
+            default = self.tr("Unknown error. Contact us to resolve the issue! help@geoalert.io")
+        return self.error_descriptions.get(key, default)

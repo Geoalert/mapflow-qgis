@@ -1,4 +1,7 @@
-from typing import Optional
+import json
+from pyproj import Proj, transform
+from PyQt5.QtNetwork import QNetworkReply
+from qgis.core import QgsRectangle
 
 
 def generate_xyz_layer_definition(url, username, password, max_zoom, source_type):
@@ -56,3 +59,19 @@ def add_connect_id(url: str, connect_id: str):
     if not url.endswith('?'):
         url = url + '&'
     return url + f'CONNECTID={connect_id}'
+
+
+def get_bounding_box_from_tile_json(response: QNetworkReply) -> QgsRectangle:
+    """Construct bounding box from response got from tile server as tile_json.
+    As tile server returns tile_json in epsg:4326, first transform it to epsg:3857.
+    :param: response: QNetworkReply, response got from tile server, tile_json.
+    :return: QgsRectangle
+    """
+    bounds = json.loads(response.readAll().data()).get('bounds')
+    out_proj = Proj(init='epsg:3857')
+    in_proj = Proj(init='epsg:4326')
+
+    xmin, ymin = transform(in_proj, out_proj, bounds[0], bounds[1])
+    xmax, ymax = transform(in_proj, out_proj, bounds[2], bounds[3])
+
+    return QgsRectangle(xmin, ymin, xmax, ymax)

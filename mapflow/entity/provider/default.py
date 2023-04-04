@@ -1,7 +1,7 @@
 from .provider import staticproperty
 from .xyz_provider import XYZProvider, SourceType, CRS
 from .proxy_provider import ProxyProvider, MaxarProxyProvider
-from ...config import SENTINEL_OPTION_NAME
+from ...constants import SENTINEL_OPTION_NAME
 
 
 class SentinelProvider(ProxyProvider):
@@ -55,15 +55,11 @@ class MaxarSecureWatchProxyProvider(MaxarProxyProvider):
 class MapboxProvider(XYZProvider):
     def __init__(self):
         super().__init__(name="Mapbox",
-                         url=None, #  'https://api.tiles.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.jpg?access_token={token}',
+                         url="https://api.tiles.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.jpg?access_token={token}",
                          crs=CRS.web_mercator)
     @property
     def preview_url(self, image_id=None):
         return None
-
-    def to_processing_params(self, image_id=None):
-        # This is a default provider which is supplied on server
-        return {}, {}
 
     @property
     def is_default(self):

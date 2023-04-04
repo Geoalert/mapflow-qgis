@@ -1,8 +1,11 @@
 import json
+import uuid
+from pathlib import Path
 import os.path
 import tempfile
+from time import time
 from base64 import b64encode, b64decode
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Callable
 from datetime import datetime  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
@@ -12,7 +15,7 @@ from PyQt5.QtGui import QColor, QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
     QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion,
-    QTextStream, QByteArray
+    QTextStream, QByteArray, QVariant
 )
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction,
@@ -26,10 +29,13 @@ from qgis.core import (
     QgsWkbTypes, QgsPoint, QgsMapLayerType
 )
 
-from .dialogs.dialogs import MainDialog, LoginDialog, ErrorMessage
+from .dialogs.dialogs import MainDialog, LoginDialog, ErrorMessageWidget
 from .dialogs.provider_dialog import ProviderDialog
-from .http import Http, update_processing_limit
-from . import helpers, config
+from .http import (Http,
+                   get_error_report_body,
+                   data_catalog_message_parser,
+                   securewatch_message_parser)
+from .config import Config
 from .entity.processing import parse_processings_request, Processing, ProcessingHistory, updated_processings
 from .entity.provider import (Provider,
                               MaxarProvider,
@@ -39,13 +45,11 @@ from .entity.provider import (Provider,
                               create_provider)
 
 from .functional.geometry import clip_aoi_to_image_extent
-from .errors import ErrorMessageList
-from .layer_utils import generate_xyz_layer_definition
-from .helpers import check_version
+from . import helpers, constants
+from .layer_utils import generate_xyz_layer_definition, get_bounding_box_from_tile_json
 
 
 class Mapflow(QObject):
-
     """This class represents the plugin. It is instantiated by QGIS."""
 
     def __init__(self, iface) -> None:
@@ -56,6 +60,9 @@ class Mapflow(QObject):
         # init empty params
         self.username = self.password = ''
         self.version_ok = True
+        # init configs
+        self.config = Config()
+        self.remaining_limit = 0
         # Save refs to key variables used throughout the plugin
         self.iface = iface
         self.main_window = self.iface.mainWindow()
@@ -64,19 +71,19 @@ class Mapflow(QObject):
         self.message_bar = self.iface.messageBar()
         self.plugin_dir = os.path.dirname(__file__)
         self.temp_dir = tempfile.gettempdir()
-        self.plugin_name = config.PLUGIN_NAME  # aliased here to be overloaded in submodules
+        self.plugin_name = self.config.PLUGIN_NAME  # aliased here to be overloaded in submodules
         # Settings will be used to store credentials and various UI customizations
         self.settings = QgsSettings()
         # Get the server environment to connect to (for admins)
-        mapflow_env = self.settings.value('variables/mapflow_env') or 'production'
-        self.server = config.SERVER.format(env=mapflow_env)
-        self.project_id = QgsSettings().value('variables/project_id') or 'default'
+        self.server = self.config.SERVER
         # By default, plugin adds layers to a group unless user explicitly deletes it
         self.add_layers_to_group = True
         self.layer_tree_root = self.project.layerTreeRoot()
         # Set up authentication flags
         self.logged_in = False
         # Store user's current processing
+        self.processing_history = ProcessingHistory.from_settings(
+            self.settings.value('processings', {}).get(self.config.MAPFLOW_ENV, {}).get(self.username, {}))
         self.processings = []
         # Init toolbar and toolbar buttons
         self.toolbar = self.iface.addToolBar(self.plugin_name)
@@ -114,16 +121,18 @@ class Mapflow(QObject):
         self.calculator = QgsDistanceArea()
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
-        self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or config.DEFAULT_ZOOM))
+        self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or self.config.DEFAULT_ZOOM))
 
         # load providers from settings
         errors = []
         try:
-            self.providers, errors = ProvidersDict.from_settings(settings=self.settings, env=mapflow_env)
+            self.providers, errors = ProvidersDict.from_settings(settings=self.settings, server=self.config.SERVER)
         except Exception as e:
             self.alert(self.tr("Error during loading the data providers: {e}").format(str(e)))
         if errors:
-            self.alert(self.tr('We failed to import providers {errors} from the settings. Please add them again').format(errors))
+            self.alert(
+                self.tr('We failed to import providers {errors} from the settings. Please add them again').format(
+                    errors))
         self.update_providers()
         self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
         self.dlg.minIntersection.setValue(int(self.settings.value('metadataMinIntersection', 0)))
@@ -133,13 +142,9 @@ class Mapflow(QObject):
         self.dlg.metadataFrom.setDate(self.settings.value('metadataFrom', today.addMonths(-6)))
         self.dlg.metadataTo.setDate(self.settings.value('metadataTo', today))
         # Hide the ID columns as only needed for table operations, not the user
-        self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
+        self.dlg.processingsTable.setColumnHidden(self.config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
-        imagery_sources = [
-            self.dlg.rasterCombo.layer(index)
-            for index in range(self.dlg.rasterCombo.count())
-        ]
-        self.filter_non_tif_rasters(list(filter(bool, imagery_sources)))
+        self.filter_bad_rasters()
         self.dlg.modelCombo.currentTextChanged.connect(self.set_available_imagery_sources)
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
@@ -147,9 +152,9 @@ class Mapflow(QObject):
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         self.dlg.selectTif.clicked.connect(self.select_tif)
+        self.dlg.downloadResultsButton.clicked.connect(self.download_results)
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.rasterCombo.layerChanged.connect(self.toggle_processing_checkboxes)
-        self.dlg.rasterCombo.layerChanged.connect(self.disallow_local_rasters_with_sentinel)
         self.dlg.rasterCombo.currentTextChanged.connect(self.toggle_processing_checkboxes)
         self.dlg.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
         self.dlg.startProcessing.clicked.connect(self.create_processing)
@@ -164,10 +169,26 @@ class Mapflow(QObject):
             self.project.mapLayer(layer_id) for layer_id in self.project.mapLayers(validOnly=True)
         ])
         self.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
-        self.project.layersAdded.connect(self.filter_non_tif_rasters)
+        self.project.layersAdded.connect(self.filter_bad_rasters)
         # Processings
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
+        # Processings ratings
+        self.dlg.processingsTable.cellClicked.connect(self.update_processing_current_rating)
+        self.dlg.ratingSubmitButton.clicked.connect(self.submit_processing_rating)
+        self.dlg.ratingSubmitButton.setEnabled(False)  # by default disabled
+        self.dlg.processingsTable.cellClicked.connect(self.enable_rating_submit_button)
+        # Processings ratings radioButtons
+        self.radio_buttons = [
+            self.dlg.processingRating_1,
+            self.dlg.processingRating_2,
+            self.dlg.processingRating_3,
+            self.dlg.processingRating_4,
+            self.dlg.processingRating_5,
+        ]
+        # connect radio buttons signals
+        for radio in self.radio_buttons:
+            radio.toggled.connect(self.enable_rating_submit_button)
         # Providers
         self.dlg.minIntersectionSpinBox.valueChanged.connect(self.filter_metadata)
         self.dlg.maxCloudCoverSpinBox.valueChanged.connect(self.filter_metadata)
@@ -186,15 +207,36 @@ class Mapflow(QObject):
         self.dlg.providerCombo.currentTextChanged.connect(self.on_provider_change)
         # Poll processings
         self.processing_fetch_timer = QTimer(self.dlg)
-        self.processing_fetch_timer.setInterval(config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
+        self.processing_fetch_timer.setInterval(self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
         self.processing_fetch_timer.timeout.connect(
             lambda: self.http.get(
-                url=f'{self.server}/projects/{self.project_id}/processings',
+                url=f'{self.server}/projects/{self.config.PROJECT_ID}/processings',
                 callback=self.get_processings_callback,
                 use_default_error_handler=False  # ignore errors to prevent repetitive alerts
             )
         )
-        self.error_messages = ErrorMessageList()
+        # Poll user status to get limits
+        self.user_status_update_timer = QTimer(self.dlg)
+        self.user_status_update_timer.setInterval(self.config.USER_STATUS_UPDATE_INTERVAL * 1000)
+        self.user_status_update_timer.timeout.connect(
+            lambda: self.http.get(
+                url=f'{self.server}/user/status',
+                callback=self.set_processing_limit,
+                use_default_error_handler=False  # ignore errors to prevent repetitive alerts
+            )
+        )
+        # timer for user update at startup, in case get_processings request takes too long
+        # stopped as soon as first /user/status request is made
+        self.app_startup_user_update_timer = QTimer(self.dlg)
+        self.app_startup_user_update_timer.setInterval(500)
+        self.app_startup_user_update_timer.timeout.connect(
+            lambda: self.http.get(
+                url=f'{self.server}/user/status',
+                callback=self.set_processing_limit,
+                callback_kwargs={'app_startup_request': True},
+                use_default_error_handler=False
+            )
+        )
         # Add layer menu
         self.add_layer_menu = QMenu()
         self.create_aoi_from_map_action = QAction(self.tr("Create new AOI layer from map extent"))
@@ -202,11 +244,13 @@ class Mapflow(QObject):
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
         self.dlg.imageId.textChanged.connect(self.set_image_id_label)
-
+        # misc
+        self.workflow_def_ids = {}
+        self.dlg.processingCostLabel.setVisible(self.config.PROCESSING_COST_LABEL_ENABLED)
 
     def set_image_id_label(self, text):
         if text:
-            self.dlg.imageId_label.setText(self.tr('Selected Image ID: {text}').format(text=text))
+            self.dlg.imageId_label.setText(self.tr('Selected Image ID:\n {text}').format(text=text))
         else:
             self.dlg.imageId_label.setText("")
 
@@ -254,32 +298,29 @@ class Mapflow(QObject):
             else:
                 self.alert(self.tr(f'Your file is not valid vector data source!'))
 
-    def filter_non_tif_rasters(self, _: List[QgsMapLayer]) -> None:
+    def filter_bad_rasters(self, changed_layers: Optional[List[QgsRasterLayer]] = None) -> None:
         """Leave only GeoTIFF layers in the Imagery Source combo box."""
         # (!) Instead of going thru all project layers each time
         # it'd be better to filter the new layers, then add them to
         # the already filtered ones like rasterCombo.exceptedLayerList() + new_layers
         # but calling exceptedLayerList() crashes when it contains deleted layers
-        self.dlg.rasterCombo.setExceptedLayerList([
-            layer for layer in self.project.mapLayers().values() 
-            if layer.type() == QgsMapLayerType.RasterLayer 
-            and not (
-                layer.crs().isValid()
-                and os.path.splitext(layer.dataProvider().dataSourceUri())[-1] in ('.tif', '.tiff')
-                and os.path.exists(layer.dataProvider().dataSourceUri())
-                and os.path.getsize(layer.publicSource()) / 2**20 < config.MAX_TIF_SIZE
-            )
-        ])
 
-    def disallow_local_rasters_with_sentinel(self, raster: QgsRasterLayer) -> None:
-        """Override local raster selection if the model is Sentinel-2 Fields."""
-        if raster and self.dlg.modelCombo.currentText() in config.SENTINEL_WD_NAMES:
-            self.alert(self.tr(
-                "Currently, Mapflow doesn't support uploading own Sentinel-2 imagery. "
-                'To process Sentinel-2, go to the Providers tab andSENTINEL_WD_NAME either search for your image '
-                'in the catalog or paste its ID in the Image ID field.'
-            ))
-            self.dlg.rasterCombo.setCurrentText(config.SENTINEL_OPTION_NAME)
+        # so we will need to add new function like "remove_filtered_layers" to handle this.
+        # However, current implementation takes 4 ms when 100 files are opened, which is OK
+
+        raster_layers = (layer for layer in self.project.mapLayers().values()
+                         if layer.type() == QgsMapLayerType.RasterLayer)
+        if self.dlg.modelCombo.currentText() in self.config.SENTINEL_WD_NAMES:
+            filtered_raster_layers = raster_layers
+        else:
+            try:
+                filtered_raster_layers = [
+                    layer for layer in raster_layers
+                    if not helpers.raster_layer_is_allowed(layer)
+                ]
+            except Exception as e:
+                self.alert(f"Error checking raster layers validity: {e}")
+        self.dlg.rasterCombo.setExceptedLayerList(filtered_raster_layers)
 
     def set_available_imagery_sources(self, wd: str) -> None:
         """Restrict the list of imagery sources according to the selected model."""
@@ -288,21 +329,20 @@ class Mapflow(QObject):
         web_providers = [provider.name for provider in self.providers.values() if
                          not isinstance(provider, SentinelProvider)]
         current_sources = self.dlg.rasterCombo.additionalItems()
-        if wd in config.SENTINEL_WD_NAMES and not set(current_sources) == set(sentinel_providers):
-            # Prevent disallow_local_rasters_with_sentinel() from being triggered
-            self.dlg.rasterCombo.blockSignals(True)
+        if wd in self.config.SENTINEL_WD_NAMES and not set(current_sources) == set(sentinel_providers):
             self.dlg.rasterCombo.setAdditionalItems(sentinel_providers)
             if sentinel_providers:
                 self.dlg.rasterCombo.setCurrentText(sentinel_providers[0])
             self.dlg.providerCombo.clear()
             self.dlg.providerCombo.addItems(sentinel_providers)
-            self.dlg.rasterCombo.blockSignals(False)
+            self.filter_bad_rasters()  # filter rasters for sentinel
         elif not set(current_sources) == set(web_providers):
             # skip update in case source list did not change.
             # This prevents the current selected item from being discarded
             self.dlg.rasterCombo.setAdditionalItems(web_providers)
             self.dlg.providerCombo.clear()
             self.dlg.providerCombo.addItems(web_providers)
+            self.filter_bad_rasters()
 
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
         """Filter out the metadata table and layer every time user changes a filter."""
@@ -324,18 +364,18 @@ class Mapflow(QObject):
         aoi = helpers.from_wgs84(self.metadata_aoi, crs)
         self.calculator.setEllipsoid(crs.ellipsoidAcronym())
         self.calculator.setSourceCrs(crs, self.project.transformContext())
-        min_intersection_size = self.calculator.measureArea(aoi) * (min_intersection/100)
+        min_intersection_size = self.calculator.measureArea(aoi) * (min_intersection / 100)
         aoi = QgsGeometry.createGeometryEngine(aoi.constGet())
         aoi.prepareGeometry()
         # Get attributes
-        if self.dlg.providerCombo.currentText() == config.SENTINEL_OPTION_NAME:
-            id_column_index = config.SENTINEL_ID_COLUMN_INDEX
-            datetime_column_index = config.SENTINEL_DATETIME_COLUMN_INDEX
-            cloud_cover_column_index = config.SENTINEL_CLOUD_COLUMN_INDEX
+        if self.dlg.providerCombo.currentText() == constants.SENTINEL_OPTION_NAME:
+            id_column_index = self.config.SENTINEL_ID_COLUMN_INDEX
+            datetime_column_index = self.config.SENTINEL_DATETIME_COLUMN_INDEX
+            cloud_cover_column_index = self.config.SENTINEL_CLOUD_COLUMN_INDEX
         else:  # Maxar
-            id_column_index = config.MAXAR_ID_COLUMN_INDEX
-            datetime_column_index = config.MAXAR_DATETIME_COLUMN_INDEX
-            cloud_cover_column_index = config.MAXAR_CLOUD_COLUMN_INDEX
+            id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
+            datetime_column_index = self.config.MAXAR_DATETIME_COLUMN_INDEX
+            cloud_cover_column_index = self.config.MAXAR_CLOUD_COLUMN_INDEX
         self.metadata_layer.setSubsetString('')  # clear any existing filters
         filtered_ids = [
             feature['id'] for feature in self.metadata_layer.getFeatures()
@@ -360,11 +400,10 @@ class Mapflow(QObject):
     def set_up_login_dialog(self) -> None:
         """Create a login dialog, set its title and signal-slot connections."""
         self.dlg_login = LoginDialog(self.main_window)
-        env = QgsSettings().value('variables/mapflow_env') or 'production'
-        if env == 'production':
+        if self.config.MAPFLOW_ENV == 'production':
             self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
         else:
-            self.dlg_login.setWindowTitle(self.plugin_name + f' {env} - ' + self.tr('Log in'))
+            self.dlg_login.setWindowTitle(self.plugin_name + f' {self.config.MAPFLOW_ENV} - ' + self.tr('Log in'))
         self.dlg_login.logIn.clicked.connect(self.read_mapflow_token)
 
     def toggle_polygon_combos(self, use_image_extent: bool) -> None:
@@ -381,12 +420,12 @@ class Mapflow(QObject):
         """
         current_provider = self.providers.get(self.dlg.providerCombo.currentText())
         if isinstance(current_provider, MaxarProxyProvider):
-            max_zoom = config.MAXAR_MAX_FREE_ZOOM
+            max_zoom = self.config.MAXAR_MAX_FREE_ZOOM
             value = max_zoom
         else:
-            max_zoom = config.MAX_ZOOM
+            max_zoom = self.config.MAX_ZOOM
             # Forced to int bc somehow used to be stored as str, so for backward compatability
-            value = int(self.settings.value('maxZoom', config.DEFAULT_ZOOM))
+            value = int(self.settings.value('maxZoom', self.config.DEFAULT_ZOOM))
         self.dlg.maxZoom.setMaximum(max_zoom)
         self.dlg.maxZoom.setValue(value)
 
@@ -401,7 +440,7 @@ class Mapflow(QObject):
         self.dlg.metadataTable.clear()
         self.dlg.imageId.clear()
 
-        more_button = self.dlg.findChild(QPushButton, config.METADATA_MORE_BUTTON_OBJECT_NAME)
+        more_button = self.dlg.findChild(QPushButton, self.config.METADATA_MORE_BUTTON_OBJECT_NAME)
         if more_button:
             self.dlg.layoutMetadataTable.removeWidget(more_button)
             more_button.deleteLater()
@@ -412,17 +451,17 @@ class Mapflow(QObject):
 
         if isinstance(provider, SentinelProvider):
             is_max_zoom_enabled = False
-            columns = config.SENTINEL_ATTRIBUTES
-            hidden_column_index = len(config.SENTINEL_ATTRIBUTES) - 1
-            sort_by = config.SENTINEL_DATETIME_COLUMN_INDEX
+            columns = self.config.SENTINEL_ATTRIBUTES
+            hidden_column_index = len(self.config.SENTINEL_ATTRIBUTES) - 1
+            sort_by = self.config.SENTINEL_DATETIME_COLUMN_INDEX
             enabled = True
             image_id_placeholder = self.tr('e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00')
             additional_filters_enabled = True
         elif isinstance(provider, (MaxarProvider, MaxarProxyProvider)):
             is_max_zoom_enabled = True
-            columns = config.MAXAR_METADATA_ATTRIBUTES
+            columns = self.config.MAXAR_METADATA_ATTRIBUTES
             hidden_column_index = None
-            sort_by = config.MAXAR_DATETIME_COLUMN_INDEX
+            sort_by = self.config.MAXAR_DATETIME_COLUMN_INDEX
             enabled = True
             image_id_placeholder = self.tr('e.g. a3b154c40cc74f3b934c0ffc9b34ecd1')
             additional_filters_enabled = True
@@ -636,7 +675,7 @@ class Mapflow(QObject):
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
-        more_button = self.dlg.findChild(QPushButton, config.METADATA_MORE_BUTTON_OBJECT_NAME)
+        more_button = self.dlg.findChild(QPushButton, self.config.METADATA_MORE_BUTTON_OBJECT_NAME)
         if more_button:
             self.dlg.layoutMetadataTable.removeWidget(more_button)
             more_button.deleteLater()
@@ -665,12 +704,12 @@ class Mapflow(QObject):
             self.alert(self.tr("Provider {name} does not support metadata requests").format(name=provider.name))
 
     def request_skywatch_metadata(
-        self,
-        aoi: QgsGeometry,
-        from_: str,
-        to: str,
-        max_cloud_cover: int,
-        min_intersection: int,
+            self,
+            aoi: QgsGeometry,
+            from_: str,
+            to: str,
+            max_cloud_cover: int,
+            min_intersection: int,
     ) -> None:
         """Sumbit a request to SkyWatch to get metadata."""
         self.metadata_aoi = aoi
@@ -682,7 +721,7 @@ class Mapflow(QObject):
         aoi_bbox_geom = QgsGeometry.fromRect(aoi_bbox)
         # Check the area
         aoi_too_large_message = self.tr('Your area of interest is too large.')
-        if self.calculator.measureArea(aoi_bbox_geom) > config.SKYWATCH_METADATA_MAX_AREA:
+        if self.calculator.measureArea(aoi_bbox_geom) > self.config.SKYWATCH_METADATA_MAX_AREA:
             self.alert(aoi_too_large_message)
             return
         # Check the side length
@@ -696,8 +735,8 @@ class Mapflow(QObject):
         width = QgsGeometry.fromPolyline((north_west, QgsPoint(x_max, y_max)))
         height = QgsGeometry.fromPolyline((north_west, QgsPoint(x_min, y_min)))
         if (
-            self.calculator.measureLength(width) > config.SKYWATCH_METADATA_MAX_SIDE_LENGTH
-            or self.calculator.measureLength(height) > config.SKYWATCH_METADATA_MAX_SIDE_LENGTH
+                self.calculator.measureLength(width) > self.config.SKYWATCH_METADATA_MAX_SIDE_LENGTH
+                or self.calculator.measureLength(height) > self.config.SKYWATCH_METADATA_MAX_SIDE_LENGTH
         ):
             self.alert(aoi_too_large_message)
             return
@@ -729,10 +768,10 @@ class Mapflow(QObject):
         self.dlg.getMetadata.blockSignals(True)
 
     def request_skywatch_metadata_callback(
-        self,
-        response: QNetworkReply,
-        max_cloud_cover: int,
-        min_intersection: int
+            self,
+            response: QNetworkReply,
+            max_cloud_cover: int,
+            min_intersection: int
     ):
         """Start polling SkyWatch for metadata upon a successful request submission
 
@@ -755,14 +794,14 @@ class Mapflow(QObject):
                 'cloudCover': 'int',
                 'acquisitionDate': 'datetime'
             }.items()),
-            config.SENTINEL_OPTION_NAME + ' metadata',
+            constants.SENTINEL_OPTION_NAME + ' metadata',
             'memory'
         )
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
         self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
         # Poll processings
         metadata_fetch_timer = QTimer(self.dlg)
-        metadata_fetch_timer.setInterval(config.SKYWATCH_POLL_INTERVAL * 1000)
+        metadata_fetch_timer.setInterval(self.config.SKYWATCH_POLL_INTERVAL * 1000)
         metadata_fetch_timer.timeout.connect(
             lambda: self.fetch_skywatch_metadata(
                 'mapflow' in response.request().url().authority(),
@@ -785,16 +824,16 @@ class Mapflow(QObject):
         if error == QNetworkReply.ContentAccessDenied:
             self.alert(self.tr('Please, check your credentials'))
         else:
-            self.report_error(response, self.tr("We couldn't fetch Sentinel metadata"))
+            self.report_http_error(response, self.tr("We couldn't fetch Sentinel metadata"))
 
     def fetch_skywatch_metadata(
-        self,
-        is_proxied: bool,
-        request_id: str,
-        max_cloud_cover: int = None,
-        min_intersection: int = None,
-        timer: QTimer = None,
-        start_index: int = 0
+            self,
+            is_proxied: bool,
+            request_id: str,
+            max_cloud_cover: int = None,
+            min_intersection: int = None,
+            timer: QTimer = None,
+            start_index: int = 0
     ) -> None:
         """Check if the metadata is ready.
 
@@ -819,12 +858,12 @@ class Mapflow(QObject):
         )
 
     def fetch_skywatch_metadata_callback(
-        self,
-        response: QNetworkReply,
-        request_id: str,
-        max_cloud_cover: int = None,
-        min_intersection: int = None,
-        timer: QTimer = None,
+            self,
+            response: QNetworkReply,
+            request_id: str,
+            max_cloud_cover: int = None,
+            min_intersection: int = None,
+            timer: QTimer = None,
     ):
         """Parse the returned metadata page and fill out the table and the layer."""
         is_proxied = 'mapflow' in response.request().url().authority()
@@ -847,8 +886,8 @@ class Mapflow(QObject):
                 'type': 'Feature',
                 'geometry': feature['location'],
                 'properties': {
-                        'preview': feature['preview_uri'],
-                        'cloudCover': round(feature['result_cloud_cover_percentage']),
+                    'preview': feature['preview_uri'],
+                    'cloudCover': round(feature['result_cloud_cover_percentage']),
                 }
             }
             try:
@@ -874,7 +913,7 @@ class Mapflow(QObject):
         self.dlg.metadataTable.setRowCount(current_row_count + metadata_layer.featureCount())
         self.dlg.metadataTable.setSortingEnabled(False)
         for row, feature in enumerate(metadata['features'], start=current_row_count):
-            table_items = [QTableWidgetItem() for _ in range(len(config.SENTINEL_ATTRIBUTES))]
+            table_items = [QTableWidgetItem() for _ in range(len(self.config.SENTINEL_ATTRIBUTES))]
             table_items[0].setData(Qt.DisplayRole, feature['properties']['acquisitionDate'])
             table_items[1].setData(Qt.DisplayRole, round(feature['properties']['cloudCover']))
             table_items[2].setData(Qt.DisplayRole, feature['id'])
@@ -901,8 +940,9 @@ class Mapflow(QObject):
         if next_page_start_index is not None:
             # Create a 'More' button
             more_button = QPushButton(self.tr('More'))
-            more_button.setObjectName(config.METADATA_MORE_BUTTON_OBJECT_NAME)
+            more_button.setObjectName(self.config.METADATA_MORE_BUTTON_OBJECT_NAME)
             self.dlg.layoutMetadataTable.addWidget(more_button)
+
             # Set the button to fetch more metadata on click
 
             def fetch_skywatch_metadata_next_page(**kwargs):
@@ -910,6 +950,7 @@ class Mapflow(QObject):
                 # more_button = self.dlg.findChild(QPushButton, config.METADATA_MORE_BUTTON_OBJECT_NAME)
                 self.dlg.layoutMetadataTable.removeWidget(more_button)
                 more_button.deleteLater()
+
             more_button.clicked.connect(
                 lambda: fetch_skywatch_metadata_next_page(
                     is_proxied=is_proxied,
@@ -931,16 +972,16 @@ class Mapflow(QObject):
             timer.deleteLater()
         except (RuntimeError, AttributeError):  # None or has been destroyed
             pass
-        self.report_error(response, self.tr("We couldn't fetch Sentinel metadata"))
+        self.report_http_error(response, self.tr("We couldn't fetch Sentinel metadata"))
 
     def get_maxar_metadata(
-        self,
-        aoi: QgsGeometry,
-        provider: Provider,
-        from_: str,
-        to: str,
-        max_cloud_cover: int,
-        min_intersection: int
+            self,
+            aoi: QgsGeometry,
+            provider: Provider,
+            from_: str,
+            to: str,
+            max_cloud_cover: int,
+            min_intersection: int
     ) -> None:
         """Get SecureWatch image metadata."""
         self.metadata_aoi = aoi
@@ -956,7 +997,7 @@ class Mapflow(QObject):
         stream.seek(0)  # rewind to the start
         request_body = provider.meta_request(from_=from_,
                                              to=to,
-                                             max_cloud_cover=max_cloud_cover/100,
+                                             max_cloud_cover=max_cloud_cover / 100,
                                              geometry=stream.readAll())
         if provider.is_proxy:  # assume user wants to use our account, proxy thru Mapflow
             self.http.post(
@@ -982,11 +1023,11 @@ class Mapflow(QObject):
             )
 
     def get_maxar_metadata_callback(
-        self,
-        response: QNetworkReply,
-        provider: Provider,
-        min_intersection: int,
-        max_cloud_cover: int
+            self,
+            response: QNetworkReply,
+            provider: Provider,
+            min_intersection: int,
+            max_cloud_cover: int
     ) -> None:
         """Format, save and load Maxar metadata.
 
@@ -1038,7 +1079,7 @@ class Mapflow(QObject):
         self.dlg.metadataTable.setSortingEnabled(False)
         for row, feature in enumerate(metadata['features']):
             feature['properties']['id'] = feature['id']  # for uniformity
-            for col, attr in enumerate(config.MAXAR_METADATA_ATTRIBUTES.values()):
+            for col, attr in enumerate(self.config.MAXAR_METADATA_ATTRIBUTES.values()):
                 try:
                     value = feature['properties'][attr]
                 except KeyError:  # e.g. <colorBandOrder/> for pachromatic images
@@ -1056,10 +1097,14 @@ class Mapflow(QObject):
         :param response: The HTTP response.
         """
         error = response.error()
-        if error == QNetworkReply.ContentAccessDenied:
+        if error in [QNetworkReply.ContentAccessDenied]:  # , QNetworkReply.AuthenticationRequiredError):
             self.alert(self.tr('Please, check your credentials'))
         else:
-            self.report_error(response, self.tr("We couldn't get metadata from Maxar, error {error}").format(error=error))
+            self.report_http_error(response,
+                                   self.tr("We couldn't get metadata from Maxar, "
+                                           "error {error}").format(
+                                       error=response.attribute(QNetworkRequest.HttpStatusCodeAttribute)),
+                                   error_message_parser=securewatch_message_parser)
 
     def sync_table_selection_with_image_id_and_layer(self) -> str:
         """
@@ -1076,9 +1121,9 @@ class Mapflow(QObject):
                 pass
             return
         id_column_index = (
-            config.SENTINEL_ID_COLUMN_INDEX
-            if self.dlg.providerCombo.currentText() == config.SENTINEL_OPTION_NAME
-            else config.MAXAR_ID_COLUMN_INDEX
+            self.config.SENTINEL_ID_COLUMN_INDEX
+            if self.dlg.providerCombo.currentText() == constants.SENTINEL_OPTION_NAME
+            else self.config.MAXAR_ID_COLUMN_INDEX
         )
         image_id = next(cell for cell in selected_cells if cell.column() == id_column_index).text()
         try:
@@ -1103,9 +1148,9 @@ class Mapflow(QObject):
             return
         selected_id = self.metadata_layer.getFeature(selected_ids[-1])['id']
         id_column_index = [
-            config.SENTINEL_ID_COLUMN_INDEX
-            if self.dlg.providerCombo.currentText() == config.SENTINEL_OPTION_NAME
-            else config.MAXAR_ID_COLUMN_INDEX
+            self.config.SENTINEL_ID_COLUMN_INDEX
+            if self.dlg.providerCombo.currentText() == constants.SENTINEL_OPTION_NAME
+            else self.config.MAXAR_ID_COLUMN_INDEX
         ]
         already_selected = [
             item.text() for item in self.dlg.metadataTable.selectedItems()
@@ -1129,10 +1174,10 @@ class Mapflow(QObject):
 
         if isinstance(provider, SentinelProvider):
             if not ((
-                helpers.SENTINEL_DATETIME_REGEX.search(image_id)
-                and helpers.SENTINEL_COORDINATE_REGEX.search(image_id)
-            ) or (helpers.SENTINEL_PRODUCT_NAME_REGEX.search(image_id)
-                  )):
+                            helpers.SENTINEL_DATETIME_REGEX.search(image_id)
+                            and helpers.SENTINEL_COORDINATE_REGEX.search(image_id)
+                    ) or (helpers.SENTINEL_PRODUCT_NAME_REGEX.search(image_id)
+                    )):
                 self.alert(self.tr(
                     'A Sentinel image ID should look like '
                     'S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 '
@@ -1169,6 +1214,7 @@ class Mapflow(QObject):
             self.calculate_aoi_area(aoi, layer.crs())
         else:  # empty layer or combo's itself is empty
             self.dlg.labelAoiArea.clear()
+            self.dlg.processingCostLabel.clear()
             self.aoi = self.aoi_size = None
 
     def calculate_aoi_area_raster(self, layer: Union[QgsRasterLayer, None]) -> None:
@@ -1219,8 +1265,32 @@ class Mapflow(QObject):
         # Set ellipsoid to calculate on sphere if the CRS is geographic
         self.calculator.setEllipsoid(helpers.WGS84_ELLIPSOID)
         self.calculator.setSourceCrs(helpers.WGS84, self.project.transformContext())
-        self.aoi_size = self.calculator.measureArea(aoi) / 10**6  # sq. m to sq.km
+        self.aoi_size = self.calculator.measureArea(aoi) / 10 ** 6  # sq. m to sq.km
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
+        self.dlg.processingCostLabel.clear()
+        # get workflow def if for selected model
+        workflow_def_id = self.workflow_def_ids.get(
+            self.dlg.modelCombo.currentText()
+        )
+        self.calculate_processing_cost(aoi=aoi, workflow_def_id=workflow_def_id)
+
+    def calculate_processing_cost(self, aoi: QgsGeometry, workflow_def_id: uuid.UUID) -> None:
+        """:return: calculated aoi area and cost in credits"""
+        # do not send any request, if PROCESSING_COST_LABEL_ENABLED setting is disabled
+        if not self.config.PROCESSING_COST_LABEL_ENABLED:
+            return
+        geometry = json.loads(aoi.asJson())
+        body = {"wdId": workflow_def_id,
+                "geometry": geometry}
+        self.http.post(
+            url=f"{self.server}/processing/cost",
+            callback=self.calculate_processing_cost_callback,
+            body=json.dumps(body).encode()
+        )
+
+    def calculate_processing_cost_callback(self, response: QNetworkReply):
+        response_data = response.readAll().data().decode()
+        self.dlg.processingCostLabel.setText(self.tr(f'Processing cost: {response_data} credits'))
 
     def delete_processings(self) -> None:
         """Delete one or more processings from the server.
@@ -1231,12 +1301,12 @@ class Mapflow(QObject):
         # Pause refreshing processings table to avoid conflicts
         self.processing_fetch_timer.stop()
         selected_ids = [
-            self.dlg.processingsTable.item(index.row(), config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+            self.dlg.processingsTable.item(index.row(), self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
             for index in self.dlg.processingsTable.selectionModel().selectedRows()
         ]
         # Ask for confirmation if there are selected rows
         if selected_ids and self.alert(
-            self.tr('Delete selected processings?'), QMessageBox.Question
+                self.tr('Delete selected processings?'), QMessageBox.Question
         ):
             for id_ in selected_ids:
                 self.http.delete(
@@ -1260,7 +1330,7 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        self.report_error(response, self.tr("Error deleting a processing"))
+        self.report_http_error(response, self.tr("Error deleting a processing"))
 
     def upload_image(self, layer, processing_params=None, mosaic=None):
         """
@@ -1271,7 +1341,8 @@ class Mapflow(QObject):
         body = QHttpMultiPart(QHttpMultiPart.FormDataType)
         tif = QHttpPart()
         tif.setHeader(QNetworkRequest.ContentTypeHeader, 'image/tiff')
-        tif.setHeader(QNetworkRequest.ContentDispositionHeader, 'form-data; name="file"; filename=""')
+        filename = Path(layer.dataProvider().dataSourceUri()).name
+        tif.setHeader(QNetworkRequest.ContentDispositionHeader, f'form-data; name="file"; filename="{filename}"')
         image = QFile(layer.dataProvider().dataSourceUri(), body)
         image.open(QIODevice.ReadOnly)
         tif.setBodyDevice(image)
@@ -1312,6 +1383,7 @@ class Mapflow(QObject):
                 return
             if bytes_sent == bytes_total:
                 self.message_bar.popWidget(progress_message)
+
         connection = response.uploadProgress.connect(display_upload_progress)
         # Tear this connection if the user closes the progress message
         progress_message.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
@@ -1367,7 +1439,7 @@ class Mapflow(QObject):
         return True
 
     def crop_aoi_with_maxar_image_footprint(self, aoi, image_id):
-        extent = self.maxar_metadata_footprints[image_id[config.MAXAR_ID_COLUMN_INDEX].text()]
+        extent = self.maxar_metadata_footprints[image_id[self.config.MAXAR_ID_COLUMN_INDEX].text()]
         try:
             aoi = next(clip_aoi_to_image_extent(aoi, extent)).geometry()
         except StopIteration:
@@ -1388,6 +1460,9 @@ class Mapflow(QObject):
         image_id = self.dlg.imageId.text()
         selected_image = self.dlg.metadataTable.selectedItems()
         if not self.check_processing_ui():
+            return
+        if not helpers.check_aoi(self.aoi):
+            self.alert(self.tr("Bad AOI. AOI must be inside boundaries: \n[-180, 180] by longitude, [-90, 90] by latitude"))
             return
 
         processing_params = {
@@ -1423,7 +1498,7 @@ class Mapflow(QObject):
         else:
             provider = self.providers[raster_option]
             if isinstance(provider, MaxarProxyProvider) and not self.is_premium_user:
-                ErrorMessage(
+                ErrorMessageWidget(
                     parent=self.dlg,
                     text=self.tr('Click on the link below to send us an email'),
                     title=self.tr('Upgrade your subscription to process Maxar imagery'),
@@ -1453,19 +1528,20 @@ class Mapflow(QObject):
         self.post_processing(processing_params)
 
     def upload_tif_error_handler(self, response: QNetworkReply) -> None:
-        """Error handler for GeoTIFF upload request.
+        """Error handler for GeoTIFF upload request, made for data-catalog API
 
-        :param response: The HTTP response.
         """
-        self.report_error(response, self.tr("We couldn't upload your GeoTIFF"))
+        self.report_http_error(response=response,
+                               title=self.tr("We couldn't upload your GeoTIFF"),
+                               error_message_parser=data_catalog_message_parser)
 
     def post_processing(self, request_body: dict) -> None:
         """Submit a processing to Mapflow.
 
         :param request_body: Processing parameters.
         """
-        if self.project_id != 'default':
-            request_body.update(projectId=self.project_id)
+        if self.config.PROJECT_ID != 'default':
+            request_body.update(projectId=self.config.PROJECT_ID)
         self.http.post(
             url=f'{self.server}/processings',
             callback=self.post_processing_callback,
@@ -1480,8 +1556,8 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        self.report_error(response,
-                         self.tr('Processing creation failed'))
+        self.report_http_error(response,
+                               self.tr('Processing creation failed'))
 
     def post_processing_callback(self, _: QNetworkReply, processing_name: str) -> None:
         """Display a success message and clear the processing name field."""
@@ -1494,35 +1570,35 @@ class Mapflow(QObject):
         self.processing_fetch_timer.start()  # start monitoring
         # Do an extra fetch immediately
         self.http.get(
-            url=f'{self.server}/projects/{self.project_id}/processings',
+            url=f'{self.server}/projects/{self.config.PROJECT_ID}/processings',
             callback=self.get_processings_callback
         )
+
+    def set_project_name(self, response_data) -> None:
+        project_name = response_data['name']
+        if self.plugin_name == 'Mapflow' and self.config.PROJECT_ID != 'default':
+            footer = self.tr('Project name: {}').format(project_name)
+            self.dlg.projectNameLabel.setText(footer)
+
+    def update_processing_limit(self) -> None:
+        """Set the user's processing limit as reported by Mapflow."""
         self.http.get(
-            url=f'{self.server}/projects/{self.project_id}',
+            url=f'{self.server}/user/status',
             callback=self.set_processing_limit
         )
 
-    def set_processing_limit(
-        self,
-        response: Optional[QNetworkReply] = None,
-        response_data: Optional[dict] = None) -> None:
-        """Set the user's processing limit as reported by Mapflow."""
-        if not response and not response_data:
-            raise AssertionError("Either response or response data must be specified")
-        if response:
-            # prefer raw response for no reason
-            response_data = json.loads(response.readAll().data())
-        user = response_data['user']
-        project_name = response_data['name']
-
-        if user['role'] == 'ADMIN':
+    def set_processing_limit(self, response: QNetworkReply,
+                             app_startup_request: Optional[bool] = False) -> None:
+        if app_startup_request:
+            self.app_startup_user_update_timer.stop()
+        response_data = json.loads(response.readAll().data())
+        # check here, if user is admin:
+        if response_data.get('admin'):
             self.remaining_limit = 1e5  # 100K sq.km
         else:
-            self.remaining_limit = (user['areaLimit'] - user['processedArea']) * 1e-6
+            self.remaining_limit = int(response_data.get('remainingArea', 0)) / 1e6  # convert into sq.km
         if self.plugin_name == 'Mapflow':
-            footer = self.tr('Processing limit: {} sq.km').format(round(self.remaining_limit, 2))
-            if self.project_id != 'default':
-                footer += self.tr('.  Project name: {}').format(project_name)
+            footer = self.tr('Processing limit: {:.2f} sq.km').format(self.remaining_limit)
             self.dlg.remainingLimit.setText(footer)
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
@@ -1550,7 +1626,7 @@ class Mapflow(QObject):
                 -320  # pixel vertical resolution (m)
             ])
             preview.FlushCache()
-        layer = QgsRasterLayer(f.name, f'{config.SENTINEL_OPTION_NAME} {datetime_}', 'gdal')
+        layer = QgsRasterLayer(f.name, f'{constants.SENTINEL_OPTION_NAME} {datetime_}', 'gdal')
         # Set the no-data value if undefined
         layer_provider = layer.dataProvider()
         for band in range(1, layer.bandCount() + 1):  # bands are 1-based (!)
@@ -1571,13 +1647,13 @@ class Mapflow(QObject):
             )
             return
         self.alert(self.tr("Sorry, we couldn't load the image"))
-        self.report_error(response, self.tr('Error previewing Sentinel imagery'))
+        self.report_http_error(response, self.tr('Error previewing Sentinel imagery'))
 
     def preview_sentinel(self, image_id):
         selected_cells = self.dlg.metadataTable.selectedItems()
         if selected_cells:
-            datetime_ = selected_cells[config.SENTINEL_DATETIME_COLUMN_INDEX]
-            url = self.dlg.metadataTable.item(datetime_.row(), config.SENTINEL_PREVIEW_COLUMN_INDEX).text()
+            datetime_ = selected_cells[self.config.SENTINEL_DATETIME_COLUMN_INDEX]
+            url = self.dlg.metadataTable.item(datetime_.row(), self.config.SENTINEL_PREVIEW_COLUMN_INDEX).text()
             if not url:
                 self.alert(self.tr("Sorry, there's no preview for this image"), QMessageBox.Information)
                 return
@@ -1608,7 +1684,7 @@ class Mapflow(QObject):
 
     def maxar_layer_name(self, layer_name, image_id):
         row = self.dlg.metadataTable.currentRow()
-        attrs = tuple(config.MAXAR_METADATA_ATTRIBUTES.values())
+        attrs = tuple(self.config.MAXAR_METADATA_ATTRIBUTES.values())
         try:
             layer_name = ' '.join((
                 layer_name,
@@ -1672,7 +1748,104 @@ class Mapflow(QObject):
         else:  # XYZ providers
             self.preview_xyz(provider=provider, image_id=image_id)
 
-    def download_results(self, row: int) -> None:
+    def get_checked_processing_rating(self) -> int:
+        """Get the index of checked radio button and return corresponding rating"""
+        for i in range(5):
+            if self.radio_buttons[i].isChecked():
+                return i + 1
+        return 0
+
+    def reset_processing_rating_labels(self) -> None:
+        for i in range(5):
+            self.radio_buttons[i].setAutoExclusive(False)
+            self.radio_buttons[i].setChecked(False)
+            self.radio_buttons[i].setAutoExclusive(True)
+        self.dlg.selectedProcessingNameLabel.clear()
+        self.dlg.processingRatingFeedbackText.clear()
+
+    def update_processing_current_rating(self) -> None:
+        # reset labels:
+        self.reset_processing_rating_labels()
+
+        row = self.dlg.processingsTable.currentRow()
+        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+        p_name = self.dlg.processingsTable.item(row, 0).text()
+        self.dlg.selectedProcessingNameLabel.setText(f'{p_name}')
+        self.http.get(
+            url=f'{self.server}/processings/{pid}',
+            callback=self.update_processing_current_rating_callback
+        )
+
+    def update_processing_current_rating_callback(self, response: QNetworkReply) -> None:
+        response_data = json.loads(response.readAll().data())
+        rating_json = response_data.get('rating')
+        if not rating_json:
+            return
+        rating = int(rating_json.get('rating'))
+        feedback = rating_json.get('feedback')
+        self.radio_buttons[rating - 1].setChecked(True)
+        self.dlg.processingRatingFeedbackText.setText(feedback)
+
+    def submit_processing_rating(self) -> None:
+        row = self.dlg.processingsTable.currentRow()
+        if not row and (row != 0):
+            return
+        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+        processing = next(filter(lambda p: p.id_ == pid, self.processings))
+        if processing.status != 'OK':
+            self.alert(self.tr('Only finished processings can be rated'))
+            return
+        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+        rating = self.get_checked_processing_rating()
+        if rating == 0:
+            return
+        feedback_text = self.dlg.processingRatingFeedbackText.toPlainText()
+        body = {
+            'rating': rating,
+            'feedback': feedback_text
+        }
+        self.http.put(
+            url=f'{self.server}/processings/{pid}/rate',
+            body=json.dumps(body).encode(),
+            callback=self.submit_processing_rating_callback,
+            callback_kwargs={'feedback': feedback_text}
+
+        )
+
+    def submit_processing_rating_callback(self, response: QNetworkReply, feedback: str) -> None:
+        if not feedback:
+            self.alert(
+                self.tr(
+                    "Thank you! Your rating is submitted!\nWe would appreciate if you add feedback as well."
+                ),
+                QMessageBox.Information
+            )
+        else:
+            self.alert(
+                self.tr(
+                    "Thank you! Your rating and feedback are submitted!"
+                ),
+                QMessageBox.Information
+            )
+        self.update_processing_current_rating()
+
+    def enable_rating_submit_button(self) -> None:
+        row = self.dlg.processingsTable.currentRow()
+        if not row >= 0:
+            return
+        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+        processing = next(filter(lambda p: p.id_ == pid, self.processings))
+        status_ok = (processing.status == 'OK')
+        radio_button_checked = any(radio_button.isChecked() for radio_button in self.radio_buttons)
+        self.dlg.ratingSubmitButton.setEnabled(status_ok and radio_button_checked)
+        if status_ok and radio_button_checked:
+            self.dlg.ratingSubmitButton.setToolTip("")
+        elif not status_ok:
+            self.dlg.ratingSubmitButton.setToolTip(self.tr("Only correctly finished processings (status OK) can be rated"))
+        else:
+            self.dlg.ratingSubmitButton.setToolTip(self.tr("Please select processing and rating to submit"))
+
+    def download_results(self) -> None:
         """Download and display processing results along with the source raster, if available.
 
         Results will be downloaded into the user's output directory.
@@ -1683,15 +1856,23 @@ class Mapflow(QObject):
 
         :param row: int Row number in the processings table (0-based)
         """
-        if self.check_if_output_directory_is_selected():
-            pid = self.dlg.processingsTable.item(row, config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
-            self.http.get(
-                url=f'{self.server}/processings/{pid}/result',
-                callback=self.download_results_callback,
-                callback_kwargs={'pid': pid},
-                error_handler=self.download_results_error_handler,
-                timeout=300
-            )
+        if not self.check_if_output_directory_is_selected():
+            return
+        row = self.dlg.processingsTable.currentRow()
+        if row < 0:  # for some reason, if nothing is selected, returns -1
+            return
+        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+        if not pid in self.processing_history.finished:
+            self.alert(self.tr("Only the results of correctly finished processing can be loaded"))
+            return
+        self.dlg.processingsTable.setEnabled(False)
+        self.http.get(
+            url=f'{self.server}/processings/{pid}/result',
+            callback=self.download_results_callback,
+            callback_kwargs={'pid': pid},
+            error_handler=self.download_results_error_handler,
+            timeout=300
+        )
 
     def download_results_callback(self, response: QNetworkReply, pid: str) -> None:
         """Display processing results upon their successful fetch.
@@ -1699,6 +1880,7 @@ class Mapflow(QObject):
         :param response: The HTTP response.
         :param pid: ID of the inspected processing.
         """
+        self.dlg.processingsTable.setEnabled(True)
         processing = next(filter(lambda p: p.id_ == pid, self.processings))
         # Avoid overwriting existing files by adding (n) to their names
         output_path = os.path.join(self.dlg.outputDirectory.text(), processing.id_)
@@ -1750,10 +1932,11 @@ class Mapflow(QObject):
             self.plugin_dir,
             'static',
             'styles',
-            config.STYLES.get(processing.workflow_def, 'default') + '.qml'
+            self.config.STYLES.get(processing.workflow_def, 'default') + '.qml'
         ))
         # Add the source raster (COG) if it has been created
         raster_url = processing.raster_layer.get('tileUrl')
+        tile_json_url = processing.raster_layer.get("tileJsonUrl")
         if raster_url:
             params = {
                 'type': 'xyz',
@@ -1768,54 +1951,55 @@ class Mapflow(QObject):
                 processing.name + ' image',
                 'wms'
             )
-        # Set image extent explicitly because as XYZ, it doesn't have one by default
-        self.http.get(
-            url=f'{self.server}/processings/{pid}/aois',
-            callback=self.set_raster_extent,
-            callback_kwargs={
-                'vector': results_layer,
-                'raster': raster
-            },
-            error_handler=self.set_raster_extent_error_handler
-        )
+            self.http.get(
+                url=tile_json_url,
+                callback=self.set_raster_extent,
+                callback_kwargs={
+                    'vector': results_layer,
+                    'raster': raster
+                },
+                use_default_error_handler=False,
+                error_handler=self.set_raster_extent_error_handler,
+                error_handler_kwargs={
+                    'vector': results_layer,
+                }
+            )
+        else:
+            self.set_raster_extent_error_handler(response=None, vector=results_layer)
 
     def download_results_error_handler(self, response: QNetworkReply) -> None:
         """Error handler for downloading processing results.
 
         :param response: The HTTP response.
         """
-        self.report_error(response, self.tr('Error downloading results'))
+        self.dlg.processingsTable.setEnabled(True)
+        self.report_http_error(response, self.tr('Error downloading results'))
 
     def set_raster_extent(
-        self,
-        response: QNetworkReply,
-        vector: QgsVectorLayer,
-        raster: QgsRasterLayer
+            self,
+            response: QNetworkReply,
+            vector: QgsVectorLayer,
+            raster: QgsRasterLayer
     ) -> None:
         """Set processing raster extent upon successfully requesting the processing's AOI.
 
         :param response: The HTTP response.
         :param vector: The downloaded feature layer.
-        :param response: The downloaded raster which was used for processing.
+        :param raster: The downloaded raster which was used for processing.
         """
-        with open(os.path.join(self.temp_dir, os.urandom(32).hex()), 'w') as f:
-            json.dump({
-                'type': 'FeatureCollection',
-                'features': json.loads(response.readAll().data())
-            }, f)
-        extent = QgsGeometry.fromRect(QgsVectorLayer(f.name, '', 'ogr').extent())
-        raster.setExtent(helpers.from_wgs84(extent, raster.crs()).boundingBox())
-        # Add the layers to the project
+        bounding_box = get_bounding_box_from_tile_json(response=response)
+        raster.setExtent(rect=bounding_box)
         self.add_layer(raster)
         self.add_layer(vector)
         self.iface.zoomToActiveLayer()
 
-    def set_raster_extent_error_handler(self, response: QNetworkReply) -> None:
-        """Error handler for processing AOI requests.
+    def set_raster_extent_error_handler(self,
+                                        response: QNetworkReply,
+                                        vector: Optional[QgsVectorLayer]):
 
-        :param response: The HTTP response.
+        """Error handler for processing AOI requests. If tilejson can't be loaded, we do not add raster layer, and 
         """
-        self.report_error(response, self.tr('Error loading results'))
+        self.add_layer(vector)
 
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """Display a minimalistic modal dialog with some info or a question.
@@ -1840,25 +2024,26 @@ class Mapflow(QObject):
 
         processings = parse_processings_request(raw_processings)
 
-        env = QgsSettings().value('variables/mapflow_env') or 'production'
+        env = self.config.MAPFLOW_ENV
         processing_history = self.settings.value('processings')
-        user_processing_history = ProcessingHistory.from_settings(processing_history.get(env, {}).get(self.username, {}))
+        self.processing_history = ProcessingHistory.from_settings(
+            processing_history.get(env, {}).get(self.username, {}))
         # get updated processings (newly failed and newly finished) and updated user processing history
-        failed_processings, finished_processings, user_processing_history = updated_processings(processings, user_processing_history)
+        failed_processings, finished_processings, self.processing_history = updated_processings(processings,
+                                                                                                self.processing_history)
 
-        if failed_processings:
-            # this means that some of processings have failed since last update and the limit must have been returned
-            update_processing_limit()
+        # update processing limit of user
+        self.update_processing_limit()
+
         self.alert_failed_processings(failed_processings)
         self.alert_finished_processings(finished_processings)
-
         self.update_processing_table(processings)
         self.processings = processings
 
         try:  # use try-except bc this will only error once
-            processing_history[env][self.username] = user_processing_history.asdict()
+            processing_history[env][self.username] = self.processing_history.asdict()
         except KeyError:  # history for the current env hasn't been initialized yet
-            processing_history[env] = {self.username: user_processing_history.asdict()}
+            processing_history[env] = {self.username: self.processing_history.asdict()}
         self.settings.setValue('processings', processing_history)
 
     def alert_failed_processings(self, failed_processings):
@@ -1870,20 +2055,23 @@ class Mapflow(QObject):
             proc = failed_processings[0]
             self.alert(
                 proc.name +
-                self.tr(' failed with error:\n') + proc.error_message(self.error_messages),
-                QMessageBox.Critical)
+                self.tr(' failed with error:\n') + proc.error_message(),
+                QMessageBox.Critical,
+                blocking=False)
         elif 1 < len(failed_processings) < 10:
             # If there are more than one failed processing, we will not
             self.alert(self.tr('{} processings failed: \n {} \n '
                                'See tooltip over the processings table'
                                ' for error details').format(len(failed_processings),
                                                             '\n'.join((proc.name for proc in failed_processings))),
-                QMessageBox.Critical)
+                       QMessageBox.Critical,
+                       blocking=False)
         else:  # >= 10
             self.alert(self.tr(
                 '{} processings failed: \n '
                 'See tooltip over the processings table for error details').format(len(failed_processings)),
-                QMessageBox.Critical)
+                       QMessageBox.Critical,
+                       blocking=False)
 
     def alert_finished_processings(self, finished_processings):
         if not finished_processings:
@@ -1899,26 +2087,26 @@ class Mapflow(QObject):
             )
         elif 1 < len(finished_processings) < 10:
             # If there are more than one failed processing, we will not
-            self.alert( self.tr(
+            self.alert(self.tr(
                 '{} processings finished: \n {} \n '
                 'Double-click it in the table '
                 'to download the results').format(len(finished_processings),
                                                   '\n'.join((proc.name for proc in finished_processings))),
-                QMessageBox.Information,
-                blocking=False)
+                       QMessageBox.Information,
+                       blocking=False)
         else:  # >= 10
             self.alert(self.tr(
                 '{} processings finished. \n '
                 'Double-click it in the table to download the results').format(len(finished_processings)),
-                QMessageBox.Information,
-                blocking=False)
+                       QMessageBox.Information,
+                       blocking=False)
 
     def update_processing_table(self, processings: List[Processing]):
         # UPDATE THE TABLE
         # Memorize the selection to restore it after table update
         selected_processings = [
             index.data() for index in self.dlg.processingsTable.selectionModel().selectedIndexes()
-            if index.column() == config.PROCESSING_TABLE_ID_COLUMN_INDEX
+            if index.column() == self.config.PROCESSING_TABLE_ID_COLUMN_INDEX
         ]
         # Explicitly clear selection since resetting row count won't do it
         self.dlg.processingsTable.clearSelection()
@@ -1930,11 +2118,11 @@ class Mapflow(QObject):
         # Fill out the table
         for row, proc in enumerate(processings):
             processing_dict = proc.asdict()
-            for col, attr in enumerate(config.PROCESSING_ATTRIBUTES):
+            for col, attr in enumerate(self.config.PROCESSING_ATTRIBUTES):
                 table_item = QTableWidgetItem()
                 table_item.setData(Qt.DisplayRole, processing_dict[attr])
                 if proc.status == 'FAILED':
-                    table_item.setToolTip(proc.error_message(self.error_messages))
+                    table_item.setToolTip(proc.error_message())
                 elif proc.status == 'OK':
                     table_item.setToolTip(self.tr("Double click to add results to the map"))
                 self.dlg.processingsTable.setItem(row, col, table_item)
@@ -1951,21 +2139,19 @@ class Mapflow(QObject):
         Since there are submodules, the various UI texts are set dynamically.
         """
         # Set main dialog title dynamically so it could be overridden when used as a submodule
-        mapflow_env = QgsSettings().value('variables/mapflow_env') or 'production'
-        if mapflow_env == 'production':
+        if self.config.MAPFLOW_ENV == 'production':
             self.dlg.setWindowTitle(self.plugin_name)
         else:
-            self.dlg.setWindowTitle(self.plugin_name + f' {mapflow_env}')
+            self.dlg.setWindowTitle(self.plugin_name + f' {self.config.MAPFLOW_ENV}')
         # Display plugin icon in own toolbar
         icon = QIcon(os.path.join(self.plugin_dir, 'icon.png'))
         plugin_button = QAction(icon, self.plugin_name, self.main_window)
         plugin_button.triggered.connect(self.main)
         self.toolbar.addAction(plugin_button)
         self.project.readProject.connect(self.set_layer_group)
-        self.project.readProject.connect(lambda: self.filter_non_tif_rasters(
-            list(filter(bool, [self.dlg.rasterCombo.layer(index) for index in range(self.dlg.rasterCombo.count())]))
-        ))
-        self.dlg.processingsTable.sortByColumn(config.PROCESSING_TABLE_SORT_COLUMN_INDEX, Qt.DescendingOrder)
+        self.project.readProject.connect(self.filter_bad_rasters)
+        # list(filter(bool, [self.dlg.rasterCombo.layer(index) for index in range(self.dlg.rasterCombo.count())]))
+        self.dlg.processingsTable.sortByColumn(self.config.PROCESSING_TABLE_SORT_COLUMN_INDEX, Qt.DescendingOrder)
 
     def set_layer_group(self) -> None:
         """Setup a legend group where all layers created by the plugin will be added."""
@@ -1980,6 +2166,7 @@ class Mapflow(QObject):
         """Remove the plugin icon & toolbar from QGIS GUI."""
         self.processing_fetch_timer.stop()
         self.processing_fetch_timer.deleteLater()
+        self.user_status_update_timer.stop()
         for dlg in self.dlg, self.dlg_login, self.dlg_provider:
             dlg.close()
         del self.toolbar
@@ -1993,7 +2180,7 @@ class Mapflow(QObject):
         token = self.dlg_login.token.text().strip()
         if token:
             # to add paddind for the token len to be multiple of 4
-            token += "="*((4 - len(token)%4)%4)
+            token += "=" * ((4 - len(token) % 4) % 4)
             self.log_in(token)
 
     def log_in(self, token) -> None:
@@ -2006,18 +2193,16 @@ class Mapflow(QObject):
         except:
             self.username = self.password = ''
             self.dlg_login.show()
-            self.log_in_error_handler()
+            self.alert(self.tr('Wrong token. '
+                               'Visit "<a href=\"https://app.mapflow.ai/account/api\">mapflow.ai</a>" '
+                               'to get a new one'),
+                       icon=QMessageBox.Warning)
             return
         self.http.basic_auth = f'Basic {token}'
-
-        mapflow_env = QgsSettings().value('variables/mapflow_env') or 'production'
-        self.server = config.SERVER.format(env=mapflow_env)
-        self.project_id = QgsSettings().value('variables/project_id') or 'default'
         self.http.get(
-            url=f'{self.server}/projects/{self.project_id}',
+            url=f'{self.config.SERVER}/projects/{self.config.PROJECT_ID}',
             callback=self.log_in_callback,
-            use_default_error_handler=False,
-            error_handler=self.log_in_error_handler
+            use_default_error_handler=True
         )
 
     def logout(self) -> None:
@@ -2025,22 +2210,11 @@ class Mapflow(QObject):
         # set token to empty to delete it from settings
         self.settings.setValue('token', '')
         self.processing_fetch_timer.stop()
+        self.user_status_update_timer.stop()
         self.logged_in = False
         self.dlg.close()
         self.set_up_login_dialog()  # recreate the login dialog
         self.dlg_login.show()  # assume user wants to log into another account
-
-    def log_in_error_handler(self, response: Optional[QNetworkReply]=None) -> None:
-        """Error handler for the login request.
-
-        :param response: The HTTP response.
-        """
-        self.dlg_login.show()
-        self.alert(self.tr('Wrong token. '
-                           'Visit "<a href=\"https://app.mapflow.ai/account/api\">mapflow.ai</a>" '
-                           'to get a new one'),
-                   icon=QMessageBox.Warning)
-
 
     def default_error_handler(self, response: QNetworkReply) -> bool:
         """Handle general networking errors: offline, timeout, server errors.
@@ -2055,11 +2229,15 @@ class Mapflow(QObject):
             if self.logged_in:  # token re-issued during a plugin session
                 self.logout()
             elif self.settings.value('token'):  # env changed w/out logging out (admin)
+                self.alert(self.tr('Wrong token. '
+                                   'Visit "<a href=\"https://app.mapflow.ai/account/api\">mapflow.ai</a>" '
+                                   'to get a new one'),
+                           icon=QMessageBox.Warning)
                 self.dlg_login.show()
             # Wrong token entered - display a message
-            elif not self.dlg_login.findChild(QLabel, config.INVALID_TOKEN_WARNING_OBJECT_NAME):
+            elif not self.dlg_login.findChild(QLabel, self.config.INVALID_TOKEN_WARNING_OBJECT_NAME):
                 invalid_token_label = QLabel(self.tr('Invalid token'), self.dlg_login)
-                invalid_token_label.setObjectName(config.INVALID_TOKEN_WARNING_OBJECT_NAME)
+                invalid_token_label.setObjectName(self.config.INVALID_TOKEN_WARNING_OBJECT_NAME)
                 invalid_token_label.setStyleSheet('color: rgb(239, 41, 41);')
                 self.dlg_login.layout().insertWidget(1, invalid_token_label, alignment=Qt.AlignCenter)
                 new_size = self.dlg_login.width(), self.dlg_login.height() + invalid_token_label.height()
@@ -2067,98 +2245,112 @@ class Mapflow(QObject):
                 self.dlg_login.setMinimumSize(*new_size)
             return True
         elif error in (
-            QNetworkReply.OperationCanceledError,  # timeout
-            QNetworkReply.ServiceUnavailableError,  # HTTP 503
-            QNetworkReply.InternalServerError,  # HTTP 500
-            QNetworkReply.ConnectionRefusedError,
-            QNetworkReply.RemoteHostClosedError,
-            QNetworkReply.NetworkSessionFailedError,
+                QNetworkReply.OperationCanceledError,  # timeout
+                QNetworkReply.ServiceUnavailableError,  # HTTP 503
+                QNetworkReply.InternalServerError,  # HTTP 500
+                QNetworkReply.ConnectionRefusedError,
+                QNetworkReply.RemoteHostClosedError,
+                QNetworkReply.NetworkSessionFailedError,
         ):
-            self.report_error(response, self.tr(
+            self.report_http_error(response, self.tr(
                 service + ' is not responding. Please, try again.\n\n'
-                'If you are behind a proxy or firewall,\ncheck your QGIS proxy settings.\n'
+                          'If you are behind a proxy or firewall,\ncheck your QGIS proxy settings.\n'
             ))
             return True
         elif error == QNetworkReply.HostNotFoundError:  # offline
-            self.alert(self.tr(service + ' requires Internet connection'))
+            self.alert(self.tr(service + ' not found. Check your Internet connection'))
             return True
         elif error in (
-            QNetworkReply.UnknownNetworkError,
-            QNetworkReply.ProxyConnectionRefusedError,
-            QNetworkReply.ProxyConnectionClosedError,
-            QNetworkReply.ProxyNotFoundError,
-            QNetworkReply.ProxyTimeoutError,
-            QNetworkReply.ProxyAuthenticationRequiredError,
+                QNetworkReply.UnknownNetworkError,
+                QNetworkReply.ProxyConnectionRefusedError,
+                QNetworkReply.ProxyConnectionClosedError,
+                QNetworkReply.ProxyNotFoundError,
+                QNetworkReply.ProxyTimeoutError,
+                QNetworkReply.ProxyAuthenticationRequiredError,
         ):
-            self.report_error(response, self.tr('Proxy error. Please, check your proxy settings.'))
+            self.report_http_error(response, self.tr('Proxy error. Please, check your proxy settings.'))
             return True
         elif error == QNetworkReply.ContentAccessDenied:
-            self.report_error(response, self.tr("This operation is forbidden for your account, contact us"))
+            self.report_http_error(response, self.tr("This operation is forbidden for your account, contact us"))
             return True
         else:
-            self.report_error(response, f"Unknown error: {error}")
+            self.report_http_error(response, self.tr("Error"))
         return False
 
-    def report_error(self, response: QNetworkReply, title: str = None):
+    def report_http_error(self,
+                          response: QNetworkReply,
+                          title: str = None,
+                          error_message_parser: Optional[Callable] = None):
         """Prepare and show an error message for the supplied response.
 
         :param response: The HTTP response.
         :param title: The error message's title.
+        :param error_message_parser: function to parse error message, depends on server which is requested.
+            Default parser (if None) searches for 'message' section in response json
         """
-        if response.error() == QNetworkReply.OperationCanceledError:
-            error_summary = error_text = 'Request timed out'
-        else:
-            response_body = response.readAll().data().decode()
-            try:  # handled standardized backend exception ({"code": <int>, "message": <str>})
-                error_summary = error_text = json.loads(response_body)['message']
-            except:  # unhandled error - plain text
-                error_summary = self.tr('Unknown error')
-                error_text = response_body
-        report = {
-            'Error summary': error_summary,
-            'URL': response.request().url().toDisplayString(),
-            'HTTP code': response.attribute(QNetworkRequest.HttpStatusCodeAttribute),
-            'Qt code': response.error(),
-            'Plugin version': self.plugin_version,
-            'QGIS version': Qgis.QGIS_VERSION,
-            'Qt version': qVersion(),
-            'Error message': error_text[:5000]  # too long body => 400 (not sure what's the limit exactly)
-        }
-        email_body = '%0a'.join(f'{key}: {value}' for key, value in report.items())
-        ErrorMessage(QApplication.activeWindow(), error_summary, title, email_body).show()
+        error_summary, email_body = get_error_report_body(response=response,
+                                                          plugin_version=self.plugin_version,
+                                                          error_message_parser=error_message_parser)
+        ErrorMessageWidget(parent=QApplication.activeWindow(),
+                           text=error_summary,
+                           title=title,
+                           email_body=email_body).show()
+
+    def setup_processings_table(self):
+        table_item = QTableWidgetItem("Loading...")
+        table_item.setToolTip('Fetching your processings from server, please wait')
+        self.dlg.processingsTable.setRowCount(1)
+        self.dlg.processingsTable.setItem(0, 0, table_item)
+        for column in range(1, self.dlg.processingsTable.columnCount()):
+            empty_item = QTableWidgetItem("")
+            self.dlg.processingsTable.setItem(0, column, empty_item)
+        # Fetch processings at startup and start the timer to keep fetching them afterwards
+        self.http.get(url=f'{self.server}/projects/{self.config.PROJECT_ID}/processings',
+                      callback=self.get_processings_callback,
+                      use_default_error_handler=False)
+        self.processing_fetch_timer.start()
 
     def log_in_callback(self, response: QNetworkReply) -> None:
         """Fetch user info, models and processings.
 
         :param response: The HTTP response.
         """
-        # Fetch processings at startup and start the timer to keep fetching them afterwards
-        self.http.get(url=f'{self.server}/projects/{self.project_id}/processings', callback=self.get_processings_callback)
-        self.processing_fetch_timer.start()
+        # Show history of processings at startup to get non-empty table immediately, and setup the table update
+        self.setup_processings_table()
         # Set up the UI with the received data
         response = json.loads(response.readAll().data())
-        self.set_processing_limit(response_data=response)
+        self.set_project_name(response_data=response)
+        self.update_processing_limit()
         self.is_premium_user = response['user']['isPremium']
         self.on_provider_change(self.dlg.providerCombo.currentText())
         self.aoi_area_limit = response['user']['aoiAreaLimit'] * 1e-6
-        self.wds = [wd['name'] for wd in response['workflowDefs']]
+        self.wds = [wd['name'] for wd in response['workflowDefs']
+                    if self.config.ENABLE_SENTINEL or wd['name'] not in self.config.SENTINEL_WD_NAMES]
+        # We skip SENTINEL WDs if sentinel is not enabled (normally, it should be not)
+        # wds along with ids in the format: {'model_name': 'workflow_def_id'}
+        self.workflow_def_ids = {}
+        for workflow in response['workflowDefs']:
+            self.workflow_def_ids.update({
+                workflow['name']: workflow['id']
+            })
         self.dlg.modelCombo.clear()
         self.dlg.modelCombo.addItems(self.wds)
-        self.dlg.modelCombo.setCurrentText(config.DEFAULT_MODEL)
+        self.dlg.modelCombo.setCurrentText(self.config.DEFAULT_MODEL)
         self.dlg.rasterCombo.setCurrentText('Mapbox')
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
-        self.dlg.processingsTable.setColumnHidden(config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
+        self.dlg.processingsTable.setColumnHidden(self.config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
         # Authenticate and keep user logged in
         self.logged_in = True
         self.dlg_login.close()
         # setup window title for different envs
-        mapflow_env = QgsSettings().value('variables/mapflow_env') or 'production'
-        if mapflow_env == 'production':
+        if self.config.MAPFLOW_ENV == 'production':
             self.dlg.setWindowTitle(self.plugin_name)
         else:
-            self.dlg.setWindowTitle(self.plugin_name + f' {mapflow_env}')
+            self.dlg.setWindowTitle(self.plugin_name + f' {self.config.MAPFLOW_ENV}')
         self.dlg.show()
+        self.user_status_update_timer.start()
+        self.app_startup_user_update_timer.start()
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
         """Inspect the plugin version backend expects and show a warning if it is incompatible w/ the plugin.
@@ -2169,13 +2361,13 @@ class Mapflow(QObject):
          and do not show the reminder until the even newer version is released
         :param response: The HTTP response.
         """
-        
+
         server_version = response.readAll().data().decode('utf-8')
         latest_reported_version = self.settings.value('latest_reported_version', self.plugin_version)
 
-        force_upgrade, recommend_upgrade = check_version(local_version=self.plugin_version,
-                                                         server_version=server_version,
-                                                         latest_reported_version=latest_reported_version)
+        force_upgrade, recommend_upgrade = helpers.check_version(local_version=self.plugin_version,
+                                                                 server_version=server_version,
+                                                                 latest_reported_version=latest_reported_version)
         if force_upgrade:
             self.alert(self.tr("You must upgrade your plugin version to continue work with Mapflow. \n"
                                "The server requires version {server_version}, your plugin is {local_version}\n"
@@ -2204,11 +2396,11 @@ class Mapflow(QObject):
         :param message: A text to translate
         """
         # Don't use self.plugin_name as context since it'll be overriden in supermodules
-        return QCoreApplication.translate(config.PLUGIN_NAME, message)
+        return QCoreApplication.translate(self.config.PLUGIN_NAME, message)
 
     def main(self) -> None:
         """Plugin entrypoint."""
-
+        self.config = Config()
         # check plugin version first
         self.http.get(
             url=f'{self.server}/version',
@@ -2221,13 +2413,12 @@ class Mapflow(QObject):
         token = self.settings.value('token')
         if self.logged_in:
             self.dlg.show()
+            self.update_processing_limit()
+            self.user_status_update_timer.start()
+            self.app_startup_user_update_timer.start()
         elif token:  # token saved
             self.http.basic_auth = f'Basic {token}'
             self.log_in(token)
         else:
             self.set_up_login_dialog()
             self.dlg_login.show()
-
-
-
-

@@ -14,7 +14,7 @@ More info about our AI models can be found [here](https://docs.mapflow.ai/usergu
 
 Mapflow supports various imagery sources types. You can upload your local GeoTIFF image, or use one of the tile services on the Web. By default, we use [Mapbox Satellite](https://www.mapbox.com/maps/satellite), but you can specify a link to another imagery in XYZ, WMS, etc. Among the providers, we have a special support for Maxar [SecureWatch](https://www.maxar.com/products/securewatch) service.
 
-![**Geoalert Mapflow plugin for QGIS**](images/plugin_showcase.jpg)
+![**Geoalert Mapflow plugin for QGIS**](images/plugin_showcase.png)
 
 
 ## Installation

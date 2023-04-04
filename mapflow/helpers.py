@@ -1,11 +1,13 @@
+import json
 import re
+from pathlib import Path
 
 from qgis.core import (
     QgsMapLayer, QgsGeometry, QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
-    QgsMapLayerType, QgsWkbTypes
+    QgsMapLayerType, QgsWkbTypes, QgsRasterLayer, QgsRectangle
 )
-from typing import Tuple
-
+from typing import Tuple, Union
+from .config import config
 
 PROJECT = QgsProject.instance()
 WGS84 = QgsCoordinateReferenceSystem('EPSG:4326')
@@ -94,3 +96,27 @@ def check_version(local_version: str,
     minor_changed = loc_major == srv_major and loc_minor < srv_minor
     patch_changed = loc_major == srv_major and loc_minor == srv_minor and loc_patch < srv_patch
     return major_changed, (minor_changed or patch_changed)
+
+
+def raster_layer_is_allowed(layer: QgsRasterLayer):
+    filepath = Path(layer.dataProvider().dataSourceUri())
+    res = layer.crs().isValid() \
+        and (layer.width() < config.MAX_FILE_SIZE_PIXELS) \
+        and (layer.height() < config.MAX_FILE_SIZE_PIXELS) \
+        and filepath.suffix.lower() in ('.tif', '.tiff') \
+        and filepath.exists() \
+        and filepath.stat().st_size < config.MAX_FILE_SIZE_BYTES
+    return res
+
+
+def check_aoi(aoi: Union[QgsGeometry, None]) -> bool:
+    """Check if aoi is within the limits of [[-360:360] [-90:90]]"""
+    if not aoi:
+        return False
+    b_box = aoi.boundingBox()
+    x_max, x_min, y_max, y_min = b_box.xMaximum(), b_box.xMinimum(), b_box.yMaximum(), b_box.yMinimum()
+    if x_max > 360 or x_max < -360 or x_min > 360 or x_min < -360:
+        return False
+    if y_max > 90 or y_max < -90 or y_min > 90 or y_min < -90:
+        return False
+    return True

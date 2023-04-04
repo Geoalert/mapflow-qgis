@@ -4,7 +4,7 @@ provider_options = {XYZProvider.option_name: XYZProvider,
                     QuadkeyProvider.option_name: QuadkeyProvider,
                     MaxarProvider.option_name: MaxarProvider}
 
-from ...config import MAXAR_BASE_URL
+from ...constants import MAXAR_BASE_URL
 from ...layer_utils import add_connect_id
 
 
