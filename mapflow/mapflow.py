@@ -225,6 +225,18 @@ class Mapflow(QObject):
                 use_default_error_handler=False  # ignore errors to prevent repetitive alerts
             )
         )
+        # timer for user update at startup, in case get_processings request takes too long
+        # stopped as soon as first /user/status request is made
+        self.app_startup_user_update_timer = QTimer(self.dlg)
+        self.app_startup_user_update_timer.setInterval(500)
+        self.app_startup_user_update_timer.timeout.connect(
+            lambda: self.http.get(
+                url=f'{self.server}/user/status',
+                callback=self.set_processing_limit,
+                callback_kwargs={'app_startup_request': True},
+                use_default_error_handler=False
+            )
+        )
         # Add layer menu
         self.add_layer_menu = QMenu()
         self.create_aoi_from_map_action = QAction(self.tr("Create new AOI layer from map extent"))
@@ -1575,7 +1587,10 @@ class Mapflow(QObject):
             callback=self.set_processing_limit
         )
 
-    def set_processing_limit(self, response: QNetworkReply) -> None:
+    def set_processing_limit(self, response: QNetworkReply,
+                             app_startup_request: Optional[bool] = False) -> None:
+        if app_startup_request:
+            self.app_startup_user_update_timer.stop()
         response_data = json.loads(response.readAll().data())
         # check here, if user is admin:
         if response_data.get('admin'):
@@ -2335,6 +2350,7 @@ class Mapflow(QObject):
             self.dlg.setWindowTitle(self.plugin_name + f' {self.config.MAPFLOW_ENV}')
         self.dlg.show()
         self.user_status_update_timer.start()
+        self.app_startup_user_update_timer.start()
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
         """Inspect the plugin version backend expects and show a warning if it is incompatible w/ the plugin.
@@ -2399,6 +2415,7 @@ class Mapflow(QObject):
             self.dlg.show()
             self.update_processing_limit()
             self.user_status_update_timer.start()
+            self.app_startup_user_update_timer.start()
         elif token:  # token saved
             self.http.basic_auth = f'Basic {token}'
             self.log_in(token)
