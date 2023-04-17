@@ -141,7 +141,7 @@ class Mapflow(QObject):
                 self.tr('We failed to import providers {errors} from the settings. Please add them again').format(
                     errors))
         self.update_providers()
-        self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
+        self.dock.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
         self.dlg.minIntersection.setValue(int(self.settings.value('metadataMinIntersection', 0)))
         self.dlg.maxCloudCover.setValue(int(self.settings.value('metadataMaxCloudCover', 100)))
         # Set default metadata dates
@@ -152,26 +152,26 @@ class Mapflow(QObject):
         self.dlg.processingsTable.setColumnHidden(self.config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
         self.filter_bad_rasters()
-        self.dlg.modelCombo.currentTextChanged.connect(self.set_available_imagery_sources)
+        self.dock.modelCombo.currentTextChanged.connect(self.set_available_imagery_sources)
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
         # Connect buttons
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
-        self.dlg.selectTif.clicked.connect(self.select_tif)
+        self.dock.selectTif.clicked.connect(self.select_tif)
         self.dlg.downloadResultsButton.clicked.connect(self.download_results)
         # (Dis)allow the user to use raster extent as AOI
-        self.dlg.rasterCombo.layerChanged.connect(self.toggle_processing_checkboxes)
-        self.dlg.rasterCombo.currentTextChanged.connect(self.toggle_processing_checkboxes)
-        self.dlg.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
-        self.dlg.startProcessing.clicked.connect(self.create_processing)
+        self.dock.rasterCombo.layerChanged.connect(self.toggle_processing_checkboxes)
+        self.dock.rasterCombo.currentTextChanged.connect(self.toggle_processing_checkboxes)
+        self.dock.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
+        self.dock.startProcessing.clicked.connect(self.create_processing)
         # Sync polygon layer combos
-        self.dlg.polygonCombo.layerChanged.connect(self.dlg.maxarAoiCombo.setLayer)
-        self.dlg.maxarAoiCombo.layerChanged.connect(self.dlg.polygonCombo.setLayer)
+        self.dock.polygonCombo.layerChanged.connect(self.dlg.maxarAoiCombo.setLayer)
+        self.dlg.maxarAoiCombo.layerChanged.connect(self.dock.polygonCombo.setLayer)
         # Calculate AOI size
-        self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area_polygon_layer)
-        self.dlg.rasterCombo.layerChanged.connect(self.calculate_aoi_area_raster)
-        self.dlg.useImageExtentAsAoi.toggled.connect(self.calculate_aoi_area_use_image_extent)
+        self.dock.polygonCombo.layerChanged.connect(self.calculate_aoi_area_polygon_layer)
+        self.dock.rasterCombo.layerChanged.connect(self.calculate_aoi_area_raster)
+        self.dock.useImageExtentAsAoi.toggled.connect(self.calculate_aoi_area_use_image_extent)
         self.monitor_polygon_layer_feature_selection([
             self.project.mapLayer(layer_id) for layer_id in self.project.mapLayers(validOnly=True)
         ])
@@ -187,11 +187,11 @@ class Mapflow(QObject):
         self.dlg.processingsTable.cellClicked.connect(self.enable_rating_submit_button)
         # Processings ratings radioButtons
         self.radio_buttons = [
-            self.dlg.processingRating_1,
-            self.dlg.processingRating_2,
-            self.dlg.processingRating_3,
-            self.dlg.processingRating_4,
-            self.dlg.processingRating_5,
+            self.dock.processingRating_1,
+            self.dock.processingRating_2,
+            self.dock.processingRating_3,
+            self.dock.processingRating_4,
+            self.dock.processingRating_5,
         ]
         # connect radio buttons signals
         for radio in self.radio_buttons:
@@ -253,13 +253,13 @@ class Mapflow(QObject):
         self.dlg.imageId.textChanged.connect(self.set_image_id_label)
         # misc
         self.workflow_def_ids = {}
-        self.dlg.processingCostLabel.setVisible(self.config.PROCESSING_COST_LABEL_ENABLED)
+        self.dock.processingCostLabel.setVisible(self.config.PROCESSING_COST_LABEL_ENABLED)
 
     def set_image_id_label(self, text):
         if text:
-            self.dlg.imageId_label.setText(self.tr('Selected Image ID:\n {text}').format(text=text))
+            self.dock.imageId_label.setText(self.tr('Selected Image ID:\n {text}').format(text=text))
         else:
-            self.dlg.imageId_label.setText("")
+            self.dock.imageId_label.setText("")
 
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.create_aoi_from_map_action)
@@ -267,7 +267,6 @@ class Mapflow(QObject):
 
         self.create_aoi_from_map_action.triggered.connect(self.create_aoi_layer_from_map)
         self.add_aoi_from_file_action.triggered.connect(self.open_vector_file)
-        self.dlg.toolButton.setMenu(self.add_layer_menu)
         self.dock.toolButton.setMenu(self.add_layer_menu)
 
     def create_aoi_layer_from_map(self, action: QAction):
@@ -286,7 +285,6 @@ class Mapflow(QObject):
         self.aoi_layer_counter += 1
         self.add_layer(aoi_layer)
         self.iface.setActiveLayer(aoi_layer)
-        self.dlg.polygonCombo.setLayer(aoi_layer)
         self.dock.polygonCombo.setLayer(aoi_layer)
 
     def open_vector_file(self):
@@ -303,7 +301,6 @@ class Mapflow(QObject):
                 self.add_layer(aoi_layer)
                 self.iface.setActiveLayer(aoi_layer)
                 self.iface.zoomToActiveLayer()
-                self.dlg.polygonCombo.setLayer(aoi_layer)
                 self.dock.polygonCombo.setLayer(aoi_layer)
             else:
                 self.alert(self.tr(f'Your file is not valid vector data source!'))
@@ -320,7 +317,7 @@ class Mapflow(QObject):
 
         raster_layers = (layer for layer in self.project.mapLayers().values()
                          if layer.type() == QgsMapLayerType.RasterLayer)
-        if self.dlg.modelCombo.currentText() in self.config.SENTINEL_WD_NAMES:
+        if self.dock.modelCombo.currentText() in self.config.SENTINEL_WD_NAMES:
             filtered_raster_layers = raster_layers
         else:
             try:
@@ -330,7 +327,7 @@ class Mapflow(QObject):
                 ]
             except Exception as e:
                 self.alert(f"Error checking raster layers validity: {e}")
-        self.dlg.rasterCombo.setExceptedLayerList(filtered_raster_layers)
+        self.dock.rasterCombo.setExceptedLayerList(filtered_raster_layers)
 
     def set_available_imagery_sources(self, wd: str) -> None:
         """Restrict the list of imagery sources according to the selected model."""
@@ -338,18 +335,18 @@ class Mapflow(QObject):
                               isinstance(provider, SentinelProvider)]
         web_providers = [provider.name for provider in self.providers.values() if
                          not isinstance(provider, SentinelProvider)]
-        current_sources = self.dlg.rasterCombo.additionalItems()
+        current_sources = self.dock.rasterCombo.additionalItems()
         if wd in self.config.SENTINEL_WD_NAMES and not set(current_sources) == set(sentinel_providers):
-            self.dlg.rasterCombo.setAdditionalItems(sentinel_providers)
+            self.dock.rasterCombo.setAdditionalItems(sentinel_providers)
             if sentinel_providers:
-                self.dlg.rasterCombo.setCurrentText(sentinel_providers[0])
+                self.dock.rasterCombo.setCurrentText(sentinel_providers[0])
             self.dlg.providerCombo.clear()
             self.dlg.providerCombo.addItems(sentinel_providers)
             self.filter_bad_rasters()  # filter rasters for sentinel
         elif not set(current_sources) == set(web_providers):
             # skip update in case source list did not change.
             # This prevents the current selected item from being discarded
-            self.dlg.rasterCombo.setAdditionalItems(web_providers)
+            self.dock.rasterCombo.setAdditionalItems(web_providers)
             self.dlg.providerCombo.clear()
             self.dlg.providerCombo.addItems(web_providers)
             self.filter_bad_rasters()
@@ -421,7 +418,6 @@ class Mapflow(QObject):
 
         :param use_image_extent: Whether the corresponding checkbox is checked
         """
-        self.dlg.polygonCombo.setEnabled(not use_image_extent)
         self.dock.polygonCombo.setEnabled(not use_image_extent)
         self.dlg.maxarAoiCombo.setEnabled(not use_image_extent)
 
@@ -613,7 +609,7 @@ class Mapflow(QObject):
         self.providers.to_settings(self.settings)
         self.dlg.providerCombo.clear()
         self.dlg.providerCombo.addItems(self.providers.keys())
-        self.dlg.modelCombo.currentTextChanged.emit(self.dlg.modelCombo.currentText())
+        self.dock.modelCombo.currentTextChanged.emit(self.dock.modelCombo.currentText())
 
     def show_provider_edit_dialog(self, name) -> None:
         provider = self.providers.get(name, None)
@@ -640,9 +636,9 @@ class Mapflow(QObject):
             tile providers, otherwise the selected raster layer
         """
         enabled = isinstance(raster_source, QgsRasterLayer)
-        self.dlg.useImageExtentAsAoi.setEnabled(enabled)
-        self.dlg.useImageExtentAsAoi.setChecked(enabled)
-        self.dlg.imageId_label.setText("")
+        self.dock.useImageExtentAsAoi.setEnabled(enabled)
+        self.dock.useImageExtentAsAoi.setChecked(enabled)
+        self.dock.imageId_label.setText("")
 
     def select_output_directory(self) -> str:
         """Open a file dialog for the user to select a directory where plugin files will be stored.
@@ -680,7 +676,7 @@ class Mapflow(QObject):
             path = dlg.selectedFiles()[0]
             layer = QgsRasterLayer(path, os.path.splitext(os.path.basename(path))[0])
             self.add_layer(layer)
-            self.dlg.rasterCombo.setLayer(layer)
+            self.dock.rasterCombo.setLayer(layer)
 
     def get_metadata(self) -> None:
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
@@ -1214,7 +1210,7 @@ class Mapflow(QObject):
 
         :param layer: The current polygon layer
         """
-        if self.dlg.useImageExtentAsAoi.isChecked():  # GeoTIFF extent used; no difference
+        if self.dock.useImageExtentAsAoi.isChecked():  # GeoTIFF extent used; no difference
             return
         if layer and layer.featureCount() > 0:
             features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
@@ -1224,9 +1220,8 @@ class Mapflow(QObject):
                 aoi = QgsGeometry.collectGeometry([feature.geometry() for feature in features])
             self.calculate_aoi_area(aoi, layer.crs())
         else:  # empty layer or combo's itself is empty
-            self.dlg.labelAoiArea.clear()
             self.dock.labelAoiArea.clear()
-            self.dlg.processingCostLabel.clear()
+            self.dock.processingCostLabel.clear()
             self.aoi = self.aoi_size = None
 
     def calculate_aoi_area_raster(self, layer: Union[QgsRasterLayer, None]) -> None:
@@ -1238,7 +1233,7 @@ class Mapflow(QObject):
             geometry = QgsGeometry.collectGeometry([QgsGeometry.fromRect(layer.extent())])
             self.calculate_aoi_area(geometry, layer.crs())
         else:
-            self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+            self.calculate_aoi_area_polygon_layer(self.dock.polygonCombo.currentLayer())
 
     def calculate_aoi_area_use_image_extent(self, use_image_extent: bool) -> None:
         """Get the AOI size when the Use image extent checkbox is toggled.
@@ -1246,23 +1241,23 @@ class Mapflow(QObject):
         :param use_image_extent: The current state of the checkbox
         """
         if use_image_extent:
-            self.calculate_aoi_area_raster(self.dlg.rasterCombo.currentLayer())
+            self.calculate_aoi_area_raster(self.dock.rasterCombo.currentLayer())
         else:
-            self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+            self.calculate_aoi_area_polygon_layer(self.dock.polygonCombo.currentLayer())
 
     def calculate_aoi_area_selection(self, _: List[QgsFeature]) -> None:
         """Get the AOI size when the selection changed on a polygon layer.
 
         :param _: A list of currently selected features
         """
-        layer = self.dlg.polygonCombo.currentLayer()
+        layer = self.dock.polygonCombo.currentLayer()
         if layer == self.iface.activeLayer():
             self.calculate_aoi_area_polygon_layer(layer)
 
     def calculate_aoi_area_layer_edited(self) -> None:
         """Get the AOI size when a feature is added or remove from a layer."""
         layer = self.sender()
-        if layer == self.dlg.polygonCombo.currentLayer():
+        if layer == self.dock.polygonCombo.currentLayer():
             self.calculate_aoi_area_polygon_layer(layer)
 
     def calculate_aoi_area(self, aoi: QgsGeometry, crs: QgsCoordinateReferenceSystem) -> None:
@@ -1278,12 +1273,11 @@ class Mapflow(QObject):
         self.calculator.setEllipsoid(helpers.WGS84_ELLIPSOID)
         self.calculator.setSourceCrs(helpers.WGS84, self.project.transformContext())
         self.aoi_size = self.calculator.measureArea(aoi) / 10 ** 6  # sq. m to sq.km
-        self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
         self.dock.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
-        self.dlg.processingCostLabel.clear()
+        self.dock.processingCostLabel.clear()
         # get workflow def if for selected model
         workflow_def_id = self.workflow_def_ids.get(
-            self.dlg.modelCombo.currentText()
+            self.dock.modelCombo.currentText()
         )
         self.calculate_processing_cost(aoi=aoi, workflow_def_id=workflow_def_id)
 
@@ -1303,7 +1297,7 @@ class Mapflow(QObject):
 
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         response_data = response.readAll().data().decode()
-        self.dlg.processingCostLabel.setText(self.tr(f'Processing cost: {response_data} credits'))
+        self.dock.processingCostLabel.setText(self.tr(f'Processing cost: {response_data} credits'))
 
     def delete_processings(self) -> None:
         """Delete one or more processings from the server.
@@ -1423,16 +1417,16 @@ class Mapflow(QObject):
         self.upload_image(layer=imagery, processing_params=params)
 
     def check_processing_ui(self):
-        processing_name = self.dlg.processingName.text()
+        processing_name = self.dock.processingName.text()
 
         if not processing_name:
             self.alert(self.tr('Please, specify a name for your processing'))
             return False
-        use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
+        use_image_extent_as_aoi = self.dock.useImageExtentAsAoi.isChecked()
         if not self.aoi:
             if use_image_extent_as_aoi:
                 self.alert(self.tr('GeoTIFF is corrupted or has invalid projection'))
-            elif self.dlg.polygonCombo.currentLayer():
+            elif self.dock.polygonCombo.currentLayer():
                 self.alert(self.tr('Processing area layer is corrupted or has invalid projection'))
             else:
                 self.alert(self.tr('Please, select an area of interest'))
@@ -1466,10 +1460,10 @@ class Mapflow(QObject):
         """
 
         # get the data from UI
-        processing_name = self.dlg.processingName.text()
-        raster_option = self.dlg.rasterCombo.currentText()
-        imagery = self.dlg.rasterCombo.currentLayer()
-        use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
+        processing_name = self.dock.processingName.text()
+        raster_option = self.dock.rasterCombo.currentText()
+        imagery = self.dock.rasterCombo.currentLayer()
+        use_image_extent_as_aoi = self.dock.useImageExtentAsAoi.isChecked()
         image_id = self.dlg.imageId.text()
         selected_image = self.dlg.metadataTable.selectedItems()
         if not self.check_processing_ui():
@@ -1480,7 +1474,7 @@ class Mapflow(QObject):
 
         processing_params = {
             'name': processing_name,
-            'wdName': self.dlg.modelCombo.currentText(),
+            'wdName': self.dock.modelCombo.currentText(),
             'meta': {  # optional metadata
                 'source-app': 'qgis',
                 'version': self.plugin_version,
@@ -1578,8 +1572,8 @@ class Mapflow(QObject):
             self.tr("Success! We'll notify you when the processing has finished."),
             QMessageBox.Information
         )
-        if self.dlg.processingName.text() == processing_name:
-            self.dlg.processingName.clear()
+        if self.dock.processingName.text() == processing_name:
+            self.dock.processingName.clear()
         self.processing_fetch_timer.start()  # start monitoring
         # Do an extra fetch immediately
         self.http.get(
@@ -1591,7 +1585,7 @@ class Mapflow(QObject):
         project_name = response_data['name']
         if self.plugin_name == 'Mapflow' and self.config.PROJECT_ID != 'default':
             footer = self.tr('Project name: {}').format(project_name)
-            self.dlg.projectNameLabel.setText(footer)
+            self.dock.projectNameLabel.setText(footer)
 
     def update_processing_limit(self) -> None:
         """Set the user's processing limit as reported by Mapflow."""
@@ -1612,7 +1606,6 @@ class Mapflow(QObject):
             self.remaining_limit = int(response_data.get('remainingArea', 0)) / 1e6  # convert into sq.km
         if self.plugin_name == 'Mapflow':
             footer = self.tr('Processing limit: {:.2f} sq.km').format(self.remaining_limit)
-            self.dlg.remainingLimit.setText(footer)
             self.dock.remainingLimit.setText(footer)
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
@@ -1774,8 +1767,8 @@ class Mapflow(QObject):
             self.radio_buttons[i].setAutoExclusive(False)
             self.radio_buttons[i].setChecked(False)
             self.radio_buttons[i].setAutoExclusive(True)
-        self.dlg.selectedProcessingNameLabel.clear()
-        self.dlg.processingRatingFeedbackText.clear()
+        self.dock.selectedProcessingNameLabel.clear()
+        self.dock.processingRatingFeedbackText.clear()
 
     def update_processing_current_rating(self) -> None:
         # reset labels:
@@ -1784,7 +1777,7 @@ class Mapflow(QObject):
         row = self.dlg.processingsTable.currentRow()
         pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
         p_name = self.dlg.processingsTable.item(row, 0).text()
-        self.dlg.selectedProcessingNameLabel.setText(f'{p_name}')
+        self.dock.selectedProcessingNameLabel.setText(f'{p_name}')
         self.http.get(
             url=f'{self.server}/processings/{pid}',
             callback=self.update_processing_current_rating_callback
@@ -1798,7 +1791,7 @@ class Mapflow(QObject):
         rating = int(rating_json.get('rating'))
         feedback = rating_json.get('feedback')
         self.radio_buttons[rating - 1].setChecked(True)
-        self.dlg.processingRatingFeedbackText.setText(feedback)
+        self.dock.processingRatingFeedbackText.setText(feedback)
 
     def submit_processing_rating(self) -> None:
         row = self.dlg.processingsTable.currentRow()
@@ -1813,7 +1806,7 @@ class Mapflow(QObject):
         rating = self.get_checked_processing_rating()
         if rating == 0:
             return
-        feedback_text = self.dlg.processingRatingFeedbackText.toPlainText()
+        feedback_text = self.dock.processingRatingFeedbackText.toPlainText()
         body = {
             'rating': rating,
             'feedback': feedback_text
@@ -2164,7 +2157,7 @@ class Mapflow(QObject):
         self.toolbar.addAction(plugin_button)
         self.project.readProject.connect(self.set_layer_group)
         self.project.readProject.connect(self.filter_bad_rasters)
-        # list(filter(bool, [self.dlg.rasterCombo.layer(index) for index in range(self.dlg.rasterCombo.count())]))
+        # list(filter(bool, [self.dock.rasterCombo.layer(index) for index in range(self.dock.rasterCombo.count())]))
         self.dlg.processingsTable.sortByColumn(self.config.PROCESSING_TABLE_SORT_COLUMN_INDEX, Qt.DescendingOrder)
 
     def set_layer_group(self) -> None:
@@ -2347,11 +2340,11 @@ class Mapflow(QObject):
             self.workflow_def_ids.update({
                 workflow['name']: workflow['id']
             })
-        self.dlg.modelCombo.clear()
-        self.dlg.modelCombo.addItems(self.wds)
-        self.dlg.modelCombo.setCurrentText(self.config.DEFAULT_MODEL)
-        self.dlg.rasterCombo.setCurrentText('Mapbox')
-        self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
+        self.dock.modelCombo.clear()
+        self.dock.modelCombo.addItems(self.wds)
+        self.dock.modelCombo.setCurrentText(self.config.DEFAULT_MODEL)
+        self.dock.rasterCombo.setCurrentText('Mapbox')
+        self.calculate_aoi_area_use_image_extent(self.dock.useImageExtentAsAoi.isChecked())
         self.dlg.processingsTable.setColumnHidden(self.config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
         # Authenticate and keep user logged in
