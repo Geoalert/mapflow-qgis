@@ -10,6 +10,7 @@ from datetime import datetime  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
 from osgeo import gdal
+from PyQt5 import uic
 from PyQt5.QtXml import QDomDocument
 from PyQt5.QtGui import QColor, QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
@@ -21,6 +22,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction,
     QAbstractItemView, QLabel, QProgressBar, QMenu
 )
+from qgis._gui import QgisInterface
 
 from qgis.gui import QgsMessageBarItem
 from qgis.core import (
@@ -52,7 +54,7 @@ from .layer_utils import generate_xyz_layer_definition, get_bounding_box_from_ti
 class Mapflow(QObject):
     """This class represents the plugin. It is instantiated by QGIS."""
 
-    def __init__(self, iface) -> None:
+    def __init__(self, iface: QgisInterface) -> None:
         """Initialize the plugin.
 
         :param iface: an instance of the QGIS interface.
@@ -65,6 +67,11 @@ class Mapflow(QObject):
         self.remaining_limit = 0
         # Save refs to key variables used throughout the plugin
         self.iface = iface
+        # add dock
+        ui_path = Path(__file__).parent/'dialogs'/'static'/'ui'
+        self.dock = uic.loadUi(ui_path/'processings_control_panel_dock.ui')
+        self.iface.addDockWidget(Qt.RightDockWidgetArea, self.dock)
+
         self.main_window = self.iface.mainWindow()
         super().__init__(self.main_window)
         self.project = QgsProject.instance()
@@ -261,6 +268,7 @@ class Mapflow(QObject):
         self.create_aoi_from_map_action.triggered.connect(self.create_aoi_layer_from_map)
         self.add_aoi_from_file_action.triggered.connect(self.open_vector_file)
         self.dlg.toolButton.setMenu(self.add_layer_menu)
+        self.dock.toolButton.setMenu(self.add_layer_menu)
 
     def create_aoi_layer_from_map(self, action: QAction):
         aoi_geometry = helpers.to_wgs84(
@@ -279,6 +287,7 @@ class Mapflow(QObject):
         self.add_layer(aoi_layer)
         self.iface.setActiveLayer(aoi_layer)
         self.dlg.polygonCombo.setLayer(aoi_layer)
+        self.dock.polygonCombo.setLayer(aoi_layer)
 
     def open_vector_file(self):
         """Open a file selection dialog for the user to select a vector file as AOI
@@ -295,6 +304,7 @@ class Mapflow(QObject):
                 self.iface.setActiveLayer(aoi_layer)
                 self.iface.zoomToActiveLayer()
                 self.dlg.polygonCombo.setLayer(aoi_layer)
+                self.dock.polygonCombo.setLayer(aoi_layer)
             else:
                 self.alert(self.tr(f'Your file is not valid vector data source!'))
 
@@ -412,6 +422,7 @@ class Mapflow(QObject):
         :param use_image_extent: Whether the corresponding checkbox is checked
         """
         self.dlg.polygonCombo.setEnabled(not use_image_extent)
+        self.dock.polygonCombo.setEnabled(not use_image_extent)
         self.dlg.maxarAoiCombo.setEnabled(not use_image_extent)
 
     def limit_zoom_auth_toggled(self) -> None:
@@ -1214,6 +1225,7 @@ class Mapflow(QObject):
             self.calculate_aoi_area(aoi, layer.crs())
         else:  # empty layer or combo's itself is empty
             self.dlg.labelAoiArea.clear()
+            self.dock.labelAoiArea.clear()
             self.dlg.processingCostLabel.clear()
             self.aoi = self.aoi_size = None
 
@@ -1267,6 +1279,7 @@ class Mapflow(QObject):
         self.calculator.setSourceCrs(helpers.WGS84, self.project.transformContext())
         self.aoi_size = self.calculator.measureArea(aoi) / 10 ** 6  # sq. m to sq.km
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
+        self.dock.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
         self.dlg.processingCostLabel.clear()
         # get workflow def if for selected model
         workflow_def_id = self.workflow_def_ids.get(
@@ -1600,6 +1613,7 @@ class Mapflow(QObject):
         if self.plugin_name == 'Mapflow':
             footer = self.tr('Processing limit: {:.2f} sq.km').format(self.remaining_limit)
             self.dlg.remainingLimit.setText(footer)
+            self.dock.remainingLimit.setText(footer)
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
         """Save and open the preview image as a layer."""
