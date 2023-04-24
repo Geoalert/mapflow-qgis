@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>360</width>
-    <height>772</height>
+    <width>358</width>
+    <height>815</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -18,7 +18,7 @@
   </property>
   <property name="maximumSize">
    <size>
-    <width>360</width>
+    <width>99999</width>
     <height>524287</height>
    </size>
   </property>
@@ -30,7 +30,7 @@
     <property name="geometry">
      <rect>
       <x>0</x>
-      <y>356</y>
+      <y>264</y>
       <width>340</width>
       <height>30</height>
      </rect>
@@ -48,7 +48,8 @@
      </size>
     </property>
     <property name="text">
-     <string/>
+     <string>Project name
+example name</string>
     </property>
     <property name="alignment">
      <set>Qt::AlignCenter</set>
@@ -58,7 +59,7 @@
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>226</y>
+      <y>211</y>
       <width>326</width>
       <height>36</height>
      </rect>
@@ -82,7 +83,8 @@
      </size>
     </property>
     <property name="text">
-     <string/>
+     <string>Image ID label
+example_id_long_long_long_long</string>
     </property>
     <property name="alignment">
      <set>Qt::AlignCenter</set>
@@ -92,7 +94,7 @@
     <property name="geometry">
      <rect>
       <x>0</x>
-      <y>320</y>
+      <y>241</y>
       <width>340</width>
       <height>30</height>
      </rect>
@@ -121,7 +123,7 @@
      </font>
     </property>
     <property name="text">
-     <string/>
+     <string>Remaining limit 100000 sq.km</string>
     </property>
     <property name="alignment">
      <set>Qt::AlignCenter</set>
@@ -130,8 +132,8 @@
    <widget class="QPushButton" name="startProcessing">
     <property name="geometry">
      <rect>
-      <x>120</x>
-      <y>410</y>
+      <x>100</x>
+      <y>300</y>
       <width>160</width>
       <height>39</height>
      </rect>
@@ -167,11 +169,17 @@
    <widget class="QgsCollapsibleGroupBox" name="rateProcessingGroupBox">
     <property name="geometry">
      <rect>
-      <x>20</x>
-      <y>490</y>
+      <x>10</x>
+      <y>339</y>
       <width>342</width>
       <height>210</height>
      </rect>
+    </property>
+    <property name="sizePolicy">
+     <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+      <horstretch>0</horstretch>
+      <verstretch>0</verstretch>
+     </sizepolicy>
     </property>
     <property name="minimumSize">
      <size>
@@ -337,20 +345,29 @@
      </layout>
     </widget>
    </widget>
-   <widget class="QWidget" name="">
+   <widget class="QWidget" name="layoutWidget">
     <property name="geometry">
      <rect>
       <x>0</x>
       <y>10</y>
       <width>351</width>
-      <height>211</height>
+      <height>202</height>
      </rect>
     </property>
     <layout class="QVBoxLayout" name="verticalLayout_5">
+     <property name="spacing">
+      <number>3</number>
+     </property>
      <item>
       <layout class="QVBoxLayout" name="verticalLayout_3">
+       <property name="spacing">
+        <number>3</number>
+       </property>
        <item>
         <layout class="QVBoxLayout" name="verticalLayout">
+         <property name="spacing">
+          <number>3</number>
+         </property>
          <item>
           <layout class="QHBoxLayout" name="horizontalLayout">
            <item>
@@ -534,6 +551,9 @@
      </item>
      <item>
       <layout class="QVBoxLayout" name="verticalLayout_4">
+       <property name="spacing">
+        <number>3</number>
+       </property>
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_4">
          <item>

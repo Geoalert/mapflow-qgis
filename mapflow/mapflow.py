@@ -67,10 +67,15 @@ class Mapflow(QObject):
         self.remaining_limit = 0
         # Save refs to key variables used throughout the plugin
         self.iface = iface
-        # add dock
+        # add processings control panel dock
         ui_path = Path(__file__).parent/'dialogs'/'static'/'ui'
         self.dock = uic.loadUi(ui_path/'processings_control_panel_dock.ui')
         self.iface.addDockWidget(Qt.RightDockWidgetArea, self.dock)
+
+        # add tables dock
+        ui_path = Path(__file__).parent/'dialogs'/'static'/'ui'
+        self.tables_dock = uic.loadUi(ui_path/'tables_dock.ui')
+        self.iface.addDockWidget(Qt.BottomDockWidgetArea, self.tables_dock)
 
         self.main_window = self.iface.mainWindow()
         super().__init__(self.main_window)
@@ -208,9 +213,9 @@ class Mapflow(QObject):
         self.dlg.maxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
         # Maxar
         self.dlg.imageId.textChanged.connect(self.sync_image_id_with_table_and_layer)
-        self.dlg.metadataTable.itemSelectionChanged.connect(self.sync_table_selection_with_image_id_and_layer)
+        self.tables_dock.metadataTable.itemSelectionChanged.connect(self.sync_table_selection_with_image_id_and_layer)
         self.dlg.getMetadata.clicked.connect(self.get_metadata)
-        self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
+        self.tables_dock.metadataTable.cellDoubleClicked.connect(self.preview)
         self.dlg.providerCombo.currentTextChanged.connect(self.on_provider_change)
         # Poll processings
         self.processing_fetch_timer = QTimer(self.dlg)
@@ -395,14 +400,14 @@ class Mapflow(QObject):
         self.metadata_layer.setSubsetString(filter_)
         to = QDate.fromString(to, Qt.ISODate).addDays(1).toString(Qt.ISODate)
         # Show/hide table rows
-        for row in range(self.dlg.metadataTable.rowCount()):
-            id_ = self.dlg.metadataTable.item(row, id_column_index).data(Qt.DisplayRole)
-            datetime_ = self.dlg.metadataTable.item(row, datetime_column_index).data(Qt.DisplayRole)
-            cloud_cover = self.dlg.metadataTable.item(row, cloud_cover_column_index).data(Qt.DisplayRole)
+        for row in range(self.tables_dock.metadataTable.rowCount()):
+            id_ = self.tables_dock.metadataTable.item(row, id_column_index).data(Qt.DisplayRole)
+            datetime_ = self.tables_dock.metadataTable.item(row, datetime_column_index).data(Qt.DisplayRole)
+            cloud_cover = self.tables_dock.metadataTable.item(row, cloud_cover_column_index).data(Qt.DisplayRole)
             is_unfit = from_ > datetime_ or to < datetime_ or id_ in filtered_ids
             if cloud_cover is not None:  # may be undefined
                 is_unfit = is_unfit or cloud_cover > max_cloud_cover
-            self.dlg.metadataTable.setRowHidden(row, is_unfit)
+            self.tables_dock.metadataTable.setRowHidden(row, is_unfit)
 
     def set_up_login_dialog(self) -> None:
         """Create a login dialog, set its title and signal-slot connections."""
@@ -444,7 +449,7 @@ class Mapflow(QObject):
         """
         provider = self.providers.get(provider_name)
 
-        self.dlg.metadataTable.clear()
+        self.tables_dock.metadataTable.clear()
         self.dlg.imageId.clear()
 
         more_button = self.dlg.findChild(QPushButton, self.config.METADATA_MORE_BUTTON_OBJECT_NAME)
@@ -487,15 +492,15 @@ class Mapflow(QObject):
         self.limit_zoom_auth_toggled()
         self.dlg.maxZoom.setEnabled(is_max_zoom_enabled)
         self.dlg.metadataFilters.setEnabled(additional_filters_enabled)
-        self.dlg.metadataTable.setRowCount(0)
-        self.dlg.metadataTable.setColumnCount(len(columns))
-        self.dlg.metadataTable.setHorizontalHeaderLabels(columns)
+        self.tables_dock.metadataTable.setRowCount(0)
+        self.tables_dock.metadataTable.setColumnCount(len(columns))
+        self.tables_dock.metadataTable.setHorizontalHeaderLabels(columns)
         for col in range(len(columns)):  # reveal any previously hidden columns
-            self.dlg.metadataTable.setColumnHidden(col, False)
+            self.tables_dock.metadataTable.setColumnHidden(col, False)
         if hidden_column_index is not None:  # now hide the relevant ones
-            self.dlg.metadataTable.setColumnHidden(hidden_column_index, True)
+            self.tables_dock.metadataTable.setColumnHidden(hidden_column_index, True)
         if sort_by is not None:
-            self.dlg.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
+            self.tables_dock.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
         self.dlg.metadata.setTitle(provider_name + self.tr(' Imagery Catalog'))
         self.dlg.metadata.setEnabled(enabled)
         self.dlg.imageId.setPlaceholderText(image_id_placeholder)
@@ -680,8 +685,8 @@ class Mapflow(QObject):
 
     def get_metadata(self) -> None:
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
-        self.dlg.metadataTable.clearContents()
-        self.dlg.metadataTable.setRowCount(0)
+        self.tables_dock.metadataTable.clearContents()
+        self.tables_dock.metadataTable.setRowCount(0)
         more_button = self.dlg.findChild(QPushButton, self.config.METADATA_MORE_BUTTON_OBJECT_NAME)
         if more_button:
             self.dlg.layoutMetadataTable.removeWidget(more_button)
@@ -916,9 +921,9 @@ class Mapflow(QObject):
         self.metadata_layer.dataProvider().addFeatures(metadata_layer.getFeatures())
         if timer:  # first page
             self.add_layer(self.metadata_layer)
-        current_row_count = self.dlg.metadataTable.rowCount()
-        self.dlg.metadataTable.setRowCount(current_row_count + metadata_layer.featureCount())
-        self.dlg.metadataTable.setSortingEnabled(False)
+        current_row_count = self.tables_dock.metadataTable.rowCount()
+        self.tables_dock.metadataTable.setRowCount(current_row_count + metadata_layer.featureCount())
+        self.tables_dock.metadataTable.setSortingEnabled(False)
         for row, feature in enumerate(metadata['features'], start=current_row_count):
             table_items = [QTableWidgetItem() for _ in range(len(self.config.SENTINEL_ATTRIBUTES))]
             table_items[0].setData(Qt.DisplayRole, feature['properties']['acquisitionDate'])
@@ -926,9 +931,9 @@ class Mapflow(QObject):
             table_items[2].setData(Qt.DisplayRole, feature['id'])
             table_items[3].setData(Qt.DisplayRole, feature['properties']['preview'])
             for col, table_item in enumerate(table_items):
-                self.dlg.metadataTable.setItem(row, col, table_item)
+                self.tables_dock.metadataTable.setItem(row, col, table_item)
         self.filter_metadata(min_intersection=min_intersection, max_cloud_cover=max_cloud_cover)
-        self.dlg.metadataTable.setSortingEnabled(True)
+        self.tables_dock.metadataTable.setSortingEnabled(True)
         # Handle pagination
         try:
             next_page_start_index = response['pagination']['cursor']['next']
@@ -1041,7 +1046,7 @@ class Mapflow(QObject):
         :param response: The HTTP response.
         :param product: Maxar product whose metadata was requested.
         """
-        self.dlg.metadataTable.clearContents()
+        self.tables_dock.metadataTable.clearContents()
         response_data = response.readAll().data()
         metadata = json.loads(response_data)
         if metadata['totalFeatures'] == 0:
@@ -1081,9 +1086,9 @@ class Mapflow(QObject):
             for feature in self.metadata_layer.getFeatures()
         }
         # Fill out the table
-        self.dlg.metadataTable.setRowCount(metadata['totalFeatures'])
+        self.tables_dock.metadataTable.setRowCount(metadata['totalFeatures'])
         # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
-        self.dlg.metadataTable.setSortingEnabled(False)
+        self.tables_dock.metadataTable.setSortingEnabled(False)
         for row, feature in enumerate(metadata['features']):
             feature['properties']['id'] = feature['id']  # for uniformity
             for col, attr in enumerate(self.config.MAXAR_METADATA_ATTRIBUTES.values()):
@@ -1093,9 +1098,9 @@ class Mapflow(QObject):
                     value = ''
                 table_item = QTableWidgetItem()
                 table_item.setData(Qt.DisplayRole, value)
-                self.dlg.metadataTable.setItem(row, col, table_item)
+                self.tables_dock.metadataTable.setItem(row, col, table_item)
         # Turn sorting on again
-        self.dlg.metadataTable.setSortingEnabled(True)
+        self.tables_dock.metadataTable.setSortingEnabled(True)
         self.filter_metadata(min_intersection=min_intersection, max_cloud_cover=max_cloud_cover)
 
     def get_maxar_metadata_error_handler(self, response: QNetworkReply) -> None:
@@ -1119,7 +1124,7 @@ class Mapflow(QObject):
         corresponding feature in the metadata layer and put the selected image's
         id into the "Image ID" field. 
         """
-        selected_cells = self.dlg.metadataTable.selectedItems()
+        selected_cells = self.tables_dock.metadataTable.selectedItems()
         if not selected_cells:
             self.dlg.imageId.setText('')
             try:
@@ -1151,7 +1156,7 @@ class Mapflow(QObject):
             the primary keys of the features.
         """
         if not selected_ids:
-            self.dlg.metadataTable.clearSelection()
+            self.tables_dock.metadataTable.clearSelection()
             return
         selected_id = self.metadata_layer.getFeature(selected_ids[-1])['id']
         id_column_index = [
@@ -1160,12 +1165,12 @@ class Mapflow(QObject):
             else self.config.MAXAR_ID_COLUMN_INDEX
         ]
         already_selected = [
-            item.text() for item in self.dlg.metadataTable.selectedItems()
+            item.text() for item in self.tables_dock.metadataTable.selectedItems()
             if item.column() == id_column_index
         ]
         if selected_id not in already_selected:
-            self.dlg.metadataTable.selectRow(
-                self.dlg.metadataTable.findItems(selected_id, Qt.MatchExactly)[0].row()
+            self.tables_dock.metadataTable.selectRow(
+                self.tables_dock.metadataTable.findItems(selected_id, Qt.MatchExactly)[0].row()
             )
 
     def sync_image_id_with_table_and_layer(self, image_id: str) -> None:
@@ -1175,7 +1180,7 @@ class Mapflow(QObject):
         :param image_id: The new image ID.
         """
         if not image_id:
-            self.dlg.metadataTable.clearSelection()
+            self.tables_dock.metadataTable.clearSelection()
             return
         provider = self.providers.get(self.dlg.providerCombo.currentText())
 
@@ -1197,12 +1202,12 @@ class Mapflow(QObject):
                 self.dlg.imageId.clear()
                 self.alert('A Maxar image ID should look like a3b154c40cc74f3b934c0ffc9b34ecd1')
                 return
-        items = self.dlg.metadataTable.findItems(image_id, Qt.MatchExactly)
+        items = self.tables_dock.metadataTable.findItems(image_id, Qt.MatchExactly)
         if not items:
-            self.dlg.metadataTable.clearSelection()
+            self.tables_dock.metadataTable.clearSelection()
             return
-        if items[0] not in self.dlg.metadataTable.selectedItems():
-            self.dlg.metadataTable.selectRow(items[0].row())
+        if items[0] not in self.tables_dock.metadataTable.selectedItems():
+            self.tables_dock.metadataTable.selectRow(items[0].row())
 
     def calculate_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
         """Get the AOI size total when polygon another layer is chosen,
@@ -1465,7 +1470,7 @@ class Mapflow(QObject):
         imagery = self.dock.rasterCombo.currentLayer()
         use_image_extent_as_aoi = self.dock.useImageExtentAsAoi.isChecked()
         image_id = self.dlg.imageId.text()
-        selected_image = self.dlg.metadataTable.selectedItems()
+        selected_image = self.tables_dock.metadataTable.selectedItems()
         if not self.check_processing_ui():
             return
         if not helpers.check_aoi(self.aoi):
@@ -1657,10 +1662,10 @@ class Mapflow(QObject):
         self.report_http_error(response, self.tr('Error previewing Sentinel imagery'))
 
     def preview_sentinel(self, image_id):
-        selected_cells = self.dlg.metadataTable.selectedItems()
+        selected_cells = self.tables_dock.metadataTable.selectedItems()
         if selected_cells:
             datetime_ = selected_cells[self.config.SENTINEL_DATETIME_COLUMN_INDEX]
-            url = self.dlg.metadataTable.item(datetime_.row(), self.config.SENTINEL_PREVIEW_COLUMN_INDEX).text()
+            url = self.tables_dock.metadataTable.item(datetime_.row(), self.config.SENTINEL_PREVIEW_COLUMN_INDEX).text()
             if not url:
                 self.alert(self.tr("Sorry, there's no preview for this image"), QMessageBox.Information)
                 return
@@ -1690,13 +1695,13 @@ class Mapflow(QObject):
         return
 
     def maxar_layer_name(self, layer_name, image_id):
-        row = self.dlg.metadataTable.currentRow()
+        row = self.tables_dock.metadataTable.currentRow()
         attrs = tuple(self.config.MAXAR_METADATA_ATTRIBUTES.values())
         try:
             layer_name = ' '.join((
                 layer_name,
-                self.dlg.metadataTable.item(row, attrs.index('acquisitionDate')).text(),
-                self.dlg.metadataTable.item(row, attrs.index('productType')).text()
+                self.tables_dock.metadataTable.item(row, attrs.index('acquisitionDate')).text(),
+                self.tables_dock.metadataTable.item(row, attrs.index('productType')).text()
             ))
         except AttributeError:  # the table is empty
             layer_name = f'{layer_name} {image_id}'
