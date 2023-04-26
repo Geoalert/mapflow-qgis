@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>358</width>
-    <height>815</height>
+    <width>361</width>
+    <height>861</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -30,7 +30,7 @@
     <property name="geometry">
      <rect>
       <x>0</x>
-      <y>264</y>
+      <y>236</y>
       <width>340</width>
       <height>30</height>
      </rect>
@@ -58,8 +58,8 @@ example name</string>
    <widget class="QLabel" name="imageId_label">
     <property name="geometry">
      <rect>
-      <x>10</x>
-      <y>211</y>
+      <x>540</x>
+      <y>200</y>
       <width>326</width>
       <height>36</height>
      </rect>
@@ -93,8 +93,8 @@ example_id_long_long_long_long</string>
    <widget class="QLabel" name="remainingLimit">
     <property name="geometry">
      <rect>
-      <x>0</x>
-      <y>241</y>
+      <x>1</x>
+      <y>208</y>
       <width>340</width>
       <height>30</height>
      </rect>
@@ -132,8 +132,8 @@ example_id_long_long_long_long</string>
    <widget class="QPushButton" name="startProcessing">
     <property name="geometry">
      <rect>
-      <x>100</x>
-      <y>300</y>
+      <x>97</x>
+      <y>270</y>
       <width>160</width>
       <height>39</height>
      </rect>
@@ -169,8 +169,8 @@ example_id_long_long_long_long</string>
    <widget class="QgsCollapsibleGroupBox" name="rateProcessingGroupBox">
     <property name="geometry">
      <rect>
-      <x>10</x>
-      <y>339</y>
+      <x>2</x>
+      <y>607</y>
       <width>342</width>
       <height>210</height>
      </rect>
@@ -629,6 +629,13 @@ example_id_long_long_long_long</string>
           </widget>
          </item>
          <item>
+          <widget class="QPushButton" name="preview">
+           <property name="text">
+            <string>Preview</string>
+           </property>
+          </widget>
+         </item>
+         <item>
           <widget class="QPushButton" name="selectTif">
            <property name="enabled">
             <bool>true</bool>
@@ -668,6 +675,341 @@ example_id_long_long_long_long</string>
      </item>
     </layout>
    </widget>
+   <widget class="QgsCollapsibleGroupBox" name="mGroupBox">
+    <property name="geometry">
+     <rect>
+      <x>2</x>
+      <y>310</y>
+      <width>351</width>
+      <height>291</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>351</width>
+      <height>251</height>
+     </size>
+    </property>
+    <property name="title">
+     <string>Search imagery</string>
+    </property>
+    <widget class="QPushButton" name="getMetadata">
+     <property name="geometry">
+      <rect>
+       <x>101</x>
+       <y>260</y>
+       <width>131</width>
+       <height>25</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Click and wait for a few seconds until the table below is filled out</string>
+     </property>
+     <property name="text">
+      <string>Search imagery</string>
+     </property>
+    </widget>
+    <widget class="QgsMapLayerComboBox" name="maxarAoiCombo">
+     <property name="geometry">
+      <rect>
+       <x>56</x>
+       <y>80</y>
+       <width>101</width>
+       <height>25</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Any (multi-)polygon(s)</string>
+     </property>
+     <property name="showCrs">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QDateEdit" name="metadataTo">
+     <property name="geometry">
+      <rect>
+       <x>191</x>
+       <y>120</y>
+       <width>103</width>
+       <height>26</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Dates are inclusive</string>
+     </property>
+     <property name="maximumDate">
+      <date>
+       <year>2030</year>
+       <month>1</month>
+       <day>1</day>
+      </date>
+     </property>
+     <property name="minimumDate">
+      <date>
+       <year>1970</year>
+       <month>1</month>
+       <day>1</day>
+      </date>
+     </property>
+     <property name="displayFormat">
+      <string>yyyy-MM-dd</string>
+     </property>
+     <property name="calendarPopup">
+      <bool>true</bool>
+     </property>
+     <property name="date">
+      <date>
+       <year>2021</year>
+       <month>12</month>
+       <day>21</day>
+      </date>
+     </property>
+    </widget>
+    <widget class="QCheckBox" name="metadataUseCanvasExtent">
+     <property name="geometry">
+      <rect>
+       <x>171</x>
+       <y>80</y>
+       <width>148</width>
+       <height>23</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Use your current screen area</string>
+     </property>
+     <property name="text">
+      <string>Use canvas extent</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="labelMaxarAoi">
+     <property name="geometry">
+      <rect>
+       <x>11</x>
+       <y>80</y>
+       <width>36</width>
+       <height>25</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Area:</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="labelTo">
+     <property name="geometry">
+      <rect>
+       <x>161</x>
+       <y>120</y>
+       <width>20</width>
+       <height>26</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>More recent images won't be shown</string>
+     </property>
+     <property name="text">
+      <string>To:</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="labelFrom">
+     <property name="geometry">
+      <rect>
+       <x>11</x>
+       <y>120</y>
+       <width>38</width>
+       <height>26</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Earlier images won't be shown</string>
+     </property>
+     <property name="text">
+      <string>From:</string>
+     </property>
+    </widget>
+    <widget class="QgsCollapsibleGroupBox" name="metadataFilters">
+     <property name="geometry">
+      <rect>
+       <x>11</x>
+       <y>150</y>
+       <width>331</width>
+       <height>100</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Click to specify additional search criteria</string>
+     </property>
+     <property name="title">
+      <string>Additional filters</string>
+     </property>
+     <property name="checked">
+      <bool>false</bool>
+     </property>
+     <property name="collapsed">
+      <bool>false</bool>
+     </property>
+     <layout class="QGridLayout" name="layoutMetadataFilters" columnstretch="0,1,0">
+      <item row="0" column="0">
+       <widget class="QLabel" name="labelMinIntersection">
+        <property name="text">
+         <string>Min intersection:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QSlider" name="minIntersection">
+        <property name="toolTip">
+         <string>Images that cover fewer % of your area won't be shown</string>
+        </property>
+        <property name="maximum">
+         <number>100</number>
+        </property>
+        <property name="tracking">
+         <bool>false</bool>
+        </property>
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="tickPosition">
+         <enum>QSlider::TicksBelow</enum>
+        </property>
+        <property name="tickInterval">
+         <number>5</number>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="2">
+       <widget class="QSpinBox" name="minIntersectionSpinBox">
+        <property name="suffix">
+         <string>%</string>
+        </property>
+        <property name="minimum">
+         <number>0</number>
+        </property>
+        <property name="maximum">
+         <number>100</number>
+        </property>
+        <property name="value">
+         <number>0</number>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="labelMaxCloudCover">
+        <property name="text">
+         <string>Cloud cover up to:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QSlider" name="maxCloudCover">
+        <property name="minimum">
+         <number>1</number>
+        </property>
+        <property name="maximum">
+         <number>100</number>
+        </property>
+        <property name="value">
+         <number>100</number>
+        </property>
+        <property name="tracking">
+         <bool>false</bool>
+        </property>
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="tickPosition">
+         <enum>QSlider::TicksBelow</enum>
+        </property>
+        <property name="tickInterval">
+         <number>10</number>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QSpinBox" name="maxCloudCoverSpinBox">
+        <property name="suffix">
+         <string>%</string>
+        </property>
+        <property name="minimum">
+         <number>1</number>
+        </property>
+        <property name="maximum">
+         <number>100</number>
+        </property>
+        <property name="value">
+         <number>100</number>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+    <widget class="QDateEdit" name="metadataFrom">
+     <property name="geometry">
+      <rect>
+       <x>53</x>
+       <y>120</y>
+       <width>103</width>
+       <height>26</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Dates are inclusive</string>
+     </property>
+     <property name="maximumDate">
+      <date>
+       <year>2030</year>
+       <month>1</month>
+       <day>1</day>
+      </date>
+     </property>
+     <property name="minimumDate">
+      <date>
+       <year>1970</year>
+       <month>1</month>
+       <day>1</day>
+      </date>
+     </property>
+     <property name="displayFormat">
+      <string>yyyy-MM-dd</string>
+     </property>
+     <property name="calendarPopup">
+      <bool>true</bool>
+     </property>
+     <property name="date">
+      <date>
+       <year>2020</year>
+       <month>12</month>
+       <day>21</day>
+      </date>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="imageId">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>50</y>
+       <width>331</width>
+       <height>25</height>
+      </rect>
+     </property>
+     <property name="placeholderText">
+      <string>Select in the table below or paste here</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="labelImageId">
+     <property name="geometry">
+      <rect>
+       <x>132</x>
+       <y>20</y>
+       <width>64</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Image ID:</string>
+     </property>
+    </widget>
+   </widget>
   </widget>
  </widget>
  <customwidgets>
@@ -684,5 +1026,70 @@ example_id_long_long_long_long</string>
   </customwidget>
  </customwidgets>
  <resources/>
- <connections/>
+ <connections>
+  <connection>
+   <sender>minIntersection</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>minIntersectionSpinBox</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>236</x>
+     <y>568</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>300</x>
+     <y>564</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>maxCloudCover</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>maxCloudCoverSpinBox</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>220</x>
+     <y>588</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>305</x>
+     <y>605</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>maxCloudCoverSpinBox</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>maxCloudCover</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>315</x>
+     <y>587</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>239</x>
+     <y>599</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>minIntersectionSpinBox</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>minIntersection</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>320</x>
+     <y>552</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>247</x>
+     <y>567</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
 </ui>
