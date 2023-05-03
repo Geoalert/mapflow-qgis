@@ -50,11 +50,12 @@ class Config:
     PROCESSING_COST_LABEL_ENABLED = False
 
     STYLES = {
-        'Buildings Detection': 'buildings',
+        '🏠 Buildings': 'buildings',
         'Buildings Detection With Heights': 'buildings',
-        'Forest Detection': 'forest',
-        'Forest Detection With Heights': 'forest_with_heights',
-        'Roads Detection': 'roads'
+        '🌲 Forest': 'forest',
+        '🌲↕️ Forest with heights': 'forest_with_heights',
+        '🚗 Roads': 'roads',
+        '🏗️ Construction sites': 'construction'
     }
 
     MAX_FILE_SIZE_PIXELS = 30_000

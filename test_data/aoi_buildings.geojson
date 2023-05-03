@@ -1,7 +1,0 @@
-{
-"type": "FeatureCollection",
-"name": "aoi_buildings",
-"features": [
-{ "type": "Feature", "properties": { }, "geometry": { "type": "Polygon", "coordinates": [ [ [ 37.6057793, 55.653104 ], [ 37.6069823, 55.6453353 ], [ 37.6178363, 55.6454108 ], [ 37.6175689, 55.6530437 ], [ 37.6057793, 55.653104 ] ] ] } }
-]
-}
