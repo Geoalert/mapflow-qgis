@@ -2373,7 +2373,8 @@ class Mapflow(QObject):
                                "The server requires version {server_version}, your plugin is {local_version}\n"
                                "Go to Plugins -> Manage and Install Plugins -> Upgradable").format(
                 server_version=server_version,
-                local_version=self.plugin_version))
+                local_version=self.plugin_version,
+                icon=QMessageBox.Warning))
             self.version_ok = False
             self.dlg.close()
 
@@ -2382,7 +2383,8 @@ class Mapflow(QObject):
                                "We recommend you to upgrade to get all the latest features\n"
                                "Go to Plugins -> Manage and Install Plugins -> Upgradable").format(
                 server_version=server_version,
-                local_version=self.plugin_version))
+                local_version=self.plugin_version,
+                icon=QMessageBox.Information))
             # saving the requested version to not bother the user next time, if he decides not to upgrade
             self.settings.setValue('latest_reported_version', server_version)
             self.version_ok = True
