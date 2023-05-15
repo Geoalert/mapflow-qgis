@@ -824,7 +824,7 @@ class Mapflow(QObject):
         if error == QNetworkReply.ContentAccessDenied:
             self.alert(self.tr('Please, check your credentials'))
         else:
-            self.report_http_error(response, self.tr("We couldn't fetch Sentinel metadata"))
+            self.default_error_handler(response, message_prefix="We couldn't fetch Sentinel metadata")
 
     def fetch_skywatch_metadata(
             self,
@@ -1313,7 +1313,8 @@ class Mapflow(QObject):
                     url=f'{self.server}/processings/{id_}',
                     callback=self.delete_processings_callback,
                     callback_kwargs={'id_': id_},
-                    error_handler=self.delete_processings_error_handler
+                    use_default_error_handler=True,
+                    error_handler_kwargs={'message_prefix': self.tr("Error deleting a processing")}
                 )
 
     def delete_processings_callback(self, _: QNetworkReply, id_: str) -> None:
@@ -1324,13 +1325,6 @@ class Mapflow(QObject):
         row = self.dlg.processingsTable.findItems(id_, Qt.MatchExactly)[0].row()
         self.dlg.processingsTable.removeRow(row)
         self.processing_fetch_timer.start()
-
-    def delete_processings_error_handler(self, response: QNetworkReply) -> None:
-        """Error handler for processing deletion request.
-
-        :param response: The HTTP response.
-        """
-        self.report_http_error(response, self.tr("Error deleting a processing"))
 
     def upload_image(self, layer, processing_params=None, mosaic=None):
         """
@@ -1546,18 +1540,11 @@ class Mapflow(QObject):
             url=f'{self.server}/processings',
             callback=self.post_processing_callback,
             callback_kwargs={'processing_name': request_body['name']},
-            error_handler=self.post_processing_error_handler,
-            use_default_error_handler=False,
+            error_handler_kwargs = {'message_prefix': self.tr('Processing creation failed')},
+            use_default_error_handler=True,
             body=json.dumps(request_body).encode()
         )
 
-    def post_processing_error_handler(self, response: QNetworkReply) -> None:
-        """Error handler for processing creation requests.
-
-        :param response: The HTTP response.
-        """
-        self.report_http_error(response,
-                               self.tr('Processing creation failed'))
 
     def post_processing_callback(self, _: QNetworkReply, processing_name: str) -> None:
         """Display a success message and clear the processing name field."""
@@ -2216,22 +2203,26 @@ class Mapflow(QObject):
         self.set_up_login_dialog()  # recreate the login dialog
         self.dlg_login.show()  # assume user wants to log into another account
 
-    def default_error_handler(self, response: QNetworkReply) -> bool:
+    def default_error_handler(self, response: QNetworkReply, message_prefix: str = "") -> bool:
         """Handle general networking errors: offline, timeout, server errors.
 
-        :param response: The HTTP response.
+        Args:
+            response: The HTTP response.
+            message_prefix: optional, if we want to add something to the alert
+
         Returns True if the error has been handled, otherwise returns False.
         """
         error = response.error()
+        message_prefix = message_prefix + '\n'
         service = 'Mapflow' if 'mapflow' in response.request().url().authority() else 'SecureWatch'
         if error == QNetworkReply.AuthenticationRequiredError:  # invalid/empty credentials
             # Prevent deadlocks
             if self.logged_in:  # token re-issued during a plugin session
                 self.logout()
             elif self.settings.value('token'):  # env changed w/out logging out (admin)
-                self.alert(self.tr('Wrong token. '
+                self.alert(self.tr('{prefix} \n Wrong token. '
                                    'Visit "<a href=\"https://app.mapflow.ai/account/api\">mapflow.ai</a>" '
-                                   'to get a new one'),
+                                   'to get a new one').format(prefix=message_prefix),
                            icon=QMessageBox.Warning)
                 self.dlg_login.show()
             # Wrong token entered - display a message
@@ -2251,30 +2242,37 @@ class Mapflow(QObject):
                 QNetworkReply.ConnectionRefusedError,
                 QNetworkReply.RemoteHostClosedError,
                 QNetworkReply.NetworkSessionFailedError,
+                QNetworkReply.UnknownNetworkError,
         ):
             self.report_http_error(response, self.tr(
-                service + ' is not responding. Please, try again.\n\n'
+                 '{prefix} {service} is not responding. Please, check your internet connection and try again.\n\n'
                           'If you are behind a proxy or firewall,\ncheck your QGIS proxy settings.\n'
-            ))
+            ).format(prefix=message_prefix,
+                     service=service))
             return True
         elif error == QNetworkReply.HostNotFoundError:  # offline
-            self.alert(self.tr(service + ' not found. Check your Internet connection'))
+            self.alert(self.tr('{prefix} {service} not found. '
+                               'Check your Internet connection').format(prefix=message_prefix,
+                                                                        service=service))
             return True
         elif error in (
-                QNetworkReply.UnknownNetworkError,
                 QNetworkReply.ProxyConnectionRefusedError,
                 QNetworkReply.ProxyConnectionClosedError,
                 QNetworkReply.ProxyNotFoundError,
                 QNetworkReply.ProxyTimeoutError,
                 QNetworkReply.ProxyAuthenticationRequiredError,
         ):
-            self.report_http_error(response, self.tr('Proxy error. Please, check your proxy settings.'))
+            self.report_http_error(response,
+                                   self.tr('{prefix} Proxy error.'
+                                           ' Please, check your proxy settings.').format(prefix=message_prefix))
             return True
         elif error == QNetworkReply.ContentAccessDenied:
-            self.report_http_error(response, self.tr("This operation is forbidden for your account, contact us"))
+            self.report_http_error(response,
+                                   self.tr("{prefix} This operation is forbidden"
+                                           " for your account, contact us").format(prefix=message_prefix))
             return True
         else:
-            self.report_http_error(response, self.tr("Error"))
+            self.report_http_error(response, self.tr("{prefix} Error").format(prefix=message_prefix))
         return False
 
     def report_http_error(self,
