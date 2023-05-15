@@ -61,7 +61,7 @@ class Http(QObject):
         """"""
         if response.error():
             if use_default_error_handler:
-                if self.default_error_handler(response):
+                if self.default_error_handler(response, **error_handler_kwargs):
                     return  # a general error occurred and has been handled
             error_handler(response, **error_handler_kwargs)  # handle specific errors
         else:

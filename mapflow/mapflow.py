@@ -972,7 +972,7 @@ class Mapflow(QObject):
             timer.deleteLater()
         except (RuntimeError, AttributeError):  # None or has been destroyed
             pass
-        self.report_http_error(response, self.tr("We couldn't fetch Sentinel metadata"))
+        self.default_error_handler(response, message_prefix=self.tr("We couldn't fetch Sentinel metadata"))
 
     def get_maxar_metadata(
             self,
@@ -1858,6 +1858,7 @@ class Mapflow(QObject):
             callback=self.download_results_callback,
             callback_kwargs={'pid': pid},
             error_handler=self.download_results_error_handler,
+            use_default_error_handler=False,
             timeout=300
         )
 
@@ -2213,14 +2214,15 @@ class Mapflow(QObject):
         Returns True if the error has been handled, otherwise returns False.
         """
         error = response.error()
-        message_prefix = message_prefix + '\n'
+        if message_prefix:
+            message_prefix = message_prefix + '\n'
         service = 'Mapflow' if 'mapflow' in response.request().url().authority() else 'SecureWatch'
         if error == QNetworkReply.AuthenticationRequiredError:  # invalid/empty credentials
             # Prevent deadlocks
             if self.logged_in:  # token re-issued during a plugin session
                 self.logout()
             elif self.settings.value('token'):  # env changed w/out logging out (admin)
-                self.alert(self.tr('{prefix} \n Wrong token. '
+                self.alert(self.tr('{prefix} Wrong token. '
                                    'Visit "<a href=\"https://app.mapflow.ai/account/api\">mapflow.ai</a>" '
                                    'to get a new one').format(prefix=message_prefix),
                            icon=QMessageBox.Warning)
