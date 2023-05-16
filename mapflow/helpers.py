@@ -8,8 +8,9 @@ from qgis.core import (
 )
 from PyQt5.QtCore import QUrl
 from PyQt5.QtGui import QDesktopServices
-from typing import Tuple, Union
+from typing import Tuple, Union, Optional
 from .config import config
+from .entity.billing import BillingType
 
 PROJECT = QgsProject.instance()
 WGS84 = QgsCoordinateReferenceSystem('EPSG:4326')
@@ -147,3 +148,17 @@ def open_model_info(model_name: str):
     else:
         section = ""
     open_url(f"{config.MODEL_DOCS_URL}#{section}")
+
+
+def check_processing_limit(billing_type: BillingType,
+                           remaining_limit: Optional[float],
+                           remaining_credits: Optional[int],
+                           aoi_size: float,
+                           processing_cost: int):
+    """Check if the user has exceeded the processing limit."""
+    if billing_type == BillingType.area:
+        return remaining_limit >= aoi_size
+    elif self.billing_type == BillingType.credits:
+        return remaining_credits >= processing_cost
+    else: # billing_type == BillingType.none
+        return True

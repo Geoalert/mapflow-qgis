@@ -1,5 +1,6 @@
 import json
 import uuid
+import math
 from pathlib import Path
 import os.path
 import tempfile
@@ -43,6 +44,8 @@ from .entity.provider import (Provider,
                               ProvidersDict,
                               SentinelProvider,
                               create_provider)
+from .entity.billing import BillingType
+from .entity.workflow_def import WorkflowDef
 
 from .functional.geometry import clip_aoi_to_image_extent
 from . import helpers, constants
@@ -58,11 +61,16 @@ class Mapflow(QObject):
         :param iface: an instance of the QGIS interface.
         """
         # init empty params
+        self.is_premium_user = False
+        self.aoi_area_limit = 0.0
         self.username = self.password = ''
         self.version_ok = True
+        self.remaining_limit = 0
+        self.remaining_credits = 0
+        self.billing_type = BillingType.area
+        self.processing_cost = 0
         # init configs
         self.config = Config()
-        self.remaining_limit = 0
         # Save refs to key variables used throughout the plugin
         self.iface = iface
         self.main_window = self.iface.mainWindow()
@@ -145,7 +153,7 @@ class Mapflow(QObject):
         self.dlg.processingsTable.setColumnHidden(self.config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
         self.filter_bad_rasters()
-        self.dlg.modelCombo.currentTextChanged.connect(self.set_available_imagery_sources)
+        self.dlg.modelCombo.currentTextChanged.connect(self.on_model_change)
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
         # Connect buttons
@@ -243,8 +251,8 @@ class Mapflow(QObject):
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
         # misc
-        self.workflow_def_ids = {}
-        self.dlg.processingCostLabel.setVisible(self.config.PROCESSING_COST_LABEL_ENABLED)
+        self.workflow_defs = {}
+        self.dlg.processingCostLabel.setVisible(self.billing_type==BillingType.credits)
         self.dlg.modelInfo.clicked.connect(lambda: helpers.open_model_info(model_name=self.dlg.modelCombo.currentText()))
         self.dlg.topUpBalanceButton.clicked.connect(lambda: helpers.open_url(self.config.TOP_UP_URL))
         self.dlg.topUpBalanceButton_2.clicked.connect(lambda: helpers.open_url(self.config.TOP_UP_URL))
@@ -317,6 +325,15 @@ class Mapflow(QObject):
             except Exception as e:
                 self.alert(f"Error checking raster layers validity: {e}")
         self.dlg.rasterCombo.setExceptedLayerList(filtered_raster_layers)
+
+    def on_model_change(self, wd: str) -> None:
+        self.set_available_imagery_sources(wd)
+        tooltip = self.workflow_defs.get(wd).description
+        if self.billing_type == BillingType.credits:
+            price = self.workflow_defs.get(wd).pricePerSqKm
+            tooltip += self.tr('\n Pricw per square km {}').format(price)
+            self.dlg.labelWdPrice.setText("{}🪙".format())
+        self.dlg.modelCombo.setToolTip(tooltip)
 
     def set_available_imagery_sources(self, wd: str) -> None:
         """Restrict the list of imagery sources according to the selected model."""
@@ -494,6 +511,8 @@ class Mapflow(QObject):
 
         self.dlg.searchImageryButton.setEnabled(enabled)
         self.dlg.searchImageryButton.setText("🔎✔️" if enabled else "🔎❌")
+        self.dlg.searchImageryButton.setToolTip(self.tr("Search imagery") if enabled
+                                                else self.tr("Provider does not support imagery search"))
 
 
     def save_dialog_state(self):
@@ -1261,16 +1280,15 @@ class Mapflow(QObject):
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
         self.dlg.processingCostLabel.clear()
         # get workflow def if for selected model
-        workflow_def_id = self.workflow_def_ids.get(
+        workflow_def_id = self.workflow_defs.get(
             self.dlg.modelCombo.currentText()
-        )
-        self.calculate_processing_cost(aoi=aoi, workflow_def_id=workflow_def_id)
+        ).id
+        if self.billing_type == BillingType.credits:
+            self.calculate_processing_cost(aoi=aoi, workflow_def_id=workflow_def_id)
 
     def calculate_processing_cost(self, aoi: QgsGeometry, workflow_def_id: uuid.UUID) -> None:
         """:return: calculated aoi area and cost in credits"""
         # do not send any request, if PROCESSING_COST_LABEL_ENABLED setting is disabled
-        if not self.config.PROCESSING_COST_LABEL_ENABLED:
-            return
         geometry = json.loads(aoi.asJson())
         body = {"wdId": workflow_def_id,
                 "geometry": geometry}
@@ -1282,6 +1300,7 @@ class Mapflow(QObject):
 
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         response_data = response.readAll().data().decode()
+        self.processing_cost = int(response_data)
         self.dlg.processingCostLabel.setText(self.tr(f'Processing cost: {response_data} credits'))
 
     def delete_processings(self) -> None:
@@ -1405,28 +1424,36 @@ class Mapflow(QObject):
         processing_name = self.dlg.processingName.text()
 
         if not processing_name:
-            self.alert(self.tr('Please, specify a name for your processing'))
+            self.alert(self.tr('Please, specify a name for your processing'),
+                       icon=QMessageBox.Warning)
             return False
         use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
         if not self.aoi:
             if use_image_extent_as_aoi:
-                self.alert(self.tr('GeoTIFF is corrupted or has invalid projection'))
+                self.alert(self.tr('GeoTIFF is corrupted or has invalid projection'),
+                           icon=QMessageBox.Warning)
             elif self.dlg.polygonCombo.currentLayer():
-                self.alert(self.tr('Processing area layer is corrupted or has invalid projection'))
+                self.alert(self.tr('Processing area layer is corrupted or has invalid projection'),
+                           icon=QMessageBox.Warning)
             else:
-                self.alert(self.tr('Please, select an area of interest'))
+                self.alert(self.tr('Please, select an area of interest'),
+                           icon=QMessageBox.Warning)
             return False
-        if self.remaining_limit < self.aoi_size:
-            if self.plugin_name == 'Mapflow':  # don't alert in TechInspection
-                self.alert(self.tr('Processing limit exceeded. '
-                                   'Visit "<a href=\"https://app.mapflow.ai/account/balance\">Mapflow</a>" '
-                                   'to top up your balance'))
+        if not helpers.check_processing_limit(billing_type=self.billing_type,
+                                              remaining_limit=self.remaining_limit,
+                                              remaining_credits=self.remaining_credits,
+                                              aoi_size=self.aoi_size,
+                                              processing_cost=self.processing_cost):
+            self.alert(self.tr('Processing limit exceeded. '
+                               'Visit "<a href=\"https://app.mapflow.ai/account/balance\">Mapflow</a>" '
+                               'to top up your balance'),
+                       icon=QMessageBox.Warning)
             return False
         if self.aoi_area_limit < self.aoi_size:
             self.alert(self.tr(
                 'Up to {} sq km can be processed at a time. '
-                'Try splitting your area(s) into several processings.'
-            ).format(self.aoi_area_limit))
+                'Try splitting your area(s) into several processings.').format(self.aoi_area_limit),
+                icon=QMessageBox.Warning)
             return False
         return True
 
@@ -1584,14 +1611,23 @@ class Mapflow(QObject):
         if app_startup_request:
             self.app_startup_user_update_timer.stop()
         response_data = json.loads(response.readAll().data())
-        # check here, if user is admin:
-        if response_data.get('admin'):
-            self.remaining_limit = 1e5  # 100K sq.km
+        if self.plugin_name != 'Mapflow':
+            # In custom plugins, we don't show the remaining limit and do not check it for the processing
+            self.billing_type = BillingType.none
         else:
+            # get billing type, by default it is area
+            self.billing_type = BillingType(response_data.get('billingType', 'area'))
+        # get limits
+        if self.billing_type == BillingType.credits:
+            self.remaining_credits = int(response_data.get('remainingCredits', 0))
+            limit_label = self.tr('Your balance: {} credits').format(self.remaining_credits)
+        elif self.billing_type == BillingType.area: # area
             self.remaining_limit = int(response_data.get('remainingArea', 0)) / 1e6  # convert into sq.km
-        if self.plugin_name == 'Mapflow':
-            footer = self.tr('Processing limit: {:.2f} sq.km').format(self.remaining_limit)
-            self.dlg.remainingLimit.setText(footer)
+            limit_label = self.tr('Processing limit: {:.2f} sq.km').format(self.remaining_limit)
+        else: # BillingType.none
+            self.remaining_limit = None
+            limit_label = ''
+        self.dlg.remainingLimit.setText(limit_label)
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
         """Save and open the preview image as a layer."""
@@ -2320,17 +2356,15 @@ class Mapflow(QObject):
         self.is_premium_user = response['user']['isPremium']
         self.on_provider_change(self.dlg.rasterCombo.currentText())
         self.aoi_area_limit = response['user']['aoiAreaLimit'] * 1e-6
-        self.wds = [wd['name'] for wd in response['workflowDefs']
-                    if self.config.ENABLE_SENTINEL or wd['name'] not in self.config.SENTINEL_WD_NAMES]
         # We skip SENTINEL WDs if sentinel is not enabled (normally, it should be not)
         # wds along with ids in the format: {'model_name': 'workflow_def_id'}
-        self.workflow_def_ids = {}
-        for workflow in response['workflowDefs']:
-            self.workflow_def_ids.update({
-                workflow['name']: workflow['id']
-            })
+        self.workflow_defs = {
+            workflow['name']: WorkflowDef(**workflow)
+            for workflow in response['workflowDefs']
+        }
         self.dlg.modelCombo.clear()
-        self.dlg.modelCombo.addItems(self.wds)
+        self.dlg.modelCombo.addItems(name for name in self.workflow_defs
+                                     if self.config.ENABLE_SENTINEL or wd['name'] not in self.config.SENTINEL_WD_NAMES)
         self.dlg.modelCombo.setCurrentText(self.config.DEFAULT_MODEL)
         self.dlg.rasterCombo.setCurrentText('Mapbox')
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
