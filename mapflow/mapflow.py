@@ -128,11 +128,11 @@ class Mapflow(QObject):
         try:
             self.providers, errors = ProvidersDict.from_settings(settings=self.settings, server=self.config.SERVER)
         except Exception as e:
-            self.alert(self.tr("Error during loading the data providers: {e}").format(str(e)))
+            self.alert(self.tr("Error during loading the data providers: {e}").format(str(e)), icon=Qgis.Warning)
         if errors:
             self.alert(
                 self.tr('We failed to import providers {errors} from the settings. Please add them again').format(
-                    errors))
+                    errors), icon=Qgis.Warning)
         self.update_providers()
         self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
         self.dlg.minIntersection.setValue(int(self.settings.value('metadataMinIntersection', 0)))
