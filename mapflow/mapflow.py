@@ -151,7 +151,6 @@ class Mapflow(QObject):
         # Connect buttons
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
-        self.dlg.selectTif.clicked.connect(self.select_tif)
         self.dlg.downloadResultsButton.clicked.connect(self.download_results)
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.rasterCombo.layerChanged.connect(self.toggle_processing_checkboxes)
@@ -204,7 +203,7 @@ class Mapflow(QObject):
         self.dlg.metadataTable.itemSelectionChanged.connect(self.sync_table_selection_with_image_id_and_layer)
         self.dlg.getMetadata.clicked.connect(self.get_metadata)
         self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
-        self.dlg.providerCombo.currentTextChanged.connect(self.on_provider_change)
+        self.dlg.rasterCombo.currentTextChanged.connect(self.on_provider_change)
         # Poll processings
         self.processing_fetch_timer = QTimer(self.dlg)
         self.processing_fetch_timer.setInterval(self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
@@ -243,16 +242,13 @@ class Mapflow(QObject):
         self.add_aoi_from_file_action = QAction(self.tr("Add AOI from vector file"))
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
-        self.dlg.imageId.textChanged.connect(self.set_image_id_label)
         # misc
         self.workflow_def_ids = {}
         self.dlg.processingCostLabel.setVisible(self.config.PROCESSING_COST_LABEL_ENABLED)
-
-    def set_image_id_label(self, text):
-        if text:
-            self.dlg.imageId_label.setText(self.tr('Selected Image ID:\n {text}').format(text=text))
-        else:
-            self.dlg.imageId_label.setText("")
+        self.dlg.modelInfo.clicked.connect(lambda: helpers.open_model_info(model_name=self.dlg.modelCombo.currentText()))
+        self.dlg.topUpBalanceButton.clicked.connect(lambda: helpers.open_url(self.config.TOP_UP_URL))
+        self.dlg.topUpBalanceButton_2.clicked.connect(lambda: helpers.open_url(self.config.TOP_UP_URL))
+        self.dlg.billingHistoryButton.clicked.connect(lambda: helpers.open_url(self.config.BILLING_HISTORY_URL))
 
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.create_aoi_from_map_action)
@@ -368,7 +364,7 @@ class Mapflow(QObject):
         aoi = QgsGeometry.createGeometryEngine(aoi.constGet())
         aoi.prepareGeometry()
         # Get attributes
-        if self.dlg.providerCombo.currentText() == constants.SENTINEL_OPTION_NAME:
+        if self.dlg.rasterCombo.currentText() == constants.SENTINEL_OPTION_NAME:
             id_column_index = self.config.SENTINEL_ID_COLUMN_INDEX
             datetime_column_index = self.config.SENTINEL_DATETIME_COLUMN_INDEX
             cloud_cover_column_index = self.config.SENTINEL_CLOUD_COLUMN_INDEX
@@ -418,7 +414,7 @@ class Mapflow(QObject):
         """
         Limit zoom for Maxar when our account is to be used.
         """
-        current_provider = self.providers.get(self.dlg.providerCombo.currentText())
+        current_provider = self.providers.get(self.dlg.rasterCombo.currentText())
         if isinstance(current_provider, MaxarProxyProvider):
             max_zoom = self.config.MAXAR_MAX_FREE_ZOOM
             value = max_zoom
@@ -473,7 +469,7 @@ class Mapflow(QObject):
             hidden_column_index = None
             sort_by = None
             enabled = False
-            image_id_placeholder = self.tr(f'Leave this field empty for ') + provider_name
+            image_id_placeholder = ""
             additional_filters_enabled = False
             image_id_tooltip = provider_name + self.tr(f" doesn't allow processing single images.")
 
@@ -491,8 +487,14 @@ class Mapflow(QObject):
             self.dlg.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
         self.dlg.metadata.setTitle(provider_name + self.tr(' Imagery Catalog'))
         self.dlg.metadata.setEnabled(enabled)
+        self.dlg.imageId.setEnabled(enabled)
         self.dlg.imageId.setPlaceholderText(image_id_placeholder)
         self.dlg.labelImageId.setToolTip(image_id_tooltip)
+        self.dlg.searchImageryButton.clicked.connect(lambda: self.dlg.tabWidget.setCurrentIndex(1))
+
+        self.dlg.searchImageryButton.setEnabled(enabled)
+        self.dlg.searchImageryButton.setText("🔎✔️" if enabled else "🔎❌")
+
 
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
@@ -537,10 +539,12 @@ class Mapflow(QObject):
         provider = self.providers[provider_name]
         if provider.is_default:
             # We want to protect built in providers!
-            self.alert(self.tr("This provider cannot be removed"), QMessageBox.Warning)
+            self.alert(self.tr("This provider is default and cannot be removed"),
+                       icon=QMessageBox.Warning)
             return
         # Ask for confirmation
-        elif self.alert(self.tr('Permanently remove {}?').format(provider.name), QMessageBox.Question):
+        elif self.alert(self.tr('Permanently remove {}?').format(provider.name),
+                        icon=QMessageBox.Question):
             self.providers.pop(provider_name)
             self.update_providers()
 
@@ -550,14 +554,15 @@ class Mapflow(QObject):
         if self.dlg_provider.result:
             new_provider = create_provider(**self.dlg_provider.result)
         else:
-            # returned empty provider - i.e nothing was changed
+            # returned empty provider - i.e. nothing was changed
             return
 
         if not old_provider:
             # we have added new one - without current one
             if new_provider.name in self.providers:
                 self.alert(self.tr("Provider name must be unique. {name} already exists, "
-                                   "select another or delete/edit existing").format(name=new_provider.name))
+                                   "select another or delete/edit existing").format(name=new_provider.name),
+                           icon=QMessageBox.Warning)
                 self.dlg_provider.show()
                 return
             else:
@@ -568,7 +573,8 @@ class Mapflow(QObject):
             if new_provider.name != old_provider.name and new_provider.name in self.providers:
                 # we do not want user to replace another provider when editing this one
                 self.alert(self.tr("Provider name must be unique. {name} already exists,"
-                                   " select another or delete/edit existing").format(name=new_provider.name))
+                                   " select another or delete/edit existing").format(name=new_provider.name),
+                           icon=QMessageBox.Warning)
                 self.dlg_provider.show()
                 return
             else:
@@ -587,7 +593,8 @@ class Mapflow(QObject):
         """
         name = self.dlg.providerCombo.currentText()
         if self.providers[name].is_default:
-            self.alert(self.tr("This is a default provider, it cannot be edited"))
+            self.alert(self.tr("This is a default provider, it cannot be edited"),
+                                icon=QMessageBox.Warni)
         else:
             self.show_provider_edit_dialog(name)
 
@@ -631,7 +638,6 @@ class Mapflow(QObject):
         enabled = isinstance(raster_source, QgsRasterLayer)
         self.dlg.useImageExtentAsAoi.setEnabled(enabled)
         self.dlg.useImageExtentAsAoi.setChecked(enabled)
-        self.dlg.imageId_label.setText("")
 
     def select_output_directory(self) -> str:
         """Open a file dialog for the user to select a directory where plugin files will be stored.
@@ -657,20 +663,6 @@ class Mapflow(QObject):
         self.alert(self.tr('Please, specify an existing output directory'))
         return False
 
-    def select_tif(self) -> None:
-        """Open a file selection dialog for the user to select a GeoTIFF for processing.
-
-        Is called by clicking the 'selectTif' button in the main dialog.
-        """
-        dlg = QFileDialog(QApplication.activeWindow(), self.tr('Select GeoTIFF'))
-        dlg.setFileMode(QFileDialog.ExistingFile)
-        dlg.setMimeTypeFilters(['image/tiff'])
-        if dlg.exec():
-            path = dlg.selectedFiles()[0]
-            layer = QgsRasterLayer(path, os.path.splitext(os.path.basename(path))[0])
-            self.add_layer(layer)
-            self.dlg.rasterCombo.setLayer(layer)
-
     def get_metadata(self) -> None:
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
         self.dlg.metadataTable.clearContents()
@@ -679,7 +671,7 @@ class Mapflow(QObject):
         if more_button:
             self.dlg.layoutMetadataTable.removeWidget(more_button)
             more_button.deleteLater()
-        provider = self.providers[self.dlg.providerCombo.currentText()]
+        provider = self.providers[self.dlg.rasterCombo.currentText()]
         # Check if the AOI is defined
         if self.dlg.metadataUseCanvasExtent.isChecked():
             aoi = helpers.to_wgs84(
@@ -1122,7 +1114,7 @@ class Mapflow(QObject):
             return
         id_column_index = (
             self.config.SENTINEL_ID_COLUMN_INDEX
-            if self.dlg.providerCombo.currentText() == constants.SENTINEL_OPTION_NAME
+            if self.dlg.rasterCombo.currentText() == constants.SENTINEL_OPTION_NAME
             else self.config.MAXAR_ID_COLUMN_INDEX
         )
         image_id = next(cell for cell in selected_cells if cell.column() == id_column_index).text()
@@ -1149,7 +1141,7 @@ class Mapflow(QObject):
         selected_id = self.metadata_layer.getFeature(selected_ids[-1])['id']
         id_column_index = [
             self.config.SENTINEL_ID_COLUMN_INDEX
-            if self.dlg.providerCombo.currentText() == constants.SENTINEL_OPTION_NAME
+            if self.dlg.rasterCombo.currentText() == constants.SENTINEL_OPTION_NAME
             else self.config.MAXAR_ID_COLUMN_INDEX
         ]
         already_selected = [
@@ -1170,7 +1162,7 @@ class Mapflow(QObject):
         if not image_id:
             self.dlg.metadataTable.clearSelection()
             return
-        provider = self.providers.get(self.dlg.providerCombo.currentText())
+        provider = self.providers.get(self.dlg.rasterCombo.currentText())
 
         if isinstance(provider, SentinelProvider):
             if not ((
@@ -1577,8 +1569,8 @@ class Mapflow(QObject):
     def set_project_name(self, response_data) -> None:
         project_name = response_data['name']
         if self.plugin_name == 'Mapflow' and self.config.PROJECT_ID != 'default':
-            footer = self.tr('Project name: {}').format(project_name)
-            self.dlg.projectNameLabel.setText(footer)
+            footer = self.tr('| Project: {}').format(project_name)
+            self.dlg.setWindowTitle(self.dlg.windowTitle + footer)
 
     def update_processing_limit(self) -> None:
         """Set the user's processing limit as reported by Mapflow."""
@@ -1738,7 +1730,11 @@ class Mapflow(QObject):
 
     def preview(self) -> None:
         """Display raster tiles served over the Web."""
-        provider_name = self.dlg.providerCombo.currentText()
+        if self.dlg.rasterCombo.currentLayer() is not None:
+            self.iface.setActiveLayer(self.dlg.rasterCombo.currentLayer())
+            self.iface.zoomToActiveLayer()
+            return
+        provider_name = self.dlg.rasterCombo.currentText()
         image_id = self.dlg.imageId.text()
         provider = self.providers[provider_name]
         if isinstance(provider, SentinelProvider):
@@ -1760,7 +1756,7 @@ class Mapflow(QObject):
             self.radio_buttons[i].setAutoExclusive(False)
             self.radio_buttons[i].setChecked(False)
             self.radio_buttons[i].setAutoExclusive(True)
-        self.dlg.selectedProcessingNameLabel.clear()
+        self.dlg.rateProcessingLabel.setText(self.tr('Rate processing'))
         self.dlg.processingRatingFeedbackText.clear()
 
     def update_processing_current_rating(self) -> None:
@@ -1770,7 +1766,7 @@ class Mapflow(QObject):
         row = self.dlg.processingsTable.currentRow()
         pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
         p_name = self.dlg.processingsTable.item(row, 0).text()
-        self.dlg.selectedProcessingNameLabel.setText(f'{p_name}')
+        self.dlg.rateProcessingLabel.setText(self.tr('Rate processing <b>{name}</b>:').format(name=p_name))
         self.http.get(
             url=f'{self.server}/processings/{pid}',
             callback=self.update_processing_current_rating_callback
@@ -2322,7 +2318,7 @@ class Mapflow(QObject):
         self.set_project_name(response_data=response)
         self.update_processing_limit()
         self.is_premium_user = response['user']['isPremium']
-        self.on_provider_change(self.dlg.providerCombo.currentText())
+        self.on_provider_change(self.dlg.rasterCombo.currentText())
         self.aoi_area_limit = response['user']['aoiAreaLimit'] * 1e-6
         self.wds = [wd['name'] for wd in response['workflowDefs']
                     if self.config.ENABLE_SENTINEL or wd['name'] not in self.config.SENTINEL_WD_NAMES]

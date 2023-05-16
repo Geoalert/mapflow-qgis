@@ -6,6 +6,8 @@ from qgis.core import (
     QgsMapLayer, QgsGeometry, QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
     QgsMapLayerType, QgsWkbTypes, QgsRasterLayer, QgsRectangle
 )
+from PyQt5.QtCore import QUrl
+from PyQt5.QtGui import QDesktopServices
 from typing import Tuple, Union
 from .config import config
 
@@ -120,3 +122,28 @@ def check_aoi(aoi: Union[QgsGeometry, None]) -> bool:
     if y_max > 90 or y_max < -90 or y_min > 90 or y_min < -90:
         return False
     return True
+
+
+def open_url(url: str):
+    url = QUrl(url)
+    QDesktopServices.openUrl(url)
+
+def open_model_info(model_name: str):
+    """Open model info page in browser"""
+    if 'aerial' in model_name.lower() or 'uav' in model_name.lower():
+        section = "buildings-aerial-imagery"
+    elif 'roads' in model_name.lower():
+        section = "roads"
+    elif 'fields' in model_name.lower():
+        section = "agriculture-fields"
+    elif 'constructions' in model_name.lower():
+        section = "constructions"
+    elif "forest" in model_name.lower():
+        section = "forest"
+    elif "dense" in model_name.lower():
+        section = "high-density-housing"
+    elif 'buildings' in model_name.lower():
+        section = "buildings"
+    else:
+        section = ""
+    open_url(f"{config.MODEL_DOCS_URL}#{section}")
