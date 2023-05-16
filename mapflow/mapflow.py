@@ -331,11 +331,11 @@ class Mapflow(QObject):
         tooltip = self.workflow_defs.get(wd).description
         if self.billing_type == BillingType.credits:
             price = self.workflow_defs.get(wd).pricePerSqKm
-            tooltip += self.tr('\n Pricw per square km {}').format(price)
-            self.dlg.labelWdPrice.setText("{}🪙".format())
+            tooltip += self.tr('\n Price per square km {}').format(price)
+            self.dlg.labelWdPrice.setText("{}".format(price))
         self.dlg.modelCombo.setToolTip(tooltip)
 
-    def set_available_imagery_sources(self, wd: str) -> None:
+    def set_available_imagery_sources(self, wd: str)     -> None:
         """Restrict the list of imagery sources according to the selected model."""
         sentinel_providers = [provider.name for provider in self.providers.values() if
                               isinstance(provider, SentinelProvider)]
@@ -510,7 +510,6 @@ class Mapflow(QObject):
         self.dlg.searchImageryButton.clicked.connect(lambda: self.dlg.tabWidget.setCurrentIndex(1))
 
         self.dlg.searchImageryButton.setEnabled(enabled)
-        self.dlg.searchImageryButton.setText("🔎✔️" if enabled else "🔎❌")
         self.dlg.searchImageryButton.setToolTip(self.tr("Search imagery") if enabled
                                                 else self.tr("Provider does not support imagery search"))
 

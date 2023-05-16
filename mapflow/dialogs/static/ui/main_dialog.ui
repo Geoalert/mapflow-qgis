@@ -214,7 +214,11 @@
             <enum>Qt::LeftToRight</enum>
            </property>
            <property name="text">
-            <string>💰</string>
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset>
+             <normaloff>../icons/coins-solid.svg</normaloff>../icons/coins-solid.svg</iconset>
            </property>
           </widget>
          </item>
@@ -303,7 +307,11 @@
             </size>
            </property>
            <property name="text">
-            <string>ℹ</string>
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset>
+             <normaloff>../icons/info.svg</normaloff>../icons/info.svg</iconset>
            </property>
           </widget>
          </item>
@@ -392,7 +400,11 @@
             </size>
            </property>
            <property name="text">
-            <string>🔍</string>
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset>
+             <normaloff>../icons/magnifying-glass-solid.svg</normaloff>../icons/magnifying-glass-solid.svg</iconset>
            </property>
           </widget>
          </item>
@@ -683,6 +695,10 @@
         </layout>
        </widget>
        <widget class="QWidget" name="providersTab">
+        <attribute name="icon">
+         <iconset>
+          <normaloff>../icons/magnifying-glass-solid.svg</normaloff>../icons/magnifying-glass-solid.svg</iconset>
+        </attribute>
         <attribute name="title">
          <string>Imagery search</string>
         </attribute>
@@ -1038,6 +1054,10 @@
         </layout>
        </widget>
        <widget class="QWidget" name="settingsTab">
+        <attribute name="icon">
+         <iconset>
+          <normaloff>../icons/user-gear-solid.svg</normaloff>../icons/user-gear-solid.svg</iconset>
+        </attribute>
         <attribute name="title">
          <string>User profile</string>
         </attribute>
@@ -1067,14 +1087,22 @@
            <item>
             <widget class="QPushButton" name="topUpBalanceButton_2">
              <property name="text">
-              <string>💰 Top up balance </string>
+              <string> Top up balance </string>
+             </property>
+             <property name="icon">
+              <iconset>
+               <normaloff>../icons/coins-solid.svg</normaloff>../icons/coins-solid.svg</iconset>
              </property>
             </widget>
            </item>
            <item>
             <widget class="QPushButton" name="billingHistoryButton">
              <property name="text">
-              <string>🔗 Open billing history</string>
+              <string>Open billing history</string>
+             </property>
+             <property name="icon">
+              <iconset>
+               <normaloff>../icons/bar-chart-2.svg</normaloff>../icons/bar-chart-2.svg</iconset>
              </property>
             </widget>
            </item>
@@ -1100,6 +1128,10 @@
              </property>
              <property name="text">
               <string>Log out</string>
+             </property>
+             <property name="icon">
+              <iconset>
+               <normaloff>../icons/log-out.svg</normaloff>../icons/log-out.svg</iconset>
              </property>
             </widget>
            </item>
@@ -1188,6 +1220,10 @@
                <property name="text">
                 <string/>
                </property>
+               <property name="icon">
+                <iconset>
+                 <normaloff>../icons/add_provider.svg</normaloff>../icons/add_provider.svg</iconset>
+               </property>
               </widget>
              </item>
              <item>
@@ -1213,6 +1249,10 @@
                <property name="text">
                 <string/>
                </property>
+               <property name="icon">
+                <iconset>
+                 <normaloff>../icons/remove_provider.svg</normaloff>../icons/remove_provider.svg</iconset>
+               </property>
               </widget>
              </item>
              <item>
@@ -1237,6 +1277,10 @@
                </property>
                <property name="text">
                 <string/>
+               </property>
+               <property name="icon">
+                <iconset>
+                 <normaloff>../icons/edit_provider.svg</normaloff>../icons/edit_provider.svg</iconset>
                </property>
               </widget>
              </item>
@@ -1351,6 +1395,10 @@
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
+        <attribute name="icon">
+         <iconset>
+          <normaloff>../icons/info.svg</normaloff>../icons/info.svg</iconset>
+        </attribute>
         <attribute name="title">
          <string>Help</string>
         </attribute>
