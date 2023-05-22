@@ -61,6 +61,8 @@ class Mapflow(QObject):
         :param iface: an instance of the QGIS interface.
         """
         # init empty params
+        self.aoi_size = None
+        self.aoi = None
         self.is_premium_user = False
         self.aoi_area_limit = 0.0
         self.username = self.password = ''
@@ -1278,10 +1280,17 @@ class Mapflow(QObject):
         self.aoi_size = self.calculator.measureArea(aoi) / 10 ** 6  # sq. m to sq.km
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
         self.dlg.processingCostLabel.clear()
-        # get workflow def if for selected model
-        workflow_def_id = self.workflow_defs.get(
-            self.dlg.modelCombo.currentText()
-        ).id
+        # get workflow def id for selected model
+        try:
+            print("Accessing to the workflow defs")
+            wd_name = self.dlg.modelCombo.currentText()
+            workflow_def_id = self.workflow_defs.get(wd_name).id
+        except AttributeError:
+            print("Failed access to the workflow defs")
+            print(wd_name)
+            print(self.workflow_defs)
+        else:
+            print("Success access to the workflow defs")
         if self.billing_type == BillingType.credits:
             self.calculate_processing_cost(aoi=aoi, workflow_def_id=workflow_def_id)
 
@@ -1614,7 +1623,7 @@ class Mapflow(QObject):
             self.billing_type = BillingType.none
         else:
             # get billing type, by default it is area
-            self.billing_type = BillingType(response_data.get('billingType', 'area'))
+            self.billing_type = BillingType(response_data.get('billingType', 'AREA').upper())
         # get limits
         if self.billing_type == BillingType.credits:
             self.remaining_credits = int(response_data.get('remainingCredits', 0))
@@ -2362,7 +2371,7 @@ class Mapflow(QObject):
         }
         self.dlg.modelCombo.clear()
         self.dlg.modelCombo.addItems(name for name in self.workflow_defs
-                                     if self.config.ENABLE_SENTINEL or wd['name'] not in self.config.SENTINEL_WD_NAMES)
+                                     if self.config.ENABLE_SENTINEL or name not in self.config.SENTINEL_WD_NAMES)
         self.dlg.modelCombo.setCurrentText(self.config.DEFAULT_MODEL)
         self.dlg.rasterCombo.setCurrentText('Mapbox')
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
