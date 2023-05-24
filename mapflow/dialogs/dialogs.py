@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from PyQt5 import uic
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtWidgets import QWidget
 from qgis.core import QgsMapLayerProxyModel
 
@@ -21,10 +21,20 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.rasterCombo.setFilters(QgsMapLayerProxyModel.RasterLayer)
         # Set icons (can be done in .ui but brings about the resources_rc import bug)
         self.setWindowIcon(plugin_icon)
-        self.addProvider.setIcon(QIcon(str(icon_path/'add_provider.svg')))
+        self.addProvider.setIcon(QIcon(str(icon_path/'add.svg')))
         self.removeProvider.setIcon(QIcon(str(icon_path/'remove_provider.svg')))
         self.editProvider.setIcon(QIcon(str(icon_path/'edit_provider.svg')))
+        self.toolButton.setIcon(QIcon(str(icon_path/'add.svg')))
+        self.modelInfo.setIcon(QIcon(str(icon_path/'info.svg')))
+        self.billingHistoryButton.setIcon(QIcon(str(icon_path/'bar-chart-2.svg')))
+        self.logoutButton.setIcon(QIcon(str(icon_path/'log-out.svg')))
+        self.tabWidget.setTabIcon(1, QIcon(str(icon_path/'magnifying-glass-solid.svg')))
+        self.tabWidget.setTabIcon(2, QIcon(str(icon_path/'user-gear-solid.svg')))
+        self.tabWidget.setTabIcon(3, QIcon(str(icon_path/'info.svg')))
 
+        pixmap = QIcon(str(icon_path/'coins-solid.svg')).pixmap(16,16)
+        self.labelCoins_1.setPixmap(pixmap)
+        self.labelCoins_2.setPixmap(pixmap)
 
 class LoginDialog(*uic.loadUiType(ui_path/'login_dialog.ui')):
     def __init__(self, parent: QWidget) -> None:

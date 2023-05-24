@@ -339,7 +339,7 @@ class Mapflow(QObject):
     def show_wd_price(self, wd):
         price = self.workflow_defs.get(wd).pricePerSqKm
         tooltip = self.workflow_defs.get(wd).description + self.tr('\n Price per square km {}').format(price)
-        self.dlg.labelWdPrice.setText("Price per sq.km: {}".format(price))
+        self.dlg.labelWdPrice.setText(str(int(price)))
         self.dlg.modelCombo.setToolTip(tooltip)
 
     def set_available_imagery_sources(self, wd: str)     -> None:
@@ -621,7 +621,7 @@ class Mapflow(QObject):
         name = self.dlg.providerCombo.currentText()
         if self.providers[name].is_default:
             self.alert(self.tr("This is a default provider, it cannot be edited"),
-                                icon=QMessageBox.Warni)
+                                icon=QMessageBox.Warning)
         else:
             self.show_provider_edit_dialog(name)
 
@@ -1621,6 +1621,7 @@ class Mapflow(QObject):
     def set_processing_limit(self, response: QNetworkReply,
                              app_startup_request: Optional[bool] = False) -> None:
         if app_startup_request:
+            self.update_processing_cost()
             self.app_startup_user_update_timer.stop()
         response_data = json.loads(response.readAll().data())
         if self.plugin_name != 'Mapflow':
@@ -1640,7 +1641,6 @@ class Mapflow(QObject):
             self.remaining_limit = None
             limit_label = ''
         self.dlg.remainingLimit.setText(limit_label)
-        self.update_processing_cost()
         self.show_wd_price(wd=self.dlg.modelCombo.currentText())
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:

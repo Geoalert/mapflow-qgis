@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1190</width>
+    <width>1504</width>
     <height>500</height>
    </rect>
   </property>
@@ -26,7 +26,7 @@
       <enum>QLayout::SetNoConstraint</enum>
      </property>
      <item>
-      <layout class="QVBoxLayout" name="procesingControlLayout" stretch="0,0,0,0,0,0,0,0,0,0,0,1,0">
+      <layout class="QVBoxLayout" name="procesingControlLayout" stretch="0,0,0,0,0,0,0,0,0,0,1,0">
        <property name="spacing">
         <number>10</number>
        </property>
@@ -184,13 +184,13 @@
            </property>
            <property name="minimumSize">
             <size>
-             <width>32</width>
+             <width>50</width>
              <height>0</height>
             </size>
            </property>
            <property name="maximumSize">
             <size>
-             <width>32</width>
+             <width>50</width>
              <height>32</height>
             </size>
            </property>
@@ -198,7 +198,7 @@
             <enum>Qt::LeftToRight</enum>
            </property>
            <property name="text">
-            <string/>
+            <string>➕</string>
            </property>
            <property name="icon">
             <iconset>
@@ -219,7 +219,7 @@
         </widget>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,1,0">
+        <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,1,0,0,0">
          <property name="sizeConstraint">
           <enum>QLayout::SetMinimumSize</enum>
          </property>
@@ -258,7 +258,7 @@
            </property>
            <property name="minimumSize">
             <size>
-             <width>50</width>
+             <width>120</width>
              <height>0</height>
             </size>
            </property>
@@ -267,6 +267,47 @@
              <width>500</width>
              <height>16777215</height>
             </size>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="labelCoins_1">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="minimumSize">
+            <size>
+             <width>16</width>
+             <height>16</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16</width>
+             <height>16</height>
+            </size>
+           </property>
+           <property name="text">
+            <string>CC</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="labelWdPrice">
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="text">
+            <string>10</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
            </property>
           </widget>
          </item>
@@ -311,23 +352,7 @@
         </layout>
        </item>
        <item>
-        <widget class="QLabel" name="labelWdPrice">
-         <property name="minimumSize">
-          <size>
-           <width>0</width>
-           <height>20</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>Price per sq. km:</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="0,1,0">
+        <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="0,1,0,0,0">
          <property name="sizeConstraint">
           <enum>QLayout::SetMinimumSize</enum>
          </property>
@@ -366,7 +391,7 @@
            </property>
            <property name="minimumSize">
             <size>
-             <width>50</width>
+             <width>120</width>
              <height>0</height>
             </size>
            </property>
@@ -385,6 +410,38 @@
              <string>postgresraster</string>
              <string>grassraster</string>
             </stringlist>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="labelCoins_2">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="minimumSize">
+            <size>
+             <width>16</width>
+             <height>16</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16</width>
+             <height>16</height>
+            </size>
+           </property>
+           <property name="text">
+            <string>CC</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="labelDataPrice">
+           <property name="text">
+            <string>10</string>
            </property>
           </widget>
          </item>
@@ -447,6 +504,10 @@
          </property>
          <property name="text">
           <string>Start processing</string>
+         </property>
+         <property name="icon">
+          <iconset>
+           <normaloff>../icons/coins-solid.svg</normaloff>../icons/coins-solid.svg</iconset>
          </property>
          <property name="default">
           <bool>false</bool>
@@ -1289,7 +1350,7 @@
                </property>
                <property name="icon">
                 <iconset>
-                 <normaloff>../icons/edit_provider.svg</normaloff>../icons/edit_provider.svg</iconset>
+                 <normaloff>../icons/info.svg</normaloff>../icons/info.svg</iconset>
                </property>
               </widget>
              </item>
