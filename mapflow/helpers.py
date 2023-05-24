@@ -158,7 +158,7 @@ def check_processing_limit(billing_type: BillingType,
     """Check if the user has exceeded the processing limit."""
     if billing_type == BillingType.area:
         return remaining_limit >= aoi_size
-    elif self.billing_type == BillingType.credits:
+    elif billing_type == BillingType.credits:
         return remaining_credits >= processing_cost
     else: # billing_type == BillingType.none
         return True

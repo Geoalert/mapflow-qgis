@@ -155,7 +155,7 @@ class Mapflow(QObject):
         self.dlg.processingsTable.setColumnHidden(self.config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
         self.filter_bad_rasters()
-        self.dlg.modelCombo.currentTextChanged.connect(self.on_model_change)
+        self.dlg.modelCombo.activated.connect(self.on_model_change)
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
         # Connect buttons
@@ -213,7 +213,7 @@ class Mapflow(QObject):
         self.dlg.metadataTable.itemSelectionChanged.connect(self.sync_table_selection_with_image_id_and_layer)
         self.dlg.getMetadata.clicked.connect(self.get_metadata)
         self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
-        self.dlg.rasterCombo.currentTextChanged.connect(self.on_provider_change)
+        self.dlg.rasterCombo.activated.connect(self.on_provider_change)
         # Poll processings
         self.processing_fetch_timer = QTimer(self.dlg)
         self.processing_fetch_timer.setInterval(self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
@@ -254,7 +254,6 @@ class Mapflow(QObject):
         self.setup_add_layer_menu()
         # misc
         self.workflow_defs = {}
-        self.dlg.processingCostLabel.setVisible(self.billing_type==BillingType.credits)
         self.dlg.modelInfo.clicked.connect(lambda: helpers.open_model_info(model_name=self.dlg.modelCombo.currentText()))
         self.dlg.topUpBalanceButton.clicked.connect(lambda: helpers.open_url(self.config.TOP_UP_URL))
         self.dlg.topUpBalanceButton_2.clicked.connect(lambda: helpers.open_url(self.config.TOP_UP_URL))
@@ -328,13 +327,19 @@ class Mapflow(QObject):
                 self.alert(f"Error checking raster layers validity: {e}")
         self.dlg.rasterCombo.setExceptedLayerList(filtered_raster_layers)
 
-    def on_model_change(self, wd: str) -> None:
+    def on_model_change(self, index: int) -> None:
+        wd = self.dlg.modelCombo.currentText()
         self.set_available_imagery_sources(wd)
-        tooltip = self.workflow_defs.get(wd).description
         if self.billing_type == BillingType.credits:
-            price = self.workflow_defs.get(wd).pricePerSqKm
-            tooltip += self.tr('\n Price per square km {}').format(price)
-            self.dlg.labelWdPrice.setText("{}".format(price))
+            self.show_wd_price(wd)
+            self.update_processing_cost()
+        else:
+            self.dlg.modelCombo.setToolTip(self.workflow_defs.get(wd).description)
+
+    def show_wd_price(self, wd):
+        price = self.workflow_defs.get(wd).pricePerSqKm
+        tooltip = self.workflow_defs.get(wd).description + self.tr('\n Price per square km {}').format(price)
+        self.dlg.labelWdPrice.setText("Price per sq.km: {}".format(price))
         self.dlg.modelCombo.setToolTip(tooltip)
 
     def set_available_imagery_sources(self, wd: str)     -> None:
@@ -444,12 +449,13 @@ class Mapflow(QObject):
         self.dlg.maxZoom.setMaximum(max_zoom)
         self.dlg.maxZoom.setValue(value)
 
-    def on_provider_change(self, provider_name: str) -> None:
+    def on_provider_change(self, index: int) -> None:
         """Adjust max and current zoom, and update the metadata table when user selects another
         provider.
 
-        :param provider: The currently selected provider
+        :param index: The currently selected provider index
         """
+        provider_name = self.dlg.rasterCombo.currentText()
         provider = self.providers.get(provider_name)
 
         self.dlg.metadataTable.clear()
@@ -515,6 +521,7 @@ class Mapflow(QObject):
         self.dlg.searchImageryButton.setToolTip(self.tr("Search imagery") if enabled
                                                 else self.tr("Provider does not support imagery search"))
 
+        self.update_processing_cost()
 
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
@@ -629,7 +636,7 @@ class Mapflow(QObject):
         self.providers.to_settings(self.settings)
         self.dlg.providerCombo.clear()
         self.dlg.providerCombo.addItems(self.providers.keys())
-        self.dlg.modelCombo.currentTextChanged.emit(self.dlg.modelCombo.currentText())
+        self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex())
 
     def show_provider_edit_dialog(self, name) -> None:
         provider = self.providers.get(name, None)
@@ -1226,7 +1233,7 @@ class Mapflow(QObject):
             self.calculate_aoi_area(aoi, layer.crs())
         else:  # empty layer or combo's itself is empty
             self.dlg.labelAoiArea.clear()
-            self.dlg.processingCostLabel.clear()
+            self.dlg.startProcessing.setText(self.tr('Start processing'))
             self.aoi = self.aoi_size = None
 
     def calculate_aoi_area_raster(self, layer: Union[QgsRasterLayer, None]) -> None:
@@ -1267,10 +1274,12 @@ class Mapflow(QObject):
 
     def calculate_aoi_area(self, aoi: QgsGeometry, crs: QgsCoordinateReferenceSystem) -> None:
         """Display the AOI size in sq.km.
-
+            This is the only place where self.aoi is changed! This is important because it is the place where we
+            send request to update processing cost!
         :param aoi: the processing area.
         :param crs: the CRS of the processing area.
         """
+
         if crs != helpers.WGS84:
             aoi = helpers.to_wgs84(aoi, crs)
         self.aoi = aoi  # save for reuse in processing creation or metadata requests
@@ -1279,22 +1288,18 @@ class Mapflow(QObject):
         self.calculator.setSourceCrs(helpers.WGS84, self.project.transformContext())
         self.aoi_size = self.calculator.measureArea(aoi) / 10 ** 6  # sq. m to sq.km
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
-        self.dlg.processingCostLabel.clear()
-        # get workflow def id for selected model
-        try:
-            print("Accessing to the workflow defs")
-            wd_name = self.dlg.modelCombo.currentText()
-            workflow_def_id = self.workflow_defs.get(wd_name).id
-        except AttributeError:
-            print("Failed access to the workflow defs")
-            print(wd_name)
-            print(self.workflow_defs)
-        else:
-            print("Success access to the workflow defs")
-        if self.billing_type == BillingType.credits:
-            self.calculate_processing_cost(aoi=aoi, workflow_def_id=workflow_def_id)
+        self.update_processing_cost()
 
-    def calculate_processing_cost(self, aoi: QgsGeometry, workflow_def_id: uuid.UUID) -> None:
+    def update_processing_cost(self):
+        if not self.aoi \
+                or not self.workflow_defs \
+                or self.billing_type != BillingType.credits:
+            self.dlg.startProcessing.setText(self.tr('Start processing'))
+        else: #  self.billing_type == BillingType.credits: f
+            workflow_def_id = self.workflow_defs[self.dlg.modelCombo.currentText()].id
+            self.request_processing_cost(aoi=self.aoi, workflow_def_id=workflow_def_id)
+
+    def request_processing_cost(self, aoi: QgsGeometry, workflow_def_id: uuid.UUID) -> None:
         """:return: calculated aoi area and cost in credits"""
         geometry = json.loads(aoi.asJson())
         body = {"wdId": workflow_def_id,
@@ -1308,7 +1313,7 @@ class Mapflow(QObject):
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         response_data = response.readAll().data().decode()
         self.processing_cost = int(response_data)
-        self.dlg.processingCostLabel.setText(self.tr(f'Processing cost: {response_data} credits'))
+        self.dlg.startProcessing.setText(self.tr(f'Start processing: {response_data} credits'))
 
     def delete_processings(self) -> None:
         """Delete one or more processings from the server.
@@ -1635,6 +1640,8 @@ class Mapflow(QObject):
             self.remaining_limit = None
             limit_label = ''
         self.dlg.remainingLimit.setText(limit_label)
+        self.update_processing_cost()
+        self.show_wd_price(wd=self.dlg.modelCombo.currentText())
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
         """Save and open the preview image as a layer."""
@@ -2388,6 +2395,9 @@ class Mapflow(QObject):
         self.dlg.show()
         self.user_status_update_timer.start()
         self.app_startup_user_update_timer.start()
+
+        self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex())
+
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
         """Inspect the plugin version backend expects and show a warning if it is incompatible w/ the plugin.

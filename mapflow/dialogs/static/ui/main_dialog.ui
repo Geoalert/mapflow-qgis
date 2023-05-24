@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1257</width>
+    <width>1190</width>
     <height>500</height>
    </rect>
   </property>
@@ -21,7 +21,7 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_2">
    <item>
-    <layout class="QHBoxLayout" name="GlobalLayout" stretch="1,0">
+    <layout class="QHBoxLayout" name="GlobalLayout" stretch="1,3">
      <property name="sizeConstraint">
       <enum>QLayout::SetNoConstraint</enum>
      </property>
@@ -100,7 +100,7 @@
             <bool>false</bool>
            </property>
            <property name="text">
-            <string>...</string>
+            <string/>
            </property>
            <property name="icon">
             <iconset>
@@ -136,22 +136,6 @@
           </widget>
          </item>
         </layout>
-       </item>
-       <item>
-        <widget class="QLabel" name="processingCostLabel">
-         <property name="minimumSize">
-          <size>
-           <width>0</width>
-           <height>20</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>Processing cost:</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
-         </property>
-        </widget>
        </item>
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_10">
@@ -313,9 +297,34 @@
             <iconset>
              <normaloff>../icons/info.svg</normaloff>../icons/info.svg</iconset>
            </property>
+           <property name="iconSize">
+            <size>
+             <width>16</width>
+             <height>16</height>
+            </size>
+           </property>
+           <property name="shortcut">
+            <string>Ctrl+S</string>
+           </property>
           </widget>
          </item>
         </layout>
+       </item>
+       <item>
+        <widget class="QLabel" name="labelWdPrice">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>20</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>Price per sq. km:</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+         </property>
+        </widget>
        </item>
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="0,1,0">
