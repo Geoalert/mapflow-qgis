@@ -102,3 +102,7 @@ class MaxarProxyProvider(ProxyProvider, ABC):
                     'connectId': self.connect_id
                 }).encode()
         return body
+
+    @property
+    def is_payed(self):
+        return True

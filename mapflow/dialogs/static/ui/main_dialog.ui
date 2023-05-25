@@ -352,7 +352,7 @@
         </layout>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="0,1,0,0,0">
+        <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="0,1,0,0">
          <property name="sizeConstraint">
           <enum>QLayout::SetMinimumSize</enum>
          </property>
@@ -435,13 +435,6 @@
            </property>
            <property name="text">
             <string>CC</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QLabel" name="labelDataPrice">
-           <property name="text">
-            <string>10</string>
            </property>
           </widget>
          </item>

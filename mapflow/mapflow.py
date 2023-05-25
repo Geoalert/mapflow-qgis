@@ -337,6 +337,7 @@ class Mapflow(QObject):
             self.dlg.modelCombo.setToolTip(self.workflow_defs.get(wd).description)
 
     def show_wd_price(self, wd):
+        print(self.workflow_defs.keys())
         price = self.workflow_defs.get(wd).pricePerSqKm
         tooltip = self.workflow_defs.get(wd).description + self.tr('\n Price per square km {}').format(price)
         self.dlg.labelWdPrice.setText(str(int(price)))
@@ -469,7 +470,8 @@ class Mapflow(QObject):
             'If you already know which {provider_name} image you want to process,\n'
             'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
         ).format(provider_name=provider_name)
-
+        provider_is_payed = False if not provider else provider.is_payed
+        self.dlg.labelCoins_2.setVisible(provider_is_payed)
         if isinstance(provider, SentinelProvider):
             is_max_zoom_enabled = False
             columns = self.config.SENTINEL_ATTRIBUTES
@@ -1234,6 +1236,7 @@ class Mapflow(QObject):
         else:  # empty layer or combo's itself is empty
             self.dlg.labelAoiArea.clear()
             self.dlg.startProcessing.setText(self.tr('Start processing'))
+            self.dlg.startProcessing.setDisabled(True)
             self.aoi = self.aoi_size = None
 
     def calculate_aoi_area_raster(self, layer: Union[QgsRasterLayer, None]) -> None:
@@ -1292,9 +1295,12 @@ class Mapflow(QObject):
 
     def update_processing_cost(self):
         if not self.aoi \
-                or not self.workflow_defs \
-                or self.billing_type != BillingType.credits:
+                or not self.workflow_defs:
             self.dlg.startProcessing.setText(self.tr('Start processing'))
+            self.dlg.startProcessing.setDisabled(True)
+        elif self.billing_type != BillingType.credits:
+            self.dlg.startProcessing.setText(self.tr('Start processing'))
+            self.dlg.startProcessing.setEnabled(True)
         else: #  self.billing_type == BillingType.credits: f
             workflow_def_id = self.workflow_defs[self.dlg.modelCombo.currentText()].id
             self.request_processing_cost(aoi=self.aoi, workflow_def_id=workflow_def_id)
@@ -1313,7 +1319,8 @@ class Mapflow(QObject):
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         response_data = response.readAll().data().decode()
         self.processing_cost = int(response_data)
-        self.dlg.startProcessing.setText(self.tr(f'Start processing: {response_data} credits'))
+        self.dlg.startProcessing.setText(self.tr(f'Start processing for {response_data} credits'))
+        self.dlg.startProcessing.setEnabled(True)
 
     def delete_processings(self) -> None:
         """Delete one or more processings from the server.
@@ -1641,6 +1648,7 @@ class Mapflow(QObject):
             self.remaining_limit = None
             limit_label = ''
         self.dlg.remainingLimit.setText(limit_label)
+        print(self.dlg.modelCombo.currentText())
         self.show_wd_price(wd=self.dlg.modelCombo.currentText())
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:

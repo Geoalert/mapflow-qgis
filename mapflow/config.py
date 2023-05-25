@@ -35,7 +35,7 @@ class Config:
     MAXAR_MAX_FREE_ZOOM = 12
 
     # MISC
-    ENABLE_SENTINEL = (QgsSettings().value('variables/mapflow_enable_sentinel').lower() == "true")
+    ENABLE_SENTINEL = (QgsSettings().value('variables/mapflow_enable_sentinel', "false").lower() == "true")
     SKYWATCH_METADATA_MAX_AREA = 1e11  # 100,000 sq.km
     SKYWATCH_METADATA_MAX_SIDE_LENGTH = 1e6  # 1,000 km
     INVALID_TOKEN_WARNING_OBJECT_NAME = 'invalidToken'
