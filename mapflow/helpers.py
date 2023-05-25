@@ -162,3 +162,12 @@ def check_processing_limit(billing_type: BillingType,
         return remaining_credits >= processing_cost
     else: # billing_type == BillingType.none
         return True
+
+def generate_plugin_header(plugin_name: str, env: Optional[str], project_name: Optional[str]) -> str:
+        #project_name = response_data['name']
+        header = plugin_name
+        if env:
+            header = header + f" {env}"
+        if project_name and project_name != "Default":
+            header = header + f" | Project: {project_name}"
+        return header

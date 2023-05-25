@@ -5,6 +5,8 @@ from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtWidgets import QWidget
 from qgis.core import QgsMapLayerProxyModel
 
+from ..entity.billing import BillingType
+
 ui_path = Path(__file__).parent/'static'/'ui'
 icon_path = Path(__file__).parent/'static'/'icons'
 plugin_icon = QIcon(str(icon_path/'mapflow.png'))
@@ -16,7 +18,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         super().__init__(parent)
         self.setupUi(self)
         # Restrict combos to relevant layer types; QGIS 3.10-3.20 (at least) bugs up if set in .ui
-        self.maxarAoiCombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
         self.polygonCombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
         self.rasterCombo.setFilters(QgsMapLayerProxyModel.RasterLayer)
         # Set icons (can be done in .ui but brings about the resources_rc import bug)
@@ -36,13 +37,32 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.labelCoins_1.setPixmap(pixmap)
         self.labelCoins_2.setPixmap(pixmap)
 
+    def setup_for_billing(self, billing_type: BillingType):
+        if billing_type == billing_type.credits:
+            self.balanceLabel.setVisible(True)
+            self.labelCoins_1.setVisible(True)
+            self.labelCoins_2.setToolTip(self.tr("This is a paid data provider"))
+            self.labelWdPrice.setVisible(True)
+        elif billing_type == billing_type.area:
+            self.balanceLabel.setVisible(True)
+            self.labelCoins_1.setVisible(False)
+            self.labelWdPrice.setVisible(False)
+            self.labelCoins_2.setToolTip(self.tr("This is a premium data provider"))
+        else: # None billing
+            self.balanceLabel.setVisible(False)
+            self.topUpBalanceButton.setVisible(False)
+            self.labelCoins_1.setVisible(False)
+            self.labelCoins_2.setVisible(False)
+            self.labelWdPrice.setVisible(False)
+
+
+
 class LoginDialog(*uic.loadUiType(ui_path/'login_dialog.ui')):
     def __init__(self, parent: QWidget) -> None:
         """Auth dialog."""
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(plugin_icon)
-
 
 class ErrorMessageWidget(*uic.loadUiType(ui_path / 'error_message.ui')):
     def __init__(self, parent: QWidget, text: str, title: str = None, email_body: str = '') -> None:

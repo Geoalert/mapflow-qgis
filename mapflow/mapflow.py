@@ -76,6 +76,7 @@ class Mapflow(QObject):
         # Save refs to key variables used throughout the plugin
         self.iface = iface
         self.main_window = self.iface.mainWindow()
+        self.dlg_login = LoginDialog(self.main_window)
         super().__init__(self.main_window)
         self.project = QgsProject.instance()
         self.message_bar = self.iface.messageBar()
@@ -163,16 +164,10 @@ class Mapflow(QObject):
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         self.dlg.downloadResultsButton.clicked.connect(self.download_results)
         # (Dis)allow the user to use raster extent as AOI
-        self.dlg.rasterCombo.layerChanged.connect(self.toggle_processing_checkboxes)
-        self.dlg.rasterCombo.currentTextChanged.connect(self.toggle_processing_checkboxes)
         self.dlg.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
         self.dlg.startProcessing.clicked.connect(self.create_processing)
-        # Sync polygon layer combos
-        self.dlg.polygonCombo.layerChanged.connect(self.dlg.maxarAoiCombo.setLayer)
-        self.dlg.maxarAoiCombo.layerChanged.connect(self.dlg.polygonCombo.setLayer)
         # Calculate AOI size
         self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area_polygon_layer)
-        self.dlg.rasterCombo.layerChanged.connect(self.calculate_aoi_area_raster)
         self.dlg.useImageExtentAsAoi.toggled.connect(self.calculate_aoi_area_use_image_extent)
         self.monitor_polygon_layer_feature_selection([
             self.project.mapLayer(layer_id) for layer_id in self.project.mapLayers(validOnly=True)
@@ -214,6 +209,7 @@ class Mapflow(QObject):
         self.dlg.getMetadata.clicked.connect(self.get_metadata)
         self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
         self.dlg.rasterCombo.activated.connect(self.on_provider_change)
+        self.dlg.rasterCombo.currentIndexChanged.connect(self.on_provider_change)
         # Poll processings
         self.processing_fetch_timer = QTimer(self.dlg)
         self.processing_fetch_timer.setInterval(self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
@@ -339,8 +335,11 @@ class Mapflow(QObject):
     def show_wd_price(self, wd):
         print(self.workflow_defs.keys())
         price = self.workflow_defs.get(wd).pricePerSqKm
-        tooltip = self.workflow_defs.get(wd).description + self.tr('\n Price per square km {}').format(price)
-        self.dlg.labelWdPrice.setText(str(int(price)))
+        _, d = divmod(price,1)
+        if d == 0:
+            price = int(price)
+        tooltip = self.workflow_defs.get(wd).description + self.tr('\nPrice: {} credits per square km').format(price)
+        self.dlg.labelWdPrice.setText(str(price))
         self.dlg.modelCombo.setToolTip(tooltip)
 
     def set_available_imagery_sources(self, wd: str)     -> None:
@@ -420,11 +419,9 @@ class Mapflow(QObject):
 
     def set_up_login_dialog(self) -> None:
         """Create a login dialog, set its title and signal-slot connections."""
-        self.dlg_login = LoginDialog(self.main_window)
-        if self.config.MAPFLOW_ENV == 'production':
-            self.dlg_login.setWindowTitle(self.plugin_name + ' - ' + self.tr('Log in'))
-        else:
-            self.dlg_login.setWindowTitle(self.plugin_name + f' {self.config.MAPFLOW_ENV} - ' + self.tr('Log in'))
+        self.dlg_login.setWindowTitle(helpers.generate_plugin_header(self.tr("Log in ") + self.plugin_name,
+                                                                     self.config.MAPFLOW_ENV,
+                                                                     None))
         self.dlg_login.logIn.clicked.connect(self.read_mapflow_token)
 
     def toggle_polygon_combos(self, use_image_extent: bool) -> None:
@@ -433,22 +430,20 @@ class Mapflow(QObject):
         :param use_image_extent: Whether the corresponding checkbox is checked
         """
         self.dlg.polygonCombo.setEnabled(not use_image_extent)
-        self.dlg.maxarAoiCombo.setEnabled(not use_image_extent)
 
-    def limit_zoom_auth_toggled(self) -> None:
+    def limit_zoom_auth_toggled(self, provider: Provider) -> None:
         """
         Limit zoom for Maxar when our account is to be used.
         """
-        current_provider = self.providers.get(self.dlg.rasterCombo.currentText())
-        if isinstance(current_provider, MaxarProxyProvider):
+        if isinstance(provider, MaxarProxyProvider):
             max_zoom = self.config.MAXAR_MAX_FREE_ZOOM
-            value = max_zoom
+            current_zoom = max_zoom
         else:
             max_zoom = self.config.MAX_ZOOM
             # Forced to int bc somehow used to be stored as str, so for backward compatability
-            value = int(self.settings.value('maxZoom', self.config.DEFAULT_ZOOM))
+            current_zoom = int(self.settings.value('maxZoom', self.config.DEFAULT_ZOOM))
         self.dlg.maxZoom.setMaximum(max_zoom)
-        self.dlg.maxZoom.setValue(value)
+        self.dlg.maxZoom.setValue(current_zoom)
 
     def on_provider_change(self, index: int) -> None:
         """Adjust max and current zoom, and update the metadata table when user selects another
@@ -457,72 +452,13 @@ class Mapflow(QObject):
         :param index: The currently selected provider index
         """
         provider_name = self.dlg.rasterCombo.currentText()
-        provider = self.providers.get(provider_name)
-
-        self.dlg.metadataTable.clear()
-        self.dlg.imageId.clear()
-
-        more_button = self.dlg.findChild(QPushButton, self.config.METADATA_MORE_BUTTON_OBJECT_NAME)
-        if more_button:
-            self.dlg.layoutMetadataTable.removeWidget(more_button)
-            more_button.deleteLater()
-        image_id_tooltip = self.tr(
-            'If you already know which {provider_name} image you want to process,\n'
-            'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
-        ).format(provider_name=provider_name)
-        provider_is_payed = False if not provider else provider.is_payed
-        self.dlg.labelCoins_2.setVisible(provider_is_payed)
-        if isinstance(provider, SentinelProvider):
-            is_max_zoom_enabled = False
-            columns = self.config.SENTINEL_ATTRIBUTES
-            hidden_column_index = len(self.config.SENTINEL_ATTRIBUTES) - 1
-            sort_by = self.config.SENTINEL_DATETIME_COLUMN_INDEX
-            enabled = True
-            image_id_placeholder = self.tr('e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00')
-            additional_filters_enabled = True
-        elif isinstance(provider, (MaxarProvider, MaxarProxyProvider)):
-            is_max_zoom_enabled = True
-            columns = self.config.MAXAR_METADATA_ATTRIBUTES
-            hidden_column_index = None
-            sort_by = self.config.MAXAR_DATETIME_COLUMN_INDEX
-            enabled = True
-            image_id_placeholder = self.tr('e.g. a3b154c40cc74f3b934c0ffc9b34ecd1')
-            additional_filters_enabled = True
-        else:
-            # other providers do not support imagery search,
-            # tear down the table and deactivate the panel
-            is_max_zoom_enabled = True
-            columns = tuple()  # empty
-            hidden_column_index = None
-            sort_by = None
-            enabled = False
-            image_id_placeholder = ""
-            additional_filters_enabled = False
-            image_id_tooltip = provider_name + self.tr(f" doesn't allow processing single images.")
-
-        self.limit_zoom_auth_toggled()
-        self.dlg.maxZoom.setEnabled(is_max_zoom_enabled)
-        self.dlg.metadataFilters.setEnabled(additional_filters_enabled)
-        self.dlg.metadataTable.setRowCount(0)
-        self.dlg.metadataTable.setColumnCount(len(columns))
-        self.dlg.metadataTable.setHorizontalHeaderLabels(columns)
-        for col in range(len(columns)):  # reveal any previously hidden columns
-            self.dlg.metadataTable.setColumnHidden(col, False)
-        if hidden_column_index is not None:  # now hide the relevant ones
-            self.dlg.metadataTable.setColumnHidden(hidden_column_index, True)
-        if sort_by is not None:
-            self.dlg.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
-        self.dlg.metadata.setTitle(provider_name + self.tr(' Imagery Catalog'))
-        self.dlg.metadata.setEnabled(enabled)
-        self.dlg.imageId.setEnabled(enabled)
-        self.dlg.imageId.setPlaceholderText(image_id_placeholder)
-        self.dlg.labelImageId.setToolTip(image_id_tooltip)
-        self.dlg.searchImageryButton.clicked.connect(lambda: self.dlg.tabWidget.setCurrentIndex(1))
-
-        self.dlg.searchImageryButton.setEnabled(enabled)
-        self.dlg.searchImageryButton.setToolTip(self.tr("Search imagery") if enabled
-                                                else self.tr("Provider does not support imagery search"))
-
+        provider_layer = self.dlg.rasterCombo.currentLayer()
+        provider = self.providers.get(provider_name, None)
+        # Changes in case provider is raster layer
+        self.toggle_processing_checkboxes(provider_layer)
+        # Changes in search tab
+        self.toggle_imagery_search(provider_name,
+                                   provider)
         self.update_processing_cost()
 
     def save_dialog_state(self):
@@ -667,6 +603,73 @@ class Mapflow(QObject):
         enabled = isinstance(raster_source, QgsRasterLayer)
         self.dlg.useImageExtentAsAoi.setEnabled(enabled)
         self.dlg.useImageExtentAsAoi.setChecked(enabled)
+
+    def toggle_imagery_search(self,
+                              provider_name: str,
+                              provider: Optional[Provider]):
+        self.dlg.metadataTable.clear()
+        self.dlg.imageId.clear()
+
+        more_button = self.dlg.findChild(QPushButton, self.config.METADATA_MORE_BUTTON_OBJECT_NAME)
+        if more_button:
+            self.dlg.layoutMetadataTable.removeWidget(more_button)
+            more_button.deleteLater()
+        image_id_tooltip = self.tr(
+            'If you already know which {provider_name} image you want to process,\n'
+            'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
+        ).format(provider_name=provider_name)
+        provider_is_payed = False if not provider else provider.is_payed
+        self.dlg.labelCoins_2.setVisible(provider_is_payed)
+        if isinstance(provider, SentinelProvider):
+            is_max_zoom_enabled = False
+            columns = self.config.SENTINEL_ATTRIBUTES
+            hidden_column_index = len(self.config.SENTINEL_ATTRIBUTES) - 1
+            sort_by = self.config.SENTINEL_DATETIME_COLUMN_INDEX
+            enabled = True
+            image_id_placeholder = self.tr('e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00')
+            additional_filters_enabled = True
+        elif isinstance(provider, (MaxarProvider, MaxarProxyProvider)):
+            is_max_zoom_enabled = True
+            columns = self.config.MAXAR_METADATA_ATTRIBUTES
+            hidden_column_index = None
+            sort_by = self.config.MAXAR_DATETIME_COLUMN_INDEX
+            enabled = True
+            image_id_placeholder = self.tr('e.g. a3b154c40cc74f3b934c0ffc9b34ecd1')
+            additional_filters_enabled = True
+        else:
+            # other providers do not support imagery search,
+            # tear down the table and deactivate the panel
+            is_max_zoom_enabled = True
+            columns = tuple()  # empty
+            hidden_column_index = None
+            sort_by = None
+            enabled = False
+            image_id_placeholder = ""
+            additional_filters_enabled = False
+            image_id_tooltip = self.tr("{} doesn't allow processing single images.").format(provider_name)
+
+        self.limit_zoom_auth_toggled(provider=provider)
+        self.dlg.maxZoom.setEnabled(is_max_zoom_enabled)
+        self.dlg.metadataFilters.setEnabled(additional_filters_enabled)
+        self.dlg.metadataTable.setRowCount(0)
+        self.dlg.metadataTable.setColumnCount(len(columns))
+        self.dlg.metadataTable.setHorizontalHeaderLabels(columns)
+        for col in range(len(columns)):  # reveal any previously hidden columns
+            self.dlg.metadataTable.setColumnHidden(col, False)
+        if hidden_column_index is not None:  # now hide the relevant ones
+            self.dlg.metadataTable.setColumnHidden(hidden_column_index, True)
+        if sort_by is not None:
+            self.dlg.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
+        self.dlg.metadata.setTitle(provider_name + self.tr(' Imagery Catalog'))
+        self.dlg.metadata.setEnabled(enabled)
+        self.dlg.imageId.setEnabled(enabled)
+        self.dlg.imageId.setPlaceholderText(image_id_placeholder)
+        self.dlg.labelImageId.setToolTip(image_id_tooltip)
+        self.dlg.searchImageryButton.clicked.connect(lambda: self.dlg.tabWidget.setCurrentIndex(1))
+
+        self.dlg.searchImageryButton.setEnabled(enabled)
+        self.dlg.searchImageryButton.setToolTip(self.tr("Search imagery") if enabled
+                                                else self.tr("Provider does not support imagery search"))
 
     def select_output_directory(self) -> str:
         """Open a file dialog for the user to select a directory where plugin files will be stored.
@@ -1239,7 +1242,7 @@ class Mapflow(QObject):
             self.dlg.startProcessing.setDisabled(True)
             self.aoi = self.aoi_size = None
 
-    def calculate_aoi_area_raster(self, layer: Union[QgsRasterLayer, None]) -> None:
+    def calculate_aoi_area_raster(self, layer: Optional[QgsRasterLayer]) -> None:
         """Get the AOI size when a new entry in the raster combo box is selected.
 
         :param layer: The current raster layer
@@ -1612,24 +1615,16 @@ class Mapflow(QObject):
             callback=self.get_processings_callback
         )
 
-    def set_project_name(self, response_data) -> None:
-        project_name = response_data['name']
-        if self.plugin_name == 'Mapflow' and self.config.PROJECT_ID != 'default':
-            footer = self.tr('| Project: {}').format(project_name)
-            self.dlg.setWindowTitle(self.dlg.windowTitle + footer)
-
     def update_processing_limit(self) -> None:
         """Set the user's processing limit as reported by Mapflow."""
         self.http.get(
             url=f'{self.server}/user/status',
-            callback=self.set_processing_limit
+            callback=self.set_processing_limit,
+            use_default_error_handler=False  #  it is done by timer, so we ignore errors to avoid stacking
         )
 
     def set_processing_limit(self, response: QNetworkReply,
                              app_startup_request: Optional[bool] = False) -> None:
-        if app_startup_request:
-            self.update_processing_cost()
-            self.app_startup_user_update_timer.stop()
         response_data = json.loads(response.readAll().data())
         if self.plugin_name != 'Mapflow':
             # In custom plugins, we don't show the remaining limit and do not check it for the processing
@@ -1639,17 +1634,22 @@ class Mapflow(QObject):
             self.billing_type = BillingType(response_data.get('billingType', 'AREA').upper())
         # get limits
         if self.billing_type == BillingType.credits:
-            self.remaining_credits = int(response_data.get('remainingCredits', 0))
-            limit_label = self.tr('Your balance: {} credits').format(self.remaining_credits)
+            balance_str = self.tr("Your balance: {} credits").format(response_data.get('remainingCredits', 0))
         elif self.billing_type == BillingType.area: # area
             self.remaining_limit = int(response_data.get('remainingArea', 0)) / 1e6  # convert into sq.km
-            limit_label = self.tr('Processing limit: {:.2f} sq.km').format(self.remaining_limit)
+            balance_str = 'Remaining limit: {:.2f} sq.km'.format(self.remaining_limit)
         else: # BillingType.none
             self.remaining_limit = None
-            limit_label = ''
-        self.dlg.remainingLimit.setText(limit_label)
+            balance_str = ''
+        self.dlg.balanceLabel.setText(balance_str)
         print(self.dlg.modelCombo.currentText())
         self.show_wd_price(wd=self.dlg.modelCombo.currentText())
+
+        if app_startup_request:
+            self.update_processing_cost()
+            self.app_startup_user_update_timer.stop()
+            self.dlg.setup_for_billing(self.billing_type)
+
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
         """Save and open the preview image as a layer."""
@@ -2373,7 +2373,6 @@ class Mapflow(QObject):
         self.setup_processings_table()
         # Set up the UI with the received data
         response = json.loads(response.readAll().data())
-        self.set_project_name(response_data=response)
         self.update_processing_limit()
         self.is_premium_user = response['user']['isPremium']
         self.on_provider_change(self.dlg.rasterCombo.currentText())
@@ -2395,17 +2394,17 @@ class Mapflow(QObject):
         # Authenticate and keep user logged in
         self.logged_in = True
         self.dlg_login.close()
-        # setup window title for different envs
-        if self.config.MAPFLOW_ENV == 'production':
-            self.dlg.setWindowTitle(self.plugin_name)
-        else:
-            self.dlg.setWindowTitle(self.plugin_name + f' {self.config.MAPFLOW_ENV}')
+
+        # setup window title for different envs and project
+        self.dlg.setWindowTitle(helpers.generate_plugin_header(self.plugin_name,
+                                                               self.config.MAPFLOW_ENV,
+                                                               response.get("name", "")))
+        self.dlg.setup_for_billing(self.billing_type)
         self.dlg.show()
         self.user_status_update_timer.start()
         self.app_startup_user_update_timer.start()
 
         self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex())
-
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
         """Inspect the plugin version backend expects and show a warning if it is incompatible w/ the plugin.
