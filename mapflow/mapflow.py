@@ -30,8 +30,7 @@ from qgis.core import (
     QgsWkbTypes, QgsPoint, QgsMapLayerType
 )
 
-from .dialogs.dialogs import MainDialog, LoginDialog, ErrorMessageWidget
-from .dialogs.provider_dialog import ProviderDialog
+from .dialogs import MainDialog, LoginDialog, ErrorMessageWidget, ProviderDialog
 from .http import (Http,
                    get_error_report_body,
                    data_catalog_message_parser,
@@ -208,7 +207,6 @@ class Mapflow(QObject):
         self.dlg.metadataTable.itemSelectionChanged.connect(self.sync_table_selection_with_image_id_and_layer)
         self.dlg.getMetadata.clicked.connect(self.get_metadata)
         self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
-        self.dlg.rasterCombo.activated.connect(self.on_provider_change)
         self.dlg.rasterCombo.currentIndexChanged.connect(self.on_provider_change)
         # Poll processings
         self.processing_fetch_timer = QTimer(self.dlg)
@@ -324,23 +322,16 @@ class Mapflow(QObject):
         self.dlg.rasterCombo.setExceptedLayerList(filtered_raster_layers)
 
     def on_model_change(self, index: int) -> None:
-        wd = self.dlg.modelCombo.currentText()
-        self.set_available_imagery_sources(wd)
+        wd_name = self.dlg.modelCombo.currentText()
+        wd = self.workflow_defs.get(wd_name)
+        self.set_available_imagery_sources(wd_name)
+        if not wd:
+            return
+        self.dlg.show_wd_price(wd_price=wd.pricePerSqKm,
+                               wd_description=wd.description,
+                               display_price=self.billing_type==BillingType.credits)
         if self.billing_type == BillingType.credits:
-            self.show_wd_price(wd)
             self.update_processing_cost()
-        else:
-            self.dlg.modelCombo.setToolTip(self.workflow_defs.get(wd).description)
-
-    def show_wd_price(self, wd):
-        print(self.workflow_defs.keys())
-        price = self.workflow_defs.get(wd).pricePerSqKm
-        _, d = divmod(price,1)
-        if d == 0:
-            price = int(price)
-        tooltip = self.workflow_defs.get(wd).description + self.tr('\nPrice: {} credits per square km').format(price)
-        self.dlg.labelWdPrice.setText(str(price))
-        self.dlg.modelCombo.setToolTip(tooltip)
 
     def set_available_imagery_sources(self, wd: str)     -> None:
         """Restrict the list of imagery sources according to the selected model."""
@@ -430,20 +421,6 @@ class Mapflow(QObject):
         :param use_image_extent: Whether the corresponding checkbox is checked
         """
         self.dlg.polygonCombo.setEnabled(not use_image_extent)
-
-    def limit_zoom_auth_toggled(self, provider: Provider) -> None:
-        """
-        Limit zoom for Maxar when our account is to be used.
-        """
-        if isinstance(provider, MaxarProxyProvider):
-            max_zoom = self.config.MAXAR_MAX_FREE_ZOOM
-            current_zoom = max_zoom
-        else:
-            max_zoom = self.config.MAX_ZOOM
-            # Forced to int bc somehow used to be stored as str, so for backward compatability
-            current_zoom = int(self.settings.value('maxZoom', self.config.DEFAULT_ZOOM))
-        self.dlg.maxZoom.setMaximum(max_zoom)
-        self.dlg.maxZoom.setValue(current_zoom)
 
     def on_provider_change(self, index: int) -> None:
         """Adjust max and current zoom, and update the metadata table when user selects another
@@ -607,69 +584,59 @@ class Mapflow(QObject):
     def toggle_imagery_search(self,
                               provider_name: str,
                               provider: Optional[Provider]):
-        self.dlg.metadataTable.clear()
-        self.dlg.imageId.clear()
-
-        more_button = self.dlg.findChild(QPushButton, self.config.METADATA_MORE_BUTTON_OBJECT_NAME)
-        if more_button:
-            self.dlg.layoutMetadataTable.removeWidget(more_button)
-            more_button.deleteLater()
-        image_id_tooltip = self.tr(
-            'If you already know which {provider_name} image you want to process,\n'
-            'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
-        ).format(provider_name=provider_name)
-        provider_is_payed = False if not provider else provider.is_payed
-        self.dlg.labelCoins_2.setVisible(provider_is_payed)
+        """
+        Get necessary attributes from config and send them to MainDialogo to setup Imagery Search tab
+        """
         if isinstance(provider, SentinelProvider):
-            is_max_zoom_enabled = False
             columns = self.config.SENTINEL_ATTRIBUTES
-            hidden_column_index = len(self.config.SENTINEL_ATTRIBUTES) - 1
+            hidden_columns = (len(columns) - 1,)
             sort_by = self.config.SENTINEL_DATETIME_COLUMN_INDEX
-            enabled = True
+            current_zoom = max_zoom = None
+            image_id_tooltip = self.tr(
+                'If you already know which {provider_name} image you want to process,\n'
+                'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
+            ).format(provider_name=provider_name)
             image_id_placeholder = self.tr('e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00')
-            additional_filters_enabled = True
         elif isinstance(provider, (MaxarProvider, MaxarProxyProvider)):
-            is_max_zoom_enabled = True
             columns = self.config.MAXAR_METADATA_ATTRIBUTES
-            hidden_column_index = None
+            hidden_columns = tuple()
             sort_by = self.config.MAXAR_DATETIME_COLUMN_INDEX
-            enabled = True
+            max_zoom = self.config.MAX_ZOOM
+            current_zoom = int(self.settings.value('maxZoom', self.config.DEFAULT_ZOOM))
+            image_id_tooltip = self.tr(
+                'If you already know which {provider_name} image you want to process,\n'
+                'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
+            ).format(provider_name=provider_name)
             image_id_placeholder = self.tr('e.g. a3b154c40cc74f3b934c0ffc9b34ecd1')
-            additional_filters_enabled = True
         else:
             # other providers do not support imagery search,
             # tear down the table and deactivate the panel
-            is_max_zoom_enabled = True
             columns = tuple()  # empty
-            hidden_column_index = None
+            hidden_columns = tuple()
             sort_by = None
-            enabled = False
+            max_zoom = self.config.MAX_ZOOM
+            # Forced to int bc somehow used to be stored as str, so for backward compatability
+            current_zoom = int(self.settings.value('maxZoom', self.config.DEFAULT_ZOOM))
             image_id_placeholder = ""
-            additional_filters_enabled = False
             image_id_tooltip = self.tr("{} doesn't allow processing single images.").format(provider_name)
 
-        self.limit_zoom_auth_toggled(provider=provider)
-        self.dlg.maxZoom.setEnabled(is_max_zoom_enabled)
-        self.dlg.metadataFilters.setEnabled(additional_filters_enabled)
-        self.dlg.metadataTable.setRowCount(0)
-        self.dlg.metadataTable.setColumnCount(len(columns))
-        self.dlg.metadataTable.setHorizontalHeaderLabels(columns)
-        for col in range(len(columns)):  # reveal any previously hidden columns
-            self.dlg.metadataTable.setColumnHidden(col, False)
-        if hidden_column_index is not None:  # now hide the relevant ones
-            self.dlg.metadataTable.setColumnHidden(hidden_column_index, True)
-        if sort_by is not None:
-            self.dlg.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
-        self.dlg.metadata.setTitle(provider_name + self.tr(' Imagery Catalog'))
-        self.dlg.metadata.setEnabled(enabled)
-        self.dlg.imageId.setEnabled(enabled)
-        self.dlg.imageId.setPlaceholderText(image_id_placeholder)
-        self.dlg.labelImageId.setToolTip(image_id_tooltip)
-        self.dlg.searchImageryButton.clicked.connect(lambda: self.dlg.tabWidget.setCurrentIndex(1))
+        # override max zoom for proxy maxar provider
+        if isinstance(provider, MaxarProxyProvider):
+            max_zoom = self.config.MAXAR_MAX_FREE_ZOOM
+            current_zoom = max_zoom
 
-        self.dlg.searchImageryButton.setEnabled(enabled)
-        self.dlg.searchImageryButton.setToolTip(self.tr("Search imagery") if enabled
-                                                else self.tr("Provider does not support imagery search"))
+
+        self.dlg.setup_imagery_search(provider_name=provider_name,
+                                      provider=provider,
+                                      columns=columns,
+                                      hidden_columns=hidden_columns,
+                                      sort_by=sort_by,
+                                      preview_zoom=current_zoom,
+                                      max_preview_zoom=max_zoom,
+                                      more_button_name=self.config.METADATA_MORE_BUTTON_OBJECT_NAME,
+                                      image_id_placeholder=image_id_placeholder,
+                                      image_id_tooltip=image_id_tooltip)
+
 
     def select_output_directory(self) -> str:
         """Open a file dialog for the user to select a directory where plugin files will be stored.
@@ -1633,19 +1600,19 @@ class Mapflow(QObject):
             # get billing type, by default it is area
             self.billing_type = BillingType(response_data.get('billingType', 'AREA').upper())
         # get limits
+        self.remaining_limit = int(response_data.get('remainingArea', 0)) / 1e6  # convert into sq.km
+        self.remaining_credits = int(response_data.get('remainingCredits', 0))
         if self.billing_type == BillingType.credits:
-            balance_str = self.tr("Your balance: {} credits").format(response_data.get('remainingCredits', 0))
+            balance_str = self.tr("Your balance: {} credits").format(self.remaining_credits)
         elif self.billing_type == BillingType.area: # area
-            self.remaining_limit = int(response_data.get('remainingArea', 0)) / 1e6  # convert into sq.km
             balance_str = 'Remaining limit: {:.2f} sq.km'.format(self.remaining_limit)
         else: # BillingType.none
-            self.remaining_limit = None
             balance_str = ''
+
         self.dlg.balanceLabel.setText(balance_str)
-        print(self.dlg.modelCombo.currentText())
-        self.show_wd_price(wd=self.dlg.modelCombo.currentText())
 
         if app_startup_request:
+            print("On app startup")
             self.update_processing_cost()
             self.app_startup_user_update_timer.stop()
             self.dlg.setup_for_billing(self.billing_type)

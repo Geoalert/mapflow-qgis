@@ -25,6 +25,10 @@ class SentinelProvider(ProxyProvider):
         return{'url': image_id,
                'source_type': self.source_type.value}, {}
 
+    @property
+    def meta_url(self):
+        return self.proxy + '/meta/skywatch/id'
+
 
 class MaxarVividProxyProvider(MaxarProxyProvider):
     def __init__(self, proxy):
