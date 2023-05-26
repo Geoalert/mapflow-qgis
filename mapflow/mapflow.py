@@ -551,7 +551,6 @@ class Mapflow(QObject):
         self.providers.to_settings(self.settings)
         self.dlg.providerCombo.clear()
         self.dlg.providerCombo.addItems(self.providers.keys())
-        self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex())
 
     def show_provider_edit_dialog(self, name) -> None:
         provider = self.providers.get(name, None)
@@ -1612,11 +1611,10 @@ class Mapflow(QObject):
         self.dlg.balanceLabel.setText(balance_str)
 
         if app_startup_request:
-            print("On app startup")
             self.update_processing_cost()
             self.app_startup_user_update_timer.stop()
             self.dlg.setup_for_billing(self.billing_type)
-
+            self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex())
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
         """Save and open the preview image as a layer."""
@@ -2370,8 +2368,6 @@ class Mapflow(QObject):
         self.dlg.show()
         self.user_status_update_timer.start()
         self.app_startup_user_update_timer.start()
-
-        self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex())
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
         """Inspect the plugin version backend expects and show a warning if it is incompatible w/ the plugin.

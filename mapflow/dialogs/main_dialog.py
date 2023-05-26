@@ -124,10 +124,10 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             # We store the price as Float, but we want to display it as int if it's a whole number (as it usually is)
             _, d = divmod(wd_price,1)
             if d == 0:
-                price = int(wd_price)
+                wd_price = int(wd_price)
             self.labelWdPrice.setText(str(wd_price))
-
             tooltip = wd_description + self.tr('\nPrice: {} credits per square km').format(wd_price)
         else:
             tooltip = wd_description
+
         self.modelCombo.setToolTip(tooltip)
