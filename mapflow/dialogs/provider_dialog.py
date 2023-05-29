@@ -11,7 +11,7 @@ from ..entity.provider import (CRS,
                                TMSProvider,
                                QuadkeyProvider,
                                MaxarProvider)
-from ..helpers import QUAD_KEY_REGEX, XYZ_REGEX, MAXAR_PROVIDER_REGEX
+from ..functional.helpers import QUAD_KEY_REGEX, XYZ_REGEX, MAXAR_PROVIDER_REGEX
 
 
 class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):

@@ -1,7 +1,30 @@
 import json
 from pyproj import Proj, transform
 from PyQt5.QtNetwork import QNetworkReply
-from qgis.core import QgsRectangle
+from qgis.core import (QgsRectangle,
+                       QgsRasterLayer,
+                       QgsFeature,
+                       QgsMapLayer,
+                       QgsGeometry,
+                       QgsMapLayerType,
+                       QgsWkbTypes)
+from .geometry import clip_aoi_to_image_extent
+from .helpers import WGS84, to_wgs84
+
+
+def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
+    """Get a layer's bounding box aka extent/envelope
+    /bounds.
+
+    :param layer: The layer of interest
+    """
+    # Create a geometry from the layer's extent
+    extent_geometry = QgsGeometry.fromRect(layer.extent())
+    # Reproject it to WGS84 if the layer has another CRS
+    layer_crs = layer.crs()
+    if layer_crs != WGS84:
+        extent_geometry = to_wgs84(extent_geometry, layer_crs)
+    return extent_geometry
 
 
 def generate_xyz_layer_definition(url, username, password, max_zoom, source_type):
@@ -75,3 +98,26 @@ def get_bounding_box_from_tile_json(response: QNetworkReply) -> QgsRectangle:
     xmax, ymax = transform(in_proj, out_proj, bounds[2], bounds[3])
 
     return QgsRectangle(xmin, ymin, xmax, ymax)
+
+
+def get_raster_aoi(raster_layer: QgsRasterLayer,
+                   selected_aoi,
+                   use_image_extent_as_aoi: bool):
+    layer_extent = QgsFeature()
+    layer_extent.setGeometry(get_layer_extent(raster_layer))
+    if not use_image_extent_as_aoi:
+        # If we do not use the layer extent as aoi, we still create it and use it to crop the selected AOI
+        try:
+            aoi = next(clip_aoi_to_image_extent(aoi_geometry=selected_aoi, extent=layer_extent)).geometry()
+        except StopIteration:
+            return None
+    else:
+        aoi = selected_aoi
+    return aoi
+
+
+def is_polygon_layer(layer: QgsMapLayer) -> bool:
+    """Determine if a layer is of vector type and has polygonal geometry.
+    :param layer: A layer to test
+    """
+    return layer.type() == QgsMapLayerType.VectorLayer and layer.geometryType() == QgsWkbTypes.PolygonGeometry

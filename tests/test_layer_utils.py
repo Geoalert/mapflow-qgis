@@ -1,6 +1,4 @@
-import pytest
-
-from mapflow.layer_utils import *
+from mapflow.functional.layer_utils import *
 
 
 def test_maxar_layer_our_proxy():

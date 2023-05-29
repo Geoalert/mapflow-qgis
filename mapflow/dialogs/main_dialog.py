@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import QWidget, QPushButton
 from qgis.core import QgsMapLayerProxyModel
 
 from ..entity.billing import BillingType
-from ..entity.provider import Provider, SentinelProvider, MaxarProvider, MaxarProxyProvider
+from ..entity.provider import Provider
 
 ui_path = Path(__file__).parent/'static'/'ui'
 icon_path = Path(__file__).parent/'static'/'icons'
@@ -40,6 +40,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.labelCoins_1.setPixmap(pixmap)
         self.labelCoins_2.setPixmap(pixmap)
 
+    # ========= SHOW =========== #
     def setup_for_billing(self, billing_type: BillingType):
         """
         set the UI elements according to user's billing type
@@ -131,3 +132,4 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             tooltip = wd_description
 
         self.modelCombo.setToolTip(tooltip)
+

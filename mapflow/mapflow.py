@@ -1,10 +1,8 @@
 import json
 import uuid
-import math
 from pathlib import Path
 import os.path
 import tempfile
-from time import time
 from base64 import b64encode, b64decode
 from typing import List, Optional, Union, Callable
 from datetime import datetime  # processing creation datetime formatting
@@ -15,8 +13,7 @@ from PyQt5.QtXml import QDomDocument
 from PyQt5.QtGui import QColor, QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
-    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, qVersion,
-    QTextStream, QByteArray, QVariant
+    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, QTextStream, QByteArray
 )
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction,
@@ -30,6 +27,7 @@ from qgis.core import (
     QgsWkbTypes, QgsPoint, QgsMapLayerType
 )
 
+from .functional import layer_utils, helpers
 from .dialogs import MainDialog, LoginDialog, ErrorMessageWidget, ProviderDialog
 from .http import (Http,
                    get_error_report_body,
@@ -45,10 +43,10 @@ from .entity.provider import (Provider,
                               create_provider)
 from .entity.billing import BillingType
 from .entity.workflow_def import WorkflowDef
-
+from .entity.processing_params import ProcessingParams, PostProcessingSchema
+from .errors import ProcessingInputDataMissing, BadProcessingInput, PluginError
 from .functional.geometry import clip_aoi_to_image_extent
-from . import helpers, constants
-from .layer_utils import generate_xyz_layer_definition, get_bounding_box_from_tile_json
+from . import constants
 
 
 class Mapflow(QObject):
@@ -329,7 +327,7 @@ class Mapflow(QObject):
             return
         self.dlg.show_wd_price(wd_price=wd.pricePerSqKm,
                                wd_description=wd.description,
-                               display_price=self.billing_type==BillingType.credits)
+                               display_price=self.billing_type == BillingType.credits)
         if self.billing_type == BillingType.credits:
             self.update_processing_cost()
 
@@ -566,7 +564,7 @@ class Mapflow(QObject):
 
         :param layers: A list of layers of any type (all non-polygon layers will be skipped)
         """
-        for layer in filter(helpers.is_polygon_layer, layers):
+        for layer in filter(layer_utils.is_polygon_layer, layers):
             layer.selectionChanged.connect(self.calculate_aoi_area_selection)
             layer.editingStopped.connect(self.calculate_aoi_area_layer_edited)
 
@@ -1263,27 +1261,23 @@ class Mapflow(QObject):
         self.update_processing_cost()
 
     def update_processing_cost(self):
-        if not self.aoi \
-                or not self.workflow_defs:
+        if not self.aoi or not self.workflow_defs:
             self.dlg.startProcessing.setText(self.tr('Start processing'))
             self.dlg.startProcessing.setDisabled(True)
         elif self.billing_type != BillingType.credits:
             self.dlg.startProcessing.setText(self.tr('Start processing'))
             self.dlg.startProcessing.setEnabled(True)
         else: #  self.billing_type == BillingType.credits: f
-            workflow_def_id = self.workflow_defs[self.dlg.modelCombo.currentText()].id
-            self.request_processing_cost(aoi=self.aoi, workflow_def_id=workflow_def_id)
-
-    def request_processing_cost(self, aoi: QgsGeometry, workflow_def_id: uuid.UUID) -> None:
-        """:return: calculated aoi area and cost in credits"""
-        geometry = json.loads(aoi.asJson())
-        body = {"wdId": workflow_def_id,
-                "geometry": geometry}
-        self.http.post(
-            url=f"{self.server}/processing/cost",
-            callback=self.calculate_processing_cost_callback,
-            body=json.dumps(body).encode()
-        )
+            request_body = self.create_processing_request(alert_errors=False,
+                                                          allow_empty_name=True)
+            if not request_body:
+                self.dlg.startProcessing.setText(self.tr('Start processing'))
+            else:
+                self.http.post(
+                    url=f"{self.server}/processing/cost",
+                    callback=self.calculate_processing_cost_callback,
+                    body=request_body.as_json().encode()
+                )
 
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         response_data = response.readAll().data().decode()
@@ -1331,7 +1325,9 @@ class Mapflow(QObject):
         """
         self.report_http_error(response, self.tr("Error deleting a processing"))
 
-    def upload_image(self, layer, processing_params=None, mosaic=None):
+    def upload_image(self, layer,
+                     processing_params: Optional[PostProcessingSchema] = None,
+                     mosaic=None):
         """
         if processing_params are None, we do not call processing after upload;
         this is a stub for further data-catalog usage
@@ -1387,62 +1383,31 @@ class Mapflow(QObject):
         # Tear this connection if the user closes the progress message
         progress_message.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
 
-    def create_processing_from_provider(self, provider, aoi, image_id, params, selected_image):
-        provider_params, processing_meta = provider.to_processing_params(image_id=image_id)
-        params.update(params=provider_params)
-        params['meta'].update(**processing_meta)
-        if selected_image:
-            if isinstance(provider, (MaxarProvider, MaxarProxyProvider)):
-                aoi = self.crop_aoi_with_maxar_image_footprint(aoi, selected_image)
-            elif isinstance(provider, SentinelProvider):
-                # todo: crop sentinel aoi with image footprint?
-                pass
-        elif provider.requires_image_id:
-            self.alert(self.tr("Provider {} requires selected Image ID").format(provider.name))
-        params.update(geometry=json.loads(aoi.asJson()))
-        self.post_processing(params)
-
-    def create_processing_from_local_file(self, imagery, aoi, params):
-        params['meta'].update(source='tif')
-        params['params'].update(source_type='tif')
-        params.update(geometry=json.loads(aoi.asJson()))
-        self.upload_image(layer=imagery, processing_params=params)
-
-    def check_processing_ui(self):
+    def check_processing_ui(self, allow_empty_name=False):
         processing_name = self.dlg.processingName.text()
 
-        if not processing_name:
-            self.alert(self.tr('Please, specify a name for your processing'),
-                       icon=QMessageBox.Warning)
-            return False
+        if not processing_name and not allow_empty_name:
+            raise ProcessingInputDataMissing(self.tr('Please, specify a name for your processing'))
         use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
         if not self.aoi:
             if use_image_extent_as_aoi:
-                self.alert(self.tr('GeoTIFF is corrupted or has invalid projection'),
-                           icon=QMessageBox.Warning)
+                raise BadProcessingInput(self.tr('GeoTIFF is corrupted or has invalid projection'))
             elif self.dlg.polygonCombo.currentLayer():
-                self.alert(self.tr('Processing area layer is corrupted or has invalid projection'),
-                           icon=QMessageBox.Warning)
+                raise BadProcessingInput(self.tr('Processing area layer is corrupted or has invalid projection'))
             else:
-                self.alert(self.tr('Please, select an area of interest'),
-                           icon=QMessageBox.Warning)
-            return False
+                raise BadProcessingInput(self.tr('Please, select an area of interest'))
         if not helpers.check_processing_limit(billing_type=self.billing_type,
                                               remaining_limit=self.remaining_limit,
                                               remaining_credits=self.remaining_credits,
                                               aoi_size=self.aoi_size,
                                               processing_cost=self.processing_cost):
-            self.alert(self.tr('Processing limit exceeded. '
+            raise PluginError(self.tr('Processing limit exceeded. '
                                'Visit "<a href=\"https://app.mapflow.ai/account/balance\">Mapflow</a>" '
-                               'to top up your balance'),
-                       icon=QMessageBox.Warning)
-            return False
+                               'to top up your balance'))
         if self.aoi_area_limit < self.aoi_size:
-            self.alert(self.tr(
+            raise PluginError(self.tr(
                 'Up to {} sq km can be processed at a time. '
-                'Try splitting your area(s) into several processings.').format(self.aoi_area_limit),
-                icon=QMessageBox.Warning)
-            return False
+                'Try splitting your area(s) into several processings.').format(self.aoi_area_limit))
         return True
 
     def crop_aoi_with_maxar_image_footprint(self, aoi, image_id):
@@ -1453,52 +1418,108 @@ class Mapflow(QObject):
             raise ValueError('Image and processing area do not intersect')
         return aoi
 
-    def create_processing(self) -> None:
-        """Create and start a processing on the server.
+    def get_processing_params(self,
+                              raster_option: str,
+                              raster_layer: Optional[QgsRasterLayer],
+                              s3_uri: str = "",
+                              image_id: Optional[str] = None):
+        meta = {'source-app': 'qgis',
+                'version': self.plugin_version,
+                'source': raster_option.lower()}
+        if raster_layer is not None:
+            # We cannot set URL yet if we do not know it before the image is uploaded
+            return ProcessingParams(source_type='tif', url=s3_uri), meta
+        provider = self.providers.get(raster_option)
+        if not provider:
+            raise PluginError(self.tr('Providers are not initialized'))
+        provider_params, provider_meta = provider.to_processing_params(image_id=image_id)
+        meta.update(**provider_meta)
+        return provider_params, meta
 
-        Is called by clicking the 'Create processing' button.
-        """
+    def get_aoi(self,
+                raster_option,
+                raster_layer,
+                use_image_extent_as_aoi,
+                selected_aoi,
+                selected_image: Optional[str] = None):
+        if raster_layer is not None:
+            # selected raster source is a layer
+            return layer_utils.get_raster_aoi(raster_layer,
+                                  selected_aoi=selected_aoi,
+                                  use_image_extent_as_aoi=use_image_extent_as_aoi)
+        else:
+            provider = self.providers.get(raster_option)
+            if not provider:
+                raise PluginError(self.tr('Providers are not initialized'))
+            if selected_image:
+                if isinstance(provider, (MaxarProvider, MaxarProxyProvider)):
+                    aoi = self.crop_aoi_with_maxar_image_footprint(selected_aoi, selected_image)
+                elif isinstance(provider, SentinelProvider):
+                    # todo: crop sentinel aoi with image footprint?
+                    aoi = selected_aoi
+            elif provider.requires_image_id:
+                self.alert(self.tr("Provider {} requires selected Image ID").format(provider.name))
+            else:
+                aoi = selected_aoi
+        return aoi
 
-        # get the data from UI
+    def create_processing_request(self,
+                                  alert_errors: bool = True,
+                                  allow_empty_name: bool = False) -> Optional[PostProcessingSchema]:
         processing_name = self.dlg.processingName.text()
         raster_option = self.dlg.rasterCombo.currentText()
         imagery = self.dlg.rasterCombo.currentLayer()
         use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
         image_id = self.dlg.imageId.text()
         selected_image = self.dlg.metadataTable.selectedItems()
-        if not self.check_processing_ui():
-            return
+        wd_name = self.dlg.modelCombo.currentText()
+        wd_id = self.workflow_defs.get(wd_name).id
+        try:
+            self.check_processing_ui(allow_empty_name=allow_empty_name)
+        except PluginError as e:
+            if alert_errors:
+                self.alert(str(e), icon=QMessageBox.Warning)
+            return None
         if not helpers.check_aoi(self.aoi):
-            self.alert(self.tr("Bad AOI. AOI must be inside boundaries: \n[-180, 180] by longitude, [-90, 90] by latitude"))
-            return
+            if alert_errors:
+                self.alert(self.tr("Bad AOI. AOI must be inside boundaries: \n[-180, 180] by longitude, [-90, 90] by latitude"))
+            return None
 
-        processing_params = {
-            'name': processing_name,
-            'wdName': self.dlg.modelCombo.currentText(),
-            'meta': {  # optional metadata
-                'source-app': 'qgis',
-                'version': self.plugin_version,
-                'source': raster_option.lower()
-            },
-            'params': {}
-        }
+        try:
+            provider_params, processing_meta = self.get_processing_params(raster_option=raster_option,
+                                                                          raster_layer=imagery,
+                                                                          image_id=image_id)
+        except PluginError as e:
+            if alert_errors:
+                self.alert(str(e), icon=QMessageBox.Warning)
+            return None
+        processing_params = PostProcessingSchema(
+            name=processing_name,
+            wdId=wd_id,
+            meta=processing_meta,
+            params=provider_params,
+            geometry=json.loads(self.get_aoi(raster_option=raster_option,
+                                             raster_layer=imagery,
+                                             use_image_extent_as_aoi=use_image_extent_as_aoi,
+                                             selected_image=selected_image,
+                                             selected_aoi=self.aoi).asJson())
+        )
+        return processing_params
+
+    def create_processing(self) -> None:
+        """Create and start a processing on the server.
+
+        Is called by clicking the 'Create processing' button.
+        """
+        # get the data from UI
+        processing_params = self.create_processing_request()
+        raster_option = self.dlg.rasterCombo.currentText()
+        imagery = self.dlg.rasterCombo.currentLayer()
+
         self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
         if imagery:
-            layer_extent = QgsFeature()
-            layer_extent.setGeometry(helpers.get_layer_extent(imagery))
-            if not use_image_extent_as_aoi:
-                # If we do not use the layer extent as aoi, we still create it and use it to crop the selected AOI
-                try:
-                    aoi = next(clip_aoi_to_image_extent(aoi_geometry=self.aoi, extent=layer_extent)).geometry()
-                except StopIteration:
-                    self.alert(self.tr('Image and processing area do not intersect'))
-                    return
-            else:
-                aoi = self.aoi
             try:
-                self.create_processing_from_local_file(imagery,
-                                                       aoi=aoi,
-                                                       params=processing_params)
+                self.upload_image(layer=imagery, processing_params=processing_params)
             except Exception as e:
                 self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
             return
@@ -1516,22 +1537,20 @@ class Mapflow(QObject):
                 ).show()
                 return
             try:
-                self.create_processing_from_provider(provider,
-                                                     aoi=self.aoi,
-                                                     image_id=image_id,
-                                                     params=processing_params,
-                                                     selected_image=selected_image)
+                self.post_processing(processing_params)
             except Exception as e:
                 self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
             return
 
-    def upload_tif_callback(self, response: QNetworkReply, processing_params: dict) -> None:
+    def upload_tif_callback(self,
+                            response: QNetworkReply,
+                            processing_params: PostProcessingSchema) -> None:
         """Start processing upon a successful GeoTIFF upload.
 
         :param response: The HTTP response.
         :param processing_params: A dictionary with the processing parameters.
         """
-        processing_params['params']['url'] = json.loads(response.readAll().data())['url']
+        processing_params.params.url = json.loads(response.readAll().data())['url']
         self.post_processing(processing_params)
 
     def upload_tif_error_handler(self, response: QNetworkReply) -> None:
@@ -1542,20 +1561,20 @@ class Mapflow(QObject):
                                title=self.tr("We couldn't upload your GeoTIFF"),
                                error_message_parser=data_catalog_message_parser)
 
-    def post_processing(self, request_body: dict) -> None:
+    def post_processing(self, request_body: PostProcessingSchema) -> None:
         """Submit a processing to Mapflow.
 
         :param request_body: Processing parameters.
         """
         if self.config.PROJECT_ID != 'default':
-            request_body.update(projectId=self.config.PROJECT_ID)
+            request_body.projectId=self.config.PROJECT_ID
         self.http.post(
             url=f'{self.server}/processings',
             callback=self.post_processing_callback,
-            callback_kwargs={'processing_name': request_body['name']},
+            callback_kwargs={'processing_name': request_body.name},
             error_handler=self.post_processing_error_handler,
             use_default_error_handler=False,
-            body=json.dumps(request_body).encode()
+            body=request_body.as_json().encode()
         )
 
     def post_processing_error_handler(self, response: QNetworkReply) -> None:
@@ -1733,13 +1752,13 @@ class Mapflow(QObject):
         if provider.is_proxy:
             username = self.username
             password = self.password
-            uri = generate_xyz_layer_definition(url,
+            uri = layer_utils.generate_xyz_layer_definition(url,
                                                 username, password,
                                                 max_zoom, image_id)
             extent = self.maxar_extent(image_id)
             layer_name = self.maxar_layer_name(layer_name, image_id)
         else:
-            uri = generate_xyz_layer_definition(url,
+            uri = layer_utils.generate_xyz_layer_definition(url,
                                                 username, password,
                                                 max_zoom, provider.source_type)
             extent = None
@@ -2006,7 +2025,7 @@ class Mapflow(QObject):
         :param vector: The downloaded feature layer.
         :param raster: The downloaded raster which was used for processing.
         """
-        bounding_box = get_bounding_box_from_tile_json(response=response)
+        bounding_box = layer_utils.get_bounding_box_from_tile_json(response=response)
         raster.setExtent(rect=bounding_box)
         self.add_layer(raster)
         self.add_layer(vector)

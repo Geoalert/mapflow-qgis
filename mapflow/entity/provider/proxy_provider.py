@@ -2,8 +2,9 @@ import json
 from abc import ABC
 from typing import Union
 from .provider import Provider, SourceType, staticproperty
+from ..processing_params import ProcessingParams
 from ...constants import MAXAR_BASE_URL
-from ...layer_utils import add_image_id, add_connect_id, maxar_tile_url
+from ...functional.layer_utils import add_image_id, add_connect_id, maxar_tile_url
 from ...requests.maxar_metadata_request import MAXAR_REQUEST_BODY, MAXAR_META_URL
 
 
@@ -26,11 +27,8 @@ class ProxyProvider(Provider, ABC):
         self.proxy = proxy
 
     def to_processing_params(self, image_id=None):
-        params = {
-            'url': self.url,
-            'source_type': self.source_type.value
-        }
-        return params, {}
+        return ProcessingParams(url=self.url,
+                                source_type=self.source_type.value), {}
 
     @property
     def is_proxy(self):
@@ -81,9 +79,9 @@ class MaxarProxyProvider(ProxyProvider, ABC):
     def to_processing_params(self, image_id=None):
         if self.requires_image_id and not image_id:
             raise ValueError("Cannot start processing without image ID!")
-        params = {'url': add_image_id(self.url, image_id),
-                  'source_type': self.source_type.value,
-                  'crs': self.crs.value}
+        params = ProcessingParams(url=add_image_id(self.url, image_id),
+                                  source_type=self.source_type.value,
+                                  crs=self.crs.value)
         meta = {'source': 'maxar',
                 'maxar_product': self.connect_id}
         return params, meta

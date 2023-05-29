@@ -1,6 +1,7 @@
 from .provider import staticproperty
 from .xyz_provider import XYZProvider, SourceType, CRS
 from .proxy_provider import ProxyProvider, MaxarProxyProvider
+from ..processing_params import ProcessingParams
 from ...constants import SENTINEL_OPTION_NAME
 
 
@@ -22,8 +23,7 @@ class SentinelProvider(ProxyProvider):
     def to_processing_params(self, image_id=None):
         if not image_id:
             raise ValueError("Sentinel provider must have image ID to launch the processing")
-        return{'url': image_id,
-               'source_type': self.source_type.value}, {}
+        return ProcessingParams(url=image_id, source_type=self.source_type.value), {}
 
     @property
     def meta_url(self):
