@@ -63,5 +63,7 @@ class Config:
     MAX_FILE_SIZE_PIXELS = 30_000
     MAX_FILE_SIZE_BYTES = 1024**3
 
+    MAX_AOIS_PER_LAYER = int(QgsSettings().value("variables/mapflow_max_aois", "10"))
+
 
 config = Config()

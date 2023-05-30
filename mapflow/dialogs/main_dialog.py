@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Optional
 
 from PyQt5 import uic
 from PyQt5.QtCore import Qt
@@ -9,10 +9,13 @@ from qgis.core import QgsMapLayerProxyModel
 
 from ..entity.billing import BillingType
 from ..entity.provider import Provider
+from ..functional import helpers
+from .. import config
 
 ui_path = Path(__file__).parent/'static'/'ui'
 icon_path = Path(__file__).parent/'static'/'icons'
 plugin_icon = QIcon(str(icon_path/'mapflow.png'))
+coins_icon = QIcon(str(icon_path/'coins-solid.svg'))
 
 
 class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
@@ -29,16 +32,21 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.removeProvider.setIcon(QIcon(str(icon_path/'remove_provider.svg')))
         self.editProvider.setIcon(QIcon(str(icon_path/'edit_provider.svg')))
         self.toolButton.setIcon(QIcon(str(icon_path/'add.svg')))
-        self.modelInfo.setIcon(QIcon(str(icon_path/'info.svg')))
         self.billingHistoryButton.setIcon(QIcon(str(icon_path/'bar-chart-2.svg')))
         self.logoutButton.setIcon(QIcon(str(icon_path/'log-out.svg')))
+        self.modelInfo.setIcon(QIcon(str(icon_path/'info.svg')))
         self.tabWidget.setTabIcon(1, QIcon(str(icon_path/'magnifying-glass-solid.svg')))
         self.tabWidget.setTabIcon(2, QIcon(str(icon_path/'user-gear-solid.svg')))
         self.tabWidget.setTabIcon(3, QIcon(str(icon_path/'info.svg')))
 
-        pixmap = QIcon(str(icon_path/'coins-solid.svg')).pixmap(16,16)
-        self.labelCoins_1.setPixmap(pixmap)
-        self.labelCoins_2.setPixmap(pixmap)
+        coin_pixmap = QIcon(str(icon_path/'coins-solid.svg')).pixmap(16,16)
+        self.labelCoins_1.setPixmap(coin_pixmap)
+
+        self.modelInfo.clicked.connect(lambda: helpers.open_model_info(model_name=self.modelCombo.currentText()))
+        self.topUpBalanceButton.clicked.connect(lambda: helpers.open_url(config.TOP_UP_URL))
+        self.topUpBalanceButton_2.clicked.connect(lambda: helpers.open_url(config.TOP_UP_URL))
+        self.billingHistoryButton.clicked.connect(lambda: helpers.open_url(config.BILLING_HISTORY_URL))
+
 
     # ========= SHOW =========== #
     def setup_for_billing(self, billing_type: BillingType):
@@ -47,19 +55,16 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         """
         if billing_type == billing_type.credits:
             self.balanceLabel.setVisible(True)
-            self.labelCoins_1.setVisible(True)
-            self.labelCoins_2.setToolTip(self.tr("This is a paid data provider"))
             self.labelWdPrice.setVisible(True)
+            self.labelCoins_1.setVisible(True)
         elif billing_type == billing_type.area:
             self.balanceLabel.setVisible(True)
             self.labelCoins_1.setVisible(False)
             self.labelWdPrice.setVisible(False)
-            self.labelCoins_2.setToolTip(self.tr("This is a premium data provider"))
-        else: # None billing
+        else:  # None billing
             self.balanceLabel.setVisible(False)
             self.topUpBalanceButton.setVisible(False)
             self.labelCoins_1.setVisible(False)
-            self.labelCoins_2.setVisible(False)
             self.labelWdPrice.setVisible(False)
 
     def setup_imagery_search(self,
@@ -80,9 +85,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         if more_button:
             self.layoutMetadataTable.removeWidget(more_button)
             more_button.deleteLater()
-
-        provider_is_payed = False if not provider else provider.is_payed
-        self.labelCoins_2.setVisible(provider_is_payed)
 
         try:
             enabled = provider.meta_url is not None
@@ -133,3 +135,11 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
         self.modelCombo.setToolTip(tooltip)
 
+    def set_processing_rating_labels(self,
+                                     processing_name: Optional[str] = None,
+                                     current_rating: Optional[int] = None,
+                                     current_feedback: Optional[str] = None) -> None:
+
+        self.rateProcessingLabel.setText(self.tr('Rate processing <b>{name}</b>:').format(name=processing_name or ""))
+        self.ratingComboBox.setCurrentIndex(current_rating or 0)
+        self.processingRatingFeedbackText.setText(current_feedback or "")

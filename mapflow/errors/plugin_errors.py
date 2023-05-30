@@ -11,3 +11,13 @@ class BadProcessingInput(PluginError):
 class ProcessingInputDataMissing(PluginError):
     """Raised when some of necessary data fields for processing are not filled."""
     pass
+
+
+class ProcessingLimitExceeded(PluginError):
+    """Raised when the user has exceeded the processing limit."""
+    pass
+
+
+class ImageIdRequired(PluginError):
+    """Raised when the user has exceeded the processing limit."""
+    pass

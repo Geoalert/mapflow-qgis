@@ -6,6 +6,7 @@ from ..processing_params import ProcessingParams
 from ...constants import MAXAR_BASE_URL
 from ...functional.layer_utils import add_image_id, add_connect_id, maxar_tile_url
 from ...requests.maxar_metadata_request import MAXAR_REQUEST_BODY, MAXAR_META_URL
+from ...errors.plugin_errors import PluginError, ImageIdRequired
 
 
 class ProxyProvider(Provider, ABC):
@@ -61,7 +62,7 @@ class MaxarProxyProvider(ProxyProvider, ABC):
 
     def preview_url(self, image_id=None):
         if self.requires_image_id and not image_id:
-            raise ValueError("Preview unavailable without image ID!")
+            raise ImageIdRequired("Preview for {name} is unavailable without image ID!".format(name=self.name))
         url = add_connect_id(f'{self.proxy}/png?TileRow={{y}}&TileCol={{x}}&TileMatrix={{z}}', self.connect_id)
         return add_image_id(url, image_id)
 
@@ -78,7 +79,7 @@ class MaxarProxyProvider(ProxyProvider, ABC):
 
     def to_processing_params(self, image_id=None):
         if self.requires_image_id and not image_id:
-            raise ValueError("Cannot start processing without image ID!")
+            raise PluginError("Cannot start processing without image ID!")
         params = ProcessingParams(url=add_image_id(self.url, image_id),
                                   source_type=self.source_type.value,
                                   crs=self.crs.value)
