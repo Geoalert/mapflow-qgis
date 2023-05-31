@@ -3,7 +3,7 @@ from pathlib import Path
 import os.path
 import tempfile
 from base64 import b64encode, b64decode
-from typing import List, Optional, Union, Callable
+from typing import List, Optional, Union, Callable, Tuple
 from datetime import datetime  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
@@ -28,11 +28,12 @@ from qgis.core import (
 
 from .functional import layer_utils, helpers
 from .dialogs import MainDialog, LoginDialog, ErrorMessageWidget, ProviderDialog
-from .dialogs.main_dialog import coins_icon, plugin_icon
+from .dialogs.icons import plugin_icon
 from .http import (Http,
                    get_error_report_body,
                    data_catalog_message_parser,
-                   securewatch_message_parser)
+                   securewatch_message_parser,
+                   api_message_parser)
 from .config import Config
 from .entity.processing import parse_processings_request, Processing, ProcessingHistory, updated_processings
 from .entity.provider import (Provider,
@@ -57,7 +58,11 @@ class Mapflow(QObject):
 
         :param iface: an instance of the QGIS interface.
         """
+        # init configs
+        self.maxar_metadata_footprints = dict()
+        self.config = Config()
         # init empty params
+        self.max_aois_per_processing = self.config.MAX_AOIS_PER_PROCESSING
         self.aoi_size = None
         self.aoi = None
         self.is_premium_user = False
@@ -68,8 +73,6 @@ class Mapflow(QObject):
         self.remaining_credits = 0
         self.billing_type = BillingType.area
         self.processing_cost = 0
-        # init configs
-        self.config = Config()
         # Save refs to key variables used throughout the plugin
         self.iface = iface
         self.main_window = self.iface.mainWindow()
@@ -153,7 +156,6 @@ class Mapflow(QObject):
         self.dlg.processingsTable.setColumnHidden(self.config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
         self.filter_bad_rasters()
-        self.filter_bad_vectors()
         self.dlg.modelCombo.activated.connect(self.on_model_change)
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
@@ -172,7 +174,6 @@ class Mapflow(QObject):
         ])
         self.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
         self.project.layersAdded.connect(self.filter_bad_rasters)
-        self.project.layersAdded.connect(self.filter_bad_vectors)
         # Processings
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
@@ -284,16 +285,6 @@ class Mapflow(QObject):
                 self.dlg.polygonCombo.setLayer(aoi_layer)
             else:
                 self.alert(self.tr(f'Your file is not valid vector data source!'))
-
-    def filter_bad_vectors(self, layers: Optional[List[QgsMapLayer]] = None):
-        """ Select from all vector layers in the project only correct ones: which contain acceptable features
-        (in the sense of self.get_aoi)
-        and the feature count is less than the limit for the user (config.MAX_AOIS_PER_LAYER)"""
-        layers = [layer for layer in self.project.mapLayers().values() if layer.type() == QgsMapLayerType.VectorLayer]
-        filtered_vector_layers = [layer for layer in layers
-                                  if not layer_utils.is_polygon_layer(layer)
-                                  and not 0 < layer.featureCount() <= self.config.MAX_AOIS_PER_LAYER]
-        self.dlg.polygonCombo.setExceptedLayerList(filtered_vector_layers)
 
     def filter_bad_rasters(self, changed_layers: Optional[List[QgsRasterLayer]] = None) -> None:
         """Leave only GeoTIFF layers in the Imagery Source combo box."""
@@ -1190,16 +1181,24 @@ class Mapflow(QObject):
         """
         if self.dlg.useImageExtentAsAoi.isChecked():  # GeoTIFF extent used; no difference
             return
-        if layer and layer.featureCount() > 0:
+        if layer and self.max_aois_per_processing >= layer.featureCount() > 0:
             features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
             if len(features) == 1:
                 aoi = features[0].geometry()
             else:
                 aoi = QgsGeometry.collectGeometry([feature.geometry() for feature in features])
             self.calculate_aoi_area(aoi, layer.crs())
+        elif layer and self.max_aois_per_processing < layer.featureCount():
+            self.dlg.labelAoiArea.clear()
+            self.dlg.startProcessing.setText(self.tr('Start processing'))
+            self.dlg.startProcessing.setToolTip(self.tr('AOI must contain not more than'
+                                                        ' {} polygons').format(self.max_aois_per_processing))
+            self.dlg.startProcessing.setDisabled(True)
+            self.aoi = self.aoi_size = None
         else:  # empty layer or combo's itself is empty
             self.dlg.labelAoiArea.clear()
             self.dlg.startProcessing.setText(self.tr('Start processing'))
+            self.dlg.startProcessing.setToolTip(self.tr('Specify AOI area to start processing'))
             self.dlg.startProcessing.setDisabled(True)
             self.aoi = self.aoi_size = None
 
@@ -1265,10 +1264,11 @@ class Mapflow(QObject):
             self.dlg.startProcessing.setText(self.tr('Start processing'))
             self.dlg.startProcessing.setEnabled(True)
         else:  # self.billing_type == BillingType.credits: f
-            request_body = self.create_processing_request(alert_errors=False,
-                                                          allow_empty_name=True)
+            request_body, error = self.create_processing_request(allow_empty_name=True)
             if not request_body:
                 self.dlg.startProcessing.setText(self.tr('Start processing'))
+                self.dlg.startProcessing.setToolTip(self.tr("Processing cost is not available: \n "
+                                                            "{error}").format(error=error))
             else:
                 self.http.post(
                     url=f"{self.server}/processing/cost",
@@ -1286,12 +1286,17 @@ class Mapflow(QObject):
         If the user tries to start the processing, he will see the errors
         """
         self.dlg.startProcessing.setText(self.tr(f'Start processing'))
+        response_text = response.readAll().data().decode()
+        message = api_message_parser(response_text)
+        self.dlg.startProcessing.setToolTip(self.tr(f'Processing cost is not available \n {message}').format(message))
         self.dlg.startProcessing.setEnabled(True)
 
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         response_data = response.readAll().data().decode()
         self.processing_cost = int(response_data)
         self.dlg.startProcessing.setText(self.tr(f'Start processing for {response_data} credits'))
+        self.dlg.startProcessing.setToolTip("")
+
         self.dlg.startProcessing.setEnabled(True)
 
     def delete_processings(self) -> None:
@@ -1411,7 +1416,9 @@ class Mapflow(QObject):
                 'Try splitting your area(s) into several processings.').format(self.aoi_area_limit))
         return True
 
-    def crop_aoi_with_maxar_image_footprint(self, aoi, image_id):
+    def crop_aoi_with_maxar_image_footprint(self,
+                                            aoi: QgsFeature,
+                                            image_id: str):
         extent = self.maxar_metadata_footprints[image_id[self.config.MAXAR_ID_COLUMN_INDEX].text()]
         try:
             aoi = next(clip_aoi_to_image_extent(aoi, extent)).geometry()
@@ -1438,17 +1445,18 @@ class Mapflow(QObject):
         return provider_params, meta
 
     def get_aoi(self,
-                raster_option,
-                raster_layer,
-                use_image_extent_as_aoi,
-                selected_aoi,
+                raster_option: Optional[str],
+                raster_layer: Optional[QgsRasterLayer],
+                use_image_extent_as_aoi: bool,
+                selected_aoi: QgsFeature,
                 selected_image: Optional[str] = None):
         if not helpers.check_aoi(selected_aoi):
             raise BadProcessingInput(self.tr('Bad AOI. AOI must be inside boundaries:'
                                              ' \n[-180, 180] by longitude, [-90, 90] by latitude'))
+
         if raster_layer is not None:
             # selected raster source is a layer
-            return layer_utils.get_raster_aoi(raster_layer,
+            return layer_utils.get_raster_aoi(raster_layer=raster_layer,
                                               selected_aoi=selected_aoi,
                                               use_image_extent_as_aoi=use_image_extent_as_aoi)
         else:
@@ -1462,14 +1470,13 @@ class Mapflow(QObject):
                     # todo: crop sentinel aoi with image footprint?
                     aoi = selected_aoi
             elif provider.requires_image_id:
-                raise PluginError(self.tr("Provider {} requires selected Image ID").format(provider.name))
+                raise PluginError(self.tr("Please select image in Search table for {}").format(provider.name))
             else:
                 aoi = selected_aoi
         return aoi
 
     def create_processing_request(self,
-                                  alert_errors: bool = True,
-                                  allow_empty_name: bool = False) -> Optional[PostProcessingSchema]:
+                                  allow_empty_name: bool = False) -> Tuple[Optional[PostProcessingSchema], str]:
         processing_name = self.dlg.processingName.text()
         raster_option = self.dlg.rasterCombo.currentText()
         imagery = self.dlg.rasterCombo.currentLayer()
@@ -1489,16 +1496,14 @@ class Mapflow(QObject):
                                selected_image=selected_image,
                                selected_aoi=self.aoi)
         except PluginError as e:
-            if alert_errors:
-                self.alert(str(e), icon=QMessageBox.Warning)
-            return None
+            return None, str(e)
         processing_params = PostProcessingSchema(
             name=processing_name,
             wdId=wd_id,
             meta=processing_meta,
             params=provider_params,
             geometry=json.loads(aoi.asJson()))
-        return processing_params
+        return processing_params, ""
 
     def create_processing(self) -> None:
         """Create and start a processing on the server.
@@ -1506,9 +1511,11 @@ class Mapflow(QObject):
         Is called by clicking the 'Create processing' button.
         """
         # get the data from UI
-        processing_params = self.create_processing_request()
+        processing_params, error = self.create_processing_request()
         if not processing_params:
+            self.alert(error, icon=QMessageBox.Warning)
             return
+
         if not helpers.check_processing_limit(billing_type=self.billing_type,
                                               remaining_limit=self.remaining_limit,
                                               remaining_credits=self.remaining_credits,
@@ -1590,7 +1597,8 @@ class Mapflow(QObject):
         :param response: The HTTP response.
         """
         self.report_http_error(response,
-                               self.tr('Processing creation failed'))
+                               self.tr('Processing creation failed'),
+                               error_message_parser=api_message_parser)
 
     def post_processing_callback(self, _: QNetworkReply, processing_name: str) -> None:
         """Display a success message and clear the processing name field."""
@@ -1627,6 +1635,8 @@ class Mapflow(QObject):
         # get limits
         self.remaining_limit = int(response_data.get('remainingArea', 0)) / 1e6  # convert into sq.km
         self.remaining_credits = int(response_data.get('remainingCredits', 0))
+        self.max_aois_per_processing = int(response_data.get("maxAoisPerProcessing",
+                                                             self.config.MAX_AOIS_PER_PROCESSING))
         if self.billing_type == BillingType.credits:
             balance_str = self.tr("Your balance: {} credits").format(self.remaining_credits)
         elif self.billing_type == BillingType.area:  # area
@@ -1826,8 +1836,9 @@ class Mapflow(QObject):
         if processing.status != 'OK':
             self.alert(self.tr('Only finished processings can be rated'))
             return
-        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
-        rating = self.dlg.ratingComboBox.currentIndex()
+        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text
+        # Rating is descending: None-5-4-3-2-1
+        rating = 6 - self.dlg.ratingComboBox.currentIndex()
         if not 0 < rating <= 5:
             return
         feedback_text = self.dlg.processingRatingFeedbackText.toPlainText()
@@ -2005,7 +2016,9 @@ class Mapflow(QObject):
         :param response: The HTTP response.
         """
         self.dlg.processingsTable.setEnabled(True)
-        self.report_http_error(response, self.tr('Error downloading results'))
+        self.report_http_error(response,
+                               self.tr('Error downloading results'),
+                               error_message_parser=api_message_parser())
 
     def set_raster_extent(
             self,
@@ -2181,7 +2194,6 @@ class Mapflow(QObject):
         self.toolbar.addAction(plugin_button)
         self.project.readProject.connect(self.set_layer_group)
         self.project.readProject.connect(self.filter_bad_rasters)
-        self.project.readProject.connect(self.filter_bad_vectors)
         # list(filter(bool, [self.dlg.rasterCombo.layer(index) for index in range(self.dlg.rasterCombo.count())]))
         self.dlg.processingsTable.sortByColumn(self.config.PROCESSING_TABLE_SORT_COLUMN_INDEX, Qt.DescendingOrder)
 
@@ -2256,6 +2268,7 @@ class Mapflow(QObject):
         """
         error = response.error()
         service = 'Mapflow' if 'mapflow' in response.request().url().authority() else 'SecureWatch'
+        parser = api_message_parser if 'mapflow' in response.request().url().authority() else securewatch_message_parser
         if error == QNetworkReply.AuthenticationRequiredError:  # invalid/empty credentials
             # Prevent deadlocks
             if self.logged_in:  # token re-issued during a plugin session
@@ -2303,10 +2316,12 @@ class Mapflow(QObject):
             self.report_http_error(response, self.tr('Proxy error. Please, check your proxy settings.'))
             return True
         elif error == QNetworkReply.ContentAccessDenied:
-            self.report_http_error(response, self.tr("This operation is forbidden for your account, contact us"))
+            self.report_http_error(response,
+                                   self.tr("This operation is forbidden for your account, contact us"),
+                                   error_message_parser=parser)
             return True
         else:
-            self.report_http_error(response, self.tr("Error"))
+            self.report_http_error(response, self.tr("Error"), error_message_parser=parser)
         return False
 
     def report_http_error(self,

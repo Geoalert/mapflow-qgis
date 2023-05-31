@@ -101,14 +101,15 @@ def get_bounding_box_from_tile_json(response: QNetworkReply) -> QgsRectangle:
 
 
 def get_raster_aoi(raster_layer: QgsRasterLayer,
-                   selected_aoi,
+                   selected_aoi: QgsFeature,
                    use_image_extent_as_aoi: bool):
     layer_extent = QgsFeature()
     layer_extent.setGeometry(get_layer_extent(raster_layer))
     if not use_image_extent_as_aoi:
         # If we do not use the layer extent as aoi, we still create it and use it to crop the selected AOI
         try:
-            aoi = next(clip_aoi_to_image_extent(aoi_geometry=selected_aoi, extent=layer_extent)).geometry()
+            aoi = next(clip_aoi_to_image_extent(aoi_geometry=selected_aoi,
+                                                extent=layer_extent)).geometry()
         except StopIteration:
             return None
     else:

@@ -3,19 +3,16 @@ from typing import Iterable, Optional
 
 from PyQt5 import uic
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtWidgets import QWidget, QPushButton
 from qgis.core import QgsMapLayerProxyModel
 
 from ..entity.billing import BillingType
 from ..entity.provider import Provider
 from ..functional import helpers
-from .. import config
+from ..config import config
+from . import icons
 
 ui_path = Path(__file__).parent/'static'/'ui'
-icon_path = Path(__file__).parent/'static'/'icons'
-plugin_icon = QIcon(str(icon_path/'mapflow.png'))
-coins_icon = QIcon(str(icon_path/'coins-solid.svg'))
 
 
 class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
@@ -27,26 +24,25 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.polygonCombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
         self.rasterCombo.setFilters(QgsMapLayerProxyModel.RasterLayer)
         # Set icons (can be done in .ui but brings about the resources_rc import bug)
-        self.setWindowIcon(plugin_icon)
-        self.addProvider.setIcon(QIcon(str(icon_path/'add.svg')))
-        self.removeProvider.setIcon(QIcon(str(icon_path/'remove_provider.svg')))
-        self.editProvider.setIcon(QIcon(str(icon_path/'edit_provider.svg')))
-        self.toolButton.setIcon(QIcon(str(icon_path/'add.svg')))
-        self.billingHistoryButton.setIcon(QIcon(str(icon_path/'bar-chart-2.svg')))
-        self.logoutButton.setIcon(QIcon(str(icon_path/'log-out.svg')))
-        self.modelInfo.setIcon(QIcon(str(icon_path/'info.svg')))
-        self.tabWidget.setTabIcon(1, QIcon(str(icon_path/'magnifying-glass-solid.svg')))
-        self.tabWidget.setTabIcon(2, QIcon(str(icon_path/'user-gear-solid.svg')))
-        self.tabWidget.setTabIcon(3, QIcon(str(icon_path/'info.svg')))
+        self.setWindowIcon(icons.plugin_icon)
+        self.addProvider.setIcon(icons.plus_icon)
+        self.removeProvider.setIcon(icons.minus_icon)
+        self.editProvider.setIcon(icons.edit_icon)
+        self.toolButton.setIcon(icons.plus_icon)
+        self.billingHistoryButton.setIcon(icons.chart_icon)
+        self.logoutButton.setIcon(icons.logout_icon)
+        self.modelInfo.setIcon(icons.info_icon)
+        self.tabWidget.setTabIcon(1, icons.lens_icon)
+        self.tabWidget.setTabIcon(2, icons.user_gear_icon)
+        self.tabWidget.setTabIcon(3, icons.info_icon)
 
-        coin_pixmap = QIcon(str(icon_path/'coins-solid.svg')).pixmap(16,16)
+        coin_pixmap = icons.coins_icon.pixmap(16, 16)
         self.labelCoins_1.setPixmap(coin_pixmap)
 
         self.modelInfo.clicked.connect(lambda: helpers.open_model_info(model_name=self.modelCombo.currentText()))
         self.topUpBalanceButton.clicked.connect(lambda: helpers.open_url(config.TOP_UP_URL))
         self.topUpBalanceButton_2.clicked.connect(lambda: helpers.open_url(config.TOP_UP_URL))
         self.billingHistoryButton.clicked.connect(lambda: helpers.open_url(config.BILLING_HISTORY_URL))
-
 
     # ========= SHOW =========== #
     def setup_for_billing(self, billing_type: BillingType):
