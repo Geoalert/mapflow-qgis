@@ -77,6 +77,8 @@ class Mapflow(QObject):
         self.iface = iface
         self.main_window = self.iface.mainWindow()
         self.dlg_login = LoginDialog(self.main_window)
+        self.workflow_defs = {}
+
         super().__init__(self.main_window)
         self.project = QgsProject.instance()
         self.message_bar = self.iface.messageBar()
@@ -239,8 +241,6 @@ class Mapflow(QObject):
         self.add_aoi_from_file_action = QAction(self.tr("Add AOI from vector file"))
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
-        # misc
-        self.workflow_defs = {}
 
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.create_aoi_from_map_action)

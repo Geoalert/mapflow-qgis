@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1504</width>
-    <height>693</height>
+    <width>1068</width>
+    <height>500</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -492,8 +492,17 @@
        </item>
        <item>
         <widget class="QLabel" name="processingProblemsLabel">
+         <property name="maximumSize">
+          <size>
+           <width>500</width>
+           <height>16777215</height>
+          </size>
+         </property>
          <property name="text">
           <string/>
+         </property>
+         <property name="wordWrap">
+          <bool>true</bool>
          </property>
         </widget>
        </item>
@@ -562,7 +571,7 @@
          <property name="minimumSize">
           <size>
            <width>200</width>
-           <height>100</height>
+           <height>50</height>
           </size>
          </property>
          <property name="maximumSize">
