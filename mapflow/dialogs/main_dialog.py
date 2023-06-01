@@ -3,6 +3,7 @@ from typing import Iterable, Optional
 
 from PyQt5 import uic
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QPalette
 from PyQt5.QtWidgets import QWidget, QPushButton
 from qgis.core import QgsMapLayerProxyModel
 
@@ -43,6 +44,10 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.topUpBalanceButton.clicked.connect(lambda: helpers.open_url(config.TOP_UP_URL))
         self.topUpBalanceButton_2.clicked.connect(lambda: helpers.open_url(config.TOP_UP_URL))
         self.billingHistoryButton.clicked.connect(lambda: helpers.open_url(config.BILLING_HISTORY_URL))
+
+        palette = QPalette()
+        palette.setColor(QPalette.WindowText, Qt.red);
+        self.processingProblemsLabel.setPalette(palette)
 
     # ========= SHOW =========== #
     def setup_for_billing(self, billing_type: BillingType):
