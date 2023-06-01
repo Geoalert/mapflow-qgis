@@ -181,7 +181,7 @@ class Mapflow(QObject):
         self.dlg.processingsTable.cellClicked.connect(self.update_processing_current_rating)
         self.dlg.processingsTable.cellClicked.connect(self.enable_rating_submit_button)
         self.dlg.ratingSubmitButton.clicked.connect(self.submit_processing_rating)
-        self.dlg.ratingSubmitButton.setEnabled(False)  # by default disabled
+        self.dlg.enable_rating(False)  # by default disabled
         # connect radio buttons signals
         self.dlg.ratingComboBox.activated.connect(self.enable_rating_submit_button)
         # Providers
@@ -1190,15 +1190,13 @@ class Mapflow(QObject):
             self.calculate_aoi_area(aoi, layer.crs())
         elif layer and self.max_aois_per_processing < layer.featureCount():
             self.dlg.labelAoiArea.clear()
-            self.dlg.startProcessing.setText(self.tr('Start processing'))
-            self.dlg.startProcessing.setToolTip(self.tr('AOI must contain not more than'
+            self.dlg.processingProblemsLabel.setText(self.tr('AOI must contain not more than'
                                                         ' {} polygons').format(self.max_aois_per_processing))
             self.dlg.startProcessing.setDisabled(True)
             self.aoi = self.aoi_size = None
         else:  # empty layer or combo's itself is empty
             self.dlg.labelAoiArea.clear()
-            self.dlg.startProcessing.setText(self.tr('Start processing'))
-            self.dlg.startProcessing.setToolTip(self.tr('Specify AOI area to start processing'))
+            self.dlg.processingProblemsLabel.setText(self.tr('Set AOI to start processing'))
             self.dlg.startProcessing.setDisabled(True)
             self.aoi = self.aoi_size = None
 
@@ -1257,18 +1255,23 @@ class Mapflow(QObject):
         self.update_processing_cost()
 
     def update_processing_cost(self):
-        if not self.aoi or not self.workflow_defs:
-            self.dlg.startProcessing.setText(self.tr('Start processing'))
+        if not self.aoi:
+            # Here the button must already be disabled, and the warning text set
+            if self.dlg.startProcessing.isEnabled():
+                self.dlg.startProcessing.setDisabled(True)
+                self.dlg.processingProblemsLabel.setText(self.tr("Set AOI to start processing"))
+        elif not self.workflow_defs:
             self.dlg.startProcessing.setDisabled(True)
+            self.dlg.processingProblemsLabel.setText("Error! Models are not initialized")
         elif self.billing_type != BillingType.credits:
-            self.dlg.startProcessing.setText(self.tr('Start processing'))
             self.dlg.startProcessing.setEnabled(True)
+            self.dlg.processingProblemsLabel.clear()
         else:  # self.billing_type == BillingType.credits: f
             request_body, error = self.create_processing_request(allow_empty_name=True)
             if not request_body:
-                self.dlg.startProcessing.setText(self.tr('Start processing'))
-                self.dlg.startProcessing.setToolTip(self.tr("Processing cost is not available: \n "
+                self.dlg.processingProblemsLabel.setText(self.tr("Processing cost is not available: \n "
                                                             "{error}").format(error=error))
+
             else:
                 self.http.post(
                     url=f"{self.server}/processing/cost",
@@ -1285,18 +1288,15 @@ class Mapflow(QObject):
 
         If the user tries to start the processing, he will see the errors
         """
-        self.dlg.startProcessing.setText(self.tr(f'Start processing'))
         response_text = response.readAll().data().decode()
         message = api_message_parser(response_text)
-        self.dlg.startProcessing.setToolTip(self.tr(f'Processing cost is not available \n {message}').format(message))
+        self.dlg.processingProblemsLabel.setText(self.tr(f'Processing cost is not available \n {message}').format(message))
         self.dlg.startProcessing.setEnabled(True)
 
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         response_data = response.readAll().data().decode()
         self.processing_cost = int(response_data)
-        self.dlg.startProcessing.setText(self.tr(f'Start processing for {response_data} credits'))
-        self.dlg.startProcessing.setToolTip("")
-
+        self.dlg.processingProblemsLabel.setText(self.tr("Processsing cost: {cost} credits").format(cost=response_data))
         self.dlg.startProcessing.setEnabled(True)
 
     def delete_processings(self) -> None:
@@ -1825,7 +1825,9 @@ class Mapflow(QObject):
             return
         rating = int(rating_json.get('rating'))
         feedback = rating_json.get('feedback')
-        self.dlg.set_processing_rating_labels(processing_name=p_name, current_rating=rating, current_feedback=feedback)
+        self.dlg.set_processing_rating_labels(processing_name=p_name,
+                                              current_rating=rating,
+                                              current_feedback=feedback)
 
     def submit_processing_rating(self) -> None:
         row = self.dlg.processingsTable.currentRow()
@@ -1836,7 +1838,7 @@ class Mapflow(QObject):
         if processing.status != 'OK':
             self.alert(self.tr('Only finished processings can be rated'))
             return
-        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text
+        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
         # Rating is descending: None-5-4-3-2-1
         rating = 6 - self.dlg.ratingComboBox.currentIndex()
         if not 0 < rating <= 5:
@@ -1879,14 +1881,7 @@ class Mapflow(QObject):
         processing = next(filter(lambda p: p.id_ == pid, self.processings))
         status_ok = (processing.status == 'OK')
         rating_selected = 5 >= self.dlg.ratingComboBox.currentIndex() > 0
-        self.dlg.ratingSubmitButton.setEnabled(status_ok and rating_selected)
-        if status_ok and rating_selected:
-            self.dlg.ratingSubmitButton.setToolTip("")
-        elif not status_ok:
-            self.dlg.ratingSubmitButton.setToolTip(self.tr("Only correctly finished processings "
-                                                           "(status OK) can be rated"))
-        else:
-            self.dlg.ratingSubmitButton.setToolTip(self.tr("Please select processing and rating to submit"))
+        self.dlg.enable_rating(status_ok, rating_selected)
 
     def download_results(self) -> None:
         """Download and display processing results along with the source raster, if available.

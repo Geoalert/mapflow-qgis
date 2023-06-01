@@ -49,19 +49,14 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         """
         set the UI elements according to user's billing type
         """
-        if billing_type == billing_type.credits:
-            self.balanceLabel.setVisible(True)
-            self.labelWdPrice.setVisible(True)
-            self.labelCoins_1.setVisible(True)
-        elif billing_type == billing_type.area:
-            self.balanceLabel.setVisible(True)
-            self.labelCoins_1.setVisible(False)
-            self.labelWdPrice.setVisible(False)
-        else:  # None billing
-            self.balanceLabel.setVisible(False)
-            self.topUpBalanceButton.setVisible(False)
-            self.labelCoins_1.setVisible(False)
-            self.labelWdPrice.setVisible(False)
+        credits_used = billing_type == billing_type.credits
+        balance_visible = billing_type != billing_type.none
+
+        self.topUpBalanceButton.setVisible(credits_used)
+        self.topUpBalanceButton_2.setVisible(credits_used)
+        self.labelCoins_1.setVisible(credits_used)
+        self.labelWdPrice.setVisible(credits_used)
+        self.balanceLabel.setVisible(balance_visible)
 
     def setup_imagery_search(self,
                              provider_name: str,
@@ -137,5 +132,29 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                                      current_feedback: Optional[str] = None) -> None:
 
         self.rateProcessingLabel.setText(self.tr('Rate processing <b>{name}</b>:').format(name=processing_name or ""))
-        self.ratingComboBox.setCurrentIndex(current_rating or 0)
+        if not current_rating:
+            position = 0
+        else:
+            # rating is reversed in the combobox; 1st line is placeholder
+            position = 6 - current_rating
+        self.ratingComboBox.setCurrentIndex(position)
         self.processingRatingFeedbackText.setText(current_feedback or "")
+
+    def enable_rating(self,
+                      can_interact=True,
+                      can_send=True):
+        """
+        Toggle the whole group of controls about user's feedback
+        """
+        self.ratingComboBox.setEnabled(can_interact)
+        self.rateProcessingLabel.setEnabled(can_interact)
+        self.processingRatingFeedbackText.setEnabled(can_interact)
+        self.ratingSubmitButton.setEnabled(can_interact and can_send)
+
+        if can_interact and can_send:
+            self.ratingSubmitButton.setToolTip("")
+        elif not can_interact:
+            self.ratingSubmitButton.setToolTip(self.tr("Only correctly finished processings "
+                                                           "(status OK) can be rated"))
+        else:
+            self.ratingSubmitButton.setToolTip(self.tr("Please select processing and rating to submit"))
