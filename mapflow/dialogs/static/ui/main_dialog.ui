@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1068</width>
+    <width>1076</width>
     <height>500</height>
    </rect>
   </property>
@@ -1124,15 +1124,15 @@
          <item>
           <layout class="QHBoxLayout" name="horizontalLayout_7" stretch="0,0,0,0,0">
            <item>
-            <widget class="QLabel" name="label">
+            <widget class="QLabel" name="balanceLabel_2">
              <property name="minimumSize">
               <size>
-               <width>250</width>
+               <width>150</width>
                <height>0</height>
               </size>
              </property>
              <property name="text">
-              <string>Your balance: </string>
+              <string>Your balance:</string>
              </property>
             </widget>
            </item>

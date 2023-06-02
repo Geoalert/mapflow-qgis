@@ -79,7 +79,7 @@ class MaxarProxyProvider(ProxyProvider, ABC):
 
     def to_processing_params(self, image_id=None):
         if self.requires_image_id and not image_id:
-            raise PluginError("Cannot start processing without image ID!")
+            raise ImageIdRequired("Cannot start processing without image ID!")
         params = ProcessingParams(url=add_image_id(self.url, image_id),
                                   source_type=self.source_type.value,
                                   crs=self.crs.value)

@@ -1269,8 +1269,8 @@ class Mapflow(QObject):
         else:  # self.billing_type == BillingType.credits: f
             request_body, error = self.create_processing_request(allow_empty_name=True)
             if not request_body:
-                self.dlg.processingProblemsLabel.setText(self.tr("Processing cost is not available: \n "
-                                                            "{error}").format(error=error))
+                self.dlg.processingProblemsLabel.setText(self.tr("Processing cost is not available:\n"
+                                                                 "{error}").format(error=error))
 
             else:
                 self.http.post(
@@ -1290,7 +1290,8 @@ class Mapflow(QObject):
         """
         response_text = response.readAll().data().decode()
         message = api_message_parser(response_text)
-        self.dlg.processingProblemsLabel.setText(self.tr(f'Processing cost is not available \n {message}').format(message))
+        self.dlg.processingProblemsLabel.setText(self.tr('Processing cost is not available:\n'
+                                                         '{message}').format(message=message))
         self.dlg.startProcessing.setEnabled(True)
 
     def calculate_processing_cost_callback(self, response: QNetworkReply):
@@ -1495,6 +1496,8 @@ class Mapflow(QObject):
                                use_image_extent_as_aoi=use_image_extent_as_aoi,
                                selected_image=selected_image,
                                selected_aoi=self.aoi)
+        except ImageIdRequired:
+            return None, self.tr("This provider requires image ID!")
         except PluginError as e:
             return None, str(e)
         processing_params = PostProcessingSchema(
@@ -1640,11 +1643,12 @@ class Mapflow(QObject):
         if self.billing_type == BillingType.credits:
             balance_str = self.tr("Your balance: {} credits").format(self.remaining_credits)
         elif self.billing_type == BillingType.area:  # area
-            balance_str = 'Remaining limit: {:.2f} sq.km'.format(self.remaining_limit)
+            balance_str = self.tr('Remaining limit: {:.2f} sq.km').format(self.remaining_limit)
         else:  # BillingType.none
             balance_str = ''
 
         self.dlg.balanceLabel.setText(balance_str)
+        self.dlg.balanceLabel_2.setText(balance_str)
 
         if app_startup_request:
             self.update_processing_cost()
