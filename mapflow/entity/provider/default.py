@@ -37,7 +37,7 @@ class MaxarVividProxyProvider(MaxarProxyProvider):
 
     @property
     def requires_image_id(self):
-        return False
+        return True
 
     @property
     def connect_id(self):
