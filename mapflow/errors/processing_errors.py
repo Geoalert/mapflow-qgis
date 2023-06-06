@@ -5,6 +5,8 @@ class ProcessingErrors(ErrorMessageList):
     def __init__(self):
         super().__init__()
         self.error_descriptions = {
+            "vector-processor.EmptyFolder": self.tr("Folder `{s3_link}` selected for processing "
+                                                    "does not contain any images. "),
             "source-validator.TaskMustContainAoi": self.tr("Task for source-validation must contain area of interest "
                                                            "(`geometry` section)"),
             "source-validator.ImageReadError": self.tr("We could not open and read the image you have uploaded"),

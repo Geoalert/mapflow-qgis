@@ -1,5 +1,4 @@
 from .error_message_list import ErrorMessageList
-from ..config import Config
 
 
 class DataErrors(ErrorMessageList):

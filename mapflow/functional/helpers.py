@@ -1,13 +1,15 @@
-import json
 import re
 from pathlib import Path
 
 from qgis.core import (
     QgsMapLayer, QgsGeometry, QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
-    QgsMapLayerType, QgsWkbTypes, QgsRasterLayer, QgsRectangle
+    QgsRasterLayer
 )
-from typing import Tuple, Union
-from .config import config
+from PyQt5.QtCore import QUrl
+from PyQt5.QtGui import QDesktopServices
+from typing import Tuple, Union, Optional
+from ..config import config
+from ..entity.billing import BillingType
 
 PROJECT = QgsProject.instance()
 WGS84 = QgsCoordinateReferenceSystem('EPSG:4326')
@@ -22,13 +24,6 @@ MAXAR_PROVIDER_REGEX = re.compile(URL_PATTERN)  # todo: make actual regex
 SENTINEL_DATETIME_REGEX = re.compile(r'\d{8}T\d{6}', re.I)
 SENTINEL_COORDINATE_REGEX = re.compile(r'T\d{2}[A-Z]{3}', re.I)
 SENTINEL_PRODUCT_NAME_REGEX = re.compile(r'\/(?:20[0-2][0-9])\/(?:1[0-2]|0?[1-9])\/(?:0?[1-9]|[1-2]\d|3[0-1])\/(\d{1,2})\/$')
-
-
-def is_polygon_layer(layer: QgsMapLayer) -> bool:
-    """Determine if a layer is of vector type and has polygonal geometry.
-    :param layer: A layer to test
-    """
-    return layer.type() == QgsMapLayerType.VectorLayer and layer.geometryType() == QgsWkbTypes.PolygonGeometry
 
 
 def to_wgs84(geometry: QgsGeometry, source_crs: QgsCoordinateReferenceSystem) -> QgsGeometry:
@@ -51,21 +46,6 @@ def from_wgs84(geometry: QgsGeometry, target_crs: QgsCoordinateReferenceSystem) 
     projected_geometry = QgsGeometry(geometry)  # clone
     projected_geometry.transform(QgsCoordinateTransform(WGS84, target_crs, PROJECT.transformContext()))
     return projected_geometry
-
-
-def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
-    """Get a layer's bounding box aka extent/envelope
-    /bounds.
-
-    :param layer: The layer of interest
-    """
-    # Create a geometry from the layer's extent
-    extent_geometry = QgsGeometry.fromRect(layer.extent())
-    # Reproject it to WGS84 if the layer has another CRS
-    layer_crs = layer.crs()
-    if layer_crs != WGS84:
-        extent_geometry = to_wgs84(extent_geometry, layer_crs)
-    return extent_geometry
 
 
 def check_version(local_version: str,
@@ -120,3 +100,53 @@ def check_aoi(aoi: Union[QgsGeometry, None]) -> bool:
     if y_max > 90 or y_max < -90 or y_min > 90 or y_min < -90:
         return False
     return True
+
+
+def open_url(url: str):
+    url = QUrl(url)
+    QDesktopServices.openUrl(url)
+
+
+def open_model_info(model_name: str):
+    """Open model info page in browser"""
+    if 'aerial' in model_name.lower() or 'uav' in model_name.lower():
+        section = "buildings-aerial-imagery"
+    elif 'roads' in model_name.lower():
+        section = "roads"
+    elif 'fields' in model_name.lower():
+        section = "agriculture-fields"
+    elif 'constructions' in model_name.lower():
+        section = "constructions"
+    elif "forest" in model_name.lower():
+        section = "forest"
+    elif "dense" in model_name.lower():
+        section = "high-density-housing"
+    elif 'buildings' in model_name.lower():
+        section = "buildings"
+    else:
+        section = ""
+    open_url(f"{config.MODEL_DOCS_URL}#{section}")
+
+
+def check_processing_limit(billing_type: BillingType,
+                           remaining_limit: Optional[float],
+                           remaining_credits: Optional[int],
+                           aoi_size: float,
+                           processing_cost: int):
+    """Check if the user has exceeded the processing limit."""
+    if billing_type == BillingType.area:
+        return remaining_limit >= aoi_size
+    elif billing_type == BillingType.credits:
+        return remaining_credits >= processing_cost
+    else: # billing_type == BillingType.none
+        return True
+
+
+def generate_plugin_header(plugin_name: str, env: Optional[str], project_name: Optional[str]) -> str:
+        #project_name = response_data['name']
+        header = plugin_name
+        if env:
+            header = header + f" {env}"
+        if project_name and project_name != "Default":
+            header = header + f" | Project: {project_name}"
+        return header

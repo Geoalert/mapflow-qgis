@@ -2,12 +2,10 @@
 <qgis version="3.10.7-A Coruña" styleCategories="Symbology">
   <renderer-v2 type="RuleRenderer" forceraster="0" enableorderby="0" symbollevels="0">
     <rules key="{6027bef4-e4ae-4bb8-b22d-23ad038c6154}">
-      <rule key="{7baa9e4d-fe4c-4365-9b19-d00a42e03ab4}" symbol="0" filter="&quot;class_id&quot; = '04m-10m' AND &quot;density&quot; = 'dense'" label="04m-10m dense"/>
-      <rule key="{3bb19b0b-c944-4043-a882-1d7a0a98cb13}" symbol="1" filter="&quot;class_id&quot; = '04m-10m' AND &quot;density&quot; = 'sparse'" label="04m-10m sparse"/>
-      <rule key="{9c4991fa-0b12-4fc3-b776-31b1c946003a}" symbol="2" filter="&quot;class_id&quot; = '10m-99m' AND &quot;density&quot; = 'dense'" label="10m-99m dense"/>
-      <rule key="{3d649a7c-40bb-4c42-832c-46c3dc6f036f}" symbol="3" filter="&quot;class_id&quot; = '10m-99m' AND &quot;density&quot; = 'sparse'" label="10m-99m sparse"/>
-      <rule key="{24e3b25f-fdfc-4334-bdd5-6379f6def216}" symbol="4" filter="class_id = '00m-04m'" label="00m-04m"/>
-      <rule key="{22d88b5b-23d5-4fe4-8a5e-af1aea5f8864}" symbol="5"/>
+      <rule key="{7baa9e4d-fe4c-4365-9b19-d00a42e03ab4}" symbol="0" filter="&quot;class_id&quot; = '04m-10m'" label="04m-10m"/>
+      <rule key="{9c4991fa-0b12-4fc3-b776-31b1c946003a}" symbol="1" filter="&quot;class_id&quot; = '10m-99m'" label="10m-99m"/>
+      <rule key="{24e3b25f-fdfc-4334-bdd5-6379f6def216}" symbol="2" filter="class_id = '00m-04m'" label="00m-04m"/>
+      <rule key="{22d88b5b-23d5-4fe4-8a5e-af1aea5f8864}" symbol="3"/>
     </rules>
     <symbols>
       <symbol force_rhr="0" alpha="1" type="fill" name="0" clip_to_extent="1">
@@ -35,28 +33,6 @@
       <symbol force_rhr="0" alpha="1" type="fill" name="1" clip_to_extent="1">
         <layer enabled="1" pass="0" class="SimpleFill" locked="0">
           <prop k="border_width_map_unit_scale" v="3x:0,0,0,0,0,0"/>
-          <prop k="color" v="142,255,109,195"/>
-          <prop k="joinstyle" v="bevel"/>
-          <prop k="offset" v="0,0"/>
-          <prop k="offset_map_unit_scale" v="3x:0,0,0,0,0,0"/>
-          <prop k="offset_unit" v="MM"/>
-          <prop k="outline_color" v="204,5,8,185"/>
-          <prop k="outline_style" v="solid"/>
-          <prop k="outline_width" v="0.26"/>
-          <prop k="outline_width_unit" v="MM"/>
-          <prop k="style" v="dense5"/>
-          <data_defined_properties>
-            <Option type="Map">
-              <Option type="QString" value="" name="name"/>
-              <Option name="properties"/>
-              <Option type="QString" value="collection" name="type"/>
-            </Option>
-          </data_defined_properties>
-        </layer>
-      </symbol>
-      <symbol force_rhr="0" alpha="1" type="fill" name="2" clip_to_extent="1">
-        <layer enabled="1" pass="0" class="SimpleFill" locked="0">
-          <prop k="border_width_map_unit_scale" v="3x:0,0,0,0,0,0"/>
           <prop k="color" v="255,178,0,166"/>
           <prop k="joinstyle" v="bevel"/>
           <prop k="offset" v="0,0"/>
@@ -76,29 +52,7 @@
           </data_defined_properties>
         </layer>
       </symbol>
-      <symbol force_rhr="0" alpha="1" type="fill" name="3" clip_to_extent="1">
-        <layer enabled="1" pass="0" class="SimpleFill" locked="0">
-          <prop k="border_width_map_unit_scale" v="3x:0,0,0,0,0,0"/>
-          <prop k="color" v="255,158,5,169"/>
-          <prop k="joinstyle" v="bevel"/>
-          <prop k="offset" v="0,0"/>
-          <prop k="offset_map_unit_scale" v="3x:0,0,0,0,0,0"/>
-          <prop k="offset_unit" v="MM"/>
-          <prop k="outline_color" v="172,23,50,205"/>
-          <prop k="outline_style" v="solid"/>
-          <prop k="outline_width" v="0.26"/>
-          <prop k="outline_width_unit" v="MM"/>
-          <prop k="style" v="dense4"/>
-          <data_defined_properties>
-            <Option type="Map">
-              <Option type="QString" value="" name="name"/>
-              <Option name="properties"/>
-              <Option type="QString" value="collection" name="type"/>
-            </Option>
-          </data_defined_properties>
-        </layer>
-      </symbol>
-      <symbol force_rhr="0" alpha="1" type="fill" name="4" clip_to_extent="1">
+      <symbol force_rhr="0" alpha="1" type="fill" name="2" clip_to_extent="1">
         <layer enabled="1" pass="0" class="SimpleFill" locked="0">
           <prop k="border_width_map_unit_scale" v="3x:0,0,0,0,0,0"/>
           <prop k="color" v="0,76,219,171"/>
@@ -120,7 +74,7 @@
           </data_defined_properties>
         </layer>
       </symbol>
-      <symbol force_rhr="0" alpha="1" type="fill" name="5" clip_to_extent="1">
+      <symbol force_rhr="0" alpha="1" type="fill" name="3" clip_to_extent="1">
         <layer enabled="1" pass="0" class="LinePatternFill" locked="0">
           <prop k="angle" v="45"/>
           <prop k="color" v="55,126,184,255"/>
