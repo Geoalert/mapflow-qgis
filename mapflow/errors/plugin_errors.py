@@ -19,5 +19,8 @@ class ProcessingLimitExceeded(PluginError):
 
 
 class ImageIdRequired(PluginError):
-    """Raised when the user has exceeded the processing limit."""
+    pass
+
+
+class AoiNotIntersectsImage(PluginError):
     pass

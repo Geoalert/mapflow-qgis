@@ -45,7 +45,7 @@ from .entity.provider import (Provider,
 from .entity.billing import BillingType
 from .entity.workflow_def import WorkflowDef
 from .entity.processing_params import ProcessingParams, PostProcessingSchema
-from .errors import ProcessingInputDataMissing, BadProcessingInput, PluginError, ImageIdRequired
+from .errors import ProcessingInputDataMissing, BadProcessingInput, PluginError, ImageIdRequired, AoiNotIntersectsImage
 from .functional.geometry import clip_aoi_to_image_extent
 from . import constants
 
@@ -568,6 +568,9 @@ class Mapflow(QObject):
         enabled = isinstance(raster_source, QgsRasterLayer)
         self.dlg.useImageExtentAsAoi.setEnabled(enabled)
         self.dlg.useImageExtentAsAoi.setChecked(enabled)
+        if enabled:
+            self.calculate_aoi_area_raster(raster_source)
+
 
     def toggle_imagery_search(self,
                               provider_name: str,
@@ -1424,7 +1427,7 @@ class Mapflow(QObject):
         try:
             aoi = next(clip_aoi_to_image_extent(aoi, extent)).geometry()
         except StopIteration:
-            raise PluginError('Image and processing area do not intersect')
+            raise AoiNotIntersectsImage()
         return aoi
 
     def get_processing_params(self,
@@ -1457,9 +1460,12 @@ class Mapflow(QObject):
 
         if raster_layer is not None:
             # selected raster source is a layer
-            return layer_utils.get_raster_aoi(raster_layer=raster_layer,
+            aoi = layer_utils.get_raster_aoi(raster_layer=raster_layer,
                                               selected_aoi=selected_aoi,
                                               use_image_extent_as_aoi=use_image_extent_as_aoi)
+            if not aoi:
+                raise AoiNotIntersectsImage()
+            return aoi
         else:
             provider = self.providers.get(raster_option)
             if not provider:
@@ -1496,6 +1502,8 @@ class Mapflow(QObject):
                                use_image_extent_as_aoi=use_image_extent_as_aoi,
                                selected_image=selected_image,
                                selected_aoi=self.aoi)
+        except AoiNotIntersectsImage:
+            return None, self.tr("Selected AOI does not intestect the selected image")
         except ImageIdRequired:
             return None, self.tr("This provider requires image ID!")
         except PluginError as e:
