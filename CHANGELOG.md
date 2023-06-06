@@ -1,3 +1,14 @@
+## 2.0.0
+    - Reflect breaking API changes: credits-based billing instead of area-based
+    - Add new error descriptions
+    - Improve UI:
+        - more compact layout
+        - icons style like in Mapflow web
+        - providers setup moved to "settings"
+        - remove doubling controls, like area for imagery search, image ID label, etc.
+        - more intuitive drop-down list for processing rating
+    - Display processing cost or problems with processing creation parameters
+    - Add links to top up balance and billing statistics pages
 
 ## 1.8.0:
     - Change UI
