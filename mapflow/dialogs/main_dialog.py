@@ -45,9 +45,14 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.topUpBalanceButton_2.clicked.connect(lambda: helpers.open_url(config.TOP_UP_URL))
         self.billingHistoryButton.clicked.connect(lambda: helpers.open_url(config.BILLING_HISTORY_URL))
 
-        palette = QPalette()
-        palette.setColor(QPalette.WindowText, Qt.red);
-        self.processingProblemsLabel.setPalette(palette)
+        self.alert_palette = QPalette()
+        self.default_palette = QPalette()
+        self.alert_palette.setColor(QPalette.WindowText, Qt.red)
+        # self.processingProblemsLabel.setPalette(self.alert_palette)
+
+        # disable model cost label
+        self.labelCoins_1.setVisible(False)
+        self.labelWdPrice.setVisible(False)
 
     # ========= SHOW =========== #
     def setup_for_billing(self, billing_type: BillingType):

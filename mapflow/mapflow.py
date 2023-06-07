@@ -1193,12 +1193,14 @@ class Mapflow(QObject):
             self.calculate_aoi_area(aoi, layer.crs())
         elif layer and self.max_aois_per_processing < layer.featureCount():
             self.dlg.labelAoiArea.clear()
+            self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
             self.dlg.processingProblemsLabel.setText(self.tr('AOI must contain not more than'
                                                         ' {} polygons').format(self.max_aois_per_processing))
             self.dlg.startProcessing.setDisabled(True)
             self.aoi = self.aoi_size = None
         else:  # empty layer or combo's itself is empty
             self.dlg.labelAoiArea.clear()
+            self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
             self.dlg.processingProblemsLabel.setText(self.tr('Set AOI to start processing'))
             self.dlg.startProcessing.setDisabled(True)
             self.aoi = self.aoi_size = None
@@ -1262,9 +1264,11 @@ class Mapflow(QObject):
             # Here the button must already be disabled, and the warning text set
             if self.dlg.startProcessing.isEnabled():
                 self.dlg.startProcessing.setDisabled(True)
+                self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
                 self.dlg.processingProblemsLabel.setText(self.tr("Set AOI to start processing"))
         elif not self.workflow_defs:
             self.dlg.startProcessing.setDisabled(True)
+            self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
             self.dlg.processingProblemsLabel.setText("Error! Models are not initialized")
         elif self.billing_type != BillingType.credits:
             self.dlg.startProcessing.setEnabled(True)
@@ -1272,6 +1276,7 @@ class Mapflow(QObject):
         else:  # self.billing_type == BillingType.credits: f
             request_body, error = self.create_processing_request(allow_empty_name=True)
             if not request_body:
+                self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
                 self.dlg.processingProblemsLabel.setText(self.tr("Processing cost is not available:\n"
                                                                  "{error}").format(error=error))
 
@@ -1293,6 +1298,7 @@ class Mapflow(QObject):
         """
         response_text = response.readAll().data().decode()
         message = api_message_parser(response_text)
+        self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
         self.dlg.processingProblemsLabel.setText(self.tr('Processing cost is not available:\n'
                                                          '{message}').format(message=message))
         self.dlg.startProcessing.setEnabled(True)
@@ -1300,6 +1306,7 @@ class Mapflow(QObject):
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         response_data = response.readAll().data().decode()
         self.processing_cost = int(response_data)
+        self.dlg.processingProblemsLabel.setPalette(self.dlg.default_palette)
         self.dlg.processingProblemsLabel.setText(self.tr("Processsing cost: {cost} credits").format(cost=response_data))
         self.dlg.startProcessing.setEnabled(True)
 
