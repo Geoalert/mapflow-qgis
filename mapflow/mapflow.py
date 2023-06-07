@@ -1663,7 +1663,6 @@ class Mapflow(QObject):
             balance_str = ''
 
         self.dlg.balanceLabel.setText(balance_str)
-        self.dlg.balanceLabel_2.setText(balance_str)
 
         if app_startup_request:
             self.update_processing_cost()

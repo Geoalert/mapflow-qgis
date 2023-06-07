@@ -42,17 +42,12 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
         self.modelInfo.clicked.connect(lambda: helpers.open_model_info(model_name=self.modelCombo.currentText()))
         self.topUpBalanceButton.clicked.connect(lambda: helpers.open_url(config.TOP_UP_URL))
-        self.topUpBalanceButton_2.clicked.connect(lambda: helpers.open_url(config.TOP_UP_URL))
         self.billingHistoryButton.clicked.connect(lambda: helpers.open_url(config.BILLING_HISTORY_URL))
 
         self.alert_palette = QPalette()
         self.default_palette = QPalette()
         self.alert_palette.setColor(QPalette.WindowText, Qt.red)
         # self.processingProblemsLabel.setPalette(self.alert_palette)
-
-        # disable model cost label
-        self.labelCoins_1.setVisible(False)
-        self.labelWdPrice.setVisible(False)
 
     # ========= SHOW =========== #
     def setup_for_billing(self, billing_type: BillingType):
@@ -63,9 +58,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         balance_visible = billing_type != billing_type.none
 
         self.topUpBalanceButton.setVisible(credits_used)
-        self.topUpBalanceButton_2.setVisible(credits_used)
-        self.labelCoins_1.setVisible(credits_used)
-        self.labelWdPrice.setVisible(credits_used)
+        self.labelCoins_1.setVisible(False)  # credits_used
+        self.labelWdPrice.setVisible(False)  # credits_used
         self.balanceLabel.setVisible(balance_visible)
 
     def setup_imagery_search(self,
