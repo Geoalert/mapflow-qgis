@@ -7,9 +7,11 @@ from qgis.core import (QgsRectangle,
                        QgsMapLayer,
                        QgsGeometry,
                        QgsMapLayerType,
-                       QgsWkbTypes)
+                       QgsWkbTypes,
+                       QgsCoordinateReferenceSystem,
+                       QgsDistanceArea)
 from .geometry import clip_aoi_to_image_extent
-from .helpers import WGS84, to_wgs84
+from .helpers import WGS84, to_wgs84, WGS84_ELLIPSOID
 
 
 def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
@@ -102,19 +104,19 @@ def get_bounding_box_from_tile_json(response: QNetworkReply) -> QgsRectangle:
 
 def get_raster_aoi(raster_layer: QgsRasterLayer,
                    selected_aoi: QgsFeature,
-                   use_image_extent_as_aoi: bool):
+                   use_image_extent_as_aoi: bool) -> QgsGeometry:
     layer_extent = QgsFeature()
     layer_extent.setGeometry(get_layer_extent(raster_layer))
     if not use_image_extent_as_aoi:
         # If we do not use the layer extent as aoi, we still create it and use it to crop the selected AOI
         try:
-            aoi = next(clip_aoi_to_image_extent(aoi_geometry=selected_aoi,
-                                                extent=layer_extent)).geometry()
+            feature = next(clip_aoi_to_image_extent(aoi_geometry=selected_aoi,
+                                                    extent=layer_extent))
         except StopIteration:
             return None
     else:
-        aoi = selected_aoi
-    return aoi
+        feature = layer_extent
+    return feature.geometry()
 
 
 def is_polygon_layer(layer: QgsMapLayer) -> bool:
@@ -122,3 +124,33 @@ def is_polygon_layer(layer: QgsMapLayer) -> bool:
     :param layer: A layer to test
     """
     return layer.type() == QgsMapLayerType.VectorLayer and layer.geometryType() == QgsWkbTypes.PolygonGeometry
+
+
+def calculate_aoi_area(aoi: QgsGeometry,
+                       project_crs: QgsCoordinateReferenceSystem) -> float:
+    calculator = QgsDistanceArea()
+    calculator.setEllipsoid(WGS84_ELLIPSOID)
+    calculator.setSourceCrs(WGS84, project_crs)
+    aoi_size = calculator.measureArea(aoi) / 10 ** 6  # sq. m to sq.km
+    return aoi_size
+
+
+def collect_geometry_from_layer(layer: QgsMapLayer) -> QgsGeometry:
+    features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
+    if len(features) == 1:
+        aoi = features[0].geometry()
+    else:
+        aoi = QgsGeometry.collectGeometry([feature.geometry() for feature in features])
+    return aoi
+
+
+def calculate_layer_area(layer: QgsMapLayer,
+                         project_crs: QgsCoordinateReferenceSystem) -> float:
+    crs = layer.crs()
+    aoi = collect_geometry_from_layer(layer)
+    if crs != WGS84:
+        aoi = to_wgs84(aoi, crs)
+
+    return calculate_aoi_area(aoi,
+                              crs,
+                              project_crs)

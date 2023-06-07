@@ -425,6 +425,13 @@ class Mapflow(QObject):
         # Changes in search tab
         self.toggle_imagery_search(provider_name,
                                    provider)
+        # re-calculate AOI because it may change due to intersection of image/area
+        polygon_layer = self.dlg.polygonCombo.currentLayer()
+        if provider_layer:
+            self.calculate_aoi_area_raster(provider_layer)
+        else:
+            self.calculate_aoi_area_polygon_layer(polygon_layer)
+
         self.update_processing_cost()
 
     def save_dialog_state(self):
@@ -568,9 +575,6 @@ class Mapflow(QObject):
         enabled = isinstance(raster_source, QgsRasterLayer)
         self.dlg.useImageExtentAsAoi.setEnabled(enabled)
         self.dlg.useImageExtentAsAoi.setChecked(enabled)
-        if enabled:
-            self.calculate_aoi_area_raster(raster_source)
-
 
     def toggle_imagery_search(self,
                               provider_name: str,
@@ -1087,9 +1091,9 @@ class Mapflow(QObject):
 
     def sync_table_selection_with_image_id_and_layer(self) -> str:
         """
-        Every time user selects a row in the metadata table, select the 
+        Every time user selects a row in the metadata table, select the
         corresponding feature in the metadata layer and put the selected image's
-        id into the "Image ID" field. 
+        id into the "Image ID" field.
         """
         selected_cells = self.dlg.metadataTable.selectedItems()
         if not selected_cells:
@@ -1113,6 +1117,7 @@ class Mapflow(QObject):
             pass
         if self.dlg.imageId.text() != image_id:
             self.dlg.imageId.setText(image_id)
+        self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
 
     def sync_layer_selection_with_table(self, selected_ids: List[int]) -> None:
         """
@@ -1248,14 +1253,26 @@ class Mapflow(QObject):
         :param aoi: the processing area.
         :param crs: the CRS of the processing area.
         """
-
         if crs != helpers.WGS84:
             aoi = helpers.to_wgs84(aoi, crs)
+
         self.aoi = aoi  # save for reuse in processing creation or metadata requests
-        # Set ellipsoid to calculate on sphere if the CRS is geographic
-        self.calculator.setEllipsoid(helpers.WGS84_ELLIPSOID)
-        self.calculator.setSourceCrs(helpers.WGS84, self.project.transformContext())
-        self.aoi_size = self.calculator.measureArea(aoi) / 10 ** 6  # sq. m to sq.km
+        # fetch UI data
+        raster_option = self.dlg.rasterCombo.currentText()
+        imagery = self.dlg.rasterCombo.currentLayer()
+        use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
+        selected_image = self.dlg.metadataTable.selectedItems()
+        # This is AOI with respect to selected Maxar images and raster image extent
+        try:
+            real_aoi = self.get_aoi(raster_option=raster_option,
+                                    raster_layer=imagery,
+                                    use_image_extent_as_aoi=use_image_extent_as_aoi,
+                                    selected_image=selected_image,
+                                    selected_aoi=self.aoi)
+            self.aoi_size = layer_utils.calculate_aoi_area(real_aoi, self.project.transformContext())
+        except:
+            # Could not calculate AOI size
+            self.aoi_size = 0
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
         self.update_processing_cost()
 
@@ -1459,8 +1476,8 @@ class Mapflow(QObject):
                 raster_option: Optional[str],
                 raster_layer: Optional[QgsRasterLayer],
                 use_image_extent_as_aoi: bool,
-                selected_aoi: QgsFeature,
-                selected_image: Optional[str] = None):
+                selected_aoi: QgsGeometry,
+                selected_image: Optional[str] = None) -> QgsGeometry:
         if not helpers.check_aoi(selected_aoi):
             raise BadProcessingInput(self.tr('Bad AOI. AOI must be inside boundaries:'
                                              ' \n[-180, 180] by longitude, [-90, 90] by latitude'))
@@ -2055,7 +2072,7 @@ class Mapflow(QObject):
                                         response: QNetworkReply,
                                         vector: Optional[QgsVectorLayer]):
 
-        """Error handler for processing AOI requests. If tilejson can't be loaded, we do not add raster layer, and 
+        """Error handler for processing AOI requests. If tilejson can't be loaded, we do not add raster layer, and
         """
         self.add_layer(vector)
 
