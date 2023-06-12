@@ -7,8 +7,9 @@
         - providers setup moved to "settings"
         - remove doubling controls, like area for imagery search, image ID label, etc.
         - more intuitive drop-down list for processing rating
-    - Display processing cost or problems with processing creation parameters
-    - Add links to top up balance and billing statistics pages
+    - Display processing coss
+    - Display warning with processing creation parameters
+    - Add Top bar with the links to top up balance and billing history pages in Mapflow user profile
 
 ## 1.8.0:
     - Change UI
