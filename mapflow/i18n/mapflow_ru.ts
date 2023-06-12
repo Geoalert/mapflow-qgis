@@ -374,14 +374,14 @@
 <context>
     <name>MainDialog</name>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="653"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="781"/>
         <source>Processing</source>
         <translation>Обработка</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="194"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="106"/>
         <source>Name:</source>
-        <translation type="obsolete">Название:</translation>
+        <translation>Название:</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="1003"/>
@@ -389,7 +389,7 @@
         <translation type="obsolete">Модель Mapflow:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="74"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="133"/>
         <source>Area:</source>
         <translation>Область:</translation>
     </message>
@@ -399,57 +399,57 @@
         <translation type="obsolete">Данные ДЗЗ:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="124"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="189"/>
         <source>Use image extent</source>
         <translation>По изображению</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="491"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="487"/>
         <source>Start processing</source>
         <translation>Начать обработку</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="699"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="833"/>
         <source>Name</source>
         <translation>Название</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="704"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="838"/>
         <source>Model</source>
         <translation>Модель</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="709"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="843"/>
         <source>Status</source>
         <translation>Состояние</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="724"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="858"/>
         <source>Created</source>
         <translation>Дата</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1195"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="749"/>
         <source>Log out</source>
         <translation>Выйти</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="762"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="896"/>
         <source>Delete</source>
         <translation>Удалить</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1374"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1420"/>
         <source>Output directory:</source>
         <translation>Рабочая папка:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="798"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="932"/>
         <source>Max zoom:</source>
         <translation>Макс зум:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="818"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="952"/>
         <source>Preview</source>
         <translation>Просмотр</translation>
     </message>
@@ -474,22 +474,22 @@
         <translation type="obsolete">Запомнить</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1442"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1488"/>
         <source>Help</source>
         <translation>Помощь</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="418"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="260"/>
         <source>wms</source>
         <translation>wms</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="419"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="261"/>
         <source>postgresraster</source>
         <translation>postgresraster</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="420"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="262"/>
         <source>grassraster</source>
         <translation>grassraster</translation>
     </message>
@@ -499,7 +499,7 @@
         <translation type="obsolete">Источники данных</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="719"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="853"/>
         <source>Area, sq. km</source>
         <translation>Площадь, кв. км</translation>
     </message>
@@ -519,82 +519,82 @@
         <translation type="obsolete">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#caching&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как это работает&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="714"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="848"/>
         <source>Progress %</source>
         <translation>Прогресс %</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="784"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="918"/>
         <source>Image ID:</source>
         <translation>ID снимка:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="791"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="925"/>
         <source>Select in the table below or paste here</source>
         <translation>Выберите в таблице ниже или вставьте сюда</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="830"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="964"/>
         <source>Provider Imagery Catalog</source>
         <translation>Каталог снимков</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="986"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1120"/>
         <source>Use canvas extent</source>
         <translation>По видимой области</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="888"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1022"/>
         <source>From:</source>
         <translation>С:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="966"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1100"/>
         <source>yyyy-MM-dd</source>
         <translation>yyyy-MM-dd</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="932"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1066"/>
         <source>Search imagery</source>
         <translation>Искать снимки</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="942"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1076"/>
         <source>To:</source>
         <translation>По:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="998"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1132"/>
         <source>Additional filters</source>
         <translation>Дополнительные фильтры</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1010"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1144"/>
         <source>Min intersection:</source>
         <translation>Минимальное пересечение:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1087"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1221"/>
         <source>%</source>
         <translation>%</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1055"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1189"/>
         <source>Cloud cover up to:</source>
         <translation>Облачность не более:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="628"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1248"/>
         <source>Settings</source>
-        <translation type="obsolete">Настройки</translation>
+        <translation>Настройки</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1270"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1316"/>
         <source>Add your own web imagery provider</source>
         <translation>Добавьте собственный источник снимков</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="827"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="961"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Here, you can search Maxar or Sentinel imagery for your area and timespan.&lt;/p&gt;&lt;p&gt;Additional filters are also available below.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Здесь вы можете искать подходящие для ваших области и времени снимки Maxar и Sentinel-2.&lt;/p&gt;&lt;p&gt;Дополнительные параметры поиска находятся во вкладке ниже.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
@@ -604,42 +604,42 @@
         <translation type="obsolete">Любые (мульти-)полигон(ы)</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="983"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1117"/>
         <source>Use your current screen area</source>
         <translation>Область ограниченная вашим экраном</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="885"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1019"/>
         <source>Earlier images won&apos;t be shown</source>
         <translation>Более ранние снимки не будут показаны</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="949"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1083"/>
         <source>Dates are inclusive</source>
         <translation>Даты включительны</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="929"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1063"/>
         <source>Click and wait for a few seconds until the table below is filled out</source>
         <translation>Нажмите и подождите несколько секунд пока данные загрузятся</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="939"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1073"/>
         <source>More recent images won&apos;t be shown</source>
         <translation>Более поздние снимки не будут показаны</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="995"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1129"/>
         <source>Click to specify additional search criteria</source>
         <translation>Нажмите чтобы указать дополнительные условия поиска</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1017"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1151"/>
         <source>Images that cover fewer % of your area won&apos;t be shown</source>
         <translation>Снимки покрывающие меньший % вашей области не будут показаны</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="847"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="981"/>
         <source>Double-click on a row to preview its image</source>
         <translation>Двойной щелчок мыши загрузит предпросмотр снимка</translation>
     </message>
@@ -649,12 +649,12 @@
         <translation type="obsolete">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Пользовательский интерфейс&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/userguides/prices.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Тарифы&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#id19&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать собственный снимок для обработки&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#id17&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать снимки из других источников&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как подключить Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow Agro&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://agro.geoalert.io/&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;О проекте&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow.html#sentinel-2&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Снимки Sentinel&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/userguides/iterative_mapping.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Пошаговый способ картирования полей&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Если у вас есть предложения или замечания по работе плагина,&lt;br/&gt;мы будем рады если вы создадите задачу на нашем &lt;/span&gt;&lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="81"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="140"/>
         <source>Create or load vector layer with your area of interest</source>
         <translation>Создать или загрузить векторный слой с вашей областью интереса</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="544"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="562"/>
         <source>...</source>
         <translation>...</translation>
     </message>
@@ -664,7 +664,7 @@
         <translation type="obsolete">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Пользовательский интерфейс&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/userguides/prices.html#mapflow-qgis-pricing-model&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Тарифы&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#id19&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать собственный снимок для обработки&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#id17&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать снимки из других источников&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как подключить Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow Agro&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://agro.geoalert.io/&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;О проекте&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow.html#sentinel-2&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Снимки Sentinel&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/userguides/iterative_mapping.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Пошаговый способ картирования полей&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Если у вас есть предложения или замечания по работе плагина,&lt;br/&gt;мы будем рады если вы создадите задачу на нашем &lt;/span&gt;&lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="739"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="873"/>
         <source> Download results </source>
         <translation> Загрузка результатов </translation>
     </message>
@@ -676,7 +676,7 @@
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="47"/>
         <source>Processing name:</source>
-        <translation>Название обработки:</translation>
+        <translation type="obsolete">Название обработки:</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="1284"/>
@@ -684,7 +684,7 @@
         <translation type="obsolete">Оценить обработку</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="622"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="640"/>
         <source>Please select processing and rating to submit</source>
         <translation>Пожалуйста, выберите обработку и оценку для отправки</translation>
     </message>
@@ -726,127 +726,132 @@
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="189"/>
         <source>Top up balance</source>
-        <translation>Пополнить</translation>
+        <translation type="obsolete">Пополнить</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="238"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="327"/>
         <source>AI model:</source>
         <translation>Модель:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="285"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="374"/>
         <source>Price of the processing per sq.km</source>
         <translation>Цена обработки за кв.км</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="266"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="355"/>
         <source>CC</source>
         <translation>СС</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="288"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="377"/>
         <source>10</source>
         <translation>10</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="357"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="446"/>
         <source>Ctrl+S</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="389"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="231"/>
         <source>Data source:</source>
-        <translation>Источник данных:</translation>
+        <translation>Данные:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="536"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="554"/>
         <source>Rate processing:</source>
         <translation>Оцените обработку:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="549"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="567"/>
         <source>⭐⭐⭐⭐⭐</source>
         <translation>⭐⭐⭐⭐⭐</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="554"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="572"/>
         <source>⭐⭐⭐⭐</source>
         <translation>⭐⭐⭐⭐</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="559"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="577"/>
         <source>⭐⭐⭐</source>
         <translation>⭐⭐⭐</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="564"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="582"/>
         <source>⭐⭐</source>
         <translation>⭐⭐</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="569"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="587"/>
         <source>⭐</source>
         <translation>⭐</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="597"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="615"/>
         <source>Share your thoughts on what aspects of this data processing work well or could be improved</source>
         <translation>Поделитесь с нами, что вам понравилось в этой обработке, а что можно было бы улучшить</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="625"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="643"/>
         <source>Submit feedback</source>
         <translation>Отправить отзыв</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="776"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="910"/>
         <source>Imagery search</source>
         <translation>Поиск снимков</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="1114"/>
         <source>User profile</source>
-        <translation>Профиль пользователя</translation>
+        <translation type="obsolete">Профиль пользователя</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="1120"/>
         <source>Manage your Mapflow account</source>
-        <translation>Упаравление вашим аккаунтом Mapflow</translation>
+        <translation type="obsolete">Упаравление вашим аккаунтом Mapflow</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1135"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="690"/>
         <source>Your balance:</source>
         <translation>Ваш баланс:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1142"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="703"/>
         <source> Top up balance </source>
         <translation> Пополнить баланс </translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1153"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="720"/>
         <source>Open billing history</source>
         <translation>Открыть историю</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1221"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1267"/>
         <source>Edit imagery providers available to the plugin</source>
         <translation>Настройка провайдеров данных, доступных в плагине</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1230"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1276"/>
         <source>Imagery providers:</source>
         <translation>Провайдеры данных:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1359"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1405"/>
         <source>Set up local working directory, where all the temporary files will be stored</source>
         <translation>Настройка рабочей папки на вашем компьютере, где будут храниться все временные файлы</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="1451"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;User Interface walkthrough&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow.html#how-to-upload-your-image&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to process your own image&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to use a different imagery tileset (XYZ or TMS)&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect to Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:14px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow Pricing&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;br/&gt;&lt;/p&gt;&lt;table border=&quot;0&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px;&quot; align=&quot;center&quot; cellspacing=&quot;2&quot; cellpadding=&quot;0&quot;&gt;&lt;thead&gt;&lt;tr&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;Billing plan&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;$50&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;$90&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;$800&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tr&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;Default or user custom imagery, km²&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;50&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;100&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;1000&lt;/p&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;Premium satellite imagery, km²&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;10&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;20&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;200&lt;/p&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;p&gt;See also – &lt;a href=&quot;https://docs.mapflow.ai/faq.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#094fd1;&quot;&gt;*How to buy credits for using the platform? How much is it?*&lt;/span&gt;&lt;/a&gt;&lt;br/&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:14px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Join the project on Github&lt;/span&gt;&lt;/h3&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;If you have a feature request or spotted a bug,&lt;br/&gt;create an issue on &lt;/span&gt;&lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Руководство по интерфейсу пользователя&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow.html#how-to-upload-your-image&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как обработать ваше изображение&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать сторонний тайловый сервис (XYZ или TMS)&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как подключиться к Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:14px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Цены&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;br/&gt;&lt;/p&gt;&lt;table border=&quot;0&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px;&quot; align=&quot;center&quot; cellspacing=&quot;2&quot; cellpadding=&quot;0&quot;&gt;&lt;thead&gt;&lt;tr&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;Тариф&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;$50&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;$90&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;$800&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tr&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;Базовое покрытие или ваши данные, км²&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;50&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;100&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;1000&lt;/p&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt; Снимки коммерческих провайдеров, км²&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;10&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;20&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;200&lt;/p&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;p&gt;См. также – &lt;a href=&quot;https://docs.mapflow.ai/faq.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#094fd1;&quot;&gt;*Как купить кредиты? Сколько это стоит?*&lt;/span&gt;&lt;/a&gt;&lt;br/&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:14px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Присоединиться к проекту на Github&lt;/span&gt;&lt;/h3&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Если у вас есть предложение или сообщение об ошибке,&lt;br/&gt;создайте issue на &lt;/span&gt;&lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+        <translation type="obsolete">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Руководство по интерфейсу пользователя&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow.html#how-to-upload-your-image&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как обработать ваше изображение&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать сторонний тайловый сервис (XYZ или TMS)&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как подключиться к Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:14px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Цены&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;br/&gt;&lt;/p&gt;&lt;table border=&quot;0&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px;&quot; align=&quot;center&quot; cellspacing=&quot;2&quot; cellpadding=&quot;0&quot;&gt;&lt;thead&gt;&lt;tr&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;Тариф&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;$50&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;$90&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;$800&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tr&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;Базовое покрытие или ваши данные, км²&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;50&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;100&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;1000&lt;/p&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt; Снимки коммерческих провайдеров, км²&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;10&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;20&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;200&lt;/p&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;p&gt;См. также – &lt;a href=&quot;https://docs.mapflow.ai/faq.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#094fd1;&quot;&gt;*Как купить кредиты? Сколько это стоит?*&lt;/span&gt;&lt;/a&gt;&lt;br/&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:14px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Присоединиться к проекту на Github&lt;/span&gt;&lt;/h3&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Если у вас есть предложение или сообщение об ошибке,&lt;br/&gt;создайте issue на &lt;/span&gt;&lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1497"/>
+        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;User Interface walkthrough&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow.html#how-to-upload-your-image&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to process your own image&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to use a different imagery tileset (XYZ or TMS)&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect to Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:14px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow credits&lt;/span&gt;&lt;span style=&quot; font-size:large; font-weight:700;&quot;&gt;&lt;br/&gt;&lt;/span&gt;&lt;/h3&gt;&lt;table border=&quot;0&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px;&quot; align=&quot;center&quot; cellspacing=&quot;2&quot; cellpadding=&quot;0&quot;&gt;&lt;thead&gt;&lt;tr&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Pay as you go&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:696;&quot;&gt;$50&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:696;&quot;&gt;$90&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:696;&quot;&gt;$800&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tr&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;Credits for processing&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;500&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;1000&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;10000&lt;/p&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;p&gt;See also – &lt;a href=&quot;https://docs.mapflow.ai/userguides/prices.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#094fd1;&quot;&gt;*How much do the processings and data cost?*&lt;/span&gt;&lt;/a&gt;&lt;br/&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:14px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Join the project on &lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt; or &lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis/issues&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;report an issue&lt;/span&gt;&lt;/a&gt;&lt;/span&gt;&lt;/h3&gt;&lt;/body&gt;&lt;/html&gt;</source>
+        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Описание пользовательского интерфейса&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow.html#how-to-upload-your-image&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как загрузить и обработать свои данные&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать другие тайловые сервисы (XYZ или TMS)&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как подключиться к Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:14px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow credits&lt;/span&gt;&lt;span style=&quot; font-size:large; font-weight:700;&quot;&gt;&lt;br/&gt;&lt;/span&gt;&lt;/h3&gt;&lt;table border=&quot;0&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px;&quot; align=&quot;center&quot; cellspacing=&quot;2&quot; cellpadding=&quot;0&quot;&gt;&lt;thead&gt;&lt;tr&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Единовременная покупка&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:696;&quot;&gt;$50&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:696;&quot;&gt;$90&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:696;&quot;&gt;$800&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tr&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;Количество кредитов&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;500&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;1000&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;10000&lt;/p&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;p&gt;См. также – &lt;a href=&quot;https://docs.mapflow.ai/userguides/prices.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#094fd1;&quot;&gt;*Сколько стоят данные и их обработка?*&lt;/span&gt;&lt;/a&gt;&lt;br/&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:14px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Присоединяйтесь к проекту на  &lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt; или &lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis/issues&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;сообщите об ошибке&lt;/span&gt;&lt;/a&gt;&lt;/span&gt;&lt;/h3&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
 </context>
 <context>
@@ -862,18 +867,18 @@
         <translation type="obsolete">Вход</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="597"/>
+        <location filename="../mapflow.py" line="601"/>
         <source>If you already know which {provider_name} image you want to process,
 simply paste its ID here. Otherwise, search suitable images in the catalog below.</source>
         <translation>Если вы уже знаете ID снимка {provider_name} который вы хотите обработать, просто вставьте его в это поле. Иначе, используйте каталог ниже чтобы найти подходящий снимок.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="590"/>
+        <location filename="../mapflow.py" line="594"/>
         <source>e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00</source>
         <translation>например S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="601"/>
+        <location filename="../mapflow.py" line="605"/>
         <source>e.g. a3b154c40cc74f3b934c0ffc9b34ecd1</source>
         <translation>например a3b154c40cc74f3b934c0ffc9b34ecd1</translation>
     </message>
@@ -893,17 +898,17 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete"> - Каталог снимков</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="477"/>
+        <location filename="../mapflow.py" line="484"/>
         <source>Permanently remove {}?</source>
         <translation>Удалить {}?</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="634"/>
+        <location filename="../mapflow.py" line="638"/>
         <source>Select output directory</source>
         <translation>Выберите папку для сохранения данных</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="650"/>
+        <location filename="../mapflow.py" line="654"/>
         <source>Please, specify an existing output directory</source>
         <translation>Пожалуйста, выберите папку для сохранения данных</translation>
     </message>
@@ -913,32 +918,32 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Выберите GeoTIFF</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1416"/>
+        <location filename="../mapflow.py" line="1440"/>
         <source>Please, select an area of interest</source>
         <translation>Пожалуйста, выберите слой с областью обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="702"/>
+        <location filename="../mapflow.py" line="706"/>
         <source>Your area of interest is too large.</source>
         <translation>Слишком большая область запроса метаданных.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1080"/>
+        <location filename="../mapflow.py" line="1084"/>
         <source>Please, check your credentials</source>
         <translation>Пожалуйста, проверьте реквизиты</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="954"/>
+        <location filename="../mapflow.py" line="958"/>
         <source>We couldn&apos;t fetch Sentinel metadata</source>
         <translation>Мы не смогли получить метаданные Сентинел</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1020"/>
+        <location filename="../mapflow.py" line="1024"/>
         <source>No images match your criteria. Try relaxing the filters.</source>
         <translation>Нет подходящий снимков. Попробуйте изменить параметры поиска.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="921"/>
+        <location filename="../mapflow.py" line="925"/>
         <source>More</source>
         <translation>Еще</translation>
     </message>
@@ -948,27 +953,27 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Мы не смогли получить метаданные от Максар</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1160"/>
+        <location filename="../mapflow.py" line="1165"/>
         <source>A Sentinel image ID should look like S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 or /36/S/XA/2022/02/09/0/</source>
         <translation>ID снимка Sentinel должен иметь формат S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 или /36/S/XA/2022/02/09/0/</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1257"/>
+        <location filename="../mapflow.py" line="1276"/>
         <source>Area: {:.2f} sq.km</source>
         <translation>Площадь: {:.2f} кв.км</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1319"/>
+        <location filename="../mapflow.py" line="1343"/>
         <source>Delete selected processings?</source>
         <translation>Удалить выбранные обработки?</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1344"/>
+        <location filename="../mapflow.py" line="1368"/>
         <source>Error deleting a processing</source>
         <translation>Ошибка удаления обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1408"/>
+        <location filename="../mapflow.py" line="1432"/>
         <source>Please, specify a name for your processing</source>
         <translation>Пожалуйста, выберите название обработки</translation>
     </message>
@@ -988,27 +993,27 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Превышен доступный лимит обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1418"/>
+        <location filename="../mapflow.py" line="1442"/>
         <source>Up to {} sq km can be processed at a time. Try splitting your area(s) into several processings.</source>
         <translation>За раз можно обработать не более {} кв км. Попробуйте разделить область обработки на части.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1554"/>
+        <location filename="../mapflow.py" line="1578"/>
         <source>Click on the link below to send us an email</source>
         <translation>Нажмите на ссылку ниже чтобы отправить нам отчет об ошибке</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1554"/>
+        <location filename="../mapflow.py" line="1578"/>
         <source>Upgrade your subscription to process Maxar imagery</source>
         <translation>Чтобы обрабатывать по Максар, нужно стать Премиум пользователем Mapflow</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1554"/>
+        <location filename="../mapflow.py" line="1578"/>
         <source>I&apos;d like to upgrade my subscription to Mapflow Processing API to be able to process Maxar imagery.</source>
         <translation>Я хотел бы стать премиум пользователем Mapflow чтобы обрабатывать по Максар.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1412"/>
+        <location filename="../mapflow.py" line="1436"/>
         <source>GeoTIFF is corrupted or has invalid projection</source>
         <translation>Geotiff файл повржден или имеет некорректную проекцию</translation>
     </message>
@@ -1018,27 +1023,27 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Снимок и область обработки не пересекаются</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1544"/>
+        <location filename="../mapflow.py" line="1568"/>
         <source>Starting the processing...</source>
         <translation>Создаем обработку...</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1384"/>
+        <location filename="../mapflow.py" line="1408"/>
         <source>Uploading image to Mapflow...</source>
         <translation>Загружаем ваш снимок на Mapflow...</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1585"/>
+        <location filename="../mapflow.py" line="1609"/>
         <source>We couldn&apos;t upload your GeoTIFF</source>
         <translation>Мы не смогли загрузить ваш снимок</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1610"/>
+        <location filename="../mapflow.py" line="1634"/>
         <source>Processing creation failed</source>
         <translation>Мы не смогли создать обработку</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1616"/>
+        <location filename="../mapflow.py" line="1640"/>
         <source>Success! We&apos;ll notify you when the processing has finished.</source>
         <translation>Обработка создана! Мы оповестим вас когда она завершится.</translation>
     </message>
@@ -1048,37 +1053,37 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Доступный лимит: {} кв.км</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1712"/>
+        <location filename="../mapflow.py" line="1735"/>
         <source>Sorry, we couldn&apos;t load the image</source>
         <translation>Ошибка предпросмотра снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1713"/>
+        <location filename="../mapflow.py" line="1736"/>
         <source>Error previewing Sentinel imagery</source>
         <translation>Ошибка предпросмотра снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1721"/>
+        <location filename="../mapflow.py" line="1744"/>
         <source>Sorry, there&apos;s no preview for this image</source>
         <translation>К сожалению, для этого снимка нет предпросмотра</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1804"/>
+        <location filename="../mapflow.py" line="1827"/>
         <source>We couldn&apos;t load a preview for this image</source>
         <translation>Мы не смогли осуществить предпросмотр этого снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1736"/>
+        <location filename="../mapflow.py" line="1759"/>
         <source>Please, select an image to preview</source>
         <translation>Пожалуйста, выберите снимок</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1977"/>
+        <location filename="../mapflow.py" line="2000"/>
         <source>Error loading results. Error code: </source>
         <translation>Ошибка загрузки результатов. Код ошибки: </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2026"/>
+        <location filename="../mapflow.py" line="2049"/>
         <source>Error downloading results</source>
         <translation>Мы не смогли скачать результаты обработки</translation>
     </message>
@@ -1095,7 +1100,7 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
 </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2134"/>
+        <location filename="../mapflow.py" line="2157"/>
         <source> finished. Double-click it in the table to download the results.</source>
         <translation> завершилась. Дважды кликните на нее в таблице чтобы загрузить результаты.</translation>
     </message>
@@ -1105,12 +1110,12 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Мы не смогли подключиться к Mapflow</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2291"/>
+        <location filename="../mapflow.py" line="2314"/>
         <source>Invalid token</source>
         <translation>Неверный токен</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2323"/>
+        <location filename="../mapflow.py" line="2346"/>
         <source>Proxy error. Please, check your proxy settings.</source>
         <translation>Ошибка прокси. Пожалуйста, проверьте настройки прокси в QGIS.</translation>
     </message>
@@ -1120,7 +1125,7 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Неизвестная ошибка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2434"/>
+        <location filename="../mapflow.py" line="2457"/>
         <source>A new version of Mapflow plugin {server_version} is released 
 We recommend you to upgrade to get all the latest features
 Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
@@ -1147,7 +1152,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation>Ваш файл не подходит как источник векторных данных!</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2179"/>
+        <location filename="../mapflow.py" line="2202"/>
         <source>Double click to add results to the map</source>
         <translation>Двойной клик добавит результаты на карту</translation>
     </message>
@@ -1167,7 +1172,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation type="obsolete">Данный источник данных не может быть удален</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="683"/>
+        <location filename="../mapflow.py" line="687"/>
         <source>Provider {name} does not support metadata requests</source>
         <translation>Источник данных {name} не поддерживает запрос метаданных</translation>
     </message>
@@ -1177,12 +1182,12 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation type="obsolete">Провайдеру {} требуется выбранный ID снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1567"/>
+        <location filename="../mapflow.py" line="1591"/>
         <source>Could not launch processing! Error: {}.</source>
         <translation>Не удалось запустить обработку! Ошибка: {}.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2108"/>
+        <location filename="../mapflow.py" line="2131"/>
         <source> failed with error:
 </source>
         <translation> завершилась с ошибкой:
@@ -1199,17 +1204,17 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation>Нам не удалось импортировать провайдеров из настроек {errors}. Пожалуйста, добавьте их снова</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="506"/>
+        <location filename="../mapflow.py" line="513"/>
         <source>Provider name must be unique. {name} already exists, select another or delete/edit existing</source>
         <translation>Название источника данных должен быть уникальным. {name} уже существует, выберите другое название или удалите/измените существующий</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1082"/>
+        <location filename="../mapflow.py" line="1086"/>
         <source>We couldn&apos;t get metadata from Maxar, error {error}</source>
         <translation>Мы не смогли получить метаданные от Maxar, ошибка {error}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1535"/>
+        <location filename="../mapflow.py" line="1559"/>
         <source>Processing limit exceeded. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; to top up your balance</source>
         <translation>Превышен доступный лимит обработки. Посетите &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; для пополнения баланса</translation>
     </message>
@@ -1219,44 +1224,44 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation type="obsolete">. Название проекта: {}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1782"/>
+        <location filename="../mapflow.py" line="1805"/>
         <source>Preview is unavailable for the provider {}</source>
         <translation>Просмотр недоступен для источника данных {}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2326"/>
+        <location filename="../mapflow.py" line="2349"/>
         <source>This operation is forbidden for your account, contact us</source>
         <translation>Эта операция запрещена для вашего аккаунта, свяжитесь с нами</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2284"/>
+        <location filename="../mapflow.py" line="2307"/>
         <source>Wrong token. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/api&quot;&gt;mapflow.ai&lt;/a&gt;&quot; to get a new one</source>
         <translation>Неправильный токен. Перейдите на &quot;&lt;a href=&quot;https://app.mapflow.ai/account/api&quot;&gt;mapflow.ai&lt;/a&gt;&quot; чтообы получить новый</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1414"/>
+        <location filename="../mapflow.py" line="1438"/>
         <source>Processing area layer is corrupted or has invalid projection</source>
         <translation>Слой области обработки поврежден или имеет некорректную проекцию</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2424"/>
+        <location filename="../mapflow.py" line="2447"/>
         <source>You must upgrade your plugin version to continue work with Mapflow. 
 The server requires version {server_version}, your plugin is {local_version}
 Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation>Обновите версию плагина чтобы продолжить работать с Mapflow. Требуется версия {server_version}, установлена версия {local_version}. Выберите меню Модули -&gt; Управление модулями -&gt; Обновляемые</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="519"/>
+        <location filename="../mapflow.py" line="526"/>
         <source>Add new provider</source>
         <translation>Добавить новый источник данных</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="527"/>
+        <location filename="../mapflow.py" line="534"/>
         <source>This is a default provider, it cannot be edited</source>
         <translation>Этот источник данных встроен в mapflow, его нельзя редактировать</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2115"/>
+        <location filename="../mapflow.py" line="2138"/>
         <source>{} processings failed: 
  {} 
  See tooltip over the processings table for error details</source>
@@ -1265,14 +1270,14 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
  Наведите курсор мыши на обработку в таблице чтобы увидеть сообщение об ошибке</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2122"/>
+        <location filename="../mapflow.py" line="2145"/>
         <source>{} processings failed: 
  See tooltip over the processings table for error details</source>
         <translation>Завершено с ошибкой {} обработок
  Наведите курсор мыши на обработку в таблице чтобы увидеть сообщение об ошибке</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2142"/>
+        <location filename="../mapflow.py" line="2165"/>
         <source>{} processings finished: 
  {} 
  Double-click it in the table to download the results</source>
@@ -1281,7 +1286,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
  Двойной клик по строке обработки в таблице скачает результаты</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2150"/>
+        <location filename="../mapflow.py" line="2173"/>
         <source>{} processings finished. 
  Double-click it in the table to download the results</source>
         <translation>Завершено успешно {} обработок.
@@ -1293,7 +1298,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation type="obsolete">Цена обработки: {response_data} credits</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1458"/>
+        <location filename="../mapflow.py" line="1482"/>
         <source>Bad AOI. AOI must be inside boundaries: 
 [-180, 180] by longitude, [-90, 90] by latitude</source>
         <translation>Неверный AOI. AOI должен быть в пределах:
@@ -1310,7 +1315,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation type="obsolete">Лимит обработки: {:.2f} кв.км</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1851"/>
+        <location filename="../mapflow.py" line="1874"/>
         <source>Only finished processings can be rated</source>
         <translation>Только законченные обработки могут быть оценены</translation>
     </message>
@@ -1320,7 +1325,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation type="obsolete">Пожалуйста, оставьте отзыв для оценки. Спасибо!</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1880"/>
+        <location filename="../mapflow.py" line="1903"/>
         <source>Thank you! Your rating and feedback are submitted!</source>
         <translation>Спасибо! Ваша оценка и отзыв отправлены!</translation>
     </message>
@@ -1335,17 +1340,17 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation type="obsolete">Пожалуйста, выберите обработку и рейтинг для отправки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1916"/>
+        <location filename="../mapflow.py" line="1939"/>
         <source>Only the results of correctly finished processing can be loaded</source>
         <translation>Загружать можно только результаты корректно законченной обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2331"/>
+        <location filename="../mapflow.py" line="2354"/>
         <source>Error</source>
         <translation>Ошибка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1873"/>
+        <location filename="../mapflow.py" line="1896"/>
         <source>Thank you! Your rating is submitted!
 We would appreciate if you add feedback as well.</source>
         <translation>Спасибо! Ваша оценка отправлена! Мы будем благодарны, если добавите комментарий к оценке.</translation>
@@ -1356,76 +1361,76 @@ We would appreciate if you add feedback as well.</source>
         <translation>Вход </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="473"/>
+        <location filename="../mapflow.py" line="480"/>
         <source>This provider is default and cannot be removed</source>
         <translation>Этот провайдер встроен в плагин, его нельзя удалить</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="612"/>
+        <location filename="../mapflow.py" line="616"/>
         <source>{} doesn&apos;t allow processing single images.</source>
         <translation>{} не позволяет обрабатывать отдельные изображения.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1196"/>
+        <location filename="../mapflow.py" line="1202"/>
         <source>AOI must contain not more than {} polygons</source>
         <translation>Область интереса не должна содержать более {} полигонов</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1265"/>
+        <location filename="../mapflow.py" line="1285"/>
         <source>Set AOI to start processing</source>
         <translation>Задайте область интереса, чтобы запустить обработку</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1275"/>
+        <location filename="../mapflow.py" line="1297"/>
         <source>Processing cost is not available:
 {error}</source>
         <translation>Стоимость обработки недоступна:
 {error}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1296"/>
+        <location filename="../mapflow.py" line="1319"/>
         <source>Processing cost is not available:
 {message}</source>
         <translation>Стоимость обработки недоступна:
 {message}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1303"/>
+        <location filename="../mapflow.py" line="1327"/>
         <source>Processsing cost: {cost} credits</source>
         <translation>Стоимость обработки: {cost} кредитов</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1472"/>
+        <location filename="../mapflow.py" line="1496"/>
         <source>Providers are not initialized</source>
         <translation>Провайдеры данных не установлены</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1480"/>
+        <location filename="../mapflow.py" line="1504"/>
         <source>Please select image in Search table for {}</source>
         <translation>Пожалуйста выберете изображение в таблице поиска для {}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1652"/>
+        <location filename="../mapflow.py" line="1676"/>
         <source>Your balance: {} credits</source>
         <translation>Ваш баланс: {} кредитов</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1778"/>
+        <location filename="../mapflow.py" line="1801"/>
         <source>Provider {name} requires image id for preview!</source>
         <translation>Чтобы открыть предпросмотр провайдера {name}, задайте ID изображения!</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1508"/>
+        <location filename="../mapflow.py" line="1532"/>
         <source>This provider requires image ID!</source>
         <translation>Выберите ID изображения!</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1654"/>
+        <location filename="../mapflow.py" line="1678"/>
         <source>Remaining limit: {:.2f} sq.km</source>
         <translation>Доступная площадь: {:.2f} кв.км</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1506"/>
+        <location filename="../mapflow.py" line="1530"/>
         <source>Selected AOI does not intestect the selected image</source>
         <translation>Выбранные область и изображение не пересекаются</translation>
     </message>
