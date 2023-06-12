@@ -106,6 +106,10 @@ class Provider:
         # option for interface and settings
         raise NotImplementedError
 
+    @property
+    def is_payed(self):
+        return False
+
     def preview_url(self, image_id=None):
         raise NotImplementedError
 

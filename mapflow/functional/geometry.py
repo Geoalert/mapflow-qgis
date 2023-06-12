@@ -2,8 +2,13 @@ from qgis import processing as qgis_processing  # to avoid collisions
 from qgis.core import QgsVectorLayer, QgsFeature, QgsGeometry, QgsFeatureIterator
 
 
-def clip_aoi_to_image_extent(aoi_geometry: QgsGeometry, extent: QgsFeature) -> QgsFeatureIterator:
-    """Clip user AOI to image extent if the image doesn't cover the entire AOI."""
+def clip_aoi_to_image_extent(aoi_geometry: QgsGeometry,
+                             extent: QgsFeature) -> QgsFeatureIterator:
+    """Clip user AOI to image extent if the image doesn't cover the entire AOI.
+    args:
+        aoi_geometry: AOI geometry - selected by user area of interest (input)
+        extent: image extent (overlay)
+    """
     aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
     aoi = QgsFeature()
     aoi.setGeometry(aoi_geometry)

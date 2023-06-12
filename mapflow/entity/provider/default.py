@@ -1,7 +1,9 @@
 from .provider import staticproperty
 from .xyz_provider import XYZProvider, SourceType, CRS
 from .proxy_provider import ProxyProvider, MaxarProxyProvider
+from ..processing_params import ProcessingParams
 from ...constants import SENTINEL_OPTION_NAME
+from ...errors.plugin_errors import PluginError
 
 
 class SentinelProvider(ProxyProvider):
@@ -21,9 +23,12 @@ class SentinelProvider(ProxyProvider):
 
     def to_processing_params(self, image_id=None):
         if not image_id:
-            raise ValueError("Sentinel provider must have image ID to launch the processing")
-        return{'url': image_id,
-               'source_type': self.source_type.value}, {}
+            raise PluginError("Sentinel provider must have image ID to launch the processing")
+        return ProcessingParams(url=image_id, source_type=self.source_type.value), {}
+
+    @property
+    def meta_url(self):
+        return self.proxy + '/meta/skywatch/id'
 
 
 class MaxarVividProxyProvider(MaxarProxyProvider):
@@ -32,7 +37,7 @@ class MaxarVividProxyProvider(MaxarProxyProvider):
 
     @property
     def requires_image_id(self):
-        return False
+        return True
 
     @property
     def connect_id(self):
@@ -45,7 +50,7 @@ class MaxarSecureWatchProxyProvider(MaxarProxyProvider):
 
     @property
     def requires_image_id(self):
-        return False
+        return True
 
     @property
     def connect_id(self):

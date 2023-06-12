@@ -15,6 +15,11 @@ MAXAR_REQUEST_BODY = """<?xml version="1.0" encoding="utf-8"?>
         <PropertyName>cloudCover</PropertyName>
         <PropertyName>offNadirAngle</PropertyName>
         <PropertyName>acquisitionDate</PropertyName>
+        <PropertyName>legacyId</PropertyName>
+        <PropertyName>licenseType</PropertyName>
+        <PropertyName>ageDays</PropertyName>
+        <PropertyName>CE90Accuracy</PropertyName>
+        <PropertyName>RMSEAccuracy</PropertyName>
         <PropertyName>geometry</PropertyName>
         <ogc:Filter>
             <ogc:And>

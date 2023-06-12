@@ -10,6 +10,9 @@ class Config:
     MAPFLOW_ENV = QgsSettings().value('variables/mapflow_env', "") or'production'
     PROJECT_ID = QgsSettings().value("variables/mapflow_project_id", "") or "default"
     SERVER = "https://whitemaps-{env}.mapflow.ai/rest".format(env=MAPFLOW_ENV)
+    BILLING_HISTORY_URL = "https://app.mapflow.ai/account/billing-history"
+    TOP_UP_URL = "https://app.mapflow.ai/account/balance"
+    MODEL_DOCS_URL = "https://docs.mapflow.ai/userguides/models_changelog/index.html"
 
     # PROCESSINGS
     PROCESSING_TABLE_REFRESH_INTERVAL = 6  # in seconds
@@ -32,7 +35,7 @@ class Config:
     MAXAR_MAX_FREE_ZOOM = 12
 
     # MISC
-    ENABLE_SENTINEL = (QgsSettings().value('variables/mapflow_enable_sentinel') == "True")
+    ENABLE_SENTINEL = (QgsSettings().value('variables/mapflow_enable_sentinel', "false").lower() == "true")
     SKYWATCH_METADATA_MAX_AREA = 1e11  # 100,000 sq.km
     SKYWATCH_METADATA_MAX_SIDE_LENGTH = 1e6  # 1,000 km
     INVALID_TOKEN_WARNING_OBJECT_NAME = 'invalidToken'
@@ -47,18 +50,20 @@ class Config:
     MAX_ZOOM = 21
     DEFAULT_ZOOM = MAXAR_MAX_FREE_ZOOM
     USER_STATUS_UPDATE_INTERVAL = 30  # seconds
-    PROCESSING_COST_LABEL_ENABLED = False
 
     STYLES = {
-        'Buildings Detection': 'buildings',
+        '🏠 Buildings': 'buildings',
         'Buildings Detection With Heights': 'buildings',
-        'Forest Detection': 'forest',
-        'Forest Detection With Heights': 'forest_with_heights',
-        'Roads Detection': 'roads'
+        '🌲 Forest': 'forest',
+        '🌲↕️ Forest with heights': 'forest_with_heights',
+        '🚗 Roads': 'roads',
+        '🏗️ Construction sites': 'construction'
     }
 
     MAX_FILE_SIZE_PIXELS = 30_000
     MAX_FILE_SIZE_BYTES = 1024**3
+
+    MAX_AOIS_PER_PROCESSING = int(QgsSettings().value("variables/mapflow_max_aois", "10"))
 
 
 config = Config()

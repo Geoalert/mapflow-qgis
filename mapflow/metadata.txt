@@ -9,11 +9,16 @@ about=Mapflow provides AI models for automatic feature extraction from satellite
         - roads
         - construction sites
     For a step-by-step user guide, go to https://docs.mapflow.ai/api/qgis_mapflow#user-interface
-version=1.8.0
+version=2.0.0
 author=Geoalert
 email=hello@geoalert.io
 changelog:
-
+    2.0.0
+        - Reflect breaking API changes: credits-based billing instead of area-based
+        - Add new error descriptions
+        - Improve UI
+        - Display processing cost or problems with processing creation parameters
+        - Add links to top up balance and billing statistics pages
     1.8.0:
         - Change UI
         - Add "rate processing" function
