@@ -2214,10 +2214,9 @@ class Mapflow(QObject):
         Since there are submodules, the various UI texts are set dynamically.
         """
         # Set main dialog title dynamically so it could be overridden when used as a submodule
-        if self.config.MAPFLOW_ENV == 'production':
-            self.dlg.setWindowTitle(self.plugin_name)
-        else:
-            self.dlg.setWindowTitle(self.plugin_name + f' {self.config.MAPFLOW_ENV}')
+        self.dlg.setWindowTitle(helpers.generate_plugin_header(self.plugin_name,
+                                                               env=self.config.MAPFLOW_ENV,
+                                                               project_name=None))
         # Display plugin icon in own toolbar
         plugin_button = QAction(plugin_icon, self.plugin_name, self.main_window)
         plugin_button.triggered.connect(self.main)
