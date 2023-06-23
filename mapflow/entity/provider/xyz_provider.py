@@ -29,7 +29,7 @@ class BasemapProvider(Provider):
     def to_processing_params(self, image_id=None):
         params = {
             'url': self.url,
-            'crs': self.crs.value,
+            'projection': self.crs.value.lower(),
             'source_type': self.source_type.value
         }
         if self.credentials:
