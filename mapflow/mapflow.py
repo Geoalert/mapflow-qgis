@@ -1912,22 +1912,39 @@ class Mapflow(QObject):
         if processing.status != "OK":
             self.alert(self.tr('Only finished processings can be rated'))
             return
-        elif processing.review_status != "IN_REVIEW": # pending review
-            self.alert(self.tr("Processing must be in awaiting_review status"))
+        elif processing.review_status != "IN_REVIEW":
+            self.alert(self.tr("Processing must be in IN_REVIEW status"))
             return
         self.http.put(
             url=f'{self.server}/processings/{pid}/acceptation',
-            callback=self.accept_processing_callback
+            callback=self.review_processing_callback
         )
 
-    def accept_processing_callback(self, response: QNetworkReply):
+    def review_processing_callback(self, response: QNetworkReply):
         self.processing_fetch_timer.start()
         self.http.get(url=f'{self.server}/projects/{self.config.PROJECT_ID}/processings',
                       callback=self.get_processings_callback,
                       use_default_error_handler=False)
 
     def review_processing(self):
-        print("Not implemented yet!")
+        processing = self.selected_processing()
+        if not processing:
+            return
+        pid = processing.id_
+        if processing.status != "OK":
+            self.alert(self.tr('Only finished processings can be rated'))
+            return
+        elif processing.review_status != "IN_REVIEW":
+            self.alert(self.tr("Processing must be in IN_REVIEW status"))
+            return
+
+        body = {"comment": self.dlg.processingRatingFeedbackText.toPlainText(),
+                "features": {"type": "FeatureCollection", "features": []}}
+        self.http.put(
+            url=f'{self.server}/processings/{pid}/rejection',
+            body=json.dumps(body).encode(),
+            callback=self.review_processing_callback
+        )
 
     def submit_processing_rating_callback(self, response: QNetworkReply, feedback: str) -> None:
         if not feedback:

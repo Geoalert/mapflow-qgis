@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple
+from dataclasses import dataclass
 from enum import Enum
 import sys
 from ..errors import ErrorMessage
@@ -19,9 +20,16 @@ class ProcessingReviewStatus(str, Enum):
 
 
 class Processing:
-    def __init__(self, id_, name, status,
-                 workflow_def, aoi_area, created,
-                 percent_completed, raster_layer, errors=None,
+    def __init__(self,
+                 id_,
+                 name,
+                 status,
+                 workflow_def,
+                 aoi_area,
+                 created,
+                 percent_completed,
+                 raster_layer,
+                 errors=None,
                  review_status=None,
                  in_review_until=None,
                  **kwargs):
