@@ -24,8 +24,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # Restrict combos to relevant layer types; QGIS 3.10-3.20 (at least) bugs up if set in .ui
         self.polygonCombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
         self.rasterCombo.setFilters(QgsMapLayerProxyModel.RasterLayer)
-        self.reviewLayerCombo.setFilters(QgsMapLayerProxyModel.HasGeometry)
-        self.reviewLayerCombo.setAllowEmptyLayer(True)
         # Set icons (can be done in .ui but brings about the resources_rc import bug)
         self.setWindowIcon(icons.plugin_icon)
         self.addProvider.setIcon(icons.plus_icon)
@@ -76,23 +74,11 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.ratingComboBox.setVisible(enable)
         self.rateProcessingLabel.setVisible(enable)
         self.ratingSubmitButton.setVisible(enable)
-        if enable:
-            self.processingRatingFeedbackText.setPlaceholderText(self.tr("Share your thoughts on what aspects "
-                                                                         "of this data processing "
-                                                                         "work well or could be improved"
-                                                                         ))
+        self.processingRatingFeedbackText.setVisible(enable)
 
     def show_review_controls(self, enable: bool):
-        self.reviewLabel.setVisible(enable)
-        self.reviewLayerCombo.setVisible(enable)
         self.acceptButton.setVisible(enable)
         self.reviewButton.setVisible(enable)
-        if enable:
-            self.processingRatingFeedbackText.setPlaceholderText(self.tr("On accept you may leave this field empty.\n"
-                                                                         "If reviewing, describe please, "
-                                                                         "what problems should we address "
-                                                                         "to make this processing acceptable?"
-                                                                         ))
 
     def setup_imagery_search(self,
                              provider_name: str,
@@ -176,16 +162,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.ratingComboBox.setCurrentIndex(position)
         self.processingRatingFeedbackText.setText(current_feedback or "")
 
-    def enable_feedback(self,
-                        review_enabled: bool,
-                        can_interact: bool = True,
-                        can_review: bool = True,
-                        reason: str = ""):
-        if review_enabled:
-            self.enable_review(can_interact, can_review, reason)
-        else:
-            self.enable_rating(can_interact, can_review, reason)
-
     def enable_rating(self,
                       can_interact: bool = True,
                       can_send: bool = True,
@@ -206,25 +182,19 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.ratingSubmitButton.setToolTip(self.tr("Please select processing and rating to submit"))
 
     def enable_review(self,
-                        can_interact: bool = True,
-                        can_review: bool = True,
-                        reason: str = ""):
+                      can_interact: bool = True,
+                      reason: str = ""):
         """
         Toggle the whole group of controls about user's feedback
 
         reason is displayed tooltip on `why the buttons are disabled`
         """
-        self.reviewLayerCombo.setEnabled(can_interact)
-        self.reviewLabel.setEnabled(can_interact)
-        self.processingRatingFeedbackText.setEnabled(can_interact)
         self.acceptButton.setEnabled(can_interact)
-        self.reviewButton.setEnabled(can_interact and can_review)
+        self.reviewButton.setEnabled(can_interact)
 
-        if can_interact and can_review:
+        if can_interact:
             self.reviewButton.setToolTip("")
             self.acceptButton.setToolTip("")
         elif not can_interact:
             self.reviewButton.setToolTip(reason)
             self.acceptButton.setToolTip(reason)
-        else:
-            self.reviewButton.setToolTip(reason)

@@ -26,7 +26,7 @@
       <enum>QLayout::SetNoConstraint</enum>
      </property>
      <item>
-      <layout class="QVBoxLayout" name="procesingControlLayout" stretch="0,0,0,0,0,0,0,0,0,0,0,0,0">
+      <layout class="QVBoxLayout" name="procesingControlLayout" stretch="0,0,0,0,0,0,0,0,0,0,0,0">
        <property name="spacing">
         <number>10</number>
        </property>
@@ -588,23 +588,6 @@
             </property>
            </item>
           </widget>
-         </item>
-        </layout>
-       </item>
-       <item>
-        <layout class="QHBoxLayout" name="reviewControls">
-         <property name="topMargin">
-          <number>9</number>
-         </property>
-         <item>
-          <widget class="QLabel" name="reviewLabel">
-           <property name="text">
-            <string>Marked errors layer:</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QgsMapLayerComboBox" name="reviewLayerCombo"/>
          </item>
         </layout>
        </item>

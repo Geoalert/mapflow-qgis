@@ -27,7 +27,7 @@ from qgis.core import (
 )
 
 from .functional import layer_utils, helpers
-from .dialogs import MainDialog, LoginDialog, ErrorMessageWidget, ProviderDialog
+from .dialogs import MainDialog, LoginDialog, ErrorMessageWidget, ProviderDialog, ReviewDialog
 from .dialogs.icons import plugin_icon
 from .http import (Http,
                    get_error_report_body,
@@ -121,6 +121,7 @@ class Mapflow(QObject):
         # Init dialogs
         self.dlg = MainDialog(self.main_window)
         self.set_up_login_dialog()
+        self.review_dialog = ReviewDialog(self.dlg)
         self.dlg_provider = ProviderDialog(self.dlg)
         self.dlg_provider.accepted.connect(self.edit_provider_callback)
         # Display the plugin's version
@@ -185,13 +186,14 @@ class Mapflow(QObject):
         self.dlg.processingsTable.cellClicked.connect(self.enable_feedback)
         self.dlg.ratingSubmitButton.clicked.connect(self.submit_processing_rating)
         self.dlg.enable_rating(False, False)  # by default disabled
-        self.dlg.enable_review(False, False)
+        self.dlg.enable_review(False)
         # processing feedback fields
         self.dlg.ratingComboBox.activated.connect(self.enable_feedback)
         self.dlg.processingRatingFeedbackText.textChanged.connect(self.enable_feedback)
         # processing review
         self.dlg.acceptButton.clicked.connect(self.accept_processing)
-        self.dlg.reviewButton.clicked.connect(self.review_processing)
+        self.dlg.reviewButton.clicked.connect(self.show_review_dialog)
+        self.review_dialog.accepted.connect(self.submit_review)
         # Providers
         self.dlg.minIntersectionSpinBox.valueChanged.connect(self.filter_metadata)
         self.dlg.maxCloudCoverSpinBox.valueChanged.connect(self.filter_metadata)
@@ -1926,22 +1928,25 @@ class Mapflow(QObject):
                       callback=self.get_processings_callback,
                       use_default_error_handler=False)
 
-    def review_processing(self):
+    def show_review_dialog(self):
         processing = self.selected_processing()
         if not processing:
             return
-        pid = processing.id_
         if processing.status != "OK":
             self.alert(self.tr('Only finished processings can be rated'))
             return
         elif processing.review_status != "IN_REVIEW":
             self.alert(self.tr("Processing must be in IN_REVIEW status"))
             return
+        self.review_dialog.setup(processing)
+        self.review_dialog.show()
 
-        body = {"comment": self.dlg.processingRatingFeedbackText.toPlainText(),
-                "features": {"type": "FeatureCollection", "features": []}}
+    def submit_review(self):
+        print("SUBMITTING")
+        body = {"comment": self.review_dialog.reviewComment.toPlainText(),
+                "features": layer_utils.export_as_geojson(self.review_dialog.reviewLayerCombo.currentLayer())}
         self.http.put(
-            url=f'{self.server}/processings/{pid}/rejection',
+            url=f'{self.server}/processings/{self.review_dialog.processing.id_}/rejection',
             body=json.dumps(body).encode(),
             callback=self.review_processing_callback
         )
@@ -1964,16 +1969,8 @@ class Mapflow(QObject):
         self.update_processing_current_rating()
 
     def enable_review_submit(self, status_ok: bool) -> None:
-        review_text_present = self.dlg.processingRatingFeedbackText.toPlainText() != ""
-        if not status_ok:
-            reason = self.tr("Only correctly finished processings (status OK) can be reviewed")
-        elif not review_text_present:
-            reason = self.tr("Please fill review text form to submit review")
-        else:
-            reason = ""
         self.dlg.enable_review(status_ok,
-                               review_text_present,
-                               reason)
+                               self.tr("Only correctly finished processings (status OK) can be reviewed"))
 
     def enable_rating_submit(self, status_ok: bool) -> None:
         rating_selected = 5 >= self.dlg.ratingComboBox.currentIndex() > 0
