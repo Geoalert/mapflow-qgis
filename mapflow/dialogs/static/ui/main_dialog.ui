@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1011</width>
-    <height>480</height>
+    <width>1013</width>
+    <height>530</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -26,7 +26,7 @@
       <enum>QLayout::SetNoConstraint</enum>
      </property>
      <item>
-      <layout class="QVBoxLayout" name="procesingControlLayout" stretch="0,0,0,0,0,0,0,0,0,0,0">
+      <layout class="QVBoxLayout" name="procesingControlLayout" stretch="0,0,0,0,0,0,0,0,0,0,0,0,0">
        <property name="spacing">
         <number>10</number>
        </property>
@@ -532,7 +532,7 @@
         </widget>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_8">
+        <layout class="QHBoxLayout" name="ratingControls">
          <property name="leftMargin">
           <number>0</number>
          </property>
@@ -592,6 +592,23 @@
         </layout>
        </item>
        <item>
+        <layout class="QHBoxLayout" name="reviewControls">
+         <property name="topMargin">
+          <number>9</number>
+         </property>
+         <item>
+          <widget class="QLabel" name="reviewLabel">
+           <property name="text">
+            <string>Marked errors layer:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QgsMapLayerComboBox" name="reviewLayerCombo"/>
+         </item>
+        </layout>
+       </item>
+       <item>
         <widget class="QTextEdit" name="processingRatingFeedbackText">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Expanding" vsizetype="Maximum">
@@ -615,6 +632,27 @@
           <string>Share your thoughts on what aspects of this data processing work well or could be improved</string>
          </property>
         </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="reviewButtons">
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QPushButton" name="acceptButton">
+           <property name="text">
+            <string>Accept</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="reviewButton">
+           <property name="text">
+            <string>Review</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
        </item>
        <item>
         <widget class="QPushButton" name="ratingSubmitButton">

@@ -72,6 +72,7 @@ class Mapflow(QObject):
         self.remaining_limit = 0
         self.remaining_credits = 0
         self.billing_type = BillingType.area
+        self.review_workflow_enabled = False
         self.processing_cost = 0
         # Save refs to key variables used throughout the plugin
         self.iface = iface
@@ -181,11 +182,13 @@ class Mapflow(QObject):
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Processings ratings
         self.dlg.processingsTable.cellClicked.connect(self.update_processing_current_rating)
-        self.dlg.processingsTable.cellClicked.connect(self.enable_rating_submit_button)
+        self.dlg.processingsTable.cellClicked.connect(self.enable_feedback)
         self.dlg.ratingSubmitButton.clicked.connect(self.submit_processing_rating)
-        self.dlg.enable_rating(False)  # by default disabled
+        self.dlg.enable_rating(False, False)  # by default disabled
+        self.dlg.enable_review(False, False)
         # connect radio buttons signals
-        self.dlg.ratingComboBox.activated.connect(self.enable_rating_submit_button)
+        self.dlg.ratingComboBox.activated.connect(self.enable_feedback)
+        self.dlg.processingRatingFeedbackText.textChanged.connect(self.enable_feedback)
         # Providers
         self.dlg.minIntersectionSpinBox.valueChanged.connect(self.filter_metadata)
         self.dlg.maxCloudCoverSpinBox.valueChanged.connect(self.filter_metadata)
@@ -1679,12 +1682,14 @@ class Mapflow(QObject):
         else:  # BillingType.none
             balance_str = ''
 
+        self.review_workflow_enabled = response_data.get('reviewWorkflowEnabled', False)
         self.dlg.balanceLabel.setText(balance_str)
 
         if app_startup_request:
             self.update_processing_cost()
             self.app_startup_user_update_timer.stop()
             self.dlg.setup_for_billing(self.billing_type)
+            self.dlg.setup_for_review(self.review_workflow_enabled)
             self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex())
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
@@ -1908,15 +1913,42 @@ class Mapflow(QObject):
             )
         self.update_processing_current_rating()
 
-    def enable_rating_submit_button(self) -> None:
+    def enable_review_submit(self, status_ok: bool) -> None:
+        review_text_present = self.dlg.processingRatingFeedbackText.toPlainText() != ""
+        if not status_ok:
+            reason = self.tr("Only correctly finished processings (status OK) can be reviewed")
+        elif not review_text_present:
+            reason = self.tr("Please fill review text form to submit review")
+        else:
+            reason = ""
+        self.dlg.enable_review(status_ok,
+                               review_text_present,
+                               reason)
+
+    def enable_rating_submit(self, status_ok: bool) -> None:
+        rating_selected = 5 >= self.dlg.ratingComboBox.currentIndex() > 0
+        if not status_ok:
+            reason = self.tr("Only correctly finished processings (status OK) can be rated")
+        elif not rating_selected:
+            reason = self.tr("Please select rating to submit")
+        else:
+            reason = ""
+        self.dlg.enable_rating(status_ok,
+                               rating_selected,
+                               reason)
+
+    def enable_feedback(self) -> None:
         row = self.dlg.processingsTable.currentRow()
         if not row >= 0:
             return
         pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
         processing = next(filter(lambda p: p.id_ == pid, self.processings))
         status_ok = (processing.status == 'OK')
-        rating_selected = 5 >= self.dlg.ratingComboBox.currentIndex() > 0
-        self.dlg.enable_rating(status_ok, rating_selected)
+
+        if self.review_workflow_enabled:
+            self.enable_review_submit(status_ok)
+        else:
+            self.enable_rating_submit(status_ok)
 
     def download_results(self) -> None:
         """Download and display processing results along with the source raster, if available.
