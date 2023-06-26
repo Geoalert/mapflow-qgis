@@ -1,13 +1,30 @@
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple
+from enum import Enum
 import sys
 from ..errors import ErrorMessage
+
+
+class ProcessingStatus(str, Enum):
+    in_progress = 'IN_PROGRESS'
+    ok = 'OK'
+    failed = 'FAILED'
+
+
+class ProcessingReviewStatus(str, Enum):
+    in_review = 'IN_REVIEW'
+    not_accepted = 'NOT_ACCEPTED'
+    refunded = 'REFUNDED'
+    accepted = 'ACCEPTED'
 
 
 class Processing:
     def __init__(self, id_, name, status,
                  workflow_def, aoi_area, created,
-                 percent_completed, raster_layer, errors=None,  **kwargs):
+                 percent_completed, raster_layer, errors=None,
+                 review_status=None,
+                 in_review_until=None,
+                 **kwargs):
         self.id_ = id_
         self.name = name
         self.status = status
@@ -17,6 +34,8 @@ class Processing:
         self.percent_completed = int(percent_completed)
         self.errors = errors
         self.raster_layer = raster_layer
+        self.review_status = review_status
+        self.in_review_until = in_review_until
 
     @classmethod
     def from_response(cls, processing):
@@ -37,7 +56,23 @@ class Processing:
         messages = processing.get('messages', [])
         errors = [ErrorMessage.from_response(message) for message in messages]
         raster_layer = processing['rasterLayer']
-        return cls(id_, name, status, workflow_def, aoi_area, created, percent_completed, raster_layer, errors)
+        if processing.get('reviewStatus'):
+            review_status = processing.get('reviewStatus', {}).get('reviewStatus')
+            in_review_until = processing.get('reviewStatus', {}).get('inReviewUntil')
+        else:
+            review_status = in_review_until = None
+
+        return cls(id_,
+                   name,
+                   status,
+                   workflow_def,
+                   aoi_area,
+                   created,
+                   percent_completed,
+                   raster_layer,
+                   errors,
+                   review_status,
+                   in_review_until)
 
     @property
     def is_new(self):
@@ -54,7 +89,7 @@ class Processing:
         return {
             'id': self.id_,
             'name': self.name,
-            'status': self.status,
+            'status': self.status_with_review,
             'workflowDef': self.workflow_def,
             'aoiArea': self.aoi_area,
             'percentCompleted': self.percent_completed,
@@ -63,6 +98,17 @@ class Processing:
             'created': self.created.strftime('%Y-%m-%d %H:%M'),
             'rasterLayer': self.raster_layer
         }
+
+    @property
+    def status_with_review(self):
+        """
+        Review status is set instead of status if applicable, that is
+        when the status is OK and review_status is set (not None)
+        """
+        if self.status == "OK" and self.review_status:
+            return self.review_status
+        else:
+            return self.status
 
 
 def parse_processings_request_dict(response: list) -> Dict[str, Processing]:
