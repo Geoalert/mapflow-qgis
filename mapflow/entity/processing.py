@@ -1,22 +1,8 @@
+import sys
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple
-from dataclasses import dataclass
-from enum import Enum
-import sys
+from .status import ProcessingStatus, ProcessingReviewStatus
 from ..errors import ErrorMessage
-
-
-class ProcessingStatus(str, Enum):
-    in_progress = 'IN_PROGRESS'
-    ok = 'OK'
-    failed = 'FAILED'
-
-
-class ProcessingReviewStatus(str, Enum):
-    in_review = 'IN_REVIEW'
-    not_accepted = 'NOT_ACCEPTED'
-    refunded = 'REFUNDED'
-    accepted = 'ACCEPTED'
 
 
 class Processing:
@@ -35,14 +21,14 @@ class Processing:
                  **kwargs):
         self.id_ = id_
         self.name = name
-        self.status = status
+        self.status = ProcessingStatus(status)
         self.workflow_def = workflow_def
         self.aoi_area = aoi_area
         self.created = created.astimezone()
         self.percent_completed = int(percent_completed)
         self.errors = errors
         self.raster_layer = raster_layer
-        self.review_status = review_status
+        self.review_status = ProcessingReviewStatus(review_status)
         self.in_review_until = in_review_until
 
     @classmethod
@@ -113,10 +99,10 @@ class Processing:
         Review status is set instead of status if applicable, that is
         when the status is OK and review_status is set (not None)
         """
-        if self.status == "OK" and self.review_status:
-            return self.review_status
+        if self.status.is_ok and not self.review_status.is_none:
+            return self.review_status.display_value
         else:
-            return self.status
+            return self.status.display_value
 
 
 def parse_processings_request_dict(response: list) -> Dict[str, Processing]:
@@ -165,7 +151,7 @@ def updated_processings(processings: List[Processing],
     failed_ids = []
     finished_ids = []
     for processing in processings:
-        if processing.status == 'FAILED':
+        if processing.status.is_failed:
             failed_ids.append(processing.id_)
             if processing.id_ not in history.failed:
                 failed.append(processing)

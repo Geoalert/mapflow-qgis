@@ -1887,7 +1887,7 @@ class Mapflow(QObject):
         if not processing:
             return
         pid = processing.id_
-        if processing.status != 'OK':
+        if not processing.status.is_ok:
             self.alert(self.tr('Only finished processings can be rated'))
             return
         # Rating is descending: None-5-4-3-2-1
@@ -1911,10 +1911,10 @@ class Mapflow(QObject):
         if not processing:
             return
         pid = processing.id_
-        if processing.status != "OK":
+        if not processing.status.is_ok:
             self.alert(self.tr('Only finished processings can be rated'))
             return
-        elif processing.review_status != "IN_REVIEW":
+        elif not processing.review_status.is_in_review:
             self.alert(self.tr("Processing must be in IN_REVIEW status"))
             return
         self.http.put(
@@ -1932,11 +1932,11 @@ class Mapflow(QObject):
         processing = self.selected_processing()
         if not processing:
             return
-        if processing.status != "OK":
+        if not processing.status.is_ok:
             self.alert(self.tr('Only finished processings can be rated'))
             return
-        elif processing.review_status != "IN_REVIEW":
-            self.alert(self.tr("Processing must be in IN_REVIEW status"))
+        elif not processing.review_status.is_in_review:
+            self.alert(self.tr("Processing must be in  status"))
             return
         self.review_dialog.setup(processing)
         self.review_dialog.show()
@@ -1990,13 +1990,11 @@ class Mapflow(QObject):
             return
         pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
         processing = next(filter(lambda p: p.id_ == pid, self.processings))
-        status_ok = (processing.status == 'OK')
-        review_requested = processing.review_status == 'IN_REVIEW'
 
         if self.review_workflow_enabled:
-            self.enable_review_submit(status_ok and review_requested)
+            self.enable_review_submit(processing.status.is_ok and processing.review_status.is_in_review)
         else:
-            self.enable_rating_submit(status_ok)
+            self.enable_rating_submit(processing.status.is_ok)
 
     def download_results(self) -> None:
         """Download and display processing results along with the source raster, if available.
@@ -2174,7 +2172,9 @@ class Mapflow(QObject):
         :param response: The HTTP response.
         """
         processings = parse_processings_request(json.loads(response.readAll().data()))
-        if all(p.status != 'IN_PROGRESS' and p.review_status != 'NOT_ACCEPTED' for p in processings):
+        if all(not p.status.is_in_progress
+               and p.review_status.is_not_accepted
+               for p in processings):
             # We do not re-fetch the processings, if nothing is going to change.
             # What can change from server-side: processing can finish if IN_PROGRESS
             # or review can be accepted if NOT_ACCEPTED.
@@ -2277,12 +2277,12 @@ class Mapflow(QObject):
             for col, attr in enumerate(self.config.PROCESSING_ATTRIBUTES):
                 table_item = QTableWidgetItem()
                 table_item.setData(Qt.DisplayRole, processing_dict[attr])
-                if proc.status == 'FAILED':
+                if proc.status.is_failed:
                     table_item.setToolTip(proc.error_message())
                 elif proc.in_review_until:
                     table_item.setToolTip(self.tr("Please review this processing until {}. Double click to add results"
                                                   " to the map").format(proc.in_review_until))
-                elif proc.status == 'OK':
+                elif proc.status.is_ok:
                     table_item.setToolTip(self.tr("Double click to add results to the map"))
                 self.dlg.processingsTable.setItem(row, col, table_item)
             if proc.id_ in selected_processings:
