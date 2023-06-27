@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1013</width>
+    <width>1011</width>
     <height>530</height>
    </rect>
   </property>
@@ -838,7 +838,7 @@
               <bool>true</bool>
              </property>
              <property name="columnCount">
-              <number>7</number>
+              <number>9</number>
              </property>
              <attribute name="horizontalHeaderDefaultSectionSize">
               <number>100</number>
@@ -876,7 +876,17 @@
              </column>
              <column>
               <property name="text">
+               <string>Cost</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
                <string>Created</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Review until</string>
               </property>
              </column>
              <column>
@@ -1283,6 +1293,107 @@
             </spacer>
            </item>
            <item>
+            <widget class="QLabel" name="label_3">
+             <property name="text">
+              <string>Show/hide processings table columns:</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_3">
+             <property name="topMargin">
+              <number>0</number>
+             </property>
+             <item>
+              <widget class="QCheckBox" name="showNameColumn">
+               <property name="enabled">
+                <bool>false</bool>
+               </property>
+               <property name="text">
+                <string>Name</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="showModelColumn">
+               <property name="text">
+                <string>Model</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="showStatusColumn">
+               <property name="text">
+                <string>Status</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="showProgressColumn">
+               <property name="text">
+                <string>Progress</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="showAreaColumn">
+               <property name="text">
+                <string>Area</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="showCostColumn">
+               <property name="text">
+                <string>Cost</string>
+               </property>
+               <property name="checked">
+                <bool>false</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="showCreatedColumn">
+               <property name="text">
+                <string>Created</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="showReviewColumn">
+               <property name="text">
+                <string>Review</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="showIdColumn">
+               <property name="text">
+                <string>Id</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
             <widget class="QLabel" name="label_4">
              <property name="text">
               <string>Edit imagery providers available to the plugin</string>
@@ -1540,15 +1651,15 @@
  </widget>
  <customwidgets>
   <customwidget>
+   <class>QgsMapLayerComboBox</class>
+   <extends>QComboBox</extends>
+   <header>qgsmaplayercombobox.h</header>
+  </customwidget>
+  <customwidget>
    <class>QgsCollapsibleGroupBox</class>
    <extends>QGroupBox</extends>
    <header>qgscollapsiblegroupbox.h</header>
    <container>1</container>
-  </customwidget>
-  <customwidget>
-   <class>QgsMapLayerComboBox</class>
-   <extends>QComboBox</extends>
-   <header>qgsmaplayercombobox.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

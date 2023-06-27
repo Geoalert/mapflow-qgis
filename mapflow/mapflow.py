@@ -4,7 +4,7 @@ import os.path
 import tempfile
 from base64 import b64encode, b64decode
 from typing import List, Optional, Union, Callable, Tuple
-from datetime import datetime  # processing creation datetime formatting
+from datetime import datetime, timedelta  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
 from osgeo import gdal
@@ -1942,7 +1942,6 @@ class Mapflow(QObject):
         self.review_dialog.show()
 
     def submit_review(self):
-        print("SUBMITTING")
         body = {"comment": self.review_dialog.reviewComment.toPlainText(),
                 "features": layer_utils.export_as_geojson(self.review_dialog.reviewLayerCombo.currentLayer())}
         self.http.put(
@@ -2274,7 +2273,12 @@ class Mapflow(QObject):
         # Fill out the table
         for row, proc in enumerate(processings):
             processing_dict = proc.asdict()
-            for col, attr in enumerate(self.config.PROCESSING_ATTRIBUTES):
+            set_color = False
+            if proc.status.is_ok and proc.review_expires:
+                # setting color for close review
+                set_color = True
+                color = QColor(255, 220, 200)
+            for col, attr in enumerate(self.config.PROCESSING_TABLE_COLUMNS):
                 table_item = QTableWidgetItem()
                 table_item.setData(Qt.DisplayRole, processing_dict[attr])
                 if proc.status.is_failed:
@@ -2284,6 +2288,8 @@ class Mapflow(QObject):
                                                   " to the map").format(proc.in_review_until))
                 elif proc.status.is_ok:
                     table_item.setToolTip(self.tr("Double click to add results to the map"))
+                if set_color:
+                    table_item.setBackground(color)
                 self.dlg.processingsTable.setItem(row, col, table_item)
             if proc.id_ in selected_processings:
                 self.dlg.processingsTable.selectRow(row)
@@ -2291,6 +2297,7 @@ class Mapflow(QObject):
         # Restore extended selection
         self.dlg.processingsTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
 
+        # test
 
     def initGui(self) -> None:
         """Create the menu entries and toolbar icons inside the QGIS GUI.
@@ -2497,7 +2504,7 @@ class Mapflow(QObject):
         self.dlg.modelCombo.setCurrentText(self.config.DEFAULT_MODEL)
         self.dlg.rasterCombo.setCurrentText('Mapbox')
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
-        self.dlg.processingsTable.setColumnHidden(self.config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
+
         self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
         # Authenticate and keep user logged in
         self.logged_in = True
