@@ -307,16 +307,7 @@ class Mapflow(QObject):
         raster_layers = (layer for layer in self.project.mapLayers().values()
                          if layer.type() == QgsMapLayerType.RasterLayer)
         if self.dlg.modelCombo.currentText() in self.config.SENTINEL_WD_NAMES:
-            filtered_raster_layers = raster_layers
-        else:
-            try:
-                filtered_raster_layers = [
-                    layer for layer in raster_layers
-                    if not helpers.raster_layer_is_allowed(layer)
-                ]
-            except Exception as e:
-                self.alert(f"Error checking raster layers validity: {e}")
-        self.dlg.rasterCombo.setExceptedLayerList(filtered_raster_layers)
+            self.dlg.rasterCombo.setExceptedLayerList(raster_layers)
 
     def on_model_change(self, index: int) -> None:
         wd_name = self.dlg.modelCombo.currentText()
@@ -1450,6 +1441,7 @@ class Mapflow(QObject):
             raise BadProcessingInput(self.tr(
                 'Up to {} sq km can be processed at a time. '
                 'Try splitting your area(s) into several processings.').format(self.aoi_area_limit))
+
         return True
 
     def crop_aoi_with_maxar_image_footprint(self,
@@ -1526,6 +1518,14 @@ class Mapflow(QObject):
         wd_id = self.workflow_defs.get(wd_name).id
         try:
             self.check_processing_ui(allow_empty_name=allow_empty_name)
+            if imagery:
+                # raster layer selected is local tiff
+                if not helpers.raster_layer_is_allowed(imagery):
+                    raise BadProcessingInput(self.tr("Raster image is not acceptable. "
+                                                     " It must be a tiff file, have pixel size less than {size}"
+                                                     " and memory size less than {memory}"
+                                                     " MB").format(size=self.config.MAX_FILE_SIZE_PIXELS,
+                                                                  memory=self.config.MAX_FILE_SIZE_BYTES//(1024*1024)))
             provider_params, processing_meta = self.get_processing_params(raster_option=raster_option,
                                                                           raster_layer=imagery,
                                                                           image_id=image_id)
