@@ -159,6 +159,15 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.ratingSubmitButton.setToolTip("")
         elif not can_interact:
             self.ratingSubmitButton.setToolTip(self.tr("Only correctly finished processings "
-                                                           "(status OK) can be rated"))
+                                                       "(status OK) can be rated"))
         else:
             self.ratingSubmitButton.setToolTip(self.tr("Please select processing and rating to submit"))
+
+    def disable_processing_start(self,
+                                 reason: str,
+                                 clear_area: bool = False):
+        if clear_area:
+            self.labelAoiArea.clear()
+        self.processingProblemsLabel.setPalette(self.alert_palette)
+        self.processingProblemsLabel.setText(reason)
+        self.startProcessing.setDisabled(True)
