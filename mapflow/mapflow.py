@@ -1469,6 +1469,7 @@ class Mapflow(QObject):
         if not provider:
             raise PluginError(self.tr('Providers are not initialized'))
         provider_params, provider_meta = provider.to_processing_params(image_id=image_id)
+
         meta.update(**provider_meta)
         return provider_params, meta
 
@@ -1538,6 +1539,7 @@ class Mapflow(QObject):
             meta=processing_meta,
             params=provider_params,
             geometry=json.loads(aoi.asJson()))
+
         return processing_params, ""
 
     def create_processing(self) -> None:
@@ -1803,8 +1805,10 @@ class Mapflow(QObject):
             return
         except NotImplementedError as e:
             self.alert(self.tr("Preview is unavailable for the provider {}").format(provider.name))
+            return
         except Exception as e:
             self.alert(str(e), QMessageBox.Warning)
+            return
         if provider.is_proxy:
             uri = layer_utils.generate_xyz_layer_definition(url,
                                                             self.username,
@@ -1819,6 +1823,7 @@ class Mapflow(QObject):
                                                             max_zoom, provider.source_type)
             extent = None
         layer = QgsRasterLayer(uri, layer_name, 'wms')
+        layer.setCrs(QgsCoordinateReferenceSystem(provider.crs))
         if layer.isValid():
             if isinstance(provider, (MaxarProvider, MaxarProxyProvider)) and image_id and extent:
                 layer.setExtent(extent)
