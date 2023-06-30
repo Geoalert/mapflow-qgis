@@ -1180,7 +1180,7 @@ class Mapflow(QObject):
         elif isinstance(provider, (MaxarProvider, MaxarProxyProvider)):
             if not helpers.UUID_REGEX.match(image_id):
                 self.dlg.imageId.clear()
-                self.alert('A Maxar image ID should look like a3b154c40cc74f3b934c0ffc9b34ecd1')
+                self.alert(self.tr('A Maxar image ID should look like a3b154c40cc74f3b934c0ffc9b34ecd1'))
                 return
         items = self.dlg.metadataTable.findItems(image_id, Qt.MatchExactly)
         if not items:
