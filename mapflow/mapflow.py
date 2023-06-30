@@ -1522,8 +1522,8 @@ class Mapflow(QObject):
                 # raster layer selected is local tiff
                 if not helpers.raster_layer_is_allowed(imagery):
                     raise BadProcessingInput(self.tr("Raster image is not acceptable. "
-                                                     " It must be a tiff file, have pixel size less than {size}"
-                                                     " and memory size less than {memory}"
+                                                     " It must be a Tiff file, have size less than {size} pixels"
+                                                     " and file size less than {memory}"
                                                      " MB").format(size=self.config.MAX_FILE_SIZE_PIXELS,
                                                                   memory=self.config.MAX_FILE_SIZE_BYTES//(1024*1024)))
             provider_params, processing_meta = self.get_processing_params(raster_option=raster_option,
