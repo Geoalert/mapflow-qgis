@@ -26,9 +26,9 @@
       <enum>QLayout::SetNoConstraint</enum>
      </property>
      <item>
-      <layout class="QVBoxLayout" name="procesingControlLayout" stretch="0,0,0,0,0,0,0,0,0,0,0">
+      <layout class="QVBoxLayout" name="procesingControlLayout" stretch="0,0,0,0,0,0,0,0,0,0,0,0">
        <property name="spacing">
-        <number>10</number>
+        <number>0</number>
        </property>
        <property name="topMargin">
         <number>0</number>
@@ -100,6 +100,9 @@
          <property name="sizeConstraint">
           <enum>QLayout::SetMinimumSize</enum>
          </property>
+         <property name="bottomMargin">
+          <number>10</number>
+         </property>
          <item>
           <widget class="QLabel" name="labelProcessingName">
            <property name="text">
@@ -120,6 +123,9 @@
         <layout class="QHBoxLayout" name="horizontalLayout_4">
          <property name="sizeConstraint">
           <enum>QLayout::SetMinimumSize</enum>
+         </property>
+         <property name="bottomMargin">
+          <number>10</number>
          </property>
          <item>
           <widget class="QLabel" name="labelAoiLayer">
@@ -183,6 +189,9 @@
          <property name="topMargin">
           <number>0</number>
          </property>
+         <property name="bottomMargin">
+          <number>10</number>
+         </property>
          <item>
           <widget class="QCheckBox" name="useImageExtentAsAoi">
            <property name="text">
@@ -206,6 +215,9 @@
         <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="0,1,0">
          <property name="sizeConstraint">
           <enum>QLayout::SetMinimumSize</enum>
+         </property>
+         <property name="bottomMargin">
+          <number>3</number>
          </property>
          <item>
           <widget class="QLabel" name="labelImagerySource">
@@ -296,12 +308,74 @@
         </layout>
        </item>
        <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_3">
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>10</number>
+         </property>
+         <item>
+          <widget class="QLabel" name="labelZoomLimit">
+           <property name="text">
+            <string>Max zoom:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QSpinBox" name="maxZoom">
+           <property name="maximumSize">
+            <size>
+             <width>40</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::PlusMinus</enum>
+           </property>
+           <property name="maximum">
+            <number>21</number>
+           </property>
+           <property name="value">
+            <number>12</number>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer_4">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QPushButton" name="preview">
+           <property name="text">
+            <string>Preview</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
         <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0,0,1,0">
          <property name="spacing">
           <number>-1</number>
          </property>
          <property name="sizeConstraint">
           <enum>QLayout::SetMinimumSize</enum>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>10</number>
          </property>
          <item>
           <widget class="QLabel" name="labelAiModel">
@@ -455,7 +529,7 @@
           <number>0</number>
          </property>
          <property name="bottomMargin">
-          <number>0</number>
+          <number>10</number>
          </property>
          <item>
           <widget class="QPushButton" name="startProcessing">
@@ -502,6 +576,12 @@
          </item>
          <item>
           <widget class="QLabel" name="processingProblemsLabel">
+           <property name="minimumSize">
+            <size>
+             <width>50</width>
+             <height>0</height>
+            </size>
+           </property>
            <property name="maximumSize">
             <size>
              <width>500</width>
@@ -540,7 +620,7 @@
           <number>0</number>
          </property>
          <property name="bottomMargin">
-          <number>0</number>
+          <number>10</number>
          </property>
          <item>
           <widget class="QLabel" name="rateProcessingLabel">
@@ -911,7 +991,7 @@
           </attribute>
           <layout class="QVBoxLayout" name="settingsLayout" stretch="0,0">
            <item>
-            <layout class="QHBoxLayout" name="provider" stretch="0,2,0,0,0">
+            <layout class="QHBoxLayout" name="provider" stretch="0,2">
              <item>
               <widget class="QLabel" name="labelImageId">
                <property name="text">
@@ -923,33 +1003,6 @@
               <widget class="QLineEdit" name="imageId">
                <property name="placeholderText">
                 <string>Select in the table below or paste here</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLabel" name="labelZoomLimit">
-               <property name="text">
-                <string>Max zoom:</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QSpinBox" name="maxZoom">
-               <property name="buttonSymbols">
-                <enum>QAbstractSpinBox::PlusMinus</enum>
-               </property>
-               <property name="maximum">
-                <number>21</number>
-               </property>
-               <property name="value">
-                <number>12</number>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QPushButton" name="preview">
-               <property name="text">
-                <string>Preview</string>
                </property>
               </widget>
              </item>
