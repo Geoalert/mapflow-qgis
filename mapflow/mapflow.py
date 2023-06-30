@@ -494,7 +494,6 @@ class Mapflow(QObject):
         else:
             # returned empty provider - i.e. nothing was changed
             return
-
         if not old_provider:
             # we have added new one - without current one
             if new_provider.name in self.providers:
@@ -505,6 +504,7 @@ class Mapflow(QObject):
                 return
             else:
                 self.providers.update({new_provider.name: new_provider})
+
         else:
             # we replace old provider with a new one
             # if self.dlg_provider.property('mode') == 'edit':  #
@@ -518,7 +518,6 @@ class Mapflow(QObject):
             else:
                 self.providers.pop(old_provider.name)
                 self.providers.update({new_provider.name: new_provider})
-
         self.update_providers()
         self.dlg.providerCombo.setCurrentText(new_provider.name)
 
@@ -547,6 +546,7 @@ class Mapflow(QObject):
         self.providers.to_settings(self.settings)
         self.dlg.providerCombo.clear()
         self.dlg.providerCombo.addItems(self.providers.keys())
+        self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
 
     def show_provider_edit_dialog(self, name) -> None:
         provider = self.providers.get(name, None)
