@@ -19,7 +19,7 @@ class Serializable:
 class ProcessingParams(Serializable):
     url: str
     source_type: str
-    crs: Optional[str] = None
+    projection: Optional[str] = None
     raster_login: Optional[str] = None
     raster_password: Optional[str] = None
 
