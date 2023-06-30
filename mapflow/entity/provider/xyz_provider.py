@@ -160,7 +160,7 @@ class MaxarProvider(XYZProvider):
     def to_processing_params(self, image_id=None):
         params = ProcessingParams( url=maxar_tile_url(self.url, image_id),
                                    source_type=self.source_type,
-                                   crs=self.crs.value,
+                                   projection=self.crs.value,
                                    raster_login=self.credentials.login,
                                    raster_password=self.credentials.password)
         return params, {}

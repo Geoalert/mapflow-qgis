@@ -82,7 +82,7 @@ class MaxarProxyProvider(ProxyProvider, ABC):
             raise ImageIdRequired("Cannot start processing without image ID!")
         params = ProcessingParams(url=add_image_id(self.url, image_id),
                                   source_type=self.source_type.value,
-                                  crs=self.crs.value)
+                                  projection=self.crs.value)
         meta = {'source': 'maxar',
                 'maxar_product': self.connect_id}
         return params, meta
