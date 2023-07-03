@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Optional, Mapping, Any
 
 
-class Serializable():
+class Serializable:
     def as_dict(self, skip_none=True):
         if skip_none:
             return dataclasses.asdict(self, dict_factory=lambda x: {k: v for (k, v) in x if v is not None})
