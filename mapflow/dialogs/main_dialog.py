@@ -233,3 +233,12 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         elif not can_interact:
             self.reviewButton.setToolTip(reason)
             self.acceptButton.setToolTip(reason)
+
+    def disable_processing_start(self,
+                                 reason: str,
+                                 clear_area: bool = False):
+        if clear_area:
+            self.labelAoiArea.clear()
+        self.processingProblemsLabel.setPalette(self.alert_palette)
+        self.processingProblemsLabel.setText(reason)
+        self.startProcessing.setDisabled(True)

@@ -1188,25 +1188,24 @@ class Mapflow(QObject):
         """
         if self.dlg.useImageExtentAsAoi.isChecked():  # GeoTIFF extent used; no difference
             return
-        if layer and self.max_aois_per_processing >= layer.featureCount() > 0:
-            features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
+
+        if not layer or layer.featureCount() == 0:
+            self.dlg.disable_processing_start(reason=self.tr('Set AOI to start processing'),
+                                              clear_area=True)
+            self.aoi = self.aoi_size = None
+            return
+
+        features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
+        if self.max_aois_per_processing >= len(features) > 0:
             if len(features) == 1:
                 aoi = features[0].geometry()
             else:
                 aoi = QgsGeometry.collectGeometry([feature.geometry() for feature in features])
             self.calculate_aoi_area(aoi, layer.crs())
-        elif layer and self.max_aois_per_processing < layer.featureCount():
-            self.dlg.labelAoiArea.clear()
-            self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
-            self.dlg.processingProblemsLabel.setText(self.tr('AOI must contain not more than'
-                                                        ' {} polygons').format(self.max_aois_per_processing))
-            self.dlg.startProcessing.setDisabled(True)
-            self.aoi = self.aoi_size = None
-        else:  # empty layer or combo's itself is empty
-            self.dlg.labelAoiArea.clear()
-            self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
-            self.dlg.processingProblemsLabel.setText(self.tr('Set AOI to start processing'))
-            self.dlg.startProcessing.setDisabled(True)
+        else: # self.max_aois_per_processing < layer.featureCount():
+            self.dlg.disable_processing_start(reason=self.tr('AOI must contain not more than'
+                                                             ' {} polygons').format(self.max_aois_per_processing),
+                                              clear_area=True)
             self.aoi = self.aoi_size = None
 
     def calculate_aoi_area_raster(self, layer: Optional[QgsRasterLayer]) -> None:
@@ -1279,13 +1278,11 @@ class Mapflow(QObject):
         if not self.aoi:
             # Here the button must already be disabled, and the warning text set
             if self.dlg.startProcessing.isEnabled():
-                self.dlg.startProcessing.setDisabled(True)
-                self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
-                self.dlg.processingProblemsLabel.setText(self.tr("Set AOI to start processing"))
+                self.dlg.disable_processing_start(reason=self.tr("Set AOI to start processing"),
+                                                  clear_area=False)
         elif not self.workflow_defs:
-            self.dlg.startProcessing.setDisabled(True)
-            self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
-            self.dlg.processingProblemsLabel.setText("Error! Models are not initialized")
+            self.dlg.disable_processing_start(reason=self.tr("Error! Models are not initialized"),
+                                              clear_area=True)
         elif self.billing_type != BillingType.credits:
             self.dlg.startProcessing.setEnabled(True)
             self.dlg.processingProblemsLabel.clear()
@@ -1314,10 +1311,9 @@ class Mapflow(QObject):
         """
         response_text = response.readAll().data().decode()
         message = api_message_parser(response_text)
-        self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
-        self.dlg.processingProblemsLabel.setText(self.tr('Processing cost is not available:\n'
-                                                         '{message}').format(message=message))
-        self.dlg.startProcessing.setEnabled(True)
+        self.dlg.disable_processing_start(reason=self.tr('Processing cost is not available:\n'
+                                                         '{message}').format(message=message),
+                                          clear_area=False)
 
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         response_data = response.readAll().data().decode()
