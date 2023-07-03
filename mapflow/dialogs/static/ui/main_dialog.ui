@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1646</width>
+    <width>1011</width>
     <height>604</height>
    </rect>
   </property>
@@ -792,10 +792,10 @@
           </size>
          </property>
          <property name="currentIndex">
-          <number>2</number>
+          <number>0</number>
          </property>
          <property name="movable">
-          <bool>true</bool>
+          <bool>false</bool>
          </property>
          <widget class="QWidget" name="processingsTab">
           <attribute name="title">
