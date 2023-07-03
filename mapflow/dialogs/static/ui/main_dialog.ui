@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1075</width>
-    <height>530</height>
+    <width>1646</width>
+    <height>604</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -792,7 +792,7 @@
           </size>
          </property>
          <property name="currentIndex">
-          <number>0</number>
+          <number>2</number>
          </property>
          <property name="movable">
           <bool>true</bool>
@@ -1450,7 +1450,7 @@
              <property name="maximumSize">
               <size>
                <width>200</width>
-               <height>16777215</height>
+               <height>210</height>
               </size>
              </property>
              <property name="verticalScrollBarPolicy">
@@ -1471,7 +1471,7 @@
                 <x>0</x>
                 <y>0</y>
                 <width>198</width>
-                <height>250</height>
+                <height>208</height>
                </rect>
               </property>
               <property name="minimumSize">
@@ -1485,7 +1485,7 @@
                 <rect>
                  <x>10</x>
                  <y>170</y>
-                 <width>671</width>
+                 <width>141</width>
                  <height>20</height>
                 </rect>
                </property>
@@ -1498,7 +1498,7 @@
                 <rect>
                  <x>10</x>
                  <y>23</y>
-                 <width>671</width>
+                 <width>141</width>
                  <height>20</height>
                 </rect>
                </property>
@@ -1514,7 +1514,7 @@
                 <rect>
                  <x>10</x>
                  <y>44</y>
-                 <width>671</width>
+                 <width>141</width>
                  <height>20</height>
                 </rect>
                </property>
@@ -1530,7 +1530,7 @@
                 <rect>
                  <x>10</x>
                  <y>86</y>
-                 <width>671</width>
+                 <width>141</width>
                  <height>20</height>
                 </rect>
                </property>
@@ -1546,7 +1546,7 @@
                 <rect>
                  <x>10</x>
                  <y>65</y>
-                 <width>671</width>
+                 <width>141</width>
                  <height>20</height>
                 </rect>
                </property>
@@ -1562,7 +1562,7 @@
                 <rect>
                  <x>10</x>
                  <y>107</y>
-                 <width>671</width>
+                 <width>141</width>
                  <height>20</height>
                 </rect>
                </property>
@@ -1578,7 +1578,7 @@
                 <rect>
                  <x>10</x>
                  <y>128</y>
-                 <width>671</width>
+                 <width>141</width>
                  <height>20</height>
                 </rect>
                </property>
@@ -1597,7 +1597,7 @@
                 <rect>
                  <x>10</x>
                  <y>2</y>
-                 <width>671</width>
+                 <width>141</width>
                  <height>20</height>
                 </rect>
                </property>
@@ -1613,7 +1613,7 @@
                 <rect>
                  <x>10</x>
                  <y>149</y>
-                 <width>671</width>
+                 <width>141</width>
                  <height>20</height>
                 </rect>
                </property>
