@@ -160,8 +160,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.imageId.setEnabled(enabled)
         self.imageId.setPlaceholderText(image_id_placeholder)
         self.labelImageId.setToolTip(image_id_tooltip)
-        self.searchImageryButton.clicked.connect(lambda: self.tabWidget.setCurrentIndex(1))
 
+        imagery_search_tab = self.tabWidget.findChild(QWidget, "providersTab")
+        self.searchImageryButton.clicked.connect(lambda: self.tabWidget.setCurrentWidget(imagery_search_tab))
         self.searchImageryButton.setEnabled(enabled)
         self.searchImageryButton.setToolTip(self.tr("Search imagery") if enabled
                                             else self.tr("Provider does not support imagery search"))
