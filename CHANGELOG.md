@@ -1,3 +1,12 @@
+## 2.1.0
+    - Add visibility settings for "Processings" table (see "Settings" tab)
+    - Add "Cost" and "ID" as processing columns
+    - For enterprise customers: new "review workflow" enabled 
+      to allow reject unsatisfying processing results
+    - Show all the rasters in the "Data source" list, 
+      and show the reason, if the raster cannot be processed
+    - Fix: allow to use selected features for processing and search 
+      even if the layer contains more than 10 features
 ## 2.0.0
     - Reflect breaking API changes: credits-based billing instead of area-based
     - Add new error descriptions

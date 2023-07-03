@@ -1916,7 +1916,7 @@ class Mapflow(QObject):
             self.alert(self.tr('Only finished processings can be rated'))
             return
         elif not processing.review_status.is_in_review:
-            self.alert(self.tr("Processing must be in IN_REVIEW status"))
+            self.alert(self.tr("Processing must be in `Review required` status"))
             return
         self.http.put(
             url=f'{self.server}/processings/{pid}/acceptation',
@@ -1937,7 +1937,7 @@ class Mapflow(QObject):
             self.alert(self.tr('Only finished processings can be rated'))
             return
         elif not processing.review_status.is_in_review:
-            self.alert(self.tr("Processing must be in  status"))
+            self.alert(self.tr("Processing must be in `Review required` status"))
             return
         self.review_dialog.setup(processing)
         self.review_dialog.show()

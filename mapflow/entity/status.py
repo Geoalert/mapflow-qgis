@@ -15,9 +15,9 @@ class ProcessingReviewStatusDict(QObject):
     def __init__(self):
         super().__init__()
         self.value_map = {None: None,
-                          'IN_REVIEW': self.tr("Review requested"),
-                          'NOT_ACCEPTED': self.tr("In revision"),
-                          'REFUNDED': self.tr("Failed"),
+                          'IN_REVIEW': self.tr("Review required"),
+                          'NOT_ACCEPTED': self.tr("In review"),
+                          'REFUNDED': self.tr("Refunded"),
                           'ACCEPTED': self.tr("Ok")}
 
 
