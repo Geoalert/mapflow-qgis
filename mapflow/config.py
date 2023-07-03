@@ -27,7 +27,8 @@ class Config:
                                 'id')
 
     """
-    {'name' : self.tr("Name"),
+    todo: add tabs in code, not in designer ?
+                                {'name' : self.tr("Name"),
                                 'workflowDef': self.tr("Model"),
                                 'status': self.tr("Status"),
                                 'percentCompleted': self.tr("Progress %"),
@@ -39,7 +40,7 @@ class Config:
     """
     PROCESSING_TABLE_ID_COLUMN_INDEX = PROCESSING_TABLE_COLUMNS.index('id')
     PROCESSING_TABLE_SORT_COLUMN_INDEX = PROCESSING_TABLE_COLUMNS.index('created')
-    DEFAULT_HIDDEN_COLUMNS = (PROCESSING_TABLE_COLUMNS.index(item) for item in ('id', 'reviewUntil'))
+    DEFAULT_HIDDEN_COLUMNS = (PROCESSING_TABLE_COLUMNS.index(item) for item in ('id', 'reviewUntil', 'cost'))
     # MAXAR
     MAXAR_METADATA_ATTRIBUTES = {
         'Product Type': 'productType',
