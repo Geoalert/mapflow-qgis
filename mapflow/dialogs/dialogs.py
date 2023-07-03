@@ -1,13 +1,11 @@
 from pathlib import Path
 
 from PyQt5 import uic
-from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 from qgis.core import QgsMapLayerProxyModel
+from .icons import plugin_icon
 
 ui_path = Path(__file__).parent/'static'/'ui'
-icon_path = Path(__file__).parent/'static'/'icons'
-plugin_icon = QIcon(str(icon_path/'mapflow.png'))
 
 
 class LoginDialog(*uic.loadUiType(ui_path/'login_dialog.ui')):

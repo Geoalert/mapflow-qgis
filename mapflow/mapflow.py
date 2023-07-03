@@ -29,6 +29,7 @@ from qgis.core import (
 from .functional import layer_utils, helpers
 from .dialogs import MainDialog, LoginDialog, ErrorMessageWidget, ProviderDialog, ReviewDialog
 from .dialogs.icons import plugin_icon
+
 from .http import (Http,
                    get_error_report_body,
                    data_catalog_message_parser,
@@ -117,8 +118,8 @@ class Mapflow(QObject):
         self.settings.beginGroup(self.plugin_name.lower())
         if self.settings.value('processings') is None:
             self.settings.setValue('processings', {})
-
         # Init dialogs
+        self.plugin_icon = plugin_icon
         self.dlg = MainDialog(self.main_window)
         self.set_up_login_dialog()
         self.review_dialog = ReviewDialog(self.dlg)
@@ -2311,7 +2312,7 @@ class Mapflow(QObject):
                                                                env=self.config.MAPFLOW_ENV,
                                                                project_name=None))
         # Display plugin icon in own toolbar
-        plugin_button = QAction(plugin_icon, self.plugin_name, self.main_window)
+        plugin_button = QAction(self.plugin_icon, self.plugin_name, self.main_window)
         plugin_button.triggered.connect(self.main)
         self.toolbar.addAction(plugin_button)
         self.project.readProject.connect(self.set_layer_group)
