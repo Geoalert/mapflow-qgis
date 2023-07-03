@@ -64,7 +64,8 @@ class MapboxProvider(XYZProvider):
                          crs=CRS.web_mercator)
     @property
     def preview_url(self, image_id=None):
-        return None
+        # We cannot provide preview via our proxy
+        raise NotImplementedError
 
     @property
     def is_default(self):

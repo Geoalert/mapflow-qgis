@@ -16,9 +16,31 @@ class Config:
 
     # PROCESSINGS
     PROCESSING_TABLE_REFRESH_INTERVAL = 6  # in seconds
-    PROCESSING_ATTRIBUTES = 'name', 'workflowDef', 'status', 'percentCompleted', 'aoiArea', 'created', 'id'
-    PROCESSING_TABLE_ID_COLUMN_INDEX = PROCESSING_ATTRIBUTES.index('id')
-    PROCESSING_TABLE_SORT_COLUMN_INDEX = PROCESSING_ATTRIBUTES.index('created')
+    PROCESSING_TABLE_COLUMNS = ('name',
+                                'workflowDef',
+                                'status',
+                                'percentCompleted',
+                                'aoiArea',
+                                'cost',
+                                'created',
+                                'reviewUntil',
+                                'id')
+
+    """
+    todo: add tabs in code, not in designer ?
+                                {'name' : self.tr("Name"),
+                                'workflowDef': self.tr("Model"),
+                                'status': self.tr("Status"),
+                                'percentCompleted': self.tr("Progress %"),
+                                'aoiArea': self.tr("Area, sq.km"),
+                                'cost': self.tr("Cost"),
+                                'created': self.tr("Created"),
+                                'reviewUntil': self.tr("review until"),
+                                'id': self.tr("ID")}
+    """
+    PROCESSING_TABLE_ID_COLUMN_INDEX = PROCESSING_TABLE_COLUMNS.index('id')
+    PROCESSING_TABLE_SORT_COLUMN_INDEX = PROCESSING_TABLE_COLUMNS.index('created')
+    DEFAULT_HIDDEN_COLUMNS = (PROCESSING_TABLE_COLUMNS.index(item) for item in ('id', 'reviewUntil', 'cost'))
     # MAXAR
     MAXAR_METADATA_ATTRIBUTES = {
         'Product Type': 'productType',

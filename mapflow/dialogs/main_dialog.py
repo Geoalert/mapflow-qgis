@@ -3,8 +3,8 @@ from typing import Iterable, Optional
 
 from PyQt5 import uic
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPalette
-from PyQt5.QtWidgets import QWidget, QPushButton
+from PyQt5.QtGui import QPalette, QStandardItemModel
+from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox
 from qgis.core import QgsMapLayerProxyModel
 
 from ..entity.billing import BillingType
@@ -49,6 +49,44 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.alert_palette.setColor(QPalette.WindowText, Qt.red)
         # self.processingProblemsLabel.setPalette(self.alert_palette)
 
+        # not show review/rating at first, to avoid showing non-appropriate buttons
+        self.show_feedback_controls(False)
+        self.show_review_controls(False)
+
+        # setup hidden/visible columns
+        # table.setHorizontalHeaderLabels(labels)
+        self.set_column_visibility()
+        self.connect_column_checkboxes()
+
+    def connect_column_checkboxes(self):
+        self.showNameColumn.toggled.connect(self.set_column_visibility)
+        self.showModelColumn.toggled.connect(self.set_column_visibility)
+        self.showStatusColumn.toggled.connect(self.set_column_visibility)
+        self.showProgressColumn.toggled.connect(self.set_column_visibility)
+        self.showAreaColumn.toggled.connect(self.set_column_visibility)
+        self.showCostColumn.toggled.connect(self.set_column_visibility)
+        self.showCreatedColumn.toggled.connect(self.set_column_visibility)
+        self.showReviewColumn.toggled.connect(self.set_column_visibility)
+        self.showIdColumn.toggled.connect(self.set_column_visibility)
+
+    def set_column_visibility(self):
+        """
+        todo: rewrite it as a checkable comboBox or something, which will be filled from code
+        """
+        column_flags = (self.showNameColumn.isChecked(),
+                        self.showModelColumn.isChecked(),
+                        self.showStatusColumn.isChecked(),
+                        self.showProgressColumn.isChecked(),
+                        self.showAreaColumn.isChecked(),
+                        self.showCostColumn.isChecked(),
+                        self.showCreatedColumn.isChecked(),
+                        self.showReviewColumn.isChecked(),
+                        self.showIdColumn.isChecked())
+
+        for idx, flag in enumerate(column_flags):
+            # A VERY ugly solution, depends on correspondence between Config, main_dialog.ui and this file
+            self.processingsTable.setColumnHidden(idx, not flag)
+
     # ========= SHOW =========== #
     def setup_for_billing(self, billing_type: BillingType):
         """
@@ -61,6 +99,20 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.labelCoins_1.setVisible(False)  # credits_used
         self.labelWdPrice.setVisible(False)  # credits_used
         self.balanceLabel.setVisible(balance_visible)
+
+    def setup_for_review(self, review_workflow_enabled: bool):
+        self.show_review_controls(review_workflow_enabled)
+        self.show_feedback_controls(not review_workflow_enabled)
+
+    def show_feedback_controls(self, enable: bool):
+        self.ratingComboBox.setVisible(enable)
+        self.rateProcessingLabel.setVisible(enable)
+        self.ratingSubmitButton.setVisible(enable)
+        self.processingRatingFeedbackText.setVisible(enable)
+
+    def show_review_controls(self, enable: bool):
+        self.acceptButton.setVisible(enable)
+        self.reviewButton.setVisible(enable)
 
     def setup_imagery_search(self,
                              provider_name: str,
@@ -108,8 +160,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.imageId.setEnabled(enabled)
         self.imageId.setPlaceholderText(image_id_placeholder)
         self.labelImageId.setToolTip(image_id_tooltip)
-        self.searchImageryButton.clicked.connect(lambda: self.tabWidget.setCurrentIndex(1))
 
+        imagery_search_tab = self.tabWidget.findChild(QWidget, "providersTab")
+        self.searchImageryButton.clicked.connect(lambda: self.tabWidget.setCurrentWidget(imagery_search_tab))
         self.searchImageryButton.setEnabled(enabled)
         self.searchImageryButton.setToolTip(self.tr("Search imagery") if enabled
                                             else self.tr("Provider does not support imagery search"))
@@ -145,8 +198,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.processingRatingFeedbackText.setText(current_feedback or "")
 
     def enable_rating(self,
-                      can_interact=True,
-                      can_send=True):
+                      can_interact: bool = True,
+                      can_send: bool = True,
+                      reason: str = ""):
         """
         Toggle the whole group of controls about user's feedback
         """
@@ -158,10 +212,27 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         if can_interact and can_send:
             self.ratingSubmitButton.setToolTip("")
         elif not can_interact:
-            self.ratingSubmitButton.setToolTip(self.tr("Only correctly finished processings "
-                                                       "(status OK) can be rated"))
+            self.ratingSubmitButton.setToolTip(reason)
         else:
             self.ratingSubmitButton.setToolTip(self.tr("Please select processing and rating to submit"))
+
+    def enable_review(self,
+                      can_interact: bool = True,
+                      reason: str = ""):
+        """
+        Toggle the whole group of controls about user's feedback
+
+        reason is displayed tooltip on `why the buttons are disabled`
+        """
+        self.acceptButton.setEnabled(can_interact)
+        self.reviewButton.setEnabled(can_interact)
+
+        if can_interact:
+            self.reviewButton.setToolTip("")
+            self.acceptButton.setToolTip("")
+        elif not can_interact:
+            self.reviewButton.setToolTip(reason)
+            self.acceptButton.setToolTip(reason)
 
     def disable_processing_start(self,
                                  reason: str,
