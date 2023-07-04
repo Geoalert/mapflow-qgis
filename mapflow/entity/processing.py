@@ -106,7 +106,7 @@ class Processing:
             # Serialize datetime and drop seconds for brevity
             'created': self.created.strftime('%Y-%m-%d %H:%M'),
             'rasterLayer': self.raster_layer,
-            'reviewUntil': self.in_review_until
+            'reviewUntil':  self.in_review_until.strftime('%Y-%m-%d %H:%M') if self.in_review_until else ""
         }
 
     @property

@@ -157,8 +157,6 @@ class Mapflow(QObject):
         today = QDate.currentDate()
         self.dlg.metadataFrom.setDate(self.settings.value('metadataFrom', today.addMonths(-6)))
         self.dlg.metadataTo.setDate(self.settings.value('metadataTo', today))
-        # Hide the ID columns as only needed for table operations, not the user
-        self.dlg.processingsTable.setColumnHidden(self.config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
         self.filter_bad_rasters()
         self.dlg.modelCombo.activated.connect(self.on_model_change)
@@ -1331,10 +1329,7 @@ class Mapflow(QObject):
         """
         # Pause refreshing processings table to avoid conflicts
         self.processing_fetch_timer.stop()
-        selected_ids = [
-            self.dlg.processingsTable.item(index.row(), self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
-            for index in self.dlg.processingsTable.selectionModel().selectedRows()
-        ]
+        selected_ids = self.selected_processing_ids()
         # Ask for confirmation if there are selected rows
         if selected_ids and self.alert(
                 self.tr('Delete selected processings?'), QMessageBox.Question
@@ -1855,6 +1850,8 @@ class Mapflow(QObject):
     def update_processing_current_rating(self) -> None:
         # reset labels:
         processing = self.selected_processing()
+        if not processing:
+            return
         pid = processing.id_
         p_name = processing.name
 
@@ -1876,13 +1873,27 @@ class Mapflow(QObject):
                                               current_rating=rating,
                                               current_feedback=feedback)
 
+    def selected_processing_ids(self, limit=None):
+        # add unique selected rows
+        selected_rows = list(set(index.row() for index in self.dlg.processingsTable.selectionModel().selectedIndexes()))
+        if not selected_rows:
+            return []
+        pids = [self.dlg.processingsTable.item(row,
+                                               self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+                for row in selected_rows[:limit]]
+        return pids
+
+    def selected_processings(self, limit=None) -> List[Processing]:
+        pids = self.selected_processing_ids(limit=limit)
+        # limit None will give full selection
+        selected_processings = [p for p in filter(lambda p: p.id_ in pids, self.processings)]
+        return selected_processings
+
     def selected_processing(self) -> Optional[Processing]:
-        row = self.dlg.processingsTable.currentRow()
-        if not row and (row != 0):
+        first = self.selected_processings(limit=1)
+        if not first:
             return None
-        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
-        processing = next(filter(lambda p: p.id_ == pid, self.processings))
-        return processing
+        return first[0]
 
     def submit_processing_rating(self) -> None:
         processing = self.selected_processing()
@@ -1986,10 +1997,10 @@ class Mapflow(QObject):
                                reason)
 
     def enable_feedback(self) -> None:
-        row = self.dlg.processingsTable.currentRow()
-        if not row >= 0:
+        processing = self.selected_processing()
+        if not processing:
             return
-        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+        pid = processing.id_
         processing = next(filter(lambda p: p.id_ == pid, self.processings))
 
         if self.review_workflow_enabled:
@@ -2010,11 +2021,11 @@ class Mapflow(QObject):
         """
         if not self.check_if_output_directory_is_selected():
             return
-        row = self.dlg.processingsTable.currentRow()
-        if row < 0:  # for some reason, if nothing is selected, returns -1
+        processing = self.selected_processing()
+        if not processing:
             return
-        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
-        if not pid in self.processing_history.finished:
+        pid = processing.id_
+        if pid not in self.processing_history.finished:
             self.alert(self.tr("Only the results of correctly finished processing can be loaded"))
             return
         self.dlg.processingsTable.setEnabled(False)
@@ -2261,10 +2272,7 @@ class Mapflow(QObject):
     def update_processing_table(self, processings: List[Processing]):
         # UPDATE THE TABLE
         # Memorize the selection to restore it after table update
-        selected_processings = [
-            index.data() for index in self.dlg.processingsTable.selectionModel().selectedIndexes()
-            if index.column() == self.config.PROCESSING_TABLE_ID_COLUMN_INDEX
-        ]
+        selected_processings = self.selected_processing_ids()
         # Explicitly clear selection since resetting row count won't do it
         self.dlg.processingsTable.clearSelection()
         # Temporarily enable multi selection so that selectRow won't clear previous selection
