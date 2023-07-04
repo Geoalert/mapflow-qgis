@@ -187,7 +187,7 @@ class Mapflow(QObject):
         self.dlg.enable_review(False)
         # processing feedback fields
         self.dlg.ratingComboBox.activated.connect(self.enable_feedback)
-        self.dlg.processingsTable.itemSelectionChanged.connect(self.update_processing_current_rating)
+        self.dlg.processingsTable.cellClicked.connect(self.update_processing_current_rating)
         # processing review
         self.dlg.acceptButton.clicked.connect(self.accept_processing)
         self.dlg.reviewButton.clicked.connect(self.show_review_dialog)
@@ -1690,8 +1690,6 @@ class Mapflow(QObject):
             self.dlg.setup_for_billing(self.billing_type)
             self.dlg.setup_for_review(self.review_workflow_enabled)
             self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex())
-            if not self.review_workflow_enabled:
-                self.dlg.processingsTable.itemSelectionChanged.connect(self.update_processing_current_rating)
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
         """Save and open the preview image as a layer."""
@@ -1849,10 +1847,9 @@ class Mapflow(QObject):
         else:  # XYZ providers
             self.preview_xyz(provider=provider, image_id=image_id)
 
-    def update_processing_current_rating(self, processing=None) -> None:
+    def update_processing_current_rating(self) -> None:
         # reset labels:
-        if not processing:
-            processing = self.selected_processing()
+        processing = self.selected_processing()
         if not processing:
             return
         pid = processing.id_
