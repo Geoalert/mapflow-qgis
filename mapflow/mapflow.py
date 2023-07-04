@@ -1936,6 +1936,8 @@ class Mapflow(QObject):
         )
 
     def review_processing_callback(self, response: QNetworkReply):
+        # Clear successfully uploaded review
+        self.review_dialog.reviewComment.setText("")
         self.processing_fetch_timer.start()
         self.http.get(url=f'{self.server}/projects/{self.config.PROJECT_ID}/processings',
                       callback=self.get_processings_callback,
@@ -2294,8 +2296,9 @@ class Mapflow(QObject):
                 if proc.status.is_failed:
                     table_item.setToolTip(proc.error_message())
                 elif proc.in_review_until:
-                    table_item.setToolTip(self.tr("Please review this processing until {}. Double click to add results"
-                                                  " to the map").format(proc.in_review_until))
+                    table_item.setToolTip(self.tr("Please review or accept this processing until {}."
+                                                  " Double click to add results"
+                                                  " to the map").format(proc.in_review_until.strftime('%Y-%m-%d %H:%M') if proc.in_review_until else ""))
                 elif proc.status.is_ok:
                     table_item.setToolTip(self.tr("Double click to add results to the map"))
                 if set_color:
