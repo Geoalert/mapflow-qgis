@@ -181,8 +181,8 @@ class Mapflow(QObject):
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Processings ratings
-        self.dlg.processingsTable.cellClicked.connect(self.update_processing_current_rating)
-        self.dlg.processingsTable.cellClicked.connect(self.enable_feedback)
+        self.dlg.processingsTable.itemSelectionChanged.connect(self.update_processing_current_rating)
+        self.dlg.processingsTable.itemSelectionChanged.connect(self.enable_feedback)
         self.dlg.ratingSubmitButton.clicked.connect(self.submit_processing_rating)
         self.dlg.enable_rating(False, False)  # by default disabled
         self.dlg.enable_review(False)
@@ -1848,6 +1848,9 @@ class Mapflow(QObject):
             self.preview_xyz(provider=provider, image_id=image_id)
 
     def update_processing_current_rating(self) -> None:
+        if self.review_workflow_enabled:
+            # ratings are disabled; no need to toggle the processing
+            return
         # reset labels:
         processing = self.selected_processing()
         if not processing:
@@ -2000,11 +2003,15 @@ class Mapflow(QObject):
 
     def enable_feedback(self) -> None:
         processing = self.selected_processing()
+        print(processing)
         if not processing:
+            if self.review_workflow_enabled:
+                self.enable_review_submit(False)
+            else:
+                self.enable_rating_submit(False)
             return
         pid = processing.id_
         processing = next(filter(lambda p: p.id_ == pid, self.processings))
-
         if self.review_workflow_enabled:
             self.enable_review_submit(processing.status.is_ok and processing.review_status.is_in_review)
         else:
