@@ -73,14 +73,6 @@ class Config:
     DEFAULT_ZOOM = MAXAR_MAX_FREE_ZOOM
     USER_STATUS_UPDATE_INTERVAL = 30  # seconds
 
-    STYLES = {
-        '🏠 Buildings': 'buildings',
-        'Buildings Detection With Heights': 'buildings',
-        '🌲 Forest': 'forest',
-        '🌲↕️ Forest with heights': 'forest_with_heights',
-        '🚗 Roads': 'roads',
-        '🏗️ Construction sites': 'construction'
-    }
 
     MAX_FILE_SIZE_PIXELS = 30_000
     MAX_FILE_SIZE_BYTES = 1024**3

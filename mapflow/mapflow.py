@@ -49,6 +49,7 @@ from .entity.processing_params import ProcessingParams, PostProcessingSchema
 from .errors import ProcessingInputDataMissing, BadProcessingInput, PluginError, ImageIdRequired, AoiNotIntersectsImage
 from .functional.geometry import clip_aoi_to_image_extent
 from . import constants
+from .styles import get_style_name
 
 
 class Mapflow(QObject):
@@ -2098,12 +2099,7 @@ class Mapflow(QObject):
             return
         # Load the results into QGIS
         results_layer = QgsVectorLayer(output_path, processing.name, 'ogr')
-        results_layer.loadNamedStyle(os.path.join(
-            self.plugin_dir,
-            'static',
-            'styles',
-            self.config.STYLES.get(processing.workflow_def, 'default') + '.qml'
-        ))
+        results_layer.loadNamedStyle(get_style_name(processing.workflow_def, layer))
         # Add the source raster (COG) if it has been created
         raster_url = processing.raster_layer.get('tileUrl')
         tile_json_url = processing.raster_layer.get("tileJsonUrl")
