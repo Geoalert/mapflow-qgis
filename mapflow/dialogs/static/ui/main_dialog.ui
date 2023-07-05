@@ -1287,7 +1287,7 @@
             </widget>
            </item>
            <item>
-            <layout class="QHBoxLayout" name="horizontalLayout_9" stretch="1,0,1">
+            <layout class="QHBoxLayout" name="horizontalLayout_9" stretch="1,0,1,0,0,0">
              <item>
               <widget class="QComboBox" name="providerCombo">
                <property name="minimumSize">
@@ -1407,6 +1407,33 @@
                 </size>
                </property>
               </spacer>
+             </item>
+             <item>
+              <widget class="QLabel" name="labelZoomLimit2">
+               <property name="text">
+                <string>Max zoom:</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QSpinBox" name="maxZoom2">
+               <property name="buttonSymbols">
+                <enum>QAbstractSpinBox::PlusMinus</enum>
+               </property>
+               <property name="maximum">
+                <number>21</number>
+               </property>
+               <property name="value">
+                <number>12</number>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="preview2">
+               <property name="text">
+                <string>Preview</string>
+               </property>
+              </widget>
              </item>
             </layout>
            </item>

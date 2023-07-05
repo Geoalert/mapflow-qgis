@@ -57,6 +57,19 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # table.setHorizontalHeaderLabels(labels)
         self.set_column_visibility()
         self.connect_column_checkboxes()
+        # connect two spinboxes
+        self.spin1_connection = self.maxZoom.valueChanged.connect(self.switch_maxzoom_2)
+        self.spin2_connection = self.maxZoom2.valueChanged.connect(self.switch_maxzoom_1)
+
+    def switch_maxzoom_1(self, value):
+        self.maxZoom.valueChanged.disconnect(self.spin1_connection)
+        self.maxZoom.setValue(value)
+        self.spin1_connection = self.maxZoom.valueChanged.connect(self.switch_maxzoom_2)
+
+    def switch_maxzoom_2(self, value):
+        self.maxZoom2.valueChanged.disconnect(self.spin2_connection)
+        self.maxZoom2.setValue(value)
+        self.spin2_connection = self.maxZoom2.valueChanged.connect(self.switch_maxzoom_1)
 
     def connect_column_checkboxes(self):
         self.showNameColumn.toggled.connect(self.set_column_visibility)
@@ -143,6 +156,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.maxZoom.setEnabled(preview_zoom_enabled)
         if preview_zoom_enabled:
             self.maxZoom.setMaximum(max_preview_zoom)
+            self.maxZoom2.setMaximum(max_preview_zoom)
             self.maxZoom.setValue(preview_zoom)
 
         self.metadataFilters.setEnabled(additional_filters_enabled)
