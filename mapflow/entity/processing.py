@@ -1,22 +1,37 @@
+import sys
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple
-import sys
+from .status import ProcessingStatus, ProcessingReviewStatus
 from ..errors import ErrorMessage
 
 
 class Processing:
-    def __init__(self, id_, name, status,
-                 workflow_def, aoi_area, created,
-                 percent_completed, raster_layer, errors=None,  **kwargs):
+    def __init__(self,
+                 id_,
+                 name,
+                 status,
+                 workflow_def,
+                 aoi_area,
+                 cost,
+                 created,
+                 percent_completed,
+                 raster_layer,
+                 errors=None,
+                 review_status=None,
+                 in_review_until=None,
+                 **kwargs):
         self.id_ = id_
         self.name = name
-        self.status = status
+        self.status = ProcessingStatus(status)
         self.workflow_def = workflow_def
         self.aoi_area = aoi_area
+        self.cost = int(cost)
         self.created = created.astimezone()
         self.percent_completed = int(percent_completed)
         self.errors = errors
         self.raster_layer = raster_layer
+        self.review_status = ProcessingReviewStatus(review_status)
+        self.in_review_until = in_review_until
 
     @classmethod
     def from_response(cls, processing):
@@ -30,20 +45,48 @@ class Processing:
             created = processing['created'].replace('Z', '+0000')
         else:
             created = processing['created']
-        created = datetime.strptime(
-            created, '%Y-%m-%dT%H:%M:%S.%f%z'
-        ).astimezone()
+        created = datetime.strptime(created, '%Y-%m-%dT%H:%M:%S.%f%z').astimezone()
         percent_completed = processing['percentCompleted']
         messages = processing.get('messages', [])
         errors = [ErrorMessage.from_response(message) for message in messages]
         raster_layer = processing['rasterLayer']
-        return cls(id_, name, status, workflow_def, aoi_area, created, percent_completed, raster_layer, errors)
+        if processing.get('reviewStatus'):
+            review_status = processing.get('reviewStatus', {}).get('reviewStatus')
+            in_review_until_str = processing.get('reviewStatus', {}).get('inReviewUntil')
+            if in_review_until_str:
+                in_review_until = datetime.strptime(in_review_until_str, '%Y-%m-%dT%H:%M:%S.%f%z').astimezone()
+            else:
+                in_review_until = None
+        else:
+            review_status = in_review_until = None
+        cost = processing.get('cost', 0)
+        return cls(id_,
+                   name,
+                   status,
+                   workflow_def,
+                   aoi_area,
+                   cost,
+                   created,
+                   percent_completed,
+                   raster_layer,
+                   errors,
+                   review_status,
+                   in_review_until)
 
     @property
     def is_new(self):
         now = datetime.now().astimezone()
         one_day = timedelta(1)
         return now - self.created < one_day
+
+    @property
+    def review_expires(self):
+        if not isinstance(self.in_review_until, datetime)\
+                or not self.review_status.is_in_review:
+            return False
+        now = datetime.now().astimezone()
+        one_day = timedelta(1)
+        return self.in_review_until - now < one_day
 
     def error_message(self):
         if not self.errors:
@@ -54,15 +97,28 @@ class Processing:
         return {
             'id': self.id_,
             'name': self.name,
-            'status': self.status,
+            'status': self.status_with_review,
             'workflowDef': self.workflow_def,
             'aoiArea': self.aoi_area,
+            'cost': self.cost,
             'percentCompleted': self.percent_completed,
             'errors': self.errors,
             # Serialize datetime and drop seconds for brevity
             'created': self.created.strftime('%Y-%m-%d %H:%M'),
-            'rasterLayer': self.raster_layer
+            'rasterLayer': self.raster_layer,
+            'reviewUntil':  self.in_review_until.strftime('%Y-%m-%d %H:%M') if self.in_review_until else ""
         }
+
+    @property
+    def status_with_review(self):
+        """
+        Review status is set instead of status if applicable, that is
+        when the status is OK and review_status is set (not None)
+        """
+        if self.status.is_ok and not self.review_status.is_none:
+            return self.review_status.display_value
+        else:
+            return self.status.display_value
 
 
 def parse_processings_request_dict(response: list) -> Dict[str, Processing]:
@@ -111,7 +167,7 @@ def updated_processings(processings: List[Processing],
     failed_ids = []
     finished_ids = []
     for processing in processings:
-        if processing.status == 'FAILED':
+        if processing.status.is_failed:
             failed_ids.append(processing.id_)
             if processing.id_ not in history.failed:
                 failed.append(processing)

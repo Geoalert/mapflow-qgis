@@ -75,13 +75,18 @@ class Provider:
             credentials = tuple(self.credentials)
         else:
             credentials = ("", "")
+        if self.crs:
+            crs = self.crs.value
+        else:
+            crs = None
         data = {
             'name': self.name,
             'source_type': self.source_type.value,
             'option_name': self.option_name,
             'url': self.url,
             'credentials': credentials,
-            'save_credentials': self.save_credentials
+            'save_credentials': self.save_credentials,
+            'crs': crs
             }
         return data
 

@@ -4,7 +4,7 @@ import os.path
 import tempfile
 from base64 import b64encode, b64decode
 from typing import List, Optional, Union, Callable, Tuple
-from datetime import datetime  # processing creation datetime formatting
+from datetime import datetime, timedelta  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
 from osgeo import gdal
@@ -27,8 +27,9 @@ from qgis.core import (
 )
 
 from .functional import layer_utils, helpers
-from .dialogs import MainDialog, LoginDialog, ErrorMessageWidget, ProviderDialog
+from .dialogs import MainDialog, LoginDialog, ErrorMessageWidget, ProviderDialog, ReviewDialog
 from .dialogs.icons import plugin_icon
+
 from .http import (Http,
                    get_error_report_body,
                    data_catalog_message_parser,
@@ -48,6 +49,7 @@ from .entity.processing_params import ProcessingParams, PostProcessingSchema
 from .errors import ProcessingInputDataMissing, BadProcessingInput, PluginError, ImageIdRequired, AoiNotIntersectsImage
 from .functional.geometry import clip_aoi_to_image_extent
 from . import constants
+from .styles import get_style_name
 
 
 class Mapflow(QObject):
@@ -72,6 +74,7 @@ class Mapflow(QObject):
         self.remaining_limit = 0
         self.remaining_credits = 0
         self.billing_type = BillingType.area
+        self.review_workflow_enabled = False
         self.processing_cost = 0
         # Save refs to key variables used throughout the plugin
         self.iface = iface
@@ -116,10 +119,11 @@ class Mapflow(QObject):
         self.settings.beginGroup(self.plugin_name.lower())
         if self.settings.value('processings') is None:
             self.settings.setValue('processings', {})
-
         # Init dialogs
+        self.plugin_icon = plugin_icon
         self.dlg = MainDialog(self.main_window)
         self.set_up_login_dialog()
+        self.review_dialog = ReviewDialog(self.dlg)
         self.dlg_provider = ProviderDialog(self.dlg)
         self.dlg_provider.accepted.connect(self.edit_provider_callback)
         # Display the plugin's version
@@ -154,8 +158,6 @@ class Mapflow(QObject):
         today = QDate.currentDate()
         self.dlg.metadataFrom.setDate(self.settings.value('metadataFrom', today.addMonths(-6)))
         self.dlg.metadataTo.setDate(self.settings.value('metadataTo', today))
-        # Hide the ID columns as only needed for table operations, not the user
-        self.dlg.processingsTable.setColumnHidden(self.config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
         # SET UP SIGNALS & SLOTS
         self.filter_bad_rasters()
         self.dlg.modelCombo.activated.connect(self.on_model_change)
@@ -180,18 +182,26 @@ class Mapflow(QObject):
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Processings ratings
-        self.dlg.processingsTable.cellClicked.connect(self.update_processing_current_rating)
-        self.dlg.processingsTable.cellClicked.connect(self.enable_rating_submit_button)
+        self.dlg.processingsTable.itemSelectionChanged.connect(self.enable_feedback)
         self.dlg.ratingSubmitButton.clicked.connect(self.submit_processing_rating)
-        self.dlg.enable_rating(False)  # by default disabled
-        # connect radio buttons signals
-        self.dlg.ratingComboBox.activated.connect(self.enable_rating_submit_button)
+        self.dlg.enable_rating(False, False)  # by default disabled
+        self.dlg.enable_review(False)
+        # processing feedback fields
+        self.dlg.ratingComboBox.activated.connect(self.enable_feedback)
+        self.dlg.processingsTable.cellClicked.connect(self.update_processing_current_rating)
+        # processing review
+        self.dlg.acceptButton.clicked.connect(self.accept_processing)
+        self.dlg.reviewButton.clicked.connect(self.show_review_dialog)
+        self.review_dialog.accepted.connect(self.submit_review)
+
         # Providers
         self.dlg.minIntersectionSpinBox.valueChanged.connect(self.filter_metadata)
         self.dlg.maxCloudCoverSpinBox.valueChanged.connect(self.filter_metadata)
         self.dlg.metadataFrom.dateChanged.connect(self.filter_metadata)
         self.dlg.metadataTo.dateChanged.connect(self.filter_metadata)
         self.dlg.preview.clicked.connect(self.preview)
+        self.dlg.preview2.clicked.connect(self.preview)
+
         self.dlg.addProvider.clicked.connect(self.add_provider)
         self.dlg.editProvider.clicked.connect(self.edit_provider)
         self.dlg.removeProvider.clicked.connect(self.remove_provider)
@@ -299,16 +309,7 @@ class Mapflow(QObject):
         raster_layers = (layer for layer in self.project.mapLayers().values()
                          if layer.type() == QgsMapLayerType.RasterLayer)
         if self.dlg.modelCombo.currentText() in self.config.SENTINEL_WD_NAMES:
-            filtered_raster_layers = raster_layers
-        else:
-            try:
-                filtered_raster_layers = [
-                    layer for layer in raster_layers
-                    if not helpers.raster_layer_is_allowed(layer)
-                ]
-            except Exception as e:
-                self.alert(f"Error checking raster layers validity: {e}")
-        self.dlg.rasterCombo.setExceptedLayerList(filtered_raster_layers)
+            self.dlg.rasterCombo.setExceptedLayerList(raster_layers)
 
     def on_model_change(self, index: int) -> None:
         wd_name = self.dlg.modelCombo.currentText()
@@ -1172,7 +1173,7 @@ class Mapflow(QObject):
         elif isinstance(provider, (MaxarProvider, MaxarProxyProvider)):
             if not helpers.UUID_REGEX.match(image_id):
                 self.dlg.imageId.clear()
-                self.alert('A Maxar image ID should look like a3b154c40cc74f3b934c0ffc9b34ecd1')
+                self.alert(self.tr('A Maxar image ID should look like a3b154c40cc74f3b934c0ffc9b34ecd1'))
                 return
         items = self.dlg.metadataTable.findItems(image_id, Qt.MatchExactly)
         if not items:
@@ -1189,25 +1190,24 @@ class Mapflow(QObject):
         """
         if self.dlg.useImageExtentAsAoi.isChecked():  # GeoTIFF extent used; no difference
             return
-        if layer and self.max_aois_per_processing >= layer.featureCount() > 0:
-            features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
+
+        if not layer or layer.featureCount() == 0:
+            self.dlg.disable_processing_start(reason=self.tr('Set AOI to start processing'),
+                                              clear_area=True)
+            self.aoi = self.aoi_size = None
+            return
+
+        features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
+        if self.max_aois_per_processing >= len(features) > 0:
             if len(features) == 1:
                 aoi = features[0].geometry()
             else:
                 aoi = QgsGeometry.collectGeometry([feature.geometry() for feature in features])
             self.calculate_aoi_area(aoi, layer.crs())
-        elif layer and self.max_aois_per_processing < layer.featureCount():
-            self.dlg.labelAoiArea.clear()
-            self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
-            self.dlg.processingProblemsLabel.setText(self.tr('AOI must contain not more than'
-                                                        ' {} polygons').format(self.max_aois_per_processing))
-            self.dlg.startProcessing.setDisabled(True)
-            self.aoi = self.aoi_size = None
-        else:  # empty layer or combo's itself is empty
-            self.dlg.labelAoiArea.clear()
-            self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
-            self.dlg.processingProblemsLabel.setText(self.tr('Set AOI to start processing'))
-            self.dlg.startProcessing.setDisabled(True)
+        else: # self.max_aois_per_processing < layer.featureCount():
+            self.dlg.disable_processing_start(reason=self.tr('AOI must contain not more than'
+                                                             ' {} polygons').format(self.max_aois_per_processing),
+                                              clear_area=True)
             self.aoi = self.aoi_size = None
 
     def calculate_aoi_area_raster(self, layer: Optional[QgsRasterLayer]) -> None:
@@ -1280,13 +1280,11 @@ class Mapflow(QObject):
         if not self.aoi:
             # Here the button must already be disabled, and the warning text set
             if self.dlg.startProcessing.isEnabled():
-                self.dlg.startProcessing.setDisabled(True)
-                self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
-                self.dlg.processingProblemsLabel.setText(self.tr("Set AOI to start processing"))
+                self.dlg.disable_processing_start(reason=self.tr("Set AOI to start processing"),
+                                                  clear_area=False)
         elif not self.workflow_defs:
-            self.dlg.startProcessing.setDisabled(True)
-            self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
-            self.dlg.processingProblemsLabel.setText("Error! Models are not initialized")
+            self.dlg.disable_processing_start(reason=self.tr("Error! Models are not initialized"),
+                                              clear_area=True)
         elif self.billing_type != BillingType.credits:
             self.dlg.startProcessing.setEnabled(True)
             self.dlg.processingProblemsLabel.clear()
@@ -1315,10 +1313,9 @@ class Mapflow(QObject):
         """
         response_text = response.readAll().data().decode()
         message = api_message_parser(response_text)
-        self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
-        self.dlg.processingProblemsLabel.setText(self.tr('Processing cost is not available:\n'
-                                                         '{message}').format(message=message))
-        self.dlg.startProcessing.setEnabled(True)
+        self.dlg.disable_processing_start(reason=self.tr('Processing cost is not available:\n'
+                                                         '{message}').format(message=message),
+                                          clear_area=False)
 
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         response_data = response.readAll().data().decode()
@@ -1335,10 +1332,7 @@ class Mapflow(QObject):
         """
         # Pause refreshing processings table to avoid conflicts
         self.processing_fetch_timer.stop()
-        selected_ids = [
-            self.dlg.processingsTable.item(index.row(), self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
-            for index in self.dlg.processingsTable.selectionModel().selectedRows()
-        ]
+        selected_ids = self.selected_processing_ids()
         # Ask for confirmation if there are selected rows
         if selected_ids and self.alert(
                 self.tr('Delete selected processings?'), QMessageBox.Question
@@ -1442,6 +1436,7 @@ class Mapflow(QObject):
             raise BadProcessingInput(self.tr(
                 'Up to {} sq km can be processed at a time. '
                 'Try splitting your area(s) into several processings.').format(self.aoi_area_limit))
+
         return True
 
     def crop_aoi_with_maxar_image_footprint(self,
@@ -1469,6 +1464,7 @@ class Mapflow(QObject):
         if not provider:
             raise PluginError(self.tr('Providers are not initialized'))
         provider_params, provider_meta = provider.to_processing_params(image_id=image_id)
+
         meta.update(**provider_meta)
         return provider_params, meta
 
@@ -1518,6 +1514,14 @@ class Mapflow(QObject):
         wd_id = self.workflow_defs.get(wd_name).id
         try:
             self.check_processing_ui(allow_empty_name=allow_empty_name)
+            if imagery:
+                # raster layer selected is local tiff
+                if not helpers.raster_layer_is_allowed(imagery):
+                    raise BadProcessingInput(self.tr("Raster image is not acceptable. "
+                                                     " It must be a Tiff file, have size less than {size} pixels"
+                                                     " and file size less than {memory}"
+                                                     " MB").format(size=self.config.MAX_FILE_SIZE_PIXELS,
+                                                                  memory=self.config.MAX_FILE_SIZE_BYTES//(1024*1024)))
             provider_params, processing_meta = self.get_processing_params(raster_option=raster_option,
                                                                           raster_layer=imagery,
                                                                           image_id=image_id)
@@ -1538,6 +1542,7 @@ class Mapflow(QObject):
             meta=processing_meta,
             params=provider_params,
             geometry=json.loads(aoi.asJson()))
+
         return processing_params, ""
 
     def create_processing(self) -> None:
@@ -1679,12 +1684,14 @@ class Mapflow(QObject):
         else:  # BillingType.none
             balance_str = ''
 
+        self.review_workflow_enabled = response_data.get('reviewWorkflowEnabled', False)
         self.dlg.balanceLabel.setText(balance_str)
 
         if app_startup_request:
             self.update_processing_cost()
             self.app_startup_user_update_timer.stop()
             self.dlg.setup_for_billing(self.billing_type)
+            self.dlg.setup_for_review(self.review_workflow_enabled)
             self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex())
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
@@ -1803,8 +1810,10 @@ class Mapflow(QObject):
             return
         except NotImplementedError as e:
             self.alert(self.tr("Preview is unavailable for the provider {}").format(provider.name))
+            return
         except Exception as e:
             self.alert(str(e), QMessageBox.Warning)
+            return
         if provider.is_proxy:
             uri = layer_utils.generate_xyz_layer_definition(url,
                                                             self.username,
@@ -1819,6 +1828,7 @@ class Mapflow(QObject):
                                                             max_zoom, provider.source_type)
             extent = None
         layer = QgsRasterLayer(uri, layer_name, 'wms')
+        layer.setCrs(QgsCoordinateReferenceSystem(provider.crs))
         if layer.isValid():
             if isinstance(provider, (MaxarProvider, MaxarProxyProvider)) and image_id and extent:
                 layer.setExtent(extent)
@@ -1842,9 +1852,11 @@ class Mapflow(QObject):
 
     def update_processing_current_rating(self) -> None:
         # reset labels:
-        row = self.dlg.processingsTable.currentRow()
-        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
-        p_name = self.dlg.processingsTable.item(row, 0).text()
+        processing = self.selected_processing()
+        if not processing:
+            return
+        pid = processing.id_
+        p_name = processing.name
 
         self.dlg.set_processing_rating_labels(processing_name=p_name)
         self.http.get(
@@ -1864,16 +1876,36 @@ class Mapflow(QObject):
                                               current_rating=rating,
                                               current_feedback=feedback)
 
+    def selected_processing_ids(self, limit=None):
+        # add unique selected rows
+        selected_rows = list(set(index.row() for index in self.dlg.processingsTable.selectionModel().selectedIndexes()))
+        if not selected_rows:
+            return []
+        pids = [self.dlg.processingsTable.item(row,
+                                               self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+                for row in selected_rows[:limit]]
+        return pids
+
+    def selected_processings(self, limit=None) -> List[Processing]:
+        pids = self.selected_processing_ids(limit=limit)
+        # limit None will give full selection
+        selected_processings = [p for p in filter(lambda p: p.id_ in pids, self.processings)]
+        return selected_processings
+
+    def selected_processing(self) -> Optional[Processing]:
+        first = self.selected_processings(limit=1)
+        if not first:
+            return None
+        return first[0]
+
     def submit_processing_rating(self) -> None:
-        row = self.dlg.processingsTable.currentRow()
-        if not row and (row != 0):
+        processing = self.selected_processing()
+        if not processing:
             return
-        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
-        processing = next(filter(lambda p: p.id_ == pid, self.processings))
-        if processing.status != 'OK':
+        pid = processing.id_
+        if not processing.status.is_ok:
             self.alert(self.tr('Only finished processings can be rated'))
             return
-        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
         # Rating is descending: None-5-4-3-2-1
         rating = 6 - self.dlg.ratingComboBox.currentIndex()
         if not 0 < rating <= 5:
@@ -1888,7 +1920,52 @@ class Mapflow(QObject):
             body=json.dumps(body).encode(),
             callback=self.submit_processing_rating_callback,
             callback_kwargs={'feedback': feedback_text}
+        )
 
+    def accept_processing(self):
+        processing = self.selected_processing()
+        if not processing:
+            return
+        pid = processing.id_
+        if not processing.status.is_ok:
+            self.alert(self.tr('Only finished processings can be rated'))
+            return
+        elif not processing.review_status.is_in_review:
+            self.alert(self.tr("Processing must be in `Review required` status"))
+            return
+        self.http.put(
+            url=f'{self.server}/processings/{pid}/acceptation',
+            callback=self.review_processing_callback
+        )
+
+    def review_processing_callback(self, response: QNetworkReply):
+        # Clear successfully uploaded review
+        self.review_dialog.reviewComment.setText("")
+        self.processing_fetch_timer.start()
+        self.http.get(url=f'{self.server}/projects/{self.config.PROJECT_ID}/processings',
+                      callback=self.get_processings_callback,
+                      use_default_error_handler=False)
+
+    def show_review_dialog(self):
+        processing = self.selected_processing()
+        if not processing:
+            return
+        if not processing.status.is_ok:
+            self.alert(self.tr('Only finished processings can be rated'))
+            return
+        elif not processing.review_status.is_in_review:
+            self.alert(self.tr("Processing must be in `Review required` status"))
+            return
+        self.review_dialog.setup(processing)
+        self.review_dialog.show()
+
+    def submit_review(self):
+        body = {"comment": self.review_dialog.reviewComment.toPlainText(),
+                "features": layer_utils.export_as_geojson(self.review_dialog.reviewLayerCombo.currentLayer())}
+        self.http.put(
+            url=f'{self.server}/processings/{self.review_dialog.processing.id_}/rejection',
+            body=json.dumps(body).encode(),
+            callback=self.review_processing_callback
         )
 
     def submit_processing_rating_callback(self, response: QNetworkReply, feedback: str) -> None:
@@ -1908,15 +1985,38 @@ class Mapflow(QObject):
             )
         self.update_processing_current_rating()
 
-    def enable_rating_submit_button(self) -> None:
-        row = self.dlg.processingsTable.currentRow()
-        if not row >= 0:
-            return
-        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
-        processing = next(filter(lambda p: p.id_ == pid, self.processings))
-        status_ok = (processing.status == 'OK')
+    def enable_review_submit(self, status_ok: bool) -> None:
+        self.dlg.enable_review(status_ok,
+                               self.tr("Only correctly finished processings (status OK) can be reviewed"))
+
+    def enable_rating_submit(self, status_ok: bool) -> None:
         rating_selected = 5 >= self.dlg.ratingComboBox.currentIndex() > 0
-        self.dlg.enable_rating(status_ok, rating_selected)
+        if not status_ok:
+            reason = self.tr("Only correctly finished processings (status OK) can be rated")
+        elif not rating_selected:
+            reason = self.tr("Please select rating to submit")
+        else:
+            reason = ""
+        self.dlg.enable_rating(status_ok,
+                               rating_selected,
+                               reason)
+
+    def enable_feedback(self) -> None:
+        """
+        By feedback we mean either rating (1-5 stars + message) for regular users
+        or review for users which have review workflow enabled
+        """
+        processing = self.selected_processing()
+        if not processing:
+            if self.review_workflow_enabled:
+                self.enable_review_submit(False)
+            else:
+                self.enable_rating_submit(False)
+            return
+        if self.review_workflow_enabled:
+            self.enable_review_submit(processing.status.is_ok and processing.review_status.is_in_review)
+        else:
+            self.enable_rating_submit(processing.status.is_ok)
 
     def download_results(self) -> None:
         """Download and display processing results along with the source raster, if available.
@@ -1931,11 +2031,11 @@ class Mapflow(QObject):
         """
         if not self.check_if_output_directory_is_selected():
             return
-        row = self.dlg.processingsTable.currentRow()
-        if row < 0:  # for some reason, if nothing is selected, returns -1
+        processing = self.selected_processing()
+        if not processing:
             return
-        pid = self.dlg.processingsTable.item(row, self.config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
-        if not pid in self.processing_history.finished:
+        pid = processing.id_
+        if pid not in self.processing_history.finished:
             self.alert(self.tr("Only the results of correctly finished processing can be loaded"))
             return
         self.dlg.processingsTable.setEnabled(False)
@@ -2001,12 +2101,7 @@ class Mapflow(QObject):
             return
         # Load the results into QGIS
         results_layer = QgsVectorLayer(output_path, processing.name, 'ogr')
-        results_layer.loadNamedStyle(os.path.join(
-            self.plugin_dir,
-            'static',
-            'styles',
-            self.config.STYLES.get(processing.workflow_def, 'default') + '.qml'
-        ))
+        results_layer.loadNamedStyle(get_style_name(processing.workflow_def, layer))
         # Add the source raster (COG) if it has been created
         raster_url = processing.raster_layer.get('tileUrl')
         tile_json_url = processing.raster_layer.get("tileJsonUrl")
@@ -2093,12 +2188,15 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        raw_processings: list[dict] = json.loads(response.readAll().data())
-        if all([p['status'] != 'IN_PROGRESS' for p in raw_processings]):  # stop polling
+        processings = parse_processings_request(json.loads(response.readAll().data()))
+        if all(not p.status.is_in_progress
+               and p.review_status.is_not_accepted
+               for p in processings):
+            # We do not re-fetch the processings, if nothing is going to change.
+            # What can change from server-side: processing can finish if IN_PROGRESS
+            # or review can be accepted if NOT_ACCEPTED.
+            # Any other processings can change only from client-side
             self.processing_fetch_timer.stop()
-
-        processings = parse_processings_request(raw_processings)
-
         env = self.config.MAPFLOW_ENV
         processing_history = self.settings.value('processings')
         self.processing_history = ProcessingHistory.from_settings(
@@ -2179,10 +2277,7 @@ class Mapflow(QObject):
     def update_processing_table(self, processings: List[Processing]):
         # UPDATE THE TABLE
         # Memorize the selection to restore it after table update
-        selected_processings = [
-            index.data() for index in self.dlg.processingsTable.selectionModel().selectedIndexes()
-            if index.column() == self.config.PROCESSING_TABLE_ID_COLUMN_INDEX
-        ]
+        selected_processings = self.selected_processing_ids()
         # Explicitly clear selection since resetting row count won't do it
         self.dlg.processingsTable.clearSelection()
         # Temporarily enable multi selection so that selectRow won't clear previous selection
@@ -2193,19 +2288,32 @@ class Mapflow(QObject):
         # Fill out the table
         for row, proc in enumerate(processings):
             processing_dict = proc.asdict()
-            for col, attr in enumerate(self.config.PROCESSING_ATTRIBUTES):
+            set_color = False
+            if proc.status.is_ok and proc.review_expires:
+                # setting color for close review
+                set_color = True
+                color = QColor(255, 220, 200)
+            for col, attr in enumerate(self.config.PROCESSING_TABLE_COLUMNS):
                 table_item = QTableWidgetItem()
                 table_item.setData(Qt.DisplayRole, processing_dict[attr])
-                if proc.status == 'FAILED':
+                if proc.status.is_failed:
                     table_item.setToolTip(proc.error_message())
-                elif proc.status == 'OK':
+                elif proc.in_review_until:
+                    table_item.setToolTip(self.tr("Please review or accept this processing until {}."
+                                                  " Double click to add results"
+                                                  " to the map").format(proc.in_review_until.strftime('%Y-%m-%d %H:%M') if proc.in_review_until else ""))
+                elif proc.status.is_ok:
                     table_item.setToolTip(self.tr("Double click to add results to the map"))
+                if set_color:
+                    table_item.setBackground(color)
                 self.dlg.processingsTable.setItem(row, col, table_item)
             if proc.id_ in selected_processings:
                 self.dlg.processingsTable.selectRow(row)
         self.dlg.processingsTable.setSortingEnabled(True)
         # Restore extended selection
         self.dlg.processingsTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
+
+        # test
 
     def initGui(self) -> None:
         """Create the menu entries and toolbar icons inside the QGIS GUI.
@@ -2214,12 +2322,11 @@ class Mapflow(QObject):
         Since there are submodules, the various UI texts are set dynamically.
         """
         # Set main dialog title dynamically so it could be overridden when used as a submodule
-        if self.config.MAPFLOW_ENV == 'production':
-            self.dlg.setWindowTitle(self.plugin_name)
-        else:
-            self.dlg.setWindowTitle(self.plugin_name + f' {self.config.MAPFLOW_ENV}')
+        self.dlg.setWindowTitle(helpers.generate_plugin_header(self.plugin_name,
+                                                               env=self.config.MAPFLOW_ENV,
+                                                               project_name=None))
         # Display plugin icon in own toolbar
-        plugin_button = QAction(plugin_icon, self.plugin_name, self.main_window)
+        plugin_button = QAction(self.plugin_icon, self.plugin_name, self.main_window)
         plugin_button.triggered.connect(self.main)
         self.toolbar.addAction(plugin_button)
         self.project.readProject.connect(self.set_layer_group)
@@ -2412,7 +2519,7 @@ class Mapflow(QObject):
         self.dlg.modelCombo.setCurrentText(self.config.DEFAULT_MODEL)
         self.dlg.rasterCombo.setCurrentText('Mapbox')
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
-        self.dlg.processingsTable.setColumnHidden(self.config.PROCESSING_TABLE_ID_COLUMN_INDEX, True)
+
         self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
         # Authenticate and keep user logged in
         self.logged_in = True

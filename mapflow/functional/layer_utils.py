@@ -1,10 +1,13 @@
 import json
+from typing import Optional
 from pyproj import Proj, transform
 from PyQt5.QtNetwork import QNetworkReply
 from qgis.core import (QgsRectangle,
                        QgsRasterLayer,
                        QgsFeature,
                        QgsMapLayer,
+                       QgsVectorLayer,
+                       QgsJsonExporter,
                        QgsGeometry,
                        QgsMapLayerType,
                        QgsWkbTypes,
@@ -154,3 +157,11 @@ def calculate_layer_area(layer: QgsMapLayer,
     return calculate_aoi_area(aoi,
                               crs,
                               project_crs)
+
+
+def export_as_geojson(layer: Optional[QgsVectorLayer]) -> dict:
+    if not layer:
+        return {"type": "FeatureCollection", "features": []}
+    exporter = QgsJsonExporter(layer)
+    gejson_str = exporter.exportFeatures(layer.getFeatures())
+    return json.loads(gejson_str)
