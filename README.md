@@ -20,4 +20,10 @@ Mapflow supports various imagery sources types. You can upload your local GeoTIF
 ## Installation
 The plugin can be found in the [official QGIS plugin repository](https://plugins.qgis.org/plugins/mapflow/) and can be installed by going to Plugins -> Manage and Install Plugins in QGIS, and then searching for 'Mapflow'. Make sure the 'all' tab is activated.
 
+## Use
+
 To learn how to use the plugin, please, follow our [guide](https://docs.mapflow.ai/api/qgis_mapflow).
+
+## License
+
+This software is released under the [GNU Public License (GPL)](LICENSE) Version 2 or any later version. This license means that you can inspect and modify the source code and guarantees that you always have access to this software under the same termas as QGIS, that is free of cost and can be freely modified.
