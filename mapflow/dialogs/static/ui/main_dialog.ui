@@ -6,14 +6,14 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1011</width>
-    <height>480</height>
+    <width>1112</width>
+    <height>550</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
     <width>0</width>
-    <height>480</height>
+    <height>550</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -26,7 +26,7 @@
       <enum>QLayout::SetNoConstraint</enum>
      </property>
      <item>
-      <layout class="QVBoxLayout" name="procesingControlLayout" stretch="0,0,0,0,0,0,0,0,0,0,0,0">
+      <layout class="QVBoxLayout" name="procesingControlLayout" stretch="0,0,0,0,0,0,0,0,0,0,0,0,0">
        <property name="spacing">
         <number>10</number>
        </property>
@@ -450,6 +450,23 @@
         </layout>
        </item>
        <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_8">
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QLabel" name="modelOptionsLabel">
+           <property name="text">
+            <string>Model options: </string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="CheckableComboBox" name="modelOptionsCombo"/>
+         </item>
+        </layout>
+       </item>
+       <item>
         <layout class="QVBoxLayout" name="verticalLayout_3">
          <property name="spacing">
           <number>0</number>
@@ -602,7 +619,7 @@
          <property name="minimumSize">
           <size>
            <width>200</width>
-           <height>60</height>
+           <height>40</height>
           </size>
          </property>
          <property name="maximumSize">
@@ -1800,6 +1817,11 @@
    <extends>QGroupBox</extends>
    <header>qgscollapsiblegroupbox.h</header>
    <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>CheckableComboBox</class>
+   <extends>QComboBox</extends>
+   <header>widgets</header>
   </customwidget>
  </customwidgets>
  <resources/>
