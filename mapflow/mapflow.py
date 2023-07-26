@@ -320,8 +320,14 @@ class Mapflow(QObject):
         self.dlg.show_wd_price(wd_price=wd.pricePerSqKm,
                                wd_description=wd.description,
                                display_price=self.billing_type == BillingType.credits)
+        self.show_wd_options(wd)
         if self.billing_type == BillingType.credits:
             self.update_processing_cost()
+
+    def show_wd_options(self, wd: WorkflowDef):
+        optional_blocks = [block for block in wd.blocks if block.optional]
+        self.dlg.modelOptionsCombo.clear()
+        self.dlg.modelOptionsCombo.addItems([f"{block.displayName}" for block in optional_blocks])
 
     def set_available_imagery_sources(self, wd: str) -> None:
         """Restrict the list of imagery sources according to the selected model."""
