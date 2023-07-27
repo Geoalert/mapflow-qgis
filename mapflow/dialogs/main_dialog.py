@@ -1,10 +1,12 @@
+import sys
+
 from pathlib import Path
 from typing import Iterable, Optional
 
 from PyQt5 import uic
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette, QStandardItemModel
-from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox
+from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox, QCheckBox
 from qgis.core import QgsMapLayerProxyModel
 
 from ..entity.billing import BillingType
@@ -15,8 +17,14 @@ from . import icons
 
 ui_path = Path(__file__).parent/'static'/'ui'
 
+# To allow to import widgets
+sys.path.append(str(Path(__file__).parent/'widgets'))
+
 
 class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
+    # SIGNALS
+    modelOptionsChanged = pyqtSignal()
+
     def __init__(self, parent: QWidget) -> None:
         """Plugin's main dialog."""
         super().__init__(parent)
@@ -60,6 +68,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # connect two spinboxes
         self.spin1_connection = self.maxZoom.valueChanged.connect(self.switch_maxzoom_2)
         self.spin2_connection = self.maxZoom2.valueChanged.connect(self.switch_maxzoom_1)
+
+        self.modelOptions = []
+
 
     def switch_maxzoom_1(self, value):
         self.maxZoom.valueChanged.disconnect(self.spin1_connection)
@@ -256,3 +267,23 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.processingProblemsLabel.setPalette(self.alert_palette)
         self.processingProblemsLabel.setText(reason)
         self.startProcessing.setDisabled(True)
+
+    def clear_model_options(self):
+        for checkbox_ in self.modelOptions:
+            checkbox_.deleteLater()
+            checkbox_ = None
+        self.modelOptions.clear()
+
+    def add_model_option(self, name: str, checked: bool = False):
+        checkbox = QCheckBox(name, self)
+        self.modelOptionsLayout.addWidget(checkbox)
+        self.modelOptions.append(checkbox)
+        checkbox.setChecked(checked)
+        checkbox.toggled.connect(lambda: self.modelOptionsChanged.emit())
+
+    def enabled_blocks(self):
+        """
+        A simple ordered list of options. It preserve the order,
+        but is WD's responsibility to translate the order into option names
+        """
+        return [box.isChecked() for box in self.modelOptions]

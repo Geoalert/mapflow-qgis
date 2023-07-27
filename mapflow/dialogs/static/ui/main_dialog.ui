@@ -459,10 +459,17 @@
            <property name="text">
             <string>Model options: </string>
            </property>
+           <property name="alignment">
+            <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+           </property>
           </widget>
          </item>
          <item>
-          <widget class="CheckableComboBox" name="modelOptionsCombo"/>
+          <layout class="QVBoxLayout" name="modelOptionsLayout">
+           <property name="spacing">
+            <number>0</number>
+           </property>
+          </layout>
          </item>
         </layout>
        </item>
@@ -1817,11 +1824,6 @@
    <extends>QGroupBox</extends>
    <header>qgscollapsiblegroupbox.h</header>
    <container>1</container>
-  </customwidget>
-  <customwidget>
-   <class>CheckableComboBox</class>
-   <extends>QComboBox</extends>
-   <header>widgets</header>
   </customwidget>
  </customwidgets>
  <resources/>

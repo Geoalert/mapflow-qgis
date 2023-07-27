@@ -161,6 +161,7 @@ class Mapflow(QObject):
         # SET UP SIGNALS & SLOTS
         self.filter_bad_rasters()
         self.dlg.modelCombo.activated.connect(self.on_model_change)
+        self.dlg.modelOptionsChanged.connect(self.on_options_change)
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
         # Connect buttons
@@ -311,23 +312,43 @@ class Mapflow(QObject):
         if self.dlg.modelCombo.currentText() in self.config.SENTINEL_WD_NAMES:
             self.dlg.rasterCombo.setExceptedLayerList(raster_layers)
 
-    def on_model_change(self, index: int) -> None:
+    def on_options_change(self):
+        wd_name = self.dlg.modelCombo.currentText()
+        wd = self.workflow_defs.get(wd_name)
+        if not wd:
+            return
+        enabled_blocks = self.dlg.enabled_blocks()
+        self.dlg.show_wd_price(wd_price=wd.get_price(enable_blocks=enabled_blocks),
+                               wd_description=wd.description,
+                               display_price=self.billing_type == BillingType.credits)
+        self.save_options_settings(wd, enabled_blocks)
+        if self.billing_type == BillingType.credits:
+            self.update_processing_cost()
+
+    def on_model_change(self, index: Optional[int] = None) -> None:
         wd_name = self.dlg.modelCombo.currentText()
         wd = self.workflow_defs.get(wd_name)
         self.set_available_imagery_sources(wd_name)
         if not wd:
             return
-        self.dlg.show_wd_price(wd_price=wd.pricePerSqKm,
+        self.show_wd_options(wd)
+        self.dlg.show_wd_price(wd_price=wd.get_price(enable_blocks=self.dlg.enabled_blocks()),
                                wd_description=wd.description,
                                display_price=self.billing_type == BillingType.credits)
-        self.show_wd_options(wd)
         if self.billing_type == BillingType.credits:
             self.update_processing_cost()
 
     def show_wd_options(self, wd: WorkflowDef):
-        optional_blocks = [block for block in wd.blocks if block.optional]
-        self.dlg.modelOptionsCombo.clear()
-        self.dlg.modelOptionsCombo.addItems([f"{block.displayName}" for block in optional_blocks])
+        self.dlg.clear_model_options()
+        for block in wd.optional_blocks:
+            self.dlg.add_model_option(block.name, checked=self.settings.value(f"wd/{wd.id}/{block.name}", False))
+
+    def save_options_settings(self, wd: WorkflowDef, enabled_blocks: List[bool]):
+        enabled_blocks_dict = wd.get_enabled_blocks(enabled_blocks)
+        for block in enabled_blocks_dict:
+            name = block["name"]
+            enabled = block["enabled"]
+            self.settings.setValue(f"wd/{wd.id}/{name}", enabled)
 
     def set_available_imagery_sources(self, wd: str) -> None:
         """Restrict the list of imagery sources according to the selected model."""
@@ -1517,7 +1538,7 @@ class Mapflow(QObject):
         image_id = self.dlg.imageId.text()
         selected_image = self.dlg.metadataTable.selectedItems()
         wd_name = self.dlg.modelCombo.currentText()
-        wd_id = self.workflow_defs.get(wd_name).id
+        wd = self.workflow_defs.get(wd_name)
         try:
             self.check_processing_ui(allow_empty_name=allow_empty_name)
             if imagery:
@@ -1544,7 +1565,8 @@ class Mapflow(QObject):
             return None, str(e)
         processing_params = PostProcessingSchema(
             name=processing_name,
-            wdId=wd_id,
+            wdId=wd.id,
+            blocks=wd.get_enabled_blocks(self.dlg.enabled_blocks()),
             meta=processing_meta,
             params=provider_params,
             geometry=json.loads(aoi.asJson()))
