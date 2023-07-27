@@ -1,7 +1,7 @@
 import json
 import dataclasses
 from dataclasses import dataclass
-from typing import Optional, Mapping, Any
+from typing import Optional, Mapping, Any, Iterable
 
 
 class Serializable:
@@ -25,10 +25,24 @@ class ProcessingParams(Serializable):
 
 
 @dataclass
+class BlockOption(Serializable):
+    name: str
+    enabled: bool
+
+
+@dataclass
 class PostProcessingSchema(Serializable):
     name: str
     wdId: Optional[str]
     params: ProcessingParams
+    blocks: Optional[Iterable[BlockOption]]
     geometry: Mapping[str, Any]
     meta: Optional[Mapping[str, Any]]
     projectId: Optional[str] = None
+
+    def __post_init__(self):
+        if self.blocks:
+            self.blocks = [BlockOption(**item) for item in self.blocks]
+        else:
+            self.blocks = []
+
