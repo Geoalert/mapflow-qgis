@@ -2,11 +2,11 @@ import json
 from abc import ABC
 from typing import Union
 from .provider import Provider, SourceType, staticproperty
-from ..processing_params import ProcessingParams
+from ...schema.processing import PostSourceSchema
 from ...constants import MAXAR_BASE_URL
 from ...functional.layer_utils import add_image_id, add_connect_id, maxar_tile_url
 from ...requests.maxar_metadata_request import MAXAR_REQUEST_BODY, MAXAR_META_URL
-from ...errors.plugin_errors import PluginError, ImageIdRequired
+from ...errors.plugin_errors import ImageIdRequired
 
 
 class ProxyProvider(Provider, ABC):
@@ -28,7 +28,7 @@ class ProxyProvider(Provider, ABC):
         self.proxy = proxy
 
     def to_processing_params(self, image_id=None):
-        return ProcessingParams(url=self.url,
+        return PostSourceSchema(url=self.url,
                                 source_type=self.source_type.value), {}
 
     @property
@@ -80,7 +80,7 @@ class MaxarProxyProvider(ProxyProvider, ABC):
     def to_processing_params(self, image_id=None):
         if self.requires_image_id and not image_id:
             raise ImageIdRequired("Cannot start processing without image ID!")
-        params = ProcessingParams(url=add_image_id(self.url, image_id),
+        params = PostSourceSchema(url=add_image_id(self.url, image_id),
                                   source_type=self.source_type.value,
                                   crs=self.crs.value)
         meta = {'source': 'maxar',

@@ -1,7 +1,7 @@
 from typing import List
 from .factory import create_provider, create_provider_old
 from .provider import Provider
-from .default import SentinelProvider, MaxarVividProxyProvider, MaxarSecureWatchProxyProvider, MapboxProvider
+from .default import SentinelProvider, MaxarVividProxyProvider, MaxarSecureWatchProxyProvider, DefaultProvider
 from ...constants import PROVIDERS_KEY, LEGACY_PROVIDERS_KEY, LEGACY_PROVIDER_LOGIN_KEY, LEGACY_PROVIDER_PASSWORD_KEY
 
 import json
@@ -27,8 +27,7 @@ class ProvidersDict(dict):
 
     @classmethod
     def create_default_providers(cls, server):
-        return cls.from_list([MapboxProvider(),
-                              MaxarVividProxyProvider(proxy=server),
+        return cls.from_list([MaxarVividProxyProvider(proxy=server),
                               MaxarSecureWatchProxyProvider(proxy=server),
                               SentinelProvider(proxy=server)])
 

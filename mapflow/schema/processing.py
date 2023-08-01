@@ -1,7 +1,7 @@
 import json
 import dataclasses
 from dataclasses import dataclass
-from typing import Optional, Mapping, Any, Iterable
+from typing import Optional, Mapping, Any, Union, Iterable
 
 
 class Serializable:
@@ -16,7 +16,7 @@ class Serializable:
 
 
 @dataclass
-class ProcessingParams(Serializable):
+class PostSourceSchema(Serializable):
     url: str
     source_type: str
     projection: Optional[str] = None
@@ -31,10 +31,17 @@ class BlockOption(Serializable):
 
 
 @dataclass
+class PostProviderSchema(Serializable):
+    # Data provider name
+    data_provider: str
+    year: Optional[str] = None
+
+
+@dataclass
 class PostProcessingSchema(Serializable):
     name: str
     wdId: Optional[str]
-    params: ProcessingParams
+    params: Union[PostSourceSchema, PostProviderSchema]
     blocks: Optional[Iterable[BlockOption]]
     geometry: Mapping[str, Any]
     meta: Optional[Mapping[str, Any]]

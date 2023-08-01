@@ -54,8 +54,13 @@ class Provider:
                  crs: Optional[Union[CRS, str]] = None,
                  credentials: Union[BasicAuth, Iterable[str]] = BasicAuth(),
                  save_credentials: bool=True,
+                 display_name: Optional[str] = None,
                  **kwargs):
         self.name = name
+        if display_name:
+            self.display_name = display_name
+        else:
+            self.display_name = name
         self.source_type = SourceType(source_type)
         self.url = url
         if not crs and self.source_type.requires_crs:

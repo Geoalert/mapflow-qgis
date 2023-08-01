@@ -4,7 +4,7 @@ import os.path
 import tempfile
 from base64 import b64encode, b64decode
 from typing import List, Optional, Union, Callable, Tuple
-from datetime import datetime, timedelta  # processing creation datetime formatting
+from datetime import datetime  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 
 from osgeo import gdal
@@ -42,10 +42,12 @@ from .entity.provider import (Provider,
                               MaxarProxyProvider,
                               ProvidersDict,
                               SentinelProvider,
-                              create_provider)
+                              create_provider,
+                              DefaultProvider)
 from .entity.billing import BillingType
 from .entity.workflow_def import WorkflowDef
-from .entity.processing_params import ProcessingParams, PostProcessingSchema
+from .schema.processing import PostSourceSchema, PostProcessingSchema
+from .schema.provider import ProviderReturnSchema
 from .errors import ProcessingInputDataMissing, BadProcessingInput, PluginError, ImageIdRequired, AoiNotIntersectsImage
 from .functional.geometry import clip_aoi_to_image_extent
 from . import constants
@@ -151,7 +153,6 @@ class Mapflow(QObject):
                 self.tr('We failed to import providers {errors} from the settings. Please add them again').format(
                     errors), icon=Qgis.Warning)
         self.update_providers()
-        self.dlg.rasterCombo.setCurrentText('Mapbox')  # otherwise SW will be set due to combo sync
         self.dlg.minIntersection.setValue(int(self.settings.value('metadataMinIntersection', 0)))
         self.dlg.maxCloudCover.setValue(int(self.settings.value('metadataMaxCloudCover', 100)))
         # Set default metadata dates
@@ -1486,7 +1487,7 @@ class Mapflow(QObject):
                 'source': raster_option.lower()}
         if raster_layer is not None:
             # We cannot set URL yet if we do not know it before the image is uploaded
-            return ProcessingParams(source_type='tif', url=s3_uri), meta
+            return PostSourceSchema(source_type='tif', url=s3_uri), meta
         provider = self.providers.get(raster_option)
         if not provider:
             raise PluginError(self.tr('Providers are not initialized'))
@@ -1721,6 +1722,13 @@ class Mapflow(QObject):
             self.dlg.setup_for_billing(self.billing_type)
             self.dlg.setup_for_review(self.review_workflow_enabled)
             self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex())
+            self.setup_providers(response_data.get("dataProviders"))
+
+    def setup_providers(self, providers_data):
+        for data in providers_data:
+            provider = DefaultProvider.from_response(ProviderReturnSchema(**data))
+            self.providers.update({provider.name: provider})
+        self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
         """Save and open the preview image as a layer."""
@@ -2545,7 +2553,6 @@ class Mapflow(QObject):
         self.dlg.modelCombo.addItems(name for name in self.workflow_defs
                                      if self.config.ENABLE_SENTINEL or name not in self.config.SENTINEL_WD_NAMES)
         self.dlg.modelCombo.setCurrentText(self.config.DEFAULT_MODEL)
-        self.dlg.rasterCombo.setCurrentText('Mapbox')
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
 
         self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))

@@ -1,9 +1,9 @@
-from .provider import staticproperty
 from .xyz_provider import XYZProvider, SourceType, CRS
 from .proxy_provider import ProxyProvider, MaxarProxyProvider
-from ..processing_params import ProcessingParams
+from ...schema.processing import PostSourceSchema, PostProviderSchema
 from ...constants import SENTINEL_OPTION_NAME
 from ...errors.plugin_errors import PluginError
+from ...schema.provider import ProviderReturnSchema
 
 
 class SentinelProvider(ProxyProvider):
@@ -24,7 +24,7 @@ class SentinelProvider(ProxyProvider):
     def to_processing_params(self, image_id=None):
         if not image_id:
             raise PluginError("Sentinel provider must have image ID to launch the processing")
-        return ProcessingParams(url=image_id, source_type=self.source_type.value), {}
+        return PostSourceSchema(url=image_id, source_type=self.source_type.value), {}
 
     @property
     def meta_url(self):
@@ -57,16 +57,32 @@ class MaxarSecureWatchProxyProvider(MaxarProxyProvider):
         return 'securewatch'
 
 
-class MapboxProvider(XYZProvider):
-    def __init__(self):
-        super().__init__(name="Mapbox",
-                         url="https://api.tiles.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.jpg?access_token={token}",
+class DefaultProvider(XYZProvider):
+    def __init__(self,
+                 id: str,
+                 name: str,
+                 display_name: str):
+        super().__init__(name=name,
+                         display_name=display_name,
+                         url=None,
                          crs=CRS.web_mercator)
+        self.id = id
+
     @property
     def preview_url(self, image_id=None):
         # We cannot provide preview via our proxy
+        # TODO: add preview url!
         raise NotImplementedError
 
     @property
     def is_default(self):
         return True
+
+    @classmethod
+    def from_response(cls, response: ProviderReturnSchema):
+        return cls(id=response.id,
+                   name=response.name,
+                   display_name=response.displayName)
+
+    def to_processing_params(self, image_id=None):
+        return PostProviderSchema(data_provider=self.name, year="2022"), {}

@@ -4,7 +4,7 @@ Basic, non-authentification XYZ provider
 from typing import Union, Iterable
 from urllib.parse import urlparse, parse_qs
 from .provider import SourceType, CRS, Provider, BasicAuth, staticproperty
-from ..processing_params import ProcessingParams
+from ...schema.processing import PostSourceSchema
 from ...functional.layer_utils import maxar_tile_url, add_connect_id
 from ...requests.maxar_metadata_request import MAXAR_REQUEST_BODY, MAXAR_META_URL
 
@@ -35,7 +35,7 @@ class BasemapProvider(Provider):
         if self.credentials:
             params.update(raster_login=self.credentials.login,
                           raster_password=self.credentials.password)
-        return ProcessingParams(**params), {}
+        return PostSourceSchema(**params), {}
 
     @property
     def requires_image_id(self):
@@ -158,11 +158,11 @@ class MaxarProvider(XYZProvider):
                                          geometry=geometry).encode()
 
     def to_processing_params(self, image_id=None):
-        params = ProcessingParams( url=maxar_tile_url(self.url, image_id),
-                                   source_type=self.source_type,
-                                   crs=self.crs.value,
-                                   raster_login=self.credentials.login,
-                                   raster_password=self.credentials.password)
+        params = PostSourceSchema(url=maxar_tile_url(self.url, image_id),
+                                  source_type=self.source_type,
+                                  projection=self.crs.value,
+                                  raster_login=self.credentials.login,
+                                  raster_password=self.credentials.password)
         return params, {}
 
     def preview_url(self, image_id=None):
