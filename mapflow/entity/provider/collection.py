@@ -1,7 +1,4 @@
-from typing import List
 from .factory import create_provider, create_provider_old
-from .provider import Provider
-from .default import SentinelProvider, MaxarVividProxyProvider, MaxarSecureWatchProxyProvider, DefaultProvider
 from ...constants import PROVIDERS_KEY, LEGACY_PROVIDERS_KEY, LEGACY_PROVIDER_LOGIN_KEY, LEGACY_PROVIDER_PASSWORD_KEY
 
 import json
@@ -19,22 +16,16 @@ def decorate(base_name, existing_names):
     return name
 
 
-class ProvidersDict(dict):
+class ProvidersList(list):
 
     @classmethod
-    def from_list(cls, providers: List[Provider]):
-        return cls({p.name: p for p in providers})
+    def from_dict(cls, providers_dict):
+        return ProvidersList(providers_dict.values())
 
     @classmethod
-    def create_default_providers(cls, server):
-        return cls.from_list([MaxarVividProxyProvider(proxy=server),
-                              MaxarSecureWatchProxyProvider(proxy=server),
-                              SentinelProvider(proxy=server)])
-
-    @classmethod
-    def from_settings(cls, settings, server):
+    def from_settings(cls, settings):
         errors = []
-        providers = ProvidersDict.create_default_providers(server=server)
+        providers = {}
         providers_settings = json.loads(settings.value(PROVIDERS_KEY, "{}"))
         if providers_settings:
             for name, params in providers_settings.items():
@@ -44,7 +35,10 @@ class ProvidersDict(dict):
                 try:
                     providers.update({name: create_provider(**params)})
                 except Exception as e:
+                    print(f"{name}: {params}")
+                    print(str(e))
                     errors.append(name)
+
         # Importing providers from old plugin settings
         old_login = settings.value(LEGACY_PROVIDER_LOGIN_KEY, "")
         old_password = settings.value(LEGACY_PROVIDER_PASSWORD_KEY, "")
@@ -71,18 +65,18 @@ class ProvidersDict(dict):
         settings.remove(LEGACY_PROVIDER_PASSWORD_KEY)
         settings.remove(LEGACY_PROVIDER_LOGIN_KEY)
 
-        return providers, errors
+        return cls.from_dict(providers), errors
 
     def dict(self):
-        return {name: provider.to_dict() for name, provider in self.items()}
+        return {provider.name: provider.to_dict() for provider in self}
 
     @property
     def default_providers(self):
-        return ProvidersDict({k: v for k, v in self.items() if v.is_default})
+        return ProvidersList([provider for provider in self if provider.is_default])
 
     @property
     def users_providers(self):
-        return ProvidersDict({k: v for k, v in self.items() if not v.is_default})
+        return ProvidersList([provider for provider in self if not provider.is_default])
 
     def to_settings(self, settings):
         users_providers = self.users_providers.dict()

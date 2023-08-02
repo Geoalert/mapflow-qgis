@@ -1,31 +1,16 @@
 """
 Basic, non-authentification XYZ provider
 """
+from abc import ABC
 from typing import Union, Iterable
 from urllib.parse import urlparse, parse_qs
-from .provider import SourceType, CRS, Provider, BasicAuth, staticproperty
+from .provider import SourceType, CRS, UsersProvider, BasicAuth, staticproperty
 from ...schema.processing import PostSourceSchema
 from ...functional.layer_utils import maxar_tile_url, add_connect_id
 from ...requests.maxar_metadata_request import MAXAR_REQUEST_BODY, MAXAR_META_URL
 
 
-class BasemapProvider(Provider):
-    def __init__(self,
-                 name: str,
-                 url: str,
-                 source_type: Union[SourceType, str],
-                 crs: [Union[CRS, str]] = CRS.web_mercator,
-                 credentials: Union[BasicAuth, Iterable[str]] = BasicAuth(),
-                 save_credentials: bool = False,
-                 **kwargs):
-        super().__init__(name=name,
-                         url=url,
-                         source_type=source_type,
-                         crs=crs,
-                         is_default=False,
-                         credentials=credentials,
-                         save_credentials=save_credentials)
-
+class BasemapProvider(UsersProvider, ABC):
     def to_processing_params(self, image_id=None):
         params = {
             'url': self.url,
@@ -39,10 +24,6 @@ class BasemapProvider(Provider):
 
     @property
     def requires_image_id(self):
-        return False
-
-    @property
-    def is_proxy(self):
         return False
 
     def preview_url(self, image_id=None):
@@ -59,83 +40,59 @@ class BasemapProvider(Provider):
 
 
 class XYZProvider(BasemapProvider):
-    def __init__(self,
-                 name: str,
-                 url: str,
-                 crs: [Union[CRS, str]] = CRS.web_mercator,
-                 credentials: Union[BasicAuth, Iterable[str]] = BasicAuth(),
-                 save_credentials: bool = False,
-                 **kwargs):
-        super().__init__(name=name,
-                         url=url,
-                         source_type=SourceType.xyz,
-                         crs=crs,
-                         credentials=credentials,
-                         save_credentials=save_credentials)
+    def __init__(self, **kwargs):
+        kwargs.update(source_type=SourceType.xyz)
+        super().__init__(**kwargs)
 
     @staticproperty
     def option_name():
         return 'xyz'
 
+    @property
+    def meta_url(self):
+        return None
+
 
 class TMSProvider(BasemapProvider):
-    def __init__(self,
-                 name: str,
-                 url: str,
-                 crs: [Union[CRS, str]] = CRS.web_mercator,
-                 credentials: Union[BasicAuth, Iterable[str]] = BasicAuth(),
-                 save_credentials: bool = False,
-                 **kwargs):
-        super().__init__(name=name,
-                         url=url,
-                         source_type=SourceType.tms,
-                         crs=crs,
-                         credentials=credentials,
-                         save_credentials=save_credentials)
+    def __init__(self, **kwargs):
+        kwargs.update(source_type=SourceType.tms)
+        super().__init__(**kwargs)
 
     @staticproperty
     def option_name():
         return 'tms'
 
+    @property
+    def meta_url(self):
+        return None
+
 
 class QuadkeyProvider(BasemapProvider):
-    def __init__(self,
-                 name: str,
-                 url: str,
-                 crs: [Union[CRS, str]] = CRS.web_mercator,
-                 credentials: Union[BasicAuth, Iterable[str]] = BasicAuth(),
-                 save_credentials: bool = False,
-                 **kwargs):
-        super().__init__(name=name,
-                         url=url,
-                         source_type=SourceType.quadkey,
-                         crs=crs,
-                         credentials=credentials,
-                         save_credentials=save_credentials)
+    def __init__(self, **kwargs):
+        kwargs.update(source_type=SourceType.quadkey)
+        super().__init__(**kwargs)
 
     @staticproperty
     def option_name():
         return 'quadkey'
 
+    @property
+    def meta_url(self):
+        return None
 
-class MaxarProvider(XYZProvider):
+
+class MaxarProvider(UsersProvider):
     """
     Direct use of MAXAR vivid/secureWatch with user's credentials
     This is a case of WMTS provider, and in the future we will add general WMTSProvider which will include it,
     but currently the parameters are fixed for just Maxar SecureWatch and Vivid, and form a XYZ link
     from a Maxar WMTS link with connectId
     """
+
     def __init__(self,
-                 name,
-                 url,
-                 credentials: Union[BasicAuth, Iterable[str]],
-                 save_credentials: bool = False,
                  **kwargs):
-        super().__init__(name=name,
-                         url=url,
-                         crs=CRS.web_mercator,
-                         credentials=credentials,
-                         save_credentials=save_credentials)
+        kwargs.update(crs=CRS.web_mercator)
+        super().__init__(**kwargs)
 
         try:
             self.connect_id = parse_qs(urlparse(self.url.lower()).query)['connectid'][0]
@@ -167,6 +124,15 @@ class MaxarProvider(XYZProvider):
 
     def preview_url(self, image_id=None):
         return maxar_tile_url(self.url, image_id)
+
+    @property
+    def requires_image_id(self):
+        return True
+
+    @property
+    def is_default(self):
+        return False
+
 
 
 

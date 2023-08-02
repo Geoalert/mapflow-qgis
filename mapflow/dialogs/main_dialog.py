@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox, QCheckBox
 from qgis.core import QgsMapLayerProxyModel
 
 from ..entity.billing import BillingType
-from ..entity.provider import Provider
+from ..entity.provider import ProviderInterface
 from ..functional import helpers
 from ..config import config
 from . import icons
@@ -139,8 +139,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.reviewButton.setVisible(enable)
 
     def setup_imagery_search(self,
-                             provider_name: str,
-                             provider: Provider,
+                             provider: ProviderInterface,
                              columns: Iterable,
                              hidden_columns: [Iterable[int]],
                              sort_by: str,
@@ -180,7 +179,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.metadataTable.setColumnHidden(col, True)
         if sort_by is not None:
             self.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
-        self.metadata.setTitle(provider_name + self.tr(' Imagery Catalog'))
+        self.metadata.setTitle(provider.name + self.tr(' Imagery Catalog'))
         self.metadata.setEnabled(enabled)
         self.imageId.setEnabled(enabled)
         self.imageId.setPlaceholderText(image_id_placeholder)
@@ -287,3 +286,14 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         but is WD's responsibility to translate the order into option names
         """
         return [box.isChecked() for box in self.modelOptions]
+
+    def providerIndex(self):
+        """
+        We store proviers in a List, so we need to discard
+        """
+        return self.providerCombo.currentIndex()
+
+    def setProviderIndex(self, index):
+        self.providerCombo.setCurrentIndex(index)
+#        self.rasterCombo.setCurrentIndex(index - (source_count - non_layers_count))
+
