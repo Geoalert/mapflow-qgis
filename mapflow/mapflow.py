@@ -2510,7 +2510,7 @@ class Mapflow(QObject):
         # We skip SENTINEL WDs if sentinel is not enabled (normally, it should be not)
         # wds along with ids in the format: {'model_name': 'workflow_def_id'}
         self.workflow_defs = {
-            workflow['name']: WorkflowDef(**workflow)
+            workflow['name']: WorkflowDef.from_dict(workflow)
             for workflow in response['workflowDefs']
         }
         self.dlg.modelCombo.clear()

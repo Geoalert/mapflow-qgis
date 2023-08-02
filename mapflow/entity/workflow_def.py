@@ -1,8 +1,9 @@
 from dataclasses import dataclass
+from ..schema import SkipDataClass
 
 
 @dataclass
-class WorkflowDef:
+class WorkflowDef(SkipDataClass):
     id: str
     name: str
     description: str = ""

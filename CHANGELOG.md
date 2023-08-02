@@ -1,3 +1,5 @@
+## 2.1.1
+    Hotfix: adaptation to non-breaking API changes
 ## 2.1.0
     - Add visibility settings for "Processings" table (see "Settings" tab)
     - Add "Cost" and "ID" as processing columns
