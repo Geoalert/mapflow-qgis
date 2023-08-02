@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 from typing import List, Dict
+from .base import SkipDataClass
 
 
 @dataclass
-class ProviderReturnSchema:
+class ProviderReturnSchema(SkipDataClass):
     id: str
     name: str
     displayName: str

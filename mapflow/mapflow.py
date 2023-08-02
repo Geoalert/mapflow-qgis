@@ -1692,7 +1692,7 @@ class Mapflow(QObject):
             self.setup_providers(response_data.get("dataProviders"))
 
     def setup_providers(self, providers_data):
-        self.default_providers = ProvidersList([DefaultProvider.from_response(ProviderReturnSchema(**data))
+        self.default_providers = ProvidersList([DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
                                                 for data in providers_data])
         self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
 
