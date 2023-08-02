@@ -144,11 +144,13 @@ class Mapflow(QObject):
         # load providers from settings
         errors = []
         try:
-            self.providers, errors = ProvidersList.from_settings(settings=self.settings)
+            self.user_providers, errors = ProvidersList.from_settings(settings=self.settings)
+            self.sentinel_providers = ProvidersList([SentinelProvider(proxy=self.server)])
+            self.default_providers = ProvidersList([])
+            self.providers = ProvidersList([])
         except Exception as e:
             self.alert(self.tr("Error during loading the data providers: {e}").format(str(e)), icon=Qgis.Warning)
         if errors:
-            print(errors)
             self.alert(self.tr('We failed to import providers from the settings. Please add them again'), icon=Qgis.Warning)
         self.update_providers()
         self.dlg.minIntersection.setValue(int(self.settings.value('metadataMinIntersection', 0)))
@@ -212,7 +214,7 @@ class Mapflow(QObject):
         self.dlg.metadataTable.itemSelectionChanged.connect(self.sync_table_selection_with_image_id_and_layer)
         self.dlg.getMetadata.clicked.connect(self.get_metadata)
         self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
-        self.dlg.rasterCombo.currentIndexChanged.connect(self.on_provider_change)
+        self.dlg.providerCombo.currentIndexChanged.connect(self.on_provider_change)
         # Poll processings
         self.processing_fetch_timer = QTimer(self.dlg)
         self.processing_fetch_timer.setInterval(self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
@@ -308,7 +310,7 @@ class Mapflow(QObject):
 
         raster_layers = (layer for layer in self.project.mapLayers().values()
                          if layer.type() == QgsMapLayerType.RasterLayer)
-        if self.dlg.modelCombo.currentText() in self.config.SENTINEL_WD_NAMES:
+        if self.config.SENTINEL_WD_NAME_PATTERN in self.dlg.modelCombo.currentText():
             self.dlg.rasterCombo.setExceptedLayerList(raster_layers)
 
     def on_options_change(self):
@@ -351,23 +353,18 @@ class Mapflow(QObject):
 
     def set_available_imagery_sources(self, wd: str) -> None:
         """Restrict the list of imagery sources according to the selected model."""
-        sentinel_providers = [provider.name for provider in self.providers if isinstance(provider, SentinelProvider)]
-        web_providers = [provider.name for provider in self.providers if not isinstance(provider, SentinelProvider)]
-        current_sources = self.dlg.rasterCombo.additionalItems()
-        if wd in self.config.SENTINEL_WD_NAMES and not set(current_sources) == set(sentinel_providers):
-            self.dlg.rasterCombo.setAdditionalItems(sentinel_providers)
-            if sentinel_providers:
-                self.dlg.rasterCombo.setCurrentText(sentinel_providers[0])
-            self.dlg.providerCombo.clear()
-            self.dlg.providerCombo.addItems(sentinel_providers)
-            self.filter_bad_rasters()  # filter rasters for sentinel
-        elif not set(current_sources) == set(web_providers):
-            # skip update in case source list did not change.
-            # This prevents the current selected item from being discarded
-            self.dlg.rasterCombo.setAdditionalItems(web_providers)
-            self.dlg.providerCombo.clear()
-            self.dlg.providerCombo.addItems(web_providers)
-            self.filter_bad_rasters()
+        if self.config.SENTINEL_WD_NAME_PATTERN in wd and self.providers != self.sentinel_providers:
+            self.providers = self.sentinel_providers
+        elif not self.providers == self.basemap_providers:
+            self.providers = self.basemap_providers
+        else:
+            # Providers did not change
+            return
+        provider_names = [p.name for p in self.providers]
+        self.dlg.rasterCombo.setAdditionalItems(provider_names)
+        self.dlg.providerCombo.clear()
+        self.dlg.providerCombo.addItems(provider_names)
+        self.filter_bad_rasters()
 
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
         """Filter out the metadata table and layer every time user changes a filter."""
@@ -442,19 +439,21 @@ class Mapflow(QObject):
 
         :param index: The currently selected provider index
         """
-        provider_index = self.dlg.providerIndex()
+
         provider_layer = self.dlg.rasterCombo.currentLayer()
-        provider = self.providers[provider_index]
         # Changes in case provider is raster layer
         self.toggle_processing_checkboxes(provider_layer)
-        # Changes in search tab
-        self.toggle_imagery_search(provider)
         # re-calculate AOI because it may change due to intersection of image/area
         polygon_layer = self.dlg.polygonCombo.currentLayer()
         if provider_layer:
             self.calculate_aoi_area_raster(provider_layer)
         else:
             self.calculate_aoi_area_polygon_layer(polygon_layer)
+        # This is done after area calculation, because there the provider list is updated
+            provider_index = self.dlg.providerIndex()
+            provider = self.providers[provider_index]
+            # Changes in search tab
+            self.toggle_imagery_search(provider)
         self.update_processing_cost()
 
     def save_dialog_state(self):
@@ -527,7 +526,7 @@ class Mapflow(QObject):
                 self.dlg_provider.show()
                 return
             else:
-                self.providers.append(new_provider)
+                self.user_providers.append(new_provider)
                 provider_index = len(self.providers) - 1
         else:
             # we replace old provider with a new one
@@ -565,8 +564,7 @@ class Mapflow(QObject):
         It works both ways: if providers is specified, it updates the settings;
         otherwise loads providers list from settings
         """
-        print([provider.name for provider in self.providers])
-        self.providers.to_settings(self.settings)
+        self.user_providers.to_settings(self.settings)
         self.dlg.providerCombo.clear()
         self.dlg.providerCombo.addItems(provider.name for provider in self.providers)
         self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
@@ -1694,9 +1692,8 @@ class Mapflow(QObject):
             self.setup_providers(response_data.get("dataProviders"))
 
     def setup_providers(self, providers_data):
-        for data in providers_data:
-            provider = DefaultProvider.from_response(ProviderReturnSchema(**data))
-            self.providers.append(provider)
+        self.default_providers = ProvidersList([DefaultProvider.from_response(ProviderReturnSchema(**data))
+                                                for data in providers_data])
         self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
@@ -2514,7 +2511,7 @@ class Mapflow(QObject):
         }
         self.dlg.modelCombo.clear()
         self.dlg.modelCombo.addItems(name for name in self.workflow_defs
-                                     if self.config.ENABLE_SENTINEL or name not in self.config.SENTINEL_WD_NAMES)
+                                     if self.config.ENABLE_SENTINEL or self.config.SENTINEL_WD_NAME_PATTERN not in name)
         self.dlg.modelCombo.setCurrentText(self.config.DEFAULT_MODEL)
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
 
@@ -2604,3 +2601,7 @@ class Mapflow(QObject):
         else:
             self.set_up_login_dialog()
             self.dlg_login.show()
+
+    @property
+    def basemap_providers(self):
+        return ProvidersList(self.default_providers + self.user_providers)

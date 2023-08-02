@@ -295,5 +295,4 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
     def setProviderIndex(self, index):
         self.providerCombo.setCurrentIndex(index)
-#        self.rasterCombo.setCurrentIndex(index - (source_count - non_layers_count))
 

@@ -130,3 +130,8 @@ class UsersProvider(ProviderInterface, ABC):
         """
         # option for interface and settings
         raise NotImplementedError
+
+
+class NoneProvider(ProviderInterface):
+    def __init__(self):
+        super().__init__(name="")

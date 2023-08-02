@@ -1,6 +1,6 @@
 from .factory import create_provider, create_provider_old
 from ...constants import PROVIDERS_KEY, LEGACY_PROVIDERS_KEY, LEGACY_PROVIDER_LOGIN_KEY, LEGACY_PROVIDER_PASSWORD_KEY
-
+from .provider import NoneProvider
 import json
 
 
@@ -81,3 +81,9 @@ class ProvidersList(list):
     def to_settings(self, settings):
         users_providers = self.users_providers.dict()
         settings.setValue(PROVIDERS_KEY, json.dumps(users_providers))
+
+    def __getitem__(self, i):
+        if i < 0:
+            return NoneProvider()
+        else:
+            return super().__getitem__(i)
