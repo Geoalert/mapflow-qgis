@@ -128,10 +128,12 @@ class UsersProvider(ProviderInterface, ABC):
         """
         Used to display the provider type in the interface
         """
-        # option for interface and settings
         raise NotImplementedError
 
 
 class NoneProvider(ProviderInterface):
     def __init__(self):
         super().__init__(name="")
+
+    def __bool__(self):
+        return False

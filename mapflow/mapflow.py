@@ -342,13 +342,14 @@ class Mapflow(QObject):
     def show_wd_options(self, wd: WorkflowDef):
         self.dlg.clear_model_options()
         for block in wd.optional_blocks:
-            self.dlg.add_model_option(block.name, checked=self.settings.value(f"wd/{wd.id}/{block.name}", False))
+            self.dlg.add_model_option(block.name, checked=bool(self.settings.value(f"wd/{wd.id}/{block.name}", False)))
 
     def save_options_settings(self, wd: WorkflowDef, enabled_blocks: List[bool]):
         enabled_blocks_dict = wd.get_enabled_blocks(enabled_blocks)
         for block in enabled_blocks_dict:
             name = block["name"]
             enabled = block["enabled"]
+            print(name,enabled)
             self.settings.setValue(f"wd/{wd.id}/{name}", enabled)
 
     def set_available_imagery_sources(self, wd: str) -> None:
@@ -441,6 +442,12 @@ class Mapflow(QObject):
         """
 
         provider_layer = self.dlg.rasterCombo.currentLayer()
+        # This is done after area calculation, because there the provider list is updated?
+        provider_index = self.dlg.providerIndex()
+        provider = self.providers[provider_index]
+        # Changes in search tab
+        self.toggle_imagery_search(provider)
+
         # Changes in case provider is raster layer
         self.toggle_processing_checkboxes(provider_layer)
         # re-calculate AOI because it may change due to intersection of image/area
@@ -449,12 +456,6 @@ class Mapflow(QObject):
             self.calculate_aoi_area_raster(provider_layer)
         else:
             self.calculate_aoi_area_polygon_layer(polygon_layer)
-        # This is done after area calculation, because there the provider list is updated
-            provider_index = self.dlg.providerIndex()
-            provider = self.providers[provider_index]
-            # Changes in search tab
-            self.toggle_imagery_search(provider)
-        self.update_processing_cost()
 
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
@@ -1468,6 +1469,7 @@ class Mapflow(QObject):
                 'source': provider.name.lower()}
         if not provider:
             raise PluginError(self.tr('Providers are not initialized'))
+        print(provider.name, provider_index)
         provider_params, provider_meta = provider.to_processing_params(image_id=image_id)
 
         meta.update(**provider_meta)
