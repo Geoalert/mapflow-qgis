@@ -35,8 +35,6 @@ class ProvidersList(list):
                 try:
                     providers.update({name: create_provider(**params)})
                 except Exception as e:
-                    print(f"{name}: {params}")
-                    print(str(e))
                     errors.append(name)
 
         # Importing providers from old plugin settings

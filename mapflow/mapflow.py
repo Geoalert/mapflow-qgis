@@ -349,7 +349,6 @@ class Mapflow(QObject):
         for block in enabled_blocks_dict:
             name = block["name"]
             enabled = block["enabled"]
-            print(name,enabled)
             self.settings.setValue(f"wd/{wd.id}/{name}", enabled)
 
     def set_available_imagery_sources(self, wd: str) -> None:
@@ -534,6 +533,7 @@ class Mapflow(QObject):
             # we replace old provider with a new one
             # if self.dlg_provider.property('mode') == 'edit':  #
             provider_index = self.providers.index(old_provider)
+            user_provider_index = self.user_providers.index(old_provider)
             if new_provider.name != old_provider.name and new_provider.name in self.providers:
                 # we do not want user to replace another provider when editing this one
                 self.alert(self.tr("Provider name must be unique. {name} already exists,"
@@ -542,7 +542,7 @@ class Mapflow(QObject):
                 self.dlg_provider.show()
                 return
             else:
-                self.providers[provider_index] = new_provider
+                self.user_providers[user_provider_index] = new_provider
 
         self.update_providers()
         self.dlg.setProviderIndex(provider_index)
@@ -1470,7 +1470,6 @@ class Mapflow(QObject):
                 'source': provider.name.lower()}
         if not provider:
             raise PluginError(self.tr('Providers are not initialized'))
-        print(provider.name, provider_index)
         provider_params, provider_meta = provider.to_processing_params(image_id=image_id)
 
         meta.update(**provider_meta)
@@ -1866,7 +1865,6 @@ class Mapflow(QObject):
     def update_processing_current_rating_callback(self, response: QNetworkReply) -> None:
         response_data = json.loads(response.readAll().data())
         processing = Processing.from_response(response_data)
-        print(processing.params, processing.blocks)
         p_name = response_data.get('name')
         rating_json = response_data.get('rating')
         if not rating_json:
