@@ -214,7 +214,7 @@ class Mapflow(QObject):
         self.dlg.metadataTable.itemSelectionChanged.connect(self.sync_table_selection_with_image_id_and_layer)
         self.dlg.getMetadata.clicked.connect(self.get_metadata)
         self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
-        self.dlg.providerCombo.currentIndexChanged.connect(self.on_provider_change)
+        self.dlg.rasterSourceChanged.connect(self.on_provider_change)
         # Poll processings
         self.processing_fetch_timer = QTimer(self.dlg)
         self.processing_fetch_timer.setInterval(self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
@@ -308,10 +308,12 @@ class Mapflow(QObject):
         # so we will need to add new function like "remove_filtered_layers" to handle this.
         # However, current implementation takes 4 ms when 100 files are opened, which is OK
 
-        raster_layers = (layer for layer in self.project.mapLayers().values()
-                         if layer.type() == QgsMapLayerType.RasterLayer)
         if self.config.SENTINEL_WD_NAME_PATTERN in self.dlg.modelCombo.currentText():
-            self.dlg.rasterCombo.setExceptedLayerList(raster_layers)
+            excluded_layers = (layer for layer in self.project.mapLayers().values()
+                                if layer.type() == QgsMapLayerType.RasterLayer)
+        else:
+            excluded_layers = []
+        self.dlg.rasterCombo.setExceptedLayerList(excluded_layers)
 
     def on_options_change(self):
         wd_name = self.dlg.modelCombo.currentText()
@@ -434,7 +436,7 @@ class Mapflow(QObject):
         """
         self.dlg.polygonCombo.setEnabled(not use_image_extent)
 
-    def on_provider_change(self, index: int) -> None:
+    def on_provider_change(self) -> None:
         """Adjust max and current zoom, and update the metadata table when user selects another
         provider.
 
@@ -447,7 +449,6 @@ class Mapflow(QObject):
         provider = self.providers[provider_index]
         # Changes in search tab
         self.toggle_imagery_search(provider)
-
         # Changes in case provider is raster layer
         self.toggle_processing_checkboxes(provider_layer)
         # re-calculate AOI because it may change due to intersection of image/area
@@ -596,7 +597,7 @@ class Mapflow(QObject):
         self.dlg.useImageExtentAsAoi.setChecked(enabled)
 
     def toggle_imagery_search(self,
-                              provider: UsersProvider):
+                              provider):
         """
         Get necessary attributes from config and send them to MainDialogo to setup Imagery Search tab
         """
@@ -2505,7 +2506,7 @@ class Mapflow(QObject):
         response = json.loads(response.readAll().data())
         self.update_processing_limit()
         self.is_premium_user = response['user']['isPremium']
-        self.on_provider_change(self.dlg.providerIndex())
+        self.on_provider_change()
         self.aoi_area_limit = response['user']['aoiAreaLimit'] * 1e-6
         # We skip SENTINEL WDs if sentinel is not enabled (normally, it should be not)
         # wds along with ids in the format: {'model_name': 'workflow_def_id'}

@@ -24,6 +24,7 @@ sys.path.append(str(Path(__file__).parent/'widgets'))
 class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     # SIGNALS
     modelOptionsChanged = pyqtSignal()
+    rasterSourceChanged = pyqtSignal()
 
     def __init__(self, parent: QWidget) -> None:
         """Plugin's main dialog."""
@@ -68,10 +69,13 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # connect two spinboxes
         self.spin1_connection = self.maxZoom.valueChanged.connect(self.switch_maxzoom_2)
         self.spin2_connection = self.maxZoom2.valueChanged.connect(self.switch_maxzoom_1)
+        # connect raster/provider combos
+        self.raster_provider_connection = self.rasterCombo.currentTextChanged.connect(self.switch_provider_combo)
+        self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
 
         self.modelOptions = []
 
-
+    # connect two spinboxes funcs
     def switch_maxzoom_1(self, value):
         self.maxZoom.valueChanged.disconnect(self.spin1_connection)
         self.maxZoom.setValue(value)
@@ -81,6 +85,19 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.maxZoom2.valueChanged.disconnect(self.spin2_connection)
         self.maxZoom2.setValue(value)
         self.spin2_connection = self.maxZoom2.valueChanged.connect(self.switch_maxzoom_1)
+
+    # connect raster/provider combos funcs
+    def switch_provider_combo(self, text):
+        self.rasterCombo.currentTextChanged.disconnect(self.raster_provider_connection)
+        self.providerCombo.setCurrentText(text)
+        self.rasterSourceChanged.emit()
+        self.raster_provider_connection = self.rasterCombo.currentTextChanged.connect(self.switch_provider_combo)
+
+    def switch_raster_combo(self, text):
+        self.providerCombo.currentTextChanged.disconnect(self.provider_raster_connection)
+        self.rasterCombo.setCurrentText(text)
+        self.rasterSourceChanged.emit()
+        self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
 
     def connect_column_checkboxes(self):
         self.showNameColumn.toggled.connect(self.set_column_visibility)
