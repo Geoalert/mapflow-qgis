@@ -1,8 +1,9 @@
 import sys
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Union
 from .status import ProcessingStatus, ProcessingReviewStatus
 from ..errors import ErrorMessage
+from ..schema.processing import ProcessingParamsSchema, BlockOption
 
 
 class Processing:
@@ -19,6 +20,8 @@ class Processing:
                  errors=None,
                  review_status=None,
                  in_review_until=None,
+                 params: Optional[ProcessingParamsSchema] = None,
+                 blocks: Optional[List[BlockOption]] = None,
                  **kwargs):
         self.id_ = id_
         self.name = name
@@ -32,6 +35,8 @@ class Processing:
         self.raster_layer = raster_layer
         self.review_status = ProcessingReviewStatus(review_status)
         self.in_review_until = in_review_until
+        self.params = params
+        self.blocks = blocks
 
     @classmethod
     def from_response(cls, processing):
@@ -60,6 +65,8 @@ class Processing:
         else:
             review_status = in_review_until = None
         cost = processing.get('cost', 0)
+        params = ProcessingParamsSchema.from_dict(processing.get("params"))
+        blocks = [BlockOption.from_dict(block) for block in processing.get("blocks", [])]
         return cls(id_,
                    name,
                    status,
@@ -71,7 +78,9 @@ class Processing:
                    raster_layer,
                    errors,
                    review_status,
-                   in_review_until)
+                   in_review_until,
+                   params,
+                   blocks)
 
     @property
     def is_new(self):

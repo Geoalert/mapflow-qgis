@@ -368,7 +368,6 @@ class Mapflow(QObject):
         self.filter_bad_rasters()
         self.dlg.rasterCombo.setCurrentText('Mapbox')
 
-
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
         """Filter out the metadata table and layer every time user changes a filter."""
         try:
@@ -1866,6 +1865,8 @@ class Mapflow(QObject):
 
     def update_processing_current_rating_callback(self, response: QNetworkReply) -> None:
         response_data = json.loads(response.readAll().data())
+        processing = Processing.from_response(response_data)
+        print(processing.params, processing.blocks)
         p_name = response_data.get('name')
         rating_json = response_data.get('rating')
         if not rating_json:
@@ -2303,7 +2304,8 @@ class Mapflow(QObject):
                                                   " Double click to add results"
                                                   " to the map").format(proc.in_review_until.strftime('%Y-%m-%d %H:%M') if proc.in_review_until else ""))
                 elif proc.status.is_ok:
-                    table_item.setToolTip(self.tr("Double click to add results to the map"))
+                    table_item.setToolTip(self.tr("Double click to add results to the map."
+                                                  ))
                 if set_color:
                     table_item.setBackground(color)
                 self.dlg.processingsTable.setItem(row, col, table_item)
