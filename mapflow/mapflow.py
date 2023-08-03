@@ -366,6 +366,8 @@ class Mapflow(QObject):
         self.dlg.providerCombo.clear()
         self.dlg.providerCombo.addItems(provider_names)
         self.filter_bad_rasters()
+        self.dlg.rasterCombo.setCurrentText('Mapbox')
+
 
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
         """Filter out the metadata table and layer every time user changes a filter."""
