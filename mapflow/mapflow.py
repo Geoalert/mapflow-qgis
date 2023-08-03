@@ -151,7 +151,8 @@ class Mapflow(QObject):
         except Exception as e:
             self.alert(self.tr("Error during loading the data providers: {e}").format(str(e)), icon=Qgis.Warning)
         if errors:
-            self.alert(self.tr('We failed to import providers from the settings. Please add them again'), icon=Qgis.Warning)
+            self.alert(self.tr('We failed to import providers from the settings. Please add them again'),
+                       icon=Qgis.Warning)
         self.update_providers()
         self.dlg.minIntersection.setValue(int(self.settings.value('metadataMinIntersection', 0)))
         self.dlg.maxCloudCover.setValue(int(self.settings.value('metadataMaxCloudCover', 100)))
@@ -169,6 +170,7 @@ class Mapflow(QObject):
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         self.dlg.downloadResultsButton.clicked.connect(self.download_results)
+        self.dlg.detailsButton.clicked.connect(self.show_details)
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
         self.dlg.startProcessing.clicked.connect(self.create_processing)
@@ -310,7 +312,7 @@ class Mapflow(QObject):
 
         if self.config.SENTINEL_WD_NAME_PATTERN in self.dlg.modelCombo.currentText():
             excluded_layers = (layer for layer in self.project.mapLayers().values()
-                                if layer.type() == QgsMapLayerType.RasterLayer)
+                               if layer.type() == QgsMapLayerType.RasterLayer)
         else:
             excluded_layers = []
         self.dlg.rasterCombo.setExceptedLayerList(excluded_layers)
@@ -1209,7 +1211,7 @@ class Mapflow(QObject):
             else:
                 aoi = QgsGeometry.collectGeometry([feature.geometry() for feature in features])
             self.calculate_aoi_area(aoi, layer.crs())
-        else: # self.max_aois_per_processing < layer.featureCount():
+        else:  # self.max_aois_per_processing < layer.featureCount():
             self.dlg.disable_processing_start(reason=self.tr('AOI must contain not more than'
                                                              ' {} polygons').format(self.max_aois_per_processing),
                                               clear_area=True)
@@ -1531,7 +1533,8 @@ class Mapflow(QObject):
                                                      " It must be a Tiff file, have size less than {size} pixels"
                                                      " and file size less than {memory}"
                                                      " MB").format(size=self.config.MAX_FILE_SIZE_PIXELS,
-                                                                  memory=self.config.MAX_FILE_SIZE_BYTES//(1024*1024)))
+                                                                   memory=self.config.MAX_FILE_SIZE_BYTES // (
+                                                                               1024 * 1024)))
             provider_params, processing_meta = self.get_processing_params(provider_index=provider_index,
                                                                           raster_layer=imagery,
                                                                           image_id=image_id)
@@ -2301,7 +2304,8 @@ class Mapflow(QObject):
                 elif proc.in_review_until:
                     table_item.setToolTip(self.tr("Please review or accept this processing until {}."
                                                   " Double click to add results"
-                                                  " to the map").format(proc.in_review_until.strftime('%Y-%m-%d %H:%M') if proc.in_review_until else ""))
+                                                  " to the map").format(
+                        proc.in_review_until.strftime('%Y-%m-%d %H:%M') if proc.in_review_until else ""))
                 elif proc.status.is_ok:
                     table_item.setToolTip(self.tr("Double click to add results to the map."
                                                   ))
@@ -2575,6 +2579,37 @@ class Mapflow(QObject):
             self.settings.setValue('latest_reported_version', server_version)
             self.version_ok = True
 
+    def show_details(self):
+        processing = self.selected_processing()
+        if not processing:
+            return
+        message = self.tr("Name: {name}"
+                          "\nStatus: {status}"
+                          "\n\nModel: {model},").format(name=processing.name,
+                                                        model=processing.workflow_def,
+                                                        status=processing.status.value)
+        if processing.blocks:
+            message += self.tr("\nModel options:"
+                               " {options}").format(options=", ".join(block.name
+                                                                      for block in processing.blocks
+                                                                      if block.enabled))
+        if processing.params.data_provider:
+            message += self.tr("\n\nData provider: {provider}").format(provider=processing.params.data_provider)
+        elif processing.params.source_type.lower() in ("local", "tif", "tiff"):
+            message += self.tr("\n\nData source: uploaded file")
+        elif processing.params.url:
+            message += self.tr("\n\nData source link {url}").format(url=processing.params.url)
+
+        if processing.errors:
+            message += "\n\nErrors: \n" + processing.error_message()
+        self.alert(message=message,
+                   icon=QMessageBox.Information,
+                   blocking=False)
+
+    @property
+    def basemap_providers(self):
+        return ProvidersList(self.default_providers + self.user_providers)
+
     def tr(self, message: str) -> str:
         """Localize a UI element text.
         :param message: A text to translate
@@ -2606,7 +2641,3 @@ class Mapflow(QObject):
         else:
             self.set_up_login_dialog()
             self.dlg_login.show()
-
-    @property
-    def basemap_providers(self):
-        return ProvidersList(self.default_providers + self.user_providers)
