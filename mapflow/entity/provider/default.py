@@ -1,4 +1,6 @@
-from .provider import ProviderInterface, SourceType
+from typing import Optional
+from .provider import ProviderInterface, SourceType, CRS
+from .basemap_provider import BasicAuth
 from ...schema.processing import PostSourceSchema, PostProviderSchema
 from ...constants import SENTINEL_OPTION_NAME
 from ...errors.plugin_errors import PluginError
@@ -46,17 +48,28 @@ class DefaultProvider(ProviderInterface):
                  id: str,
                  name: str,
                  api_name: str,
-                 price: dict):
+                 price: dict,
+                 preview_url: Optional[str] = None,
+                 source_type: SourceType = SourceType.xyz,
+                 credentials: BasicAuth = BasicAuth()):
         super().__init__(name=name)
         self.id = id
         self.api_name = api_name
         self.price = price
+        self._preview_url = preview_url
 
-    @property
+        # In the default (server-side) providers these params are for preview only
+        # By now, this is the only option for the server-side providers.
+        # If this will change, we will initialize this from api request
+        self.source_type = source_type
+        self.credentials = credentials
+        self.crs = CRS.web_mercator
+
     def preview_url(self, image_id=None):
         # We cannot provide preview via our proxy
-        # TODO: add preview url!
-        raise NotImplementedError
+        if not self._preview_url:
+            raise NotImplementedError
+        return self._preview_url
 
     @property
     def is_default(self):
@@ -79,7 +92,8 @@ class DefaultProvider(ProviderInterface):
         return cls(id=response.id,
                    name=response.displayName,
                    api_name=response.name,
-                   price=response.price_dict)
+                   price=response.price_dict,
+                   preview_url=response.previewUrl)
 
     def to_processing_params(self, image_id=None):
         return PostProviderSchema(data_provider=self.api_name), {}

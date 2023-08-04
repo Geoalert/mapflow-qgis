@@ -1825,7 +1825,8 @@ class Mapflow(QObject):
         uri = layer_utils.generate_xyz_layer_definition(url,
                                                         provider.credentials.login,
                                                         provider.credentials.password,
-                                                        max_zoom, provider.source_type)
+                                                        max_zoom,
+                                                        provider.source_type)
         layer = QgsRasterLayer(uri, layer_name, 'wms')
         layer.setCrs(QgsCoordinateReferenceSystem(provider.crs))
         if layer.isValid():
