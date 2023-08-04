@@ -921,11 +921,18 @@
             </widget>
            </item>
            <item>
-            <layout class="QHBoxLayout" name="processingFooter" stretch="0,0,0">
+            <layout class="QHBoxLayout" name="processingFooter" stretch="0,0,0,0">
              <item>
               <widget class="QPushButton" name="downloadResultsButton">
                <property name="text">
                 <string> Download results </string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="detailsButton">
+               <property name="text">
+                <string>See details</string>
                </property>
               </widget>
              </item>
@@ -1889,38 +1896,6 @@
     <hint type="destinationlabel">
      <x>495</x>
      <y>205</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>rasterCombo</sender>
-   <signal>currentTextChanged(QString)</signal>
-   <receiver>providerCombo</receiver>
-   <slot>setCurrentText(QString)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>521</x>
-     <y>111</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>120</x>
-     <y>128</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>providerCombo</sender>
-   <signal>currentTextChanged(QString)</signal>
-   <receiver>rasterCombo</receiver>
-   <slot>setCurrentText(QString)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>120</x>
-     <y>128</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>521</x>
-     <y>111</y>
     </hint>
    </hints>
   </connection>

@@ -4,7 +4,7 @@ from ..schema import SkipDataClass
 
 
 @dataclass
-class BlockConfig:
+class BlockConfig(SkipDataClass):
     name: str
     displayName: str
     price: int
@@ -20,11 +20,11 @@ class WorkflowDef(SkipDataClass):
     pricePerSqKm: float = 1.0
     created: str = ""
     updated: str = ""
-    blocks: Optional[List[BlockConfig]] = None
+    blocks: Optional[List[dict]] = None
 
     def __post_init__(self):
         if self.blocks:
-            self.blocks = [BlockConfig(**item) for item in self.blocks]
+            self.blocks = [BlockConfig.from_dict(item) for item in self.blocks]
             # Store obligatory price in pricePerSqKm
             self.pricePerSqKm = sum(block.price for block in self.non_optional_blocks)
         else:

@@ -1,7 +1,8 @@
 import json
 import dataclasses
 from dataclasses import dataclass
-from typing import Optional, Mapping, Any, Iterable
+from typing import Optional, Mapping, Any, Union, Iterable
+from .base import SkipDataClass
 
 
 class Serializable:
@@ -16,7 +17,7 @@ class Serializable:
 
 
 @dataclass
-class ProcessingParams(Serializable):
+class PostSourceSchema(Serializable, SkipDataClass):
     url: str
     source_type: str
     projection: Optional[str] = None
@@ -25,16 +26,31 @@ class ProcessingParams(Serializable):
 
 
 @dataclass
-class BlockOption(Serializable):
+class BlockOption(Serializable, SkipDataClass):
     name: str
     enabled: bool
+
+
+@dataclass
+class PostProviderSchema(Serializable, SkipDataClass):
+    # Data provider name
+    data_provider: str
+    year: Optional[str] = None
+
+
+@dataclass
+class ProcessingParamsSchema(SkipDataClass):
+    data_provider: Optional[str] = None
+    url: Optional[str] = None
+    projection: Optional[str] = None
+    source_type: Optional[str] = None
 
 
 @dataclass
 class PostProcessingSchema(Serializable):
     name: str
     wdId: Optional[str]
-    params: ProcessingParams
+    params: Union[PostSourceSchema, PostProviderSchema]
     blocks: Optional[Iterable[BlockOption]]
     geometry: Mapping[str, Any]
     meta: Optional[Mapping[str, Any]]

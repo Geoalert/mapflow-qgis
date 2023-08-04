@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 from .dialogs import ui_path, plugin_icon
 from ..entity.provider import (CRS,
                                BasicAuth,
-                               Provider,
+                               UsersProvider,
                                XYZProvider,
                                TMSProvider,
                                QuadkeyProvider,
@@ -35,7 +35,7 @@ class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
         self.current_provider = None
         self.result = None
 
-    def setup(self, provider: Optional[Provider] = None, title: str = ''):
+    def setup(self, provider: Optional[UsersProvider] = None, title: str = ''):
         self.current_provider = provider
         self.result = None
 
@@ -57,7 +57,6 @@ class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
             login = ""
             password = ""
             save_credentials = False
-
 
         # Fill out the edit dialog with the current data
         self.setWindowTitle(title)

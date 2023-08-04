@@ -1,11 +1,11 @@
-from .xyz_provider import XYZProvider, TMSProvider, QuadkeyProvider, MaxarProvider
+from .basemap_provider import XYZProvider, TMSProvider, QuadkeyProvider, MaxarProvider
+from ...constants import MAXAR_BASE_URL
+from ...functional.layer_utils import add_connect_id
+
 provider_options = {XYZProvider.option_name: XYZProvider,
                     TMSProvider.option_name: TMSProvider,
                     QuadkeyProvider.option_name: QuadkeyProvider,
                     MaxarProvider.option_name: MaxarProvider}
-
-from ...constants import MAXAR_BASE_URL
-from ...functional.layer_utils import add_connect_id
 
 
 def create_provider(option_name,
