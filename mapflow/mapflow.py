@@ -1695,7 +1695,7 @@ class Mapflow(QObject):
             self.dlg.setup_for_billing(self.billing_type)
             self.dlg.setup_for_review(self.review_workflow_enabled)
             self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex())
-            self.setup_providers(response_data.get("dataProviders"))
+            self.setup_providers(response_data.get("dataProviders") or [])
 
     def setup_providers(self, providers_data):
         self.default_providers = ProvidersList([DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
@@ -2596,7 +2596,9 @@ class Mapflow(QObject):
                                                                       if block.enabled))
         if processing.params.data_provider:
             message += self.tr("\n\nData provider: {provider}").format(provider=processing.params.data_provider)
-        elif processing.params.source_type.lower() in ("local", "tif", "tiff"):
+        elif (processing.params.source_type and processing.params.source_type.lower() in ("local", "tif", "tiff"))\
+                or (processing.params.url and processing.params.url.startswith("s3://")):
+            # case of user's raster file; we do not want to display internal file address
             message += self.tr("\n\nData source: uploaded file")
         elif processing.params.url:
             message += self.tr("\n\nData source link {url}").format(url=processing.params.url)
