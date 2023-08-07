@@ -1,3 +1,13 @@
+## 2.2.0
+    - Add "Model options" for the models that support setup
+        - This will work in the same way as options in Mapflow Web
+        - Options will be available for Buildings and Forest models
+    - Use data providers that are set for the users at the server, instead of builtin default providers in the plugin.
+        - Old API for the default providers will be deprecated
+        - All users will have access to Mapflow and ArcGIS Satellite basemaps, 
+          Satimagery basemaps will be available for payed customers
+        - We pause support for Maxar Securewatch via Mapflow account; you still can use it with your own Maxar credentials
+    - Add "See details" button to display processing options and data source
 ## 2.1.1
     Hotfix: adaptation to non-breaking API changes
 ## 2.1.0
