@@ -1,5 +1,6 @@
 from typing import Iterable, Union, Optional
 from enum import Enum
+from abc import ABC
 
 
 class staticproperty(staticmethod):
@@ -46,16 +47,45 @@ class BasicAuth:
         return f'{self.login}:{self.password}'
 
 
-class Provider:
+class ProviderInterface:
+    def __init__(self,
+                 name: str):
+        self.name = name
+
+    @property
+    def is_default(self):
+        raise NotImplementedError
+
+    @property
+    def requires_image_id(self):
+        raise NotImplementedError
+
+    @property
+    def meta_url(self):
+        raise NotImplementedError
+
+    @property
+    def is_payed(self):
+        return False
+
+    def preview_url(self, image_id=None):
+        raise NotImplementedError
+
+    def to_processing_params(self, image_id=None):
+        """ You cannot create a processing with generic provider without implementation"""
+        raise NotImplementedError
+
+
+class UsersProvider(ProviderInterface, ABC):
     def __init__(self,
                  name: str,
                  url: str,
                  source_type: Union[SourceType, str] = SourceType.xyz,
-                 crs: Optional[Union[CRS, str]] = None,
+                 crs: Optional[Union[CRS, str]] = CRS.web_mercator,
                  credentials: Union[BasicAuth, Iterable[str]] = BasicAuth(),
-                 save_credentials: bool=True,
+                 save_credentials: bool = False,
                  **kwargs):
-        self.name = name
+        super().__init__(name=name)
         self.source_type = SourceType(source_type)
         self.url = url
         if not crs and self.source_type.requires_crs:
@@ -71,6 +101,9 @@ class Provider:
         self.save_credentials = save_credentials
 
     def to_dict(self):
+        """
+        Used to save it to the settinigs
+        """
         if self.save_credentials:
             credentials = tuple(self.credentials)
         else:
@@ -90,34 +123,17 @@ class Provider:
             }
         return data
 
-    @property
-    def is_default(self):
-        raise NotImplementedError
-
-    @property
-    def is_proxy(self):
-        raise NotImplementedError
-
-    @property
-    def requires_image_id(self):
-        raise NotImplementedError
-
-    @property
-    def meta_url(self):
-        raise NotImplementedError
-
     @staticproperty
     def option_name():
-        # option for interface and settings
+        """
+        Used to display the provider type in the interface
+        """
         raise NotImplementedError
 
-    @property
-    def is_payed(self):
+
+class NoneProvider(ProviderInterface):
+    def __init__(self):
+        super().__init__(name="")
+
+    def __bool__(self):
         return False
-
-    def preview_url(self, image_id=None):
-        raise NotImplementedError
-
-    def to_processing_params(self, image_id=None):
-        """ You cannot create a processing with generic provider without implementation"""
-        raise NotImplementedError

@@ -1,22 +1,31 @@
+import sys
+
 from pathlib import Path
 from typing import Iterable, Optional
 
 from PyQt5 import uic
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette, QStandardItemModel
-from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox
+from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox, QCheckBox
 from qgis.core import QgsMapLayerProxyModel
 
 from ..entity.billing import BillingType
-from ..entity.provider import Provider
+from ..entity.provider import ProviderInterface
 from ..functional import helpers
 from ..config import config
 from . import icons
 
 ui_path = Path(__file__).parent/'static'/'ui'
 
+# To allow to import widgets
+sys.path.append(str(Path(__file__).parent/'widgets'))
+
 
 class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
+    # SIGNALS
+    modelOptionsChanged = pyqtSignal()
+    rasterSourceChanged = pyqtSignal()
+
     def __init__(self, parent: QWidget) -> None:
         """Plugin's main dialog."""
         super().__init__(parent)
@@ -60,7 +69,13 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # connect two spinboxes
         self.spin1_connection = self.maxZoom.valueChanged.connect(self.switch_maxzoom_2)
         self.spin2_connection = self.maxZoom2.valueChanged.connect(self.switch_maxzoom_1)
+        # connect raster/provider combos
+        self.raster_provider_connection = self.rasterCombo.currentTextChanged.connect(self.switch_provider_combo)
+        self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
 
+        self.modelOptions = []
+
+    # connect two spinboxes funcs
     def switch_maxzoom_1(self, value):
         self.maxZoom.valueChanged.disconnect(self.spin1_connection)
         self.maxZoom.setValue(value)
@@ -70,6 +85,19 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.maxZoom2.valueChanged.disconnect(self.spin2_connection)
         self.maxZoom2.setValue(value)
         self.spin2_connection = self.maxZoom2.valueChanged.connect(self.switch_maxzoom_1)
+
+    # connect raster/provider combos funcs
+    def switch_provider_combo(self, text):
+        self.rasterCombo.currentTextChanged.disconnect(self.raster_provider_connection)
+        self.providerCombo.setCurrentText(text)
+        self.rasterSourceChanged.emit()
+        self.raster_provider_connection = self.rasterCombo.currentTextChanged.connect(self.switch_provider_combo)
+
+    def switch_raster_combo(self, text):
+        self.providerCombo.currentTextChanged.disconnect(self.provider_raster_connection)
+        self.rasterCombo.setCurrentText(text)
+        self.rasterSourceChanged.emit()
+        self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
 
     def connect_column_checkboxes(self):
         self.showNameColumn.toggled.connect(self.set_column_visibility)
@@ -128,8 +156,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.reviewButton.setVisible(enable)
 
     def setup_imagery_search(self,
-                             provider_name: str,
-                             provider: Provider,
+                             provider: ProviderInterface,
                              columns: Iterable,
                              hidden_columns: [Iterable[int]],
                              sort_by: str,
@@ -169,7 +196,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.metadataTable.setColumnHidden(col, True)
         if sort_by is not None:
             self.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
-        self.metadata.setTitle(provider_name + self.tr(' Imagery Catalog'))
+        self.metadata.setTitle(provider.name + self.tr(' Imagery Catalog'))
         self.metadata.setEnabled(enabled)
         self.imageId.setEnabled(enabled)
         self.imageId.setPlaceholderText(image_id_placeholder)
@@ -256,3 +283,33 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.processingProblemsLabel.setPalette(self.alert_palette)
         self.processingProblemsLabel.setText(reason)
         self.startProcessing.setDisabled(True)
+
+    def clear_model_options(self):
+        for checkbox_ in self.modelOptions:
+            checkbox_.deleteLater()
+            checkbox_ = None
+        self.modelOptions.clear()
+
+    def add_model_option(self, name: str, checked: bool = False):
+        checkbox = QCheckBox(name, self)
+        self.modelOptionsLayout.addWidget(checkbox)
+        self.modelOptions.append(checkbox)
+        checkbox.setChecked(checked)
+        checkbox.toggled.connect(lambda: self.modelOptionsChanged.emit())
+
+    def enabled_blocks(self):
+        """
+        A simple ordered list of options. It preserve the order,
+        but is WD's responsibility to translate the order into option names
+        """
+        return [box.isChecked() for box in self.modelOptions]
+
+    def providerIndex(self):
+        """
+        We store proviers in a List, so we need to discard
+        """
+        return self.providerCombo.currentIndex()
+
+    def setProviderIndex(self, index):
+        self.providerCombo.setCurrentIndex(index)
+

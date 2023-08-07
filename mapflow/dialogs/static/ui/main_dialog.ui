@@ -6,14 +6,14 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1011</width>
-    <height>480</height>
+    <width>1112</width>
+    <height>550</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
     <width>0</width>
-    <height>480</height>
+    <height>550</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -26,7 +26,7 @@
       <enum>QLayout::SetNoConstraint</enum>
      </property>
      <item>
-      <layout class="QVBoxLayout" name="procesingControlLayout" stretch="0,0,0,0,0,0,0,0,0,0,0,0">
+      <layout class="QVBoxLayout" name="procesingControlLayout" stretch="0,0,0,0,0,0,0,0,0,0,0,0,0">
        <property name="spacing">
         <number>10</number>
        </property>
@@ -450,6 +450,30 @@
         </layout>
        </item>
        <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_8">
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QLabel" name="modelOptionsLabel">
+           <property name="text">
+            <string>Model options: </string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <layout class="QVBoxLayout" name="modelOptionsLayout">
+           <property name="spacing">
+            <number>0</number>
+           </property>
+          </layout>
+         </item>
+        </layout>
+       </item>
+       <item>
         <layout class="QVBoxLayout" name="verticalLayout_3">
          <property name="spacing">
           <number>0</number>
@@ -602,7 +626,7 @@
          <property name="minimumSize">
           <size>
            <width>200</width>
-           <height>60</height>
+           <height>40</height>
           </size>
          </property>
          <property name="maximumSize">
@@ -897,11 +921,18 @@
             </widget>
            </item>
            <item>
-            <layout class="QHBoxLayout" name="processingFooter" stretch="0,0,0">
+            <layout class="QHBoxLayout" name="processingFooter" stretch="0,0,0,0">
              <item>
               <widget class="QPushButton" name="downloadResultsButton">
                <property name="text">
                 <string> Download results </string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="detailsButton">
+               <property name="text">
+                <string>See details</string>
                </property>
               </widget>
              </item>
@@ -1865,38 +1896,6 @@
     <hint type="destinationlabel">
      <x>495</x>
      <y>205</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>rasterCombo</sender>
-   <signal>currentTextChanged(QString)</signal>
-   <receiver>providerCombo</receiver>
-   <slot>setCurrentText(QString)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>521</x>
-     <y>111</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>120</x>
-     <y>128</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>providerCombo</sender>
-   <signal>currentTextChanged(QString)</signal>
-   <receiver>rasterCombo</receiver>
-   <slot>setCurrentText(QString)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>120</x>
-     <y>128</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>521</x>
-     <y>111</y>
     </hint>
    </hints>
   </connection>
