@@ -1690,6 +1690,16 @@ class Mapflow(QObject):
         self.dlg.balanceLabel.setText(balance_str)
 
         if app_startup_request:
+            self.workflow_defs = {
+                workflow['name']: WorkflowDef.from_dict(workflow)
+                for workflow in response_data['models']
+            }
+            self.dlg.modelCombo.clear()
+            self.dlg.modelCombo.addItems(name for name in self.workflow_defs
+                                         if
+                                         self.config.ENABLE_SENTINEL or self.config.SENTINEL_WD_NAME_PATTERN not in name)
+            self.dlg.modelCombo.setCurrentText(self.config.DEFAULT_MODEL)
+
             self.update_processing_cost()
             self.app_startup_user_update_timer.stop()
             self.dlg.setup_for_billing(self.billing_type)
@@ -2515,14 +2525,6 @@ class Mapflow(QObject):
         self.aoi_area_limit = response['user']['aoiAreaLimit'] * 1e-6
         # We skip SENTINEL WDs if sentinel is not enabled (normally, it should be not)
         # wds along with ids in the format: {'model_name': 'workflow_def_id'}
-        self.workflow_defs = {
-            workflow['name']: WorkflowDef.from_dict(workflow)
-            for workflow in response['workflowDefs']
-        }
-        self.dlg.modelCombo.clear()
-        self.dlg.modelCombo.addItems(name for name in self.workflow_defs
-                                     if self.config.ENABLE_SENTINEL or self.config.SENTINEL_WD_NAME_PATTERN not in name)
-        self.dlg.modelCombo.setCurrentText(self.config.DEFAULT_MODEL)
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
 
         self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
