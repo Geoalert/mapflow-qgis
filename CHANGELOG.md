@@ -1,3 +1,7 @@
+## 2.2.1
+    Hotfix:
+    - fix bug with unhandled exception on opening of the plugin with opened vector layers
+    - add "forest with heights" style for Forest model when classes are present
 ## 2.2.0
     - Add "Model options" for the models that support setup
         - This will work in the same way as options in Mapflow Web
