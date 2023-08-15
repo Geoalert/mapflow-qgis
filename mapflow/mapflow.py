@@ -2523,6 +2523,8 @@ class Mapflow(QObject):
         self.dlg.modelCombo.addItems(name for name in self.workflow_defs
                                      if self.config.ENABLE_SENTINEL or self.config.SENTINEL_WD_NAME_PATTERN not in name)
         self.dlg.modelCombo.setCurrentText(self.config.DEFAULT_MODEL)
+        # Manually toggle function to avoid race condition
+        self.on_model_change()
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
 
         self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
