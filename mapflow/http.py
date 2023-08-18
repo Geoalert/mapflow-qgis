@@ -56,14 +56,18 @@ class Http(QObject):
         callback_kwargs: dict,
         error_handler: Callable,
         error_handler_kwargs: dict,
-        use_default_error_handler: bool
+        use_default_error_handler: bool,
+        error_message_parser: Optional[Callable] = None,
     ) -> None:
         """"""
         if response.error():
             if use_default_error_handler:
-                if self.default_error_handler(response):
+                if self.default_error_handler(response,
+                                              error_message_parser=error_message_parser):
                     return  # a general error occurred and has been handled
-            error_handler(response, **error_handler_kwargs)  # handle specific errors
+            error_handler(response,
+                          error_message_parser=error_message_parser,
+                          **error_handler_kwargs)  # handle specific errors
         else:
             callback(response, **callback_kwargs)
 
@@ -75,7 +79,8 @@ class Http(QObject):
         auth: bytes = None,
         callback: Callable = None,
         callback_kwargs: dict = None,
-        error_handler: Callable = None,
+        error_handler: Optional[Callable] = None,
+        error_message_parser: Optional[Callable] = None,
         error_handler_kwargs: dict = None,
         use_default_error_handler: bool = True,
         timeout: int = DEFAULT_HTTP_TIMEOUT_SECONDS,
@@ -105,6 +110,7 @@ class Http(QObject):
                 callback,
                 callback_kwargs,
                 error_handler,
+                error_message_parser,
                 error_handler_kwargs,
                 use_default_error_handler
             )

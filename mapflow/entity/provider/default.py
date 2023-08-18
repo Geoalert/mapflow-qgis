@@ -1,8 +1,8 @@
 from typing import Optional
 from .provider import ProviderInterface, SourceType, CRS
 from .basemap_provider import BasicAuth
-from ...schema.processing import PostSourceSchema, PostProviderSchema
-from ...constants import SENTINEL_OPTION_NAME
+from ...schema import PostSourceSchema, PostProviderSchema, ImageCatalogRequestSchema
+from ...constants import SENTINEL_OPTION_NAME, SEARCH_OPTION_NAME
 from ...errors.plugin_errors import PluginError
 from ...schema.provider import ProviderReturnSchema
 
@@ -30,6 +30,44 @@ class SentinelProvider(ProviderInterface):
     @property
     def meta_url(self):
         return self.proxy + '/meta/skywatch/id'
+
+    @property
+    def is_default(self):
+        return True
+
+
+class ImagerySearchProvider(ProviderInterface):
+    """
+    Represents imagery-based providers that are accessible via Mapflow API
+    It allows to search the images based on metadata, see their footprings on the map,
+    and order processing with particular image.
+
+    It works with all the providers that are linked to the user via the same interface, regardless of
+    real data provider
+    """
+
+    def __init__(self,
+                 proxy,
+                 **kwargs):
+        super().__init__(name=SEARCH_OPTION_NAME)
+        self.proxy = proxy
+
+    def preview_url(self, image_id=None):
+        return None
+
+    @property
+    def requires_image_id(self):
+        return True
+
+    def to_processing_params(self, image_id=None):
+        if not image_id:
+            raise PluginError("Search provider must have image ID to launch the processing")
+        return PostSourceSchema(url=image_id,
+                                source_type=SourceType.sentinel_l2a), {}
+
+    @property
+    def meta_url(self):
+        return self.proxy + '/catalog/meta'
 
     @property
     def is_default(self):

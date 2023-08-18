@@ -6,7 +6,7 @@ from typing import Iterable, Optional
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette, QStandardItemModel
-from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox, QCheckBox
+from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox, QCheckBox, QTableWidgetItem
 from qgis.core import QgsMapLayerProxyModel
 
 from ..entity.billing import BillingType
@@ -14,6 +14,7 @@ from ..entity.provider import ProviderInterface
 from ..functional import helpers
 from ..config import config
 from . import icons
+from ..schema import ImageCatalogResponseSchema
 
 ui_path = Path(__file__).parent/'static'/'ui'
 
@@ -177,8 +178,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             enabled = provider.meta_url is not None
         except (NotImplementedError, AttributeError):
             enabled = False
-        additional_filters_enabled = enabled
 
+        additional_filters_enabled = enabled
         preview_zoom_enabled = max_preview_zoom is not None and preview_zoom is not None
         self.maxZoom.setEnabled(preview_zoom_enabled)
         if preview_zoom_enabled:
@@ -313,3 +314,21 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     def setProviderIndex(self, index):
         self.providerCombo.setCurrentIndex(index)
 
+    def fill_metadata_table(self, metadata):
+        # Fill out the table
+        self.metadataTable.setRowCount(metadata.get('totalFeatures') or len(metadata['features']))
+        # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
+        self.metadataTable.setSortingEnabled(False)
+        for row, feature in enumerate(metadata['features']):
+            if feature.get('id'):
+                feature['properties']['id'] = feature.get('id') # for uniformity
+            for col, attr in enumerate(config.METADATA_TABLE_ATTRIBUTES.values()):
+                try:
+                    value = feature['properties'][attr]
+                except KeyError:  # e.g. <colorBandOrder/> for pachromatic images
+                    value = ''
+                table_item = QTableWidgetItem()
+                table_item.setData(Qt.DisplayRole, value)
+                self.metadataTable.setItem(row, col, table_item)
+        # Turn sorting on again
+        self.metadataTable.setSortingEnabled(True)

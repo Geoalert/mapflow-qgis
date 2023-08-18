@@ -42,7 +42,7 @@ class Config:
     PROCESSING_TABLE_SORT_COLUMN_INDEX = PROCESSING_TABLE_COLUMNS.index('created')
     DEFAULT_HIDDEN_COLUMNS = (PROCESSING_TABLE_COLUMNS.index(item) for item in ('id', 'reviewUntil', 'cost'))
     # MAXAR
-    MAXAR_METADATA_ATTRIBUTES = {
+    METADATA_TABLE_ATTRIBUTES = {
         'Product Type': 'productType',
         'Sensor': 'source',
         'Band Order': 'colorBandOrder',
@@ -51,9 +51,9 @@ class Config:
         f'Date & Time ({TIMEZONE})': 'acquisitionDate',
         'Image ID': 'id'
     }
-    MAXAR_ID_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.values()).index('id')
-    MAXAR_DATETIME_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.keys()).index(f'Date & Time ({TIMEZONE})')
-    MAXAR_CLOUD_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.keys()).index(f'Cloud %')
+    MAXAR_ID_COLUMN_INDEX = tuple(METADATA_TABLE_ATTRIBUTES.values()).index('id')
+    MAXAR_DATETIME_COLUMN_INDEX = tuple(METADATA_TABLE_ATTRIBUTES.keys()).index(f'Date & Time ({TIMEZONE})')
+    MAXAR_CLOUD_COLUMN_INDEX = tuple(METADATA_TABLE_ATTRIBUTES.keys()).index(f'Cloud %')
     MAXAR_MAX_FREE_ZOOM = 12
 
     # MISC
