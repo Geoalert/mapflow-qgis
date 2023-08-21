@@ -168,7 +168,7 @@ class Mapflow(QObject):
         self.dlg.metadataFrom.setDate(self.settings.value('metadataFrom', today.addMonths(-6)))
         self.dlg.metadataTo.setDate(self.settings.value('metadataTo', today))
         # SET UP SIGNALS & SLOTS
-        self.filter_bad_rasters()
+        self.dlg.rasterCombo.setExceptedLayerList(self.filter_bad_rasters())
         self.dlg.modelCombo.activated.connect(self.on_model_change)
         self.dlg.modelOptionsChanged.connect(self.on_options_change)
         # Memorize dialog element sizes & positioning
@@ -318,11 +318,11 @@ class Mapflow(QObject):
         # However, current implementation takes 4 ms when 100 files are opened, which is OK
 
         if self.config.SENTINEL_WD_NAME_PATTERN in self.dlg.modelCombo.currentText():
-            excluded_layers = (layer for layer in self.project.mapLayers().values()
-                               if layer.type() == QgsMapLayerType.RasterLayer)
+            excluded_layers = [layer for layer in self.project.mapLayers().values()
+                               if layer.type() == QgsMapLayerType.RasterLayer]
         else:
             excluded_layers = []
-        self.dlg.rasterCombo.setExceptedLayerList(excluded_layers)
+        return excluded_layers
 
     def on_options_change(self):
         wd_name = self.dlg.modelCombo.currentText()
@@ -365,18 +365,19 @@ class Mapflow(QObject):
     def set_available_imagery_sources(self, wd: str) -> None:
         """Restrict the list of imagery sources according to the selected model."""
         if self.config.SENTINEL_WD_NAME_PATTERN in wd and self.providers != self.sentinel_providers:
+            print("Setting sentinel provider")
             self.providers = self.sentinel_providers
         elif not self.providers == self.basemap_providers:
+            print("Setting basemaps providers")
             self.providers = self.basemap_providers
         else:
             # Providers did not change
             return
         provider_names = [p.name for p in self.providers]
-        self.dlg.rasterCombo.setAdditionalItems(provider_names)
-        self.dlg.providerCombo.clear()
-        self.dlg.providerCombo.addItems(provider_names)
-        self.filter_bad_rasters()
-        self.dlg.rasterCombo.setCurrentText('Mapbox')
+        print(f"Got {len(provider_names)} providers")
+        self.dlg.set_raster_sources(provider_names=provider_names,
+                                    default_provider_name='Mapbox',
+                                    excepted_layers=self.filter_bad_rasters())
 
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
         """Filter out the metadata table and layer every time user changes a filter."""
@@ -455,6 +456,7 @@ class Mapflow(QObject):
         provider_layer = self.dlg.rasterCombo.currentLayer()
         # This is done after area calculation, because there the provider list is updated?
         provider_index = self.dlg.providerIndex()
+        print(f"Provider # {provider_index}")
         provider = self.providers[provider_index]
         # Changes in search tab
         self.toggle_imagery_search(provider)
@@ -516,7 +518,7 @@ class Mapflow(QObject):
         # Ask for confirmation
         elif self.alert(self.tr('Permanently remove {}?').format(provider.name),
                         icon=QMessageBox.Question):
-            self.providers.pop(provider_index)
+            self.user_providers.remove(provider)
             self.update_providers()
 
     def edit_provider_callback(self) -> None:
@@ -736,7 +738,6 @@ class Mapflow(QObject):
                                                     minOffNadirAngle=min_off_nadir_angle,
                                                     maxOffNadirAngle=max_off_nadir_angle,
                                                     minAoiIntersectionPercent=min_intersection)
-        print(f"requesting head metadata with params {request_payload.as_json()}")
         self.http.post(url=provider.meta_url,
                        body=request_payload.as_json().encode(),
                        headers={},
@@ -761,7 +762,6 @@ class Mapflow(QObject):
     def request_mapflow_metadata_callback(self, response: QNetworkReply):
         response_json = json.loads(response.readAll().data())
         response_data = ImageCatalogResponseSchema(**response_json)
-        print([image.offNadirAngle for image in response_data.images])
         geoms = response_data.as_geojson()
         self.dlg.fill_metadata_table(geoms)
         self.display_metadata_geojson_layer(geoms, "Mapflow catalog metadata")
@@ -1641,7 +1641,6 @@ class Mapflow(QObject):
             url=f'{self.server}/processings',
             callback=self.post_processing_callback,
             callback_kwargs={'processing_name': request_body.name},
-            error_handler=self.post_processing_error_handler,
             use_default_error_handler=True,
             error_message_parser=api_message_parser,
             body=request_body.as_json().encode()

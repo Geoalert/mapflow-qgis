@@ -1,13 +1,13 @@
 import sys
 
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Optional, List
 
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette, QStandardItemModel
 from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox, QCheckBox, QTableWidgetItem
-from qgis.core import QgsMapLayerProxyModel
+from qgis.core import QgsMapLayerProxyModel, QgsMapLayer
 
 from ..entity.billing import BillingType
 from ..entity.provider import ProviderInterface
@@ -91,14 +91,42 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     def switch_provider_combo(self, text):
         self.rasterCombo.currentTextChanged.disconnect(self.raster_provider_connection)
         self.providerCombo.setCurrentText(text)
+        print("Emit rasterSourceChanged from switch provider combo")
         self.rasterSourceChanged.emit()
         self.raster_provider_connection = self.rasterCombo.currentTextChanged.connect(self.switch_provider_combo)
 
     def switch_raster_combo(self, text):
         self.providerCombo.currentTextChanged.disconnect(self.provider_raster_connection)
         self.rasterCombo.setCurrentText(text)
+        print("Emit rasterSourceChanged from switch raster combo")
         self.rasterSourceChanged.emit()
         self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
+
+    def set_raster_sources(self,
+                           provider_names: List[str],
+                           default_provider_name: str,
+                           excepted_layers: List[QgsMapLayer]):
+        """
+        args:
+            provider_names: strings to be added to providers and raster combos
+            default_provider_name: will try to set the current text to this value, if available
+            excepted_layers: will exclude these layers from rasterCombo (for Sentinel, mainly)
+        """
+        # Disconnect so that rasterSourceChanged would not be emitted while changing comboBoxes
+        self.providerCombo.currentTextChanged.disconnect(self.provider_raster_connection)
+        self.rasterCombo.currentTextChanged.disconnect(self.raster_provider_connection)
+
+        self.rasterCombo.setAdditionalItems(provider_names)
+        self.providerCombo.clear()
+        self.providerCombo.addItems(provider_names)
+        self.rasterCombo.setExceptedLayerList(excepted_layers)
+        self.rasterCombo.setCurrentText(default_provider_name)
+
+        # Now, after all is set, we can unblock the signals and emit a new one
+        self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
+        self.raster_provider_connection = self.rasterCombo.currentTextChanged.connect(self.switch_provider_combo)
+
+        self.rasterSourceChanged.emit()
 
     def connect_column_checkboxes(self):
         self.showNameColumn.toggled.connect(self.set_column_visibility)
