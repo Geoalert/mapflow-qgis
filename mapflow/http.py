@@ -106,13 +106,13 @@ class Http(QObject):
             error_handler_kwargs=error_handler_kwargs or {},
             use_default_error_handler=use_default_error_handler:
             self.response_dispatcher(
-                response,
-                callback,
-                callback_kwargs,
-                error_handler,
-                error_message_parser,
-                error_handler_kwargs,
-                use_default_error_handler
+                response=response,
+                callback=callback,
+                callback_kwargs=callback_kwargs,
+                error_handler=error_handler,
+                error_handler_kwargs=error_handler_kwargs,
+                use_default_error_handler=use_default_error_handler,
+                error_message_parser=error_message_parser
             )
         )
         return response
@@ -143,7 +143,6 @@ def api_message_parser(response_body: str) -> str:
 def securewatch_message_parser(response_body: str) -> str:
     # todo: parse this HTML page for useful info, or display it as is?
     return response_body
-
 
 def get_error_report_body(response: QNetworkReply,
                           plugin_version: str,

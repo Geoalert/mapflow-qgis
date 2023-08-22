@@ -34,7 +34,9 @@ from .http import (Http,
                    get_error_report_body,
                    data_catalog_message_parser,
                    securewatch_message_parser,
-                   api_message_parser)
+                   api_message_parser,
+                   )
+
 from .config import Config
 from .entity.processing import parse_processings_request, Processing, ProcessingHistory, updated_processings
 from .entity.provider import (UsersProvider,
@@ -365,16 +367,13 @@ class Mapflow(QObject):
     def set_available_imagery_sources(self, wd: str) -> None:
         """Restrict the list of imagery sources according to the selected model."""
         if self.config.SENTINEL_WD_NAME_PATTERN in wd and self.providers != self.sentinel_providers:
-            print("Setting sentinel provider")
             self.providers = self.sentinel_providers
         elif not self.providers == self.basemap_providers:
-            print("Setting basemaps providers")
             self.providers = self.basemap_providers
         else:
             # Providers did not change
             return
         provider_names = [p.name for p in self.providers]
-        print(f"Got {len(provider_names)} providers")
         self.dlg.set_raster_sources(provider_names=provider_names,
                                     default_provider_name='Mapbox',
                                     excepted_layers=self.filter_bad_rasters())
@@ -456,7 +455,6 @@ class Mapflow(QObject):
         provider_layer = self.dlg.rasterCombo.currentLayer()
         # This is done after area calculation, because there the provider list is updated?
         provider_index = self.dlg.providerIndex()
-        print(f"Provider # {provider_index}")
         provider = self.providers[provider_index]
         # Changes in search tab
         self.toggle_imagery_search(provider)
@@ -1072,8 +1070,8 @@ class Mapflow(QObject):
             auth=f'Basic {encoded_credentials.decode()}'.encode(),
             callback=self.get_maxar_metadata_callback,
             callback_kwargs=callback_kwargs,
-            use_default_error_handler=True,
-            error_message_parser=securewatch_message_parser
+            use_default_error_handler=False,
+            error_handler=self.get_maxar_metadata_error_handler
         )
 
     def get_maxar_metadata_callback(
@@ -1115,8 +1113,23 @@ class Mapflow(QObject):
             feature['id']: feature
             for feature in self.metadata_layer.getFeatures()
         }
-        self.dlg.fill_metadata_table_maxar(metadata)
+        self.dlg.fill_metadata_table(metadata)
         self.filter_metadata(min_intersection=min_intersection, max_cloud_cover=max_cloud_cover)
+
+    def get_maxar_metadata_error_handler(self, response: QNetworkReply, error_message_parser) -> None:
+        """Error handler for metadata requests.
+
+        :param response: The HTTP response.
+        """
+        error = response.error()
+        if error in [QNetworkReply.ContentAccessDenied]:  # , QNetworkReply.AuthenticationRequiredError):
+            self.alert(self.tr('Please, check your Maxar credentials'))
+        else:
+            self.report_http_error(response,
+                                   self.tr("We couldn't get metadata from Maxar, "
+                                           "error {error}").format(
+                                       error=response.attribute(QNetworkRequest.HttpStatusCodeAttribute)),
+                                   error_message_parser=securewatch_message_parser)
 
     def sync_table_selection_with_image_id_and_layer(self) -> str:
         """

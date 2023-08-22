@@ -121,11 +121,11 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.providerCombo.addItems(provider_names)
         self.rasterCombo.setExceptedLayerList(excepted_layers)
         self.rasterCombo.setCurrentText(default_provider_name)
+        self.providerCombo.setCurrentText(default_provider_name)
 
         # Now, after all is set, we can unblock the signals and emit a new one
         self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
         self.raster_provider_connection = self.rasterCombo.currentTextChanged.connect(self.switch_provider_combo)
-
         self.rasterSourceChanged.emit()
 
     def connect_column_checkboxes(self):
