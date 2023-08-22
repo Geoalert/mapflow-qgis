@@ -6,10 +6,8 @@ from PyQt5.QtCore import QObject, QTimer, QUrl, qVersion
 from PyQt5.QtNetwork import QHttpMultiPart, QNetworkReply, QNetworkRequest
 from qgis.core import QgsNetworkAccessManager, Qgis
 
-
-import logging
 from .constants import DEFAULT_HTTP_TIMEOUT_SECONDS
-from .errors import ErrorMessage, ErrorMessageList
+from .errors import ErrorMessage
 
 
 class Http(QObject):
@@ -50,41 +48,37 @@ class Http(QObject):
         return self.send_request(self.nam.deleteResource, **kwargs)
 
     def response_dispatcher(
-        self,
-        response: QNetworkReply,
-        callback: Callable,
-        callback_kwargs: dict,
-        error_handler: Callable,
-        error_handler_kwargs: dict,
-        use_default_error_handler: bool,
-        error_message_parser: Optional[Callable] = None,
+            self,
+            response: QNetworkReply,
+            callback: Callable,
+            callback_kwargs: dict,
+            error_handler: Callable,
+            error_handler_kwargs: dict,
+            use_default_error_handler: bool,
     ) -> None:
         """"""
         if response.error():
             if use_default_error_handler:
-                if self.default_error_handler(response,
-                                              error_message_parser=error_message_parser):
+                if self.default_error_handler(response):
                     return  # a general error occurred and has been handled
             error_handler(response,
-                          error_message_parser=error_message_parser,
                           **error_handler_kwargs)  # handle specific errors
         else:
             callback(response, **callback_kwargs)
 
     def send_request(
-        self,
-        method: Callable,
-        url: str,
-        headers: dict = None,
-        auth: bytes = None,
-        callback: Callable = None,
-        callback_kwargs: dict = None,
-        error_handler: Optional[Callable] = None,
-        error_message_parser: Optional[Callable] = None,
-        error_handler_kwargs: dict = None,
-        use_default_error_handler: bool = True,
-        timeout: int = DEFAULT_HTTP_TIMEOUT_SECONDS,
-        body: Union[QHttpMultiPart, bytes] = None
+            self,
+            method: Callable,
+            url: str,
+            headers: dict = None,
+            auth: bytes = None,
+            callback: Callable = None,
+            callback_kwargs: dict = None,
+            error_handler: Optional[Callable] = None,
+            error_handler_kwargs: dict = None,
+            use_default_error_handler: bool = True,
+            timeout: int = DEFAULT_HTTP_TIMEOUT_SECONDS,
+            body: Union[QHttpMultiPart, bytes] = None
     ) -> QNetworkReply:
         """Send an actual request."""
         request = QNetworkRequest(QUrl(url))
@@ -97,24 +91,19 @@ class Http(QObject):
         request.setRawHeader(b'authorization', auth or self._basic_auth)
         response = method(request, body) if (method == self.nam.post or method == self.nam.put) else method(request)
         QTimer.singleShot(timeout * 1000, response.abort)
-        response.finished.connect(
-            lambda
-            response=response,
-            callback=callback,
-            callback_kwargs=callback_kwargs or {},
-            error_handler=error_handler or (lambda _: None),
-            error_handler_kwargs=error_handler_kwargs or {},
-            use_default_error_handler=use_default_error_handler:
-            self.response_dispatcher(
-                response=response,
-                callback=callback,
-                callback_kwargs=callback_kwargs,
-                error_handler=error_handler,
-                error_handler_kwargs=error_handler_kwargs,
-                use_default_error_handler=use_default_error_handler,
-                error_message_parser=error_message_parser
-            )
-        )
+
+        response.finished.connect(lambda response=response,
+                                         callback=callback,
+                                         callback_kwargs=callback_kwargs or {},
+                                         error_handler=error_handler or (lambda _: None),
+                                         error_handler_kwargs=error_handler_kwargs or {},
+                                         use_default_error_handler=use_default_error_handler:
+                                  self.response_dispatcher(response=response,
+                                                           callback=callback,
+                                                           callback_kwargs=callback_kwargs,
+                                                           error_handler=error_handler,
+                                                           error_handler_kwargs=error_handler_kwargs,
+                                                           use_default_error_handler=use_default_error_handler))
         return response
 
 
@@ -143,6 +132,7 @@ def api_message_parser(response_body: str) -> str:
 def securewatch_message_parser(response_body: str) -> str:
     # todo: parse this HTML page for useful info, or display it as is?
     return response_body
+
 
 def get_error_report_body(response: QNetworkReply,
                           plugin_version: str,
