@@ -89,18 +89,18 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
     # connect raster/provider combos funcs
     def switch_provider_combo(self, text):
-        self.rasterCombo.currentTextChanged.disconnect(self.raster_provider_connection)
+        self.providerCombo.currentTextChanged.disconnect(self.provider_raster_connection)
         self.providerCombo.setCurrentText(text)
         print("Emit rasterSourceChanged from switch provider combo")
         self.rasterSourceChanged.emit()
-        self.raster_provider_connection = self.rasterCombo.currentTextChanged.connect(self.switch_provider_combo)
+        self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
 
     def switch_raster_combo(self, text):
-        self.providerCombo.currentTextChanged.disconnect(self.provider_raster_connection)
+        self.rasterCombo.currentTextChanged.disconnect(self.raster_provider_connection)
         self.rasterCombo.setCurrentText(text)
         print("Emit rasterSourceChanged from switch raster combo")
         self.rasterSourceChanged.emit()
-        self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
+        self.raster_provider_connection = self.rasterCombo.currentTextChanged.connect(self.switch_provider_combo)
 
     def set_raster_sources(self,
                            provider_names: List[str],
