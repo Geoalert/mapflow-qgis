@@ -20,14 +20,15 @@ class ImageCatalogRequestSchema(Serializable):
 @dataclass
 class ImageSchema(Serializable, SkipDataClass):
     id: str
-    footprint: dict
-    pixelResolution: float
+    footprint: Optional[dict]
+    pixelResolution: Optional[float]
     acquisitionDate: Union[datetime, str]
-    productType: str
-    sensor: str
-    colorBandOrder: str
-    cloudCover: float
-    offNadirAngle: float
+    productType: Optional[str]
+    sensor: Optional[str]
+    colorBandOrder: Optional[str]
+    cloudCover: Optional[float]
+    offNadirAngle: Optional[float]
+    source: Optional[str] = None  # Duplicate of sensor for the table (like in Maxar)
 
     def __post_init__(self):
         if isinstance(self.acquisitionDate, str):
@@ -36,6 +37,7 @@ class ImageSchema(Serializable, SkipDataClass):
             raise TypeError("Acquisition date must be either datetime or ISO-formatted str")
         # To percent
         self.cloudCover = self.cloudCover*100
+        self.source = self.sensor
 
     def as_geojson(self):
         properties = {k: v for k, v in self.as_dict().items() if k != "footprint"}
@@ -44,7 +46,7 @@ class ImageSchema(Serializable, SkipDataClass):
                 "properties": properties}
 
 @dataclass
-class ImageCatalogResponseSchema(Serializable, SkipDataClass):
+class ImageCatalogResponseSchema(Serializable):
     images: List[ImageSchema]
 
     def __post_init__(self):
