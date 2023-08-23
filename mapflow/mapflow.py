@@ -2716,7 +2716,6 @@ class Mapflow(QObject):
             self.dlg.show()
             self.update_processing_limit()
             self.user_status_update_timer.start()
-            self.app_startup_user_update_timer.start()
         elif token:  # token saved
             self.http.basic_auth = f'Basic {token}'
             self.log_in(token)
