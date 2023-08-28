@@ -2714,6 +2714,7 @@ class Mapflow(QObject):
         token = self.settings.value('token')
         if self.logged_in:
             self.dlg.show()
+            self.dlg.raise_()
             self.update_processing_limit()
             self.user_status_update_timer.start()
         elif token:  # token saved
