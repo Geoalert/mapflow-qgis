@@ -1,19 +1,20 @@
 import sys
 
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Optional, List
 
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette, QStandardItemModel
-from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox, QCheckBox
-from qgis.core import QgsMapLayerProxyModel
+from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox, QCheckBox, QTableWidgetItem
+from qgis.core import QgsMapLayerProxyModel, QgsMapLayer
 
 from ..entity.billing import BillingType
 from ..entity.provider import ProviderInterface
 from ..functional import helpers
 from ..config import config
 from . import icons
+from ..schema import ImageCatalogResponseSchema
 
 ui_path = Path(__file__).parent/'static'/'ui'
 
@@ -88,16 +89,42 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
     # connect raster/provider combos funcs
     def switch_provider_combo(self, text):
-        self.rasterCombo.currentTextChanged.disconnect(self.raster_provider_connection)
+        self.providerCombo.currentTextChanged.disconnect(self.provider_raster_connection)
         self.providerCombo.setCurrentText(text)
+        self.rasterSourceChanged.emit()
+        self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
+
+    def switch_raster_combo(self, text):
+        self.rasterCombo.currentTextChanged.disconnect(self.raster_provider_connection)
+        self.rasterCombo.setCurrentText(text)
         self.rasterSourceChanged.emit()
         self.raster_provider_connection = self.rasterCombo.currentTextChanged.connect(self.switch_provider_combo)
 
-    def switch_raster_combo(self, text):
+    def set_raster_sources(self,
+                           provider_names: List[str],
+                           default_provider_name: str,
+                           excepted_layers: List[QgsMapLayer]):
+        """
+        args:
+            provider_names: strings to be added to providers and raster combos
+            default_provider_name: will try to set the current text to this value, if available
+            excepted_layers: will exclude these layers from rasterCombo (for Sentinel, mainly)
+        """
+        # Disconnect so that rasterSourceChanged would not be emitted while changing comboBoxes
         self.providerCombo.currentTextChanged.disconnect(self.provider_raster_connection)
-        self.rasterCombo.setCurrentText(text)
-        self.rasterSourceChanged.emit()
+        self.rasterCombo.currentTextChanged.disconnect(self.raster_provider_connection)
+
+        self.rasterCombo.setAdditionalItems(provider_names)
+        self.providerCombo.clear()
+        self.providerCombo.addItems(provider_names)
+        self.rasterCombo.setExceptedLayerList(excepted_layers)
+        self.rasterCombo.setCurrentText(default_provider_name)
+        self.providerCombo.setCurrentText(default_provider_name)
+
+        # Now, after all is set, we can unblock the signals and emit a new one
         self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
+        self.raster_provider_connection = self.rasterCombo.currentTextChanged.connect(self.switch_provider_combo)
+        self.rasterSourceChanged.emit()
 
     def connect_column_checkboxes(self):
         self.showNameColumn.toggled.connect(self.set_column_visibility)
@@ -177,8 +204,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             enabled = provider.meta_url is not None
         except (NotImplementedError, AttributeError):
             enabled = False
-        additional_filters_enabled = enabled
 
+        additional_filters_enabled = enabled
         preview_zoom_enabled = max_preview_zoom is not None and preview_zoom is not None
         self.maxZoom.setEnabled(preview_zoom_enabled)
         if preview_zoom_enabled:
@@ -313,3 +340,21 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     def setProviderIndex(self, index):
         self.providerCombo.setCurrentIndex(index)
 
+    def fill_metadata_table(self, metadata):
+        # Fill out the table
+        self.metadataTable.setRowCount(metadata.get('totalFeatures') or len(metadata['features']))
+        # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
+        self.metadataTable.setSortingEnabled(False)
+        for row, feature in enumerate(metadata['features']):
+            if feature.get('id'):
+                feature['properties']['id'] = feature.get('id') # for uniformity
+            for col, attr in enumerate(config.METADATA_TABLE_ATTRIBUTES.values()):
+                try:
+                    value = feature['properties'][attr]
+                except KeyError:  # e.g. <colorBandOrder/> for pachromatic images
+                    value = ''
+                table_item = QTableWidgetItem()
+                table_item.setData(Qt.DisplayRole, value)
+                self.metadataTable.setItem(row, col, table_item)
+        # Turn sorting on again
+        self.metadataTable.setSortingEnabled(True)

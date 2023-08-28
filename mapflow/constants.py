@@ -6,5 +6,6 @@ LEGACY_PROVIDER_PASSWORD_KEY = 'providerPassword'
 MAXAR_BASE_URL = 'https://securewatch.digitalglobe.com/earthservice/wmtsaccess?'
 
 SENTINEL_OPTION_NAME = 'Sentinel-2'
+SEARCH_OPTION_NAME = "Imagery Catalog"
 
 DEFAULT_HTTP_TIMEOUT_SECONDS = 5
