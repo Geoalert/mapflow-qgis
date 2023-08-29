@@ -92,6 +92,7 @@ class Mapflow(QObject):
         self.dlg_login = LoginDialog(self.main_window)
         self.workflow_defs = {}
         self.aoi_layers = []
+        self.use_all_layers = True
 
         super().__init__(self.main_window)
         self.project = QgsProject.instance()
@@ -254,6 +255,7 @@ class Mapflow(QObject):
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
 
+        # Layer actions
         self.add_layer_action = QAction(u"Use as AOI in Mapflow")
         self.add_layer_action.setIcon(plugin_icon)
         self.add_layer_action.triggered.connect(self.add_to_layers)
@@ -262,6 +264,7 @@ class Mapflow(QObject):
         self.remove_layer_action.setIcon(plugin_icon)
         self.remove_layer_action.triggered.connect(self.remove_from_layers)
         iface.addCustomActionForLayerType(self.remove_layer_action, None, QgsMapLayerType.VectorLayer, False)
+        self.dlg.useAllVectorLayers.stateChanged.connect(self.toggle_all_layers)
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
@@ -288,25 +291,9 @@ class Mapflow(QObject):
             # it can be easly already removed as I can't remove action from contextmenu of a single layer
         self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
 
-    # TMP
-    """
-            self.user_status_update_timer.timeout.connect(
-            lambda: self.http.get(
-                url=f'{self.server}/user/status',
-                callback=self.set_processing_limit,
-                use_default_error_handler=False  # ignore errors to prevent repetitive alerts
-            )
-        )
-        self.app_startup_user_update_timer.timeout.connect(
-            lambda: self.http.get(
-                url=f'{self.server}/user/status',
-                callback=self.set_processing_limit,
-                callback_kwargs={'app_startup_request': True},
-                use_default_error_handler=False
-            )
-        )
-
-    """
+    def toggle_all_layers(self, state: bool):
+        self.use_all_layers = bool(state)
+        self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
 
     def refresh_status(self):
         self.http.get(
@@ -323,7 +310,6 @@ class Mapflow(QObject):
             use_default_error_handler=False
         )
 
-    # /TMP
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.create_aoi_from_map_action)
         self.add_layer_menu.addAction(self.add_aoi_from_file_action)
@@ -388,8 +374,9 @@ class Mapflow(QObject):
         return excluded_layers
 
     def filter_aoi_layers(self):
-        excluded_layers = [layer for layer in self.project.mapLayers().values() if layer not in self.aoi_layers]
-        return excluded_layers
+        if self.use_all_layers:
+            return []
+        return [layer for layer in self.project.mapLayers().values() if layer not in self.aoi_layers]
 
     def on_options_change(self):
         wd_name = self.dlg.modelCombo.currentText()
