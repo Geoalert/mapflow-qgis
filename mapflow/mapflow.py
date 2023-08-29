@@ -92,7 +92,6 @@ class Mapflow(QObject):
         self.dlg_login = LoginDialog(self.main_window)
         self.workflow_defs = {}
         self.aoi_layers = []
-        self.use_all_layers = True
 
         super().__init__(self.main_window)
         self.project = QgsProject.instance()
@@ -173,7 +172,6 @@ class Mapflow(QObject):
         self.dlg.metadataTo.setDate(self.settings.value('metadataTo', today))
         # SET UP SIGNALS & SLOTS
         self.dlg.rasterCombo.setExceptedLayerList(self.filter_bad_rasters())
-        self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
         self.dlg.modelCombo.activated.connect(self.on_model_change)
         self.dlg.modelOptionsChanged.connect(self.on_options_change)
         # Memorize dialog element sizes & positioning
@@ -264,7 +262,10 @@ class Mapflow(QObject):
         self.remove_layer_action.setIcon(plugin_icon)
         self.remove_layer_action.triggered.connect(self.remove_from_layers)
         iface.addCustomActionForLayerType(self.remove_layer_action, None, QgsMapLayerType.VectorLayer, False)
+        self.dlg.useAllVectorLayers.setChecked(bool(self.settings.value('useAllVectorLayers', True)))
         self.dlg.useAllVectorLayers.stateChanged.connect(self.toggle_all_layers)
+        self.use_all_layers = self.dlg.useAllVectorLayers.isChecked()
+        self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
@@ -523,6 +524,7 @@ class Mapflow(QObject):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
         # Save main dialog size & position
         self.settings.setValue('mainDialogState', self.dlg.saveGeometry())
+        self.settings.setValue('useAllVectorLayers', self.use_all_layers)
 
     def add_layer(self, layer: QgsMapLayer) -> None:
         """Add layers created by the plugin to the legend.
