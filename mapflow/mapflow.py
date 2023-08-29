@@ -2121,6 +2121,7 @@ class Mapflow(QObject):
             url=f'{self.server}/processings/{pid}/result',
             callback=self.download_results_callback,
             callback_kwargs={'pid': pid},
+            use_default_error_handler=False,
             error_handler=self.download_results_error_handler,
             timeout=300
         )
@@ -2218,9 +2219,10 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
+        print("Handling download error")
         self.dlg.processingsTable.setEnabled(True)
         self.report_http_error(response,
-                               self.tr('Error downloading results'),
+                               self.tr('Error downloading results, \n try again later or report error'),
                                error_message_parser=api_message_parser)
 
     def set_raster_extent(
