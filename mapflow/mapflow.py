@@ -546,7 +546,7 @@ class Mapflow(QObject):
         self.settings.setValue('mainDialogState', self.dlg.saveGeometry())
         self.settings.setValue('useAllVectorLayers', self.use_all_layers)
 
-    def add_layer(self, layer: QgsMapLayer) -> None:
+    def add_layer(self, layer: Optional[QgsMapLayer]) -> None:
         """Add layers created by the plugin to the legend.
 
         By default, layers are added to a group with the same name as the plugin.
@@ -555,6 +555,8 @@ class Mapflow(QObject):
 
         :param layer: A vector or raster layer to be added.
         """
+        if not layer:
+            return
         self.layer_group = self.layer_tree_root.findGroup(self.settings.value('layerGroup'))
         if self.add_layers_to_group:
             if not self.layer_group:  # сreate a layer group
@@ -2359,6 +2361,53 @@ class Mapflow(QObject):
 
         :param row: int Row number in the processings table (0-based)
         """
+        processing = self.selected_processing()
+        if not processing:
+            return
+        pid = processing.id_
+        if pid not in self.processing_history.finished:
+            self.alert(self.tr("Only the results of correctly finished processing can be loaded"))
+            return
+        raster_tilejson = processing.raster_layer.get("tileJsonUrl", None)
+        vector_tilejson = processing.vector_layer.get("tileJsonUrl", None)
+        raster_layer = layer_utils.generate_raster_layer(processing.raster_layer.get("tileUrl", None),
+                                                         name=f"{processing.name} raster")
+        vector_layer = layer_utils.generate_vector_layer(processing.vector_layer.get("tileUrl", None),
+                                                         name=processing.name)
+        #vector_layer.loadNamedStyle(get_style_name(processing.workflow_def, vector_layer))
+
+        self.set_map_extent(None,
+                            tilejson_uris=[uri for uri in (raster_tilejson, vector_tilejson) if uri is not None],
+                            raster_layer=raster_layer,
+                            vector_layer=vector_layer)
+
+    def set_map_extent(self, response: Optional[QNetworkReply], tilejson_uris: List,
+                       raster_layer, vector_layer):
+        print(f"Trying with {tilejson_uris}")
+        if not tilejson_uris:
+            # Error handler in case tiljson uri is unavailable
+            # return
+            # debug; later will remove and replace with pass to skip this error
+            if not response:
+                raise AssertionError("Do not call set_map_extent without URI")
+            self.report_http_error(response=response, title=self.tr("Could not set layer extent"))
+
+        # request with the first and save the rest in case of error
+        main_tilejson_uri = tilejson_uris[0]
+        other_tilejson_uris = tilejson_uris[1:]
+
+        self.http.get(url=main_tilejson_uri,
+                      callback=self.set_raster_extent,
+                      callback_kwargs={"raster": raster_layer,
+                                       "vector": vector_layer},
+                      error_handler=self.set_map_extent,
+                      error_handler_kwargs={"tilejson_uris": other_tilejson_uris,
+                                            "raster_layer": raster_layer,
+                                            "vector_layer": vector_layer},
+                      use_default_error_handler=False,
+                      )
+
+    def download_results_file(self) -> None:
         if not self.check_if_output_directory_is_selected():
             return
         processing = self.selected_processing()
@@ -2489,9 +2538,17 @@ class Mapflow(QObject):
         :param raster: The downloaded raster which was used for processing.
         """
         bounding_box = layer_utils.get_bounding_box_from_tile_json(response=response)
+        print(f"Setting extent to {bounding_box}")
         raster.setExtent(rect=bounding_box)
+        vector.setExtent(rect=bounding_box)
         self.add_layer(raster)
         self.add_layer(vector)
+        if raster:
+            # It is prefered to zoom to the raster as it has a fixed extent, but if raster layer is not present,
+            # we fallback to vector
+            self.iface.setActiveLayer(raster)
+        else:
+            self.iface.setActiveLayer(vector)
         self.iface.zoomToActiveLayer()
 
     def set_raster_extent_error_handler(self,

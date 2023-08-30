@@ -7,9 +7,11 @@ from qgis.core import (QgsRectangle,
                        QgsFeature,
                        QgsMapLayer,
                        QgsVectorLayer,
+                       QgsVectorTileLayer,
                        QgsJsonExporter,
                        QgsGeometry,
                        QgsMapLayerType,
+                       QgsDataSourceUri,
                        QgsWkbTypes,
                        QgsCoordinateReferenceSystem,
                        QgsDistanceArea)
@@ -62,15 +64,15 @@ def maxar_tile_url(base_url, image_id=None):
         # case when this is not the first arguments in layer
         base_url = base_url + '&'
     url = base_url + "SERVICE=WMTS" \
-                      "&VERSION=1.0.0" \
-                      "&STYLE=" \
-                      "&REQUEST=GetTile" \
-                      "&LAYER=DigitalGlobe:ImageryTileService" \
-                      "&FORMAT=image/jpeg" \
-                      "&TileRow={y}" \
-                      "&TileCol={x}" \
-                      "&TileMatrixSet=EPSG:3857" \
-                      "&TileMatrix=EPSG:3857:{z}"
+                     "&VERSION=1.0.0" \
+                     "&STYLE=" \
+                     "&REQUEST=GetTile" \
+                     "&LAYER=DigitalGlobe:ImageryTileService" \
+                     "&FORMAT=image/jpeg" \
+                     "&TileRow={y}" \
+                     "&TileCol={x}" \
+                     "&TileMatrixSet=EPSG:3857" \
+                     "&TileMatrix=EPSG:3857:{z}"
     url = add_image_id(url, image_id)
     return url
 
@@ -165,3 +167,52 @@ def export_as_geojson(layer: Optional[QgsVectorLayer]) -> dict:
     exporter = QgsJsonExporter(layer)
     gejson_str = exporter.exportFeatures(layer.getFeatures())
     return json.loads(gejson_str)
+
+
+def generate_raster_layer(layer_uri,
+                          name,
+                          min_zoom=0,
+                          max_zoom=18,
+                          username=None,
+                          password=None,
+                          ):
+    if not layer_uri:
+        return None
+    params = {
+        'type': 'xyz',
+        'url': layer_uri,
+        'zmin': min_zoom,
+        'zmax': max_zoom,
+    }
+    if username and password:
+        params.update(username=username, password=password)
+    layer = QgsRasterLayer(
+        '&'.join(f'{key}={val}' for key, val in params.items()),  # don't URL-encode it
+        name,
+        'wms'
+    )
+    return layer
+
+
+def generate_vector_layer(layer_uri,
+                          name,
+                          min_zoom=14,
+                          max_zoom=25,
+                          username=None,
+                          password=None,
+                          ):
+    if not layer_uri:
+        return None
+    params = {
+        'type': 'xyz',
+        'url': layer_uri,
+        'zmin': min_zoom,
+        'zmax': max_zoom,
+    }
+    if username and password:
+        params.update(username=username, password=password)
+    layer = QgsVectorTileLayer(
+        '&'.join(f'{key}={val}' for key, val in params.items()),  # don't URL-encode it
+        name
+    )
+    return layer
