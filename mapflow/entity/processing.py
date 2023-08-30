@@ -17,6 +17,7 @@ class Processing:
                  created,
                  percent_completed,
                  raster_layer,
+                 vector_layer,
                  errors=None,
                  review_status=None,
                  in_review_until=None,
@@ -33,6 +34,7 @@ class Processing:
         self.percent_completed = int(percent_completed)
         self.errors = errors
         self.raster_layer = raster_layer
+        self.vector_layer = vector_layer
         self.review_status = ProcessingReviewStatus(review_status)
         self.in_review_until = in_review_until
         self.params = params
@@ -55,6 +57,7 @@ class Processing:
         messages = processing.get('messages', [])
         errors = [ErrorMessage.from_response(message) for message in messages]
         raster_layer = processing['rasterLayer']
+        vector_layer = processing['vectorLayer']
         if processing.get('reviewStatus'):
             review_status = processing.get('reviewStatus', {}).get('reviewStatus')
             in_review_until_str = processing.get('reviewStatus', {}).get('inReviewUntil')
@@ -76,6 +79,7 @@ class Processing:
                    created,
                    percent_completed,
                    raster_layer,
+                   vector_layer,
                    errors,
                    review_status,
                    in_review_until,
