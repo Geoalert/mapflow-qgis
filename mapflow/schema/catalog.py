@@ -1,7 +1,15 @@
 from dataclasses import dataclass
+from enum import Enum
 from typing import Optional, Mapping, Any, Union, List
 from datetime import datetime
 from .base import Serializable, SkipDataClass
+
+
+class PreviewType(str, Enum):
+    png = "png"
+    xyz = "xyz"
+    tms = "tms"
+    wms = "wms"
 
 
 @dataclass
@@ -29,6 +37,8 @@ class ImageSchema(Serializable, SkipDataClass):
     cloudCover: Optional[float]
     offNadirAngle: Optional[float]
     source: Optional[str] = None  # Duplicate of sensor for the table (like in Maxar)
+    previewType: Optional[PreviewType] = None
+    previewUrl: Optional[str] = None
 
     def __post_init__(self):
         if isinstance(self.acquisitionDate, str):
@@ -38,6 +48,7 @@ class ImageSchema(Serializable, SkipDataClass):
         # To percent
         self.cloudCover = self.cloudCover*100
         self.source = self.sensor
+        self.previewType = PreviewType(self.previewType)
 
     def as_geojson(self):
         properties = {k: v for k, v in self.as_dict().items() if k != "footprint"}

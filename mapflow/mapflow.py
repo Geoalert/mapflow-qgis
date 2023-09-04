@@ -23,7 +23,7 @@ from qgis.gui import QgsMessageBarItem
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
     QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter,
-    QgsWkbTypes, QgsPoint, QgsMapLayerType
+    QgsWkbTypes, QgsPoint, QgsMapLayerType, QgsRectangle
 )
 
 from .functional import layer_utils, helpers
@@ -57,6 +57,7 @@ from .schema import (PostSourceSchema,
 from .errors import ProcessingInputDataMissing, BadProcessingInput, PluginError, ImageIdRequired, AoiNotIntersectsImage
 from .functional.geometry import clip_aoi_to_image_extent
 from . import constants
+from .schema.catalog import PreviewType
 from .styles import get_style_name
 
 
@@ -504,7 +505,6 @@ class Mapflow(QObject):
 
         :param index: The currently selected provider index
         """
-
         provider_layer = self.dlg.rasterCombo.currentLayer()
         # This is done after area calculation, because there the provider list is updated?
         provider_index = self.dlg.providerIndex()
@@ -1855,6 +1855,59 @@ class Mapflow(QObject):
         self.alert(self.tr("Sorry, we couldn't load the image"))
         self.report_http_error(response, self.tr('Error previewing Sentinel imagery'))
 
+    def preview_catalog(self, image_id):
+        feature = self.metadata_feature(image_id)
+        extent = self.metadata_extent(feature=feature)
+        url = feature.attribute('previewUrl')
+        preview_type = feature.attribute('previewType')
+        if preview_type == PreviewType.png:
+            self.preview_png(url, extent, image_id)
+        else:
+            raise NotImplementedError("Only PNG preview type is supported")
+
+    def preview_png(self,
+                    url: str,
+                    extent: QgsRectangle,
+                    image_id: str = ""):
+        self.http.get(url=url,
+                      auth='null'.encode(),
+                      callback=self.display_png_preview,
+                      use_default_error_handler=False,
+                      error_handler=self.preview_png_error_handler,
+                      callback_kwargs={"extent": extent,
+                                       "image_id": image_id})
+
+    def display_png_preview(self,
+                            response: QNetworkReply,
+                            extent: QgsRectangle,
+                            crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857"),
+                            image_id: str = ""):
+        """
+        We assume that png preview is not internally georeferenced,
+        but the footprint specified in the metadata has the same extent, so we generate georef for the image
+        """
+        with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb') as f:
+            f.write(response.readAll().data())
+        preview = gdal.Open(f.name)
+        pixel_xsize = extent.width()/preview.RasterXSize
+        pixel_ysize = extent.height()/preview.RasterYSize
+        preview.SetProjection(crs.toWkt())
+        preview.SetGeoTransform([
+            extent.xMinimum(),  # north-west corner x
+            pixel_xsize,  # pixel horizontal resolution (m)
+            0,  # x-axis rotation
+            extent.yMaximum(),  # north-west corner y
+            0,  # y-axis rotation
+            -pixel_ysize  # pixel vertical resolution (m)
+        ])
+        preview.FlushCache()
+        layer = QgsRasterLayer(f.name, f"{image_id} preview", 'gdal')
+        layer.setExtent(extent)
+        self.project.addMapLayer(layer)
+
+    def preview_png_error_handler(self, response: QNetworkReply):
+        self.report_http_error(response, "Could not display preview")
+
     def preview_sentinel(self, image_id):
         selected_cells = self.dlg.metadataTable.selectedItems()
         if selected_cells:
@@ -1901,16 +1954,23 @@ class Mapflow(QObject):
             layer_name = f'{layer_name} {image_id}'
         return layer_name
 
-    def maxar_extent(self, image_id):
+    def metadata_extent(self,
+                        image_id=None,
+                        feature=None,
+                        crs: QgsCoordinateReferenceSystem = helpers.WEB_MERCATOR):
+        if not feature:
+            feature = self.metadata_feature(image_id)
+        if not feature:
+            return None
+        return helpers.from_wgs84(feature.geometry(), crs).boundingBox()
+
+    def metadata_feature(self, image_id):
         if not image_id:
             return None
         try:  # Get the image extent to set the correct extent on the raster layer
-            footprint = next(self.metadata_layer.getFeatures(f"id = '{image_id}'"))
+            return next(self.metadata_layer.getFeatures(f"id = '{image_id}'"))
         except (RuntimeError, AttributeError, StopIteration):  # layer doesn't exist or has been deleted, or empty
-            extent = None
-        else:
-            extent = helpers.from_wgs84(footprint.geometry(), helpers.WEB_MERCATOR).boundingBox()
-        return extent
+            return None
 
     def preview_xyz(self, provider, image_id):
         max_zoom = self.dlg.maxZoom.value()
@@ -1938,7 +1998,7 @@ class Mapflow(QObject):
             if isinstance(provider, MaxarProvider) and image_id:
                 layer_name = self.maxar_layer_name(layer_name, image_id)
                 layer.setName(layer_name)
-                extent = self.maxar_extent(image_id)
+                extent = self.metadata_extent(image_id)
                 if extent:
                     layer.setExtent(extent)
             self.add_layer(layer)
@@ -1953,8 +2013,13 @@ class Mapflow(QObject):
             return
         image_id = self.dlg.imageId.text()
         provider = self.providers[self.dlg.providerIndex()]
+        if provider.requires_image_id and not image_id:
+            self.alert(self.tr("This provider requires image ID!"), QMessageBox.Warning)
+            return
         if isinstance(provider, SentinelProvider):
             self.preview_sentinel(image_id=image_id)
+        elif isinstance(provider, ImagerySearchProvider):
+            self.preview_catalog(image_id=image_id)
         else:  # XYZ providers
             self.preview_xyz(provider=provider, image_id=image_id)
 
@@ -2152,6 +2217,7 @@ class Mapflow(QObject):
             url=f'{self.server}/processings/{pid}/result',
             callback=self.download_results_callback,
             callback_kwargs={'pid': pid},
+            use_default_error_handler=False,
             error_handler=self.download_results_error_handler,
             timeout=300
         )
@@ -2251,7 +2317,7 @@ class Mapflow(QObject):
         """
         self.dlg.processingsTable.setEnabled(True)
         self.report_http_error(response,
-                               self.tr('Error downloading results'),
+                               self.tr('Error downloading results, \n try again later or report error'),
                                error_message_parser=api_message_parser)
 
     def set_raster_extent(
@@ -2333,7 +2399,6 @@ class Mapflow(QObject):
             return
             # this means that some of processings have failed since last update and the limit must have been returned
         if len(failed_processings) == 1:
-            # Print error message from first failed processing
             proc = failed_processings[0]
             self.alert(
                 proc.name +

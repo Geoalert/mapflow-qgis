@@ -90,7 +90,6 @@ class Http(QObject):
         request.setRawHeader(b'x-plugin-version', self.plugin_version.encode())
         request.setRawHeader(b'authorization', auth or self._basic_auth)
         response = method(request, body) if (method == self.nam.post or method == self.nam.put) else method(request)
-        QTimer.singleShot(timeout * 1000, response.abort)
 
         response.finished.connect(lambda response=response,
                                          callback=callback,
@@ -104,6 +103,12 @@ class Http(QObject):
                                                            error_handler=error_handler,
                                                            error_handler_kwargs=error_handler_kwargs,
                                                            use_default_error_handler=use_default_error_handler))
+
+        def abort_request():
+            if not response.isFinished():
+                response.abort()
+        QTimer.singleShot(timeout * 1000, abort_request)
+
         return response
 
 

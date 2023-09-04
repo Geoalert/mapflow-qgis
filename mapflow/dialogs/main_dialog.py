@@ -14,7 +14,6 @@ from ..entity.provider import ProviderInterface
 from ..functional import helpers
 from ..config import config
 from . import icons
-from ..schema import ImageCatalogResponseSchema
 
 ui_path = Path(__file__).parent/'static'/'ui'
 
@@ -70,6 +69,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # connect two spinboxes
         self.spin1_connection = self.maxZoom.valueChanged.connect(self.switch_maxzoom_2)
         self.spin2_connection = self.maxZoom2.valueChanged.connect(self.switch_maxzoom_1)
+        # current state to compare with on change
+        self.current_raster_source = self.rasterCombo.currentText()
+        self.current_raster_layer = self.rasterCombo.currentLayer()
         # connect raster/provider combos
         self.raster_provider_connection = self.rasterCombo.currentTextChanged.connect(self.switch_provider_combo)
         self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
@@ -89,12 +91,24 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
     # connect raster/provider combos funcs
     def switch_provider_combo(self, text):
+        # We want to skip the signal emission if the actual text and layer did not change
+        # Separate check on layer is needed in case two layera have the same name
+        # Separate check on layer is needed in case two layera have the same name
+        if self.current_raster_source == text and self.current_raster_layer == self.rasterCombo.currentLayer():
+            return
+        self.current_raster_source = text
+        self.current_raster_layer = self.rasterCombo.currentLayer()
+
         self.providerCombo.currentTextChanged.disconnect(self.provider_raster_connection)
         self.providerCombo.setCurrentText(text)
         self.rasterSourceChanged.emit()
         self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
 
     def switch_raster_combo(self, text):
+        # We want to skip the signal emission if the actual text did not change
+        if self.current_raster_source == text:
+            return
+        self.current_raster_source = text
         self.rasterCombo.currentTextChanged.disconnect(self.raster_provider_connection)
         self.rasterCombo.setCurrentText(text)
         self.rasterSourceChanged.emit()
