@@ -91,6 +91,7 @@ class Mapflow(QObject):
         self.main_window = self.iface.mainWindow()
         self.dlg_login = LoginDialog(self.main_window)
         self.workflow_defs = {}
+        self.aoi_layers = []
 
         super().__init__(self.main_window)
         self.project = QgsProject.instance()
@@ -189,8 +190,8 @@ class Mapflow(QObject):
         self.monitor_polygon_layer_feature_selection([
             self.project.mapLayer(layer_id) for layer_id in self.project.mapLayers(validOnly=True)
         ])
+        self.project.layersAdded.connect(self.setup_layers_context_menu)
         self.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
-        self.project.layersAdded.connect(self.filter_bad_rasters)
         # Processings
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
@@ -252,25 +253,48 @@ class Mapflow(QObject):
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
 
-    # TMP
-    """
-            self.user_status_update_timer.timeout.connect(
-            lambda: self.http.get(
-                url=f'{self.server}/user/status',
-                callback=self.set_processing_limit,
-                use_default_error_handler=False  # ignore errors to prevent repetitive alerts
-            )
-        )
-        self.app_startup_user_update_timer.timeout.connect(
-            lambda: self.http.get(
-                url=f'{self.server}/user/status',
-                callback=self.set_processing_limit,
-                callback_kwargs={'app_startup_request': True},
-                use_default_error_handler=False
-            )
-        )
+        # Layer actions
+        self.add_layer_action = QAction(u"Use as AOI in Mapflow")
+        self.add_layer_action.setIcon(plugin_icon)
+        self.add_layer_action.triggered.connect(self.add_to_layers)
+        iface.addCustomActionForLayerType(self.add_layer_action, None, QgsMapLayerType.VectorLayer, True)
+        self.remove_layer_action = QAction(u"Remove AOI from Mapflow")
+        self.remove_layer_action.setIcon(plugin_icon)
+        self.remove_layer_action.triggered.connect(self.remove_from_layers)
+        iface.addCustomActionForLayerType(self.remove_layer_action, None, QgsMapLayerType.VectorLayer, False)
+        self.dlg.useAllVectorLayers.setChecked(bool(self.settings.value('useAllVectorLayers', True)))
+        self.dlg.useAllVectorLayers.stateChanged.connect(self.toggle_all_layers)
+        self.use_all_layers = self.dlg.useAllVectorLayers.isChecked()
+        self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
 
-    """
+    def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
+        for layer in filter(layer_utils.is_polygon_layer, layers):
+            self.iface.addCustomActionForLayer(self.add_layer_action, layer)
+        self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
+
+    def add_to_layers(self, layer=None):
+        if not layer:
+            layer = self.iface.layerTreeView().currentLayer()
+        if not layer in self.aoi_layers:
+            self.aoi_layers.append(layer)
+            self.iface.addCustomActionForLayer(self.remove_layer_action, layer)
+        else:
+            pass
+        self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
+
+    def remove_from_layers(self, layer=None):
+        if not layer:
+            layer = self.iface.layerTreeView().currentLayer()
+        try:
+            self.aoi_layers.remove(layer)
+        except ValueError:
+            pass
+            # it can be easly already removed as I can't remove action from contextmenu of a single layer
+        self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
+
+    def toggle_all_layers(self, state: bool):
+        self.use_all_layers = bool(state)
+        self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
 
     def refresh_status(self):
         self.http.get(
@@ -287,7 +311,6 @@ class Mapflow(QObject):
             use_default_error_handler=False
         )
 
-    # /TMP
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.create_aoi_from_map_action)
         self.add_layer_menu.addAction(self.add_aoi_from_file_action)
@@ -311,6 +334,7 @@ class Mapflow(QObject):
         aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
         self.aoi_layer_counter += 1
         self.add_layer(aoi_layer)
+        self.add_to_layers(aoi_layer)
         self.iface.setActiveLayer(aoi_layer)
         self.dlg.polygonCombo.setLayer(aoi_layer)
 
@@ -326,6 +350,7 @@ class Mapflow(QObject):
             aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
             if aoi_layer.isValid():
                 self.add_layer(aoi_layer)
+                self.add_to_layers(aoi_layer)
                 self.iface.setActiveLayer(aoi_layer)
                 self.iface.zoomToActiveLayer()
                 self.dlg.polygonCombo.setLayer(aoi_layer)
@@ -348,6 +373,11 @@ class Mapflow(QObject):
         else:
             excluded_layers = []
         return excluded_layers
+
+    def filter_aoi_layers(self):
+        if self.use_all_layers:
+            return []
+        return [layer for layer in self.project.mapLayers().values() if layer not in self.aoi_layers]
 
     def on_options_change(self):
         wd_name = self.dlg.modelCombo.currentText()
@@ -494,6 +524,7 @@ class Mapflow(QObject):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
         # Save main dialog size & position
         self.settings.setValue('mainDialogState', self.dlg.saveGeometry())
+        self.settings.setValue('useAllVectorLayers', self.use_all_layers)
 
     def add_layer(self, layer: QgsMapLayer) -> None:
         """Add layers created by the plugin to the legend.
@@ -2410,7 +2441,6 @@ class Mapflow(QObject):
         plugin_button.triggered.connect(self.main)
         self.toolbar.addAction(plugin_button)
         self.project.readProject.connect(self.set_layer_group)
-        self.project.readProject.connect(self.filter_bad_rasters)
         # list(filter(bool, [self.dlg.rasterCombo.layer(index) for index in range(self.dlg.rasterCombo.count())]))
         self.dlg.processingsTable.sortByColumn(self.config.PROCESSING_TABLE_SORT_COLUMN_INDEX, Qt.DescendingOrder)
 
@@ -2428,6 +2458,8 @@ class Mapflow(QObject):
         self.processing_fetch_timer.stop()
         self.processing_fetch_timer.deleteLater()
         self.user_status_update_timer.stop()
+        self.iface.removeCustomActionForLayerType(self.add_layer_action)
+        self.iface.removeCustomActionForLayerType(self.remove_layer_action)
         for dlg in self.dlg, self.dlg_login, self.dlg_provider:
             dlg.close()
         del self.toolbar
@@ -2714,6 +2746,7 @@ class Mapflow(QObject):
         token = self.settings.value('token')
         if self.logged_in:
             self.dlg.show()
+            self.dlg.raise_()
             self.update_processing_limit()
             self.user_status_update_timer.start()
         elif token:  # token saved
