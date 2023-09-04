@@ -1870,6 +1870,7 @@ class Mapflow(QObject):
                     extent: QgsRectangle,
                     image_id: str = ""):
         self.http.get(url=url,
+                      timeout=30,
                       auth='null'.encode(),
                       callback=self.display_png_preview,
                       use_default_error_handler=False,
