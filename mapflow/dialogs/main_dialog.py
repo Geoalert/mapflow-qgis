@@ -205,7 +205,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                              max_preview_zoom: int,
                              more_button_name: str,
                              image_id_placeholder: str,
-                             image_id_tooltip: str):
+                             image_id_tooltip: str,
+                             fill: Optional[dict] = None):
         self.metadataTable.clear()
         self.imageId.clear()
 
@@ -248,6 +249,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.searchImageryButton.setEnabled(enabled)
         self.searchImageryButton.setToolTip(self.tr("Search imagery") if enabled
                                             else self.tr("Provider does not support imagery search"))
+        if fill:
+            self.fill_metadata_table(fill)
 
     def show_wd_price(self,
                       wd_price: float,

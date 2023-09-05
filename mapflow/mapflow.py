@@ -674,6 +674,7 @@ class Mapflow(QObject):
                 'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
             ).format(provider_name=provider.name)
             image_id_placeholder = self.tr('e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00')
+            geoms = None
         elif isinstance(provider, (MaxarProvider, ImagerySearchProvider)):
             columns = self.config.METADATA_TABLE_ATTRIBUTES
             hidden_columns = tuple()
@@ -685,6 +686,16 @@ class Mapflow(QObject):
                 'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
             ).format(provider_name=provider.name)
             image_id_placeholder = self.tr('e.g. a3b154c40cc74f3b934c0ffc9b34ecd1')
+
+            # If we have searched with current provider previously, we want to restore the search results as it were
+            # We store the results in a temp folder, separate file for each provider
+            try:
+                with open(os.path.join(self.temp_dir, f"{provider.name}_metadata.geojson"), 'r') as saved_results:
+                    geoms = json.load(saved_results)
+                self.display_metadata_geojson_layer(geoms, f"{provider.name} catalog metadata")
+            except (FileNotFoundError, json.JSONDecodeError):
+                # we could not parse the results, so just skip the resoring - it is optional after all
+                geoms = None
         else:
             # other providers do not support imagery search,
             # tear down the table and deactivate the panel
@@ -696,7 +707,7 @@ class Mapflow(QObject):
             current_zoom = int(self.settings.value('maxZoom', self.config.DEFAULT_ZOOM))
             image_id_placeholder = ""
             image_id_tooltip = self.tr("{} doesn't allow processing single images.").format(provider.name)
-
+            geoms = None
         # override max zoom for proxy maxar provider
         self.dlg.setup_imagery_search(provider=provider,
                                       columns=columns,
@@ -706,7 +717,8 @@ class Mapflow(QObject):
                                       max_preview_zoom=max_zoom,
                                       more_button_name=self.config.METADATA_MORE_BUTTON_OBJECT_NAME,
                                       image_id_placeholder=image_id_placeholder,
-                                      image_id_tooltip=image_id_tooltip)
+                                      image_id_tooltip=image_id_tooltip,
+                                      fill=geoms)
 
     def select_output_directory(self) -> str:
         """Open a file dialog for the user to select a directory where plugin files will be stored.
@@ -826,8 +838,12 @@ class Mapflow(QObject):
             )
         response_data = ImageCatalogResponseSchema(**response_json)
         geoms = response_data.as_geojson()
+        # Save the current search results to load later
+        provider = self.providers[self.dlg.providerIndex()]
+        with open(os.path.join(self.temp_dir, f"{provider.name}_metadata.geojson"), 'w') as saved_search:
+            saved_search.write(json.dumps(geoms))
         self.dlg.fill_metadata_table(geoms)
-        self.display_metadata_geojson_layer(geoms, "Mapflow catalog metadata")
+        self.display_metadata_geojson_layer(geoms, f"{provider.name} catalog metadata")
 
     def request_skywatch_metadata(
             self,
@@ -1171,6 +1187,9 @@ class Mapflow(QObject):
                 feature['properties']['offNadirAngle'] = round(feature['properties']['offNadirAngle'])
             if feature['properties']['cloudCover']:
                 feature['properties']['cloudCover'] = round(feature['properties']['cloudCover'] * 100)
+        # Save metadata to file to return to previous search
+        with open(os.path.join(self.temp_dir, f"{provider.name}_metadata.geojson"), 'w') as tmpfile:
+            tmpfile.write(json.dumps(metadata))
 
         self.display_metadata_geojson_layer(metadata, f'{provider.name} metadata')
         # Memorize IDs and extents to be able to clip the user's AOI to image on processing creation
@@ -1178,6 +1197,8 @@ class Mapflow(QObject):
             feature['id']: feature
             for feature in self.metadata_layer.getFeatures()
         }
+        provider = self.providers[self.dlg.providerIndex()]
+
         self.dlg.fill_metadata_table(metadata)
         self.filter_metadata(min_intersection=min_intersection, max_cloud_cover=max_cloud_cover)
 
