@@ -465,12 +465,11 @@ class Mapflow(QObject):
             datetime_column_index = self.config.MAXAR_DATETIME_COLUMN_INDEX
             cloud_cover_column_index = self.config.MAXAR_CLOUD_COLUMN_INDEX
         self.metadata_layer.setSubsetString('')  # clear any existing filters
-        filtered_ids = [
-            feature['id'] for feature in self.metadata_layer.getFeatures()
-            if self.calculator.measureArea(
-                QgsGeometry(aoi.intersection(feature.geometry().constGet()))
-            ) < min_intersection_size
-        ]
+        filtered_ids = []
+        for feature in self.metadata_layer.getFeatures():
+            area = self.calculator.measureArea(QgsGeometry(aoi.intersection(feature.geometry().constGet())))
+            if area < min_intersection_size:
+                filtered_ids.append(feature['id'])
         if filtered_ids:
             filter_ += f' and id not in (' + ', '.join((f"'{id_}'" for id_ in filtered_ids)) + ')'
         self.metadata_layer.setSubsetString(filter_)
@@ -774,11 +773,22 @@ class Mapflow(QObject):
         max_cloud_cover = self.dlg.maxCloudCover.value()
         min_intersection = self.dlg.minIntersection.value()
         if isinstance(provider, MaxarProvider):
-            self.get_maxar_metadata(aoi, provider, from_, to, max_cloud_cover, min_intersection)
+            self.get_maxar_metadata(aoi=aoi,
+                                    provider=provider,
+                                    from_=from_,
+                                    to=to,
+                                    max_cloud_cover=max_cloud_cover,
+                                    min_intersection=min_intersection)
         elif isinstance(provider, SentinelProvider):
             self.request_skywatch_metadata(aoi, provider, from_, to, max_cloud_cover, min_intersection)
         else:
-            self.request_mapflow_metadata(aoi, provider, from_time, to_time, max_cloud_cover, min_intersection)
+            self.request_mapflow_metadata(aoi=aoi,
+                                          provider=provider,
+                                          from_=from_time,
+                                          to=to_time)
+            # HEAD API does not work properly with intersection percent, so not sending it yet (filtering after)
+                                          # max_cloud_cover=max_cloud_cover,
+                                          # min_intersection=min_intersection)
 
     def request_mapflow_metadata(self,
                                  aoi: QgsGeometry,
@@ -805,9 +815,11 @@ class Mapflow(QObject):
                        body=request_payload.as_json().encode(),
                        headers={},
                        callback=self.request_mapflow_metadata_callback,
+                       callback_kwargs={"min_intersection": min_intersection,
+                                        "max_cloud_cover": max_cloud_cover},
                        error_handler=self.request_mapflow_metadata_error_handler,
                        use_default_error_handler=False,
-                       )
+                       timeout=30)
 
     def request_mapflow_metadata_error_handler(self, response: QNetworkReply):
         self.report_http_error(response,
@@ -829,13 +841,16 @@ class Mapflow(QObject):
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
         self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
 
-    def request_mapflow_metadata_callback(self, response: QNetworkReply):
+    def request_mapflow_metadata_callback(self, response: QNetworkReply,
+                                          min_intersection: int = 0,
+                                          max_cloud_cover: int = 90):
         response_json = json.loads(response.readAll().data())
         if not response_json.get("images"):
             self.alert(
                 self.tr('No images match your criteria. Try relaxing the filters.'),
                 QMessageBox.Information
             )
+            return
         response_data = ImageCatalogResponseSchema(**response_json)
         geoms = response_data.as_geojson()
         # Save the current search results to load later
@@ -844,6 +859,7 @@ class Mapflow(QObject):
             saved_search.write(json.dumps(geoms))
         self.dlg.fill_metadata_table(geoms)
         self.display_metadata_geojson_layer(geoms, f"{provider.name} catalog metadata")
+        self.filter_metadata(min_intersection=min_intersection, max_cloud_cover=max_cloud_cover)
 
     def request_skywatch_metadata(
             self,
