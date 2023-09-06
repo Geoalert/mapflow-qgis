@@ -228,6 +228,7 @@ class Mapflow(QObject):
         self.dlg.getMetadata.clicked.connect(self.get_metadata)
         self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
         self.dlg.rasterSourceChanged.connect(self.on_provider_change)
+        self.dlg.clearSearch.clicked.connect(self.clear_metadata)
         # Poll processings
         self.processing_fetch_timer = QTimer(self.dlg)
         self.processing_fetch_timer.setInterval(self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
@@ -688,13 +689,7 @@ class Mapflow(QObject):
 
             # If we have searched with current provider previously, we want to restore the search results as it were
             # We store the results in a temp folder, separate file for each provider
-            try:
-                with open(os.path.join(self.temp_dir, f"{provider.name}_metadata.geojson"), 'r') as saved_results:
-                    geoms = json.load(saved_results)
-                self.display_metadata_geojson_layer(geoms, f"{provider.name} catalog metadata")
-            except (FileNotFoundError, json.JSONDecodeError):
-                # we could not parse the results, so just skip the resoring - it is optional after all
-                geoms = None
+            geoms = provider.load_search_layer(self.temp_dir)
         else:
             # other providers do not support imagery search,
             # tear down the table and deactivate the panel
@@ -790,6 +785,17 @@ class Mapflow(QObject):
                                           # max_cloud_cover=max_cloud_cover,
                                           # min_intersection=min_intersection)
 
+    def clear_metadata(self):
+        try:
+            self.project.removeMapLayer(self.metadata_layer)
+        except (AttributeError, RuntimeError):  # metadata layer has been deleted
+            pass
+
+        self.dlg.metadataTable.clearContents()
+        self.dlg.metadataTable.setRowCount(0)
+        provider = self.providers[self.dlg.providerIndex()]
+        provider.clear_saved_search(self.temp_dir)
+
     def request_mapflow_metadata(self,
                                  aoi: QgsGeometry,
                                  provider: ProviderInterface,
@@ -828,15 +834,12 @@ class Mapflow(QObject):
                                    error=response.attribute(QNetworkRequest.HttpStatusCodeAttribute)),
                                error_message_parser=api_message_parser)
 
-    def display_metadata_geojson_layer(self, geoms, layer_name):
+    def display_metadata_geojson_layer(self, filename, layer_name):
         try:
             self.project.removeMapLayer(self.metadata_layer)
         except (AttributeError, RuntimeError):  # metadata layer has been deleted
             pass
-        with open(os.path.join(self.temp_dir, os.urandom(32).hex()) + '.geojson', 'w') as file:
-            json.dump(geoms, file)
-            file.seek(0)
-            self.metadata_layer = QgsVectorLayer(file.name, layer_name, 'ogr')
+        self.metadata_layer = QgsVectorLayer(filename, layer_name, 'ogr')
         self.project.addMapLayer(self.metadata_layer)
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
         self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
@@ -855,10 +858,9 @@ class Mapflow(QObject):
         geoms = response_data.as_geojson()
         # Save the current search results to load later
         provider = self.providers[self.dlg.providerIndex()]
-        with open(os.path.join(self.temp_dir, f"{provider.name}_metadata.geojson"), 'w') as saved_search:
-            saved_search.write(json.dumps(geoms))
+        filename = provider.save_search_layer(self.temp_dir, geoms)
         self.dlg.fill_metadata_table(geoms)
-        self.display_metadata_geojson_layer(geoms, f"{provider.name} catalog metadata")
+        self.display_metadata_geojson_layer(filename, f"{provider.name} catalog metadata")
         self.filter_metadata(min_intersection=min_intersection, max_cloud_cover=max_cloud_cover)
 
     def request_skywatch_metadata(
@@ -1204,16 +1206,13 @@ class Mapflow(QObject):
             if feature['properties']['cloudCover']:
                 feature['properties']['cloudCover'] = round(feature['properties']['cloudCover'] * 100)
         # Save metadata to file to return to previous search
-        with open(os.path.join(self.temp_dir, f"{provider.name}_metadata.geojson"), 'w') as tmpfile:
-            tmpfile.write(json.dumps(metadata))
-
-        self.display_metadata_geojson_layer(metadata, f'{provider.name} metadata')
+        filename = provider.save_search_layer(self.temp_dir, metadata)
+        self.display_metadata_geojson_layer(filename, f'{provider.name} metadata')
         # Memorize IDs and extents to be able to clip the user's AOI to image on processing creation
         self.maxar_metadata_footprints = {
             feature['id']: feature
             for feature in self.metadata_layer.getFeatures()
         }
-        provider = self.providers[self.dlg.providerIndex()]
 
         self.dlg.fill_metadata_table(metadata)
         self.filter_metadata(min_intersection=min_intersection, max_cloud_cover=max_cloud_cover)
@@ -1840,6 +1839,9 @@ class Mapflow(QObject):
                                                [DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
                                                 for data in providers_data])
         self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
+        # We want to clear the data from previous lauunch to avoid confusion
+        for provider in self.providers:
+            provider.clear_saved_search(self.temp_dir)
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
         """Save and open the preview image as a layer."""

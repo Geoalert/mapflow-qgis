@@ -1,6 +1,8 @@
 from typing import Iterable, Union, Optional
 from enum import Enum
 from abc import ABC
+import os
+import json
 
 
 class staticproperty(staticmethod):
@@ -75,6 +77,43 @@ class ProviderInterface:
         """ You cannot create a processing with generic provider without implementation"""
         raise NotImplementedError
 
+    @property
+    def metadata_layer_name(self):
+        if not self.meta_url:
+            return None
+        else:
+            return f"{self.name} imagery search"
+
+    def save_search_layer(self, folder, data: dict) -> Optional[str]:
+        """
+        saves to file (a single file specific to the provider) in specified folder, to be loaded later
+        """
+        if not self.metadata_layer_name or not data:
+            return
+        with open(os.path.join(folder, self.metadata_layer_name), 'w') as saved_results:
+            saved_results.write(json.dumps(data))
+        return os.path.join(folder, self.metadata_layer_name)
+
+    def load_search_layer(self, folder) -> Optional[dict]:
+        """
+        loads geometries as geojson dict
+        Returns nothing if the provider does not support metadata search, or if the file does not exist
+        """
+        if not self.metadata_layer_name:
+            return None
+        try:
+            with open(os.path.join(folder, self.metadata_layer_name), 'r') as saved_results:
+                return json.load(saved_results)
+        except FileNotFoundError:
+            return None
+
+    def clear_saved_search(self, folder) -> None:
+        if not self.metadata_layer_name:
+            return
+        try:
+            os.remove(os.path.join(folder, self.metadata_layer_name))
+        except OSError:
+            pass
 
 class UsersProvider(ProviderInterface, ABC):
     def __init__(self,
