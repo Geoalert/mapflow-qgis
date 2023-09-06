@@ -280,9 +280,8 @@ class Mapflow(QObject):
         if not layer in self.aoi_layers:
             self.aoi_layers.append(layer)
             self.iface.addCustomActionForLayer(self.remove_layer_action, layer)
-        else:
-            pass
         self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
+        self.dlg.polygonCombo.setLayer(layer)
 
     def remove_from_layers(self, layer=None):
         if not layer:
@@ -338,7 +337,6 @@ class Mapflow(QObject):
         self.add_layer(aoi_layer)
         self.add_to_layers(aoi_layer)
         self.iface.setActiveLayer(aoi_layer)
-        self.dlg.polygonCombo.setLayer(aoi_layer)
 
     def open_vector_file(self):
         """Open a file selection dialog for the user to select a vector file as AOI
@@ -355,7 +353,6 @@ class Mapflow(QObject):
                 self.add_to_layers(aoi_layer)
                 self.iface.setActiveLayer(aoi_layer)
                 self.iface.zoomToActiveLayer()
-                self.dlg.polygonCombo.setLayer(aoi_layer)
             else:
                 self.alert(self.tr(f'Your file is not valid vector data source!'))
 
