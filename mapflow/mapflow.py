@@ -228,6 +228,7 @@ class Mapflow(QObject):
         self.dlg.getMetadata.clicked.connect(self.get_metadata)
         self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
         self.dlg.rasterSourceChanged.connect(self.on_provider_change)
+        self.dlg.clearSearch.clicked.connect(self.clear_metadata)
         # Poll processings
         self.processing_fetch_timer = QTimer(self.dlg)
         self.processing_fetch_timer.setInterval(self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
@@ -279,9 +280,8 @@ class Mapflow(QObject):
         if not layer in self.aoi_layers:
             self.aoi_layers.append(layer)
             self.iface.addCustomActionForLayer(self.remove_layer_action, layer)
-        else:
-            pass
         self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
+        self.dlg.polygonCombo.setLayer(layer)
 
     def remove_from_layers(self, layer=None):
         if not layer:
@@ -337,7 +337,6 @@ class Mapflow(QObject):
         self.add_layer(aoi_layer)
         self.add_to_layers(aoi_layer)
         self.iface.setActiveLayer(aoi_layer)
-        self.dlg.polygonCombo.setLayer(aoi_layer)
 
     def open_vector_file(self):
         """Open a file selection dialog for the user to select a vector file as AOI
@@ -354,7 +353,6 @@ class Mapflow(QObject):
                 self.add_to_layers(aoi_layer)
                 self.iface.setActiveLayer(aoi_layer)
                 self.iface.zoomToActiveLayer()
-                self.dlg.polygonCombo.setLayer(aoi_layer)
             else:
                 self.alert(self.tr(f'Your file is not valid vector data source!'))
 
@@ -465,12 +463,11 @@ class Mapflow(QObject):
             datetime_column_index = self.config.MAXAR_DATETIME_COLUMN_INDEX
             cloud_cover_column_index = self.config.MAXAR_CLOUD_COLUMN_INDEX
         self.metadata_layer.setSubsetString('')  # clear any existing filters
-        filtered_ids = [
-            feature['id'] for feature in self.metadata_layer.getFeatures()
-            if self.calculator.measureArea(
-                QgsGeometry(aoi.intersection(feature.geometry().constGet()))
-            ) < min_intersection_size
-        ]
+        filtered_ids = []
+        for feature in self.metadata_layer.getFeatures():
+            area = self.calculator.measureArea(QgsGeometry(aoi.intersection(feature.geometry().constGet())))
+            if area < min_intersection_size:
+                filtered_ids.append(feature['id'])
         if filtered_ids:
             filter_ += f' and id not in (' + ', '.join((f"'{id_}'" for id_ in filtered_ids)) + ')'
         self.metadata_layer.setSubsetString(filter_)
@@ -674,6 +671,7 @@ class Mapflow(QObject):
                 'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
             ).format(provider_name=provider.name)
             image_id_placeholder = self.tr('e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00')
+            geoms = None
         elif isinstance(provider, (MaxarProvider, ImagerySearchProvider)):
             columns = self.config.METADATA_TABLE_ATTRIBUTES
             hidden_columns = tuple()
@@ -685,6 +683,10 @@ class Mapflow(QObject):
                 'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
             ).format(provider_name=provider.name)
             image_id_placeholder = self.tr('e.g. a3b154c40cc74f3b934c0ffc9b34ecd1')
+
+            # If we have searched with current provider previously, we want to restore the search results as it were
+            # We store the results in a temp folder, separate file for each provider
+            geoms = provider.load_search_layer(self.temp_dir)
         else:
             # other providers do not support imagery search,
             # tear down the table and deactivate the panel
@@ -696,7 +698,7 @@ class Mapflow(QObject):
             current_zoom = int(self.settings.value('maxZoom', self.config.DEFAULT_ZOOM))
             image_id_placeholder = ""
             image_id_tooltip = self.tr("{} doesn't allow processing single images.").format(provider.name)
-
+            geoms = None
         # override max zoom for proxy maxar provider
         self.dlg.setup_imagery_search(provider=provider,
                                       columns=columns,
@@ -706,7 +708,8 @@ class Mapflow(QObject):
                                       max_preview_zoom=max_zoom,
                                       more_button_name=self.config.METADATA_MORE_BUTTON_OBJECT_NAME,
                                       image_id_placeholder=image_id_placeholder,
-                                      image_id_tooltip=image_id_tooltip)
+                                      image_id_tooltip=image_id_tooltip,
+                                      fill=geoms)
 
     def select_output_directory(self) -> str:
         """Open a file dialog for the user to select a directory where plugin files will be stored.
@@ -762,11 +765,33 @@ class Mapflow(QObject):
         max_cloud_cover = self.dlg.maxCloudCover.value()
         min_intersection = self.dlg.minIntersection.value()
         if isinstance(provider, MaxarProvider):
-            self.get_maxar_metadata(aoi, provider, from_, to, max_cloud_cover, min_intersection)
+            self.get_maxar_metadata(aoi=aoi,
+                                    provider=provider,
+                                    from_=from_,
+                                    to=to,
+                                    max_cloud_cover=max_cloud_cover,
+                                    min_intersection=min_intersection)
         elif isinstance(provider, SentinelProvider):
             self.request_skywatch_metadata(aoi, provider, from_, to, max_cloud_cover, min_intersection)
         else:
-            self.request_mapflow_metadata(aoi, provider, from_time, to_time, max_cloud_cover, min_intersection)
+            self.request_mapflow_metadata(aoi=aoi,
+                                          provider=provider,
+                                          from_=from_time,
+                                          to=to_time)
+            # HEAD API does not work properly with intersection percent, so not sending it yet (filtering after)
+                                          # max_cloud_cover=max_cloud_cover,
+                                          # min_intersection=min_intersection)
+
+    def clear_metadata(self):
+        try:
+            self.project.removeMapLayer(self.metadata_layer)
+        except (AttributeError, RuntimeError):  # metadata layer has been deleted
+            pass
+
+        self.dlg.metadataTable.clearContents()
+        self.dlg.metadataTable.setRowCount(0)
+        provider = self.providers[self.dlg.providerIndex()]
+        provider.clear_saved_search(self.temp_dir)
 
     def request_mapflow_metadata(self,
                                  aoi: QgsGeometry,
@@ -793,9 +818,11 @@ class Mapflow(QObject):
                        body=request_payload.as_json().encode(),
                        headers={},
                        callback=self.request_mapflow_metadata_callback,
+                       callback_kwargs={"min_intersection": min_intersection,
+                                        "max_cloud_cover": max_cloud_cover},
                        error_handler=self.request_mapflow_metadata_error_handler,
                        use_default_error_handler=False,
-                       )
+                       timeout=30)
 
     def request_mapflow_metadata_error_handler(self, response: QNetworkReply):
         self.report_http_error(response,
@@ -804,30 +831,34 @@ class Mapflow(QObject):
                                    error=response.attribute(QNetworkRequest.HttpStatusCodeAttribute)),
                                error_message_parser=api_message_parser)
 
-    def display_metadata_geojson_layer(self, geoms, layer_name):
+    def display_metadata_geojson_layer(self, filename, layer_name):
         try:
             self.project.removeMapLayer(self.metadata_layer)
         except (AttributeError, RuntimeError):  # metadata layer has been deleted
             pass
-        with open(os.path.join(self.temp_dir, os.urandom(32).hex()) + '.geojson', 'w') as file:
-            json.dump(geoms, file)
-            file.seek(0)
-            self.metadata_layer = QgsVectorLayer(file.name, layer_name, 'ogr')
+        self.metadata_layer = QgsVectorLayer(filename, layer_name, 'ogr')
         self.project.addMapLayer(self.metadata_layer)
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
         self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
 
-    def request_mapflow_metadata_callback(self, response: QNetworkReply):
+    def request_mapflow_metadata_callback(self, response: QNetworkReply,
+                                          min_intersection: int = 0,
+                                          max_cloud_cover: int = 90):
         response_json = json.loads(response.readAll().data())
         if not response_json.get("images"):
             self.alert(
                 self.tr('No images match your criteria. Try relaxing the filters.'),
                 QMessageBox.Information
             )
+            return
         response_data = ImageCatalogResponseSchema(**response_json)
         geoms = response_data.as_geojson()
+        # Save the current search results to load later
+        provider = self.providers[self.dlg.providerIndex()]
+        filename = provider.save_search_layer(self.temp_dir, geoms)
         self.dlg.fill_metadata_table(geoms)
-        self.display_metadata_geojson_layer(geoms, "Mapflow catalog metadata")
+        self.display_metadata_geojson_layer(filename, f"{provider.name} catalog metadata")
+        self.filter_metadata(min_intersection=min_intersection, max_cloud_cover=max_cloud_cover)
 
     def request_skywatch_metadata(
             self,
@@ -1171,13 +1202,15 @@ class Mapflow(QObject):
                 feature['properties']['offNadirAngle'] = round(feature['properties']['offNadirAngle'])
             if feature['properties']['cloudCover']:
                 feature['properties']['cloudCover'] = round(feature['properties']['cloudCover'] * 100)
-
-        self.display_metadata_geojson_layer(metadata, f'{provider.name} metadata')
+        # Save metadata to file to return to previous search
+        filename = provider.save_search_layer(self.temp_dir, metadata)
+        self.display_metadata_geojson_layer(filename, f'{provider.name} metadata')
         # Memorize IDs and extents to be able to clip the user's AOI to image on processing creation
         self.maxar_metadata_footprints = {
             feature['id']: feature
             for feature in self.metadata_layer.getFeatures()
         }
+
         self.dlg.fill_metadata_table(metadata)
         self.filter_metadata(min_intersection=min_intersection, max_cloud_cover=max_cloud_cover)
 
@@ -1803,6 +1836,9 @@ class Mapflow(QObject):
                                                [DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
                                                 for data in providers_data])
         self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
+        # We want to clear the data from previous lauunch to avoid confusion
+        for provider in self.providers:
+            provider.clear_saved_search(self.temp_dir)
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
         """Save and open the preview image as a layer."""

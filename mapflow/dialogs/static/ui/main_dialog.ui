@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1011</width>
+    <width>1033</width>
     <height>550</height>
    </rect>
   </property>
@@ -1074,7 +1074,7 @@
                </layout>
               </item>
               <item row="0" column="0">
-               <layout class="QHBoxLayout" name="layoutMetadataDatetime" stretch="0,0,1,0,0,0">
+               <layout class="QHBoxLayout" name="layoutMetadataDatetime" stretch="0,0,1,0,0,0,0">
                 <item>
                  <widget class="QLabel" name="labelFrom">
                   <property name="toolTip">
@@ -1121,11 +1121,17 @@
                 </item>
                 <item>
                  <widget class="QPushButton" name="getMetadata">
+                  <property name="maximumSize">
+                   <size>
+                    <width>100</width>
+                    <height>16777215</height>
+                   </size>
+                  </property>
                   <property name="toolTip">
                    <string>Click and wait for a few seconds until the table below is filled out</string>
                   </property>
                   <property name="text">
-                   <string>Search imagery</string>
+                   <string>Search </string>
                   </property>
                  </widget>
                 </item>
@@ -1180,6 +1186,16 @@
                   </property>
                   <property name="text">
                    <string>Use canvas extent</string>
+                  </property>
+                  <property name="checked">
+                   <bool>false</bool>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="clearSearch">
+                  <property name="text">
+                   <string>Clear </string>
                   </property>
                  </widget>
                 </item>
