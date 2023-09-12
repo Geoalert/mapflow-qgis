@@ -772,7 +772,7 @@ class Mapflow(QObject):
                                     max_cloud_cover=max_cloud_cover,
                                     min_intersection=min_intersection)
         elif isinstance(provider, SentinelProvider):
-            self.request_skywatch_metadata(aoi, provider, from_, to, max_cloud_cover, min_intersection)
+            self.request_skywatch_metadata(aoi, from_, to, max_cloud_cover, min_intersection)
         else:
             self.request_mapflow_metadata(aoi=aoi,
                                           provider=provider,
@@ -1409,7 +1409,7 @@ class Mapflow(QObject):
                                     selected_image=selected_image,
                                     selected_aoi=self.aoi)
             self.aoi_size = layer_utils.calculate_aoi_area(real_aoi, self.project.transformContext())
-        except:
+        except Exception as e:
             # Could not calculate AOI size
             self.aoi_size = 0
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
