@@ -39,6 +39,7 @@ class ImageSchema(Serializable, SkipDataClass):
     source: Optional[str] = None  # Duplicate of sensor for the table (like in Maxar)
     previewType: Optional[PreviewType] = None
     previewUrl: Optional[str] = None
+    providerName: Optional[str] = None
 
     def __post_init__(self):
         if isinstance(self.acquisitionDate, str):

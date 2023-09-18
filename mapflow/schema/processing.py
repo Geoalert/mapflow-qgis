@@ -22,7 +22,7 @@ class BlockOption(Serializable, SkipDataClass):
 class PostProviderSchema(Serializable, SkipDataClass):
     # Data provider name
     data_provider: str
-    year: Optional[str] = None
+    url: Optional[str] = None
 
 
 @dataclass

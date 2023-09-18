@@ -70,7 +70,7 @@ class Mapflow(QObject):
         :param iface: an instance of the QGIS interface.
         """
         # init configs
-        self.maxar_metadata_footprints = dict()
+        self.search_footprints = dict()
         self.config = Config()
         # init empty params
         self.max_aois_per_processing = self.config.MAX_AOIS_PER_PROCESSING
@@ -687,6 +687,7 @@ class Mapflow(QObject):
             # If we have searched with current provider previously, we want to restore the search results as it were
             # We store the results in a temp folder, separate file for each provider
             geoms = provider.load_search_layer(self.temp_dir)
+
         else:
             # other providers do not support imagery search,
             # tear down the table and deactivate the panel
@@ -840,6 +841,11 @@ class Mapflow(QObject):
         self.project.addMapLayer(self.metadata_layer)
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
         self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
+        self.search_footprints = {
+            feature['id']: feature
+            for feature in self.metadata_layer.getFeatures()
+        }
+
 
     def request_mapflow_metadata_callback(self, response: QNetworkReply,
                                           min_intersection: int = 0,
@@ -853,6 +859,7 @@ class Mapflow(QObject):
             return
         response_data = ImageCatalogResponseSchema(**response_json)
         geoms = response_data.as_geojson()
+
         # Save the current search results to load later
         provider = self.providers[self.dlg.providerIndex()]
         filename = provider.save_search_layer(self.temp_dir, geoms)
@@ -1206,10 +1213,6 @@ class Mapflow(QObject):
         filename = provider.save_search_layer(self.temp_dir, metadata)
         self.display_metadata_geojson_layer(filename, f'{provider.name} metadata')
         # Memorize IDs and extents to be able to clip the user's AOI to image on processing creation
-        self.maxar_metadata_footprints = {
-            feature['id']: feature
-            for feature in self.metadata_layer.getFeatures()
-        }
 
         self.dlg.fill_metadata_table(metadata)
         self.filter_metadata(min_intersection=min_intersection, max_cloud_cover=max_cloud_cover)
@@ -1582,8 +1585,8 @@ class Mapflow(QObject):
 
     def crop_aoi_with_maxar_image_footprint(self,
                                             aoi: QgsFeature,
-                                            image_id: str):
-        extent = self.maxar_metadata_footprints[image_id[self.config.MAXAR_ID_COLUMN_INDEX].text()]
+                                            selected_image: QTableWidgetItem):
+        extent = self.search_footprints[selected_image[self.config.MAXAR_ID_COLUMN_INDEX].text()]
         try:
             aoi = next(clip_aoi_to_image_extent(aoi, extent)).geometry()
         except StopIteration:
@@ -1594,7 +1597,8 @@ class Mapflow(QObject):
                               provider_index: Optional[int],
                               raster_layer: Optional[QgsRasterLayer],
                               s3_uri: str = "",
-                              image_id: Optional[str] = None):
+                              image_id: Optional[str] = None,
+                              provider_name: Optional[str] = None):
         if raster_layer is not None:
             # We cannot set URL yet if we do not know it before the image is uploaded
             meta = {'source-app': 'qgis',
@@ -1607,7 +1611,8 @@ class Mapflow(QObject):
                 'source': provider.name.lower()}
         if not provider:
             raise PluginError(self.tr('Providers are not initialized'))
-        provider_params, provider_meta = provider.to_processing_params(image_id=image_id)
+        provider_params, provider_meta = provider.to_processing_params(image_id=image_id,
+                                                                       provider_name=provider_name)
 
         meta.update(**provider_meta)
         return provider_params, meta
@@ -1640,6 +1645,8 @@ class Mapflow(QObject):
                 elif isinstance(provider, SentinelProvider):
                     # todo: crop sentinel aoi with image footprint?
                     aoi = selected_aoi
+                elif isinstance(provider, ImagerySearchProvider):
+                    aoi = self.crop_aoi_with_maxar_image_footprint(selected_aoi, selected_image)
                 else:
                     raise PluginError(self.tr("Selection is not available for  {}").format(provider.name))
             elif provider.requires_image_id:
@@ -1655,6 +1662,14 @@ class Mapflow(QObject):
         imagery = self.dlg.rasterCombo.currentLayer()
         use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
         image_id = self.dlg.imageId.text()
+        provider_name = None
+        if image_id:
+            # for ImagerySearchProvider we must get the internal provider name from the features,
+            # it is as necessary as image_id for it
+            try:
+                provider_name = self.search_footprints[image_id].attribute("providerName")
+            except KeyError:
+                provider_name = None
         selected_image = self.dlg.metadataTable.selectedItems()
         wd_name = self.dlg.modelCombo.currentText()
         wd = self.workflow_defs.get(wd_name)
@@ -1671,7 +1686,8 @@ class Mapflow(QObject):
                                                                            1024 * 1024)))
             provider_params, processing_meta = self.get_processing_params(provider_index=provider_index,
                                                                           raster_layer=imagery,
-                                                                          image_id=image_id)
+                                                                          image_id=image_id,
+                                                                          provider_name=provider_name)
             aoi = self.get_aoi(provider_index=provider_index,
                                raster_layer=imagery,
                                use_image_extent_as_aoi=use_image_extent_as_aoi,

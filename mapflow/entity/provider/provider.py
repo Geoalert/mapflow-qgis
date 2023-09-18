@@ -73,7 +73,9 @@ class ProviderInterface:
     def preview_url(self, image_id=None):
         raise NotImplementedError
 
-    def to_processing_params(self, image_id=None):
+    def to_processing_params(self,
+                             image_id: Optional[str] = None,
+                             provider_name: Optional[str] = None):
         """ You cannot create a processing with generic provider without implementation"""
         raise NotImplementedError
 
@@ -86,7 +88,7 @@ class ProviderInterface:
 
     def save_search_layer(self, folder, data: dict) -> Optional[str]:
         """
-        saves to file (a single file specific to the provider) in specified folder, to be loaded later
+        saves to file (a single file specific to the provider) in specified folder, to be loaded later;
         """
         if not self.metadata_layer_name or not data:
             return
@@ -114,6 +116,7 @@ class ProviderInterface:
             os.remove(os.path.join(folder, self.metadata_layer_name))
         except OSError:
             pass
+
 
 class UsersProvider(ProviderInterface, ABC):
     def __init__(self,

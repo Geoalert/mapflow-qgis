@@ -1,7 +1,7 @@
 from typing import Optional
 from .provider import ProviderInterface, SourceType, CRS
-from .basemap_provider import BasicAuth
-from ...schema import PostSourceSchema, PostProviderSchema, ImageCatalogRequestSchema
+from .provider import BasicAuth
+from ...schema import PostSourceSchema, PostProviderSchema
 from ...constants import SENTINEL_OPTION_NAME, SEARCH_OPTION_NAME
 from ...errors.plugin_errors import PluginError
 from ...schema.provider import ProviderReturnSchema
@@ -21,7 +21,9 @@ class SentinelProvider(ProviderInterface):
     def requires_image_id(self):
         return True
 
-    def to_processing_params(self, image_id=None):
+    def to_processing_params(self,
+                             image_id: Optional[str] = None,
+                             provider_name: Optional[str] = None):
         if not image_id:
             raise PluginError("Sentinel provider must have image ID to launch the processing")
         return PostSourceSchema(url=image_id,
@@ -59,11 +61,13 @@ class ImagerySearchProvider(ProviderInterface):
     def requires_image_id(self):
         return True
 
-    def to_processing_params(self, image_id=None):
+    def to_processing_params(self,
+                             image_id: Optional[str] = None,
+                             provider_name: Optional[str] = None):
         if not image_id:
             raise PluginError("Search provider must have image ID to launch the processing")
-        return PostSourceSchema(url=image_id,
-                                source_type=SourceType.sentinel_l2a), {}
+        return PostProviderSchema(data_provider=provider_name,
+                                  url=image_id), {}
 
     @property
     def meta_url(self):
@@ -133,5 +137,7 @@ class DefaultProvider(ProviderInterface):
                    price=response.price_dict,
                    preview_url=response.previewUrl)
 
-    def to_processing_params(self, image_id=None):
+    def to_processing_params(self,
+                             image_id: Optional[str] = None,
+                             provider_name: Optional[str] = None):
         return PostProviderSchema(data_provider=self.api_name), {}
