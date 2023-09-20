@@ -1803,7 +1803,18 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        self.report_http_error(response,
+        error = response.error()
+        response_body = response.readAll().data().decode()
+        if error == QNetworkReply.ContentAccessDenied \
+                and "data provider" in response_body.lower():
+            self.alert(self.tr('Data provider with id is unavailable on your plan. \n '
+                               'Upgrade your subscription to get access to the data. \n'
+                               'See pricing at <a href=\"https://mapflow.ai/pricing\">mapflow.ai</a>'),
+                       QMessageBox.Information)
+            # provider ID is the last "word" in the message.
+            # In this case, when "data provider" is in the message, there can't be index error
+        else:
+            self.report_http_error(response,
                                self.tr('Processing creation failed'),
                                error_message_parser=api_message_parser)
 
@@ -1909,6 +1920,9 @@ class Mapflow(QObject):
 
     def preview_catalog(self, image_id):
         feature = self.metadata_feature(image_id)
+        if not feature:
+            self.alert(self.tr("Preview is unavailable when metadata layer is removed"))
+            return
         extent = self.metadata_extent(feature=feature)
         url = feature.attribute('previewUrl')
         preview_type = feature.attribute('previewType')
@@ -2407,6 +2421,7 @@ class Mapflow(QObject):
         :param blocking: Opened as modal - code below will only be executed when the alert is closed
         """
         box = QMessageBox(icon, self.plugin_name, message, parent=QApplication.activeWindow())
+        box.setTextFormat(Qt.RichText)
         if icon == QMessageBox.Question:  # by default, only OK is added
             box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
         return box.exec() == QMessageBox.Ok if blocking else box.open()
