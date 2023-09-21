@@ -780,8 +780,8 @@ class Mapflow(QObject):
                                           from_=from_time,
                                           to=to_time)
             # HEAD API does not work properly with intersection percent, so not sending it yet (filtering after)
-                                          # max_cloud_cover=max_cloud_cover,
-                                          # min_intersection=min_intersection)
+            # max_cloud_cover=max_cloud_cover,
+            # min_intersection=min_intersection)
 
     def clear_metadata(self):
         try:
@@ -845,7 +845,6 @@ class Mapflow(QObject):
             feature['id']: feature
             for feature in self.metadata_layer.getFeatures()
         }
-
 
     def request_mapflow_metadata_callback(self, response: QNetworkReply,
                                           min_intersection: int = 0,
@@ -1550,7 +1549,6 @@ class Mapflow(QObject):
         )
         self.message_bar.pushItem(progress_message)
 
-
         def display_upload_progress(bytes_sent: int, bytes_total: int):
             try:
                 progress_message.widget().setValue(round(bytes_sent / bytes_total * 100))
@@ -1815,8 +1813,8 @@ class Mapflow(QObject):
             # In this case, when "data provider" is in the message, there can't be index error
         else:
             self.report_http_error(response,
-                               self.tr('Processing creation failed'),
-                               error_message_parser=api_message_parser)
+                                   self.tr('Processing creation failed'),
+                                   error_message_parser=api_message_parser)
 
     def update_processing_limit(self) -> None:
         """Set the user's processing limit as reported by Mapflow."""
@@ -1956,8 +1954,8 @@ class Mapflow(QObject):
         with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb') as f:
             f.write(response.readAll().data())
         preview = gdal.Open(f.name)
-        pixel_xsize = extent.width()/preview.RasterXSize
-        pixel_ysize = extent.height()/preview.RasterYSize
+        pixel_xsize = extent.width() / preview.RasterXSize
+        pixel_ysize = extent.height() / preview.RasterYSize
         preview.SetProjection(crs.toWkt())
         preview.SetGeoTransform([
             extent.xMinimum(),  # north-west corner x
