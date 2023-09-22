@@ -662,6 +662,12 @@ class Mapflow(QObject):
         """
         Get necessary attributes from config and send them to MainDialogo to setup Imagery Search tab
         """
+        # this is the default provider - ImagerySearchProvider -
+        # which will be used for search if the selected provider is unavailable
+        if not self.default_providers:
+            return
+        default_search_provider = self.default_providers[0]
+
         if isinstance(provider, SentinelProvider):
             columns = self.config.SENTINEL_ATTRIBUTES
             hidden_columns = (len(columns) - 1,)
@@ -673,7 +679,8 @@ class Mapflow(QObject):
             ).format(provider_name=provider.name)
             image_id_placeholder = self.tr('e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00')
             geoms = None
-        elif isinstance(provider, (MaxarProvider, ImagerySearchProvider)):
+        else:  # any non-sentinel provider: setup table as for ImagerySearch provider
+            provider = self.replace_search_provider(provider)
             columns = self.config.METADATA_TABLE_ATTRIBUTES
             hidden_columns = tuple()
             sort_by = self.config.MAXAR_DATETIME_COLUMN_INDEX
@@ -688,19 +695,6 @@ class Mapflow(QObject):
             # If we have searched with current provider previously, we want to restore the search results as it were
             # We store the results in a temp folder, separate file for each provider
             geoms = provider.load_search_layer(self.temp_dir)
-
-        else:
-            # other providers do not support imagery search,
-            # tear down the table and deactivate the panel
-            columns = tuple()  # empty
-            hidden_columns = tuple()
-            sort_by = None
-            max_zoom = self.config.MAX_ZOOM
-            # Forced to int bc somehow used to be stored as str, so for backward compatability
-            current_zoom = int(self.settings.value('maxZoom', self.config.DEFAULT_ZOOM))
-            image_id_placeholder = ""
-            image_id_tooltip = self.tr("{} doesn't allow processing single images.").format(provider.name)
-            geoms = None
         # override max zoom for proxy maxar provider
         self.dlg.setup_imagery_search(provider=provider,
                                       columns=columns,
@@ -737,8 +731,39 @@ class Mapflow(QObject):
         self.alert(self.tr('Please, specify an existing output directory'))
         return False
 
+    @property
+    def imagery_search_provider_index(self):
+        for index, provider in enumerate(self.providers):
+            if isinstance(provider, ImagerySearchProvider):
+                return index
+        return -1
+
+    @property
+    def imagery_search_provider(self):
+        for provider in self.providers:
+            if isinstance(provider, ImagerySearchProvider):
+                return provider
+        return None
+
+    def replace_search_provider(self, provider: ProviderInterface):
+        try:
+            provider_supports_search = provider.meta_url is not None
+        except (NotImplementedError, AttributeError):
+            provider_supports_search = False
+        if not provider_supports_search:
+            provider = self.imagery_search_provider
+        return provider
+
     def get_metadata(self) -> None:
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
+        # If current provider does not support search, we should select ImagerySearchProvider to be able to search
+        try:
+            provider_supports_search = self.providers[self.dlg.providerIndex()].meta_url is not None
+        except (NotImplementedError, AttributeError):
+            provider_supports_search = False
+        if not provider_supports_search:
+            self.dlg.setProviderIndex(self.imagery_search_provider_index)
+
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
         more_button = self.dlg.findChild(QPushButton, self.config.METADATA_MORE_BUTTON_OBJECT_NAME)
@@ -861,7 +886,7 @@ class Mapflow(QObject):
         geoms = response_data.as_geojson()
 
         # Save the current search results to load later
-        provider = self.providers[self.dlg.providerIndex()]
+        provider = self.imagery_search_provider
         filename = provider.save_search_layer(self.temp_dir, geoms)
         self.dlg.fill_metadata_table(geoms)
         self.display_metadata_geojson_layer(filename, f"{provider.name} catalog metadata")
