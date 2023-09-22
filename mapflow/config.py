@@ -12,7 +12,7 @@ class Config:
     SERVER = "https://whitemaps-{env}.mapflow.ai/rest".format(env=MAPFLOW_ENV)
     BILLING_HISTORY_URL = "https://app.mapflow.ai/account/billing-history"
     TOP_UP_URL = "https://app.mapflow.ai/account/balance"
-    MODEL_DOCS_URL = "https://docs.mapflow.ai/userguides/models_changelog/index.html"
+    MODEL_DOCS_URL = "https://docs.mapflow.ai/userguides/pipelines.html"
 
     # PROCESSINGS
     PROCESSING_TABLE_REFRESH_INTERVAL = 6  # in seconds

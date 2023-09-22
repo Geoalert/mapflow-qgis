@@ -1074,7 +1074,7 @@
                </layout>
               </item>
               <item row="0" column="0">
-               <layout class="QHBoxLayout" name="layoutMetadataDatetime" stretch="0,0,1,0,0,0,0">
+               <layout class="QHBoxLayout" name="layoutMetadataDatetime" stretch="0,0,0,0,0,0">
                 <item>
                  <widget class="QLabel" name="labelFrom">
                   <property name="toolTip">
@@ -1121,6 +1121,18 @@
                 </item>
                 <item>
                  <widget class="QPushButton" name="getMetadata">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>150</width>
+                    <height>0</height>
+                   </size>
+                  </property>
                   <property name="maximumSize">
                    <size>
                     <width>100</width>
@@ -1192,14 +1204,26 @@
                   </property>
                  </widget>
                 </item>
-                <item>
-                 <widget class="QPushButton" name="clearSearch">
-                  <property name="text">
-                   <string>Clear </string>
-                  </property>
-                 </widget>
-                </item>
                </layout>
+              </item>
+              <item row="3" column="0" alignment="Qt::AlignRight">
+               <widget class="QPushButton" name="clearSearch">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="minimumSize">
+                 <size>
+                  <width>0</width>
+                  <height>0</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Clear </string>
+                </property>
+               </widget>
               </item>
               <item row="1" column="0">
                <widget class="QgsCollapsibleGroupBox" name="metadataFilters">
