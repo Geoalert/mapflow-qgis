@@ -224,7 +224,8 @@ class Mapflow(QObject):
         # Maxar
         self.dlg.imageId.textChanged.connect(self.sync_image_id_with_table_and_layer)
         self.dlg.imageId.textChanged.connect(self.update_processing_cost)
-        self.dlg.metadataTable.itemSelectionChanged.connect(self.sync_table_selection_with_image_id_and_layer)
+        self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(self.sync_table_selection_with_image_id_and_layer)
+        self.meta_layer_table_connection = None
         self.dlg.getMetadata.clicked.connect(self.get_metadata)
         self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
         self.dlg.rasterSourceChanged.connect(self.on_provider_change)
@@ -840,7 +841,7 @@ class Mapflow(QObject):
         self.metadata_layer = QgsVectorLayer(filename, layer_name, 'ogr')
         self.project.addMapLayer(self.metadata_layer)
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
-        self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
+        self.meta_layer_table_connection = self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
         self.search_footprints = {
             feature['id']: feature
             for feature in self.metadata_layer.getFeatures()
@@ -961,7 +962,7 @@ class Mapflow(QObject):
             'memory'
         )
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
-        self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
+        self.meta_layer_table_connection = self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
         # Poll processings
         metadata_fetch_timer = QTimer(self.dlg)
         metadata_fetch_timer.setInterval(self.config.SKYWATCH_POLL_INTERVAL * 1000)
@@ -1231,35 +1232,44 @@ class Mapflow(QObject):
                                        error=response.attribute(QNetworkRequest.HttpStatusCodeAttribute)),
                                    error_message_parser=securewatch_message_parser)
 
-    def sync_table_selection_with_image_id_and_layer(self) -> str:
+    def sync_table_selection_with_image_id_and_layer(self) -> None:
         """
         Every time user selects a row in the metadata table, select the
         corresponding feature in the metadata layer and put the selected image's
         id into the "Image ID" field.
         """
-        selected_cells = self.dlg.metadataTable.selectedItems()
-        if not selected_cells:
-            self.dlg.imageId.setText('')
-            try:
-                self.metadata_layer.removeSelection()
-            except RuntimeError:  # layer has been deleted
-                pass
-            return
+        # Disconnect to avoid backwards signal and possible infinite loop;
+        # connection is restored before return
         id_column_index = (
             self.config.SENTINEL_ID_COLUMN_INDEX
             if self.dlg.rasterCombo.currentText() == constants.SENTINEL_OPTION_NAME
             else self.config.MAXAR_ID_COLUMN_INDEX
         )
-        image_id = next(cell for cell in selected_cells if cell.column() == id_column_index).text()
+        selected_cells = self.dlg.metadataTable.selectedItems()
+        if not selected_cells:
+            self.dlg.imageId.setText('')
+            image_id = None
+        else:
+            image_id = next(cell for cell in selected_cells if cell.column() == id_column_index).text()
+            self.dlg.imageId.setText(image_id)
+
         try:
-            already_selected = [feature['id'] for feature in self.metadata_layer.selectedFeatures()]
-            if (len(already_selected) != 1 or already_selected[0] != image_id):
-                self.metadata_layer.selectByExpression(f"id='{image_id}'")
+            self.metadata_layer.selectionChanged.disconnect(self.meta_layer_table_connection)
+            # disconnect to prevent loop of signals
+        except (RuntimeError, AttributeError):
+            # metadata layer was removed or not initialized
+            return
+        try:
+            self.metadata_layer.selectByExpression(f"id='{image_id}'")
         except RuntimeError:  # layer has been deleted
             pass
-        if self.dlg.imageId.text() != image_id:
-            self.dlg.imageId.setText(image_id)
+        except Exception as e:
+            self.meta_layer_table_connection = self.metadata_layer.selectionChanged.connect(
+                self.sync_layer_selection_with_table)
+            raise e
         self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+        self.meta_layer_table_connection = self.metadata_layer.selectionChanged.connect(
+            self.sync_layer_selection_with_table)
 
     def sync_layer_selection_with_table(self, selected_ids: List[int]) -> None:
         """
@@ -1269,10 +1279,20 @@ class Mapflow(QObject):
         :param selected_ids: The selected feature IDs. These aren't the image IDs, but rather
             the primary keys of the features.
         """
+        # Disconnect to avoid backwards signal and possible infinite loop;
+        # connection is restored before return
+        self.dlg.metadataTable.itemSelectionChanged.disconnect(self.meta_table_layer_connection)
         if not selected_ids:
             self.dlg.metadataTable.clearSelection()
+            self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
+                self.sync_table_selection_with_image_id_and_layer)
             return
-        selected_id = self.metadata_layer.getFeature(selected_ids[-1])['id']
+        try:
+            selected_id = self.metadata_layer.getFeature(selected_ids[-1])['id']
+        except RuntimeError as e:
+            self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
+                self.sync_table_selection_with_image_id_and_layer)
+            return
         id_column_index = [
             self.config.SENTINEL_ID_COLUMN_INDEX
             if self.dlg.rasterCombo.currentText() == constants.SENTINEL_OPTION_NAME
@@ -1286,6 +1306,8 @@ class Mapflow(QObject):
             self.dlg.metadataTable.selectRow(
                 self.dlg.metadataTable.findItems(selected_id, Qt.MatchExactly)[0].row()
             )
+        self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
+            self.sync_table_selection_with_image_id_and_layer)
 
     def sync_image_id_with_table_and_layer(self, image_id: str) -> None:
         """
@@ -1293,6 +1315,7 @@ class Mapflow(QObject):
 
         :param image_id: The new image ID.
         """
+
         if not image_id:
             self.dlg.metadataTable.clearSelection()
             return
