@@ -206,7 +206,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                              more_button_name: str,
                              image_id_placeholder: str,
                              image_id_tooltip: str,
-                             fill: Optional[dict] = None):
+                             fill: Optional[dict] = None
+                             ):
         self.metadataTable.clear()
         self.imageId.clear()
 
@@ -215,12 +216,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.layoutMetadataTable.removeWidget(more_button)
             more_button.deleteLater()
 
-        try:
-            enabled = provider.meta_url is not None
-        except (NotImplementedError, AttributeError):
-            enabled = False
+        # If the provider does not support search,
+        # we substitute it with default search provider (which is ImagerySearchProvider)
 
-        additional_filters_enabled = enabled
         preview_zoom_enabled = max_preview_zoom is not None and preview_zoom is not None
         self.maxZoom.setEnabled(preview_zoom_enabled)
         if preview_zoom_enabled:
@@ -228,7 +226,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.maxZoom2.setMaximum(max_preview_zoom)
             self.maxZoom.setValue(preview_zoom)
 
-        self.metadataFilters.setEnabled(additional_filters_enabled)
+        self.metadataFilters.setEnabled(True)
         self.metadataTable.setRowCount(0)
         self.metadataTable.setColumnCount(len(columns))
         self.metadataTable.setHorizontalHeaderLabels(columns)
@@ -238,17 +236,13 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.metadataTable.setColumnHidden(col, True)
         if sort_by is not None:
             self.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
-        self.metadata.setTitle(provider.name + self.tr(' Imagery Catalog'))
-        self.metadata.setEnabled(enabled)
-        self.imageId.setEnabled(enabled)
+        self.metadata.setTitle(self.tr("Search ") + provider.name)
         self.imageId.setPlaceholderText(image_id_placeholder)
         self.labelImageId.setToolTip(image_id_tooltip)
 
         imagery_search_tab = self.tabWidget.findChild(QWidget, "providersTab")
         self.searchImageryButton.clicked.connect(lambda: self.tabWidget.setCurrentWidget(imagery_search_tab))
-        self.searchImageryButton.setEnabled(enabled)
-        self.searchImageryButton.setToolTip(self.tr("Search imagery") if enabled
-                                            else self.tr("Provider does not support imagery search"))
+        self.searchImageryButton.setToolTip(self.tr("Search imagery"))
         if fill:
             self.fill_metadata_table(fill)
 
