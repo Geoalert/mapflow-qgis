@@ -92,8 +92,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     # connect raster/provider combos funcs
     def switch_provider_combo(self, text):
         # We want to skip the signal emission if the actual text and layer did not change
-        # Separate check on layer is needed in case two layera have the same name
-        # Separate check on layer is needed in case two layera have the same name
+        # Separate check on layer is needed in case two layers have the same name
         if self.current_raster_source == text and self.current_raster_layer == self.rasterCombo.currentLayer():
             return
         self.current_raster_source = text
@@ -134,6 +133,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.rasterCombo.setExceptedLayerList(excepted_layers)
         self.rasterCombo.setCurrentText(default_provider_name)
         self.providerCombo.setCurrentText(default_provider_name)
+        self.current_raster_source = self.rasterCombo.currentText()
 
         # Now, after all is set, we can unblock the signals and emit a new one
         self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)

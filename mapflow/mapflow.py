@@ -78,6 +78,7 @@ class Mapflow(QObject):
         self.aoi = None
         self.metadata_aoi = None
         self.metadata_layer = None
+        self.search_provider = None
         self.is_premium_user = False
         self.aoi_area_limit = 0.0
         self.username = self.password = ''
@@ -662,13 +663,12 @@ class Mapflow(QObject):
         """
         Get necessary attributes from config and send them to MainDialogo to setup Imagery Search tab
         """
-        # this is the default provider - ImagerySearchProvider -
-        # which will be used for search if the selected provider is unavailable
-        if not self.default_providers:
+        provider_changed = self.replace_search_provider(provider)
+        if not provider_changed:
             return
-        default_search_provider = self.default_providers[0]
-
-        if isinstance(provider, SentinelProvider):
+        # No need to re-set imagery search if the provider is not set,
+        # or if search provider did not change
+        if isinstance(self.search_provider, SentinelProvider):
             columns = self.config.SENTINEL_ATTRIBUTES
             hidden_columns = (len(columns) - 1,)
             sort_by = self.config.SENTINEL_DATETIME_COLUMN_INDEX
@@ -676,11 +676,10 @@ class Mapflow(QObject):
             image_id_tooltip = self.tr(
                 'If you already know which {provider_name} image you want to process,\n'
                 'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
-            ).format(provider_name=provider.name)
+            ).format(provider_name=self.search_provider.name)
             image_id_placeholder = self.tr('e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00')
             geoms = None
         else:  # any non-sentinel provider: setup table as for ImagerySearch provider
-            provider = self.replace_search_provider(provider)
             columns = self.config.METADATA_TABLE_ATTRIBUTES
             hidden_columns = tuple()
             sort_by = self.config.MAXAR_DATETIME_COLUMN_INDEX
@@ -689,14 +688,20 @@ class Mapflow(QObject):
             image_id_tooltip = self.tr(
                 'If you already know which {provider_name} image you want to process,\n'
                 'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
-            ).format(provider_name=provider.name)
+            ).format(provider_name=self.search_provider.name)
             image_id_placeholder = self.tr('e.g. a3b154c40cc74f3b934c0ffc9b34ecd1')
 
             # If we have searched with current provider previously, we want to restore the search results as it were
             # We store the results in a temp folder, separate file for each provider
-            geoms = provider.load_search_layer(self.temp_dir)
+            geoms = self.search_provider.load_search_layer(self.temp_dir)
+            if geoms:
+                self.display_metadata_geojson_layer(os.path.join(self.temp_dir, self.search_provider.metadata_layer_name),
+                                                    f"{self.search_provider.name} metadata")
+            else:
+                self.clear_metadata()
+
         # override max zoom for proxy maxar provider
-        self.dlg.setup_imagery_search(provider=provider,
+        self.dlg.setup_imagery_search(provider=self.search_provider,
                                       columns=columns,
                                       hidden_columns=hidden_columns,
                                       sort_by=sort_by,
@@ -746,23 +751,37 @@ class Mapflow(QObject):
         return None
 
     def replace_search_provider(self, provider: ProviderInterface):
+        if not provider:
+            return False
+        provider_changed = False
         try:
             provider_supports_search = provider.meta_url is not None
         except (NotImplementedError, AttributeError):
             provider_supports_search = False
         if not provider_supports_search:
             provider = self.imagery_search_provider
-        return provider
 
-    def get_metadata(self) -> None:
-        """Metadata is image footprints with attributes like acquisition date or cloud cover."""
-        # If current provider does not support search, we should select ImagerySearchProvider to be able to search
+        if provider != self.search_provider:
+            self.search_provider = provider
+            provider_changed = True
+        return provider_changed
+
+    def replace_search_provider_index(self):
         try:
             provider_supports_search = self.providers[self.dlg.providerIndex()].meta_url is not None
         except (NotImplementedError, AttributeError):
             provider_supports_search = False
+
+        # IF current rasterSourse is a layer, id does not support search, let's switch it to Search provider
+        if self.dlg.current_raster_layer is not None:
+            provider_supports_search = False
         if not provider_supports_search:
             self.dlg.setProviderIndex(self.imagery_search_provider_index)
+
+    def get_metadata(self) -> None:
+        """Metadata is image footprints with attributes like acquisition date or cloud cover."""
+        # If current provider does not support search, we should select ImagerySearchProvider to be able to search
+        self.replace_search_provider_index()
 
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
@@ -889,7 +908,7 @@ class Mapflow(QObject):
         provider = self.imagery_search_provider
         filename = provider.save_search_layer(self.temp_dir, geoms)
         self.dlg.fill_metadata_table(geoms)
-        self.display_metadata_geojson_layer(filename, f"{provider.name} catalog metadata")
+        self.display_metadata_geojson_layer(filename, f"{provider.name} metadata")
         self.filter_metadata(min_intersection=min_intersection, max_cloud_cover=max_cloud_cover)
 
     def request_skywatch_metadata(
@@ -1263,8 +1282,6 @@ class Mapflow(QObject):
         corresponding feature in the metadata layer and put the selected image's
         id into the "Image ID" field.
         """
-        # Disconnect to avoid backwards signal and possible infinite loop;
-        # connection is restored before return
         id_column_index = (
             self.config.SENTINEL_ID_COLUMN_INDEX
             if self.dlg.rasterCombo.currentText() == constants.SENTINEL_OPTION_NAME
@@ -1284,6 +1301,8 @@ class Mapflow(QObject):
         except (RuntimeError, AttributeError):
             # metadata layer was removed or not initialized
             return
+        self.replace_search_provider_index()
+
         try:
             self.metadata_layer.selectByExpression(f"id='{image_id}'")
         except RuntimeError:  # layer has been deleted
@@ -1903,6 +1922,7 @@ class Mapflow(QObject):
             self.dlg.setup_for_review(self.review_workflow_enabled)
             self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex())
             self.setup_providers(response_data.get("dataProviders") or [])
+            self.on_provider_change()
 
     def setup_providers(self, providers_data):
         self.default_providers = ProvidersList([ImagerySearchProvider(proxy=self.server)] +
@@ -2799,7 +2819,6 @@ class Mapflow(QObject):
         response = json.loads(response.readAll().data())
         self.update_processing_limit()
         self.is_premium_user = response['user']['isPremium']
-        self.on_provider_change()
         self.aoi_area_limit = response['user']['aoiAreaLimit'] * 1e-6
         # We skip SENTINEL WDs if sentinel is not enabled (normally, it should be not)
         # wds along with ids in the format: {'model_name': 'workflow_def_id'}
