@@ -30,8 +30,11 @@ class ErrorMessage(QObject):
     def from_response(cls, response: Dict):
         return cls(response["code"], response["parameters"])
 
-    def to_str(self):
-        message = error_message_list.get(self.code)
+    def to_str(self, raw=False):
+        default = "Unknown error. Contact us to resolve the issue! help@geoalert.io"
+        message = error_message_list.get(self.code, default=default)
+        if message == default and raw:
+            return f"Raw error: code = {self.code}, parameters={self.parameters}, message={self.message}"
         try:
             message = message.format(**self.parameters)
         except KeyError as e:

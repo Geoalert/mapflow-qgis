@@ -2536,7 +2536,7 @@ class Mapflow(QObject):
             proc = failed_processings[0]
             self.alert(
                 proc.name +
-                self.tr(' failed with error:\n') + proc.error_message(),
+                self.tr(' failed with error:\n') + proc.error_message(self.config.SHOW_RAW_ERROR),
                 QMessageBox.Critical,
                 blocking=False)
         elif 1 < len(failed_processings) < 10:
@@ -2605,7 +2605,7 @@ class Mapflow(QObject):
                 table_item = QTableWidgetItem()
                 table_item.setData(Qt.DisplayRole, processing_dict[attr])
                 if proc.status.is_failed:
-                    table_item.setToolTip(proc.error_message())
+                    table_item.setToolTip(proc.error_message(raw=self.config.SHOW_RAW_ERROR))
                 elif proc.in_review_until:
                     table_item.setToolTip(self.tr("Please review or accept this processing until {}."
                                                   " Double click to add results"
@@ -2913,7 +2913,7 @@ class Mapflow(QObject):
             message += self.tr("\n\nData source link {url}").format(url=processing.params.url)
 
         if processing.errors:
-            message += "\n\nErrors: \n" + processing.error_message()
+            message += "\n\nErrors: \n" + processing.error_message(raw=self.config.SHOW_RAW_ERROR)
         self.alert(message=message,
                    icon=QMessageBox.Information,
                    blocking=False)
