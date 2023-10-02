@@ -1,19 +1,6 @@
-import json
-import dataclasses
 from dataclasses import dataclass
 from typing import Optional, Mapping, Any, Union, Iterable
-from .base import SkipDataClass
-
-
-class Serializable:
-    def as_dict(self, skip_none=True):
-        if skip_none:
-            return dataclasses.asdict(self, dict_factory=lambda x: {k: v for (k, v) in x if v is not None})
-        else:
-            return dataclasses.asdict(self)
-
-    def as_json(self, skip_none=True):
-        return json.dumps(self.as_dict(skip_none=skip_none))
+from .base import SkipDataClass, Serializable
 
 
 @dataclass
@@ -35,7 +22,7 @@ class BlockOption(Serializable, SkipDataClass):
 class PostProviderSchema(Serializable, SkipDataClass):
     # Data provider name
     data_provider: str
-    year: Optional[str] = None
+    url: Optional[str] = None
 
 
 @dataclass

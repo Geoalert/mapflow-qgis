@@ -2,16 +2,18 @@
 Basic, non-authentification XYZ provider
 """
 from abc import ABC
-from typing import Union, Iterable
+from typing import Optional
 from urllib.parse import urlparse, parse_qs
-from .provider import SourceType, CRS, UsersProvider, BasicAuth, staticproperty
+from .provider import SourceType, CRS, UsersProvider, staticproperty
 from ...schema.processing import PostSourceSchema
 from ...functional.layer_utils import maxar_tile_url, add_connect_id
 from ...requests.maxar_metadata_request import MAXAR_REQUEST_BODY, MAXAR_META_URL
 
 
 class BasemapProvider(UsersProvider, ABC):
-    def to_processing_params(self, image_id=None):
+    def to_processing_params(self,
+                             image_id: Optional[str] = None,
+                             provider_name: Optional[str] = None):
         params = {
             'url': self.url,
             'projection': self.crs.value.lower(),
@@ -114,7 +116,9 @@ class MaxarProvider(UsersProvider):
                                          max_cloud_cover=max_cloud_cover,
                                          geometry=geometry).encode()
 
-    def to_processing_params(self, image_id=None):
+    def to_processing_params(self,
+                             image_id: Optional[str] = None,
+                             provider_name: Optional[str] = None):
         params = PostSourceSchema(url=maxar_tile_url(self.url, image_id),
                                   source_type=self.source_type,
                                   projection=self.crs.value,

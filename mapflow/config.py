@@ -12,7 +12,7 @@ class Config:
     SERVER = "https://whitemaps-{env}.mapflow.ai/rest".format(env=MAPFLOW_ENV)
     BILLING_HISTORY_URL = "https://app.mapflow.ai/account/billing-history"
     TOP_UP_URL = "https://app.mapflow.ai/account/balance"
-    MODEL_DOCS_URL = "https://docs.mapflow.ai/userguides/models_changelog/index.html"
+    MODEL_DOCS_URL = "https://docs.mapflow.ai/userguides/pipelines.html"
 
     # PROCESSINGS
     PROCESSING_TABLE_REFRESH_INTERVAL = 6  # in seconds
@@ -42,7 +42,7 @@ class Config:
     PROCESSING_TABLE_SORT_COLUMN_INDEX = PROCESSING_TABLE_COLUMNS.index('created')
     DEFAULT_HIDDEN_COLUMNS = (PROCESSING_TABLE_COLUMNS.index(item) for item in ('id', 'reviewUntil', 'cost'))
     # MAXAR
-    MAXAR_METADATA_ATTRIBUTES = {
+    METADATA_TABLE_ATTRIBUTES = {
         'Product Type': 'productType',
         'Sensor': 'source',
         'Band Order': 'colorBandOrder',
@@ -51,13 +51,14 @@ class Config:
         f'Date & Time ({TIMEZONE})': 'acquisitionDate',
         'Image ID': 'id'
     }
-    MAXAR_ID_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.values()).index('id')
-    MAXAR_DATETIME_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.keys()).index(f'Date & Time ({TIMEZONE})')
-    MAXAR_CLOUD_COLUMN_INDEX = tuple(MAXAR_METADATA_ATTRIBUTES.keys()).index(f'Cloud %')
+    MAXAR_ID_COLUMN_INDEX = tuple(METADATA_TABLE_ATTRIBUTES.values()).index('id')
+    MAXAR_DATETIME_COLUMN_INDEX = tuple(METADATA_TABLE_ATTRIBUTES.keys()).index(f'Date & Time ({TIMEZONE})')
+    MAXAR_CLOUD_COLUMN_INDEX = tuple(METADATA_TABLE_ATTRIBUTES.keys()).index(f'Cloud %')
     MAXAR_MAX_FREE_ZOOM = 12
 
     # MISC
     ENABLE_SENTINEL = (QgsSettings().value('variables/mapflow_enable_sentinel', "false").lower() == "true")
+    SHOW_RAW_ERROR = (QgsSettings().value("variables/mapflow_raw_error", "false").lower() == "true")
     SKYWATCH_METADATA_MAX_AREA = 1e11  # 100,000 sq.km
     SKYWATCH_METADATA_MAX_SIDE_LENGTH = 1e6  # 1,000 km
     INVALID_TOKEN_WARNING_OBJECT_NAME = 'invalidToken'

@@ -97,10 +97,10 @@ class Processing:
         one_day = timedelta(1)
         return self.in_review_until - now < one_day
 
-    def error_message(self):
+    def error_message(self, raw=False):
         if not self.errors:
             return ""
-        return "\n".join([error.to_str() for error in self.errors])
+        return "\n".join([error.to_str(raw=raw) for error in self.errors])
 
     def asdict(self):
         return {

@@ -1,3 +1,10 @@
+## 2.3.0
+    - Add "Imagery Catalog" to search and preview archive satellite imagert via Mapflow API.
+    Requires commercial subscription to process this data.
+    - You can disable auto addition of any vector layer to the AOI drop-down list. See "settings" tab
+    - UI state (selected processing/aoi/name) is now preserved when closing&opening plugin window
+    - (for MacOS users): click on the plugin button now moves plugin window on top
+    - Fix bug when the download of the result silently fails
 ## 2.2.1
     Hotfix:
     - fix bug with unhandled exception on opening of the plugin with opened vector layers

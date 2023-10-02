@@ -1,13 +1,13 @@
 import sys
 
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Optional, List
 
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette, QStandardItemModel
-from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox, QCheckBox
-from qgis.core import QgsMapLayerProxyModel
+from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox, QCheckBox, QTableWidgetItem
+from qgis.core import QgsMapLayerProxyModel, QgsMapLayer
 
 from ..entity.billing import BillingType
 from ..entity.provider import ProviderInterface
@@ -69,6 +69,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # connect two spinboxes
         self.spin1_connection = self.maxZoom.valueChanged.connect(self.switch_maxzoom_2)
         self.spin2_connection = self.maxZoom2.valueChanged.connect(self.switch_maxzoom_1)
+        # current state to compare with on change
+        self.current_raster_source = self.rasterCombo.currentText()
+        self.current_raster_layer = self.rasterCombo.currentLayer()
         # connect raster/provider combos
         self.raster_provider_connection = self.rasterCombo.currentTextChanged.connect(self.switch_provider_combo)
         self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
@@ -88,16 +91,54 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
     # connect raster/provider combos funcs
     def switch_provider_combo(self, text):
-        self.rasterCombo.currentTextChanged.disconnect(self.raster_provider_connection)
+        # We want to skip the signal emission if the actual text and layer did not change
+        # Separate check on layer is needed in case two layers have the same name
+        if self.current_raster_source == text and self.current_raster_layer == self.rasterCombo.currentLayer():
+            return
+        self.current_raster_source = text
+        self.current_raster_layer = self.rasterCombo.currentLayer()
+
+        self.providerCombo.currentTextChanged.disconnect(self.provider_raster_connection)
         self.providerCombo.setCurrentText(text)
+        self.rasterSourceChanged.emit()
+        self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
+
+    def switch_raster_combo(self, text):
+        # We want to skip the signal emission if the actual text did not change
+        if self.current_raster_source == text:
+            return
+        self.current_raster_source = text
+        self.rasterCombo.currentTextChanged.disconnect(self.raster_provider_connection)
+        self.rasterCombo.setCurrentText(text)
         self.rasterSourceChanged.emit()
         self.raster_provider_connection = self.rasterCombo.currentTextChanged.connect(self.switch_provider_combo)
 
-    def switch_raster_combo(self, text):
+    def set_raster_sources(self,
+                           provider_names: List[str],
+                           default_provider_name: str,
+                           excepted_layers: List[QgsMapLayer]):
+        """
+        args:
+            provider_names: strings to be added to providers and raster combos
+            default_provider_name: will try to set the current text to this value, if available
+            excepted_layers: will exclude these layers from rasterCombo (for Sentinel, mainly)
+        """
+        # Disconnect so that rasterSourceChanged would not be emitted while changing comboBoxes
         self.providerCombo.currentTextChanged.disconnect(self.provider_raster_connection)
-        self.rasterCombo.setCurrentText(text)
-        self.rasterSourceChanged.emit()
+        self.rasterCombo.currentTextChanged.disconnect(self.raster_provider_connection)
+
+        self.rasterCombo.setAdditionalItems(provider_names)
+        self.providerCombo.clear()
+        self.providerCombo.addItems(provider_names)
+        self.rasterCombo.setExceptedLayerList(excepted_layers)
+        self.rasterCombo.setCurrentText(default_provider_name)
+        self.providerCombo.setCurrentText(default_provider_name)
+        self.current_raster_source = self.rasterCombo.currentText()
+
+        # Now, after all is set, we can unblock the signals and emit a new one
         self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
+        self.raster_provider_connection = self.rasterCombo.currentTextChanged.connect(self.switch_provider_combo)
+        self.rasterSourceChanged.emit()
 
     def connect_column_checkboxes(self):
         self.showNameColumn.toggled.connect(self.set_column_visibility)
@@ -164,7 +205,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                              max_preview_zoom: int,
                              more_button_name: str,
                              image_id_placeholder: str,
-                             image_id_tooltip: str):
+                             image_id_tooltip: str,
+                             fill: Optional[dict] = None
+                             ):
         self.metadataTable.clear()
         self.imageId.clear()
 
@@ -173,11 +216,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.layoutMetadataTable.removeWidget(more_button)
             more_button.deleteLater()
 
-        try:
-            enabled = provider.meta_url is not None
-        except (NotImplementedError, AttributeError):
-            enabled = False
-        additional_filters_enabled = enabled
+        # If the provider does not support search,
+        # we substitute it with default search provider (which is ImagerySearchProvider)
 
         preview_zoom_enabled = max_preview_zoom is not None and preview_zoom is not None
         self.maxZoom.setEnabled(preview_zoom_enabled)
@@ -186,7 +226,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.maxZoom2.setMaximum(max_preview_zoom)
             self.maxZoom.setValue(preview_zoom)
 
-        self.metadataFilters.setEnabled(additional_filters_enabled)
+        self.metadataFilters.setEnabled(True)
         self.metadataTable.setRowCount(0)
         self.metadataTable.setColumnCount(len(columns))
         self.metadataTable.setHorizontalHeaderLabels(columns)
@@ -196,17 +236,15 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.metadataTable.setColumnHidden(col, True)
         if sort_by is not None:
             self.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
-        self.metadata.setTitle(provider.name + self.tr(' Imagery Catalog'))
-        self.metadata.setEnabled(enabled)
-        self.imageId.setEnabled(enabled)
+        self.metadata.setTitle(self.tr("Search ") + provider.name)
         self.imageId.setPlaceholderText(image_id_placeholder)
         self.labelImageId.setToolTip(image_id_tooltip)
 
         imagery_search_tab = self.tabWidget.findChild(QWidget, "providersTab")
         self.searchImageryButton.clicked.connect(lambda: self.tabWidget.setCurrentWidget(imagery_search_tab))
-        self.searchImageryButton.setEnabled(enabled)
-        self.searchImageryButton.setToolTip(self.tr("Search imagery") if enabled
-                                            else self.tr("Provider does not support imagery search"))
+        self.searchImageryButton.setToolTip(self.tr("Search imagery"))
+        if fill:
+            self.fill_metadata_table(fill)
 
     def show_wd_price(self,
                       wd_price: float,
@@ -313,3 +351,21 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     def setProviderIndex(self, index):
         self.providerCombo.setCurrentIndex(index)
 
+    def fill_metadata_table(self, metadata):
+        # Fill out the table
+        self.metadataTable.setRowCount(metadata.get('totalFeatures') or len(metadata['features']))
+        # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
+        self.metadataTable.setSortingEnabled(False)
+        for row, feature in enumerate(metadata['features']):
+            if feature.get('id'):
+                feature['properties']['id'] = feature.get('id') # for uniformity
+            for col, attr in enumerate(config.METADATA_TABLE_ATTRIBUTES.values()):
+                try:
+                    value = feature['properties'][attr]
+                except KeyError:  # e.g. <colorBandOrder/> for pachromatic images
+                    value = ''
+                table_item = QTableWidgetItem()
+                table_item.setData(Qt.DisplayRole, value)
+                self.metadataTable.setItem(row, col, table_item)
+        # Turn sorting on again
+        self.metadataTable.setSortingEnabled(True)
