@@ -760,7 +760,7 @@ class Mapflow(QObject):
             provider_supports_search = False
         if not provider_supports_search:
             provider = self.imagery_search_provider
-
+            # we need to deselect table to be able to use the non-search provider
         if provider != self.search_provider:
             self.search_provider = provider
             provider_changed = True
@@ -1713,7 +1713,9 @@ class Mapflow(QObject):
                 elif isinstance(provider, ImagerySearchProvider):
                     aoi = self.crop_aoi_with_maxar_image_footprint(selected_aoi, selected_image)
                 else:
-                    raise PluginError(self.tr("Selection is not available for  {}").format(provider.name))
+                    aoi = selected_aoi
+                    # We ignore image ID if the provider does not support it
+                    #raise PluginError(self.tr("Selection is not available for  {}").format(provider.name))
             elif provider.requires_image_id:
                 raise PluginError(self.tr("Please select image in Search table for {}").format(provider.name))
             else:
