@@ -12,7 +12,7 @@ from PyQt5.QtXml import QDomDocument
 from PyQt5.QtGui import QColor
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
-    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, QTextStream, QByteArray
+    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, QTextStream, QByteArray, QUrl
 )
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction,
@@ -27,7 +27,7 @@ from qgis.core import (
 )
 
 from .functional import layer_utils, helpers
-from .dialogs import MainDialog, LoginDialog, ErrorMessageWidget, ProviderDialog, ReviewDialog
+from .dialogs import MainDialog, LoginDialog, ErrorMessageWidget, ProviderDialog, ReviewDialog, OauthLoginDialog
 from .dialogs.icons import plugin_icon
 
 from .http import (Http,
@@ -91,7 +91,7 @@ class Mapflow(QObject):
         # Save refs to key variables used throughout the plugin
         self.iface = iface
         self.main_window = self.iface.mainWindow()
-        self.dlg_login = LoginDialog(self.main_window)
+        self.dlg_login = None
         self.workflow_defs = {}
         self.aoi_layers = []
 
@@ -2581,7 +2581,8 @@ class Mapflow(QObject):
         self.iface.removeCustomActionForLayerType(self.add_layer_action)
         self.iface.removeCustomActionForLayerType(self.remove_layer_action)
         for dlg in self.dlg, self.dlg_login, self.dlg_provider:
-            dlg.close()
+            if dlg:
+                dlg.close()
         del self.toolbar
         self.settings.setValue('metadataMinIntersection', self.dlg.minIntersection.value())
         self.settings.setValue('metadataMaxCloudCover', self.dlg.maxCloudCover.value())
@@ -2590,13 +2591,28 @@ class Mapflow(QObject):
 
     def read_mapflow_token(self) -> None:
         """Compose and memorize the user's credentils as Basic Auth."""
-        token = self.dlg_login.token.text().strip()
-        if token:
+        print("cloacked")
+        auth_data = self.dlg_login.token.text().strip()
+        if self.config.USE_OAUTH:
+            self.login_oauth(oauth_id=auth_data)
+        elif auth_data:
             # to add paddind for the token len to be multiple of 4
-            token += "=" * ((4 - len(token) % 4) % 4)
-            self.log_in(token)
+            token = auth_data + "=" * ((4 - len(auth_data) % 4) % 4)
+            self.login_basic(token)
 
-    def log_in(self, token) -> None:
+    def login_oauth(self, oauth_id):
+        self.http.setup_auth(oauth_id=oauth_id)
+        print("Sending request!")
+        try:
+            self.http.get(
+                url=f'{self.config.SERVER}/projects/{self.config.PROJECT_ID}',
+                callback=self.log_in_callback,
+                use_default_error_handler=True
+            )
+        except Exception as e:
+            self.alert(f"Error while trying to send authorization request: {e}")
+
+    def login_basic(self, token) -> None:
         """Log into Mapflow."""
         # save new token to settings immediately to overwrite old one, if any
         self.settings.setValue('token', token)
@@ -2611,7 +2627,7 @@ class Mapflow(QObject):
                                'to get a new one'),
                        icon=QMessageBox.Warning)
             return
-        self.http.basic_auth = f'Basic {token}'
+        self.http.setup_auth(basic_auth_token=f'Basic {token}')
         self.http.get(
             url=f'{self.config.SERVER}/projects/{self.config.PROJECT_ID}',
             callback=self.log_in_callback,
@@ -2843,6 +2859,27 @@ class Mapflow(QObject):
     def basemap_providers(self):
         return ProvidersList(self.default_providers + self.user_providers)
 
+    def get_auth(self):
+        auth = QgsApplication.authManager()
+        configids = auth.configIds()
+        print(configids)
+        id_ = configids[0]
+        print(auth.configAuthMethod(id_))
+        config = QgsAuthMethodConfig()
+        auth.loadAuthenticationConfig(id_, config)
+        print(config.method(), config.name(), config.isValid())
+        http = QgsNetworkAccessManager.instance()
+        request = QNetworkRequest(QUrl("https://mapflow.bftcom.com/rest/user/status"))
+        request.setAttribute(
+            QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.AlwaysNetwork
+        )
+        print(request.url())
+        updated, request = auth.updateNetworkRequest(request, id_)
+        print(f"Sending request: {updated}, {request.url()}")
+        self._reply = http.get(request)
+        self._reply.finished.connect(self.bftreply)
+        http.requestTimedOut.connect(lambda: print("NO rEPLY"))
+
     def tr(self, message: str) -> str:
         """Localize a UI element text.
         :param message: A text to translate
@@ -2862,15 +2899,25 @@ class Mapflow(QObject):
         if not self.version_ok:
             self.dlg.close()
             return
-        token = self.settings.value('token')
+
         if self.logged_in:
+            # with any auth method
             self.dlg.show()
             self.dlg.raise_()
             self.update_processing_limit()
             self.user_status_update_timer.start()
-        elif token:  # token saved
-            self.http.basic_auth = f'Basic {token}'
-            self.log_in(token)
-        else:
+            return
+
+        if self.config.USE_OAUTH:
+            self.dlg_login = OauthLoginDialog(self.main_window)
             self.set_up_login_dialog()
             self.dlg_login.show()
+        else:
+            self.dlg_login = LoginDialog(self.main_window)
+            token = self.settings.value('token')
+            if token:  # token saved
+                self.login_basic(token)
+            else:
+                self.set_up_login_dialog()
+                self.dlg_login.show()
+
