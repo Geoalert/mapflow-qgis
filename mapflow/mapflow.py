@@ -254,6 +254,7 @@ class Mapflow(QObject):
         self.add_layer_menu = QMenu()
         self.create_aoi_from_map_action = QAction(self.tr("Create new AOI layer from map extent"))
         self.add_aoi_from_file_action = QAction(self.tr("Add AOI from vector file"))
+        self.draw_aoi = QAction(self.tr("Draw AOI at the map"))
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
 
@@ -317,9 +318,11 @@ class Mapflow(QObject):
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.create_aoi_from_map_action)
         self.add_layer_menu.addAction(self.add_aoi_from_file_action)
+        self.add_layer_menu.addAction(self.draw_aoi)
 
         self.create_aoi_from_map_action.triggered.connect(self.create_aoi_layer_from_map)
         self.add_aoi_from_file_action.triggered.connect(self.open_vector_file)
+        self.draw_aoi.triggered.connect(self.create_editable_aoi_layer)
         self.dlg.toolButton.setMenu(self.add_layer_menu)
 
     def create_aoi_layer_from_map(self, action: QAction):
@@ -339,6 +342,18 @@ class Mapflow(QObject):
         self.add_layer(aoi_layer)
         self.add_to_layers(aoi_layer)
         self.iface.setActiveLayer(aoi_layer)
+
+    def create_editable_aoi_layer(self, action: QAction):
+        aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326',
+                                   f'AOI_{self.aoi_layer_counter}',
+                                   'memory')
+        aoi_layer.startEditing()
+        aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
+        self.aoi_layer_counter += 1
+        self.add_layer(aoi_layer)
+        self.add_to_layers(aoi_layer)
+        self.iface.setActiveLayer(aoi_layer)
+        self.iface.actionAddFeature().trigger()
 
     def open_vector_file(self):
         """Open a file selection dialog for the user to select a vector file as AOI
