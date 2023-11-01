@@ -372,7 +372,9 @@ class Mapflow(QObject):
             excluded_layers = [layer for layer in self.project.mapLayers().values()
                                if layer.type() == QgsMapLayerType.RasterLayer]
         else:
-            excluded_layers = []
+            excluded_layers = [layer for layer in self.project.mapLayers().values()
+                               if layer.type() == QgsMapLayerType.RasterLayer
+                               and Path(layer.source()).suffix.lower() not in ['tif', 'tiff']]
         return excluded_layers
 
     def filter_aoi_layers(self):
@@ -1745,8 +1747,8 @@ class Mapflow(QObject):
             if imagery:
                 # raster layer selected is local tiff
                 if not helpers.raster_layer_is_allowed(imagery):
-                    raise BadProcessingInput(self.tr("Raster image is not acceptable. "
-                                                     " It must be a Tiff file, have size less than {size} pixels"
+                    raise BadProcessingInput(self.tr("Raster TIFF file must be georeferenced,"
+                                                     " have size less than {size} pixels"
                                                      " and file size less than {memory}"
                                                      " MB").format(size=self.config.MAX_FILE_SIZE_PIXELS,
                                                                    memory=self.config.MAX_FILE_SIZE_BYTES // (
