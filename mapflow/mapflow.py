@@ -194,6 +194,7 @@ class Mapflow(QObject):
         ])
         self.project.layersAdded.connect(self.setup_layers_context_menu)
         self.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
+        self.project.layersAdded.connect(self.set_excepted_layers)
         # Processings
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
@@ -254,6 +255,7 @@ class Mapflow(QObject):
         self.add_layer_menu = QMenu()
         self.create_aoi_from_map_action = QAction(self.tr("Create new AOI layer from map extent"))
         self.add_aoi_from_file_action = QAction(self.tr("Add AOI from vector file"))
+        self.draw_aoi = QAction(self.tr("Draw AOI at the map"))
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
 
@@ -317,9 +319,11 @@ class Mapflow(QObject):
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.create_aoi_from_map_action)
         self.add_layer_menu.addAction(self.add_aoi_from_file_action)
+        self.add_layer_menu.addAction(self.draw_aoi)
 
         self.create_aoi_from_map_action.triggered.connect(self.create_aoi_layer_from_map)
         self.add_aoi_from_file_action.triggered.connect(self.open_vector_file)
+        self.draw_aoi.triggered.connect(self.create_editable_aoi_layer)
         self.dlg.toolButton.setMenu(self.add_layer_menu)
 
     def create_aoi_layer_from_map(self, action: QAction):
@@ -340,6 +344,18 @@ class Mapflow(QObject):
         self.add_to_layers(aoi_layer)
         self.iface.setActiveLayer(aoi_layer)
 
+    def create_editable_aoi_layer(self, action: QAction):
+        aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326',
+                                   f'AOI_{self.aoi_layer_counter}',
+                                   'memory')
+        aoi_layer.startEditing()
+        aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
+        self.aoi_layer_counter += 1
+        self.add_layer(aoi_layer)
+        self.add_to_layers(aoi_layer)
+        self.iface.setActiveLayer(aoi_layer)
+        self.iface.actionAddFeature().trigger()
+
     def open_vector_file(self):
         """Open a file selection dialog for the user to select a vector file as AOI
         Is called by clicking the 'Open vector file menu' button in the main dialog.
@@ -358,6 +374,9 @@ class Mapflow(QObject):
             else:
                 self.alert(self.tr(f'Your file is not valid vector data source!'))
 
+    def set_excepted_layers(self):
+        self.dlg.rasterCombo.setExceptedLayerList(self.filter_bad_rasters())
+
     def filter_bad_rasters(self, changed_layers: Optional[List[QgsRasterLayer]] = None) -> None:
         """Leave only GeoTIFF layers in the Imagery Source combo box."""
         # (!) Instead of going thru all project layers each time
@@ -372,7 +391,9 @@ class Mapflow(QObject):
             excluded_layers = [layer for layer in self.project.mapLayers().values()
                                if layer.type() == QgsMapLayerType.RasterLayer]
         else:
-            excluded_layers = []
+            excluded_layers = [layer for layer in self.project.mapLayers().values()
+                               if layer.type() == QgsMapLayerType.RasterLayer
+                               and Path(layer.source()).suffix.lower() not in ['.tif', '.tiff']]
         return excluded_layers
 
     def filter_aoi_layers(self):
@@ -1745,8 +1766,8 @@ class Mapflow(QObject):
             if imagery:
                 # raster layer selected is local tiff
                 if not helpers.raster_layer_is_allowed(imagery):
-                    raise BadProcessingInput(self.tr("Raster image is not acceptable. "
-                                                     " It must be a Tiff file, have size less than {size} pixels"
+                    raise BadProcessingInput(self.tr("Raster TIFF file must be georeferenced,"
+                                                     " have size less than {size} pixels"
                                                      " and file size less than {memory}"
                                                      " MB").format(size=self.config.MAX_FILE_SIZE_PIXELS,
                                                                    memory=self.config.MAX_FILE_SIZE_BYTES // (
