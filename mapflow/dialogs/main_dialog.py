@@ -42,6 +42,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.billingHistoryButton.setIcon(icons.chart_icon)
         self.logoutButton.setIcon(icons.logout_icon)
         self.modelInfo.setIcon(icons.info_icon)
+        self.tabWidget.setTabIcon(0, icons.processing_icon)
         self.tabWidget.setTabIcon(1, icons.lens_icon)
         self.tabWidget.setTabIcon(2, icons.user_gear_icon)
         self.tabWidget.setTabIcon(3, icons.info_icon)
