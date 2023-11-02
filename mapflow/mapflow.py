@@ -194,6 +194,7 @@ class Mapflow(QObject):
         ])
         self.project.layersAdded.connect(self.setup_layers_context_menu)
         self.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
+        self.project.layersAdded.connect(self.set_excepted_layers)
         # Processings
         self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
@@ -373,6 +374,9 @@ class Mapflow(QObject):
             else:
                 self.alert(self.tr(f'Your file is not valid vector data source!'))
 
+    def set_excepted_layers(self):
+        self.dlg.rasterCombo.setExceptedLayerList(self.filter_bad_rasters())
+
     def filter_bad_rasters(self, changed_layers: Optional[List[QgsRasterLayer]] = None) -> None:
         """Leave only GeoTIFF layers in the Imagery Source combo box."""
         # (!) Instead of going thru all project layers each time
@@ -389,7 +393,7 @@ class Mapflow(QObject):
         else:
             excluded_layers = [layer for layer in self.project.mapLayers().values()
                                if layer.type() == QgsMapLayerType.RasterLayer
-                               and Path(layer.source()).suffix.lower() not in ['tif', 'tiff']]
+                               and Path(layer.source()).suffix.lower() not in ['.tif', '.tiff']]
         return excluded_layers
 
     def filter_aoi_layers(self):
