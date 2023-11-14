@@ -799,7 +799,7 @@ class Mapflow(QObject):
         elif self.aoi:
             aoi = self.aoi
         else:
-            self.alert(self.tr('Please, select an area of interest'))
+            self.alert(self.tr('Please, select a valid area of interest'))
             return
 
         from_ = self.dlg.metadataFrom.date().toString(Qt.ISODate)
@@ -1640,7 +1640,7 @@ class Mapflow(QObject):
             elif self.dlg.polygonCombo.currentLayer():
                 raise BadProcessingInput(self.tr('Processing area layer is corrupted or has invalid projection'))
             else:
-                raise BadProcessingInput(self.tr('Please, select an area of interest'))
+                raise BadProcessingInput(self.tr('Please, select a valid area of interest'))
         if self.aoi_area_limit < self.aoi_size:
             raise BadProcessingInput(self.tr(
                 'Up to {} sq km can be processed at a time. '
