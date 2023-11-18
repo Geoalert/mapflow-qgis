@@ -1,10 +1,13 @@
+import json
 from typing import Optional
 from .provider import ProviderInterface, SourceType, CRS
 from .provider import BasicAuth
 from ...schema import PostSourceSchema, PostProviderSchema
-from ...constants import SENTINEL_OPTION_NAME, SEARCH_OPTION_NAME
+from ...constants import SENTINEL_OPTION_NAME, SEARCH_OPTION_NAME, MAXAR_BASE_URL
 from ...errors.plugin_errors import PluginError
 from ...schema.provider import ProviderReturnSchema
+from ...functional.layer_utils import add_image_id, add_connect_id, maxar_tile_url
+from ...requests.maxar_metadata_request import MAXAR_REQUEST_BODY
 
 
 class SentinelProvider(ProviderInterface):
@@ -141,3 +144,57 @@ class DefaultProvider(ProviderInterface):
                              image_id: Optional[str] = None,
                              provider_name: Optional[str] = None):
         return PostProviderSchema(data_provider=self.api_name), {}
+
+
+class MaxarProxyProvider(ProviderInterface):
+    def __init__(self,
+                 proxy,
+                 **kwargs):
+        super().__init__(name="Maxar SecureWatch")
+        self.proxy = proxy
+        self.credentials = BasicAuth()
+        self.source_type = SourceType.xyz
+        self.crs = CRS.web_mercator
+
+    def preview_url(self, image_id=None):
+        if not image_id:
+            raise ValueError("Image ID is required for the preview")
+        return add_image_id(add_connect_id(f'{self.proxy}/png?TileRow={{y}}&TileCol={{x}}&TileMatrix={{z}}',
+                                           "securewatch"),
+                            image_id)
+
+    def to_processing_params(self,
+                             image_id: Optional[str] = None,
+                             provider_name: Optional[str] = None):
+        if not image_id:
+            raise PluginError("Search provider must have image ID to launch the processing")
+        meta = {"source": "maxar", "maxar_product": "securewatch"}
+        return PostSourceSchema(url=add_image_id(self.url, image_id),
+                                source_type="xyz",
+                                ), meta
+
+    @property
+    def url(self):
+        return maxar_tile_url(MAXAR_BASE_URL)
+
+    def meta_request(self, from_, to, max_cloud_cover, geometry):
+        body = MAXAR_REQUEST_BODY.format(from_=from_,
+                                         to=to,
+                                         max_cloud_cover=max_cloud_cover,
+                                         geometry=geometry)
+        return json.dumps(
+            {"url": "https://securewatch.digitalglobe.com/catalogservice/wfsaccess?width=3000&height=3000",
+             "body": body,
+             "connectId": "securewatch"}).encode()
+
+    @property
+    def requires_image_id(self):
+        return True
+
+    @property
+    def meta_url(self):
+        return self.proxy + '/meta'
+
+    @property
+    def is_default(self):
+        return True

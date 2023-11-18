@@ -43,6 +43,7 @@ from .entity.provider import (UsersProvider,
                               MaxarProvider,
                               ProvidersList,
                               SentinelProvider,
+                              MaxarProxyProvider,
                               create_provider,
                               DefaultProvider,
                               ImagerySearchProvider,
@@ -811,7 +812,7 @@ class Mapflow(QObject):
 
         max_cloud_cover = self.dlg.maxCloudCover.value()
         min_intersection = self.dlg.minIntersection.value()
-        if isinstance(provider, MaxarProvider):
+        if isinstance(provider, (MaxarProvider, MaxarProxyProvider)):
             self.get_maxar_metadata(aoi=aoi,
                                     provider=provider,
                                     from_=from_,
@@ -1210,19 +1211,26 @@ class Mapflow(QObject):
                                              to=to,
                                              max_cloud_cover=max_cloud_cover / 100,
                                              geometry=stream.readAll())
-        encoded_credentials = b64encode(':'.join((
-            provider.credentials.login,
-            provider.credentials.password
-        )).encode())
-        self.http.post(
-            url=provider.meta_url,
-            body=request_body,
-            auth=f'Basic {encoded_credentials.decode()}'.encode(),
-            callback=self.get_maxar_metadata_callback,
-            callback_kwargs=callback_kwargs,
-            use_default_error_handler=False,
-            error_handler=self.get_maxar_metadata_error_handler
-        )
+        if provider.is_default:
+            self.http.post(
+                url=provider.meta_url,
+                body=request_body,
+                callback=self.get_maxar_metadata_callback,
+                callback_kwargs=callback_kwargs,
+                use_default_error_handler=True
+            )
+        else:
+            encoded_credentials = b64encode(':'.join((provider.credentials.login,
+                                                      provider.credentials.password)).encode())
+            self.http.post(
+                url=provider.meta_url,
+                body=request_body,
+                auth=f'Basic {encoded_credentials.decode()}'.encode(),
+                callback=self.get_maxar_metadata_callback,
+                callback_kwargs=callback_kwargs,
+                use_default_error_handler=False,
+                error_handler=self.get_maxar_metadata_error_handler
+            )
 
     def get_maxar_metadata_callback(
             self,
@@ -1930,7 +1938,8 @@ class Mapflow(QObject):
             self.on_provider_change()
 
     def setup_providers(self, providers_data):
-        self.default_providers = ProvidersList([ImagerySearchProvider(proxy=self.server)] +
+        self.default_providers = ProvidersList([ImagerySearchProvider(proxy=self.server),
+                                                MaxarProxyProvider(proxy=self.server)] +
                                                [DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
                                                 for data in providers_data])
         self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
@@ -2125,9 +2134,17 @@ class Mapflow(QObject):
         except Exception as e:
             self.alert(str(e), QMessageBox.Warning)
             return
+        # Default (proxied) providers have preview authorized with our login and password
+        if provider.is_default:
+            login = self.username
+            password = self.password
+        else:
+            login = provider.credentials.login
+            password = provider.credentials.password
+
         uri = layer_utils.generate_xyz_layer_definition(url,
-                                                        provider.credentials.login,
-                                                        provider.credentials.password,
+                                                        login,
+                                                        password,
                                                         max_zoom,
                                                         provider.source_type)
         layer = QgsRasterLayer(uri, layer_name, 'wms')
