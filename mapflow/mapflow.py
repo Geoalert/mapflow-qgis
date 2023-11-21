@@ -106,6 +106,8 @@ class Mapflow(QObject):
         self.settings = QgsSettings()
         # Get the server environment to connect to (for admins)
         self.server = self.config.SERVER
+        # By default, plugin adds layers to a group unless user explicitly deletes it
+        self.add_layers_to_group = True
         self.layer_tree_root = self.project.layerTreeRoot()
         # Set up authentication flags
         self.logged_in = False
