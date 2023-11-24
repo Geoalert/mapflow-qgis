@@ -95,6 +95,22 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         else:
             self.viewAsLocal.setChecked(True)
         self.useAllVectorLayers.setChecked(bool(self.settings.value('useAllVectorLayers', True)))
+        # Save on toggle
+        self.buttonGroup.buttonClicked.connect(self.save_view_results_mode)
+
+        # Restored saved state
+        self.set_state_from_settings()
+
+    # ===== Settings management ===== #
+    def save_view_results_mode(self):
+        self.settings.setValue("viewResultsAsVectorTiles", bool(self.viewAsTiles.isChecked()))
+
+    def set_state_from_settings(self):
+        if self.settings.value("viewResultsAsVectorTiles", True):
+            self.viewAsTiles.setChecked(True)
+        else:
+            self.viewAsLocal.setChecked(True)
+        self.useAllVectorLayers.setChecked(self.settings.value('useAllVectorLayers', True))
 
     # connect two spinboxes funcs
     def switch_maxzoom_1(self, value):
