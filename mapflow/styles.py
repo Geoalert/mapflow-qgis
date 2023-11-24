@@ -17,7 +17,7 @@ def get_style_name(wd_name: str, layer: QgsVectorLayer):
     if isinstance(layer, QgsVectorTileLayer):
         return str(Path(__file__).parent/'static'/'styles'/'tiles.qml')
     else:
-        return get_local_style_name(wd_name)
+        return get_local_style_name(wd_name, layer)
 
 
 def get_tile_style_name(wd_name):
