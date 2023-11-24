@@ -1,7 +1,11 @@
+import os
 import json
-from typing import Optional
+import tempfile
+from typing import Optional, List
 from pyproj import Proj, transform
 from PyQt5.QtNetwork import QNetworkReply
+from PyQt5.QtCore import QObject
+from PyQt5.QtWidgets import QFileDialog, QApplication
 from qgis.core import (QgsRectangle,
                        QgsRasterLayer,
                        QgsFeature,
@@ -14,9 +18,12 @@ from qgis.core import (QgsRectangle,
                        QgsDataSourceUri,
                        QgsWkbTypes,
                        QgsCoordinateReferenceSystem,
-                       QgsDistanceArea)
+                       QgsDistanceArea,
+                       QgsVectorFileWriter)
+
 from .geometry import clip_aoi_to_image_extent
 from .helpers import WGS84, to_wgs84, WGS84_ELLIPSOID
+from ..styles import get_style_name
 
 
 def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
@@ -216,3 +223,270 @@ def generate_vector_layer(layer_uri,
         name
     )
     return layer
+
+
+# Layer management for results
+class ResultsLoader(QObject):
+    def __init__(self, iface, maindialog, http, server, project, settings, plugin_name):
+        super().__init__()
+        self.message_bar = iface.messageBar()
+        self.dlg = maindialog
+        self.http = http
+        self.iface = iface
+        self.server = server
+        self.project = project
+        self.layer_tree_root = self.project.layerTreeRoot()
+        # By default, plugin adds layers to a group unless user explicitly deletes it
+        self.add_layers_to_group = True
+        self.layer_group = None
+        self.settings = settings
+        self.plugin_name = plugin_name
+
+    # ======= General layer management  ====== #
+
+    def add_layer(self, layer: Optional[QgsMapLayer]) -> None:
+        """Add layers created by the plugin to the legend.
+
+        By default, layers are added to a group with the same name as the plugin.
+        If the group has been deleted by the user, assume they prefer to not use
+        the group, and add layers to the legend root.
+
+        :param layer: A vector or raster layer to be added.
+        """
+        if not layer:
+            return
+        self.layer_group = self.layer_tree_root.findGroup(self.settings.value('layerGroup'))
+        if self.add_layers_to_group:
+            if not self.layer_group:  # сreate a layer group
+                self.layer_group = self.layer_tree_root.insertGroup(0, self.plugin_name)
+                # A bug fix, - gotta collapse first to be able to expand it
+                # Or else it'll ignore the setExpanded(True) calls
+                self.layer_group.setExpanded(False)
+                self.settings.setValue('layerGroup', self.plugin_name)
+                # If the group has been deleted, assume user wants to add layers to root, memorize it
+                self.layer_group.destroyed.connect(lambda: setattr(self, 'add_layers_to_group', False))
+                # Let user rename the group, memorize the new name
+                self.layer_group.nameChanged.connect(lambda _, name: self.settings.setValue('layerGroup', name))
+            # To be added to group, layer has to be added to project first
+            self.project.addMapLayer(layer, addToLegend=False)
+            # Explcitly add layer to the position 0 or else it adds it to bottom
+            self.layer_group.insertLayer(0, layer)
+            self.layer_group.setExpanded(True)
+        else:  # assume user opted to not use a group, add layers as usual
+            self.project.addMapLayer(layer)
+
+    # ======= Load as tile layers ====== #
+
+    def load_result_tiles(self, processing):
+        raster_tilejson = processing.raster_layer.get("tileJsonUrl", None)
+        vector_tilejson = processing.vector_layer.get("tileJsonUrl", None)
+        raster_layer = generate_raster_layer(processing.raster_layer.get("tileUrl", None),
+                                             name=f"{processing.name} raster")
+        vector_layer = generate_vector_layer(processing.vector_layer.get("tileUrl", None),
+                                             name=processing.name)
+        vector_layer.loadNamedStyle(get_style_name(processing.workflow_def, vector_layer))
+        #os.path.join(self.plugin_dir, 'static', 'styles', 'tiles.qml'))
+        self.add_layer(raster_layer)
+        self.add_layer(vector_layer)
+        self.request_layer_extent(None,
+                                  tilejson_uris=[uri for uri in (raster_tilejson, vector_tilejson) if
+                                                 uri is not None],
+                                  raster_layer=raster_layer,
+                                  vector_layer=vector_layer)
+
+    def request_layer_extent(self,
+                             response: QNetworkReply,
+                             tilejson_uris: List[str],
+                             raster_layer,
+                             vector_layer):
+        if not tilejson_uris:
+            # All available tilejson urls were tried and none returned success
+            self.message_bar.pushWarning(self.tr("Results loaded"),
+                                         self.tr("Extent failed to load, zoom to the layers manually"))
+        # request with the first and save the rest in case of error
+        main_tilejson_uri = tilejson_uris[0]
+        other_tilejson_uris = tilejson_uris[1:]
+        self.http.get(url=main_tilejson_uri,
+                      callback=self.add_layers_with_extent,
+                      callback_kwargs={"raster": raster_layer,
+                                       "vector": vector_layer},
+                      error_handler=self.request_layer_extent,
+                      error_handler_kwargs={"tilejson_uris": other_tilejson_uris,
+                                            "raster_layer": raster_layer,
+                                            "vector_layer": vector_layer},
+                      use_default_error_handler=False,
+                      )
+
+    def add_layers_with_extent(
+            self,
+            response: QNetworkReply,
+            vector: QgsVectorLayer,
+            raster: QgsRasterLayer
+    ) -> None:
+        """Set processing raster extent upon successfully requesting the processing's AOI.
+
+        :param response: The HTTP response.
+        :param vector: The downloaded feature layer.
+        :param raster: The downloaded raster which was used for processing.
+        """
+        bounding_box = get_bounding_box_from_tile_json(response=response)
+        raster.setExtent(rect=bounding_box)
+        vector.setExtent(rect=bounding_box)
+        self.iface.setActiveLayer(vector)
+        self.iface.zoomToActiveLayer()
+        self.message_bar.pushSuccess(self.tr("Success"),
+                                     self.tr("Results loaded to the project"))
+
+    # ====== Download as geojson ===== #
+    def download_results_file(self, pid) -> None:
+        """
+        Download result and save directly to a geojson file
+        It is the most reliable way to get results, applicable if everything else failed
+        """
+        path, _ = QFileDialog.getSaveFileName(QApplication.activeWindow(),
+                                              self.tr('Save processing results'),
+                                              filter="*.geojson")
+        if not path:
+            # if the path was not selected
+            return
+        self.dlg.saveResultsButton.setEnabled(False)
+        self.http.get(
+            url=f'{self.server}/processings/{pid}/result',
+            callback=self.download_results_file_callback,
+            callback_kwargs={'path': path},
+            use_default_error_handler=False,
+            error_handler=self.download_results_file_error_handler,
+            timeout=300
+        )
+
+    def download_results_file_callback(self, response: QNetworkReply, path: str) -> None:
+        """
+        Write results to the geojson file
+        """
+        self.dlg.saveResultsButton.setEnabled(True)
+        with open(path, mode='wb') as f:
+            f.write(response.readAll().data())
+        self.message_bar.pushSuccess(self.tr("Results saved"),
+                                     self.tr("see in {path}!").format(path=path))
+
+    def download_results_file_error_handler(self, response: QNetworkReply) -> None:
+        """Error handler for downloading processing results.
+
+        :param response: The HTTP response.
+        """
+        self.dlg.saveResultsButton.setEnabled(True)
+        self.message_bar.pushWarning(self.tr("Error"),
+                                     self.tr('could not download results, \n try again later or report error'),
+                                     )
+
+    # ======= Save as geopackage and add as layer - old variant ======= #
+
+    def download_results_callback(self, response: QNetworkReply, processing) -> None:
+        """Display processing results upon their successful fetch.
+
+        :param response: The HTTP response.
+        :param pid: ID of the inspected processing.
+        """
+        self.dlg.processingsTable.setEnabled(True)
+        # Avoid overwriting existing files by adding (n) to their names
+        output_path = os.path.join(self.dlg.outputDirectory.text(), processing.id_)
+        extension = '.gpkg'
+        if os.path.exists(output_path + extension):
+            count = 1
+            while os.path.exists(output_path + f'({count})' + extension):
+                count += 1
+            output_path += f'({count})' + extension
+        else:
+            output_path += extension
+        transform = self.project.transformContext()
+        # Layer creation options for QGIS 3.10.3+
+        write_options = QgsVectorFileWriter.SaveVectorOptions()
+        write_options.layerOptions = ['fid=id']
+        with tempfile.NamedTemporaryFile() as f:
+            f.write(response.readAll().data())
+            f.seek(0)  # rewind the cursor to the start of the file
+            layer = QgsVectorLayer(f.name, '', 'ogr')
+            # writeAsVectorFormat keeps changing with versions so gotta check the version :-(
+            # V3 returns two additional str values but they're not documented, so just discard them
+            error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(
+                layer,
+                output_path,
+                transform,
+                write_options
+            )
+        if error:
+            self.message_bar.pushWarning(self.tr("Error"),
+                                         self.tr('Failed to save results to file. '
+                                                 'Error code: {code}. Message: {message}').format(code=error,
+                                                                                                  message=msg))
+            return
+        # Load the results into QGIS
+        results_layer = QgsVectorLayer(output_path, processing.name, 'ogr')
+        results_layer.loadNamedStyle(get_style_name(processing.workflow_def, layer))
+        # Add the source raster (COG) if it has been created
+        raster_url = processing.raster_layer.get('tileUrl')
+        tile_json_url = processing.raster_layer.get("tileJsonUrl")
+        if raster_url:
+            params = {
+                'type': 'xyz',
+                'url': raster_url,
+                'zmin': 0,
+                'zmax': 18,
+                # 'username': self.username,
+                # 'password': self.password
+            }
+            raster = QgsRasterLayer(
+                '&'.join(f'{key}={val}' for key, val in params.items()),  # don't URL-encode it
+                processing.name + ' image',
+                'wms'
+            )
+            self.http.get(
+                url=tile_json_url,
+                callback=self.set_raster_extent,
+                callback_kwargs={
+                    'vector': results_layer,
+                    'raster': raster
+                },
+                use_default_error_handler=False,
+                error_handler=self.set_raster_extent_error_handler,
+                error_handler_kwargs={
+                    'vector': results_layer,
+                }
+            )
+        else:
+            self.set_raster_extent_error_handler(response=None, vector=results_layer)
+
+    def download_results_error_handler(self, response: QNetworkReply) -> None:
+        """Error handler for downloading processing results.
+
+        :param response: The HTTP response.
+        """
+        self.dlg.processingsTable.setEnabled(True)
+        self.message_bar.pushWarning(self.tr("Error"),
+                                     self.tr('failed to download results, \n try again later or report error'))
+
+    def set_raster_extent(
+            self,
+            response: QNetworkReply,
+            vector: QgsVectorLayer,
+            raster: QgsRasterLayer
+    ) -> None:
+        """Set processing raster extent upon successfully requesting the processing's AOI.
+
+        :param response: The HTTP response.
+        :param vector: The downloaded feature layer.
+        :param raster: The downloaded raster which was used for processing.
+        """
+        bounding_box = get_bounding_box_from_tile_json(response=response)
+        raster.setExtent(rect=bounding_box)
+        self.add_layer(raster)
+        self.add_layer(vector)
+        self.iface.zoomToActiveLayer()
+
+    def set_raster_extent_error_handler(self,
+                                        response: QNetworkReply,
+                                        vector: Optional[QgsVectorLayer] = None):
+
+        """Error handler for processing AOI requests. If tilejson can't be loaded, we do not add raster layer, and
+        """
+        self.add_layer(vector)

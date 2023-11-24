@@ -921,11 +921,11 @@
             </widget>
            </item>
            <item>
-            <layout class="QHBoxLayout" name="processingFooter" stretch="0,0,0,0">
+            <layout class="QHBoxLayout" name="processingFooter" stretch="0,0,0,0,0">
              <item>
               <widget class="QPushButton" name="downloadResultsButton">
                <property name="text">
-                <string> Download results </string>
+                <string>View results</string>
                </property>
               </widget>
              </item>
@@ -933,6 +933,13 @@
               <widget class="QPushButton" name="detailsButton">
                <property name="text">
                 <string>See details</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="saveResultsButton">
+               <property name="text">
+                <string>Save results</string>
                </property>
               </widget>
              </item>
@@ -1744,6 +1751,29 @@
                 </widget>
                </item>
                <item>
+                <widget class="QRadioButton" name="viewAsTiles">
+                 <property name="text">
+                  <string>view results as a vector layer</string>
+                 </property>
+                 <property name="checked">
+                  <bool>true</bool>
+                 </property>
+                 <attribute name="buttonGroup">
+                  <string notr="true">buttonGroup</string>
+                 </attribute>
+                </widget>
+               </item>
+               <item>
+                <widget class="QRadioButton" name="viewAsLocal">
+                 <property name="text">
+                  <string>save local gpkg file to view results</string>
+                 </property>
+                 <attribute name="buttonGroup">
+                  <string notr="true">buttonGroup</string>
+                 </attribute>
+                </widget>
+               </item>
+               <item>
                 <spacer name="verticalSpacer_3">
                  <property name="orientation">
                   <enum>Qt::Vertical</enum>
@@ -1978,4 +2008,7 @@
    </hints>
   </connection>
  </connections>
+ <buttongroups>
+  <buttongroup name="buttonGroup"/>
+ </buttongroups>
 </ui>
