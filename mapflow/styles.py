@@ -15,13 +15,20 @@ DEFAULT_STYLE = "default"
 
 def get_style_name(wd_name: str, layer: QgsVectorLayer):
     if isinstance(layer, QgsVectorTileLayer):
-        return str(Path(__file__).parent/'static'/'styles'/'tiles.qml')
+        return get_tile_style_name(wd_name)
     else:
         return get_local_style_name(wd_name, layer)
 
 
 def get_tile_style_name(wd_name):
-    return str(Path(__file__).parent / 'static' / 'styles' / 'tiles.qml')
+    if "building" in wd_name.lower():
+        name = 'buildings'
+    elif "forest" in wd_name.lower():
+        name = 'forest'
+    else:
+        name = 'default'
+
+    return str(Path(__file__).parent / 'static' / 'styles' / 'tiles' / (name + '.qml'))
 
 
 def get_local_style_name(wd_name, layer):
@@ -32,4 +39,4 @@ def get_local_style_name(wd_name, layer):
     # Show forest heights for new (updated) forest with block config
     elif name == "forest" and "class_id" in layer.fields().names():
         name = "forest_with_heights"
-    return str(Path(__file__).parent/'static'/'styles'/(name + '.qml'))
+    return str(Path(__file__).parent / 'static' / 'styles' / 'file' / (name + '.qml'))
