@@ -94,7 +94,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.viewAsTiles.setChecked(True)
         else:
             self.viewAsLocal.setChecked(True)
-        self.useAllVectorLayers.setChecked(self.settings.value('useAllVectorLayers', True))
+        self.useAllVectorLayers.setChecked(bool(self.settings.value('useAllVectorLayers', True)))
 
     # connect two spinboxes funcs
     def switch_maxzoom_1(self, value):
