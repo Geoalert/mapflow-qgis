@@ -7,7 +7,7 @@ from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette, QStandardItemModel
 from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox, QCheckBox, QTableWidgetItem
-from qgis.core import QgsMapLayerProxyModel, QgsMapLayer
+from qgis.core import QgsMapLayerProxyModel, QgsMapLayer, QgsSettings
 
 from ..entity.billing import BillingType
 from ..entity.provider import ProviderInterface
@@ -26,9 +26,10 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     modelOptionsChanged = pyqtSignal()
     rasterSourceChanged = pyqtSignal()
 
-    def __init__(self, parent: QWidget) -> None:
+    def __init__(self, parent: QWidget, settings: QgsSettings) -> None:
         """Plugin's main dialog."""
         super().__init__(parent)
+        self.settings = settings
         self.setupUi(self)
         # Restrict combos to relevant layer types; QGIS 3.10-3.20 (at least) bugs up if set in .ui
         self.polygonCombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
@@ -78,6 +79,22 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
 
         self.modelOptions = []
+        # Save on toggle
+        self.buttonGroup.buttonClicked.connect(self.save_view_results_mode)
+
+        # Restored saved state
+        self.set_state_from_settings()
+
+    # ===== Settings management ===== #
+    def save_view_results_mode(self):
+        self.settings.setValue("viewResultsAsVectorTiles", bool(self.viewAsTiles.isChecked()))
+
+    def set_state_from_settings(self):
+        if self.settings.value("viewResultsAsVectorTiles", True):
+            self.viewAsTiles.setChecked(True)
+        else:
+            self.viewAsLocal.setChecked(True)
+        self.useAllVectorLayers.setChecked(self.settings.value('useAllVectorLayers', True))
 
     # connect two spinboxes funcs
     def switch_maxzoom_1(self, value):
