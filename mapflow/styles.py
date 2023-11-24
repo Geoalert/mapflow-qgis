@@ -24,7 +24,11 @@ def get_tile_style_name(wd_name):
     if "building" in wd_name.lower():
         name = 'buildings'
     elif "forest" in wd_name.lower():
-        name = 'forest'
+        name = "forest"
+    elif "road" in wd_name.lower():
+        name = "roads"
+    elif "construction" in wd_name.lower():
+        name = "construction"
     else:
         name = 'default'
 

@@ -1,5 +1,5 @@
 <!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
-<qgis hasScaleBasedVisibilityFlag="0" minScale="1e+08" styleCategories="AllStyleCategories" maxScale="0" version="3.28.12-Firenze">
+<qgis maxScale="0" version="3.28.12-Firenze" styleCategories="AllStyleCategories" minScale="1e+08" hasScaleBasedVisibilityFlag="0">
   <flags>
     <Identifiable>1</Identifiable>
     <Removable>1</Removable>
@@ -11,9 +11,9 @@
   </customproperties>
   <renderer type="basic">
     <styles>
-      <style enabled="1" layer="vector_layer" min-zoom="-1" name="residential" geometry="2" max-zoom="-1" expression="&quot;class_id&quot; IS '101'">
+      <style geometry="2" enabled="1" expression="&quot;class_id&quot; IS '101'" name="residential" layer="vector_layer" max-zoom="-1" min-zoom="-1">
         <symbols>
-          <symbol type="fill" frame_rate="10" is_animated="0" name="0" alpha="1" force_rhr="0" clip_to_extent="1">
+          <symbol frame_rate="10" type="fill" name="0" alpha="1" is_animated="0" force_rhr="0" clip_to_extent="1">
             <data_defined_properties>
               <Option type="Map">
                 <Option type="QString" value="" name="name"/>
@@ -21,7 +21,7 @@
                 <Option type="QString" value="collection" name="type"/>
               </Option>
             </data_defined_properties>
-            <layer enabled="1" locked="0" pass="0" class="SimpleLine">
+            <layer enabled="1" pass="0" locked="0" class="SimpleLine">
               <Option type="Map">
                 <Option type="QString" value="0" name="align_dash_pattern"/>
                 <Option type="QString" value="square" name="capstyle"/>
@@ -62,9 +62,9 @@
           </symbol>
         </symbols>
       </style>
-      <style enabled="1" layer="vector_layer" min-zoom="-1" name="house" geometry="2" max-zoom="-1" expression="&quot;class_id&quot; IS '102'">
+      <style geometry="2" enabled="1" expression="&quot;class_id&quot; IS '102'" name="house" layer="vector_layer" max-zoom="-1" min-zoom="-1">
         <symbols>
-          <symbol type="fill" frame_rate="10" is_animated="0" name="0" alpha="1" force_rhr="0" clip_to_extent="1">
+          <symbol frame_rate="10" type="fill" name="0" alpha="1" is_animated="0" force_rhr="0" clip_to_extent="1">
             <data_defined_properties>
               <Option type="Map">
                 <Option type="QString" value="" name="name"/>
@@ -72,7 +72,7 @@
                 <Option type="QString" value="collection" name="type"/>
               </Option>
             </data_defined_properties>
-            <layer enabled="1" locked="0" pass="0" class="SimpleLine">
+            <layer enabled="1" pass="0" locked="0" class="SimpleLine">
               <Option type="Map">
                 <Option type="QString" value="0" name="align_dash_pattern"/>
                 <Option type="QString" value="square" name="capstyle"/>
@@ -113,9 +113,9 @@
           </symbol>
         </symbols>
       </style>
-      <style enabled="1" layer="vector_layer" min-zoom="-1" name="commercial" geometry="2" max-zoom="-1" expression="&quot;class_id&quot; IS '103'">
+      <style geometry="2" enabled="1" expression="&quot;class_id&quot; IS '103'" name="commercial" layer="vector_layer" max-zoom="-1" min-zoom="-1">
         <symbols>
-          <symbol type="fill" frame_rate="10" is_animated="0" name="0" alpha="1" force_rhr="0" clip_to_extent="1">
+          <symbol frame_rate="10" type="fill" name="0" alpha="1" is_animated="0" force_rhr="0" clip_to_extent="1">
             <data_defined_properties>
               <Option type="Map">
                 <Option type="QString" value="" name="name"/>
@@ -123,7 +123,7 @@
                 <Option type="QString" value="collection" name="type"/>
               </Option>
             </data_defined_properties>
-            <layer enabled="1" locked="0" pass="0" class="SimpleLine">
+            <layer enabled="1" pass="0" locked="0" class="SimpleLine">
               <Option type="Map">
                 <Option type="QString" value="0" name="align_dash_pattern"/>
                 <Option type="QString" value="square" name="capstyle"/>
@@ -164,9 +164,9 @@
           </symbol>
         </symbols>
       </style>
-      <style enabled="1" layer="vector_layer" min-zoom="-1" name="" geometry="2" max-zoom="-1" expression="&quot;class_id&quot; IS '104'">
+      <style geometry="2" enabled="1" expression="&quot;class_id&quot; IS '104'" name="" layer="vector_layer" max-zoom="-1" min-zoom="-1">
         <symbols>
-          <symbol type="fill" frame_rate="10" is_animated="0" name="0" alpha="1" force_rhr="0" clip_to_extent="1">
+          <symbol frame_rate="10" type="fill" name="0" alpha="1" is_animated="0" force_rhr="0" clip_to_extent="1">
             <data_defined_properties>
               <Option type="Map">
                 <Option type="QString" value="" name="name"/>
@@ -174,7 +174,7 @@
                 <Option type="QString" value="collection" name="type"/>
               </Option>
             </data_defined_properties>
-            <layer enabled="1" locked="0" pass="0" class="SimpleLine">
+            <layer enabled="1" pass="0" locked="0" class="SimpleLine">
               <Option type="Map">
                 <Option type="QString" value="0" name="align_dash_pattern"/>
                 <Option type="QString" value="square" name="capstyle"/>
@@ -215,9 +215,9 @@
           </symbol>
         </symbols>
       </style>
-      <style enabled="1" layer="vector_layer" min-zoom="-1" name="other" geometry="2" max-zoom="-1" expression="&quot;class_id&quot; IS '105'">
+      <style geometry="2" enabled="1" expression="&quot;class_id&quot; IS '105'" name="other" layer="vector_layer" max-zoom="-1" min-zoom="-1">
         <symbols>
-          <symbol type="fill" frame_rate="10" is_animated="0" name="0" alpha="1" force_rhr="0" clip_to_extent="1">
+          <symbol frame_rate="10" type="fill" name="0" alpha="1" is_animated="0" force_rhr="0" clip_to_extent="1">
             <data_defined_properties>
               <Option type="Map">
                 <Option type="QString" value="" name="name"/>
@@ -225,7 +225,7 @@
                 <Option type="QString" value="collection" name="type"/>
               </Option>
             </data_defined_properties>
-            <layer enabled="1" locked="0" pass="0" class="SimpleLine">
+            <layer enabled="1" pass="0" locked="0" class="SimpleLine">
               <Option type="Map">
                 <Option type="QString" value="0" name="align_dash_pattern"/>
                 <Option type="QString" value="square" name="capstyle"/>
@@ -266,9 +266,9 @@
           </symbol>
         </symbols>
       </style>
-      <style enabled="1" layer="vector_layer" min-zoom="-1" name="" geometry="2" max-zoom="-1" expression="&quot;class_id&quot; IS NOT IN ('101', '102', '103', '104','105')">
+      <style geometry="2" enabled="1" expression="&quot;class_id&quot; IS NOT IN ('101', '102', '103', '104','105')" name="" layer="vector_layer" max-zoom="-1" min-zoom="-1">
         <symbols>
-          <symbol type="fill" frame_rate="10" is_animated="0" name="0" alpha="1" force_rhr="0" clip_to_extent="1">
+          <symbol frame_rate="10" type="fill" name="0" alpha="1" is_animated="0" force_rhr="0" clip_to_extent="1">
             <data_defined_properties>
               <Option type="Map">
                 <Option type="QString" value="" name="name"/>
@@ -276,15 +276,15 @@
                 <Option type="QString" value="collection" name="type"/>
               </Option>
             </data_defined_properties>
-            <layer enabled="1" locked="0" pass="0" class="SimpleFill">
+            <layer enabled="1" pass="0" locked="0" class="SimpleFill">
               <Option type="Map">
                 <Option type="QString" value="3x:0,0,0,0,0,0" name="border_width_map_unit_scale"/>
-                <Option type="QString" value="255,139,106,81" name="color"/>
+                <Option type="QString" value="255,138,106,81" name="color"/>
                 <Option type="QString" value="bevel" name="joinstyle"/>
                 <Option type="QString" value="0,0" name="offset"/>
                 <Option type="QString" value="3x:0,0,0,0,0,0" name="offset_map_unit_scale"/>
                 <Option type="QString" value="MM" name="offset_unit"/>
-                <Option type="QString" value="255,139,106,255" name="outline_color"/>
+                <Option type="QString" value="0,0,0,255" name="outline_color"/>
                 <Option type="QString" value="solid" name="outline_style"/>
                 <Option type="QString" value="0.26" name="outline_width"/>
                 <Option type="QString" value="MM" name="outline_width_unit"/>
