@@ -21,7 +21,9 @@ def get_style_name(wd_name: str, layer: QgsVectorLayer):
 
 
 def get_tile_style_name(wd_name):
-    if "building" in wd_name.lower():
+    if "building" in wd_name.lower() and "height" in wd_name.lower():
+        name = 'building_heights'
+    elif "building" in wd_name.lower():
         name = 'buildings'
     elif "forest" in wd_name.lower():
         name = "forest"
@@ -31,8 +33,8 @@ def get_tile_style_name(wd_name):
         name = "construction"
     else:
         name = 'default'
-
-    return str(Path(__file__).parent / 'static' / 'styles' / 'tiles' / (name + '.qml'))
+    res = str(Path(__file__).parent / 'static' / 'styles' / 'tiles' / (name + '.qml'))
+    return res
 
 
 def get_local_style_name(wd_name, layer):
