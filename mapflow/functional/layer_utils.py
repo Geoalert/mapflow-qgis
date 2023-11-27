@@ -6,7 +6,8 @@ from pyproj import Proj, transform
 from PyQt5.QtNetwork import QNetworkReply
 from PyQt5.QtCore import QObject
 from PyQt5.QtWidgets import QFileDialog, QApplication
-from qgis.core import (QgsRectangle,
+from qgis.core import (Qgis,
+                       QgsRectangle,
                        QgsRasterLayer,
                        QgsFeature,
                        QgsMapLayer,
@@ -227,7 +228,7 @@ def generate_vector_layer(layer_uri,
 
 # Layer management for results
 class ResultsLoader(QObject):
-    def __init__(self, iface, maindialog, http, server, project, settings, plugin_name):
+    def __init__(self, iface, maindialog, http, server, project, settings, plugin_name, temp_dir):
         super().__init__()
         self.message_bar = iface.messageBar()
         self.dlg = maindialog
@@ -241,6 +242,7 @@ class ResultsLoader(QObject):
         self.layer_group = None
         self.settings = settings
         self.plugin_name = plugin_name
+        self.temp_dir = temp_dir
 
     # ======= General layer management  ====== #
 
@@ -402,6 +404,45 @@ class ResultsLoader(QObject):
         # Layer creation options for QGIS 3.10.3+
         write_options = QgsVectorFileWriter.SaveVectorOptions()
         write_options.layerOptions = ['fid=id']
+
+        with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb+') as f:
+            f.write(response.readAll().data())
+            f.seek(0)  # rewind the cursor to the start of the file
+            layer = QgsVectorLayer(f.name, '', 'ogr')
+            # writeAsVectorFormat keeps changing with versions so gotta check the version :-(
+            if Qgis.QGIS_VERSION_INT < 31003:
+                print("using v1")
+                error, msg = QgsVectorFileWriter.writeAsVectorFormat(
+                    layer,
+                    output_path,
+                    'utf8',
+                    layerOptions=['fid=id']
+                )
+            elif Qgis.QGIS_VERSION_INT >= 32000:
+                print("using v3")
+                # V3 returns two additional str values but they're not documented, so just discard them
+                error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(
+                    layer,
+                    output_path,
+                    transform,
+                    write_options
+                )
+            else:
+                print("using v2")
+                error, msg = QgsVectorFileWriter.writeAsVectorFormatV2(
+                    layer,
+                    output_path,
+                    transform,
+                    write_options
+                )
+        if error:
+            self.alert(self.tr('Error loading results. Error code: ' + str(error)))
+            return
+        # Load the results into QGIS
+        results_layer = QgsVectorLayer(output_path, processing.name, 'ogr')
+        results_layer.loadNamedStyle(get_style_name(processing.workflow_def, layer))
+
+        """
         with tempfile.NamedTemporaryFile() as f:
             f.write(response.readAll().data())
             f.seek(0)  # rewind the cursor to the start of the file
@@ -423,6 +464,7 @@ class ResultsLoader(QObject):
         # Load the results into QGIS
         results_layer = QgsVectorLayer(output_path, processing.name, 'ogr')
         results_layer.loadNamedStyle(get_style_name(processing.workflow_def, layer))
+        """
         # Add the source raster (COG) if it has been created
         raster_url = processing.raster_layer.get('tileUrl')
         tile_json_url = processing.raster_layer.get("tileJsonUrl")
