@@ -278,7 +278,8 @@ class Mapflow(QObject):
                                                        server=self.server,
                                                        project=self.project,
                                                        settings=self.settings,
-                                                       plugin_name=self.plugin_name
+                                                       plugin_name=self.plugin_name,
+                                                       temp_dir=self.temp_dir
                                                        )
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
