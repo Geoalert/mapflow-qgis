@@ -360,7 +360,7 @@ class Mapflow(QObject):
         aoi_layer.startEditing()
         aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
         self.aoi_layer_counter += 1
-        self.add_layer(aoi_layer)
+        self.result_loader.add_layer(aoi_layer)
         self.add_to_layers(aoi_layer)
         self.iface.setActiveLayer(aoi_layer)
         self.iface.actionAddFeature().trigger()
