@@ -87,16 +87,18 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
     # ===== Settings management ===== #
     def save_view_results_mode(self):
-        self.settings.setValue("viewResultsAsVectorTiles", bool(self.viewAsTiles.isChecked()))
+        if self.viewAsTiles.isChecked():
+            self.settings.setValue("viewResultsMode", "tile")
+        elif self.viewAsLocal.isChecked():
+            self.settings.setValue("viewResultsMode", "file")
 
     def set_state_from_settings(self):
-        if self.settings.value("viewResultsAsVectorTiles", True):
+        viewResultsMode = self.settings.value('viewResultsMode', "tile")
+        if viewResultsMode == "tile":
             self.viewAsTiles.setChecked(True)
-        else:
+        elif viewResultsMode == "file":
             self.viewAsLocal.setChecked(True)
-        self.useAllVectorLayers.setChecked(bool(self.settings.value('useAllVectorLayers', True)))
-        # Save on toggle
-        self.buttonGroup.buttonClicked.connect(self.save_view_results_mode)
+        self.useAllVectorLayers.setChecked(str(self.settings.value('useAllVectorLayers', "true")).lower() == "true")
 
     # connect two spinboxes funcs
     def switch_maxzoom_1(self, value):

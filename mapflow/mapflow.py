@@ -308,7 +308,7 @@ class Mapflow(QObject):
 
     def toggle_all_layers(self, state: bool):
         self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
-        self.settings.setValue('useAllVectorLayers', bool(self.dlg.useAllVectorLayers.isChecked()))
+        self.settings.setValue('useAllVectorLayers', str(self.dlg.useAllVectorLayers.isChecked()))
 
     def refresh_status(self):
         self.http.get(
