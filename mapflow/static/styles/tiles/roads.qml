@@ -1,5 +1,5 @@
 <!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
-<qgis maxScale="0" version="3.28.12-Firenze" styleCategories="AllStyleCategories" minScale="1e+08" hasScaleBasedVisibilityFlag="0">
+<qgis version="3.28.12-Firenze" hasScaleBasedVisibilityFlag="0" minScale="1e+08" styleCategories="AllStyleCategories" maxScale="0">
   <flags>
     <Identifiable>1</Identifiable>
     <Removable>1</Removable>
@@ -11,9 +11,9 @@
   </customproperties>
   <renderer type="basic">
     <styles>
-      <style geometry="2" enabled="1" expression="geometry_type($geometry)='Polygon'" name="" layer="vector_layer" max-zoom="-1" min-zoom="-1">
+      <style max-zoom="-1" layer="vector_layer" min-zoom="-1" name="" geometry="2" enabled="1" expression="geometry_type($geometry)='Polygon'">
         <symbols>
-          <symbol frame_rate="10" type="fill" name="0" alpha="1" is_animated="0" force_rhr="0" clip_to_extent="1">
+          <symbol type="fill" frame_rate="10" alpha="1" name="0" force_rhr="0" clip_to_extent="1" is_animated="0">
             <data_defined_properties>
               <Option type="Map">
                 <Option type="QString" value="" name="name"/>
@@ -21,15 +21,15 @@
                 <Option type="QString" value="collection" name="type"/>
               </Option>
             </data_defined_properties>
-            <layer enabled="1" pass="0" locked="0" class="SimpleFill">
+            <layer class="SimpleFill" locked="0" enabled="1" pass="0">
               <Option type="Map">
                 <Option type="QString" value="3x:0,0,0,0,0,0" name="border_width_map_unit_scale"/>
-                <Option type="QString" value="250,216,40,126" name="color"/>
+                <Option type="QString" value="255,182,71,126" name="color"/>
                 <Option type="QString" value="bevel" name="joinstyle"/>
                 <Option type="QString" value="0,0" name="offset"/>
                 <Option type="QString" value="3x:0,0,0,0,0,0" name="offset_map_unit_scale"/>
                 <Option type="QString" value="MM" name="offset_unit"/>
-                <Option type="QString" value="255,196,82,255" name="outline_color"/>
+                <Option type="QString" value="255,110,35,255" name="outline_color"/>
                 <Option type="QString" value="solid" name="outline_style"/>
                 <Option type="QString" value="0.86" name="outline_width"/>
                 <Option type="QString" value="MM" name="outline_width_unit"/>
@@ -46,9 +46,9 @@
           </symbol>
         </symbols>
       </style>
-      <style geometry="1" enabled="1" expression="geometry_type($geometry)='Line'" name="" layer="" max-zoom="-1" min-zoom="-1">
+      <style max-zoom="-1" layer="" min-zoom="-1" name="" geometry="1" enabled="1" expression="geometry_type($geometry)='Line'">
         <symbols>
-          <symbol frame_rate="10" type="line" name="0" alpha="1" is_animated="0" force_rhr="0" clip_to_extent="1" renderer_should_use_levels="1">
+          <symbol type="line" frame_rate="10" alpha="1" name="0" force_rhr="0" renderer_should_use_levels="1" clip_to_extent="1" is_animated="0">
             <data_defined_properties>
               <Option type="Map">
                 <Option type="QString" value="" name="name"/>
@@ -56,7 +56,7 @@
                 <Option type="QString" value="collection" name="type"/>
               </Option>
             </data_defined_properties>
-            <layer enabled="1" pass="0" locked="1" class="SimpleLine">
+            <layer class="SimpleLine" locked="1" enabled="1" pass="0">
               <Option type="Map">
                 <Option type="QString" value="0" name="align_dash_pattern"/>
                 <Option type="QString" value="round" name="capstyle"/>
@@ -94,7 +94,7 @@
                 </Option>
               </data_defined_properties>
             </layer>
-            <layer enabled="1" pass="0" locked="0" class="SimpleLine">
+            <layer class="SimpleLine" locked="0" enabled="1" pass="0">
               <Option type="Map">
                 <Option type="QString" value="0" name="align_dash_pattern"/>
                 <Option type="QString" value="round" name="capstyle"/>

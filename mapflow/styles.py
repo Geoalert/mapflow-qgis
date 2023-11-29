@@ -40,8 +40,12 @@ def get_tile_style_name(wd_name):
 def get_local_style_name(wd_name, layer):
     name = STYLES.get(wd_name, DEFAULT_STYLE)
     # Buildings classes look bad in legend if there are no classes in layer, so we discard the style in this case
-    if name == "buildings" and "class_id" not in layer.fields().names():
+    if "building" in wd_name.lower() and "height" in wd_name.lower():
+        name = 'building_heights'
+    elif name == "buildings" and "class_id" not in layer.fields().names():
         name = DEFAULT_STYLE
+    elif "building" in wd_name.lower():
+        name = 'buildings'
     # Show forest heights for new (updated) forest with block config
     elif name == "forest" and "class_id" in layer.fields().names():
         name = "forest_with_heights"
