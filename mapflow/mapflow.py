@@ -105,8 +105,6 @@ class Mapflow(QObject):
         self.settings = QgsSettings()
         # Get the server environment to connect to (for admins)
         self.server = self.config.SERVER
-        # By default, plugin adds layers to a group unless user explicitly deletes it
-        self.add_layers_to_group = True
         self.layer_tree_root = self.project.layerTreeRoot()
         # Set up authentication flags
         self.logged_in = False
@@ -134,7 +132,7 @@ class Mapflow(QObject):
             self.settings.setValue('processings', {})
         # Init dialogs
         self.plugin_icon = plugin_icon
-        self.dlg = MainDialog(self.main_window)
+        self.dlg = MainDialog(self.main_window, self.settings)
         self.set_up_login_dialog()
         self.review_dialog = ReviewDialog(self.dlg)
         self.dlg_provider = ProviderDialog(self.dlg)
@@ -181,7 +179,8 @@ class Mapflow(QObject):
         # Connect buttons
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
-        self.dlg.downloadResultsButton.clicked.connect(self.download_results)
+        self.dlg.downloadResultsButton.clicked.connect(self.load_results)
+        self.dlg.saveResultsButton.clicked.connect(self.download_results_file)
         self.dlg.detailsButton.clicked.connect(self.show_details)
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
@@ -196,7 +195,7 @@ class Mapflow(QObject):
         self.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
         self.project.layersAdded.connect(self.set_excepted_layers)
         # Processings
-        self.dlg.processingsTable.cellDoubleClicked.connect(self.download_results)
+        self.dlg.processingsTable.cellDoubleClicked.connect(self.load_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
         # Processings ratings
         self.dlg.processingsTable.itemSelectionChanged.connect(self.enable_feedback)
@@ -226,7 +225,8 @@ class Mapflow(QObject):
         # Maxar
         self.dlg.imageId.textChanged.connect(self.sync_image_id_with_table_and_layer)
         self.dlg.imageId.textChanged.connect(self.update_processing_cost)
-        self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(self.sync_table_selection_with_image_id_and_layer)
+        self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
+            self.sync_table_selection_with_image_id_and_layer)
         self.meta_layer_table_connection = None
         self.dlg.getMetadata.clicked.connect(self.get_metadata)
         self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
@@ -268,10 +268,19 @@ class Mapflow(QObject):
         self.remove_layer_action.setIcon(plugin_icon)
         self.remove_layer_action.triggered.connect(self.remove_from_layers)
         iface.addCustomActionForLayerType(self.remove_layer_action, None, QgsMapLayerType.VectorLayer, False)
-        self.dlg.useAllVectorLayers.setChecked(bool(self.settings.value('useAllVectorLayers', True)))
         self.dlg.useAllVectorLayers.stateChanged.connect(self.toggle_all_layers)
-        self.use_all_layers = self.dlg.useAllVectorLayers.isChecked()
         self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
+
+        # Service init
+        self.result_loader = layer_utils.ResultsLoader(iface=self.iface,
+                                                       maindialog=self.dlg,
+                                                       http=self.http,
+                                                       server=self.server,
+                                                       project=self.project,
+                                                       settings=self.settings,
+                                                       plugin_name=self.plugin_name,
+                                                       temp_dir=self.temp_dir
+                                                       )
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
@@ -281,7 +290,7 @@ class Mapflow(QObject):
     def add_to_layers(self, layer=None):
         if not layer:
             layer = self.iface.layerTreeView().currentLayer()
-        if not layer in self.aoi_layers:
+        if layer not in self.aoi_layers:
             self.aoi_layers.append(layer)
             self.iface.addCustomActionForLayer(self.remove_layer_action, layer)
         self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
@@ -298,8 +307,8 @@ class Mapflow(QObject):
         self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
 
     def toggle_all_layers(self, state: bool):
-        self.use_all_layers = bool(state)
         self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
+        self.settings.setValue('useAllVectorLayers', str(self.dlg.useAllVectorLayers.isChecked()))
 
     def refresh_status(self):
         self.http.get(
@@ -340,7 +349,7 @@ class Mapflow(QObject):
         aoi_layer.updateExtents()
         aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
         self.aoi_layer_counter += 1
-        self.add_layer(aoi_layer)
+        self.result_loader.add_layer(aoi_layer)
         self.add_to_layers(aoi_layer)
         self.iface.setActiveLayer(aoi_layer)
 
@@ -351,7 +360,7 @@ class Mapflow(QObject):
         aoi_layer.startEditing()
         aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
         self.aoi_layer_counter += 1
-        self.add_layer(aoi_layer)
+        self.result_loader.add_layer(aoi_layer)
         self.add_to_layers(aoi_layer)
         self.iface.setActiveLayer(aoi_layer)
         self.iface.actionAddFeature().trigger()
@@ -367,7 +376,7 @@ class Mapflow(QObject):
             aoi_layer = QgsVectorLayer(path, os.path.splitext(os.path.basename(path))[0])
             aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
             if aoi_layer.isValid():
-                self.add_layer(aoi_layer)
+                self.result_loader.add_layer(aoi_layer)
                 self.add_to_layers(aoi_layer)
                 self.iface.setActiveLayer(aoi_layer)
                 self.iface.zoomToActiveLayer()
@@ -397,7 +406,7 @@ class Mapflow(QObject):
         return excluded_layers
 
     def filter_aoi_layers(self):
-        if self.use_all_layers:
+        if self.dlg.useAllVectorLayers.isChecked():
             return []
         return [layer for layer in self.project.mapLayers().values() if layer not in self.aoi_layers]
 
@@ -544,36 +553,6 @@ class Mapflow(QObject):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
         # Save main dialog size & position
         self.settings.setValue('mainDialogState', self.dlg.saveGeometry())
-        self.settings.setValue('useAllVectorLayers', self.use_all_layers)
-
-    def add_layer(self, layer: QgsMapLayer) -> None:
-        """Add layers created by the plugin to the legend.
-
-        By default, layers are added to a group with the same name as the plugin.
-        If the group has been deleted by the user, assume they prefer to not use
-        the group, and add layers to the legend root.
-
-        :param layer: A vector or raster layer to be added.
-        """
-        self.layer_group = self.layer_tree_root.findGroup(self.settings.value('layerGroup'))
-        if self.add_layers_to_group:
-            if not self.layer_group:  # сreate a layer group
-                self.layer_group = self.layer_tree_root.insertGroup(0, self.plugin_name)
-                # A bug fix, - gotta collapse first to be able to expand it
-                # Or else it'll ignore the setExpanded(True) calls
-                self.layer_group.setExpanded(False)
-                self.settings.setValue('layerGroup', self.plugin_name)
-                # If the group has been deleted, assume user wants to add layers to root, memorize it
-                self.layer_group.destroyed.connect(lambda: setattr(self, 'add_layers_to_group', False))
-                # Let user rename the group, memorize the new name
-                self.layer_group.nameChanged.connect(lambda _, name: self.settings.setValue('layerGroup', name))
-            # To be added to group, layer has to be added to project first
-            self.project.addMapLayer(layer, addToLegend=False)
-            # Explcitly add layer to the position 0 or else it adds it to bottom
-            self.layer_group.insertLayer(0, layer)
-            self.layer_group.setExpanded(True)
-        else:  # assume user opted to not use a group, add layers as usual
-            self.project.addMapLayer(layer)
 
     def remove_provider(self) -> None:
         """Delete a web tile provider from the list of registered providers.
@@ -716,8 +695,9 @@ class Mapflow(QObject):
             # We store the results in a temp folder, separate file for each provider
             geoms = self.search_provider.load_search_layer(self.temp_dir)
             if geoms:
-                self.display_metadata_geojson_layer(os.path.join(self.temp_dir, self.search_provider.metadata_layer_name),
-                                                    f"{self.search_provider.name} metadata")
+                self.display_metadata_geojson_layer(
+                    os.path.join(self.temp_dir, self.search_provider.metadata_layer_name),
+                    f"{self.search_provider.name} metadata")
             else:
                 self.clear_metadata()
 
@@ -906,7 +886,8 @@ class Mapflow(QObject):
         self.metadata_layer = QgsVectorLayer(filename, layer_name, 'ogr')
         self.project.addMapLayer(self.metadata_layer)
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
-        self.meta_layer_table_connection = self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
+        self.meta_layer_table_connection = self.metadata_layer.selectionChanged.connect(
+            self.sync_layer_selection_with_table)
         self.search_footprints = {
             feature['id']: feature
             for feature in self.metadata_layer.getFeatures()
@@ -1027,7 +1008,8 @@ class Mapflow(QObject):
             'memory'
         )
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
-        self.meta_layer_table_connection = self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
+        self.meta_layer_table_connection = self.metadata_layer.selectionChanged.connect(
+            self.sync_layer_selection_with_table)
         # Poll processings
         metadata_fetch_timer = QTimer(self.dlg)
         metadata_fetch_timer.setInterval(self.config.SKYWATCH_POLL_INTERVAL * 1000)
@@ -1137,7 +1119,7 @@ class Mapflow(QObject):
         # Add the new features to the displayed metadata layer
         self.metadata_layer.dataProvider().addFeatures(metadata_layer.getFeatures())
         if timer:  # first page
-            self.add_layer(self.metadata_layer)
+            self.result_loader.add_layer(self.metadata_layer)
         current_row_count = self.dlg.metadataTable.rowCount()
         self.dlg.metadataTable.setRowCount(current_row_count + metadata_layer.featureCount())
         self.dlg.metadataTable.setSortingEnabled(False)
@@ -1736,7 +1718,7 @@ class Mapflow(QObject):
                 else:
                     aoi = selected_aoi
                     # We ignore image ID if the provider does not support it
-                    #raise PluginError(self.tr("Selection is not available for  {}").format(provider.name))
+                    # raise PluginError(self.tr("Selection is not available for  {}").format(provider.name))
             elif provider.requires_image_id:
                 raise PluginError(self.tr("Please select image in Search table for {}").format(provider.name))
             else:
@@ -1988,7 +1970,7 @@ class Mapflow(QObject):
             if not layer_provider.sourceHasNoDataValue(band):
                 layer_provider.setNoDataValue(band, 0)
         layer.renderer().setNodataColor(QColor(Qt.transparent))
-        self.add_layer(layer)
+        self.result_loader.add_layer(layer)
 
     def preview_sentinel_error_handler(self,
                                        response: QNetworkReply,
@@ -2157,7 +2139,7 @@ class Mapflow(QObject):
                 extent = self.metadata_extent(image_id)
                 if extent:
                     layer.setExtent(extent)
-            self.add_layer(layer)
+            self.result_loader.add_layer(layer)
         else:
             self.alert(self.tr("We couldn't load a preview for this image"))
 
@@ -2348,16 +2330,41 @@ class Mapflow(QObject):
         else:
             self.enable_rating_submit(processing.status.is_ok)
 
+    # =================== Results management ==================== #
+    def load_results(self):
+        if self.dlg.viewAsTiles.isChecked():
+            self.add_tile_layers()
+        elif self.dlg.viewAsLocal.isChecked():
+            self.download_results()
+
+    def add_tile_layers(self) -> None:
+        """
+        Add raster- and vector- tile layers of the processing results to the project
+        If tilejson is available, the project is zoomed to this layer
+
+        This is the fastest way for bigger processings (streaming tiles rather than downloading full file)
+        but requires stable connection to work with this project
+
+        This will be the only supported way for free users!
+        """
+        processing = self.selected_processing()
+        if not processing:
+            return
+        pid = processing.id_
+        if pid not in self.processing_history.finished:
+            self.alert(self.tr("Only the results of correctly finished processing can be loaded"))
+            return
+        self.result_loader.load_result_tiles(processing=processing)
+
     def download_results(self) -> None:
-        """Download and display processing results along with the source raster, if available.
+        """
+        Download and display processing results along with the source raster, if available.
 
         Results will be downloaded into the user's output directory.
         If it's unset, the user will be prompted to select one.
         Unfinished or failed processings yield partial or no results.
 
         Is called by double-clicking on a row in the processings table.
-
-        :param row: int Row number in the processings table (0-based)
         """
         if not self.check_if_output_directory_is_selected():
             return
@@ -2371,136 +2378,26 @@ class Mapflow(QObject):
         self.dlg.processingsTable.setEnabled(False)
         self.http.get(
             url=f'{self.server}/processings/{pid}/result',
-            callback=self.download_results_callback,
-            callback_kwargs={'pid': pid},
+            callback=self.result_loader.download_results_callback,
+            callback_kwargs={'processing': processing},
             use_default_error_handler=False,
-            error_handler=self.download_results_error_handler,
+            error_handler=self.result_loader.download_results_error_handler,
             timeout=300
         )
 
-    def download_results_callback(self, response: QNetworkReply, pid: str) -> None:
-        """Display processing results upon their successful fetch.
-
-        :param response: The HTTP response.
-        :param pid: ID of the inspected processing.
+    def download_results_file(self) -> None:
         """
-        self.dlg.processingsTable.setEnabled(True)
-        processing = next(filter(lambda p: p.id_ == pid, self.processings))
-        # Avoid overwriting existing files by adding (n) to their names
-        output_path = os.path.join(self.dlg.outputDirectory.text(), processing.id_)
-        extension = '.gpkg'
-        if os.path.exists(output_path + extension):
-            count = 1
-            while os.path.exists(output_path + f'({count})' + extension):
-                count += 1
-            output_path += f'({count})' + extension
-        else:
-            output_path += extension
-        transform = self.project.transformContext()
-        # Layer creation options for QGIS 3.10.3+
-        write_options = QgsVectorFileWriter.SaveVectorOptions()
-        write_options.layerOptions = ['fid=id']
-        with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb+') as f:
-            f.write(response.readAll().data())
-            f.seek(0)  # rewind the cursor to the start of the file
-            layer = QgsVectorLayer(f.name, '', 'ogr')
-            # writeAsVectorFormat keeps changing with versions so gotta check the version :-(
-            if Qgis.QGIS_VERSION_INT < 31003:
-                error, msg = QgsVectorFileWriter.writeAsVectorFormat(
-                    layer,
-                    output_path,
-                    'utf8',
-                    layerOptions=['fid=id']
-                )
-            elif Qgis.QGIS_VERSION_INT >= 32000:
-                # V3 returns two additional str values but they're not documented, so just discard them
-                error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(
-                    layer,
-                    output_path,
-                    transform,
-                    write_options
-                )
-            else:
-                error, msg = QgsVectorFileWriter.writeAsVectorFormatV2(
-                    layer,
-                    output_path,
-                    transform,
-                    write_options
-                )
-        if error:
-            self.alert(self.tr('Error loading results. Error code: ' + str(error)))
+        Download result and save directly to a geojson file
+        It is the most reliable way to get results, applicable if everything else failed
+        """
+        processing = self.selected_processing()
+        if not processing:
             return
-        # Load the results into QGIS
-        results_layer = QgsVectorLayer(output_path, processing.name, 'ogr')
-        results_layer.loadNamedStyle(get_style_name(processing.workflow_def, layer))
-        # Add the source raster (COG) if it has been created
-        raster_url = processing.raster_layer.get('tileUrl')
-        tile_json_url = processing.raster_layer.get("tileJsonUrl")
-        if raster_url:
-            params = {
-                'type': 'xyz',
-                'url': raster_url,
-                'zmin': 0,
-                'zmax': 18,
-                'username': self.username,
-                'password': self.password
-            }
-            raster = QgsRasterLayer(
-                '&'.join(f'{key}={val}' for key, val in params.items()),  # don't URL-encode it
-                processing.name + ' image',
-                'wms'
-            )
-            self.http.get(
-                url=tile_json_url,
-                callback=self.set_raster_extent,
-                callback_kwargs={
-                    'vector': results_layer,
-                    'raster': raster
-                },
-                use_default_error_handler=False,
-                error_handler=self.set_raster_extent_error_handler,
-                error_handler_kwargs={
-                    'vector': results_layer,
-                }
-            )
-        else:
-            self.set_raster_extent_error_handler(response=None, vector=results_layer)
-
-    def download_results_error_handler(self, response: QNetworkReply) -> None:
-        """Error handler for downloading processing results.
-
-        :param response: The HTTP response.
-        """
-        self.dlg.processingsTable.setEnabled(True)
-        self.report_http_error(response,
-                               self.tr('Error downloading results, \n try again later or report error'),
-                               error_message_parser=api_message_parser)
-
-    def set_raster_extent(
-            self,
-            response: QNetworkReply,
-            vector: QgsVectorLayer,
-            raster: QgsRasterLayer
-    ) -> None:
-        """Set processing raster extent upon successfully requesting the processing's AOI.
-
-        :param response: The HTTP response.
-        :param vector: The downloaded feature layer.
-        :param raster: The downloaded raster which was used for processing.
-        """
-        bounding_box = layer_utils.get_bounding_box_from_tile_json(response=response)
-        raster.setExtent(rect=bounding_box)
-        self.add_layer(raster)
-        self.add_layer(vector)
-        self.iface.zoomToActiveLayer()
-
-    def set_raster_extent_error_handler(self,
-                                        response: QNetworkReply,
-                                        vector: Optional[QgsVectorLayer] = None):
-
-        """Error handler for processing AOI requests. If tilejson can't be loaded, we do not add raster layer, and
-        """
-        self.add_layer(vector)
+        pid = processing.id_
+        if pid not in self.processing_history.finished:
+            self.alert(self.tr("Only the results of correctly finished processing can be loaded"))
+            return
+        self.result_loader.download_results_file(pid=pid)
 
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """Display a minimalistic modal dialog with some info or a question.
