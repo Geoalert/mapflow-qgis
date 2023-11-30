@@ -43,7 +43,7 @@ def get_local_style_name(wd_name, layer):
     if "building" in wd_name.lower() and "height" in wd_name.lower():
         name = 'building_heights'
     elif name == "buildings" and "class_id" not in layer.fields().names():
-        name = DEFAULT_STYLE
+        name = "buildings_noclass"
     elif "building" in wd_name.lower():
         name = 'buildings'
     # Show forest heights for new (updated) forest with block config
