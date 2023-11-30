@@ -24,12 +24,12 @@
             <layer pass="0" locked="0" class="SimpleFill" enabled="1">
               <Option type="Map">
                 <Option name="border_width_map_unit_scale" type="QString" value="3x:0,0,0,0,0,0"/>
-                <Option name="color" type="QString" value="250,216,40,126"/>
+                <Option name="color" type="QString" value="255,182,71,108"/>
                 <Option name="joinstyle" type="QString" value="bevel"/>
                 <Option name="offset" type="QString" value="0,0"/>
                 <Option name="offset_map_unit_scale" type="QString" value="3x:0,0,0,0,0,0"/>
                 <Option name="offset_unit" type="QString" value="MM"/>
-                <Option name="outline_color" type="QString" value="255,196,82,255"/>
+                <Option name="outline_color" type="QString" value="255,110,35,255"/>
                 <Option name="outline_style" type="QString" value="solid"/>
                 <Option name="outline_width" type="QString" value="0.86"/>
                 <Option name="outline_width_unit" type="QString" value="MM"/>
