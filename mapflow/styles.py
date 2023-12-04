@@ -42,7 +42,7 @@ def get_local_style_name(wd_name, layer):
     # Buildings classes look bad in legend if there are no classes in layer, so we discard the style in this case
     if "building" in wd_name.lower() and "height" in wd_name.lower():
         name = 'building_heights'
-    elif name == "buildings" and "class_id" not in layer.fields().names():
+    elif "building" in wd_name.lower() and "class_id" not in layer.fields().names():
         name = "buildings_noclass"
     elif "building" in wd_name.lower():
         name = 'buildings'
