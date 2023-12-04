@@ -517,6 +517,10 @@ class Mapflow(QObject):
 
     def set_up_login_dialog(self) -> None:
         """Create a login dialog, set its title and signal-slot connections."""
+        if self.config.USE_OAUTH:
+            self.dlg_login = OauthLoginDialog(self.main_window)
+        else:
+            self.dlg_login = LoginDialog(self.main_window)
         self.dlg_login.setWindowTitle(helpers.generate_plugin_header(self.tr("Log in ") + self.plugin_name,
                                                                      self.config.MAPFLOW_ENV,
                                                                      None))
