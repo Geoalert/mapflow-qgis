@@ -1,3 +1,9 @@
+## 2.4.0
+    - Show processing results via vector tiles link. Experimental feature, may be turned off in "settings".
+    - Add separate "save to file" button to directly download results to .geojson (not adding layer to the project)
+    - Add "Draw polygon" to AOI menu
+    - Minor bug fixes and translation additions
+    - Remove QGIS pre-3.20 version support
 ## 2.3.0
     - Add "Imagery Catalog" to search and preview archive satellite imagert via Mapflow API.
     Requires commercial subscription to process this data.
