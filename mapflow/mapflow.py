@@ -25,6 +25,7 @@ from qgis.core import (
     QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter,
     QgsWkbTypes, QgsPoint, QgsMapLayerType, QgsRectangle
 )
+from qgis.core import QgsApplication, QgsAuthMethodConfig
 
 from .functional import layer_utils, helpers
 from .dialogs import MainDialog, LoginDialog, ErrorMessageWidget, ProviderDialog, ReviewDialog, OauthLoginDialog
@@ -56,7 +57,7 @@ from .schema import (PostSourceSchema,
                      ImageCatalogResponseSchema)
 from .errors import ProcessingInputDataMissing, BadProcessingInput, PluginError, ImageIdRequired, AoiNotIntersectsImage
 from .functional.geometry import clip_aoi_to_image_extent
-from .functional.auth import setup_auth_config, get_auth_id
+from .functional.auth import get_auth_id
 from . import constants
 from .schema.catalog import PreviewType
 
@@ -281,7 +282,6 @@ class Mapflow(QObject):
                                                        plugin_name=self.plugin_name,
                                                        temp_dir=self.temp_dir
                                                        )
-
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
