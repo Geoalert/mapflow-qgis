@@ -41,12 +41,13 @@ class Http(QObject):
         else:
             raise ValueError("One of the auth methods (basic auth / oauth2) must be set, got none")
 
-    def _setup_oauth(self, config_id: int):
+    def _setup_oauth(self, config_id: str):
         self.oauth_id = config_id
         self._oauth = QgsApplication.authManager()
         auth_config = QgsAuthMethodConfig()
         self._oauth.loadAuthenticationConfig(config_id, auth_config)
-        print(f"config ready: {self._oauth}")
+        print(f"config ready: {self._oauth}, {config_id}")
+        print(auth_config.configMap())
 
     @property
     def basic_auth(self):

@@ -56,9 +56,9 @@ from .schema import (PostSourceSchema,
                      ImageCatalogResponseSchema)
 from .errors import ProcessingInputDataMissing, BadProcessingInput, PluginError, ImageIdRequired, AoiNotIntersectsImage
 from .functional.geometry import clip_aoi_to_image_extent
+from .functional.auth import setup_auth_config, get_auth_id
 from . import constants
 from .schema.catalog import PreviewType
-from .styles import get_style_name
 
 
 class Mapflow(QObject):
@@ -281,6 +281,7 @@ class Mapflow(QObject):
                                                        plugin_name=self.plugin_name,
                                                        temp_dir=self.temp_dir
                                                        )
+
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
@@ -2595,18 +2596,24 @@ class Mapflow(QObject):
 
     def read_mapflow_token(self) -> None:
         """Compose and memorize the user's credentils as Basic Auth."""
-        print("cloacked")
-        auth_data = self.dlg_login.token.text().strip()
         if self.config.USE_OAUTH:
-            self.login_oauth(oauth_id=auth_data)
-        elif auth_data:
+            auth_name = self.config.AUTH_CONFIG_NAME
+            auth_id = get_auth_id(auth_name)
+            if not auth_id:
+                self.dlg_login.wrong_token_label.setVisible(True)
+            else:
+                self.dlg_login.wrong_token_label.setVisible(False)
+                self.login_oauth(auth_id)
+        else:
+            auth_data = self.dlg_login.auth_data
+            if not auth_data:
+                return
             # to add paddind for the token len to be multiple of 4
             token = auth_data + "=" * ((4 - len(auth_data) % 4) % 4)
             self.login_basic(token)
 
     def login_oauth(self, oauth_id):
         self.http.setup_auth(oauth_id=oauth_id)
-        print("Sending request!")
         try:
             self.http.get(
                 url=f'{self.config.SERVER}/projects/{self.config.PROJECT_ID}',
@@ -2673,7 +2680,7 @@ class Mapflow(QObject):
                 self.dlg_login.show()
             # Wrong token entered - display a message
             elif not self.dlg_login.findChild(QLabel, self.config.INVALID_TOKEN_WARNING_OBJECT_NAME):
-                invalid_token_label = QLabel(self.tr('Invalid token'), self.dlg_login)
+                invalid_token_label = QLabel(self.tr('Invalid credentials'), self.dlg_login)
                 invalid_token_label.setObjectName(self.config.INVALID_TOKEN_WARNING_OBJECT_NAME)
                 invalid_token_label.setStyleSheet('color: rgb(239, 41, 41);')
                 self.dlg_login.layout().insertWidget(1, invalid_token_label, alignment=Qt.AlignCenter)
@@ -2862,27 +2869,6 @@ class Mapflow(QObject):
     @property
     def basemap_providers(self):
         return ProvidersList(self.default_providers + self.user_providers)
-
-    def get_auth(self):
-        auth = QgsApplication.authManager()
-        configids = auth.configIds()
-        print(configids)
-        id_ = configids[0]
-        print(auth.configAuthMethod(id_))
-        config = QgsAuthMethodConfig()
-        auth.loadAuthenticationConfig(id_, config)
-        print(config.method(), config.name(), config.isValid())
-        http = QgsNetworkAccessManager.instance()
-        request = QNetworkRequest(QUrl("https://mapflow.bftcom.com/rest/user/status"))
-        request.setAttribute(
-            QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.AlwaysNetwork
-        )
-        print(request.url())
-        updated, request = auth.updateNetworkRequest(request, id_)
-        print(f"Sending request: {updated}, {request.url()}")
-        self._reply = http.get(request)
-        self._reply.finished.connect(self.bftreply)
-        http.requestTimedOut.connect(lambda: print("NO rEPLY"))
 
     def tr(self, message: str) -> str:
         """Localize a UI element text.
