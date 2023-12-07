@@ -25,7 +25,6 @@ from qgis.core import (
     QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter,
     QgsWkbTypes, QgsPoint, QgsMapLayerType, QgsRectangle
 )
-from qgis.core import QgsApplication, QgsAuthMethodConfig
 
 from .functional import layer_utils, helpers
 from .dialogs import MainDialog, LoginDialog, ErrorMessageWidget, ProviderDialog, ReviewDialog, OauthLoginDialog
@@ -57,7 +56,7 @@ from .schema import (PostSourceSchema,
                      ImageCatalogResponseSchema)
 from .errors import ProcessingInputDataMissing, BadProcessingInput, PluginError, ImageIdRequired, AoiNotIntersectsImage
 from .functional.geometry import clip_aoi_to_image_extent
-from .functional.auth import get_auth_id
+from .functional.auth import get_auth_id, setup_auth_config
 from . import constants
 from .schema.catalog import PreviewType
 
@@ -95,6 +94,7 @@ class Mapflow(QObject):
         self.dlg_login = None
         self.workflow_defs = {}
         self.aoi_layers = []
+        self.auth_id = None
 
         super().__init__(self.main_window)
         self.project = QgsProject.instance()
@@ -2597,8 +2597,7 @@ class Mapflow(QObject):
     def read_mapflow_token(self) -> None:
         """Compose and memorize the user's credentils as Basic Auth."""
         if self.config.USE_OAUTH:
-            auth_name = self.config.AUTH_CONFIG_NAME
-            auth_id = get_auth_id(auth_name)
+            auth_id = self.auth_id
             if not auth_id:
                 self.dlg_login.wrong_token_label.setVisible(True)
             else:
@@ -2889,6 +2888,13 @@ class Mapflow(QObject):
         if not self.version_ok:
             self.dlg.close()
             return
+
+        self.auth_id, new_auth = get_auth_id(self.config.AUTH_CONFIG_NAME,
+                                           self.config.AUTH_CONFIG_MAP)
+        if new_auth:
+            self.alert(self.tr("We have just set the authentication config for you. \n"
+                               " You may need to restart QGIS to apply it so you could log in"),
+                       icon=QMessageBox.Information)
 
         if self.logged_in:
             # with any auth method

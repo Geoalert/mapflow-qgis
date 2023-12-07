@@ -83,28 +83,7 @@ class Config:
     # OAuth2
     OAUTH2_URL = "https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect"
     AUTH_CONFIG_NAME = f"mapflow_{MAPFLOW_ENV}"
-    AUTH_CONFIG = {
-        "accessMethod": "0",
-        "clientId": "qgis",
-        "clientSecret": "",
-        "configType": "1",
-        "customHeader": "",
-        "description": "",
-        "grantFlow": "1",
-        "name": f"mapflow_{MAPFLOW_ENV}",
-        "objectName": "",
-        "password": "",
-        "persistToken": "false",
-        "redirectPort": "7070",
-        "redirectUrl": "qgis",
-        "refreshTokenUrl": f"{OAUTH2_URL}/token",
-        "requestTimeout": "30",
-        "requestUrl": f"{OAUTH2_URL}/auth",
-        "scope": "",
-        "tokenUrl": f"{OAUTH2_URL}/token",
-        "username": "",
-        "version": "1"
-    }
+    AUTH_CONFIG_MAP = '{"accessMethod":0,"apiKey":"","clientId":"qgis","clientSecret":"","configType":1,"customHeader":"","description":"","grantFlow":1,"id":"","name":"","objectName":"","password":"","persistToken":false,"queryPairs":{},"redirectPort":7070,"redirectUrl":"qgis","refreshTokenUrl":"https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect/token","requestTimeout":30,"requestUrl":"https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect/auth","scope":"","tokenUrl":"https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect/token","username":"","version":1}'
 
 
 config = Config()
