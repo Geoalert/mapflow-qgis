@@ -388,7 +388,7 @@ class Mapflow(QObject):
     def set_excepted_layers(self):
         self.dlg.rasterCombo.setExceptedLayerList(self.filter_bad_rasters())
 
-    def filter_bad_rasters(self, changed_layers: Optional[List[QgsRasterLayer]] = None) -> None:
+    def filter_bad_rasters(self, changed_layers: Optional[List[QgsRasterLayer]] = None) -> List[QgsMapLayer]:
         """Leave only GeoTIFF layers in the Imagery Source combo box."""
         # (!) Instead of going thru all project layers each time
         # it'd be better to filter the new layers, then add them to
@@ -461,7 +461,7 @@ class Mapflow(QObject):
             return
         provider_names = [p.name for p in self.providers]
         self.dlg.set_raster_sources(provider_names=provider_names,
-                                    default_provider_name='Mapbox',
+                                    default_provider_names=['Mapbox', '🌎 Mapbox Satellite'],
                                     excepted_layers=self.filter_bad_rasters())
 
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:

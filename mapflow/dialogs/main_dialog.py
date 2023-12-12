@@ -137,12 +137,13 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
     def set_raster_sources(self,
                            provider_names: List[str],
-                           default_provider_name: str,
+                           default_provider_names: List[str],
                            excepted_layers: List[QgsMapLayer]):
         """
         args:
             provider_names: strings to be added to providers and raster combos
-            default_provider_name: will try to set the current text to this value, if available
+            default_provider_names: will try to set the current text to this value, if available
+                The first of available names is set, so the first is preferable
             excepted_layers: will exclude these layers from rasterCombo (for Sentinel, mainly)
         """
         # Disconnect so that rasterSourceChanged would not be emitted while changing comboBoxes
@@ -153,8 +154,10 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.providerCombo.clear()
         self.providerCombo.addItems(provider_names)
         self.rasterCombo.setExceptedLayerList(excepted_layers)
-        self.rasterCombo.setCurrentText(default_provider_name)
-        self.providerCombo.setCurrentText(default_provider_name)
+        for name in default_provider_names:
+            if name in provider_names:
+                self.rasterCombo.setCurrentText(name)
+                self.providerCombo.setCurrentText(name)
         self.current_raster_source = self.rasterCombo.currentText()
 
         # Now, after all is set, we can unblock the signals and emit a new one
