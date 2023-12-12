@@ -7,7 +7,7 @@ class Config:
     TIMEZONE = time.localtime().tm_zone
     PLUGIN_NAME = 'Mapflow'
     DEFAULT_MODEL = '🏠 Buildings'
-    MAPFLOW_ENV = QgsSettings().value('variables/mapflow_env', "") or'production'
+    MAPFLOW_ENV = QgsSettings().value('variables/mapflow_env', "") or 'production'
     PROJECT_ID = QgsSettings().value("variables/mapflow_project_id", "") or "default"
     SERVER = "https://whitemaps-{env}.mapflow.ai/rest".format(env=MAPFLOW_ENV)
     BILLING_HISTORY_URL = "https://app.mapflow.ai/account/billing-history"
@@ -59,6 +59,7 @@ class Config:
     # MISC
     ENABLE_SENTINEL = (QgsSettings().value('variables/mapflow_enable_sentinel', "false").lower() == "true")
     SHOW_RAW_ERROR = (QgsSettings().value("variables/mapflow_raw_error", "false").lower() == "true")
+    USE_OAUTH = (QgsSettings().value("variables/mapflow_use_oauth", "false").lower() == "true")
     SKYWATCH_METADATA_MAX_AREA = 1e11  # 100,000 sq.km
     SKYWATCH_METADATA_MAX_SIDE_LENGTH = 1e6  # 1,000 km
     INVALID_TOKEN_WARNING_OBJECT_NAME = 'invalidToken'
@@ -75,9 +76,14 @@ class Config:
     USER_STATUS_UPDATE_INTERVAL = 30  # seconds
 
     MAX_FILE_SIZE_PIXELS = 30_000
-    MAX_FILE_SIZE_BYTES = 1024**3
+    MAX_FILE_SIZE_BYTES = 2*(1024**3)
 
     MAX_AOIS_PER_PROCESSING = int(QgsSettings().value("variables/mapflow_max_aois", "10"))
+
+    # OAuth2
+    OAUTH2_URL = "https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect"
+    AUTH_CONFIG_NAME = f"mapflow_{MAPFLOW_ENV}"
+    AUTH_CONFIG_MAP = '{"accessMethod":0,"apiKey":"","clientId":"qgis","clientSecret":"","configType":1,"customHeader":"","description":"","grantFlow":1,"id":"","name":"","objectName":"","password":"","persistToken":false,"queryPairs":{},"redirectPort":7070,"redirectUrl":"qgis","refreshTokenUrl":"https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect/token","requestTimeout":30,"requestUrl":"https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect/auth","scope":"","tokenUrl":"https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect/token","username":"","version":1}'
 
 
 config = Config()

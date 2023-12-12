@@ -8,14 +8,6 @@ from .icons import plugin_icon
 ui_path = Path(__file__).parent/'static'/'ui'
 
 
-class LoginDialog(*uic.loadUiType(ui_path/'login_dialog.ui')):
-    def __init__(self, parent: QWidget) -> None:
-        """Auth dialog."""
-        super().__init__(parent)
-        self.setupUi(self)
-        self.setWindowIcon(plugin_icon)
-
-
 class ErrorMessageWidget(*uic.loadUiType(ui_path / 'error_message.ui')):
     def __init__(self, parent: QWidget, text: str, title: str = None, email_body: str = '') -> None:
         """A message box notifying user about a plugin error, with a 'Send a report' button."""
