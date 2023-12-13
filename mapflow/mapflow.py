@@ -1486,9 +1486,16 @@ class Mapflow(QObject):
                                     use_image_extent_as_aoi=use_image_extent_as_aoi,
                                     selected_image=selected_image,
                                     selected_aoi=self.aoi)
-            self.aoi_size = layer_utils.calculate_aoi_area(real_aoi, self.project.transformContext())
+        except ImageIdRequired:
+            # AOI is OK, but image ID is not selected,
+            # in this case we should use selected AOI without cut by AOI
+            real_aoi = self.aoi
         except Exception as e:
             # Could not calculate AOI size
+            real_aoi = QgsGeometry()
+        try:
+            self.aoi_size = layer_utils.calculate_aoi_area(real_aoi, self.project.transformContext())
+        except Exception as e:
             self.aoi_size = 0
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
         self.update_processing_cost()
@@ -1714,19 +1721,18 @@ class Mapflow(QObject):
             if not provider:
                 raise PluginError(self.tr('Providers are not initialized'))
             if selected_image:
-                if isinstance(provider, MaxarProvider):
+                if isinstance(provider, (MaxarProvider, ImagerySearchProvider)):
                     aoi = self.crop_aoi_with_maxar_image_footprint(selected_aoi, selected_image)
                 elif isinstance(provider, SentinelProvider):
                     # todo: crop sentinel aoi with image footprint?
                     aoi = selected_aoi
-                elif isinstance(provider, ImagerySearchProvider):
-                    aoi = self.crop_aoi_with_maxar_image_footprint(selected_aoi, selected_image)
                 else:
                     aoi = selected_aoi
                     # We ignore image ID if the provider does not support it
                     # raise PluginError(self.tr("Selection is not available for  {}").format(provider.name))
             elif provider.requires_image_id:
-                raise PluginError(self.tr("Please select image in Search table for {}").format(provider.name))
+                aoi = selected_aoi
+                # raise PluginError(self.tr("Please select image in Search table for {}").format(provider.name))
             else:
                 aoi = selected_aoi
         return aoi
@@ -1772,7 +1778,8 @@ class Mapflow(QObject):
         except AoiNotIntersectsImage:
             return None, self.tr("Selected AOI does not intestect the selected image")
         except ImageIdRequired:
-            return None, self.tr("This provider requires image ID!")
+            return None, self.tr("This provider requires image ID. Use search tab to find imagery for you requirements, "
+                                 "and select image in the table.")
         except PluginError as e:
             return None, str(e)
         processing_params = PostProcessingSchema(
