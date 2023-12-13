@@ -388,7 +388,7 @@ class Mapflow(QObject):
     def set_excepted_layers(self):
         self.dlg.rasterCombo.setExceptedLayerList(self.filter_bad_rasters())
 
-    def filter_bad_rasters(self, changed_layers: Optional[List[QgsRasterLayer]] = None) -> None:
+    def filter_bad_rasters(self, changed_layers: Optional[List[QgsRasterLayer]] = None) -> List[QgsMapLayer]:
         """Leave only GeoTIFF layers in the Imagery Source combo box."""
         # (!) Instead of going thru all project layers each time
         # it'd be better to filter the new layers, then add them to
@@ -461,7 +461,7 @@ class Mapflow(QObject):
             return
         provider_names = [p.name for p in self.providers]
         self.dlg.set_raster_sources(provider_names=provider_names,
-                                    default_provider_name='Mapbox',
+                                    default_provider_names=['Mapbox', '🌎 Mapbox Satellite'],
                                     excepted_layers=self.filter_bad_rasters())
 
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
@@ -2889,12 +2889,6 @@ class Mapflow(QObject):
             self.dlg.close()
             return
 
-        self.auth_id, new_auth = get_auth_id(self.config.AUTH_CONFIG_NAME,
-                                           self.config.AUTH_CONFIG_MAP)
-        if new_auth:
-            self.alert(self.tr("We have just set the authentication config for you. \n"
-                               " You may need to restart QGIS to apply it so you could log in"),
-                       icon=QMessageBox.Information)
 
         if self.logged_in:
             # with any auth method
@@ -2904,16 +2898,19 @@ class Mapflow(QObject):
             self.user_status_update_timer.start()
             return
 
+        self.set_up_login_dialog()
         if self.config.USE_OAUTH:
-            self.dlg_login = OauthLoginDialog(self.main_window)
-            self.set_up_login_dialog()
+            self.auth_id, new_auth = get_auth_id(self.config.AUTH_CONFIG_NAME,
+                                                 self.config.AUTH_CONFIG_MAP)
+            if new_auth:
+                self.alert(self.tr("We have just set the authentication config for you. \n"
+                                   " You may need to restart QGIS to apply it so you could log in"),
+                           icon=QMessageBox.Information)
             self.dlg_login.show()
         else:
-            self.dlg_login = LoginDialog(self.main_window)
             token = self.settings.value('token')
             if token:  # token saved
                 self.login_basic(token)
             else:
-                self.set_up_login_dialog()
                 self.dlg_login.show()
 
