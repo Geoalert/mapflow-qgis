@@ -56,7 +56,7 @@ from .schema import (PostSourceSchema,
                      ImageCatalogResponseSchema)
 from .errors import ProcessingInputDataMissing, BadProcessingInput, PluginError, ImageIdRequired, AoiNotIntersectsImage
 from .functional.geometry import clip_aoi_to_image_extent
-from .functional.auth import get_auth_id, setup_auth_config
+from .functional.auth import get_auth_id
 from . import constants
 from .schema.catalog import PreviewType
 
