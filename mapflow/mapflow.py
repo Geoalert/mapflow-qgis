@@ -93,7 +93,6 @@ class Mapflow(QObject):
         self.main_window = self.iface.mainWindow()
         self.workflow_defs = {}
         self.aoi_layers = []
-        self.auth_id = None
 
         super().__init__(self.main_window)
         self.project = QgsProject.instance()
@@ -518,7 +517,7 @@ class Mapflow(QObject):
 
     def set_up_login_dialog(self) -> MapflowLoginDialog:
         """Create a login dialog, set its title and signal-slot connections."""
-        dlg_login = MapflowLoginDialog(self.main_window, self.use_oauth)
+        dlg_login = MapflowLoginDialog(self.main_window, self.use_oauth, self.settings.value("token", ""))
         dlg_login.setWindowTitle(helpers.generate_plugin_header(self.tr("Log in ") + self.plugin_name,
                                                                      self.config.MAPFLOW_ENV,
                                                                      None))
@@ -529,7 +528,7 @@ class Mapflow(QObject):
     def set_auth_type(self, use_oauth: bool = False):
         self.use_oauth = use_oauth
         self.settings.setValue("use_oauth", str(use_oauth).lower())
-        self.dlg_login.set_auth_type(use_oauth=use_oauth)
+        self.dlg_login.set_auth_type(use_oauth=use_oauth, token = self.settings.value('token', ""))
 
     def toggle_polygon_combos(self, use_image_extent: bool) -> None:
         """Disable polygon combos when Use image extent is checked.
@@ -2608,7 +2607,13 @@ class Mapflow(QObject):
     def read_mapflow_token(self) -> None:
         """Compose and memorize the user's credentils as Basic Auth."""
         if self.use_oauth:
-            auth_id = self.auth_id
+            auth_id, new_auth = get_auth_id(self.config.AUTH_CONFIG_NAME,
+                                             self.config.AUTH_CONFIG_MAP)
+            if new_auth:
+                self.alert(self.tr("We have just set the authentication config for you. \n"
+                                       " You may need to restart QGIS to apply it so you could log in"),
+                           icon=QMessageBox.Information)
+
             if not auth_id:
                 self.dlg_login.invalidToken.setVisible(True)
             else:
@@ -2641,6 +2646,7 @@ class Mapflow(QObject):
     def login_basic(self, token) -> None:
         """Log into Mapflow."""
         # save new token to settings immediately to overwrite old one, if any
+        print(f"setting token {token}")
         self.settings.setValue('token', token)
         # keep login/password from token
         try:
@@ -2909,19 +2915,9 @@ class Mapflow(QObject):
             self.user_status_update_timer.start()
             return
 
-        # self.dlg_login = self.set_up_login_dialog()
-        self.auth_id, new_auth = get_auth_id(self.config.AUTH_CONFIG_NAME,
-                                             self.config.AUTH_CONFIG_MAP)
-
-        if self.use_oauth:
-            if new_auth:
-                self.alert(self.tr("We have just set the authentication config for you. \n"
-                                       " You may need to restart QGIS to apply it so you could log in"),
-                           icon=QMessageBox.Information)
-            self.dlg_login.show()
+        token = self.settings.value('token')
+        if not self.use_oauth and token:
+            # Saved token for basic auth
+            self.login_basic(token)
         else:
-            token = self.settings.value('token')
-            if token:  # token saved
-                self.login_basic(token)
-            else:
-                self.dlg_login.show()
+            self.dlg_login.show()

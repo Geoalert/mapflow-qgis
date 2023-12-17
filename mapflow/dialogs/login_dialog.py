@@ -9,13 +9,13 @@ ui_path = Path(__file__).parent/'static'/'ui'
 
 
 class MapflowLoginDialog(*uic.loadUiType(ui_path / 'login_dialog.ui')):
-    def __init__(self, parent: QWidget, use_oauth: bool = False) -> None:
+    def __init__(self, parent: QWidget, use_oauth: bool = False, token: str = "") -> None:
         """Auth dialog."""
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(plugin_icon)
         self.use_oauth = use_oauth
-        self.set_auth_type(self.use_oauth)
+        self.set_auth_type(self.use_oauth, token)
         self.invalidToken.setVisible(False)
         self.useOauth.setChecked(use_oauth)
 
@@ -25,7 +25,8 @@ class MapflowLoginDialog(*uic.loadUiType(ui_path / 'login_dialog.ui')):
         else:
             return None
 
-    def set_auth_type(self, use_oauth: bool = False):
+    def set_auth_type(self, use_oauth: bool = False, token: str = ""):
+        print(f"{token = }")
         self.use_oauth = use_oauth
         self.invalidToken.setVisible(False)
         if use_oauth:
@@ -35,6 +36,7 @@ class MapflowLoginDialog(*uic.loadUiType(ui_path / 'login_dialog.ui')):
             self.needAnAccount.setText('<html><head/><body><p><a href="https://app.mapflow.ai/account/api"><span style=" text-decoration: underline; color:#0057ae;">Get token</span></a></p><p><a href="https://mapflow.ai/terms-of-use-en.pdf"><span style=" text-decoration: underline; color:#0057ae;">Terms of use</span></a></p><p>Register at <a href="https://mapflow.ai"><span style=" text-decoration: underline; color:#0057ae;">mapflow.ai</span></a> to use the plugin</p><p><br/></p></body></html>')
             self.invalidToken.setText('Invalid credentials')
             self.invalidToken.setStyleSheet('color: rgb(239, 41, 41);')
+        self.token.setText(token)
         self.token.setVisible(not use_oauth)
         self.labelPassword.setVisible(not use_oauth)
 
