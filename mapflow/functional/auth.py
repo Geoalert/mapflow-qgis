@@ -20,7 +20,7 @@ def setup_auth_config(auth_config_name, auth_config_map):
     config.setMethod("OAuth2")
     config.setConfig('oauth2config', auth_config_map)
     if config.isValid():
-        res, new_config = auth_manager.storeAuthenticationConfig(config)
+        auth_manager.storeAuthenticationConfig(config)
         config_id = config.id()
         new_config = QgsAuthMethodConfig()
         auth_manager.loadAuthenticationConfig(config_id, new_config, full=True)

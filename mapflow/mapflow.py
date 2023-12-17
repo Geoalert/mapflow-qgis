@@ -27,7 +27,7 @@ from qgis.core import (
 )
 
 from .functional import layer_utils, helpers
-from .dialogs import MainDialog, LoginDialog, ErrorMessageWidget, ProviderDialog, ReviewDialog, OauthLoginDialog
+from .dialogs import MainDialog, MapflowLoginDialog, ErrorMessageWidget, ProviderDialog, ReviewDialog
 from .dialogs.icons import plugin_icon
 
 from .http import (Http,
@@ -91,7 +91,6 @@ class Mapflow(QObject):
         # Save refs to key variables used throughout the plugin
         self.iface = iface
         self.main_window = self.iface.mainWindow()
-        self.dlg_login = None
         self.workflow_defs = {}
         self.aoi_layers = []
         self.auth_id = None
@@ -132,9 +131,10 @@ class Mapflow(QObject):
         if self.settings.value('processings') is None:
             self.settings.setValue('processings', {})
         # Init dialogs
+        self.use_oauth = (self.settings.value('use_oauth', 'false').lower() == 'true')
         self.plugin_icon = plugin_icon
         self.dlg = MainDialog(self.main_window, self.settings)
-        self.set_up_login_dialog()
+        self.dlg_login = self.set_up_login_dialog()
         self.review_dialog = ReviewDialog(self.dlg)
         self.dlg_provider = ProviderDialog(self.dlg)
         self.dlg_provider.accepted.connect(self.edit_provider_callback)
@@ -516,16 +516,20 @@ class Mapflow(QObject):
                 is_unfit = is_unfit or cloud_cover > max_cloud_cover
             self.dlg.metadataTable.setRowHidden(row, is_unfit)
 
-    def set_up_login_dialog(self) -> None:
+    def set_up_login_dialog(self) -> MapflowLoginDialog:
         """Create a login dialog, set its title and signal-slot connections."""
-        if self.config.USE_OAUTH:
-            self.dlg_login = OauthLoginDialog(self.main_window)
-        else:
-            self.dlg_login = LoginDialog(self.main_window)
-        self.dlg_login.setWindowTitle(helpers.generate_plugin_header(self.tr("Log in ") + self.plugin_name,
+        dlg_login = MapflowLoginDialog(self.main_window, self.use_oauth)
+        dlg_login.setWindowTitle(helpers.generate_plugin_header(self.tr("Log in ") + self.plugin_name,
                                                                      self.config.MAPFLOW_ENV,
                                                                      None))
-        self.dlg_login.logIn.clicked.connect(self.read_mapflow_token)
+        dlg_login.logIn.clicked.connect(self.read_mapflow_token)
+        dlg_login.useOauth.toggled.connect(self.set_auth_type)
+        return dlg_login
+
+    def set_auth_type(self, use_oauth: bool = False):
+        self.use_oauth = use_oauth
+        self.settings.setValue("use_oauth", str(use_oauth).lower())
+        self.dlg_login.set_auth_type(use_oauth=use_oauth)
 
     def toggle_polygon_combos(self, use_image_extent: bool) -> None:
         """Disable polygon combos when Use image extent is checked.
@@ -2603,15 +2607,15 @@ class Mapflow(QObject):
 
     def read_mapflow_token(self) -> None:
         """Compose and memorize the user's credentils as Basic Auth."""
-        if self.config.USE_OAUTH:
+        if self.use_oauth:
             auth_id = self.auth_id
             if not auth_id:
-                self.dlg_login.wrong_token_label.setVisible(True)
+                self.dlg_login.invalidToken.setVisible(True)
             else:
-                self.dlg_login.wrong_token_label.setVisible(False)
+                self.dlg_login.invalidToken.setVisible(False)
                 self.login_oauth(auth_id)
         else:
-            auth_data = self.dlg_login.auth_data
+            auth_data = self.dlg_login.token_value()
             if not auth_data:
                 return
             # to add paddind for the token len to be multiple of 4
@@ -2627,7 +2631,12 @@ class Mapflow(QObject):
                 use_default_error_handler=True
             )
         except Exception as e:
-            self.alert(f"Error while trying to send authorization request: {e}")
+            self.alert(f"Error while trying to send authorization request: {e}."
+                       f"It is possible that your auth config is corrupted. "
+                       f"Remove auth config named {self.config.AUTH_CONFIG_NAME} and restart QGis"
+                       f"for the plugin to recreate it. "
+                       f"If it does not help, contact us",
+                       icon=QMessageBox.Warning)
 
     def login_basic(self, token) -> None:
         """Log into Mapflow."""
@@ -2643,6 +2652,7 @@ class Mapflow(QObject):
                                'Visit "<a href=\"https://app.mapflow.ai/account/api\">mapflow.ai</a>" '
                                'to get a new one'),
                        icon=QMessageBox.Warning)
+            self.dlg_login.invalidToken.setVisible(True)
             return
         self.http.setup_auth(basic_auth_token=f'Basic {token}')
         self.http.get(
@@ -2659,7 +2669,7 @@ class Mapflow(QObject):
         self.user_status_update_timer.stop()
         self.logged_in = False
         self.dlg.close()
-        self.set_up_login_dialog()  # recreate the login dialog
+        # self.dlg_login = self.set_up_login_dialog()  # recreate the login dialog
         self.dlg_login.show()  # assume user wants to log into another account
 
     def default_error_handler(self,
@@ -2684,15 +2694,8 @@ class Mapflow(QObject):
                                    'to get a new one'),
                            icon=QMessageBox.Warning)
                 self.dlg_login.show()
-            # Wrong token entered - display a message
-            elif not self.dlg_login.findChild(QLabel, self.config.INVALID_TOKEN_WARNING_OBJECT_NAME):
-                invalid_token_label = QLabel(self.tr('Invalid credentials'), self.dlg_login)
-                invalid_token_label.setObjectName(self.config.INVALID_TOKEN_WARNING_OBJECT_NAME)
-                invalid_token_label.setStyleSheet('color: rgb(239, 41, 41);')
-                self.dlg_login.layout().insertWidget(1, invalid_token_label, alignment=Qt.AlignCenter)
-                new_size = self.dlg_login.width(), self.dlg_login.height() + invalid_token_label.height()
-                self.dlg_login.setMaximumSize(*new_size)
-                self.dlg_login.setMinimumSize(*new_size)
+
+            self.dlg_login.invalidToken.setVisible(True)
             return True
         elif error in (
                 QNetworkReply.OperationCanceledError,  # timeout
@@ -2768,6 +2771,7 @@ class Mapflow(QObject):
         :param response: The HTTP response.
         """
         # Show history of processings at startup to get non-empty table immediately, and setup the table update
+        self.dlg_login.invalidToken.setVisible(False)
         self.setup_processings_table()
         # Set up the UI with the received data
         response = json.loads(response.readAll().data())
@@ -2905,13 +2909,14 @@ class Mapflow(QObject):
             self.user_status_update_timer.start()
             return
 
-        self.set_up_login_dialog()
-        if self.config.USE_OAUTH:
-            self.auth_id, new_auth = get_auth_id(self.config.AUTH_CONFIG_NAME,
-                                                 self.config.AUTH_CONFIG_MAP)
+        # self.dlg_login = self.set_up_login_dialog()
+        self.auth_id, new_auth = get_auth_id(self.config.AUTH_CONFIG_NAME,
+                                             self.config.AUTH_CONFIG_MAP)
+
+        if self.use_oauth:
             if new_auth:
                 self.alert(self.tr("We have just set the authentication config for you. \n"
-                                   " You may need to restart QGIS to apply it so you could log in"),
+                                       " You may need to restart QGIS to apply it so you could log in"),
                            icon=QMessageBox.Information)
             self.dlg_login.show()
         else:
@@ -2920,4 +2925,3 @@ class Mapflow(QObject):
                 self.login_basic(token)
             else:
                 self.dlg_login.show()
-
