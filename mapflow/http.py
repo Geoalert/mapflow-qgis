@@ -30,7 +30,6 @@ class Http(QObject):
                    basic_auth_token: Optional[str] = None,
                    oauth_id: Optional[int] = None):
         if oauth_id:
-            print("Setting up oauth")
             if basic_auth_token is not None:
                 raise ValueError("Only one auth method (basic auth / oauth2) may be set, got both")
             self._setup_oauth(oauth_id)
@@ -46,8 +45,6 @@ class Http(QObject):
         self._oauth = QgsApplication.authManager()
         auth_config = QgsAuthMethodConfig()
         self._oauth.loadAuthenticationConfig(config_id, auth_config)
-        print(f"config ready: {self._oauth}, {config_id}")
-        print(auth_config.configMap())
 
     @property
     def basic_auth(self):
@@ -129,10 +126,7 @@ class Http(QObject):
             for key, value in headers.items():
                 request.setRawHeader(key.encode(), value.encode())
         request.setRawHeader(b'x-plugin-version', self.plugin_version.encode())
-        try:
-            request = self.authorize(request, auth)
-        except Exception as e:
-            print("Authorization failed!")
+        request = self.authorize(request, auth)
         response = method(request, body) if (method == self.nam.post or method == self.nam.put) else method(request)
 
         response.finished.connect(lambda response=response,
