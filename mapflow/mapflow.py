@@ -846,8 +846,8 @@ class Mapflow(QObject):
 
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
-        provider = self.providers[self.dlg.providerIndex()]
-        provider.clear_saved_search(self.temp_dir)
+        #provider = self.providers[self.dlg.providerIndex()]
+        self.search_provider.clear_saved_search(self.temp_dir)
 
     def request_mapflow_metadata(self,
                                  aoi: QgsGeometry,
