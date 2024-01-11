@@ -8,7 +8,6 @@ class Config:
     PLUGIN_NAME = 'Mapflow'
     DEFAULT_MODEL = '🏠 Buildings'
     MAPFLOW_ENV = QgsSettings().value('variables/mapflow_env', "") or 'production'
-    PROJECT_ID = QgsSettings().value("variables/mapflow_project_id", "") or "default"
     SERVER = "https://whitemaps-{env}.mapflow.ai/rest".format(env=MAPFLOW_ENV)
     BILLING_HISTORY_URL = "https://app.mapflow.ai/account/billing-history"
     TOP_UP_URL = "https://app.mapflow.ai/account/balance"

@@ -1786,6 +1786,9 @@
                  </property>
                 </spacer>
                </item>
+               <item>
+                <widget class="QComboBox" name="projectsCombo"/>
+               </item>
               </layout>
              </item>
             </layout>
