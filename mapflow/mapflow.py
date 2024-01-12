@@ -582,7 +582,7 @@ class Mapflow(QObject):
         current_project = self.projects[currentIndex]
         self.project_id = current_project.id
         self.settings.setValue("project_id", self.project_id)
-        self.setup_workflow_defs(current_project.workflow_defs)
+        self.setup_workflow_defs(current_project.workflowDefs)
         # Manually toggle function to avoid race condition
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
         self.setup_processings_table()
