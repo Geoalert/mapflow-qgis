@@ -397,5 +397,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.metadataTable.setSortingEnabled(True)
 
     def setup_project_combo(self, projects: List[MapflowProject], current_position: int):
+        self.projectsCombo.clear()
         self.projectsCombo.addItems([pr.name for pr in projects])
         self.projectsCombo.setCurrentIndex(current_position)

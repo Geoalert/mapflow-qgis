@@ -94,7 +94,7 @@ class Mapflow(QObject):
         self.main_window = self.iface.mainWindow()
         self.workflow_defs = {}
         self.aoi_layers = []
-
+        self.project_connection = None
         super().__init__(self.main_window)
         self.project = QgsProject.instance()
         self.message_bar = self.iface.messageBar()
@@ -2699,6 +2699,8 @@ class Mapflow(QObject):
 
     def logout(self) -> None:
         """Close the plugin and clear credentials from cache."""
+        # disconnect what was connected on login
+        self.dlg.projectsCombo.currentIndexChanged.disconnect(self.project_connection)
         # set token to empty to delete it from settings
         self.settings.setValue('token', '')
         self.processing_fetch_timer.stop()
@@ -2840,8 +2842,9 @@ class Mapflow(QObject):
         current_index = self.find_project(self.projects, self.project_id)
         self.dlg.setup_project_combo(self.projects, current_index)
         self.on_project_change(current_index)
-        self.dlg.projectsCombo.currentIndexChanged.connect(self.on_project_change)
+        self.project_connection = self.dlg.projectsCombo.currentIndexChanged.connect(self.on_project_change)
         # User info is stored inside (any) user's project - will change it in the future API versions
+        # todo: for admin - use his project, not any project!
         userinfo = response[0]['user']
         self.update_processing_limit()
         self.is_premium_user = userinfo['isPremium']
