@@ -7,11 +7,11 @@ from .workflow_def import WorkflowDef
 class MapflowProject(SkipDataClass):
     id: str
     name: str
-    workflow_defs: Optional[List[dict]] = None
+    workflowDefs: Optional[List[dict]] = None
 
     def __post_init__(self):
-        if self.workflow_defs:
-            self.workflow_defs = [WorkflowDef.from_dict(item) for item in self.workflow_defs]
+        if self.workflowDefs:
+            self.workflowDefs = [WorkflowDef.from_dict(item) for item in self.workflowDefs]
         else:
-            self.workflow_defs = []
+            self.workflowDefs = []
 

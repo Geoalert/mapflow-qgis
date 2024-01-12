@@ -81,6 +81,7 @@ class Mapflow(QObject):
         self.metadata_layer = None
         self.search_provider = None
         self.is_premium_user = False
+        self.is_admin = False
         self.aoi_area_limit = 0.0
         self.username = self.password = ''
         self.version_ok = True
@@ -567,19 +568,22 @@ class Mapflow(QObject):
         else:
             self.calculate_aoi_area_polygon_layer(polygon_layer)
 
-    def on_project_change(self, currentIndex):
-        current_project = self.projects[currentIndex]
-        self.project_id = current_project.id
-        self.settings.setValue("project_id", self.project_id)
-        self.workflow_defs = {wd.name: wd for wd in current_project.workflow_defs}
+    def setup_workflow_defs(self, workflow_defs: List[WorkflowDef]):
+        self.workflow_defs = {wd.name: wd for wd in workflow_defs}
         self.dlg.modelCombo.clear()
         # We skip SENTINEL WDs if sentinel is not enabled (normally, it should be not)
         # wds along with ids in the format: {'model_name': 'workflow_def_id'}
         self.dlg.modelCombo.addItems(name for name in self.workflow_defs
                                      if self.config.ENABLE_SENTINEL or self.config.SENTINEL_WD_NAME_PATTERN not in name)
         self.dlg.modelCombo.setCurrentText(self.config.DEFAULT_MODEL)
-        # Manually toggle function to avoid race condition
         self.on_model_change()
+
+    def on_project_change(self, currentIndex):
+        current_project = self.projects[currentIndex]
+        self.project_id = current_project.id
+        self.settings.setValue("project_id", self.project_id)
+        self.setup_workflow_defs(current_project.workflow_defs)
+        # Manually toggle function to avoid race condition
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
         self.setup_processings_table()
 
@@ -2662,7 +2666,7 @@ class Mapflow(QObject):
         self.http.setup_auth(oauth_id=oauth_id)
         try:
             self.http.get(
-                url=f'{self.config.SERVER}/projects',
+                url=f'{self.config.SERVER}/projects/default',
                 callback=self.log_in_callback,
                 use_default_error_handler=True
             )
@@ -2692,7 +2696,7 @@ class Mapflow(QObject):
             return
         self.http.setup_auth(basic_auth_token=f'Basic {token}')
         self.http.get(
-            url=f'{self.config.SERVER}/projects',
+            url=f'{self.config.SERVER}/projects/default',
             callback=self.log_in_callback,
             use_default_error_handler=True
         )
@@ -2826,12 +2830,44 @@ class Mapflow(QObject):
 
     def log_in_callback(self, response: QNetworkReply) -> None:
         """Fetch user info, models and processings.
-
         :param response: The HTTP response.
         """
         # Show history of processings at startup to get non-empty table immediately, and setup the table update
         self.dlg_login.invalidToken.setVisible(False)
         # Set up the UI with the received data
+        response = json.loads(response.readAll().data())
+        # User info is stored inside user's Default project - will change it in the future API versions
+        userinfo = response['user']
+        default_project = MapflowProject.from_dict(response)
+
+        self.update_processing_limit()
+        self.is_premium_user = userinfo['isPremium']
+        self.aoi_area_limit = userinfo['aoiAreaLimit'] * 1e-6
+        # We have different behavior for admin as he has access to all processings
+        self.is_admin = userinfo.get("role") == "ADMIN"
+
+        self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
+        # Authenticate and keep user logged in
+        self.logged_in = True
+        self.dlg_login.close()
+
+        # Get all projects & setup processings table (see callback)
+        if self.is_admin:
+            self.project_id = Config.PROJECT_ID
+            self.setup_workflow_defs(default_project.workflowDefs)
+            self.setup_processings_table()
+        else:
+            self.http.get(
+                url=f'{self.config.SERVER}/projects',
+                callback=self.get_projects_callback,
+                use_default_error_handler=True
+            )
+        self.dlg.setup_for_billing(self.billing_type)
+        self.dlg.show()
+        self.user_status_update_timer.start()
+        self.app_startup_user_update_timer.start()
+
+    def get_projects_callback(self, response: QNetworkReply):
         response = json.loads(response.readAll().data())
         # Projects are set up once at login and stored in the plugin
         self.projects = [MapflowProject.from_dict(project) for project in response]
@@ -2843,22 +2879,7 @@ class Mapflow(QObject):
         self.dlg.setup_project_combo(self.projects, current_index)
         self.on_project_change(current_index)
         self.project_connection = self.dlg.projectsCombo.currentIndexChanged.connect(self.on_project_change)
-        # User info is stored inside (any) user's project - will change it in the future API versions
-        # todo: for admin - use his project, not any project!
-        userinfo = response[0]['user']
-        self.update_processing_limit()
-        self.is_premium_user = userinfo['isPremium']
-        self.aoi_area_limit = userinfo['aoiAreaLimit'] * 1e-6
 
-        self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
-        # Authenticate and keep user logged in
-        self.logged_in = True
-        self.dlg_login.close()
-
-        self.dlg.setup_for_billing(self.billing_type)
-        self.dlg.show()
-        self.user_status_update_timer.start()
-        self.app_startup_user_update_timer.start()
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
         """Inspect the plugin version backend expects and show a warning if it is incompatible w/ the plugin.
