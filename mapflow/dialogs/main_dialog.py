@@ -11,6 +11,7 @@ from qgis.core import QgsMapLayerProxyModel, QgsMapLayer, QgsSettings
 
 from ..entity.billing import BillingType
 from ..entity.provider import ProviderInterface
+from ..entity.project import MapflowProject
 from ..functional import helpers
 from ..config import config
 from . import icons
@@ -394,3 +395,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                 self.metadataTable.setItem(row, col, table_item)
         # Turn sorting on again
         self.metadataTable.setSortingEnabled(True)
+
+    def setup_project_combo(self, projects: List[MapflowProject], current_position: int):
+        self.projectsCombo.clear()
+        self.projectsCombo.addItems([pr.name for pr in projects])
+        self.projectsCombo.setCurrentIndex(current_position)
