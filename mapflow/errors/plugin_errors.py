@@ -24,3 +24,6 @@ class ImageIdRequired(PluginError):
 
 class AoiNotIntersectsImage(PluginError):
     pass
+
+class ProxyIsAlreadySet(RuntimeError):
+    pass

@@ -55,7 +55,12 @@ from .schema import (PostSourceSchema,
                      ProviderReturnSchema,
                      ImageCatalogRequestSchema,
                      ImageCatalogResponseSchema)
-from .errors import ProcessingInputDataMissing, BadProcessingInput, PluginError, ImageIdRequired, AoiNotIntersectsImage
+from .errors import (ProcessingInputDataMissing,
+                     BadProcessingInput,
+                     PluginError,
+                     ImageIdRequired,
+                     AoiNotIntersectsImage,
+                     ProxyIsAlreadySet)
 from .functional.geometry import clip_aoi_to_image_extent
 from .functional.auth import get_auth_id
 from . import constants
@@ -2642,16 +2647,18 @@ class Mapflow(QObject):
     def read_mapflow_token(self) -> None:
         """Compose and memorize the user's credentils as Basic Auth."""
         if self.use_oauth:
+            print("Using oauth")
             auth_id, new_auth = get_auth_id(self.config.AUTH_CONFIG_NAME,
                                              self.config.AUTH_CONFIG_MAP)
             if new_auth:
                 self.alert(self.tr("We have just set the authentication config for you. \n"
                                        " You may need to restart QGIS to apply it so you could log in"),
                            icon=QMessageBox.Information)
-
             if not auth_id:
+                print("Id not provider")
                 self.dlg_login.invalidToken.setVisible(True)
             else:
+                print("Proceed to oauth login")
                 self.dlg_login.invalidToken.setVisible(False)
                 self.login_oauth(auth_id)
         else:
@@ -2663,13 +2670,16 @@ class Mapflow(QObject):
             self.login_basic(token)
 
     def login_oauth(self, oauth_id):
-        self.http.setup_auth(oauth_id=oauth_id)
         try:
+            self.http.setup_auth(oauth_id=oauth_id)
             self.http.get(
                 url=f'{self.config.SERVER}/projects/default',
                 callback=self.log_in_callback,
                 use_default_error_handler=True
             )
+        except ProxyIsAlreadySet:
+            self.alert(self.tr("Please restart QGIS before using OAuth2 login."),
+                       icon=QMessageBox.Warning)
         except Exception as e:
             self.alert(f"Error while trying to send authorization request: {e}."
                        f"It is possible that your auth config is corrupted. "

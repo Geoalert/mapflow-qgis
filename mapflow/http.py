@@ -7,8 +7,7 @@ from PyQt5.QtNetwork import QHttpMultiPart, QNetworkReply, QNetworkRequest
 from qgis.core import QgsNetworkAccessManager, Qgis, QgsApplication, QgsAuthMethodConfig
 
 from .constants import DEFAULT_HTTP_TIMEOUT_SECONDS
-from .errors import ErrorMessage
-
+from .errors import ErrorMessage, ProxyIsAlreadySet
 
 class Http(QObject):
     """"""
@@ -23,6 +22,7 @@ class Http(QObject):
         self.plugin_version = plugin_version
         self._basic_auth = b''
         self._oauth = None
+        self.proxy_is_set = False
         self.nam = QgsNetworkAccessManager.instance()
         self.default_error_handler = default_error_handler
 
@@ -32,10 +32,14 @@ class Http(QObject):
         if oauth_id:
             if basic_auth_token is not None:
                 raise ValueError("Only one auth method (basic auth / oauth2) may be set, got both")
+            if self.proxy_is_set:
+                # If the proxy is set, the OAuth2 flow will
+                raise ProxyIsAlreadySet
             self._setup_oauth(oauth_id)
         elif basic_auth_token:
             # Proxy management blocks oauth2 redirect to browser, so it is activated only for default Basic Auth
             self.nam.setupDefaultProxyAndCache()
+            self.proxy_is_set = True
             self.basic_auth = basic_auth_token
         else:
             raise ValueError("One of the auth methods (basic auth / oauth2) must be set, got none")
