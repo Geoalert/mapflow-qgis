@@ -30,11 +30,14 @@ class MapflowLoginDialog(*uic.loadUiType(ui_path / 'login_dialog.ui')):
         self.use_oauth = use_oauth
         self.invalidToken.setVisible(False)
         if use_oauth:
-            self.needAnAccount.setText('<html><head/><body><p>You will be redirecrted to web browser <br/>to enter your Mapflow login and password</p></body></html>')
-            self.invalidToken.setText('<html><head/><body><p><span style=" color:#ff0000;">Authorization is not configured! </span></p><p><br/>Setup authorization config <br/>and restart QGIS before login. <br/><a href="https://docs.mapflow.ai/api/qgis_mapflow.html#oauth2_setup"><span style=" text-decoration: underline; color:#094fd1;">See documentation for help </span></a></p></body></html>')
+            self.needAnAccount.setText(self.tr('<html><head/><body><p>You will be redirecrted to web browser <br/>to enter your Mapflow login and password</p></body></html>'))
+            self.invalidToken.setText(self.tr('<html><head/><body><p><span style=" color:#ff0000;">Authorization is not completed! </span></p><p>'
+                                              '<br/>1. Complete authorization in browser. <br/>'
+                                              '<br/>2. If it does not help, restart QGIS. '
+                                              '<br/><a href="https://docs.mapflow.ai/api/qgis_mapflow.html#oauth2_setup"><span style=" text-decoration: underline; color:#094fd1;">See documentation for help </span></a></p></body></html>'))
         else:  # basic
-            self.needAnAccount.setText('<html><head/><body><p><a href="https://app.mapflow.ai/account/api"><span style=" text-decoration: underline; color:#0057ae;">Get token</span></a></p><p><a href="https://mapflow.ai/terms-of-use-en.pdf"><span style=" text-decoration: underline; color:#0057ae;">Terms of use</span></a></p><p>Register at <a href="https://mapflow.ai"><span style=" text-decoration: underline; color:#0057ae;">mapflow.ai</span></a> to use the plugin</p><p><br/></p></body></html>')
-            self.invalidToken.setText('Invalid credentials')
+            self.needAnAccount.setText(self.tr('<html><head/><body><p><a href="https://app.mapflow.ai/account/api"><span style=" text-decoration: underline; color:#0057ae;">Get token</span></a></p><p><a href="https://mapflow.ai/terms-of-use-en.pdf"><span style=" text-decoration: underline; color:#0057ae;">Terms of use</span></a></p><p>Register at <a href="https://mapflow.ai"><span style=" text-decoration: underline; color:#0057ae;">mapflow.ai</span></a> to use the plugin</p><p><br/></p></body></html>'))
+            self.invalidToken.setText(self.tr('Invalid credentials'))
             self.invalidToken.setStyleSheet('color: rgb(239, 41, 41);')
         self.token.setText(token)
         self.token.setVisible(not use_oauth)

@@ -50,6 +50,13 @@ class Http(QObject):
         auth_config = QgsAuthMethodConfig()
         self._oauth.loadAuthenticationConfig(config_id, auth_config)
 
+    def logout(self):
+        if self._oauth:
+            print("Clear oauth config")
+            self._oauth.clearCachedConfig(self.oauth_id)
+        elif self._basic_auth:
+            self._basic_auth = b''
+
     @property
     def basic_auth(self):
         """"""
@@ -130,7 +137,12 @@ class Http(QObject):
             for key, value in headers.items():
                 request.setRawHeader(key.encode(), value.encode())
         request.setRawHeader(b'x-plugin-version', self.plugin_version.encode())
-        request = self.authorize(request, auth)
+        try:
+            request = self.authorize(request, auth)
+        except Exception as e:
+            print(f"{e}")
+            pass
+
         response = method(request, body) if (method == self.nam.post or method == self.nam.put) else method(request)
 
         response.finished.connect(lambda response=response,

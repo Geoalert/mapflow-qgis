@@ -2721,6 +2721,7 @@ class Mapflow(QObject):
         self.processing_fetch_timer.stop()
         self.user_status_update_timer.stop()
         self.logged_in = False
+        self.http.logout()
         self.dlg.close()
         # self.dlg_login = self.set_up_login_dialog()  # recreate the login dialog
         self.dlg_login.show()  # assume user wants to log into another account
