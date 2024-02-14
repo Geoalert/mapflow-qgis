@@ -85,7 +85,6 @@ class Mapflow(QObject):
         self.metadata_aoi = None
         self.metadata_layer = None
         self.search_provider = None
-        self.is_premium_user = False
         self.is_admin = False
         self.aoi_area_limit = 0.0
         self.username = self.password = ''
@@ -2853,7 +2852,6 @@ class Mapflow(QObject):
         default_project = MapflowProject.from_dict(response)
 
         self.update_processing_limit()
-        self.is_premium_user = userinfo['isPremium']
         self.aoi_area_limit = userinfo['aoiAreaLimit'] * 1e-6
         # We have different behavior for admin as he has access to all processings
         self.is_admin = userinfo.get("role") == "ADMIN"
