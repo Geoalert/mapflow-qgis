@@ -7,7 +7,7 @@ class Config:
     TIMEZONE = time.localtime().tm_zone
     PLUGIN_NAME = 'Mapflow'
     DEFAULT_MODEL = '🏠 Buildings'
-    MAPFLOW_ENV = QgsSettings().value('variables/mapflow_env', "") or'production'
+    MAPFLOW_ENV = QgsSettings().value('variables/mapflow_env', "") or 'production'
     PROJECT_ID = QgsSettings().value("variables/mapflow_project_id", "") or "default"
     SERVER = "https://whitemaps-{env}.mapflow.ai/rest".format(env=MAPFLOW_ENV)
     BILLING_HISTORY_URL = "https://app.mapflow.ai/account/billing-history"
@@ -75,9 +75,18 @@ class Config:
     USER_STATUS_UPDATE_INTERVAL = 30  # seconds
 
     MAX_FILE_SIZE_PIXELS = 30_000
-    MAX_FILE_SIZE_BYTES = 1024**3
+    MAX_FILE_SIZE_BYTES = 2*(1024**3)
 
     MAX_AOIS_PER_PROCESSING = int(QgsSettings().value("variables/mapflow_max_aois", "10"))
+
+    # OAuth2
+    OAUTH2_URL = "https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect"
+    AUTH_CONFIG_NAME = f"mapflow_{MAPFLOW_ENV}"
+    AUTH_CONFIG_MAPS = {'duty': '{"accessMethod":0,"apiKey":"","clientId":"qgis","clientSecret":"","configType":1,"customHeader":"","description":"","grantFlow":1,"id":"","name":"","objectName":"","password":"","persistToken":false,"queryPairs":{},"redirectPort":7070,"redirectUrl":"qgis","refreshTokenUrl":"https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect/token","requestTimeout":30,"requestUrl":"https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect/auth","scope":"","tokenUrl":"https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect/token","username":"","version":1}',
+                        'staging': '{"accessMethod":0,"apiKey":"","clientId":"qgis","clientSecret":"","configType":1,"customHeader":"","description":"","grantFlow":1,"id":"","name":"","objectName":"","password":"","persistToken":false,"queryPairs":{},"redirectPort":7070,"redirectUrl":"qgis","refreshTokenUrl":"https://auth.mapflow.ai/auth/realms/mapflow-staging/protocol/openid-connect/token","requestTimeout":30,"requestUrl":"https://auth.mapflow.ai/auth/realms/mapflow-staging/protocol/openid-connect/auth","scope":"","tokenUrl":"https://auth.mapflow.ai/auth/realms/mapflow-staging/protocol/openid-connect/token","username":"","version":1}',
+                        'internal': '{"accessMethod":0,"apiKey":"","clientId":"qgis","clientSecret":"","configType":1,"customHeader":"","description":"","grantFlow":1,"id":"","name":"","objectName":"","password":"","persistToken":false,"queryPairs":{},"redirectPort":7070,"redirectUrl":"qgis","refreshTokenUrl":"https://auth.mapflow.ai/auth/realms/mapflow-internal/protocol/openid-connect/token","requestTimeout":30,"requestUrl":"https://auth.mapflow.ai/auth/realms/mapflow-internal/protocol/openid-connect/auth","scope":"","tokenUrl":"https://auth.mapflow.ai/auth/realms/mapflow-internal/protocol/openid-connect/token","username":"","version":1}',
+                        'production': '{"accessMethod":0,"apiKey":"","clientId":"qgis","clientSecret":"","configType":1,"customHeader":"","description":"","grantFlow":1,"id":"","name":"","objectName":"","password":"","persistToken":false,"queryPairs":{},"redirectPort":7070,"redirectUrl":"qgis","refreshTokenUrl":"https://auth.mapflow.ai/auth/realms/mapflow/protocol/openid-connect/token","requestTimeout":30,"requestUrl":"https://auth.mapflow.ai/auth/realms/mapflow/protocol/openid-connect/auth","scope":"","tokenUrl":"https://auth.mapflow.ai/auth/realms/mapflow/protocol/openid-connect/token","username":"","version":1}'}
+    AUTH_CONFIG_MAP = AUTH_CONFIG_MAPS.get(MAPFLOW_ENV, '')
 
 
 config = Config()

@@ -12,7 +12,7 @@ from PyQt5.QtXml import QDomDocument
 from PyQt5.QtGui import QColor
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtCore import (
-    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, QTextStream, QByteArray
+    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, QTextStream, QByteArray, QUrl
 )
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction,
@@ -27,7 +27,7 @@ from qgis.core import (
 )
 
 from .functional import layer_utils, helpers
-from .dialogs import MainDialog, LoginDialog, ErrorMessageWidget, ProviderDialog, ReviewDialog
+from .dialogs import MainDialog, MapflowLoginDialog, ErrorMessageWidget, ProviderDialog, ReviewDialog
 from .dialogs.icons import plugin_icon
 
 from .http import (Http,
@@ -47,6 +47,7 @@ from .entity.provider import (UsersProvider,
                               DefaultProvider,
                               ImagerySearchProvider,
                               ProviderInterface)
+from .entity.project import MapflowProject
 from .entity.billing import BillingType
 from .entity.workflow_def import WorkflowDef
 from .schema import (PostSourceSchema,
@@ -54,11 +55,16 @@ from .schema import (PostSourceSchema,
                      ProviderReturnSchema,
                      ImageCatalogRequestSchema,
                      ImageCatalogResponseSchema)
-from .errors import ProcessingInputDataMissing, BadProcessingInput, PluginError, ImageIdRequired, AoiNotIntersectsImage
+from .errors import (ProcessingInputDataMissing,
+                     BadProcessingInput,
+                     PluginError,
+                     ImageIdRequired,
+                     AoiNotIntersectsImage,
+                     ProxyIsAlreadySet)
 from .functional.geometry import clip_aoi_to_image_extent
+from .functional.auth import get_auth_id
 from . import constants
 from .schema.catalog import PreviewType
-from .styles import get_style_name
 
 
 class Mapflow(QObject):
@@ -79,7 +85,7 @@ class Mapflow(QObject):
         self.metadata_aoi = None
         self.metadata_layer = None
         self.search_provider = None
-        self.is_premium_user = False
+        self.is_admin = False
         self.aoi_area_limit = 0.0
         self.username = self.password = ''
         self.version_ok = True
@@ -91,10 +97,9 @@ class Mapflow(QObject):
         # Save refs to key variables used throughout the plugin
         self.iface = iface
         self.main_window = self.iface.mainWindow()
-        self.dlg_login = LoginDialog(self.main_window)
         self.workflow_defs = {}
         self.aoi_layers = []
-
+        self.project_connection = None
         super().__init__(self.main_window)
         self.project = QgsProject.instance()
         self.message_bar = self.iface.messageBar()
@@ -108,13 +113,10 @@ class Mapflow(QObject):
         self.layer_tree_root = self.project.layerTreeRoot()
         # Set up authentication flags
         self.logged_in = False
-        # Store user's current processing
-        self.processing_history = ProcessingHistory.from_settings(
-            self.settings.value('processings', {}).get(self.config.MAPFLOW_ENV, {}).get(self.username, {}))
-        self.processings = []
         # Init toolbar and toolbar buttons
         self.toolbar = self.iface.addToolBar(self.plugin_name)
         self.toolbar.setObjectName(self.plugin_name)
+        # Init project
         # Translation
         locale = self.settings.value('locale/userLocale', 'en_US')[0:2]
         locale_path = os.path.join(self.plugin_dir, 'i18n', f'mapflow_{locale}.qm')
@@ -130,10 +132,22 @@ class Mapflow(QObject):
         self.settings.beginGroup(self.plugin_name.lower())
         if self.settings.value('processings') is None:
             self.settings.setValue('processings', {})
+        # If no project id is set, use "default"
+        self.project_id = self.settings.value("project_id", "default")
+        self.projects = []
+        # Store user's current processing
+        self.processing_history = ProcessingHistory.from_settings(
+            self.settings.value('processings', {})
+            .get(self.config.MAPFLOW_ENV, {})
+            .get(self.username, {})
+            .get(self.project_id, {}))
+        self.processings = []
+
         # Init dialogs
+        self.use_oauth = (self.settings.value('use_oauth', 'false').lower() == 'true')
         self.plugin_icon = plugin_icon
         self.dlg = MainDialog(self.main_window, self.settings)
-        self.set_up_login_dialog()
+        self.dlg_login = self.set_up_login_dialog()
         self.review_dialog = ReviewDialog(self.dlg)
         self.dlg_provider = ProviderDialog(self.dlg)
         self.dlg_provider.accepted.connect(self.edit_provider_callback)
@@ -237,7 +251,7 @@ class Mapflow(QObject):
         self.processing_fetch_timer.setInterval(self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
         self.processing_fetch_timer.timeout.connect(
             lambda: self.http.get(
-                url=f'{self.server}/projects/{self.config.PROJECT_ID}/processings',
+                url=f'{self.server}/projects/{self.project_id}/processings',
                 callback=self.get_processings_callback,
                 use_default_error_handler=False  # ignore errors to prevent repetitive alerts
             )
@@ -387,7 +401,7 @@ class Mapflow(QObject):
     def set_excepted_layers(self):
         self.dlg.rasterCombo.setExceptedLayerList(self.filter_bad_rasters())
 
-    def filter_bad_rasters(self, changed_layers: Optional[List[QgsRasterLayer]] = None) -> None:
+    def filter_bad_rasters(self, changed_layers: Optional[List[QgsRasterLayer]] = None) -> List[QgsMapLayer]:
         """Leave only GeoTIFF layers in the Imagery Source combo box."""
         # (!) Instead of going thru all project layers each time
         # it'd be better to filter the new layers, then add them to
@@ -460,7 +474,7 @@ class Mapflow(QObject):
             return
         provider_names = [p.name for p in self.providers]
         self.dlg.set_raster_sources(provider_names=provider_names,
-                                    default_provider_name='Mapbox',
+                                    default_provider_names=['Mapbox', '🌎 Mapbox Satellite'],
                                     excepted_layers=self.filter_bad_rasters())
 
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
@@ -515,12 +529,20 @@ class Mapflow(QObject):
                 is_unfit = is_unfit or cloud_cover > max_cloud_cover
             self.dlg.metadataTable.setRowHidden(row, is_unfit)
 
-    def set_up_login_dialog(self) -> None:
+    def set_up_login_dialog(self) -> MapflowLoginDialog:
         """Create a login dialog, set its title and signal-slot connections."""
-        self.dlg_login.setWindowTitle(helpers.generate_plugin_header(self.tr("Log in ") + self.plugin_name,
+        dlg_login = MapflowLoginDialog(self.main_window, self.use_oauth, self.settings.value("token", ""))
+        dlg_login.setWindowTitle(helpers.generate_plugin_header(self.tr("Log in ") + self.plugin_name,
                                                                      self.config.MAPFLOW_ENV,
                                                                      None))
-        self.dlg_login.logIn.clicked.connect(self.read_mapflow_token)
+        dlg_login.logIn.clicked.connect(self.read_mapflow_token)
+        dlg_login.useOauth.toggled.connect(self.set_auth_type)
+        return dlg_login
+
+    def set_auth_type(self, use_oauth: bool = False):
+        self.use_oauth = use_oauth
+        self.settings.setValue("use_oauth", str(use_oauth).lower())
+        self.dlg_login.set_auth_type(use_oauth=use_oauth, token = self.settings.value('token', ""))
 
     def toggle_polygon_combos(self, use_image_extent: bool) -> None:
         """Disable polygon combos when Use image extent is checked.
@@ -549,6 +571,25 @@ class Mapflow(QObject):
             self.calculate_aoi_area_raster(provider_layer)
         else:
             self.calculate_aoi_area_polygon_layer(polygon_layer)
+
+    def setup_workflow_defs(self, workflow_defs: List[WorkflowDef]):
+        self.workflow_defs = {wd.name: wd for wd in workflow_defs}
+        self.dlg.modelCombo.clear()
+        # We skip SENTINEL WDs if sentinel is not enabled (normally, it should be not)
+        # wds along with ids in the format: {'model_name': 'workflow_def_id'}
+        self.dlg.modelCombo.addItems(name for name in self.workflow_defs
+                                     if self.config.ENABLE_SENTINEL or self.config.SENTINEL_WD_NAME_PATTERN not in name)
+        self.dlg.modelCombo.setCurrentText(self.config.DEFAULT_MODEL)
+        self.on_model_change()
+
+    def on_project_change(self, currentIndex):
+        current_project = self.projects[currentIndex]
+        self.project_id = current_project.id
+        self.settings.setValue("project_id", self.project_id)
+        self.setup_workflow_defs(current_project.workflowDefs)
+        # Manually toggle function to avoid race condition
+        self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
+        self.setup_processings_table()
 
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
@@ -838,8 +879,8 @@ class Mapflow(QObject):
 
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
-        provider = self.providers[self.dlg.providerIndex()]
-        provider.clear_saved_search(self.temp_dir)
+        #provider = self.providers[self.dlg.providerIndex()]
+        self.search_provider.clear_saved_search(self.temp_dir)
 
     def request_mapflow_metadata(self,
                                  aoi: QgsGeometry,
@@ -1481,9 +1522,16 @@ class Mapflow(QObject):
                                     use_image_extent_as_aoi=use_image_extent_as_aoi,
                                     selected_image=selected_image,
                                     selected_aoi=self.aoi)
-            self.aoi_size = layer_utils.calculate_aoi_area(real_aoi, self.project.transformContext())
+        except ImageIdRequired:
+            # AOI is OK, but image ID is not selected,
+            # in this case we should use selected AOI without cut by AOI
+            real_aoi = self.aoi
         except Exception as e:
             # Could not calculate AOI size
+            real_aoi = QgsGeometry()
+        try:
+            self.aoi_size = layer_utils.calculate_aoi_area(real_aoi, self.project.transformContext())
+        except Exception as e:
             self.aoi_size = 0
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
         self.update_processing_cost()
@@ -1709,19 +1757,18 @@ class Mapflow(QObject):
             if not provider:
                 raise PluginError(self.tr('Providers are not initialized'))
             if selected_image:
-                if isinstance(provider, MaxarProvider):
+                if isinstance(provider, (MaxarProvider, ImagerySearchProvider)):
                     aoi = self.crop_aoi_with_maxar_image_footprint(selected_aoi, selected_image)
                 elif isinstance(provider, SentinelProvider):
                     # todo: crop sentinel aoi with image footprint?
                     aoi = selected_aoi
-                elif isinstance(provider, ImagerySearchProvider):
-                    aoi = self.crop_aoi_with_maxar_image_footprint(selected_aoi, selected_image)
                 else:
                     aoi = selected_aoi
                     # We ignore image ID if the provider does not support it
                     # raise PluginError(self.tr("Selection is not available for  {}").format(provider.name))
             elif provider.requires_image_id:
-                raise PluginError(self.tr("Please select image in Search table for {}").format(provider.name))
+                aoi = selected_aoi
+                # raise PluginError(self.tr("Please select image in Search table for {}").format(provider.name))
             else:
                 aoi = selected_aoi
         return aoi
@@ -1767,7 +1814,8 @@ class Mapflow(QObject):
         except AoiNotIntersectsImage:
             return None, self.tr("Selected AOI does not intestect the selected image")
         except ImageIdRequired:
-            return None, self.tr("This provider requires image ID!")
+            return None, self.tr("This provider requires image ID. Use search tab to find imagery for you requirements, "
+                                 "and select image in the table.")
         except PluginError as e:
             return None, str(e)
         processing_params = PostProcessingSchema(
@@ -1843,8 +1891,8 @@ class Mapflow(QObject):
 
         :param request_body: Processing parameters.
         """
-        if self.config.PROJECT_ID != 'default':
-            request_body.projectId = self.config.PROJECT_ID
+        if self.project_id != 'default':
+            request_body.projectId = self.project_id
         self.http.post(
             url=f'{self.server}/processings',
             callback=self.post_processing_callback,
@@ -1865,7 +1913,7 @@ class Mapflow(QObject):
         self.processing_fetch_timer.start()  # start monitoring
         # Do an extra fetch immediately
         self.http.get(
-            url=f'{self.server}/projects/{self.config.PROJECT_ID}/processings',
+            url=f'{self.server}/projects/{self.project_id}/processings',
             callback=self.get_processings_callback
         )
 
@@ -2255,7 +2303,7 @@ class Mapflow(QObject):
         # Clear successfully uploaded review
         self.review_dialog.reviewComment.setText("")
         self.processing_fetch_timer.start()
-        self.http.get(url=f'{self.server}/projects/{self.config.PROJECT_ID}/processings',
+        self.http.get(url=f'{self.server}/projects/{self.project_id}/processings',
                       callback=self.get_processings_callback,
                       use_default_error_handler=False)
 
@@ -2430,7 +2478,9 @@ class Mapflow(QObject):
         env = self.config.MAPFLOW_ENV
         processing_history = self.settings.value('processings')
         self.processing_history = ProcessingHistory.from_settings(
-            processing_history.get(env, {}).get(self.username, {}))
+            processing_history.get(env, {})
+            .get(self.username, {})
+            .get(self.project_id, {}))
         # get updated processings (newly failed and newly finished) and updated user processing history
         failed_processings, finished_processings, self.processing_history = updated_processings(processings,
                                                                                                 self.processing_history)
@@ -2444,9 +2494,13 @@ class Mapflow(QObject):
         self.processings = processings
 
         try:  # use try-except bc this will only error once
-            processing_history[env][self.username] = self.processing_history.asdict()
+            processing_history[env][self.username][self.project_id] = self.processing_history.asdict()
         except KeyError:  # history for the current env hasn't been initialized yet
-            processing_history[env] = {self.username: self.processing_history.asdict()}
+            try:
+                processing_history[env][self.username] = {self.project_id: self.processing_history.asdict()}
+            except KeyError:
+                processing_history[env] = {self.username: {self.project_id: self.processing_history.asdict()}}
+
         self.settings.setValue('processings', processing_history)
 
     def alert_failed_processings(self, failed_processings):
@@ -2581,7 +2635,8 @@ class Mapflow(QObject):
         self.iface.removeCustomActionForLayerType(self.add_layer_action)
         self.iface.removeCustomActionForLayerType(self.remove_layer_action)
         for dlg in self.dlg, self.dlg_login, self.dlg_provider:
-            dlg.close()
+            if dlg:
+                dlg.close()
         del self.toolbar
         self.settings.setValue('metadataMinIntersection', self.dlg.minIntersection.value())
         self.settings.setValue('metadataMaxCloudCover', self.dlg.maxCloudCover.value())
@@ -2590,13 +2645,46 @@ class Mapflow(QObject):
 
     def read_mapflow_token(self) -> None:
         """Compose and memorize the user's credentils as Basic Auth."""
-        token = self.dlg_login.token.text().strip()
-        if token:
+        if self.use_oauth:
+            auth_id, new_auth = get_auth_id(self.config.AUTH_CONFIG_NAME,
+                                             self.config.AUTH_CONFIG_MAP)
+            if new_auth:
+                self.alert(self.tr("We have just set the authentication config for you. \n"
+                                       " You may need to restart QGIS to apply it so you could log in"),
+                           icon=QMessageBox.Information)
+            if not auth_id:
+                self.dlg_login.invalidToken.setVisible(True)
+            else:
+                self.dlg_login.invalidToken.setVisible(False)
+                self.login_oauth(auth_id)
+        else:
+            auth_data = self.dlg_login.token_value()
+            if not auth_data:
+                return
             # to add paddind for the token len to be multiple of 4
-            token += "=" * ((4 - len(token) % 4) % 4)
-            self.log_in(token)
+            token = auth_data + "=" * ((4 - len(auth_data) % 4) % 4)
+            self.login_basic(token)
 
-    def log_in(self, token) -> None:
+    def login_oauth(self, oauth_id):
+        try:
+            self.http.setup_auth(oauth_id=oauth_id)
+            self.http.get(
+                url=f'{self.config.SERVER}/projects/default',
+                callback=self.log_in_callback,
+                use_default_error_handler=True
+            )
+        except ProxyIsAlreadySet:
+            self.alert(self.tr("Please restart QGIS before using OAuth2 login."),
+                       icon=QMessageBox.Warning)
+        except Exception as e:
+            self.alert(f"Error while trying to send authorization request: {e}."
+                       f"It is possible that your auth config is corrupted. "
+                       f"Remove auth config named {self.config.AUTH_CONFIG_NAME} and restart QGis"
+                       f"for the plugin to recreate it. "
+                       f"If it does not help, contact us",
+                       icon=QMessageBox.Warning)
+
+    def login_basic(self, token) -> None:
         """Log into Mapflow."""
         # save new token to settings immediately to overwrite old one, if any
         self.settings.setValue('token', token)
@@ -2610,23 +2698,28 @@ class Mapflow(QObject):
                                'Visit "<a href=\"https://app.mapflow.ai/account/api\">mapflow.ai</a>" '
                                'to get a new one'),
                        icon=QMessageBox.Warning)
+            self.dlg_login.invalidToken.setVisible(True)
             return
-        self.http.basic_auth = f'Basic {token}'
+        self.http.setup_auth(basic_auth_token=f'Basic {token}')
         self.http.get(
-            url=f'{self.config.SERVER}/projects/{self.config.PROJECT_ID}',
+            url=f'{self.config.SERVER}/projects/default',
             callback=self.log_in_callback,
             use_default_error_handler=True
         )
 
     def logout(self) -> None:
         """Close the plugin and clear credentials from cache."""
+        # disconnect what was connected on login
+        if self.project_connection is not None:
+            self.dlg.projectsCombo.currentIndexChanged.disconnect(self.project_connection)
         # set token to empty to delete it from settings
         self.settings.setValue('token', '')
         self.processing_fetch_timer.stop()
         self.user_status_update_timer.stop()
         self.logged_in = False
+        self.http.logout()
         self.dlg.close()
-        self.set_up_login_dialog()  # recreate the login dialog
+        # self.dlg_login = self.set_up_login_dialog()  # recreate the login dialog
         self.dlg_login.show()  # assume user wants to log into another account
 
     def default_error_handler(self,
@@ -2651,15 +2744,8 @@ class Mapflow(QObject):
                                    'to get a new one'),
                            icon=QMessageBox.Warning)
                 self.dlg_login.show()
-            # Wrong token entered - display a message
-            elif not self.dlg_login.findChild(QLabel, self.config.INVALID_TOKEN_WARNING_OBJECT_NAME):
-                invalid_token_label = QLabel(self.tr('Invalid token'), self.dlg_login)
-                invalid_token_label.setObjectName(self.config.INVALID_TOKEN_WARNING_OBJECT_NAME)
-                invalid_token_label.setStyleSheet('color: rgb(239, 41, 41);')
-                self.dlg_login.layout().insertWidget(1, invalid_token_label, alignment=Qt.AlignCenter)
-                new_size = self.dlg_login.width(), self.dlg_login.height() + invalid_token_label.height()
-                self.dlg_login.setMaximumSize(*new_size)
-                self.dlg_login.setMinimumSize(*new_size)
+
+            self.dlg_login.invalidToken.setVisible(True)
             return True
         elif error in (
                 QNetworkReply.OperationCanceledError,  # timeout
@@ -2724,50 +2810,83 @@ class Mapflow(QObject):
             empty_item = QTableWidgetItem("")
             self.dlg.processingsTable.setItem(0, column, empty_item)
         # Fetch processings at startup and start the timer to keep fetching them afterwards
-        self.http.get(url=f'{self.server}/projects/{self.config.PROJECT_ID}/processings',
+        self.http.get(url=f'{self.server}/projects/{self.project_id}/processings',
                       callback=self.get_processings_callback,
                       use_default_error_handler=False)
         self.processing_fetch_timer.start()
 
+    def find_project(self, projects: List[MapflowProject], project_id: str):
+        # first, try to find by ID
+        default_index = -1
+        for idx, project in enumerate(projects):
+            if project.id == project_id:
+                return idx
+            if project.name == "Default":
+                default_index = idx
+
+        # report if id is not found
+        if default_index >= 0:
+            if project_id.lower() != "default":
+                self.alert(message=f"Selected project {project_id} is not found. Setting project to default",
+                           icon=QMessageBox.Information)
+            return default_index
+
+        # if there is NO default project, but some projects are present - we will use the first
+        self.alert(message=f"Default project is not found. Using existing project {projects[0].name}",
+                   icon=QMessageBox.Information)
+        return 0
+
     def log_in_callback(self, response: QNetworkReply) -> None:
         """Fetch user info, models and processings.
-
         :param response: The HTTP response.
         """
         # Show history of processings at startup to get non-empty table immediately, and setup the table update
-        self.setup_processings_table()
+        self.dlg_login.invalidToken.setVisible(False)
         # Set up the UI with the received data
         response = json.loads(response.readAll().data())
+        # User info is stored inside user's Default project - will change it in the future API versions
+        userinfo = response['user']
+        default_project = MapflowProject.from_dict(response)
+
         self.update_processing_limit()
-        self.is_premium_user = response['user']['isPremium']
-        self.aoi_area_limit = response['user']['aoiAreaLimit'] * 1e-6
-        # We skip SENTINEL WDs if sentinel is not enabled (normally, it should be not)
-        # wds along with ids in the format: {'model_name': 'workflow_def_id'}
-        self.workflow_defs = {
-            workflow['name']: WorkflowDef.from_dict(workflow)
-            for workflow in response['workflowDefs']
-        }
-        self.dlg.modelCombo.clear()
-        self.dlg.modelCombo.addItems(name for name in self.workflow_defs
-                                     if self.config.ENABLE_SENTINEL or self.config.SENTINEL_WD_NAME_PATTERN not in name)
-        self.dlg.modelCombo.setCurrentText(self.config.DEFAULT_MODEL)
-        # Manually toggle function to avoid race condition
-        self.on_model_change()
-        self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
+        self.aoi_area_limit = userinfo['aoiAreaLimit'] * 1e-6
+        # We have different behavior for admin as he has access to all processings
+        self.is_admin = userinfo.get("role") == "ADMIN"
 
         self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
         # Authenticate and keep user logged in
         self.logged_in = True
         self.dlg_login.close()
 
-        # setup window title for different envs and project
-        self.dlg.setWindowTitle(helpers.generate_plugin_header(self.plugin_name,
-                                                               self.config.MAPFLOW_ENV,
-                                                               response.get("name", "")))
+        # Get all projects & setup processings table (see callback)
+        if self.is_admin:
+            self.project_id = Config.PROJECT_ID
+            self.setup_workflow_defs(default_project.workflowDefs)
+            self.setup_processings_table()
+        else:
+            self.http.get(
+                url=f'{self.config.SERVER}/projects',
+                callback=self.get_projects_callback,
+                use_default_error_handler=True
+            )
         self.dlg.setup_for_billing(self.billing_type)
         self.dlg.show()
         self.user_status_update_timer.start()
         self.app_startup_user_update_timer.start()
+
+    def get_projects_callback(self, response: QNetworkReply):
+        response = json.loads(response.readAll().data())
+        # Projects are set up once at login and stored in the plugin
+        self.projects = [MapflowProject.from_dict(project) for project in response]
+        if not self.projects:
+            self.alert(self.tr("No projects found! Contact us to resolve the issue"))
+            return
+        # Projects combo allows to select the project
+        current_index = self.find_project(self.projects, self.project_id)
+        self.dlg.setup_project_combo(self.projects, current_index)
+        self.on_project_change(current_index)
+        self.project_connection = self.dlg.projectsCombo.currentIndexChanged.connect(self.on_project_change)
+
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
         """Inspect the plugin version backend expects and show a warning if it is incompatible w/ the plugin.
@@ -2862,15 +2981,19 @@ class Mapflow(QObject):
         if not self.version_ok:
             self.dlg.close()
             return
-        token = self.settings.value('token')
+
+
         if self.logged_in:
+            # with any auth method
             self.dlg.show()
             self.dlg.raise_()
             self.update_processing_limit()
             self.user_status_update_timer.start()
-        elif token:  # token saved
-            self.http.basic_auth = f'Basic {token}'
-            self.log_in(token)
+            return
+
+        token = self.settings.value('token')
+        if not self.use_oauth and token:
+            # Saved token for basic auth
+            self.login_basic(token)
         else:
-            self.set_up_login_dialog()
             self.dlg_login.show()

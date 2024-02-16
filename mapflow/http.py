@@ -4,22 +4,59 @@ from typing import Callable, Union, Optional
 
 from PyQt5.QtCore import QObject, QTimer, QUrl, qVersion
 from PyQt5.QtNetwork import QHttpMultiPart, QNetworkReply, QNetworkRequest
-from qgis.core import QgsNetworkAccessManager, Qgis
+from qgis.core import QgsNetworkAccessManager, Qgis, QgsApplication, QgsAuthMethodConfig
 
 from .constants import DEFAULT_HTTP_TIMEOUT_SECONDS
-from .errors import ErrorMessage
-
+from .errors import ErrorMessage, ProxyIsAlreadySet
 
 class Http(QObject):
     """"""
 
-    def __init__(self, plugin_version: str, default_error_handler: Callable) -> None:
-        """"""
-        self.nam = QgsNetworkAccessManager.instance()
-        self.nam.setupDefaultProxyAndCache()
+    def __init__(self,
+                 plugin_version: str,
+                 default_error_handler: Callable) -> None:
+        """
+        oauth_id is defined if we are using oauth2 configuration
+        """
+        self.oauth_id = None
         self.plugin_version = plugin_version
         self._basic_auth = b''
+        self._oauth = None
+        self.proxy_is_set = False
+        self.nam = QgsNetworkAccessManager.instance()
         self.default_error_handler = default_error_handler
+
+    def setup_auth(self,
+                   basic_auth_token: Optional[str] = None,
+                   oauth_id: Optional[int] = None):
+        if oauth_id:
+            if basic_auth_token is not None:
+                raise ValueError("Only one auth method (basic auth / oauth2) may be set, got both")
+            if self.proxy_is_set:
+                # If the proxy is set, the OAuth2 flow will
+                raise ProxyIsAlreadySet
+            self._setup_oauth(oauth_id)
+        elif basic_auth_token:
+            # Proxy management blocks oauth2 redirect to browser, so it is activated only for default Basic Auth
+            self.nam.setupDefaultProxyAndCache()
+            self.proxy_is_set = True
+            self.basic_auth = basic_auth_token
+        else:
+            raise ValueError("One of the auth methods (basic auth / oauth2) must be set, got none")
+
+    def _setup_oauth(self, config_id: str):
+        self.oauth_id = config_id
+        self._oauth = QgsApplication.authManager()
+        auth_config = QgsAuthMethodConfig()
+        self._oauth.loadAuthenticationConfig(config_id, auth_config)
+
+    def logout(self):
+        if self._oauth:
+            self._oauth.clearCachedConfig(self.oauth_id)
+            self._oauth = None
+
+        elif self._basic_auth:
+            self._basic_auth = b''
 
     @property
     def basic_auth(self):
@@ -66,6 +103,19 @@ class Http(QObject):
         else:
             callback(response, **callback_kwargs)
 
+    def authorize(self, request: QNetworkRequest, auth: Optional[bytes] = None):
+        if auth is not None:
+            # Override of autorization, use basic auth
+            request.setRawHeader(b'authorization', auth)
+        elif self._oauth:
+            updated, request = self._oauth.updateNetworkRequest(request, self.oauth_id)
+            if not updated:
+                raise Exception(f"Failed to apply Auth config to request {request.url}")
+        elif self._basic_auth:
+            request.setRawHeader(b'authorization', self._basic_auth)
+        # else: assume that the request is non-authorized
+        return request
+
     def send_request(
             self,
             method: Callable,
@@ -88,7 +138,12 @@ class Http(QObject):
             for key, value in headers.items():
                 request.setRawHeader(key.encode(), value.encode())
         request.setRawHeader(b'x-plugin-version', self.plugin_version.encode())
-        request.setRawHeader(b'authorization', auth or self._basic_auth)
+        try:
+            request = self.authorize(request, auth)
+        except Exception as e:
+            # We skip the exception handling, then the request goes out unauthorized and the error response is handled
+            pass
+
         response = method(request, body) if (method == self.nam.post or method == self.nam.put) else method(request)
 
         response.finished.connect(lambda response=response,

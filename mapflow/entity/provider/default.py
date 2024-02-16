@@ -3,7 +3,7 @@ from .provider import ProviderInterface, SourceType, CRS
 from .provider import BasicAuth
 from ...schema import PostSourceSchema, PostProviderSchema
 from ...constants import SENTINEL_OPTION_NAME, SEARCH_OPTION_NAME
-from ...errors.plugin_errors import PluginError
+from ...errors.plugin_errors import PluginError, ImageIdRequired
 from ...schema.provider import ProviderReturnSchema
 
 
@@ -25,7 +25,7 @@ class SentinelProvider(ProviderInterface):
                              image_id: Optional[str] = None,
                              provider_name: Optional[str] = None):
         if not image_id:
-            raise PluginError("Sentinel provider must have image ID to launch the processing")
+            raise ImageIdRequired("Sentinel provider must have image ID to launch the processing")
         return PostSourceSchema(url=image_id,
                                 source_type=SourceType.sentinel_l2a), {}
 
@@ -65,7 +65,7 @@ class ImagerySearchProvider(ProviderInterface):
                              image_id: Optional[str] = None,
                              provider_name: Optional[str] = None):
         if not image_id:
-            raise PluginError("Search provider must have image ID to launch the processing")
+            raise ImageIdRequired("Search provider must have image ID to launch the processing")
         return PostProviderSchema(data_provider=provider_name,
                                   url=image_id), {}
 
