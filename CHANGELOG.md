@@ -1,3 +1,9 @@
+## 2.5.0
+    - Allow direct login to Mapflow via OAuth2 protocol, without token
+    - Add Mapflow project selection. Note: these projects are from API, not from Mapflow Web!
+    - Fixed UI bugs: 
+        - zooming to the selected image on "preview" button is now working properly
+        - search results are now really cleared on "clear" button, and will not appear after restart
 ## 2.4.0
     - Show processing results via vector tiles link. Experimental feature, may be turned off in "settings".
     - Add separate "save to file" button to directly download results to .geojson (not adding layer to the project)

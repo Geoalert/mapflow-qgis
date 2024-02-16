@@ -13,6 +13,10 @@ version=2.4.0
 author=Geoalert
 email=hello@geoalert.io
 changelog:
+    2.5.0
+    - Allow direct login to Mapflow via OAuth2 protocol, without token
+    - Add Mapflow project selection
+    - Fixed bugs: zooming to the current image on "preview" and clearing search result
     2.4.0
     - Show processing results via vector tiles link. Experimental feature, may be turned off in "settings".
     - Add separate "save to file" button to directly download results to .geojson (not adding layer to the project)
