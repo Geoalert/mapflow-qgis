@@ -2646,7 +2646,6 @@ class Mapflow(QObject):
     def read_mapflow_token(self) -> None:
         """Compose and memorize the user's credentils as Basic Auth."""
         if self.use_oauth:
-            print("Using oauth")
             auth_id, new_auth = get_auth_id(self.config.AUTH_CONFIG_NAME,
                                              self.config.AUTH_CONFIG_MAP)
             if new_auth:
@@ -2654,10 +2653,8 @@ class Mapflow(QObject):
                                        " You may need to restart QGIS to apply it so you could log in"),
                            icon=QMessageBox.Information)
             if not auth_id:
-                print("Id not provider")
                 self.dlg_login.invalidToken.setVisible(True)
             else:
-                print("Proceed to oauth login")
                 self.dlg_login.invalidToken.setVisible(False)
                 self.login_oauth(auth_id)
         else:

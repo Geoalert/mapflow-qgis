@@ -26,7 +26,6 @@ class MapflowLoginDialog(*uic.loadUiType(ui_path / 'login_dialog.ui')):
             return None
 
     def set_auth_type(self, use_oauth: bool = False, token: str = ""):
-        print(f"{token = }")
         self.use_oauth = use_oauth
         self.invalidToken.setVisible(False)
         if use_oauth:

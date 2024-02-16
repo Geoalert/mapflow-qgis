@@ -141,7 +141,7 @@ class Http(QObject):
         try:
             request = self.authorize(request, auth)
         except Exception as e:
-            print(f"{e}")
+            # We skip the exception handling, then the request goes out unauthorized and the error response is handled
             pass
 
         response = method(request, body) if (method == self.nam.post or method == self.nam.put) else method(request)
