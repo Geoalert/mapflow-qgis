@@ -53,6 +53,7 @@ class Http(QObject):
     def logout(self):
         if self._oauth:
             self._oauth.clearCachedConfig(self.oauth_id)
+            self._oauth = None
 
         elif self._basic_auth:
             self._basic_auth = b''
