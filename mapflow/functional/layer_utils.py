@@ -361,6 +361,20 @@ class ResultsLoader(QObject):
             timeout=300
         )
 
+    def download_aoi_file(self, pid) -> None:
+        """
+        Download area of interest and save to a geojson file
+        """ 
+        path = self.temp_dir+str(pid)+'_aoi.geojson'                             
+        self.dlg.saveResultsButton.setEnabled(False)
+        self.http.get(
+            url=f'{self.server}/processings/{pid}/aois',
+            callback=self.download_aoi_file_callback,
+            callback_kwargs={'path': path},
+            use_default_error_handler=True,
+            timeout=300
+        )
+
     def download_results_file_callback(self, response: QNetworkReply, path: str) -> None:
         """
         Write results to the geojson file
@@ -370,6 +384,33 @@ class ResultsLoader(QObject):
             f.write(response.readAll().data())
         self.message_bar.pushSuccess(self.tr("Results saved"),
                                      self.tr("see in {path}!").format(path=path))
+        
+    def download_aoi_file_callback(self, response: QNetworkReply, path: str) -> None:
+        """
+        Write area of interest to the geojson file
+        """
+        self.dlg.saveResultsButton.setEnabled(True)
+        with open(path, mode='wb') as f:
+            data = f.write(response.readAll().data())
+        with open(path) as f:
+            data = json.load(f)
+            geojson = {
+                "type": "FeatureCollection",
+                "features": [{
+                    "type": "Feature",
+                    "geometry" : d['geometry'],
+                    "properties" : {"id": d['id'], 
+                                    "status": d['status'],
+                                    "percentCompleted": d['percentCompleted'],
+                                    "area": d['area'],
+                                    "messages": d['messages']},
+                }for d in data]
+            }
+        with open(path, "w") as out:
+            json.dump(geojson, out)
+        aoi_layer = QgsVectorLayer(path, 'Area of interest')
+        self.add_layer(aoi_layer)
+        aoi_layer.loadNamedStyle(os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, 'static', 'styles', 'aoi.qml'))))
 
     def download_results_file_error_handler(self, response: QNetworkReply) -> None:
         """Error handler for downloading processing results.
