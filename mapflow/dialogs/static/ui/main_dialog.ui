@@ -937,9 +937,9 @@
               </widget>
              </item>
              <item>
-              <widget class="QPushButton" name="saveAoiButton">
+              <widget class="QPushButton" name="downloadAoiButton">
                <property name="text">
-                <string>Save area</string>
+                <string>Download AOI</string>
                </property>
               </widget>
              </item>

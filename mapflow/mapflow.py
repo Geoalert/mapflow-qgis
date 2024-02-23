@@ -195,7 +195,7 @@ class Mapflow(QObject):
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         self.dlg.downloadResultsButton.clicked.connect(self.load_results)
         self.dlg.saveResultsButton.clicked.connect(self.download_results_file)
-        self.dlg.saveAoiButton.clicked.connect(self.download_aoi_file)        
+        self.dlg.downloadAoiButton.clicked.connect(self.download_aoi_file)        
         self.dlg.detailsButton.clicked.connect(self.show_details)
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
@@ -2457,9 +2457,6 @@ class Mapflow(QObject):
         if not processing:
             return
         pid = processing.id_
-        if pid not in self.processing_history.finished:
-            self.alert(self.tr("Only the areas of correctly finished processing can be loaded"))
-            return
         self.result_loader.download_aoi_file(pid=pid)
 
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:

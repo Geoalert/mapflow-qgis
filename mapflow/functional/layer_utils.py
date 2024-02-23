@@ -21,6 +21,7 @@ from qgis.core import (Qgis,
                        QgsCoordinateReferenceSystem,
                        QgsDistanceArea,
                        QgsVectorFileWriter)
+from pathlib import Path
 
 from .geometry import clip_aoi_to_image_extent
 from .helpers import WGS84, to_wgs84, WGS84_ELLIPSOID
@@ -365,14 +366,15 @@ class ResultsLoader(QObject):
         """
         Download area of interest and save to a geojson file
         """ 
-        path = self.temp_dir+str(pid)+'_aoi.geojson'                             
+        path = Path(self.temp_dir)/f'{pid}_aoi.geojson'
+        #path = os.path.join(self.temp_dir, f'{pid}_aoi.geojson')                           
         self.dlg.saveResultsButton.setEnabled(False)
         self.http.get(
             url=f'{self.server}/processings/{pid}/aois',
             callback=self.download_aoi_file_callback,
             callback_kwargs={'path': path},
             use_default_error_handler=True,
-            timeout=300
+            timeout=30
         )
 
     def download_results_file_callback(self, response: QNetworkReply, path: str) -> None:
@@ -390,25 +392,23 @@ class ResultsLoader(QObject):
         Write area of interest to the geojson file
         """
         self.dlg.saveResultsButton.setEnabled(True)
-        with open(path, mode='wb') as f:
-            data = f.write(response.readAll().data())
-        with open(path) as f:
-            data = json.load(f)
-            geojson = {
-                "type": "FeatureCollection",
-                "features": [{
-                    "type": "Feature",
-                    "geometry" : d['geometry'],
-                    "properties" : {"id": d['id'], 
-                                    "status": d['status'],
-                                    "percentCompleted": d['percentCompleted'],
-                                    "area": d['area'],
-                                    "messages": d['messages']},
-                }for d in data]
-            }
-        with open(path, "w") as out:
-            json.dump(geojson, out)
-        aoi_layer = QgsVectorLayer(path, 'Area of interest')
+        data = json.loads(response.readAll().data())
+        geojson = {
+        "type": "FeatureCollection",
+        "features": [{
+            "type": "Feature",
+            "geometry" : d['geometry'],
+            "properties" : {"id": d['id'], 
+                            "status": d['status'],
+                            "percentCompleted": d['percentCompleted'],
+                            "area": d['area'],
+                            "messages": d['messages']},
+            }for d in data]
+        }
+        with open(path, "w") as f:
+            json.dump(geojson, f)
+        id = os.path.splitext(os.path.basename(path))[0][:-4]
+        aoi_layer = QgsVectorLayer(str(path), "AOI: {id}".format(id=id))
         self.add_layer(aoi_layer)
         aoi_layer.loadNamedStyle(os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, 'static', 'styles', 'aoi.qml'))))
 
