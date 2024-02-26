@@ -194,9 +194,6 @@ class Mapflow(QObject):
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         self.dlg.downloadResultsButton.clicked.connect(self.load_results)
-        self.dlg.saveResultsButton.clicked.connect(self.download_results_file)
-        self.dlg.downloadAoiButton.clicked.connect(self.download_aoi_file)        
-        self.dlg.detailsButton.clicked.connect(self.show_details)
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
         self.dlg.startProcessing.clicked.connect(self.create_processing)
@@ -273,6 +270,12 @@ class Mapflow(QObject):
         self.draw_aoi = QAction(self.tr("Draw AOI at the map"))
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
+        # Add options menu
+        self.options_menu = QMenu()
+        self.save_result_action = QAction(self.tr("Save results"))
+        self.download_aoi_action = QAction(self.tr("Download AOI"))
+        self.see_details_action = QAction(self.tr("See details"))
+        self.setup_options_menu()
 
         # Layer actions
         self.add_layer_action = QAction(u"Use as AOI in Mapflow")
@@ -349,6 +352,16 @@ class Mapflow(QObject):
         self.add_aoi_from_file_action.triggered.connect(self.open_vector_file)
         self.draw_aoi.triggered.connect(self.create_editable_aoi_layer)
         self.dlg.toolButton.setMenu(self.add_layer_menu)
+
+    def setup_options_menu(self):
+        self.options_menu.addAction(self.save_result_action)
+        self.options_menu.addAction(self.download_aoi_action)
+        self.options_menu.addAction(self.see_details_action)
+
+        self.save_result_action.triggered.connect(self.download_results_file)
+        self.download_aoi_action.triggered.connect(self.download_aoi_file)
+        self.see_details_action.triggered.connect(self.show_details)
+        self.dlg.toolButton_2.setMenu(self.options_menu)
 
     def create_aoi_layer_from_map(self, action: QAction):
         aoi_geometry = helpers.to_wgs84(

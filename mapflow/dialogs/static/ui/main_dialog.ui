@@ -921,7 +921,7 @@
             </widget>
            </item>
            <item>
-            <layout class="QHBoxLayout" name="processingFooter" stretch="0,0,0,0,0,0">
+            <layout class="QHBoxLayout" name="processingFooter" stretch="0,0,0,0">
              <item>
               <widget class="QPushButton" name="downloadResultsButton">
                <property name="text">
@@ -930,23 +930,33 @@
               </widget>
              </item>
              <item>
-              <widget class="QPushButton" name="detailsButton">
-               <property name="text">
-                <string>See details</string>
+              <widget class="QToolButton" name="toolButton_2">
+               <property name="contextMenuPolicy">
+                <enum>Qt::ActionsContextMenu</enum>
                </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QPushButton" name="downloadAoiButton">
-               <property name="text">
-                <string>Download AOI</string>
+               <property name="layoutDirection">
+                <enum>Qt::LeftToRight</enum>
                </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QPushButton" name="saveResultsButton">
                <property name="text">
-                <string>Save results</string>
+                <string/>
+               </property>
+               <property name="checkable">
+                <bool>false</bool>
+               </property>
+               <property name="checked">
+                <bool>false</bool>
+               </property>
+               <property name="popupMode">
+                <enum>QToolButton::InstantPopup</enum>
+               </property>
+               <property name="toolButtonStyle">
+                <enum>Qt::ToolButtonIconOnly</enum>
+               </property>
+               <property name="autoRaise">
+                <bool>false</bool>
+               </property>
+               <property name="arrowType">
+                <enum>Qt::NoArrow</enum>
                </property>
               </widget>
              </item>
@@ -1944,6 +1954,11 @@
     </layout>
    </item>
   </layout>
+  <action name="see_details_action">
+   <property name="text">
+    <string>see_details_action</string>
+   </property>
+  </action>
  </widget>
  <customwidgets>
   <customwidget>

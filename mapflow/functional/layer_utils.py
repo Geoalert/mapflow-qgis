@@ -352,7 +352,7 @@ class ResultsLoader(QObject):
         if not path:
             # if the path was not selected
             return
-        self.dlg.saveResultsButton.setEnabled(False)
+        self.dlg.toolButton_2.setEnabled(False)
         self.http.get(
             url=f'{self.server}/processings/{pid}/result',
             callback=self.download_results_file_callback,
@@ -366,9 +366,8 @@ class ResultsLoader(QObject):
         """
         Download area of interest and save to a geojson file
         """ 
-        path = Path(self.temp_dir)/f'{pid}_aoi.geojson'
-        #path = os.path.join(self.temp_dir, f'{pid}_aoi.geojson')                           
-        self.dlg.saveResultsButton.setEnabled(False)
+        path = Path(self.temp_dir)/f'{pid}_aoi.geojson'                         
+        self.dlg.toolButton_2.setEnabled(False)
         self.http.get(
             url=f'{self.server}/processings/{pid}/aois',
             callback=self.download_aoi_file_callback,
@@ -381,7 +380,7 @@ class ResultsLoader(QObject):
         """
         Write results to the geojson file
         """
-        self.dlg.saveResultsButton.setEnabled(True)
+        self.dlg.toolButton_2.setEnabled(True)
         with open(path, mode='wb') as f:
             f.write(response.readAll().data())
         self.message_bar.pushSuccess(self.tr("Results saved"),
@@ -391,7 +390,7 @@ class ResultsLoader(QObject):
         """
         Write area of interest to the geojson file
         """
-        self.dlg.saveResultsButton.setEnabled(True)
+        self.dlg.toolButton_2.setEnabled(True)
         data = json.loads(response.readAll().data())
         geojson = {
         "type": "FeatureCollection",

@@ -48,6 +48,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.tabWidget.setTabIcon(1, icons.lens_icon)
         self.tabWidget.setTabIcon(2, icons.user_gear_icon)
         self.tabWidget.setTabIcon(3, icons.info_icon)
+        self.toolButton_2.setIcon(icons.options_icon)
 
         coin_pixmap = icons.coins_icon.pixmap(16, 16)
         self.labelCoins_1.setPixmap(coin_pixmap)
