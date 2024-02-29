@@ -66,7 +66,7 @@ class ImageCatalogResponseSchema(Serializable):
         return {"type": "FeatureCollection", "features": [image.as_geojson() for image in self.images]}
 
 @dataclass
-class Aoi():
+class Aoi:
     id: str
     status: str
     percentCompleted: int
@@ -75,26 +75,24 @@ class Aoi():
     geometry: dict
 
     def aoi_as_feature(self):
-        feature = [{"type": "Feature",
+        feature = {"type": "Feature",
                    "geometry" : self.geometry,
                    "properties" : { "id": self.id, 
                                     "status": self.status,
                                     "percentCompleted": self.percentCompleted,
                                     "area": self.area,
                                     "messages": self.messages }
-                  }]
+                  }
         return feature
-    
+
 @dataclass
-class AoisResponseSchema():
-    id: str
-    status: str
-    percentCompleted: int
-    area: int
-    messages: list
-    geometry: dict
+class AoiResponseSchema:
+    aois: List[Aoi]
+
+    def __post_init__(self):
+        self.aois = [Aoi(**data) for data in self.aois]
 
     def aoi_as_geojson(self):
         geojson = { "type": "FeatureCollection",
-                    "features": Aoi.aoi_as_feature(self)}
+                    "features": [aoi.aoi_as_feature() for aoi in self.aois]}
         return geojson

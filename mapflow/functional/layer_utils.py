@@ -26,7 +26,7 @@ from pathlib import Path
 from .geometry import clip_aoi_to_image_extent
 from .helpers import WGS84, to_wgs84, WGS84_ELLIPSOID
 from ..styles import get_style_name
-from ..schema.catalog import AoisResponseSchema
+from ..schema.catalog import AoiResponseSchema
 
 
 def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
@@ -393,7 +393,7 @@ class ResultsLoader(QObject):
         """
         self.dlg.saveOptionsButton.setEnabled(True)
         data = json.loads(response.readAll().data())
-        geojson = AoisResponseSchema.aoi_as_geojson(AoisResponseSchema(**data[0]))
+        geojson = AoiResponseSchema(data).aoi_as_geojson()
         with open(path, "w") as f:
             json.dump(geojson, f)
         id = Path(path).stem[:-4]
