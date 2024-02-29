@@ -351,7 +351,7 @@ class Mapflow(QObject):
         self.create_aoi_from_map_action.triggered.connect(self.create_aoi_layer_from_map)
         self.add_aoi_from_file_action.triggered.connect(self.open_vector_file)
         self.draw_aoi.triggered.connect(self.create_editable_aoi_layer)
-        self.dlg.toolButton.setMenu(self.add_layer_menu)
+        self.dlg.addAoiButton.setMenu(self.add_layer_menu)
 
     def setup_options_menu(self):
         self.options_menu.addAction(self.save_result_action)
@@ -361,7 +361,7 @@ class Mapflow(QObject):
         self.save_result_action.triggered.connect(self.download_results_file)
         self.download_aoi_action.triggered.connect(self.download_aoi_file)
         self.see_details_action.triggered.connect(self.show_details)
-        self.dlg.toolButton_2.setMenu(self.options_menu)
+        self.dlg.saveOptionsButton.setMenu(self.options_menu)
 
     def create_aoi_layer_from_map(self, action: QAction):
         aoi_geometry = helpers.to_wgs84(

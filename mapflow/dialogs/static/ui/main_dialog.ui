@@ -151,7 +151,7 @@
           </widget>
          </item>
          <item>
-          <widget class="QToolButton" name="toolButton">
+          <widget class="QToolButton" name="addAoiButton">
            <property name="maximumSize">
             <size>
              <width>32</width>
@@ -930,7 +930,7 @@
               </widget>
              </item>
              <item>
-              <widget class="QToolButton" name="toolButton_2">
+              <widget class="QToolButton" name="saveOptionsButton">
                <property name="contextMenuPolicy">
                 <enum>Qt::ActionsContextMenu</enum>
                </property>
