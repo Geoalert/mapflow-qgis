@@ -2480,7 +2480,7 @@ class Mapflow(QObject):
         :param blocking: Opened as modal - code below will only be executed when the alert is closed
         """
         box = QMessageBox(icon, self.plugin_name, message, parent=QApplication.activeWindow())
-        box.setTextFormat(Qt.RichText)
+        box.setTextFormat(Qt.AutoText)
         if icon == QMessageBox.Question:  # by default, only OK is added
             box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
         return box.exec() == QMessageBox.Ok if blocking else box.open()
@@ -2960,27 +2960,28 @@ class Mapflow(QObject):
         processing = self.selected_processing()
         if not processing:
             return
-        message = self.tr("Name: {name}"
-                          "\nStatus: {status}"
-                          "\n\nModel: {model},").format(name=processing.name,
+        message = self.tr("<b>Name</b>: {name}"
+                          "<br><b>Status</b></br>: {status}"
+                          "<br><b>Model</b></br>: {model}").format(name=processing.name,
                                                         model=processing.workflow_def,
                                                         status=processing.status.value)
-        if processing.blocks:
-            message += self.tr("\nModel options:"
-                               " {options}").format(options=", ".join(block.name
-                                                                      for block in processing.blocks
-                                                                      if block.enabled))
+        if processing.blocks: 
+            if processing.blocks[0].enabled == True:
+                message += self.tr("<br><b>Model options:</b></br>"
+                                    " {options}").format(options=", ".join(block.name
+                                                                      for block in processing.blocks))
+                
         if processing.params.data_provider:
-            message += self.tr("\n\nData provider: {provider}").format(provider=processing.params.data_provider)
+            message += self.tr("<br><b>Data provider</b></br>: {provider}").format(provider=processing.params.data_provider)
         elif (processing.params.source_type and processing.params.source_type.lower() in ("local", "tif", "tiff")) \
                 or (processing.params.url and processing.params.url.startswith("s3://")):
             # case of user's raster file; we do not want to display internal file address
-            message += self.tr("\n\nData source: uploaded file")
+            message += self.tr("<br><b>Data source</b></br>: uploaded file")
         elif processing.params.url:
-            message += self.tr("\n\nData source link {url}").format(url=processing.params.url)
+            message += self.tr("<br><b>Data source link</b></br> {url}").format(url=processing.params.url)
 
         if processing.errors:
-            message += "\n\nErrors: \n" + processing.error_message(raw=self.config.SHOW_RAW_ERROR)
+            message += "<br><b>Errors</b>:</br>" + "<br></br>" + processing.error_message(raw=self.config.SHOW_RAW_ERROR)
         self.alert(message=message,
                    icon=QMessageBox.Information,
                    blocking=False)
