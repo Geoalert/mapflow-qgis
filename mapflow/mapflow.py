@@ -194,8 +194,6 @@ class Mapflow(QObject):
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         self.dlg.downloadResultsButton.clicked.connect(self.load_results)
-        self.dlg.saveResultsButton.clicked.connect(self.download_results_file)
-        self.dlg.detailsButton.clicked.connect(self.show_details)
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
         self.dlg.startProcessing.clicked.connect(self.create_processing)
@@ -272,6 +270,12 @@ class Mapflow(QObject):
         self.draw_aoi = QAction(self.tr("Draw AOI at the map"))
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
+        # Add options menu
+        self.options_menu = QMenu()
+        self.save_result_action = QAction(self.tr("Save results"))
+        self.download_aoi_action = QAction(self.tr("Download AOI"))
+        self.see_details_action = QAction(self.tr("See details"))
+        self.setup_options_menu()
 
         # Layer actions
         self.add_layer_action = QAction(u"Use as AOI in Mapflow")
@@ -347,7 +351,17 @@ class Mapflow(QObject):
         self.create_aoi_from_map_action.triggered.connect(self.create_aoi_layer_from_map)
         self.add_aoi_from_file_action.triggered.connect(self.open_vector_file)
         self.draw_aoi.triggered.connect(self.create_editable_aoi_layer)
-        self.dlg.toolButton.setMenu(self.add_layer_menu)
+        self.dlg.addAoiButton.setMenu(self.add_layer_menu)
+
+    def setup_options_menu(self):
+        self.options_menu.addAction(self.save_result_action)
+        self.options_menu.addAction(self.download_aoi_action)
+        self.options_menu.addAction(self.see_details_action)
+
+        self.save_result_action.triggered.connect(self.download_results_file)
+        self.download_aoi_action.triggered.connect(self.download_aoi_file)
+        self.see_details_action.triggered.connect(self.show_details)
+        self.dlg.saveOptionsButton.setMenu(self.options_menu)
 
     def create_aoi_layer_from_map(self, action: QAction):
         aoi_geometry = helpers.to_wgs84(
@@ -2448,6 +2462,16 @@ class Mapflow(QObject):
             return
         self.result_loader.download_results_file(pid=pid)
 
+    def download_aoi_file(self) -> None:
+        """
+        Download area of interest and save to a geojson file
+        """
+        processing = self.selected_processing()
+        if not processing:
+            return
+        pid = processing.id_
+        self.result_loader.download_aoi_file(pid=pid)
+
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """Display a minimalistic modal dialog with some info or a question.
 
@@ -2456,7 +2480,7 @@ class Mapflow(QObject):
         :param blocking: Opened as modal - code below will only be executed when the alert is closed
         """
         box = QMessageBox(icon, self.plugin_name, message, parent=QApplication.activeWindow())
-        box.setTextFormat(Qt.RichText)
+        box.setTextFormat(Qt.AutoText)
         if icon == QMessageBox.Question:  # by default, only OK is added
             box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
         return box.exec() == QMessageBox.Ok if blocking else box.open()
@@ -2933,27 +2957,30 @@ class Mapflow(QObject):
         processing = self.selected_processing()
         if not processing:
             return
-        message = self.tr("Name: {name}"
-                          "\nStatus: {status}"
-                          "\n\nModel: {model},").format(name=processing.name,
+        message = self.tr("<b>Name</b>: {name}"
+                          "<br><b>Status</b></br>: {status}"
+                          "<br><b>Model</b></br>: {model}").format(name=processing.name,
                                                         model=processing.workflow_def,
                                                         status=processing.status.value)
-        if processing.blocks:
-            message += self.tr("\nModel options:"
-                               " {options}").format(options=", ".join(block.name
-                                                                      for block in processing.blocks
-                                                                      if block.enabled))
+        if processing.blocks: 
+            if processing.blocks[0].enabled == True:
+                message += self.tr("<br><b>Model options:</b></br>"
+                                    " {options}").format(options=", ".join(block.name
+                                                                      for block in processing.blocks))
+            if processing.blocks[0].enabled == False:
+                message += self.tr("<br><b>Model options:</b></br>" " No options selected")
+                
         if processing.params.data_provider:
-            message += self.tr("\n\nData provider: {provider}").format(provider=processing.params.data_provider)
+            message += self.tr("<br><b>Data provider</b></br>: {provider}").format(provider=processing.params.data_provider)
         elif (processing.params.source_type and processing.params.source_type.lower() in ("local", "tif", "tiff")) \
                 or (processing.params.url and processing.params.url.startswith("s3://")):
             # case of user's raster file; we do not want to display internal file address
-            message += self.tr("\n\nData source: uploaded file")
+            message += self.tr("<br><b>Data source</b></br>: uploaded file")
         elif processing.params.url:
-            message += self.tr("\n\nData source link {url}").format(url=processing.params.url)
+            message += self.tr("<br><b>Data source link</b></br> {url}").format(url=processing.params.url)
 
         if processing.errors:
-            message += "\n\nErrors: \n" + processing.error_message(raw=self.config.SHOW_RAW_ERROR)
+            message += "<br><b>Errors</b>:</br>" + "<br></br>" + processing.error_message(raw=self.config.SHOW_RAW_ERROR)
         self.alert(message=message,
                    icon=QMessageBox.Information,
                    blocking=False)
