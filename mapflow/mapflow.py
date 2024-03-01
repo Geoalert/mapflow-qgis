@@ -2970,6 +2970,8 @@ class Mapflow(QObject):
                 message += self.tr("<br><b>Model options:</b></br>"
                                     " {options}").format(options=", ".join(block.name
                                                                       for block in processing.blocks))
+            if processing.blocks[0].enabled == False:
+                message += self.tr("<br><b>Model options:</b></br>" " No options selected")
                 
         if processing.params.data_provider:
             message += self.tr("<br><b>Data provider</b></br>: {provider}").format(provider=processing.params.data_provider)
