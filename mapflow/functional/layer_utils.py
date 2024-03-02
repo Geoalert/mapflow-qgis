@@ -20,7 +20,8 @@ from qgis.core import (Qgis,
                        QgsWkbTypes,
                        QgsCoordinateReferenceSystem,
                        QgsDistanceArea,
-                       QgsVectorFileWriter)
+                       QgsVectorFileWriter,
+                       QgsLayerTreeLayer)
 from pathlib import Path
 
 from .geometry import clip_aoi_to_image_extent
@@ -275,6 +276,29 @@ class ResultsLoader(QObject):
             self.project.addMapLayer(layer, addToLegend=False)
             # Explcitly add layer to the position 0 or else it adds it to bottom
             self.layer_group.insertLayer(0, layer)
+            self.layer_group.setExpanded(True)
+        else:  # assume user opted to not use a group, add layers as usual
+            self.project.addMapLayer(layer)
+
+    def add_layer_to_bottom(self, layer: Optional[QgsMapLayer]) -> None:
+        if not layer:
+            return
+        self.layer_group = self.layer_tree_root.findGroup(self.settings.value('layerGroup'))
+        if self.add_layers_to_group:
+            if not self.layer_group:  # сreate a layer group
+                self.layer_group = self.layer_tree_root.insertGroup(0, self.plugin_name)
+                # A bug fix, - gotta collapse first to be able to expand it
+                # Or else it'll ignore the setExpanded(True) calls
+                self.layer_group.setExpanded(False)
+                self.settings.setValue('layerGroup', self.plugin_name)
+                # If the group has been deleted, assume user wants to add layers to root, memorize it
+                self.layer_group.destroyed.connect(lambda: setattr(self, 'add_layers_to_group', False))
+                # Let user rename the group, memorize the new name
+                self.layer_group.nameChanged.connect(lambda _, name: self.settings.setValue('layerGroup', name))
+            # To be added to group, layer has to be added to project first
+            self.project.addMapLayer(layer, addToLegend=False)
+            # Explcitly add layer to the bottom
+            self.layer_group.insertLayer(-1, layer)
             self.layer_group.setExpanded(True)
         else:  # assume user opted to not use a group, add layers as usual
             self.project.addMapLayer(layer)

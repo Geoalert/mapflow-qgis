@@ -16,7 +16,7 @@ from PyQt5.QtCore import (
 )
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction,
-    QAbstractItemView, QLabel, QProgressBar, QMenu
+    QAbstractItemView, QLabel, QProgressBar, QMenu, QWidget
 )
 
 from qgis.gui import QgsMessageBarItem
@@ -229,6 +229,7 @@ class Mapflow(QObject):
         self.dlg.metadataTo.dateChanged.connect(self.filter_metadata)
         self.dlg.preview.clicked.connect(self.preview)
         self.dlg.preview2.clicked.connect(self.preview)
+        self.dlg.searchImageryButton.clicked.connect(self.preview_or_search)
 
         self.dlg.addProvider.clicked.connect(self.add_provider)
         self.dlg.editProvider.clicked.connect(self.edit_provider)
@@ -2183,7 +2184,14 @@ class Mapflow(QObject):
                        QMessageBox.Warning)
             return
         except NotImplementedError as e:
-            self.alert(self.tr("Preview is unavailable for the provider {}").format(provider.name))
+            for l in self.iface.mapCanvas().layers():
+                if l.name() == 'OpenStreetMap':
+                    QgsProject.instance().removeMapLayers([l.id()])  
+            self.alert(self.tr("Preview is unavailable for the provider {}. \nOSM layer will be added instead.").format(provider.name))
+            # Add OSM instaed of preview, if it is unavailable (for Mapbox)
+            osm = 'type=xyz&url=https://tile.openstreetmap.org/{z}/{x}/{y}.png&zmax=19&zmin=0'
+            layer = QgsRasterLayer(osm, 'OpenStreetMap', 'wms')  
+            self.result_loader.add_layer_to_bottom(layer)
             return
         except Exception as e:
             self.alert(str(e), QMessageBox.Warning)
@@ -2202,7 +2210,7 @@ class Mapflow(QObject):
                 extent = self.metadata_extent(image_id)
                 if extent:
                     layer.setExtent(extent)
-            self.result_loader.add_layer(layer)
+            self.result_loader.add_layer_to_bottom(layer)
         else:
             self.alert(self.tr("We couldn't load a preview for this image"))
 
@@ -2223,6 +2231,13 @@ class Mapflow(QObject):
             self.preview_catalog(image_id=image_id)
         else:  # XYZ providers
             self.preview_xyz(provider=provider, image_id=image_id)
+    
+    def preview_or_search(self) -> None:
+        if "Imagery Search" in str(self.dlg.providerCombo.currentText()):
+            imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
+            self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
+        else:
+            self.preview()
 
     def update_processing_current_rating(self) -> None:
         # reset labels:
@@ -2670,7 +2685,6 @@ class Mapflow(QObject):
     def read_mapflow_token(self) -> None:
         """Compose and memorize the user's credentils as Basic Auth."""
         if self.use_oauth:
-            print("Using oauth")
             auth_id, new_auth = get_auth_id(self.config.AUTH_CONFIG_NAME,
                                              self.config.AUTH_CONFIG_MAP)
             if new_auth:
@@ -2678,10 +2692,8 @@ class Mapflow(QObject):
                                        " You may need to restart QGIS to apply it so you could log in"),
                            icon=QMessageBox.Information)
             if not auth_id:
-                print("Id not provider")
                 self.dlg_login.invalidToken.setVisible(True)
             else:
-                print("Proceed to oauth login")
                 self.dlg_login.invalidToken.setVisible(False)
                 self.login_oauth(auth_id)
         else:
