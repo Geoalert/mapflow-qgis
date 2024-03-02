@@ -20,8 +20,7 @@ from qgis.core import (Qgis,
                        QgsWkbTypes,
                        QgsCoordinateReferenceSystem,
                        QgsDistanceArea,
-                       QgsVectorFileWriter,
-                       QgsLayerTreeLayer)
+                       QgsVectorFileWriter)
 from pathlib import Path
 
 from .geometry import clip_aoi_to_image_extent
