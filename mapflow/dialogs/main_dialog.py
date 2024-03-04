@@ -11,7 +11,7 @@ from qgis.core import QgsMapLayerProxyModel, QgsMapLayer, QgsSettings
 
 from ..entity.billing import BillingType
 from ..entity.provider import ProviderInterface
-from ..entity.project import MapflowProject
+from ..schema.project import MapflowProject
 from ..functional import helpers
 from ..config import config
 from . import icons
@@ -49,6 +49,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.tabWidget.setTabIcon(2, icons.user_gear_icon)
         self.tabWidget.setTabIcon(3, icons.info_icon)
         self.saveOptionsButton.setIcon(icons.options_icon)
+        self.createProject.setIcon(icons.plus_icon)
+        self.deleteProject.setIcon(icons.minus_icon)
+        self.updateProject.setIcon(icons.edit_icon)
 
         coin_pixmap = icons.coins_icon.pixmap(16, 16)
         self.labelCoins_1.setPixmap(coin_pixmap)
@@ -401,3 +404,11 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.projectsCombo.clear()
         self.projectsCombo.addItems([pr.name for pr in projects])
         self.projectsCombo.setCurrentIndex(current_position)
+
+    def setup_default_project(self, is_default: bool):
+        tooltip = self.tr("You can't remove or modify default project") if is_default else ""
+        self.deleteProject.setDisabled(is_default)
+        self.updateProject.setDisabled(is_default)
+        self.deleteProject.setToolTip(tooltip)
+        self.updateProject.setToolTip(tooltip)
+

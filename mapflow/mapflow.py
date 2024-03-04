@@ -27,16 +27,21 @@ from qgis.core import (
 )
 
 from .functional import layer_utils, helpers
-from .dialogs import MainDialog, MapflowLoginDialog, ErrorMessageWidget, ProviderDialog, ReviewDialog
+from .dialogs import (MainDialog,
+                      MapflowLoginDialog,
+                      ErrorMessageWidget,
+                      ProviderDialog,
+                      ReviewDialog,
+                      CreateProjectDialog,
+                      UpdateProjectDialog
+                      )
 from .dialogs.icons import plugin_icon
-
 from .http import (Http,
                    get_error_report_body,
                    data_catalog_message_parser,
                    securewatch_message_parser,
                    api_message_parser,
                    )
-
 from .config import Config
 from .entity.processing import parse_processings_request, Processing, ProcessingHistory, updated_processings
 from .entity.provider import (UsersProvider,
@@ -47,7 +52,7 @@ from .entity.provider import (UsersProvider,
                               DefaultProvider,
                               ImagerySearchProvider,
                               ProviderInterface)
-from .entity.project import MapflowProject
+from .schema.project import MapflowProject
 from .entity.billing import BillingType
 from .entity.workflow_def import WorkflowDef
 from .schema import (PostSourceSchema,
@@ -62,6 +67,7 @@ from .errors import (ProcessingInputDataMissing,
                      AoiNotIntersectsImage,
                      ProxyIsAlreadySet)
 from .functional.geometry import clip_aoi_to_image_extent
+from .functional.project import ProjectService
 from .functional.auth import get_auth_id
 from . import constants
 from .schema.catalog import PreviewType
@@ -150,8 +156,10 @@ class Mapflow(QObject):
         self.dlg_login = self.set_up_login_dialog()
         self.review_dialog = ReviewDialog(self.dlg)
         self.dlg_provider = ProviderDialog(self.dlg)
+
         self.dlg_provider.accepted.connect(self.edit_provider_callback)
         # Display the plugin's version
+        # todo: Move to Maindialog
         metadata_parser = ConfigParser()
         metadata_parser.read(os.path.join(self.plugin_dir, 'metadata.txt'))
         self.plugin_version = metadata_parser.get('general', 'version')
@@ -165,6 +173,9 @@ class Mapflow(QObject):
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or self.config.DEFAULT_ZOOM))
 
+        # Initialize services
+        self.project_service = ProjectService(self.http, self.server)
+        self.project_service.projectsUpdated.connect(self.update_projects)
         # load providers from settings
         errors = []
         try:
@@ -234,6 +245,12 @@ class Mapflow(QObject):
         self.dlg.editProvider.clicked.connect(self.edit_provider)
         self.dlg.removeProvider.clicked.connect(self.remove_provider)
         self.dlg.maxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
+
+        # Projects
+        self.dlg.createProject.clicked.connect(self.create_project)
+        self.dlg.deleteProject.clicked.connect(self.delete_project)
+        self.dlg.updateProject.clicked.connect(self.update_project)
+
         # Maxar
         self.dlg.imageId.textChanged.connect(self.sync_image_id_with_table_and_layer)
         self.dlg.imageId.textChanged.connect(self.update_processing_cost)
@@ -596,20 +613,46 @@ class Mapflow(QObject):
         self.dlg.modelCombo.setCurrentText(self.config.DEFAULT_MODEL)
         self.on_model_change()
 
-    def on_project_change(self, currentIndex):
-        current_project = self.projects[currentIndex]
-        self.project_id = current_project.id
-        self.settings.setValue("project_id", self.project_id)
-        self.setup_workflow_defs(current_project.workflowDefs)
-        # Manually toggle function to avoid race condition
-        self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
-        self.setup_processings_table()
-
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
         # Save main dialog size & position
         self.settings.setValue('mainDialogState', self.dlg.saveGeometry())
 
+    # ========== Projects ========== #
+
+    def on_project_change(self, currentIndex):
+        current_project = self.projects[currentIndex]
+        self.project_id = current_project.id
+        self.settings.setValue("project_id", self.project_id)
+        self.setup_workflow_defs(current_project.workflowDefs)
+        # you can't delete or modify the default project
+        self.dlg.setup_default_project(current_project.isDefault)
+        # Manually toggle function to avoid race condition
+        self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
+        self.setup_processings_table()
+
+    def create_project(self):
+        dialog = CreateProjectDialog(self.dlg)
+        dialog.accepted.connect(lambda: self.project_service.create_project(dialog.project()))
+        dialog.setup()
+        dialog.deleteLater()
+
+    def update_project(self):
+        current_project = self.projects[self.dlg.projectsCombo.currentIndex()]
+        dialog = UpdateProjectDialog(self.dlg)
+        dialog.accepted.connect(lambda: self.project_service.update_project(current_project.id,
+                                                                                              dialog.project()))
+        dialog.setup(current_project)
+        dialog.deleteLater()
+
+    def delete_project(self):
+        current_project = self.projects[self.dlg.projectsCombo.currentIndex()]
+        if self.alert(self.tr('Do you really want to remove project {}? '
+                              'This action cannot be undone, all processings will be lost!').format(current_project.name),
+                        icon=QMessageBox.Question):
+            self.project_service.delete_project(current_project.id)
+
+    # ========= Providers ============ #
     def remove_provider(self) -> None:
         """Delete a web tile provider from the list of registered providers.
 
@@ -2485,12 +2528,17 @@ class Mapflow(QObject):
             box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
         return box.exec() == QMessageBox.Ok if blocking else box.open()
 
-    def get_processings_callback(self, response: QNetworkReply) -> None:
+    def get_processings_callback(self, response: QNetworkReply, caller=None) -> None:
         """Update the processing table and user limit.
 
         :param response: The HTTP response.
         """
-        processings = parse_processings_request(json.loads(response.readAll().data()))
+        response_data = json.loads(response.readAll().data())
+        processings = parse_processings_request(response_data)
+        if response_data:
+            current_project_id = response_data[0]['projectId']
+        else:
+            current_project_id = None
         if all(not p.status.is_in_progress
                and p.review_status.is_not_accepted
                for p in processings):
@@ -2836,6 +2884,7 @@ class Mapflow(QObject):
         # Fetch processings at startup and start the timer to keep fetching them afterwards
         self.http.get(url=f'{self.server}/projects/{self.project_id}/processings',
                       callback=self.get_processings_callback,
+                      callback_kwargs={"caller": f"setup_table_{self.project_id}"},
                       use_default_error_handler=False)
         self.processing_fetch_timer.start()
 
@@ -2888,25 +2937,21 @@ class Mapflow(QObject):
             self.setup_workflow_defs(default_project.workflowDefs)
             self.setup_processings_table()
         else:
-            self.http.get(
-                url=f'{self.config.SERVER}/projects',
-                callback=self.get_projects_callback,
-                use_default_error_handler=True
-            )
+            self.project_service.get_projects(current_project_id=self.project_id)
         self.dlg.setup_for_billing(self.billing_type)
         self.dlg.show()
         self.user_status_update_timer.start()
         self.app_startup_user_update_timer.start()
 
-    def get_projects_callback(self, response: QNetworkReply):
-        response = json.loads(response.readAll().data())
-        # Projects are set up once at login and stored in the plugin
-        self.projects = [MapflowProject.from_dict(project) for project in response]
+    def update_projects(self, current_project_id: str):
+        self.projects = self.project_service.projects
         if not self.projects:
             self.alert(self.tr("No projects found! Contact us to resolve the issue"))
             return
-        # Projects combo allows to select the project
-        current_index = self.find_project(self.projects, self.project_id)
+        current_index = self.find_project(self.projects, current_project_id)
+        if self.project_connection is not None:
+            self.dlg.projectsCombo.currentIndexChanged.disconnect(self.project_connection)
+            self.project_connection = None
         self.dlg.setup_project_combo(self.projects, current_index)
         self.on_project_change(current_index)
         self.project_connection = self.dlg.projectsCombo.currentIndexChanged.connect(self.on_project_change)
