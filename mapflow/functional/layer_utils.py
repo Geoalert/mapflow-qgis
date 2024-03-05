@@ -279,7 +279,7 @@ class ResultsLoader(QObject):
         else:  # assume user opted to not use a group, add layers as usual
             self.project.addMapLayer(layer)
 
-    def add_layer_to_bottom(self, layer: Optional[QgsMapLayer]) -> None:
+    def add_layer_by_order(self, order, layer: Optional[QgsMapLayer]) -> None:
         if not layer:
             return
         self.layer_group = self.layer_tree_root.findGroup(self.settings.value('layerGroup'))
@@ -297,7 +297,7 @@ class ResultsLoader(QObject):
             # To be added to group, layer has to be added to project first
             self.project.addMapLayer(layer, addToLegend=False)
             # Explcitly add layer to the bottom
-            self.layer_group.insertLayer(-1, layer)
+            self.layer_group.insertLayer(order, layer)
             self.layer_group.setExpanded(True)
         else:  # assume user opted to not use a group, add layers as usual
             self.project.addMapLayer(layer)

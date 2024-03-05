@@ -2187,15 +2187,25 @@ class Mapflow(QObject):
             for l in self.iface.mapCanvas().layers():
                 if l.name() == 'OpenStreetMap':
                     QgsProject.instance().removeMapLayers([l.id()])  
-            self.alert(self.tr("Preview is unavailable for the provider {}. \nOSM layer will be added instead.").format(provider.name))
+            self.alert(self.tr("Preview is unavailable for the provider {}. \nOSM layer will be added instead.").format(provider.name), QMessageBox.Information)
             # Add OSM instaed of preview, if it is unavailable (for Mapbox)
             osm = 'type=xyz&url=https://tile.openstreetmap.org/{z}/{x}/{y}.png&zmax=19&zmin=0'
             layer = QgsRasterLayer(osm, 'OpenStreetMap', 'wms')  
-            self.result_loader.add_layer_to_bottom(layer)
+            for l in self.iface.mapCanvas().layers(): 
+                if l.name() == 'OpenStreetMap' or l.name() == 'ArcGIS World Imagery':
+                    other_preview_layer = QgsProject.instance().layerTreeRoot().findLayer(l)
+                    parent_group = other_preview_layer.parent()
+                    idndex = parent_group.children().index(other_preview_layer)
+                    self.result_loader.add_layer_by_order(order = idndex, layer = layer)
+                    return
+            self.result_loader.add_layer_by_order(-1, layer)
             return
         except Exception as e:
             self.alert(str(e), QMessageBox.Warning)
             return
+        for l in self.iface.mapCanvas().layers():
+            if l.name() == 'ArcGIS World Imagery':
+                QgsProject.instance().removeMapLayers([l.id()])
         uri = layer_utils.generate_xyz_layer_definition(url,
                                                         provider.credentials.login,
                                                         provider.credentials.password,
@@ -2210,7 +2220,14 @@ class Mapflow(QObject):
                 extent = self.metadata_extent(image_id)
                 if extent:
                     layer.setExtent(extent)
-            self.result_loader.add_layer_to_bottom(layer)
+            for l in self.iface.mapCanvas().layers(): 
+                if l.name() == 'OpenStreetMap' or l.name() == 'ArcGIS World Imagery':
+                    other_preview_layer = QgsProject.instance().layerTreeRoot().findLayer(l)
+                    parent_group = other_preview_layer.parent()
+                    idndex = parent_group.children().index(other_preview_layer)
+                    self.result_loader.add_layer_by_order(order = idndex, layer = layer)
+                    return
+            self.result_loader.add_layer_by_order(-1, layer)
         else:
             self.alert(self.tr("We couldn't load a preview for this image"))
 
