@@ -267,9 +267,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.imageId.setPlaceholderText(image_id_placeholder)
         self.labelImageId.setToolTip(image_id_tooltip)
 
-        imagery_search_tab = self.tabWidget.findChild(QWidget, "providersTab")
-        self.searchImageryButton.clicked.connect(lambda: self.tabWidget.setCurrentWidget(imagery_search_tab))
-        self.searchImageryButton.setToolTip(self.tr("Search imagery"))
         if fill:
             self.fill_metadata_table(fill)
             

@@ -16,7 +16,7 @@ from PyQt5.QtCore import (
 )
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction,
-    QAbstractItemView, QLabel, QProgressBar, QMenu
+    QAbstractItemView, QLabel, QProgressBar, QMenu, QWidget
 )
 
 from qgis.gui import QgsMessageBarItem
@@ -229,6 +229,7 @@ class Mapflow(QObject):
         self.dlg.metadataTo.dateChanged.connect(self.filter_metadata)
         self.dlg.preview.clicked.connect(self.preview)
         self.dlg.preview2.clicked.connect(self.preview)
+        self.dlg.searchImageryButton.clicked.connect(self.preview_or_search)
 
         self.dlg.addProvider.clicked.connect(self.add_provider)
         self.dlg.editProvider.clicked.connect(self.edit_provider)
@@ -2188,6 +2189,9 @@ class Mapflow(QObject):
         except Exception as e:
             self.alert(str(e), QMessageBox.Warning)
             return
+        for l in self.iface.mapCanvas().layers():
+            if "arcgis" in l.dataProvider().dataSourceUri():
+                QgsProject.instance().removeMapLayers([l.id()])
         uri = layer_utils.generate_xyz_layer_definition(url,
                                                         provider.credentials.login,
                                                         provider.credentials.password,
@@ -2202,7 +2206,7 @@ class Mapflow(QObject):
                 extent = self.metadata_extent(image_id)
                 if extent:
                     layer.setExtent(extent)
-            self.result_loader.add_layer(layer)
+            self.result_loader.add_layer_by_order(layer, -1)
         else:
             self.alert(self.tr("We couldn't load a preview for this image"))
 
@@ -2223,6 +2227,14 @@ class Mapflow(QObject):
             self.preview_catalog(image_id=image_id)
         else:  # XYZ providers
             self.preview_xyz(provider=provider, image_id=image_id)
+
+    def preview_or_search(self) -> None:
+        if "Imagery Search" in str(self.dlg.providerCombo.currentText()):
+            imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
+            self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
+        else:
+            self.preview()
+
 
     def update_processing_current_rating(self) -> None:
         # reset labels:
