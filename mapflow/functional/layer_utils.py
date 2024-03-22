@@ -1,7 +1,6 @@
 import os
 import json
-import tempfile
-from typing import Optional, List
+from typing import Optional, List, Iterable
 from pyproj import Proj, transform
 from PyQt5.QtNetwork import QNetworkReply
 from PyQt5.QtCore import QObject
@@ -27,7 +26,7 @@ from .geometry import clip_aoi_to_image_extent
 from .helpers import WGS84, to_wgs84, WGS84_ELLIPSOID
 from ..styles import get_style_name
 from ..schema.catalog import AoiResponseSchema
-
+from ..dialogs.dialogs import ErrorMessageWidget
 
 def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
     """Get a layer's bounding box aka extent/envelope
@@ -289,57 +288,86 @@ class ResultsLoader(QObject):
         vector_layer = generate_vector_layer(processing.vector_layer.get("tileUrl", None),
                                              name=processing.name)
         vector_layer.loadNamedStyle(get_style_name(processing.workflow_def, vector_layer))
-        #os.path.join(self.plugin_dir, 'static', 'styles', 'tiles.qml'))
-        self.add_layer(raster_layer)
-        self.add_layer(vector_layer)
-        self.request_layer_extent(None,
-                                  tilejson_uris=[uri for uri in (raster_tilejson, vector_tilejson) if
-                                                 uri is not None],
-                                  raster_layer=raster_layer,
-                                  vector_layer=vector_layer)
+        self.request_layer_extent(tilejson_uri=raster_tilejson,
+                                  layer=raster_layer,
+                                  next_layers = [vector_layer],
+                                  next_tilejson_uris = [vector_tilejson],
+                                  processing_id = processing.id_
+                                  )
 
     def request_layer_extent(self,
-                             response: QNetworkReply,
-                             tilejson_uris: List[str],
-                             raster_layer,
-                             vector_layer):
-        if not tilejson_uris:
-            # All available tilejson urls were tried and none returned success
-            self.message_bar.pushWarning(self.tr("Results loaded"),
-                                         self.tr("Extent failed to load, zoom to the layers manually"))
-        # request with the first and save the rest in case of error
-        main_tilejson_uri = tilejson_uris[0]
-        other_tilejson_uris = tilejson_uris[1:]
-        self.http.get(url=main_tilejson_uri,
+                             tilejson_uri: str,
+                             layer: QgsMapLayer,
+                             next_layers: List[QgsMapLayer],
+                             next_tilejson_uris: List[str],
+                             errors: bool = False,
+                             processing_id: Optional[str] = None
+                             ):
+        self.http.get(url=tilejson_uri,
                       callback=self.add_layers_with_extent,
-                      callback_kwargs={"raster": raster_layer,
-                                       "vector": vector_layer},
-                      error_handler=self.request_layer_extent,
-                      error_handler_kwargs={"tilejson_uris": other_tilejson_uris,
-                                            "raster_layer": raster_layer,
-                                            "vector_layer": vector_layer},
+                      callback_kwargs={"layer": layer,
+                                       "processing_id": processing_id,
+                                       "next_layers": next_layers,
+                                       "next_tilejson_uris": next_tilejson_uris,
+                                       "errors": errors},
+                      error_handler=self.add_layers_with_extent,
+                      error_handler_kwargs={"layer": layer,
+                                            "processing_id": processing_id,
+                                            "errors": errors,
+                                            "next_layers": next_layers,
+                                            "next_tilejson_uris": next_tilejson_uris,
+                                            },
                       use_default_error_handler=False,
                       )
 
     def add_layers_with_extent(
             self,
             response: QNetworkReply,
-            vector: QgsVectorLayer,
-            raster: QgsRasterLayer
+            layer: QgsMapLayer,
+            next_layers: List[QgsMapLayer],
+            next_tilejson_uris: List[str],
+            errors: bool = False,
+            processing_id: Optional[str] = None
     ) -> None:
-        """Set processing raster extent upon successfully requesting the processing's AOI.
+        if response.error() != QNetworkReply.NoError:
+            errors = True
+        else:
+            try:
+                bounding_box = get_bounding_box_from_tile_json(response=response)
+            except Exception as e:
+                errors = True
+            else:
+                layer.setExtent(rect=bounding_box)
+                self.add_layer(layer)
+            self.iface.setActiveLayer(layer)
+            self.iface.zoomToActiveLayer()
+        if next_layers and next_tilejson_uris:
+            self.request_layer_extent(tilejson_uri=next_tilejson_uris[0],
+                                      layer=next_layers[0],
+                                      next_layers=next_layers[1:],
+                                      next_tilejson_uris=next_tilejson_uris[1:],
+                                      errors=errors,
+                                      processing_id=processing_id
+                                      )
+        elif errors:
+            # Report errors if there were any in layers loading
+            self.report_layer_error(errors, processing_id=processing_id)
 
-        :param response: The HTTP response.
-        :param vector: The downloaded feature layer.
-        :param raster: The downloaded raster which was used for processing.
-        """
-        bounding_box = get_bounding_box_from_tile_json(response=response)
-        raster.setExtent(rect=bounding_box)
-        vector.setExtent(rect=bounding_box)
-        self.iface.setActiveLayer(vector)
-        self.iface.zoomToActiveLayer()
-        self.message_bar.pushSuccess(self.tr("Success"),
-                                     self.tr("Results loaded to the project"))
+
+    def report_layer_error(self,
+                           response: QNetworkReply = None,
+                           processing_id: Optional[str] = None):
+        error_summary =  self.tr('Failed to download results \n'
+                                 'please try again later or report error').format(processing_id)
+        title = self.tr("Error")
+        email_body = "Error while loading results layer." \
+                     f"Processing id: {processing_id}"
+
+        ErrorMessageWidget(parent=QApplication.activeWindow(),
+                           text=error_summary,
+                           title=title,
+                           email_body=email_body).show()
+
 
     # ====== Download as geojson ===== #
     def download_results_file(self, pid) -> None:
@@ -401,17 +429,37 @@ class ResultsLoader(QObject):
         self.add_layer(aoi_layer)
         aoi_layer.loadNamedStyle(str(Path(__file__).parents[1]/'static'/'styles'/'aoi.qml'))
         
-    def download_results_file_error_handler(self, response: QNetworkReply) -> None:
+    def download_results_file_error_handler(self,
+                                            response: QNetworkReply,
+                                            processing_id: Optional[str] = None) -> None:
         """Error handler for downloading processing results.
 
         :param response: The HTTP response.
         """
         self.dlg.saveResultsButton.setEnabled(True)
-        self.message_bar.pushWarning(self.tr("Error"),
-                                     self.tr('could not download results, \n try again later or report error'),
-                                     )
+        self.report_layer_error(response, processing_id)
 
     # ======= Save as geopackage and add as layer - old variant ======= #
+
+    def download_results(self, processing) -> None:
+        """
+        Download and display processing results along with the source raster, if available.
+
+        Results will be downloaded into the user's output directory.
+        If it's unset, the user will be prompted to select one.
+        Unfinished or failed processings yield partial or no results.
+
+        Is called by double-clicking on a row in the processings table.
+        """
+        self.dlg.processingsTable.setEnabled(False)
+        self.http.get(
+            url=f'{self.server}/processings/{processing.id_}/result',
+            callback=self.download_results_callback,
+            callback_kwargs={'processing': processing},
+            use_default_error_handler=False,
+            error_handler=self.download_results_error_handler,
+            timeout=300
+        )
 
     def download_results_callback(self, response: QNetworkReply, processing) -> None:
         """Display processing results upon their successful fetch.
@@ -508,11 +556,22 @@ class ResultsLoader(QObject):
         :param vector: The downloaded feature layer.
         :param raster: The downloaded raster which was used for processing.
         """
-        bounding_box = get_bounding_box_from_tile_json(response=response)
+        try:
+            bounding_box = get_bounding_box_from_tile_json(response=response)
+        except Exception as e:
+            # we assume that the raster extent must be present,
+            # otherwise there is some error in raster tile server, and we should not add the layer
+            self.message_bar.pushWarning(self.tr("Results loaded"),
+                                         self.tr("Extent failed to load, zoom to the layers manually"))
+            self.set_raster_extent_error_handler(response, vector)
+            return
         raster.setExtent(rect=bounding_box)
         self.add_layer(raster)
         self.add_layer(vector)
+        # If raster is available, we zoom to the raster to fit the whole processing, not only the detected objects
+        self.iface.setActiveLayer(raster)
         self.iface.zoomToActiveLayer()
+        self.iface.setActiveLayer(vector)
 
     def set_raster_extent_error_handler(self,
                                         response: QNetworkReply,
@@ -521,3 +580,5 @@ class ResultsLoader(QObject):
         """Error handler for processing AOI requests. If tilejson can't be loaded, we do not add raster layer, and
         """
         self.add_layer(vector)
+        self.iface.setActiveLayer(vector)
+        self.iface.zoomToActiveLayer()

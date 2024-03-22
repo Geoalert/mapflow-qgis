@@ -2438,58 +2438,19 @@ class Mapflow(QObject):
 
     # =================== Results management ==================== #
     def load_results(self):
+        processing = self.selected_processing()
+        if not processing:
+            return
+        if processing.id_ not in self.processing_history.finished:
+            self.alert(self.tr("Only the results of correctly finished processing can be loaded"))
+            return
+
         if self.dlg.viewAsTiles.isChecked():
-            self.add_tile_layers()
+            self.result_loader.load_result_tiles(processing=processing)
         elif self.dlg.viewAsLocal.isChecked():
-            self.download_results()
-
-    def add_tile_layers(self) -> None:
-        """
-        Add raster- and vector- tile layers of the processing results to the project
-        If tilejson is available, the project is zoomed to this layer
-
-        This is the fastest way for bigger processings (streaming tiles rather than downloading full file)
-        but requires stable connection to work with this project
-
-        This will be the only supported way for free users!
-        """
-        processing = self.selected_processing()
-        if not processing:
-            return
-        pid = processing.id_
-        if pid not in self.processing_history.finished:
-            self.alert(self.tr("Only the results of correctly finished processing can be loaded"))
-            return
-        self.result_loader.load_result_tiles(processing=processing)
-
-    def download_results(self) -> None:
-        """
-        Download and display processing results along with the source raster, if available.
-
-        Results will be downloaded into the user's output directory.
-        If it's unset, the user will be prompted to select one.
-        Unfinished or failed processings yield partial or no results.
-
-        Is called by double-clicking on a row in the processings table.
-        """
-        if not self.check_if_output_directory_is_selected():
-            return
-        processing = self.selected_processing()
-        if not processing:
-            return
-        pid = processing.id_
-        if pid not in self.processing_history.finished:
-            self.alert(self.tr("Only the results of correctly finished processing can be loaded"))
-            return
-        self.dlg.processingsTable.setEnabled(False)
-        self.http.get(
-            url=f'{self.server}/processings/{pid}/result',
-            callback=self.result_loader.download_results_callback,
-            callback_kwargs={'processing': processing},
-            use_default_error_handler=False,
-            error_handler=self.result_loader.download_results_error_handler,
-            timeout=300
-        )
+            if not self.check_if_output_directory_is_selected():
+                return
+            self.result_loader.download_results(processing=processing)
 
     def download_results_file(self) -> None:
         """
@@ -2499,11 +2460,10 @@ class Mapflow(QObject):
         processing = self.selected_processing()
         if not processing:
             return
-        pid = processing.id_
-        if pid not in self.processing_history.finished:
+        if processing.id_ not in self.processing_history.finished:
             self.alert(self.tr("Only the results of correctly finished processing can be loaded"))
             return
-        self.result_loader.download_results_file(pid=pid)
+        self.result_loader.download_results_file(pid=processing.id_)
 
     def download_aoi_file(self) -> None:
         """
@@ -2512,8 +2472,7 @@ class Mapflow(QObject):
         processing = self.selected_processing()
         if not processing:
             return
-        pid = processing.id_
-        self.result_loader.download_aoi_file(pid=pid)
+        self.result_loader.download_aoi_file(pid=processing.id_)
 
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """Display a minimalistic modal dialog with some info or a question.
