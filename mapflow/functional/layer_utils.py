@@ -20,7 +20,8 @@ from qgis.core import (Qgis,
                        QgsWkbTypes,
                        QgsCoordinateReferenceSystem,
                        QgsDistanceArea,
-                       QgsVectorFileWriter)
+                       QgsVectorFileWriter,
+                       QgsProject)
 from pathlib import Path
 
 from .geometry import clip_aoi_to_image_extent
@@ -301,6 +302,25 @@ class ResultsLoader(QObject):
             self.layer_group.setExpanded(True)
         else:  # assume user opted to not use a group, add layers as usual
             self.project.addMapLayer(layer)
+
+    def add_basemap_layer(self, basemap, layer):
+        # Remove layer if already exists
+        for l in self.iface.mapCanvas().layers():
+            if basemap in l.dataProvider().dataSourceUri():
+                QgsProject.instance().removeMapLayers([l.id()])
+        # Append each basemap layer to a list and add new ones at the top of a group
+        basemaps = []
+        for l in self.iface.mapCanvas().layers():
+            if "{z}" or "http" in l.dataProvider().dataSourceUri():
+                basemaps.append(l.id())
+            other_preview_layer_id = basemaps[-1]
+            other_preview_layer = QgsProject.instance().layerTreeRoot().findLayer(other_preview_layer_id)
+            parent_group = other_preview_layer.parent()
+            index = parent_group.children().index(other_preview_layer)
+            self.add_layer_by_order(order = index, layer = layer)
+            return
+        self.add_layer_by_order(layer=layer, order=-1)
+        return
 
     # ======= Load as tile layers ====== #
 

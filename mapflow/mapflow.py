@@ -2183,15 +2183,16 @@ class Mapflow(QObject):
             self.alert(self.tr("Provider {name} requires image id for preview!").format(name=provider.name),
                        QMessageBox.Warning)
             return
-        except NotImplementedError as e:
-            self.alert(self.tr("Preview is unavailable for the provider {}").format(provider.name))
+        except NotImplementedError as e:            
+            self.alert(self.tr("Preview is unavailable for the provider {}. \nOSM layer will be added instead.").format(provider.name), QMessageBox.Information)
+            # Add OSM instaed of preview, if it is unavailable (for Mapbox)
+            osm = constants.OSM
+            layer = QgsRasterLayer(osm, 'OpenStreetMap', 'wms')
+            self.result_loader.add_basemap_layer(basemap=osm, layer=layer)
             return
         except Exception as e:
             self.alert(str(e), QMessageBox.Warning)
-            return
-        for l in self.iface.mapCanvas().layers():
-            if "arcgis" in l.dataProvider().dataSourceUri():
-                QgsProject.instance().removeMapLayers([l.id()])
+            return         
         uri = layer_utils.generate_xyz_layer_definition(url,
                                                         provider.credentials.login,
                                                         provider.credentials.password,
@@ -2205,8 +2206,8 @@ class Mapflow(QObject):
                 layer.setName(layer_name)
                 extent = self.metadata_extent(image_id)
                 if extent:
-                    layer.setExtent(extent)
-            self.result_loader.add_layer_by_order(layer, -1)
+                    layer.setExtent(extent)   
+            self.result_loader.add_basemap_layer(basemap=url, layer=layer)
         else:
             self.alert(self.tr("We couldn't load a preview for this image"))
 
@@ -2228,13 +2229,14 @@ class Mapflow(QObject):
         else:  # XYZ providers
             self.preview_xyz(provider=provider, image_id=image_id)
 
-    def preview_or_search(self) -> None:
-        if "Imagery Search" in str(self.dlg.providerCombo.currentText()):
+    def preview_or_search(self, provider) -> None:
+        provider_index = self.dlg.providerIndex()
+        provider = self.providers[provider_index]
+        if provider.requires_image_id:
             imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
             self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
         else:
             self.preview()
-
 
     def update_processing_current_rating(self) -> None:
         # reset labels:
