@@ -745,7 +745,9 @@ class Mapflow(QObject):
         """
         for layer in filter(layer_utils.is_polygon_layer, layers):
             layer.selectionChanged.connect(self.calculate_aoi_area_selection)
-            layer.editingStopped.connect(self.calculate_aoi_area_layer_edited)
+            layer.geometryChanged.connect(self.calculate_aoi_area_layer_edited)
+            layer.featureAdded.connect(self.calculate_aoi_area_layer_edited)
+            layer.featuresDeleted.connect(self.calculate_aoi_area_layer_edited)
 
     def toggle_processing_checkboxes(self, raster_source: Union[QgsRasterLayer, str, None]) -> None:
         """Toggle 'Use image extent' depending on the item in the imagery combo box.
