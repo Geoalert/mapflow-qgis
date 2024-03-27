@@ -33,7 +33,8 @@ from .dialogs import (MainDialog,
                       ProviderDialog,
                       ReviewDialog,
                       CreateProjectDialog,
-                      UpdateProjectDialog
+                      UpdateProjectDialog,
+                      UpdateProcessingDialog,
                       )
 from .dialogs.icons import plugin_icon
 from .http import (Http,
@@ -68,6 +69,7 @@ from .errors import (ProcessingInputDataMissing,
                      ProxyIsAlreadySet)
 from .functional.geometry import clip_aoi_to_image_extent
 from .functional.project import ProjectService
+from .functional.processing import ProcessingService
 from .functional.auth import get_auth_id
 from . import constants
 from .schema.catalog import PreviewType
@@ -176,6 +178,13 @@ class Mapflow(QObject):
         # Initialize services
         self.project_service = ProjectService(self.http, self.server)
         self.project_service.projectsUpdated.connect(self.update_projects)
+
+        self.processing_service = ProcessingService(self.http, self.server)
+        self.processing_service.processingUpdated.connect(lambda: self.http.get(
+                url=f'{self.server}/projects/{self.project_id}/processings',
+                callback=self.get_processings_callback,
+                use_default_error_handler=False  # ignore errors to prevent repetitive alerts
+            ))
         # load providers from settings
         errors = []
         try:
@@ -292,6 +301,7 @@ class Mapflow(QObject):
         self.save_result_action = QAction(self.tr("Save results"))
         self.download_aoi_action = QAction(self.tr("Download AOI"))
         self.see_details_action = QAction(self.tr("See details"))
+        self.processing_update_action = QAction(self.tr("Rename"))
         self.setup_options_menu()
 
         # Layer actions
@@ -374,10 +384,12 @@ class Mapflow(QObject):
         self.options_menu.addAction(self.save_result_action)
         self.options_menu.addAction(self.download_aoi_action)
         self.options_menu.addAction(self.see_details_action)
+        self.options_menu.addAction(self.processing_update_action)
 
         self.save_result_action.triggered.connect(self.download_results_file)
         self.download_aoi_action.triggered.connect(self.download_aoi_file)
         self.see_details_action.triggered.connect(self.show_details)
+        self.processing_update_action.triggered.connect(self.update_processing)
         self.dlg.saveOptionsButton.setMenu(self.options_menu)
 
     def create_aoi_layer_from_map(self, action: QAction):
@@ -2482,7 +2494,7 @@ class Mapflow(QObject):
         :param blocking: Opened as modal - code below will only be executed when the alert is closed
         """
         box = QMessageBox(icon, self.plugin_name, message, parent=QApplication.activeWindow())
-        box.setTextFormat(Qt.AutoText)
+        box.setTextFormat(Qt.RichText)
         if icon == QMessageBox.Question:  # by default, only OK is added
             box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
         return box.exec() == QMessageBox.Ok if blocking else box.open()
@@ -2964,14 +2976,17 @@ class Mapflow(QObject):
         message = self.tr("<b>Name</b>: {name}"
                           "<br><b>Status</b></br>: {status}"
                           "<br><b>Model</b></br>: {model}").format(name=processing.name,
-                                                        model=processing.workflow_def,
-                                                        status=processing.status.value)
+                                                                   model=processing.workflow_def,
+                                                                   status=processing.status.value)
+        if processing.description:
+            message += self.tr("<br><b>Description</b></br>: {description}").format(description=processing.description)
         if processing.blocks: 
-            if processing.blocks[0].enabled == True:
+            if any([block.enabled for block in processing.blocks]):
                 message += self.tr("<br><b>Model options:</b></br>"
                                     " {options}").format(options=", ".join(block.name
-                                                                      for block in processing.blocks))
-            if processing.blocks[0].enabled == False:
+                                                                      for block in processing.blocks
+                                                                           if block.enabled))
+            else:
                 message += self.tr("<br><b>Model options:</b></br>" " No options selected")
                 
         if processing.params.data_provider:
@@ -2988,6 +3003,16 @@ class Mapflow(QObject):
         self.alert(message=message,
                    icon=QMessageBox.Information,
                    blocking=False)
+
+    def update_processing(self):
+        processing = self.selected_processing()
+        if not processing:
+            return
+        dialog = UpdateProcessingDialog(self.dlg)
+        dialog.accepted.connect(lambda: self.processing_service.update_processing(processing.id_,
+                                                                                  dialog.processing()))
+        dialog.setup(processing)
+        dialog.deleteLater()
 
     @property
     def basemap_providers(self):

@@ -23,6 +23,7 @@ class Processing:
                  in_review_until=None,
                  params: Optional[ProcessingParamsSchema] = None,
                  blocks: Optional[List[BlockOption]] = None,
+                 description: Optional[str] = None,
                  **kwargs):
         self.id_ = id_
         self.name = name
@@ -39,12 +40,14 @@ class Processing:
         self.in_review_until = in_review_until
         self.params = params
         self.blocks = blocks
+        self.description = description
 
     @classmethod
     def from_response(cls, processing):
         id_ = processing['id']
         name = processing['name']
         status = processing['status']
+        description = processing.get("description") or None
         workflow_def = processing['workflowDef']['name']
         aoi_area = round(processing['aoiArea'] / 10 ** 6, 2)
 
@@ -84,7 +87,8 @@ class Processing:
                    review_status,
                    in_review_until,
                    params,
-                   blocks)
+                   blocks,
+                   description)
 
     @property
     def is_new(self):
@@ -119,7 +123,8 @@ class Processing:
             # Serialize datetime and drop seconds for brevity
             'created': self.created.strftime('%Y-%m-%d %H:%M'),
             'rasterLayer': self.raster_layer,
-            'reviewUntil':  self.in_review_until.strftime('%Y-%m-%d %H:%M') if self.in_review_until else ""
+            'reviewUntil':  self.in_review_until.strftime('%Y-%m-%d %H:%M') if self.in_review_until else "",
+            "description": self.description
         }
 
     @property

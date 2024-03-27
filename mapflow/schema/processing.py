@@ -49,3 +49,8 @@ class PostProcessingSchema(Serializable):
         else:
             self.blocks = []
 
+@dataclass
+class UpdateProcessingSchema(Serializable):
+    name: str
+    description: str
+
