@@ -21,7 +21,8 @@ from qgis.core import (Qgis,
                        QgsCoordinateReferenceSystem,
                        QgsDistanceArea,
                        QgsVectorFileWriter,
-                       QgsProject)
+                       QgsProject,
+                       QgsMessageLog)
 from pathlib import Path
 
 from .geometry import clip_aoi_to_image_extent
@@ -249,7 +250,7 @@ class ResultsLoader(QObject):
 
     # ======= General layer management  ====== #
 
-    def add_layer(self, layer: Optional[QgsMapLayer]) -> None:
+    def add_layer(self, layer: Optional[QgsMapLayer], order=0) -> None:
         """Add layers created by the plugin to the legend.
 
         By default, layers are added to a group with the same name as the plugin.
@@ -274,53 +275,38 @@ class ResultsLoader(QObject):
                 self.layer_group.nameChanged.connect(lambda _, name: self.settings.setValue('layerGroup', name))
             # To be added to group, layer has to be added to project first
             self.project.addMapLayer(layer, addToLegend=False)
-            # Explcitly add layer to the position 0 or else it adds it to bottom
-            self.layer_group.insertLayer(0, layer)
-            self.layer_group.setExpanded(True)
-        else:  # assume user opted to not use a group, add layers as usual
-            self.project.addMapLayer(layer)
-
-    def add_layer_by_order(self, layer: Optional[QgsMapLayer], order) -> None:
-        if not layer:
-            return
-        self.layer_group = self.layer_tree_root.findGroup(self.settings.value('layerGroup'))
-        if self.add_layers_to_group:
-            if not self.layer_group:  # сreate a layer group
-                self.layer_group = self.layer_tree_root.insertGroup(0, self.plugin_name)
-                # A bug fix, - gotta collapse first to be able to expand it
-                # Or else it'll ignore the setExpanded(True) calls
-                self.layer_group.setExpanded(False)
-                self.settings.setValue('layerGroup', self.plugin_name)
-                # If the group has been deleted, assume user wants to add layers to root, memorize it
-                self.layer_group.destroyed.connect(lambda: setattr(self, 'add_layers_to_group', False))
-                # Let user rename the group, memorize the new name
-                self.layer_group.nameChanged.connect(lambda _, name: self.settings.setValue('layerGroup', name))
-            # To be added to group, layer has to be added to project first
-            self.project.addMapLayer(layer, addToLegend=False)
-            # Explcitly add layer to the position 0 or else it adds it to bottom
+            # Explcitly add layer to the position 0 (default value) or else it adds it to bottom
             self.layer_group.insertLayer(order, layer)
             self.layer_group.setExpanded(True)
         else:  # assume user opted to not use a group, add layers as usual
             self.project.addMapLayer(layer)
 
-    def add_basemap_layer(self, basemap, layer):
-        # Remove layer if already exists
-        for l in self.iface.mapCanvas().layers():
-            if basemap in l.dataProvider().dataSourceUri():
-                QgsProject.instance().removeMapLayers([l.id()])
-        # Append each basemap layer to a list and add new ones at the top of a group
-        basemaps = []
-        for l in self.iface.mapCanvas().layers():
-            if "{z}" or "http" in l.dataProvider().dataSourceUri():
-                basemaps.append(l.id())
-            other_preview_layer_id = basemaps[-1]
-            other_preview_layer = QgsProject.instance().layerTreeRoot().findLayer(other_preview_layer_id)
-            parent_group = other_preview_layer.parent()
-            index = parent_group.children().index(other_preview_layer)
-            self.add_layer_by_order(order = index, layer = layer)
-            return
-        self.add_layer_by_order(layer=layer, order=-1)
-        return
+    def add_preview_layer(self, preview_layer, preview_list):        
+        # If new preview uri is in a list of previously added previes
+        if preview_layer.dataProvider().dataSourceUri() in preview_list:
+            # Delete it from the list and from the layer tree   
+            preview_list.remove(preview_layer.dataProvider().dataSourceUri())   
+            for l in self.iface.mapCanvas().layers():
+                if preview_layer.dataProvider().dataSourceUri() == l.dataProvider().dataSourceUri():
+                    QgsProject.instance().removeMapLayers([l.id()])
+        # If preview list is empty
+        if len(preview_list) == 0:
+            # Add preview to the bottom and its uri to the list
+            self.add_layer(layer = preview_layer, order=-1)
+            preview_list.append(preview_layer.dataProvider().dataSourceUri())
+        else:
+            # Get the last value from previews list
+            upper_preview_url = preview_list[-1]
+            # Compare it to layer tree to find a specific layer id and its index
+            for l in self.iface.mapCanvas().layers():
+                if upper_preview_url == l.dataProvider().dataSourceUri():
+                    upper_preview_id = l.id()
+                    upper_preview = QgsProject.instance().layerTreeRoot().findLayer(upper_preview_id)
+                    parent_group = upper_preview.parent()
+                    index = parent_group.children().index(upper_preview)
+                    # Add preview to the found position and its uri to the list
+                    self.add_layer(layer = preview_layer, order = index)
+                    preview_list.append(preview_layer.dataProvider().dataSourceUri())
 
     # ======= Load as tile layers ====== #
 
