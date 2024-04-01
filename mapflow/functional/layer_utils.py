@@ -21,8 +21,7 @@ from qgis.core import (Qgis,
                        QgsCoordinateReferenceSystem,
                        QgsDistanceArea,
                        QgsVectorFileWriter,
-                       QgsProject,
-                       QgsMessageLog)
+                       QgsProject)
 from pathlib import Path
 
 from .geometry import clip_aoi_to_image_extent
@@ -281,33 +280,44 @@ class ResultsLoader(QObject):
         else:  # assume user opted to not use a group, add layers as usual
             self.project.addMapLayer(layer)
 
-    def add_preview_layer(self, preview_layer, preview_list):        
+    def add_preview_layer(self, preview_layer, preview_urls, preview_ids):   
+        id = preview_layer.id()
+        url = preview_layer.dataProvider().dataSourceUri()
+        preview_ids.append(id)
         # If new preview uri is in a list of previously added previes
-        if preview_layer.dataProvider().dataSourceUri() in preview_list:
+        if url in preview_urls:
             # Delete it from the list and from the layer tree   
-            preview_list.remove(preview_layer.dataProvider().dataSourceUri())   
+            preview_urls.remove(url)
             for l in self.iface.mapCanvas().layers():
-                if preview_layer.dataProvider().dataSourceUri() == l.dataProvider().dataSourceUri():
+                if url == l.dataProvider().dataSourceUri() and l.id() in preview_ids:
                     QgsProject.instance().removeMapLayers([l.id()])
         # If preview list is empty
-        if len(preview_list) == 0:
+        if len(preview_urls) == 0:
             # Add preview to the bottom and its uri to the list
             self.add_layer(layer = preview_layer, order=-1)
-            preview_list.append(preview_layer.dataProvider().dataSourceUri())
+            preview_urls.append(url)
         else:
             # Get the last value from previews list
-            upper_preview_url = preview_list[-1]
+            top_preview_url = preview_urls[-1]
             # Compare it to layer tree to find a specific layer id and its index
             for l in self.iface.mapCanvas().layers():
-                if upper_preview_url == l.dataProvider().dataSourceUri():
-                    upper_preview_id = l.id()
-                    upper_preview = QgsProject.instance().layerTreeRoot().findLayer(upper_preview_id)
-                    parent_group = upper_preview.parent()
-                    index = parent_group.children().index(upper_preview)
+                if top_preview_url == l.dataProvider().dataSourceUri() and l.id() in preview_ids:
+                    top_preview_id = l.id()
+                    top_preview = QgsProject.instance().layerTreeRoot().findLayer(top_preview_id)
+                    parent_group = top_preview.parent()
+                    index = parent_group.children().index(top_preview)
                     # Add preview to the found position and its uri to the list
                     self.add_layer(layer = preview_layer, order = index)
-                    preview_list.append(preview_layer.dataProvider().dataSourceUri())
-
+                    preview_urls.append(url)
+        # Check if layer doesn't exist to delete its id from preview_ids list
+        layer_ids = []
+        for l in self.iface.mapCanvas().layers():
+            layer_ids.append(l.id())
+            layer_ids.append(id)
+        for i in preview_ids:
+            if not i in layer_ids:
+                preview_ids.remove(i)
+        
     # ======= Load as tile layers ====== #
 
     def load_result_tiles(self, processing):

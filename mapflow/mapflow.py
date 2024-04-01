@@ -99,7 +99,8 @@ class Mapflow(QObject):
         self.main_window = self.iface.mainWindow()
         self.workflow_defs = {}
         self.aoi_layers = []
-        self.preview_layers = []
+        self.preview_layer_urls = []
+        self.preview_layer_ids = []
         self.project_connection = None
         super().__init__(self.main_window)
         self.project = QgsProject.instance()
@@ -2189,7 +2190,7 @@ class Mapflow(QObject):
             # Add OSM instaed of preview, if it is unavailable (for Mapbox)
             osm = constants.OSM
             layer = QgsRasterLayer(osm, 'OpenStreetMap', 'wms')
-            self.result_loader.add_preview_layer(preview_layer=layer, preview_list=self.preview_layers)
+            self.result_loader.add_preview_layer(preview_layer=layer, preview_urls=self.preview_layer_urls, preview_ids=self.preview_layer_ids)
             return
         except Exception as e:
             self.alert(str(e), QMessageBox.Warning)
@@ -2208,7 +2209,7 @@ class Mapflow(QObject):
                 extent = self.metadata_extent(image_id)
                 if extent:
                     layer.setExtent(extent)
-            self.result_loader.add_preview_layer(preview_layer=layer, preview_list=self.preview_layers)            
+            self.result_loader.add_preview_layer(preview_layer=layer, preview_urls=self.preview_layer_urls, preview_ids=self.preview_layer_ids)            
         else:
             self.alert(self.tr("We couldn't load a preview for this image"))
 
