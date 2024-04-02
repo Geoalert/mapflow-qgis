@@ -21,7 +21,8 @@ from qgis.core import (Qgis,
                        QgsCoordinateReferenceSystem,
                        QgsDistanceArea,
                        QgsVectorFileWriter,
-                       QgsProject)
+                       QgsProject
+                       )
 from pathlib import Path
 
 from .geometry import clip_aoi_to_image_extent
@@ -280,43 +281,35 @@ class ResultsLoader(QObject):
         else:  # assume user opted to not use a group, add layers as usual
             self.project.addMapLayer(layer)
 
-    def add_preview_layer(self, preview_layer, preview_urls, preview_ids):   
-        id = preview_layer.id()
-        url = preview_layer.dataProvider().dataSourceUri()
-        preview_ids.append(id)
-        # If new preview uri is in a list of previously added previes
-        if url in preview_urls:
-            # Delete it from the list and from the layer tree   
-            preview_urls.remove(url)
-            for l in self.iface.mapCanvas().layers():
-                if url == l.dataProvider().dataSourceUri() and l.id() in preview_ids:
-                    QgsProject.instance().removeMapLayers([l.id()])
-        # If preview list is empty
-        if len(preview_urls) == 0:
-            # Add preview to the bottom and its uri to the list
+    def add_preview_layer(self, preview_layer, preview_dict): 
+        layers_to_delete = []
+        # In a dictionary of ids (as keys) and urls (as values) of plugin added previews
+        for id, url in preview_dict.copy().items():
+            # Remove old item from the dictionary if the same layer had been added before
+            if preview_layer.dataProvider().dataSourceUri() == url:
+                del preview_dict[id]
+                # And delete the old layer if its url matches current one and its id in dictionary
+                for l in self.iface.mapCanvas().layers():
+                    if preview_layer.dataProvider().dataSourceUri() == l.dataProvider().dataSourceUri() and l.id() == id:
+                        layers_to_delete.append(l.id())
+        QgsProject.instance().removeMapLayers(layers_to_delete)
+        # For the first added preview, just add it to the bottom
+        if len(preview_dict) == 0:
             self.add_layer(layer = preview_layer, order=-1)
-            preview_urls.append(url)
+        # In other cases - add it to the top of plugin added previews
         else:
-            # Get the last value from previews list
-            top_preview_url = preview_urls[-1]
-            # Compare it to layer tree to find a specific layer id and its index
+            # Find the last added layer
+            top_preview_layer = list(preview_dict.items())[-1]
             for l in self.iface.mapCanvas().layers():
-                if top_preview_url == l.dataProvider().dataSourceUri() and l.id() in preview_ids:
-                    top_preview_id = l.id()
-                    top_preview = QgsProject.instance().layerTreeRoot().findLayer(top_preview_id)
-                    parent_group = top_preview.parent()
-                    index = parent_group.children().index(top_preview)
-                    # Add preview to the found position and its uri to the list
-                    self.add_layer(layer = preview_layer, order = index)
-                    preview_urls.append(url)
-        # Check if layer doesn't exist to delete its id from preview_ids list
-        layer_ids = []
-        for l in self.iface.mapCanvas().layers():
-            layer_ids.append(l.id())
-            layer_ids.append(id)
-        for i in preview_ids:
-            if not i in layer_ids:
-                preview_ids.remove(i)
+                for id, url in preview_dict.copy().items():
+                    # Get position of a layer if its in the dictionary and has the found url of a top layer
+                    if l.id() == id and top_preview_layer[1] == l.dataProvider().dataSourceUri():
+                        top_preview = QgsProject.instance().layerTreeRoot().findLayer(l.id())
+                        parent_group = top_preview.parent()
+                        index = parent_group.children().index(top_preview)
+            self.add_layer(layer = preview_layer, order = index)
+        # Add newly added preview's id and url to the dictionary
+        preview_dict[preview_layer.id()] = preview_layer.dataProvider().dataSourceUri()
         
     # ======= Load as tile layers ====== #
 
