@@ -21,7 +21,8 @@ from qgis.core import (Qgis,
                        QgsCoordinateReferenceSystem,
                        QgsDistanceArea,
                        QgsVectorFileWriter,
-                       QgsProject
+                       QgsProject,
+                       QgsMessageLog
                        )
 from pathlib import Path
 
@@ -282,35 +283,31 @@ class ResultsLoader(QObject):
             self.project.addMapLayer(layer)
 
     def add_preview_layer(self, preview_layer, preview_dict): 
-        layers_to_delete = []
-        # In a dictionary of ids (as keys) and urls (as values) of plugin added previews
-        for id, url in preview_dict.copy().items():
-            # Remove old item from the dictionary if the same layer had been added before
-            if preview_layer.dataProvider().dataSourceUri() == url:
-                del preview_dict[id]
-                # And delete the old layer if its url matches current one and its id in dictionary
-                for l in self.iface.mapCanvas().layers():
-                    if preview_layer.dataProvider().dataSourceUri() == l.dataProvider().dataSourceUri() and l.id() == id:
-                        layers_to_delete.append(l.id())
-        QgsProject.instance().removeMapLayers(layers_to_delete)
+        # Delete layer from dictionary if it was deleted from layer tree
+        for url, id in preview_dict.copy().items():
+            if id not in self.project.mapLayers() and id != preview_layer.id():
+                del preview_dict[url]
+        # Revove the old layer if its url matches current one and its in the dictionary
+        url = preview_layer.dataProvider().dataSourceUri()
+        if url in preview_dict.keys():
+            current_preview_id = preview_dict[url]
+            # We can't have many layers with the same ID 
+            QgsProject.instance().removeMapLayer(current_preview_id)
+            # And delete old item from dictionary to rewrite it to a new position 
+            # (So later we can easyly find the last added preview)
+            del preview_dict[url] 
         # For the first added preview, just add it to the bottom
         if len(preview_dict) == 0:
             self.add_layer(layer = preview_layer, order=-1)
         # In other cases - add it to the top of plugin added previews
         else:
-            # Find the last added layer
-            top_preview_layer = list(preview_dict.items())[-1]
-            for l in self.iface.mapCanvas().layers():
-                for id, url in preview_dict.copy().items():
-                    # Get position of a layer if its in the dictionary and has the found url of a top layer
-                    if l.id() == id and top_preview_layer[1] == l.dataProvider().dataSourceUri():
-                        top_preview = QgsProject.instance().layerTreeRoot().findLayer(l.id())
-                        parent_group = top_preview.parent()
-                        index = parent_group.children().index(top_preview)
+            top_preview_id = list(preview_dict.values())[-1]
+            top_preview_layer = QgsProject.instance().layerTreeRoot().findLayer(top_preview_id)
+            index = top_preview_layer.parent().children().index(top_preview_layer)
             self.add_layer(layer = preview_layer, order = index)
-        # Add newly added preview's id and url to the dictionary
-        preview_dict[preview_layer.id()] = preview_layer.dataProvider().dataSourceUri()
-        
+        # Add preview url and id to the dictionary
+        preview_dict[url] = preview_layer.id()
+
     # ======= Load as tile layers ====== #
 
     def load_result_tiles(self, processing):
