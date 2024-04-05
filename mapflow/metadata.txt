@@ -9,10 +9,16 @@ about=Mapflow provides AI models for automatic feature extraction from satellite
         - roads
         - construction sites
     For a step-by-step user guide, go to https://docs.mapflow.ai/api/qgis_mapflow#user-interface
-version=2.5.0
+version=2.6.0
 author=Geoalert
 email=hello@geoalert.io
 changelog:
+    2.6.0
+    - Allow to create, modify and delete projects
+    - Rename processings
+    - Download and display processing AOI
+    - Show preview (or OpenStreetMap) on "magnifying glass" button beside data provider
+    - Fix: now all changes to the AOI layer are applied immediately to the processing area calculation
     2.5.0
     - Allow direct login to Mapflow via OAuth2 protocol, without token
     - Add Mapflow project selection
