@@ -16,7 +16,7 @@ from PyQt5.QtCore import (
 )
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction,
-    QAbstractItemView, QLabel, QProgressBar, QMenu
+    QAbstractItemView, QLabel, QProgressBar, QMenu, QWidget
 )
 
 from qgis.gui import QgsMessageBarItem
@@ -107,6 +107,7 @@ class Mapflow(QObject):
         self.main_window = self.iface.mainWindow()
         self.workflow_defs = {}
         self.aoi_layers = []
+        self.preview_dict = {}
         self.project_connection = None
         super().__init__(self.main_window)
         self.project = QgsProject.instance()
@@ -249,6 +250,7 @@ class Mapflow(QObject):
         self.dlg.metadataTo.dateChanged.connect(self.filter_metadata)
         self.dlg.preview.clicked.connect(self.preview)
         self.dlg.preview2.clicked.connect(self.preview)
+        self.dlg.searchImageryButton.clicked.connect(self.preview_or_search)
 
         self.dlg.addProvider.clicked.connect(self.add_provider)
         self.dlg.editProvider.clicked.connect(self.edit_provider)
@@ -2239,12 +2241,16 @@ class Mapflow(QObject):
             self.alert(self.tr("Provider {name} requires image id for preview!").format(name=provider.name),
                        QMessageBox.Warning)
             return
-        except NotImplementedError as e:
-            self.alert(self.tr("Preview is unavailable for the provider {}").format(provider.name))
+        except NotImplementedError as e:            
+            self.alert(self.tr("Preview is unavailable for the provider {}. \nOSM layer will be added instead.").format(provider.name), QMessageBox.Information)
+            # Add OSM instaed of preview, if it is unavailable (for Mapbox)
+            osm = constants.OSM
+            layer = QgsRasterLayer(osm, 'OpenStreetMap', 'wms')
+            self.result_loader.add_preview_layer(preview_layer=layer, preview_dict=self.preview_dict)
             return
         except Exception as e:
             self.alert(str(e), QMessageBox.Warning)
-            return
+            return         
         uri = layer_utils.generate_xyz_layer_definition(url,
                                                         provider.credentials.login,
                                                         provider.credentials.password,
@@ -2259,7 +2265,7 @@ class Mapflow(QObject):
                 extent = self.metadata_extent(image_id)
                 if extent:
                     layer.setExtent(extent)
-            self.result_loader.add_layer(layer)
+            self.result_loader.add_preview_layer(preview_layer=layer, preview_dict=self.preview_dict)            
         else:
             self.alert(self.tr("We couldn't load a preview for this image"))
 
@@ -2280,6 +2286,15 @@ class Mapflow(QObject):
             self.preview_catalog(image_id=image_id)
         else:  # XYZ providers
             self.preview_xyz(provider=provider, image_id=image_id)
+
+    def preview_or_search(self, provider) -> None:
+        provider_index = self.dlg.providerIndex()
+        provider = self.providers[provider_index]
+        if provider.requires_image_id:
+            imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
+            self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
+        else:
+            self.preview()
 
     def update_processing_current_rating(self) -> None:
         # reset labels:

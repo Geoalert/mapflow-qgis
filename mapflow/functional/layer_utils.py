@@ -19,7 +19,10 @@ from qgis.core import (Qgis,
                        QgsWkbTypes,
                        QgsCoordinateReferenceSystem,
                        QgsDistanceArea,
-                       QgsVectorFileWriter)
+                       QgsVectorFileWriter,
+                       QgsProject,
+                       QgsMessageLog
+                       )
 from pathlib import Path
 
 from .geometry import clip_aoi_to_image_extent
@@ -247,7 +250,7 @@ class ResultsLoader(QObject):
 
     # ======= General layer management  ====== #
 
-    def add_layer(self, layer: Optional[QgsMapLayer]) -> None:
+    def add_layer(self, layer: Optional[QgsMapLayer], order=0) -> None:
         """Add layers created by the plugin to the legend.
 
         By default, layers are added to a group with the same name as the plugin.
@@ -272,11 +275,37 @@ class ResultsLoader(QObject):
                 self.layer_group.nameChanged.connect(lambda _, name: self.settings.setValue('layerGroup', name))
             # To be added to group, layer has to be added to project first
             self.project.addMapLayer(layer, addToLegend=False)
-            # Explcitly add layer to the position 0 or else it adds it to bottom
-            self.layer_group.insertLayer(0, layer)
+            # Explcitly add layer to the position 0 (default value) or else it adds it to bottom
+            self.layer_group.insertLayer(order, layer)
             self.layer_group.setExpanded(True)
         else:  # assume user opted to not use a group, add layers as usual
             self.project.addMapLayer(layer)
+
+    def add_preview_layer(self, preview_layer, preview_dict): 
+        # Delete layer from dictionary if it was deleted from layer tree
+        for url, id in preview_dict.copy().items():
+            if id not in self.project.mapLayers() and id != preview_layer.id():
+                del preview_dict[url]
+        # Revove the old layer if its url matches current one and its in the dictionary
+        url = preview_layer.dataProvider().dataSourceUri()
+        if url in preview_dict.keys():
+            current_preview_id = preview_dict[url]
+            # We can't have many layers with the same ID 
+            QgsProject.instance().removeMapLayer(current_preview_id)
+            # And delete old item from dictionary to rewrite it to a new position 
+            # (So later we can easyly find the last added preview)
+            del preview_dict[url] 
+        # For the first added preview, just add it to the bottom
+        if len(preview_dict) == 0:
+            self.add_layer(layer = preview_layer, order=-1)
+        # In other cases - add it to the top of plugin added previews
+        else:
+            top_preview_id = list(preview_dict.values())[-1]
+            top_preview_layer = QgsProject.instance().layerTreeRoot().findLayer(top_preview_id)
+            index = top_preview_layer.parent().children().index(top_preview_layer)
+            self.add_layer(layer = preview_layer, order = index)
+        # Add preview url and id to the dictionary
+        preview_dict[url] = preview_layer.id()
 
     # ======= Load as tile layers ====== #
 
