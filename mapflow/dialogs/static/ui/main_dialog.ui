@@ -151,7 +151,7 @@
           </widget>
          </item>
          <item>
-          <widget class="QToolButton" name="toolButton">
+          <widget class="QToolButton" name="addAoiButton">
            <property name="maximumSize">
             <size>
              <width>32</width>
@@ -298,7 +298,7 @@
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0,0,1,0">
          <property name="spacing">
-          <number>-1</number>
+          <number>7</number>
          </property>
          <property name="sizeConstraint">
           <enum>QLayout::SetMinimumSize</enum>
@@ -921,7 +921,7 @@
             </widget>
            </item>
            <item>
-            <layout class="QHBoxLayout" name="processingFooter" stretch="0,0,0,0,0">
+            <layout class="QHBoxLayout" name="processingFooter" stretch="0,0,0,0">
              <item>
               <widget class="QPushButton" name="downloadResultsButton">
                <property name="text">
@@ -930,16 +930,33 @@
               </widget>
              </item>
              <item>
-              <widget class="QPushButton" name="detailsButton">
-               <property name="text">
-                <string>See details</string>
+              <widget class="QToolButton" name="saveOptionsButton">
+               <property name="contextMenuPolicy">
+                <enum>Qt::ActionsContextMenu</enum>
                </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QPushButton" name="saveResultsButton">
+               <property name="layoutDirection">
+                <enum>Qt::LeftToRight</enum>
+               </property>
                <property name="text">
-                <string>Save results</string>
+                <string/>
+               </property>
+               <property name="checkable">
+                <bool>false</bool>
+               </property>
+               <property name="checked">
+                <bool>false</bool>
+               </property>
+               <property name="popupMode">
+                <enum>QToolButton::InstantPopup</enum>
+               </property>
+               <property name="toolButtonStyle">
+                <enum>Qt::ToolButtonIconOnly</enum>
+               </property>
+               <property name="autoRaise">
+                <bool>false</bool>
+               </property>
+               <property name="arrowType">
+                <enum>Qt::NoArrow</enum>
                </property>
               </widget>
              </item>
@@ -1546,7 +1563,94 @@
                 </widget>
                </item>
                <item>
-                <widget class="QComboBox" name="projectsCombo"/>
+                <layout class="QHBoxLayout" name="horizontalLayout_11" stretch="1,0">
+                 <property name="spacing">
+                  <number>-1</number>
+                 </property>
+                 <property name="bottomMargin">
+                  <number>0</number>
+                 </property>
+                 <item>
+                  <widget class="QComboBox" name="projectsCombo">
+                   <property name="minimumSize">
+                    <size>
+                     <width>200</width>
+                     <height>0</height>
+                    </size>
+                   </property>
+                   <property name="maximumSize">
+                    <size>
+                     <width>200</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <layout class="QHBoxLayout" name="horizontalLayout_12">
+                   <property name="spacing">
+                    <number>0</number>
+                   </property>
+                   <item>
+                    <widget class="QPushButton" name="createProject">
+                     <property name="minimumSize">
+                      <size>
+                       <width>29</width>
+                       <height>29</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize">
+                      <size>
+                       <width>29</width>
+                       <height>29</height>
+                      </size>
+                     </property>
+                     <property name="text">
+                      <string/>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QPushButton" name="deleteProject">
+                     <property name="minimumSize">
+                      <size>
+                       <width>29</width>
+                       <height>29</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize">
+                      <size>
+                       <width>29</width>
+                       <height>29</height>
+                      </size>
+                     </property>
+                     <property name="text">
+                      <string/>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QPushButton" name="updateProject">
+                     <property name="minimumSize">
+                      <size>
+                       <width>29</width>
+                       <height>29</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize">
+                      <size>
+                       <width>29</width>
+                       <height>29</height>
+                      </size>
+                     </property>
+                     <property name="text">
+                      <string/>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                </layout>
                </item>
                <item>
                 <widget class="QLabel" name="label_3">
@@ -1749,6 +1853,19 @@
               </layout>
              </item>
              <item>
+              <spacer name="horizontalSpacer_4">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item>
               <layout class="QVBoxLayout" name="verticalLayout_6">
                <item>
                 <widget class="QCheckBox" name="useAllVectorLayers">
@@ -1830,7 +1947,7 @@
            <item>
             <layout class="QHBoxLayout" name="layoutOutputDirectoryInput" stretch="0,1,0,1">
              <property name="spacing">
-              <number>-1</number>
+              <number>7</number>
              </property>
              <property name="rightMargin">
               <number>10</number>
@@ -1937,18 +2054,23 @@
     </layout>
    </item>
   </layout>
+  <action name="see_details_action">
+   <property name="text">
+    <string>see_details_action</string>
+   </property>
+  </action>
  </widget>
  <customwidgets>
-  <customwidget>
-   <class>QgsMapLayerComboBox</class>
-   <extends>QComboBox</extends>
-   <header>qgsmaplayercombobox.h</header>
-  </customwidget>
   <customwidget>
    <class>QgsCollapsibleGroupBox</class>
    <extends>QGroupBox</extends>
    <header>qgscollapsiblegroupbox.h</header>
    <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>QgsMapLayerComboBox</class>
+   <extends>QComboBox</extends>
+   <header>qgsmaplayercombobox.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

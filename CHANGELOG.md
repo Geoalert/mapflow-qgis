@@ -1,3 +1,10 @@
+
+## 2.6.0
+    - Allow to create, modify and delete projects
+    - Rename processings
+    - Download and display processing AOI
+    - Show preview (or OpenStreetMap) on "magnifying glass" button beside data provider
+    - Fix: now all changes to the AOI layer are applied immediately to the processing area calculation
 ## 2.5.0
     - Allow direct login to Mapflow via OAuth2 protocol, without token
     - Add Mapflow project selection. Note: these projects are from API, not from Mapflow Web!

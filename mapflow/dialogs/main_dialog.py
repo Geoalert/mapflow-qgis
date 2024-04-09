@@ -11,7 +11,7 @@ from qgis.core import QgsMapLayerProxyModel, QgsMapLayer, QgsSettings
 
 from ..entity.billing import BillingType
 from ..entity.provider import ProviderInterface
-from ..entity.project import MapflowProject
+from ..schema.project import MapflowProject
 from ..functional import helpers
 from ..config import config
 from . import icons
@@ -40,7 +40,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.addProvider.setIcon(icons.plus_icon)
         self.removeProvider.setIcon(icons.minus_icon)
         self.editProvider.setIcon(icons.edit_icon)
-        self.toolButton.setIcon(icons.plus_icon)
+        self.addAoiButton.setIcon(icons.plus_icon)
         self.billingHistoryButton.setIcon(icons.chart_icon)
         self.logoutButton.setIcon(icons.logout_icon)
         self.modelInfo.setIcon(icons.info_icon)
@@ -48,6 +48,10 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.tabWidget.setTabIcon(1, icons.lens_icon)
         self.tabWidget.setTabIcon(2, icons.user_gear_icon)
         self.tabWidget.setTabIcon(3, icons.info_icon)
+        self.saveOptionsButton.setIcon(icons.options_icon)
+        self.createProject.setIcon(icons.plus_icon)
+        self.deleteProject.setIcon(icons.minus_icon)
+        self.updateProject.setIcon(icons.edit_icon)
 
         coin_pixmap = icons.coins_icon.pixmap(16, 16)
         self.labelCoins_1.setPixmap(coin_pixmap)
@@ -266,12 +270,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.imageId.setPlaceholderText(image_id_placeholder)
         self.labelImageId.setToolTip(image_id_tooltip)
 
-        imagery_search_tab = self.tabWidget.findChild(QWidget, "providersTab")
-        self.searchImageryButton.clicked.connect(lambda: self.tabWidget.setCurrentWidget(imagery_search_tab))
-        self.searchImageryButton.setToolTip(self.tr("Search imagery"))
         if fill:
             self.fill_metadata_table(fill)
-
+            
     def show_wd_price(self,
                       wd_price: float,
                       wd_description: str,
@@ -400,3 +401,11 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.projectsCombo.clear()
         self.projectsCombo.addItems([pr.name for pr in projects])
         self.projectsCombo.setCurrentIndex(current_position)
+
+    def setup_default_project(self, is_default: bool):
+        tooltip = self.tr("You can't remove or modify default project") if is_default else ""
+        self.deleteProject.setDisabled(is_default)
+        self.updateProject.setDisabled(is_default)
+        self.deleteProject.setToolTip(tooltip)
+        self.updateProject.setToolTip(tooltip)
+

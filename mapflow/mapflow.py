@@ -16,7 +16,7 @@ from PyQt5.QtCore import (
 )
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction,
-    QAbstractItemView, QLabel, QProgressBar, QMenu
+    QAbstractItemView, QLabel, QProgressBar, QMenu, QWidget
 )
 
 from qgis.gui import QgsMessageBarItem
@@ -27,16 +27,22 @@ from qgis.core import (
 )
 
 from .functional import layer_utils, helpers
-from .dialogs import MainDialog, MapflowLoginDialog, ErrorMessageWidget, ProviderDialog, ReviewDialog
+from .dialogs import (MainDialog,
+                      MapflowLoginDialog,
+                      ErrorMessageWidget,
+                      ProviderDialog,
+                      ReviewDialog,
+                      CreateProjectDialog,
+                      UpdateProjectDialog,
+                      UpdateProcessingDialog,
+                      )
 from .dialogs.icons import plugin_icon
-
 from .http import (Http,
                    get_error_report_body,
                    data_catalog_message_parser,
                    securewatch_message_parser,
                    api_message_parser,
                    )
-
 from .config import Config
 from .entity.processing import parse_processings_request, Processing, ProcessingHistory, updated_processings
 from .entity.provider import (UsersProvider,
@@ -47,7 +53,7 @@ from .entity.provider import (UsersProvider,
                               DefaultProvider,
                               ImagerySearchProvider,
                               ProviderInterface)
-from .entity.project import MapflowProject
+from .schema.project import MapflowProject
 from .entity.billing import BillingType
 from .entity.workflow_def import WorkflowDef
 from .schema import (PostSourceSchema,
@@ -62,6 +68,8 @@ from .errors import (ProcessingInputDataMissing,
                      AoiNotIntersectsImage,
                      ProxyIsAlreadySet)
 from .functional.geometry import clip_aoi_to_image_extent
+from .functional.project import ProjectService
+from .functional.processing import ProcessingService
 from .functional.auth import get_auth_id
 from . import constants
 from .schema.catalog import PreviewType
@@ -99,6 +107,7 @@ class Mapflow(QObject):
         self.main_window = self.iface.mainWindow()
         self.workflow_defs = {}
         self.aoi_layers = []
+        self.preview_dict = {}
         self.project_connection = None
         super().__init__(self.main_window)
         self.project = QgsProject.instance()
@@ -150,8 +159,10 @@ class Mapflow(QObject):
         self.dlg_login = self.set_up_login_dialog()
         self.review_dialog = ReviewDialog(self.dlg)
         self.dlg_provider = ProviderDialog(self.dlg)
+
         self.dlg_provider.accepted.connect(self.edit_provider_callback)
         # Display the plugin's version
+        # todo: Move to Maindialog
         metadata_parser = ConfigParser()
         metadata_parser.read(os.path.join(self.plugin_dir, 'metadata.txt'))
         self.plugin_version = metadata_parser.get('general', 'version')
@@ -165,6 +176,16 @@ class Mapflow(QObject):
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or self.config.DEFAULT_ZOOM))
 
+        # Initialize services
+        self.project_service = ProjectService(self.http, self.server)
+        self.project_service.projectsUpdated.connect(self.update_projects)
+
+        self.processing_service = ProcessingService(self.http, self.server)
+        self.processing_service.processingUpdated.connect(lambda: self.http.get(
+                url=f'{self.server}/projects/{self.project_id}/processings',
+                callback=self.get_processings_callback,
+                use_default_error_handler=False  # ignore errors to prevent repetitive alerts
+            ))
         # load providers from settings
         errors = []
         try:
@@ -194,8 +215,6 @@ class Mapflow(QObject):
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         self.dlg.downloadResultsButton.clicked.connect(self.load_results)
-        self.dlg.saveResultsButton.clicked.connect(self.download_results_file)
-        self.dlg.detailsButton.clicked.connect(self.show_details)
         # (Dis)allow the user to use raster extent as AOI
         self.dlg.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
         self.dlg.startProcessing.clicked.connect(self.create_processing)
@@ -231,11 +250,18 @@ class Mapflow(QObject):
         self.dlg.metadataTo.dateChanged.connect(self.filter_metadata)
         self.dlg.preview.clicked.connect(self.preview)
         self.dlg.preview2.clicked.connect(self.preview)
+        self.dlg.searchImageryButton.clicked.connect(self.preview_or_search)
 
         self.dlg.addProvider.clicked.connect(self.add_provider)
         self.dlg.editProvider.clicked.connect(self.edit_provider)
         self.dlg.removeProvider.clicked.connect(self.remove_provider)
         self.dlg.maxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
+
+        # Projects
+        self.dlg.createProject.clicked.connect(self.create_project)
+        self.dlg.deleteProject.clicked.connect(self.delete_project)
+        self.dlg.updateProject.clicked.connect(self.update_project)
+
         # Maxar
         self.dlg.imageId.textChanged.connect(self.sync_image_id_with_table_and_layer)
         self.dlg.imageId.textChanged.connect(self.update_processing_cost)
@@ -272,6 +298,13 @@ class Mapflow(QObject):
         self.draw_aoi = QAction(self.tr("Draw AOI at the map"))
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
+        # Add options menu
+        self.options_menu = QMenu()
+        self.save_result_action = QAction(self.tr("Save results"))
+        self.download_aoi_action = QAction(self.tr("Download AOI"))
+        self.see_details_action = QAction(self.tr("See details"))
+        self.processing_update_action = QAction(self.tr("Rename"))
+        self.setup_options_menu()
 
         # Layer actions
         self.add_layer_action = QAction(u"Use as AOI in Mapflow")
@@ -347,7 +380,19 @@ class Mapflow(QObject):
         self.create_aoi_from_map_action.triggered.connect(self.create_aoi_layer_from_map)
         self.add_aoi_from_file_action.triggered.connect(self.open_vector_file)
         self.draw_aoi.triggered.connect(self.create_editable_aoi_layer)
-        self.dlg.toolButton.setMenu(self.add_layer_menu)
+        self.dlg.addAoiButton.setMenu(self.add_layer_menu)
+
+    def setup_options_menu(self):
+        self.options_menu.addAction(self.save_result_action)
+        self.options_menu.addAction(self.download_aoi_action)
+        self.options_menu.addAction(self.see_details_action)
+        self.options_menu.addAction(self.processing_update_action)
+
+        self.save_result_action.triggered.connect(self.download_results_file)
+        self.download_aoi_action.triggered.connect(self.download_aoi_file)
+        self.see_details_action.triggered.connect(self.show_details)
+        self.processing_update_action.triggered.connect(self.update_processing)
+        self.dlg.saveOptionsButton.setMenu(self.options_menu)
 
     def create_aoi_layer_from_map(self, action: QAction):
         aoi_geometry = helpers.to_wgs84(
@@ -582,20 +627,46 @@ class Mapflow(QObject):
         self.dlg.modelCombo.setCurrentText(self.config.DEFAULT_MODEL)
         self.on_model_change()
 
-    def on_project_change(self, currentIndex):
-        current_project = self.projects[currentIndex]
-        self.project_id = current_project.id
-        self.settings.setValue("project_id", self.project_id)
-        self.setup_workflow_defs(current_project.workflowDefs)
-        # Manually toggle function to avoid race condition
-        self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
-        self.setup_processings_table()
-
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
         # Save main dialog size & position
         self.settings.setValue('mainDialogState', self.dlg.saveGeometry())
 
+    # ========== Projects ========== #
+
+    def on_project_change(self, currentIndex):
+        current_project = self.projects[currentIndex]
+        self.project_id = current_project.id
+        self.settings.setValue("project_id", self.project_id)
+        self.setup_workflow_defs(current_project.workflowDefs)
+        # you can't delete or modify the default project
+        self.dlg.setup_default_project(current_project.isDefault)
+        # Manually toggle function to avoid race condition
+        self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
+        self.setup_processings_table()
+
+    def create_project(self):
+        dialog = CreateProjectDialog(self.dlg)
+        dialog.accepted.connect(lambda: self.project_service.create_project(dialog.project()))
+        dialog.setup()
+        dialog.deleteLater()
+
+    def update_project(self):
+        current_project = self.projects[self.dlg.projectsCombo.currentIndex()]
+        dialog = UpdateProjectDialog(self.dlg)
+        dialog.accepted.connect(lambda: self.project_service.update_project(current_project.id,
+                                                                                              dialog.project()))
+        dialog.setup(current_project)
+        dialog.deleteLater()
+
+    def delete_project(self):
+        current_project = self.projects[self.dlg.projectsCombo.currentIndex()]
+        if self.alert(self.tr('Do you really want to remove project {}? '
+                              'This action cannot be undone, all processings will be lost!').format(current_project.name),
+                        icon=QMessageBox.Question):
+            self.project_service.delete_project(current_project.id)
+
+    # ========= Providers ============ #
     def remove_provider(self) -> None:
         """Delete a web tile provider from the list of registered providers.
 
@@ -688,7 +759,9 @@ class Mapflow(QObject):
         """
         for layer in filter(layer_utils.is_polygon_layer, layers):
             layer.selectionChanged.connect(self.calculate_aoi_area_selection)
-            layer.editingStopped.connect(self.calculate_aoi_area_layer_edited)
+            layer.geometryChanged.connect(self.calculate_aoi_area_layer_edited)
+            layer.featureAdded.connect(self.calculate_aoi_area_layer_edited)
+            layer.featuresDeleted.connect(self.calculate_aoi_area_layer_edited)
 
     def toggle_processing_checkboxes(self, raster_source: Union[QgsRasterLayer, str, None]) -> None:
         """Toggle 'Use image extent' depending on the item in the imagery combo box.
@@ -2168,12 +2241,16 @@ class Mapflow(QObject):
             self.alert(self.tr("Provider {name} requires image id for preview!").format(name=provider.name),
                        QMessageBox.Warning)
             return
-        except NotImplementedError as e:
-            self.alert(self.tr("Preview is unavailable for the provider {}").format(provider.name))
+        except NotImplementedError as e:            
+            self.alert(self.tr("Preview is unavailable for the provider {}. \nOSM layer will be added instead.").format(provider.name), QMessageBox.Information)
+            # Add OSM instaed of preview, if it is unavailable (for Mapbox)
+            osm = constants.OSM
+            layer = QgsRasterLayer(osm, 'OpenStreetMap', 'wms')
+            self.result_loader.add_preview_layer(preview_layer=layer, preview_dict=self.preview_dict)
             return
         except Exception as e:
             self.alert(str(e), QMessageBox.Warning)
-            return
+            return         
         uri = layer_utils.generate_xyz_layer_definition(url,
                                                         provider.credentials.login,
                                                         provider.credentials.password,
@@ -2188,7 +2265,7 @@ class Mapflow(QObject):
                 extent = self.metadata_extent(image_id)
                 if extent:
                     layer.setExtent(extent)
-            self.result_loader.add_layer(layer)
+            self.result_loader.add_preview_layer(preview_layer=layer, preview_dict=self.preview_dict)            
         else:
             self.alert(self.tr("We couldn't load a preview for this image"))
 
@@ -2209,6 +2286,15 @@ class Mapflow(QObject):
             self.preview_catalog(image_id=image_id)
         else:  # XYZ providers
             self.preview_xyz(provider=provider, image_id=image_id)
+
+    def preview_or_search(self, provider) -> None:
+        provider_index = self.dlg.providerIndex()
+        provider = self.providers[provider_index]
+        if provider.requires_image_id:
+            imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
+            self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
+        else:
+            self.preview()
 
     def update_processing_current_rating(self) -> None:
         # reset labels:
@@ -2381,58 +2467,19 @@ class Mapflow(QObject):
 
     # =================== Results management ==================== #
     def load_results(self):
+        processing = self.selected_processing()
+        if not processing:
+            return
+        if processing.id_ not in self.processing_history.finished:
+            self.alert(self.tr("Only the results of correctly finished processing can be loaded"))
+            return
+
         if self.dlg.viewAsTiles.isChecked():
-            self.add_tile_layers()
+            self.result_loader.load_result_tiles(processing=processing)
         elif self.dlg.viewAsLocal.isChecked():
-            self.download_results()
-
-    def add_tile_layers(self) -> None:
-        """
-        Add raster- and vector- tile layers of the processing results to the project
-        If tilejson is available, the project is zoomed to this layer
-
-        This is the fastest way for bigger processings (streaming tiles rather than downloading full file)
-        but requires stable connection to work with this project
-
-        This will be the only supported way for free users!
-        """
-        processing = self.selected_processing()
-        if not processing:
-            return
-        pid = processing.id_
-        if pid not in self.processing_history.finished:
-            self.alert(self.tr("Only the results of correctly finished processing can be loaded"))
-            return
-        self.result_loader.load_result_tiles(processing=processing)
-
-    def download_results(self) -> None:
-        """
-        Download and display processing results along with the source raster, if available.
-
-        Results will be downloaded into the user's output directory.
-        If it's unset, the user will be prompted to select one.
-        Unfinished or failed processings yield partial or no results.
-
-        Is called by double-clicking on a row in the processings table.
-        """
-        if not self.check_if_output_directory_is_selected():
-            return
-        processing = self.selected_processing()
-        if not processing:
-            return
-        pid = processing.id_
-        if pid not in self.processing_history.finished:
-            self.alert(self.tr("Only the results of correctly finished processing can be loaded"))
-            return
-        self.dlg.processingsTable.setEnabled(False)
-        self.http.get(
-            url=f'{self.server}/processings/{pid}/result',
-            callback=self.result_loader.download_results_callback,
-            callback_kwargs={'processing': processing},
-            use_default_error_handler=False,
-            error_handler=self.result_loader.download_results_error_handler,
-            timeout=300
-        )
+            if not self.check_if_output_directory_is_selected():
+                return
+            self.result_loader.download_results(processing=processing)
 
     def download_results_file(self) -> None:
         """
@@ -2442,11 +2489,19 @@ class Mapflow(QObject):
         processing = self.selected_processing()
         if not processing:
             return
-        pid = processing.id_
-        if pid not in self.processing_history.finished:
+        if processing.id_ not in self.processing_history.finished:
             self.alert(self.tr("Only the results of correctly finished processing can be loaded"))
             return
-        self.result_loader.download_results_file(pid=pid)
+        self.result_loader.download_results_file(pid=processing.id_)
+
+    def download_aoi_file(self) -> None:
+        """
+        Download area of interest and save to a geojson file
+        """
+        processing = self.selected_processing()
+        if not processing:
+            return
+        self.result_loader.download_aoi_file(pid=processing.id_)
 
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """Display a minimalistic modal dialog with some info or a question.
@@ -2461,12 +2516,17 @@ class Mapflow(QObject):
             box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
         return box.exec() == QMessageBox.Ok if blocking else box.open()
 
-    def get_processings_callback(self, response: QNetworkReply) -> None:
+    def get_processings_callback(self, response: QNetworkReply, caller=None) -> None:
         """Update the processing table and user limit.
 
         :param response: The HTTP response.
         """
-        processings = parse_processings_request(json.loads(response.readAll().data()))
+        response_data = json.loads(response.readAll().data())
+        processings = parse_processings_request(response_data)
+        if response_data:
+            current_project_id = response_data[0]['projectId']
+        else:
+            current_project_id = None
         if all(not p.status.is_in_progress
                and p.review_status.is_not_accepted
                for p in processings):
@@ -2812,6 +2872,7 @@ class Mapflow(QObject):
         # Fetch processings at startup and start the timer to keep fetching them afterwards
         self.http.get(url=f'{self.server}/projects/{self.project_id}/processings',
                       callback=self.get_processings_callback,
+                      callback_kwargs={"caller": f"setup_table_{self.project_id}"},
                       use_default_error_handler=False)
         self.processing_fetch_timer.start()
 
@@ -2864,25 +2925,21 @@ class Mapflow(QObject):
             self.setup_workflow_defs(default_project.workflowDefs)
             self.setup_processings_table()
         else:
-            self.http.get(
-                url=f'{self.config.SERVER}/projects',
-                callback=self.get_projects_callback,
-                use_default_error_handler=True
-            )
+            self.project_service.get_projects(current_project_id=self.project_id)
         self.dlg.setup_for_billing(self.billing_type)
         self.dlg.show()
         self.user_status_update_timer.start()
         self.app_startup_user_update_timer.start()
 
-    def get_projects_callback(self, response: QNetworkReply):
-        response = json.loads(response.readAll().data())
-        # Projects are set up once at login and stored in the plugin
-        self.projects = [MapflowProject.from_dict(project) for project in response]
+    def update_projects(self, current_project_id: str):
+        self.projects = self.project_service.projects
         if not self.projects:
             self.alert(self.tr("No projects found! Contact us to resolve the issue"))
             return
-        # Projects combo allows to select the project
-        current_index = self.find_project(self.projects, self.project_id)
+        current_index = self.find_project(self.projects, current_project_id)
+        if self.project_connection is not None:
+            self.dlg.projectsCombo.currentIndexChanged.disconnect(self.project_connection)
+            self.project_connection = None
         self.dlg.setup_project_combo(self.projects, current_index)
         self.on_project_change(current_index)
         self.project_connection = self.dlg.projectsCombo.currentIndexChanged.connect(self.on_project_change)
@@ -2933,30 +2990,46 @@ class Mapflow(QObject):
         processing = self.selected_processing()
         if not processing:
             return
-        message = self.tr("Name: {name}"
-                          "\nStatus: {status}"
-                          "\n\nModel: {model},").format(name=processing.name,
-                                                        model=processing.workflow_def,
-                                                        status=processing.status.value)
-        if processing.blocks:
-            message += self.tr("\nModel options:"
-                               " {options}").format(options=", ".join(block.name
+        message = self.tr("<b>Name</b>: {name}"
+                          "<br><b>Status</b></br>: {status}"
+                          "<br><b>Model</b></br>: {model}").format(name=processing.name,
+                                                                   model=processing.workflow_def,
+                                                                   status=processing.status.value)
+        if processing.description:
+            message += self.tr("<br><b>Description</b></br>: {description}").format(description=processing.description)
+        if processing.blocks: 
+            if any([block.enabled for block in processing.blocks]):
+                message += self.tr("<br><b>Model options:</b></br>"
+                                    " {options}").format(options=", ".join(block.name
                                                                       for block in processing.blocks
-                                                                      if block.enabled))
+                                                                           if block.enabled))
+            else:
+                message += self.tr("<br><b>Model options:</b></br>" " No options selected")
+                
         if processing.params.data_provider:
-            message += self.tr("\n\nData provider: {provider}").format(provider=processing.params.data_provider)
+            message += self.tr("<br><b>Data provider</b></br>: {provider}").format(provider=processing.params.data_provider)
         elif (processing.params.source_type and processing.params.source_type.lower() in ("local", "tif", "tiff")) \
                 or (processing.params.url and processing.params.url.startswith("s3://")):
             # case of user's raster file; we do not want to display internal file address
-            message += self.tr("\n\nData source: uploaded file")
+            message += self.tr("<br><b>Data source</b></br>: uploaded file")
         elif processing.params.url:
-            message += self.tr("\n\nData source link {url}").format(url=processing.params.url)
+            message += self.tr("<br><b>Data source link</b></br> {url}").format(url=processing.params.url)
 
         if processing.errors:
-            message += "\n\nErrors: \n" + processing.error_message(raw=self.config.SHOW_RAW_ERROR)
+            message += "<br><b>Errors</b>:</br>" + "<br></br>" + processing.error_message(raw=self.config.SHOW_RAW_ERROR)
         self.alert(message=message,
                    icon=QMessageBox.Information,
                    blocking=False)
+
+    def update_processing(self):
+        processing = self.selected_processing()
+        if not processing:
+            return
+        dialog = UpdateProcessingDialog(self.dlg)
+        dialog.accepted.connect(lambda: self.processing_service.update_processing(processing.id_,
+                                                                                  dialog.processing()))
+        dialog.setup(processing)
+        dialog.deleteLater()
 
     @property
     def basemap_providers(self):
