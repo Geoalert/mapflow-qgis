@@ -142,10 +142,10 @@
            <property name="maxVisibleItems">
             <number>30</number>
            </property>
-           <property name="allowEmptyLayer" stdset="0">
+           <property name="allowEmptyLayer">
             <bool>false</bool>
            </property>
-           <property name="showCrs" stdset="0">
+           <property name="showCrs">
             <bool>true</bool>
            </property>
           </widget>
@@ -252,10 +252,10 @@
              <height>16777215</height>
             </size>
            </property>
-           <property name="showCrs" stdset="0">
+           <property name="showCrs">
             <bool>true</bool>
            </property>
-           <property name="excludedProviders" stdset="0">
+           <property name="excludedProviders">
             <stringlist notr="true">
              <string>wms</string>
              <string>postgresraster</string>
@@ -298,7 +298,7 @@
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0,0,1,0">
          <property name="spacing">
-          <number>-1</number>
+          <number>7</number>
          </property>
          <property name="sizeConstraint">
           <enum>QLayout::SetMinimumSize</enum>
@@ -816,7 +816,7 @@
           </size>
          </property>
          <property name="currentIndex">
-          <number>0</number>
+          <number>2</number>
          </property>
          <property name="movable">
           <bool>false</bool>
@@ -1243,7 +1243,7 @@
                 <property name="checked">
                  <bool>false</bool>
                 </property>
-                <property name="collapsed" stdset="0">
+                <property name="collapsed">
                  <bool>true</bool>
                 </property>
                 <layout class="QGridLayout" name="layoutMetadataFilters" columnstretch="0,1,0">
@@ -1606,7 +1606,7 @@
                    <property name="geometry">
                     <rect>
                      <x>10</x>
-                     <y>170</y>
+                     <y>149</y>
                      <width>141</width>
                      <height>20</height>
                     </rect>
@@ -1679,27 +1679,11 @@
                     <bool>true</bool>
                    </property>
                   </widget>
-                  <widget class="QCheckBox" name="showCostColumn">
-                   <property name="geometry">
-                    <rect>
-                     <x>10</x>
-                     <y>107</y>
-                     <width>141</width>
-                     <height>20</height>
-                    </rect>
-                   </property>
-                   <property name="text">
-                    <string>Cost</string>
-                   </property>
-                   <property name="checked">
-                    <bool>false</bool>
-                   </property>
-                  </widget>
                   <widget class="QCheckBox" name="showCreatedColumn">
                    <property name="geometry">
                     <rect>
                      <x>10</x>
-                     <y>128</y>
+                     <y>107</y>
                      <width>141</width>
                      <height>20</height>
                     </rect>
@@ -1734,7 +1718,7 @@
                    <property name="geometry">
                     <rect>
                      <x>10</x>
-                     <y>149</y>
+                     <y>128</y>
                      <width>141</width>
                      <height>20</height>
                     </rect>
@@ -1830,7 +1814,7 @@
            <item>
             <layout class="QHBoxLayout" name="layoutOutputDirectoryInput" stretch="0,1,0,1">
              <property name="spacing">
-              <number>-1</number>
+              <number>7</number>
              </property>
              <property name="rightMargin">
               <number>10</number>
@@ -1940,15 +1924,15 @@
  </widget>
  <customwidgets>
   <customwidget>
-   <class>QgsMapLayerComboBox</class>
-   <extends>QComboBox</extends>
-   <header>qgsmaplayercombobox.h</header>
-  </customwidget>
-  <customwidget>
    <class>QgsCollapsibleGroupBox</class>
    <extends>QGroupBox</extends>
    <header>qgscollapsiblegroupbox.h</header>
    <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>QgsMapLayerComboBox</class>
+   <extends>QComboBox</extends>
+   <header>qgsmaplayercombobox.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

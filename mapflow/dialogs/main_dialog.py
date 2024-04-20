@@ -172,7 +172,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.showStatusColumn.toggled.connect(self.set_column_visibility)
         self.showProgressColumn.toggled.connect(self.set_column_visibility)
         self.showAreaColumn.toggled.connect(self.set_column_visibility)
-        self.showCostColumn.toggled.connect(self.set_column_visibility)
         self.showCreatedColumn.toggled.connect(self.set_column_visibility)
         self.showReviewColumn.toggled.connect(self.set_column_visibility)
         self.showIdColumn.toggled.connect(self.set_column_visibility)
@@ -186,7 +185,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                         self.showStatusColumn.isChecked(),
                         self.showProgressColumn.isChecked(),
                         self.showAreaColumn.isChecked(),
-                        self.showCostColumn.isChecked(),
                         self.showCreatedColumn.isChecked(),
                         self.showReviewColumn.isChecked(),
                         self.showIdColumn.isChecked())
