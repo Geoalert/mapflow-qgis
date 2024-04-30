@@ -1,4 +1,5 @@
-
+## 2.6.1
+    - Fix python error on logout/login
 ## 2.6.0
     - Allow to create, modify and delete projects
     - Rename processings

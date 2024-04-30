@@ -13,6 +13,8 @@ version=2.6.0
 author=Geoalert
 email=hello@geoalert.io
 changelog:
+    2.6.1
+    - Fix python error on logout/login
     2.6.0
     - Allow to create, modify and delete projects
     - Rename processings
