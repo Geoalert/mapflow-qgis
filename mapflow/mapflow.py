@@ -2769,9 +2769,6 @@ class Mapflow(QObject):
 
     def logout(self) -> None:
         """Close the plugin and clear credentials from cache."""
-        # disconnect what was connected on login
-        if self.project_connection is not None:
-            self.dlg.projectsCombo.currentIndexChanged.disconnect(self.project_connection)
         # set token to empty to delete it from settings
         self.settings.setValue('token', '')
         self.processing_fetch_timer.stop()
