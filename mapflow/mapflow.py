@@ -71,6 +71,7 @@ from .functional.geometry import clip_aoi_to_image_extent
 from .functional.project import ProjectService
 from .functional.processing import ProcessingService
 from .functional.auth import get_auth_id
+from .functional.service.data_catalog import DataCatalogService
 from . import constants
 from .schema.catalog import PreviewType
 
@@ -177,6 +178,10 @@ class Mapflow(QObject):
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or self.config.DEFAULT_ZOOM))
 
         # Initialize services
+        self.data_catalog_service = DataCatalogService(self.http, self.server)
+        self.data_catalog_service.mosaicsUpdated.connect(self.update_mosaics)
+        self.dlg.
+
         self.project_service = ProjectService(self.http, self.server)
         self.project_service.projectsUpdated.connect(self.update_projects)
 
@@ -3031,6 +3036,12 @@ class Mapflow(QObject):
         dialog.setup(processing)
         dialog.deleteLater()
 
+    def create_project(self):
+        dialog = CreateProjectDialog(self.dlg)
+        dialog.accepted.connect(lambda: self.project_service.create_project(dialog.project()))
+        dialog.setup()
+        dialog.deleteLater()
+
     @property
     def basemap_providers(self):
         return ProvidersList(self.default_providers + self.user_providers)
@@ -3070,3 +3081,8 @@ class Mapflow(QObject):
             self.login_basic(token)
         else:
             self.dlg_login.show()
+
+    # ==== mosaic tmp test ====== #
+
+    def update_mosaics(self):
+        print(list(self.mosaic_service.mosaics.keys()))
