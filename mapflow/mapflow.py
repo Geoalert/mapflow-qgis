@@ -37,6 +37,7 @@ from .dialogs import (MainDialog,
                       UpdateProcessingDialog,
                       )
 from .dialogs.icons import plugin_icon
+from .functional.controller.data_catalog_controller import DataCatalogController
 from .http import (Http,
                    get_error_report_body,
                    data_catalog_message_parser,
@@ -178,9 +179,8 @@ class Mapflow(QObject):
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or self.config.DEFAULT_ZOOM))
 
         # Initialize services
-        self.data_catalog_service = DataCatalogService(self.http, self.server)
-        self.data_catalog_service.mosaicsUpdated.connect(self.update_mosaics)
-        self.dlg.
+        self.data_catalog_service = DataCatalogService(self.http, self.server, self.dlg)
+        self.data_catalog_controller = DataCatalogController(self.dlg, self.data_catalog_service)
 
         self.project_service = ProjectService(self.http, self.server)
         self.project_service.projectsUpdated.connect(self.update_projects)
@@ -2931,6 +2931,7 @@ class Mapflow(QObject):
             self.setup_processings_table()
         else:
             self.project_service.get_projects(current_project_id=self.project_id)
+            self.data_catalog_service.get_mosaics()
         self.dlg.setup_for_billing(self.billing_type)
         self.dlg.show()
         self.user_status_update_timer.start()
@@ -3066,7 +3067,6 @@ class Mapflow(QObject):
             self.dlg.close()
             return
 
-
         if self.logged_in:
             # with any auth method
             self.dlg.show()
@@ -3081,8 +3081,3 @@ class Mapflow(QObject):
             self.login_basic(token)
         else:
             self.dlg_login.show()
-
-    # ==== mosaic tmp test ====== #
-
-    def update_mosaics(self):
-        print(list(self.mosaic_service.mosaics.keys()))

@@ -17,6 +17,7 @@ class DataCatalogApi(QObject):
     def __init__(self,
                  http: Http,
                  server: str):
+        super().__init__()
         self.server = server
         self.http = http
 
