@@ -37,6 +37,7 @@ from .dialogs import (MainDialog,
                       UpdateProcessingDialog,
                       )
 from .dialogs.icons import plugin_icon
+from .functional.controller.data_catalog_controller import DataCatalogController
 from .http import (Http,
                    get_error_report_body,
                    data_catalog_message_parser,
@@ -71,6 +72,7 @@ from .functional.geometry import clip_aoi_to_image_extent
 from .functional.project import ProjectService
 from .functional.processing import ProcessingService
 from .functional.auth import get_auth_id
+from .functional.service.data_catalog import DataCatalogService
 from . import constants
 from .schema.catalog import PreviewType
 
@@ -177,6 +179,9 @@ class Mapflow(QObject):
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or self.config.DEFAULT_ZOOM))
 
         # Initialize services
+        self.data_catalog_service = DataCatalogService(self.http, self.server, self.dlg)
+        self.data_catalog_controller = DataCatalogController(self.dlg, self.data_catalog_service)
+
         self.project_service = ProjectService(self.http, self.server)
         self.project_service.projectsUpdated.connect(self.update_projects)
 
@@ -2923,6 +2928,7 @@ class Mapflow(QObject):
             self.setup_processings_table()
         else:
             self.project_service.get_projects(current_project_id=self.project_id)
+            self.data_catalog_service.get_mosaics()
         self.dlg.setup_for_billing(self.billing_type)
         self.dlg.show()
         self.user_status_update_timer.start()
@@ -3028,6 +3034,12 @@ class Mapflow(QObject):
         dialog.setup(processing)
         dialog.deleteLater()
 
+    def create_project(self):
+        dialog = CreateProjectDialog(self.dlg)
+        dialog.accepted.connect(lambda: self.project_service.create_project(dialog.project()))
+        dialog.setup()
+        dialog.deleteLater()
+
     @property
     def basemap_providers(self):
         return ProvidersList(self.default_providers + self.user_providers)
@@ -3051,7 +3063,6 @@ class Mapflow(QObject):
         if not self.version_ok:
             self.dlg.close()
             return
-
 
         if self.logged_in:
             # with any auth method
