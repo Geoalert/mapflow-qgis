@@ -34,6 +34,7 @@ class DataCatalogService(QObject):
         self.api = DataCatalogApi(http=http, server=server)
         self.view = DataCatalogView(dlg=dlg)
         self.mosaics = {}
+        self.images = []
         
 
     # Mosaics CRUD
@@ -107,13 +108,15 @@ class DataCatalogService(QObject):
             return
         self.view.display_mosaic_info(mosaic)
         self.get_mosaic_images(mosaic.id)
+        # Clear preview label when choosing new mosaic
+        self.view.remove_preview_s()
 
     def get_mosaic_images(self, mosaic_id):
         self.api.get_mosaic_images(mosaic_id=mosaic_id, callback=self.get_mosaic_images_callback)
 
     def get_mosaic_images_callback(self, response: QNetworkReply):
-        images = [ImageReturnSchema.from_dict(data) for data in json.loads(response.readAll().data())]
-        self.view.display_images(images)
+        self.images = [ImageReturnSchema.from_dict(data) for data in json.loads(response.readAll().data())]
+        self.view.display_images(self.images)
 
     def get_image(self, image_id: UUID, callback: Callable):
         self.api.get_image(image_id=image_id, callback=callback)
@@ -125,7 +128,10 @@ class DataCatalogService(QObject):
         pass
 
     def image_clicked(self):
-        pass
+        image = self.selected_image()
+        if not image:
+            return
+        self.get_image_preview_s(image, PreviewSize.small)
 
     def get_image_preview_s(self,
                            image: ImageReturnSchema,
@@ -160,3 +166,8 @@ class DataCatalogService(QObject):
         if not first:
             return None
         return first[0]
+
+    def selected_image(self, limit=1) -> Optional[ImageReturnSchema]:
+        self.view.selected_images_ids(limit=limit)
+        image = self.images[0]
+        return image
