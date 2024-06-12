@@ -55,3 +55,10 @@ class DataCatalogView(QObject):
                 for row in selected_rows[:limit]]
         return pids
 
+    def selected_images_ids(self, limit=None):
+        selected_rows = list(set(index.row() for index in self.dlg.imageTable.selectionModel().selectedIndexes()))
+        if not selected_rows:
+            return []
+        pids = [self.dlg.imageTable.item(row, 0).text()
+                for row in selected_rows[:limit]]
+        return pids

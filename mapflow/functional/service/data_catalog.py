@@ -6,6 +6,7 @@ import json
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
+from PyQt5.QtWidgets import QMessageBox, QApplication
 
 from ...dialogs.main_dialog import MainDialog
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
@@ -34,6 +35,7 @@ class DataCatalogService(QObject):
         self.api = DataCatalogApi(http=http, server=server)
         self.view = DataCatalogView(dlg=dlg)
         self.mosaics = {}
+        self.images = []
         
 
     # Mosaics CRUD
@@ -112,8 +114,8 @@ class DataCatalogService(QObject):
         self.api.get_mosaic_images(mosaic_id=mosaic_id, callback=self.get_mosaic_images_callback)
 
     def get_mosaic_images_callback(self, response: QNetworkReply):
-        images = [ImageReturnSchema.from_dict(data) for data in json.loads(response.readAll().data())]
-        self.view.display_images(images)
+        self.images = [ImageReturnSchema.from_dict(data) for data in json.loads(response.readAll().data())]
+        self.view.display_images(self.images)
 
     def get_image(self, image_id: UUID, callback: Callable):
         self.api.get_image(image_id=image_id, callback=callback)
@@ -160,3 +162,34 @@ class DataCatalogService(QObject):
         if not first:
             return None
         return first[0]
+    
+    def selected_image(self, limit=1) -> Optional[ImageReturnSchema]:
+        try:
+            self.view.selected_images_ids(limit=limit)
+            image = self.images[0]
+            return image
+        except IndexError:
+            return
+    
+    def image_info(self):
+        image = self.selected_image()
+        if not image:
+            return
+        self.get_image_info(image=image)
+
+    def get_image_info(self, image: ImageReturnSchema):
+        try:
+            message = '<b>Name</b>: {filename}\
+                        <br><b>Date</b></br>: {uploaded_at}\
+                        <br><b>Size</b></br>: {file_size}\
+                        <br><b>Footprint</b></br>: {footprint}\
+                        <br><b>Metadata</b></br>: {meta_data}'\
+                        .format(filename=image.filename, 
+                                uploaded_at=image.uploaded_at, 
+                                file_size=image.file_size, 
+                                footprint=image.footprint, 
+                                meta_data=image.meta_data)
+            info_box = QMessageBox(QMessageBox.Information, "Mapflow", message, parent=QApplication.activeWindow())
+            return info_box.exec()
+        except IndexError:
+            return
