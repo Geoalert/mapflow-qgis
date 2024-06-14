@@ -2,16 +2,20 @@ from typing import Sequence, Union, Optional, Callable, List
 from pathlib import Path
 from uuid import UUID
 import json
+import tempfile
 
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
+from qgis.core import QgsProject, QgsSettings, QgsRasterLayer
 
 from ...dialogs.main_dialog import MainDialog
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
 from ..api.data_catalog_api import DataCatalogApi
 from ..view.data_catalog_view import DataCatalogView
 from ...http import Http
+from ...functional import layer_utils
+from ...config import Config
 
 
 class DataCatalogService(QObject):
@@ -28,13 +32,22 @@ class DataCatalogService(QObject):
     def __init__(self,
                  http: Http,
                  server: str,
-                 dlg: MainDialog):
+                 dlg: MainDialog,
+                 iface):
         super().__init__()
         self.dlg = dlg
         self.api = DataCatalogApi(http=http, server=server)
         self.view = DataCatalogView(dlg=dlg)
         self.mosaics = {}
-        
+        self.result_loader = layer_utils.ResultsLoader(iface=iface,
+                                                       maindialog=self.dlg,
+                                                       http=http,
+                                                       server=server,
+                                                       project=QgsProject.instance(),
+                                                       settings=QgsSettings(),
+                                                       plugin_name=Config().PLUGIN_NAME,
+                                                       temp_dir=tempfile.gettempdir()
+                                                       )
 
     # Mosaics CRUD
     def create_mosaic(self, mosaic: MosaicCreateSchema):
@@ -160,3 +173,11 @@ class DataCatalogService(QObject):
         if not first:
             return None
         return first[0]
+
+    def mosaic_preview(self):
+        mosaic = self.selected_mosaic()
+        url = mosaic.rasterLayer.tileUrl
+        url_json = mosaic.rasterLayer.tileJsonUrl
+        name = mosaic.name
+        layer = layer_utils.generate_raster_layer(url, name)
+        self.result_loader.request_layer_extent(url_json, layer, [], [])
