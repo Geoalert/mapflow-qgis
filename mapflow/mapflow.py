@@ -499,7 +499,7 @@ class Mapflow(QObject):
     def show_wd_options(self, wd: WorkflowDef):
         self.dlg.clear_model_options()
         for block in wd.optional_blocks:
-            self.dlg.add_model_option(block.name, checked=bool(self.settings.value(f"wd/{wd.id}/{block.name}", False)))
+            self.dlg.add_model_option(block.displayName, checked=bool(self.settings.value(f"wd/{wd.id}/{block.name}", False)))
 
     def save_options_settings(self, wd: WorkflowDef, enabled_blocks: List[bool]):
         enabled_blocks_dict = wd.get_enabled_blocks(enabled_blocks)
