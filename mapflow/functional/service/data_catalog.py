@@ -108,8 +108,8 @@ class DataCatalogService(QObject):
             return
         self.view.display_mosaic_info(mosaic)
         self.get_mosaic_images(mosaic.id)
-        # Clear preview label when choosing new mosaic
-        self.view.remove_preview_s()
+        self.dlg.imageTable.clearSelection()
+        self.dlg.imagePreview.setText(" ")
 
     def get_mosaic_images(self, mosaic_id):
         self.api.get_mosaic_images(mosaic_id=mosaic_id, callback=self.get_mosaic_images_callback)

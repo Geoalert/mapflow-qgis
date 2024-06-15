@@ -46,9 +46,6 @@ class DataCatalogView(QObject):
     def show_preview_s(self, preview_image):
         self.dlg.imagePreview.setPixmap(QPixmap.fromImage(preview_image))
 
-    def remove_preview_s(self):
-        self.dlg.imagePreview.setText(" ")
-
     def selected_mosaic_ids(self, limit=None):
         # add unique selected rows
         selected_rows = list(set(index.row() for index in self.dlg.mosaicTable.selectionModel().selectedIndexes()))
