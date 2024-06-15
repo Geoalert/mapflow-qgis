@@ -6,7 +6,6 @@ import json
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
-from PyQt5.QtWidgets import QMessageBox, QApplication
 
 from ...dialogs.main_dialog import MainDialog
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
@@ -109,6 +108,8 @@ class DataCatalogService(QObject):
             return
         self.view.display_mosaic_info(mosaic)
         self.get_mosaic_images(mosaic.id)
+        self.dlg.imageTable.clearSelection()
+        self.dlg.imageDetails.setText("Image Info")
 
     def get_mosaic_images(self, mosaic_id):
         self.api.get_mosaic_images(mosaic_id=mosaic_id, callback=self.get_mosaic_images_callback)
@@ -127,6 +128,10 @@ class DataCatalogService(QObject):
         pass
 
     def image_clicked(self):
+        image = self.selected_image()
+        if not image:
+            return
+        self.view.display_image_info(image)
         pass
 
     def get_image_preview_s(self,
@@ -175,21 +180,4 @@ class DataCatalogService(QObject):
         image = self.selected_image()
         if not image:
             return
-        self.get_image_info(image=image)
-
-    def get_image_info(self, image: ImageReturnSchema):
-        try:
-            message = '<b>Name</b>: {filename}\
-                        <br><b>Date</b></br>: {uploaded_at}\
-                        <br><b>Size</b></br>: {file_size}\
-                        <br><b>Footprint</b></br>: {footprint}\
-                        <br><b>Metadata</b></br>: {meta_data}'\
-                        .format(filename=image.filename, 
-                                uploaded_at=image.uploaded_at, 
-                                file_size=image.file_size, 
-                                footprint=image.footprint, 
-                                meta_data=image.meta_data)
-            info_box = QMessageBox(QMessageBox.Information, "Mapflow", message, parent=QApplication.activeWindow())
-            return info_box.exec()
-        except IndexError:
-            return
+        self.view.full_image_info(image=image)
