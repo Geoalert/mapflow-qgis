@@ -31,10 +31,12 @@ class DataCatalogService(QObject):
                  http: Http,
                  server: str,
                  dlg: MainDialog,
-                 iface):
+                 iface,
+                 result_loader):
         super().__init__()
         self.dlg = dlg
-        self.api = DataCatalogApi(http=http, server=server, dlg=dlg, iface=iface)
+        self.result_loader = result_loader
+        self.api = DataCatalogApi(http=http, server=server, dlg=dlg, iface=iface, result_loader=self.result_loader)
         self.view = DataCatalogView(dlg=dlg)
         self.mosaics = {}
 

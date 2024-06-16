@@ -1,17 +1,15 @@
 from typing import Union, Callable, Optional
 from pathlib import Path
 from uuid import UUID
-import tempfile
 
 from PyQt5.QtCore import QObject, pyqtSignal, QFile, QIODevice
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtWidgets import QApplication
-from qgis.core import QgsMapLayer, QgsProject, QgsSettings
+from qgis.core import QgsMapLayer
 
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
 from ...http import Http
 from ...functional import layer_utils
-from ...config import Config
 from ...dialogs.dialogs import ErrorMessageWidget
 from ...dialogs.main_dialog import MainDialog
 
@@ -26,21 +24,14 @@ class DataCatalogApi(QObject):
                  http: Http,
                  server: str,
                  dlg: MainDialog,
-                 iface):
+                 iface,
+                 result_loader):
         super().__init__()
         self.server = server
         self.http = http
         self.iface = iface
         self.dlg = dlg
-        self.result_loader = layer_utils.ResultsLoader(iface=self.iface,
-                                                       maindialog=self.dlg,
-                                                       http=self.http,
-                                                       server=self.server,
-                                                       project=QgsProject.instance(),
-                                                       settings=QgsSettings(),
-                                                       plugin_name=Config().PLUGIN_NAME,
-                                                       temp_dir=tempfile.gettempdir()
-                                                       )
+        self.result_loader = result_loader
 
     # Mosaics CRUD
     def create_mosaic(self, mosaic: MosaicCreateSchema, callback: Callable = lambda *args: None):

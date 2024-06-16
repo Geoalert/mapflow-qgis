@@ -179,7 +179,17 @@ class Mapflow(QObject):
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or self.config.DEFAULT_ZOOM))
 
         # Initialize services
-        self.data_catalog_service = DataCatalogService(self.http, self.server, self.dlg, self.iface)
+        self.result_loader = layer_utils.ResultsLoader(iface=self.iface,
+                                                       maindialog=self.dlg,
+                                                       http=self.http,
+                                                       server=self.server,
+                                                       project=self.project,
+                                                       settings=self.settings,
+                                                       plugin_name=self.plugin_name,
+                                                       temp_dir=self.temp_dir
+                                                       )
+
+        self.data_catalog_service = DataCatalogService(self.http, self.server, self.dlg, self.iface, self.result_loader)
         self.data_catalog_controller = DataCatalogController(self.dlg, self.data_catalog_service)
 
         self.project_service = ProjectService(self.http, self.server)
@@ -324,7 +334,7 @@ class Mapflow(QObject):
         self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
 
         # Service init
-        self.result_loader = layer_utils.ResultsLoader(iface=self.iface,
+        """ self.result_loader = layer_utils.ResultsLoader(iface=self.iface,
                                                        maindialog=self.dlg,
                                                        http=self.http,
                                                        server=self.server,
@@ -332,7 +342,7 @@ class Mapflow(QObject):
                                                        settings=self.settings,
                                                        plugin_name=self.plugin_name,
                                                        temp_dir=self.temp_dir
-                                                       )
+                                                       ) """
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
