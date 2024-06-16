@@ -1,9 +1,13 @@
 from typing import Union, Callable, Optional
 from pathlib import Path
 from uuid import UUID
+import os.path
+from osgeo import gdal
+import tempfile
 
 from PyQt5.QtCore import QObject, pyqtSignal, QFile, QIODevice
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
+from qgis.core import QgsRasterLayer, QgsCoordinateReferenceSystem, QgsRectangle, QgsProject
 
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
 from ...http import Http
@@ -15,11 +19,16 @@ class DataCatalogApi(QObject):
     mosaicsUpdated = pyqtSignal()
 
     def __init__(self,
+                 iface,
                  http: Http,
                  server: str):
         super().__init__()
+        self.iface = iface
         self.server = server
         self.http = http
+        self.temp_dir = tempfile.gettempdir()
+        self.project = QgsProject.instance()
+
 
     # Mosaics CRUD
     def create_mosaic(self, mosaic: MosaicCreateSchema, callback: Callable = lambda *args: None):
@@ -96,6 +105,43 @@ class DataCatalogApi(QObject):
                       callback=callback,
                       use_default_error_handler=True
                       )
+        
+    def get_image_preview_l(self,
+                            image: ImageReturnSchema,
+                            extent: QgsRectangle,
+                            callback: Callable,
+                            image_id: str = ""):
+        self.http.get(url=image.preview_url_l,
+                      callback=callback,
+                      use_default_error_handler=True,
+                      callback_kwargs={"extent": extent,
+                                       "image_id": image_id})
+    
+    def display_image_preview(self,
+                              response: QNetworkReply,
+                              extent: QgsRectangle,
+                              crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857"),
+                              image_id: str = ""):
+        with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb') as f:
+            f.write(response.readAll().data())
+        preview = gdal.Open(f.name)
+        pixel_xsize = extent.width() / preview.RasterXSize
+        pixel_ysize = extent.height() / preview.RasterYSize
+        preview.SetProjection(crs.toWkt())
+        preview.SetGeoTransform([
+            extent.xMinimum(),  # north-west corner x
+            pixel_xsize,  # pixel horizontal resolution (m)
+            0,  # x-axis rotation
+            extent.yMaximum(),  # north-west corner y
+            0,  # y-axis rotation
+            -pixel_ysize  # pixel vertical resolution (m)
+        ])
+        preview.FlushCache()
+        layer = QgsRasterLayer(f.name, f"preview {image_id}", 'gdal')
+        layer.setExtent(extent)
+        self.project.addMapLayer(layer)
+        self.iface.setActiveLayer(layer)
+        self.iface.zoomToActiveLayer()
 
     # Legacy:
     def upload_to_new_mosaic(self,

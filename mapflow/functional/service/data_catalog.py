@@ -6,6 +6,7 @@ import json
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
+from qgis.core import QgsGeometry, QgsCoordinateTransform, QgsCoordinateReferenceSystem, QgsProject
 
 from ...dialogs.main_dialog import MainDialog
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
@@ -26,14 +27,17 @@ class DataCatalogService(QObject):
     mosaicsUpdated = pyqtSignal()
 
     def __init__(self,
+                 iface,
                  http: Http,
                  server: str,
                  dlg: MainDialog):
         super().__init__()
+        self.iface = iface
         self.dlg = dlg
-        self.api = DataCatalogApi(http=http, server=server)
+        self.api = DataCatalogApi(http=http, server=server, iface=self.iface)
         self.view = DataCatalogView(dlg=dlg)
         self.mosaics = {}
+        self.images = []
         
 
     # Mosaics CRUD
@@ -112,8 +116,8 @@ class DataCatalogService(QObject):
         self.api.get_mosaic_images(mosaic_id=mosaic_id, callback=self.get_mosaic_images_callback)
 
     def get_mosaic_images_callback(self, response: QNetworkReply):
-        images = [ImageReturnSchema.from_dict(data) for data in json.loads(response.readAll().data())]
-        self.view.display_images(images)
+        self.images = [ImageReturnSchema.from_dict(data) for data in json.loads(response.readAll().data())]
+        self.view.display_images(self.images)
 
     def get_image(self, image_id: UUID, callback: Callable):
         self.api.get_image(image_id=image_id, callback=callback)
@@ -135,6 +139,20 @@ class DataCatalogService(QObject):
     def get_image_preview_s_callback(self, response: QNetworkReply):
         image = QImage.fromData(response.readAll().data())
         self.view.show_preview_s(image)
+    
+    def get_image_preview_l(self, image: ImageReturnSchema):
+        image = self.selected_image()
+        extent = self.footprint_to_extent(image)
+        self.api.get_image_preview_l(image=image, extent=extent, callback=self.api.display_image_preview, image_id=image.id)
+
+    def footprint_to_extent(self, image):
+        sourceCrs = QgsCoordinateReferenceSystem(4326)
+        destCrs = QgsCoordinateReferenceSystem(3857)
+        tr = QgsCoordinateTransform(sourceCrs, destCrs, QgsProject.instance())
+        geom = QgsGeometry.fromWkt(image.footprint)
+        geom.transform(tr)
+        extent = geom.boundingBox()
+        return extent
 
     # Legacy:
     def upload_to_new_mosaic(self,
@@ -160,3 +178,11 @@ class DataCatalogService(QObject):
         if not first:
             return None
         return first[0]
+    
+    def selected_image(self, limit=1) -> Optional[ImageReturnSchema]:
+        self.view.selected_images_ids(limit=limit)
+        image = self.images[0]
+        return image    
+
+
+#extent=QgsGeometry.fromWkt(image.footprint).boundingBox(),
