@@ -179,7 +179,7 @@ class Mapflow(QObject):
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or self.config.DEFAULT_ZOOM))
 
         # Initialize services
-        self.data_catalog_service = DataCatalogService(self.iface, self.http, self.server, self.dlg)
+        self.data_catalog_service = DataCatalogService(self.iface, self.http, self.server, self.dlg, self.plugin_version)
         self.data_catalog_controller = DataCatalogController(self.dlg, self.data_catalog_service)
 
         self.project_service = ProjectService(self.http, self.server)

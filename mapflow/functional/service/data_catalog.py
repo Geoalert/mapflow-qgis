@@ -30,11 +30,13 @@ class DataCatalogService(QObject):
                  iface,
                  http: Http,
                  server: str,
-                 dlg: MainDialog):
+                 dlg: MainDialog,
+                 plugin_version):
         super().__init__()
         self.iface = iface
         self.dlg = dlg
-        self.api = DataCatalogApi(http=http, server=server, iface=self.iface)
+        self.plugin_version = plugin_version
+        self.api = DataCatalogApi(http=http, server=server, iface=self.iface, plugin_version=self.plugin_version)
         self.view = DataCatalogView(dlg=dlg)
         self.mosaics = {}
         self.images = []
