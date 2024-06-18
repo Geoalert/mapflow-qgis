@@ -143,14 +143,17 @@ class DataCatalogService(QObject):
         self.view.show_preview_s(image)
     
     def get_image_preview_l(self, image: ImageReturnSchema):
-        image = self.selected_image()
-        extent = self.footprint_to_extent(image)
-        self.api.get_image_preview_l(image=image, extent=extent, callback=self.api.display_image_preview, image_id=image.id)
+        try:
+            image = self.selected_image()
+            extent = self.footprint_to_extent(image)
+            self.api.get_image_preview_l(image=image, extent=extent, callback=self.api.display_image_preview, image_id=image.id)
+        except AttributeError:
+            return
 
     def footprint_to_extent(self, image):
-        sourceCrs = QgsCoordinateReferenceSystem(4326)
-        destCrs = QgsCoordinateReferenceSystem(3857)
-        tr = QgsCoordinateTransform(sourceCrs, destCrs, QgsProject.instance())
+        source_crs = QgsCoordinateReferenceSystem(4326)
+        dest_crs = QgsCoordinateReferenceSystem(3857)
+        tr = QgsCoordinateTransform(source_crs, dest_crs, QgsProject.instance())
         geom = QgsGeometry.fromWkt(image.footprint)
         geom.transform(tr)
         extent = geom.boundingBox()
@@ -181,10 +184,14 @@ class DataCatalogService(QObject):
             return None
         return first[0]
     
-    def selected_image(self, limit=1) -> Optional[ImageReturnSchema]:
-        self.view.selected_images_ids(limit=limit)
-        image = self.images[0]
-        return image    
+    def selected_images(self, limit=None) -> List[MosaicReturnSchema]:
+        ids = self.view.selected_images_ids(limit=limit)
+        print(ids)
+        images = [i for i in self.images if i.id in ids]
+        return images
 
-
-#extent=QgsGeometry.fromWkt(image.footprint).boundingBox(),
+    def selected_image(self) -> Optional[ImageReturnSchema]:
+        first = self.selected_images(limit=1)
+        if not first:
+            return None
+        return first[0]
