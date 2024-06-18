@@ -168,13 +168,17 @@ class DataCatalogService(QObject):
             return None
         return first[0]
     
-    def selected_image(self, limit=1) -> Optional[ImageReturnSchema]:
-        try:
-            self.view.selected_images_ids(limit=limit)
-            image = self.images[0]
-            return image
-        except IndexError:
-            return
+    def selected_images(self, limit=None) -> List[MosaicReturnSchema]:
+        ids = self.view.selected_images_ids(limit=limit)
+        print(ids)
+        images = [i for i in self.images if i.id in ids]
+        return images
+
+    def selected_image(self) -> Optional[ImageReturnSchema]:
+        first = self.selected_images(limit=1)
+        if not first:
+            return None
+        return first[0]
     
     def image_info(self):
         image = self.selected_image()
