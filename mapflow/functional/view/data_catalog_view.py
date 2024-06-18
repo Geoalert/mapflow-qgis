@@ -55,3 +55,5 @@ class DataCatalogView(QObject):
                 for row in selected_rows[:limit]]
         return pids
 
+    def show_storage(self, taken_storage):
+        self.dlg.dataLimit.setText("Your data: {taken} MB. Free space: {free} MB".format(taken=taken_storage, free=1024-taken_storage))

@@ -10,3 +10,4 @@ class DataCatalogController(QObject):
 
         self.dlg.mosaicTable.cellClicked.connect(self.service.mosaic_clicked)
         self.dlg.imageTable.cellClicked.connect(self.service.image_clicked)
+        self.dlg.tabWidget.tabBarClicked.connect(self.service.get_all_image_sizes)
