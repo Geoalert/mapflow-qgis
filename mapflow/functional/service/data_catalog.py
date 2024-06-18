@@ -144,8 +144,14 @@ class DataCatalogService(QObject):
                                       callback=callback)
 
     # Status
-    def get_user_limit(self, callback):
-        self.api.get_user_limit(callback=callback)
+    def get_user_limit(self):
+        self.api.get_user_limit(callback=self.get_user_limit_callback)
+    
+    def get_user_limit_callback(self, response: QNetworkReply):
+        data_limit = list(json.loads(response.readAll().data()).values())
+        taken = data_limit[1]
+        free = data_limit[2]
+        self.view.show_storage(taken, free)
 
     # Selection
     def selected_mosaics(self, limit=None) -> List[MosaicReturnSchema]:
@@ -160,29 +166,3 @@ class DataCatalogService(QObject):
         if not first:
             return None
         return first[0]
-    
-    def get_mosaic_ids(self):
-        mosaic_ids = []
-        for m in self.mosaics.values():
-            mid = m.id
-            mosaic_ids.append(mid)
-        return mosaic_ids
-    
-    def get_all_image_sizes(self):
-        self.sizes = []
-        mosaic_ids = self.get_mosaic_ids()
-        for mid in mosaic_ids:
-            self.api.get_mosaic_images(mosaic_id=mid, callback=self.get_all_image_sizes_callback)
-
-    def get_all_image_sizes_callback(self, response: QNetworkReply):
-        images = [ImageReturnSchema.from_dict(data) for data in json.loads(response.readAll().data())]
-        for i in images:
-            self.sizes.append(i.file_size)
-        taken_storage = round(sum(self.sizes)/1000000, 1)
-        self.view.show_storage(taken_storage)
-
-        
-
-        
-
-
