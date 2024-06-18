@@ -34,7 +34,7 @@ class DataCatalogService(QObject):
         self.api = DataCatalogApi(http=http, server=server)
         self.view = DataCatalogView(dlg=dlg)
         self.mosaics = {}
-        
+
 
     # Mosaics CRUD
     def create_mosaic(self, mosaic: MosaicCreateSchema):
@@ -144,8 +144,14 @@ class DataCatalogService(QObject):
                                       callback=callback)
 
     # Status
-    def get_user_limit(self, callback):
-        self.api.get_user_limit(callback=callback)
+    def get_user_limit(self):
+        self.api.get_user_limit(callback=self.get_user_limit_callback)
+    
+    def get_user_limit_callback(self, response: QNetworkReply):
+        data_limit = list(json.loads(response.readAll().data()).values())
+        taken = data_limit[1]
+        free = data_limit[2]
+        self.view.show_storage(taken, free)
 
     # Selection
     def selected_mosaics(self, limit=None) -> List[MosaicReturnSchema]:
