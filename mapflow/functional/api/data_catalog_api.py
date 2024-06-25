@@ -129,3 +129,34 @@ class DataCatalogApi(QObject):
         tif.setBodyDevice(image)
         body.append(tif)
         return body
+    
+    """ def upload_image_to_mosaic(self, layer, mosaic):
+        body = QHttpMultiPart(QHttpMultiPart.FormDataType)
+        tif = QHttpPart()
+        tif.setHeader(QNetworkRequest.ContentTypeHeader, 'image/tiff')
+        filename = Path(layer.dataProvider().dataSourceUri()).name
+        tif.setHeader(QNetworkRequest.ContentDispositionHeader, f'form-data; name="file"; filename="{filename}"')
+        image = QFile(layer.dataProvider().dataSourceUri(), body)
+        image.open(QIODevice.ReadOnly)
+        tif.setBodyDevice(image)
+        body.append(tif)
+        callback = None
+        callback_kwargs = None
+        url = f'{self.server}/mosaic/{mosaic.id}/image'
+        response = self.http.post(
+            url=url,
+            callback=callback,
+            callback_kwargs=callback_kwargs,
+            use_default_error_handler=True,
+            #error_handler=self.upload_tif_error_handler,
+            body=body,
+            timeout=3600  # one hour
+        )
+        body.setParent(response) 
+        progress_message = QgsMessageBarItem(
+            self.plugin_name,
+            self.tr('Uploading image to Mapflow...'),
+            QProgressBar(self.message_bar),
+            parent=self.message_bar
+        )
+        self.message_bar.pushItem(progress_message) """
