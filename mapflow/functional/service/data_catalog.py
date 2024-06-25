@@ -8,6 +8,7 @@ from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
 
 from ...dialogs.main_dialog import MainDialog
+from ...dialogs.mosaic_dialog import CreateMosaicDialog, UpdateMosaicDialog
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
 from ..api.data_catalog_api import DataCatalogApi
 from ..view.data_catalog_view import DataCatalogView
@@ -38,7 +39,12 @@ class DataCatalogService(QObject):
 
     # Mosaics CRUD
     def create_mosaic(self, mosaic: MosaicCreateSchema):
-        self.api.create_mosaic(mosaic, callback=self.create_mosaic_callback)
+        dialog = CreateMosaicDialog(self.dlg)
+        dialog.accepted.connect(lambda: self.api.create_mosaic(dialog.mosaic()))
+        dialog.setup()
+        dialog.deleteLater()
+
+        #self.api.create_mosaic(mosaic, callback=self.create_mosaic_callback)
 
     def create_mosaic_callback(self, response: QNetworkReply):
         self.get_mosaics()
