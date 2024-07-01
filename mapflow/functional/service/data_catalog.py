@@ -2,10 +2,13 @@ from typing import Sequence, Union, Optional, Callable, List
 from pathlib import Path
 from uuid import UUID
 import json
+import os.path
 
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
+from qgis.core import QgsRasterLayer
+from PyQt5.QtWidgets import QApplication, QMessageBox, QFileDialog
 
 from ...dialogs.main_dialog import MainDialog
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
@@ -34,7 +37,6 @@ class DataCatalogService(QObject):
         self.api = DataCatalogApi(http=http, server=server)
         self.view = DataCatalogView(dlg=dlg)
         self.mosaics = {}
-        
 
     # Mosaics CRUD
     def create_mosaic(self, mosaic: MosaicCreateSchema):
@@ -160,3 +162,22 @@ class DataCatalogService(QObject):
         if not first:
             return None
         return first[0]
+
+    def upload_image_to_mosaic(self):
+        mosaic = self.selected_mosaic()
+        image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), "Choose image to upload", filter='(TIF files *.tif; *.tiff)')[0]
+        for image_path in image_paths:
+            image_filename = os.path.splitext(os.path.basename(image_path))[0]
+            image = QgsRasterLayer(image_path, image_filename)
+            #self.api.upload_image_to_mosaic(image, mosaic)
+            self.api.upload_image(mosaic.id, image_path)
+    
+    def test(self):
+        info_box = QMessageBox(QMessageBox.Information, "Mapflow", "Error", parent=QApplication.activeWindow())
+        return info_box.exec()
+    
+    def check_mosaic_selection(self):
+        if self.dlg.mosaicTable.selectionModel().hasSelection() is True:
+            self.dlg.addImageButton.setEnabled(True)
+        else:
+            self.dlg.addImageButton.setEnabled(False)
