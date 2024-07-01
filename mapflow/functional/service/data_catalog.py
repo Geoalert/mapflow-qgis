@@ -8,6 +8,7 @@ from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
 
 from ...dialogs.main_dialog import MainDialog
+from ...dialogs.mosaic_dialog import CreateMosaicDialog, UpdateMosaicDialog
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
 from ..api.data_catalog_api import DataCatalogApi
 from ..view.data_catalog_view import DataCatalogView
@@ -38,7 +39,12 @@ class DataCatalogService(QObject):
 
     # Mosaics CRUD
     def create_mosaic(self, mosaic: MosaicCreateSchema):
-        self.api.create_mosaic(mosaic, callback=self.create_mosaic_callback)
+        dialog = CreateMosaicDialog(self.dlg)
+        dialog.accepted.connect(lambda: self.api.create_mosaic(dialog.mosaic()))
+        dialog.setup()
+        dialog.deleteLater()
+
+        #self.api.create_mosaic(mosaic, callback=self.create_mosaic_callback)
 
     def create_mosaic_callback(self, response: QNetworkReply):
         self.get_mosaics()
@@ -61,6 +67,16 @@ class DataCatalogService(QObject):
         mosaic = MosaicReturnSchema.from_dict(response.readAll().data())
         self.mosaics.update({mosaic.id: mosaic})
         self.mosaicsUpdated.emit()
+    
+    def update_mosaic(self):
+        try:
+            mosaic = self.selected_mosaic()
+            dialog = UpdateMosaicDialog(self.dlg)
+            dialog.accepted.connect(lambda: self.api.update_mosaic(mosaic.id, dialog.mosaic()))
+            dialog.setup(mosaic)
+            dialog.deleteLater()
+        except TypeError:
+            return    
 
     def delete_mosaic(self, mosaic_id: UUID):
         self.api.delete_mosaic(mosaic_id=mosaic_id,
