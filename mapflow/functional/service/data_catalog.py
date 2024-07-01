@@ -67,6 +67,16 @@ class DataCatalogService(QObject):
         mosaic = MosaicReturnSchema.from_dict(response.readAll().data())
         self.mosaics.update({mosaic.id: mosaic})
         self.mosaicsUpdated.emit()
+    
+    def update_mosaic(self):
+        try:
+            mosaic = self.selected_mosaic()
+            dialog = UpdateMosaicDialog(self.dlg)
+            dialog.accepted.connect(lambda: self.api.update_mosaic(mosaic.id, dialog.mosaic()))
+            dialog.setup(mosaic)
+            dialog.deleteLater()
+        except TypeError:
+            return    
 
     def delete_mosaic(self, mosaic_id: UUID):
         self.api.delete_mosaic(mosaic_id=mosaic_id,
