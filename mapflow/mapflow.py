@@ -2907,6 +2907,8 @@ class Mapflow(QObject):
         response = json.loads(response.readAll().data())
         # User info is stored inside user's Default project - will change it in the future API versions
         userinfo = response['user']
+        # set username to be used for the user settings storage
+        self.username = userinfo.get("email", "")
         default_project = MapflowProject.from_dict(response)
 
         self.update_processing_limit()
