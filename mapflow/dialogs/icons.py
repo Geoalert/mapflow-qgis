@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from PyQt5.QtGui import QIcon
 
 icon_path = Path(__file__).parent/'static'/'icons'

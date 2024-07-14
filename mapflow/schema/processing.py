@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional, Mapping, Any, Union, Iterable
+
 from .base import SkipDataClass, Serializable
 
 

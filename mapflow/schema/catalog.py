@@ -1,8 +1,10 @@
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from typing import Optional, Mapping, Any, Union, List
-from datetime import datetime
+
 from .base import Serializable, SkipDataClass
+
 
 class PreviewType(str, Enum):
     png = "png"

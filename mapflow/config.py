@@ -1,6 +1,8 @@
 import time
 from dataclasses import dataclass
+
 from qgis.core import QgsSettings
+
 
 @dataclass
 class Config:

@@ -1,7 +1,8 @@
-from .factory import create_provider, create_provider_old
-from ...constants import PROVIDERS_KEY, LEGACY_PROVIDERS_KEY, LEGACY_PROVIDER_LOGIN_KEY, LEGACY_PROVIDER_PASSWORD_KEY
-from .provider import NoneProvider
 import json
+
+from .factory import create_provider, create_provider_old
+from .provider import NoneProvider
+from ...constants import PROVIDERS_KEY, LEGACY_PROVIDERS_KEY, LEGACY_PROVIDER_LOGIN_KEY, LEGACY_PROVIDER_PASSWORD_KEY
 
 
 def decorate(base_name, existing_names):

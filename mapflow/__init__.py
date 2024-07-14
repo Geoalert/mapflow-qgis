@@ -1,6 +1,6 @@
 from qgis.gui import QgisInterface
-from .mapflow import Mapflow
 
+from .mapflow import Mapflow
 
 """
 This plugin is developed and maintained by Geoalert LLC (https://www.geoalert.io) and provides a QGIS interface

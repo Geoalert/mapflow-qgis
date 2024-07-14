@@ -1,13 +1,14 @@
 import re
 from pathlib import Path
+from typing import Tuple, Union, Optional
 
-from qgis.core import (
-    QgsMapLayer, QgsGeometry, QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
-    QgsRasterLayer
-)
 from PyQt5.QtCore import QUrl
 from PyQt5.QtGui import QDesktopServices
-from typing import Tuple, Union, Optional
+from qgis.core import (
+    QgsGeometry, QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
+    QgsRasterLayer
+)
+
 from ..config import config
 from ..entity.billing import BillingType
 

@@ -6,6 +6,7 @@ from PyQt5.QtNetwork import QNetworkReply
 
 from ..schema.project import CreateProjectSchema, UpdateProjectSchema, MapflowProject
 
+
 class ProjectService(QObject):
     projectsUpdated = pyqtSignal(str)
 

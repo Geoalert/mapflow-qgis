@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from PyQt5 import uic
-from PyQt5.QtWidgets import QWidget, QDialogButtonBox
+from PyQt5.QtWidgets import QWidget
 
 from .icons import plugin_icon
 

@@ -9,6 +9,7 @@ from qgis.core import QgsNetworkAccessManager, Qgis, QgsApplication, QgsAuthMeth
 from .constants import DEFAULT_HTTP_TIMEOUT_SECONDS
 from .errors import ErrorMessage, ProxyIsAlreadySet
 
+
 class Http(QObject):
     """"""
 

@@ -1,10 +1,12 @@
 from typing import Dict, Optional
+
 from PyQt5.QtCore import QObject
 
-from .error_message_list import ErrorMessageList
-from .data_errors import DataErrors
-from .processing_errors import ProcessingErrors
 from .api_errors import ApiErrors
+from .data_errors import DataErrors
+from .error_message_list import ErrorMessageList
+from .processing_errors import ProcessingErrors
+
 """
 ["messages":[{"code":"source-validator.PixelSizeTooHigh","parameters":{"max_res":"1.2","level":"error","actual_res":"5.620983603290215"}}]}]
 """
