@@ -1414,7 +1414,7 @@ class Mapflow(QObject):
         try:
             self.metadata_layer.selectionChanged.disconnect(self.meta_layer_table_connection)
             # disconnect to prevent loop of signals
-        except (RuntimeError, AttributeError):
+        except (TypeError, RuntimeError, AttributeError):
             # metadata layer was removed or not initialized
             return
         self.replace_search_provider_index()
