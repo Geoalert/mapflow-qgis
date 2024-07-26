@@ -56,4 +56,4 @@ class UpdateMosaicDialog(MosaicDialog):
         if not self.mosaicName:
             raise AssertionError("Mosaic name must not be empty!")
         return MosaicUpdateSchema(name = self.mosaicName.text(),
-                                  detags = self.mosaicTags.text() or None)
+                                  tags = self.mosaicTags.text() or None)
