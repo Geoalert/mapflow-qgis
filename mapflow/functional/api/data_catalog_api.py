@@ -67,16 +67,16 @@ class DataCatalogApi(QObject):
                              tilejson_uri: str,
                              layer: QgsMapLayer,
                              errors: bool = False,
-                             processing_id: Optional[str] = None
+                             mosaic_id: Optional[str] = None
                              ):
         self.http.get(url=tilejson_uri,
                       callback=self.add_mosaic_with_extent,
                       callback_kwargs={"layer": layer,
-                                       "processing_id": processing_id,
+                                       "mosaic_id": mosaic_id,
                                        "errors": errors},
                       error_handler=self.add_mosaic_with_extent,
                       error_handler_kwargs={"layer": layer,
-                                            "processing_id": processing_id,
+                                            "mosaic_id": mosaic_id,
                                             "errors": errors},
                       use_default_error_handler=False,
                       )
@@ -85,7 +85,7 @@ class DataCatalogApi(QObject):
                                 response: QNetworkReply,
                                 layer: QgsMapLayer,
                                 errors: bool = False,
-                                processing_id: Optional[str] = None
+                                mosaic_id: Optional[str] = None
                                 ) -> None:
         if response.error() != QNetworkReply.NoError:
             errors = True
@@ -101,10 +101,10 @@ class DataCatalogApi(QObject):
             self.iface.zoomToActiveLayer()
         if errors:
             error_summary =  self.tr('Failed to load mosaic \n'
-                                     'please try again later or report error').format(processing_id)
+                                     'please try again later or report error').format(mosaic_id)
             title = self.tr("Error")
-            email_body = "Error while loading results layer." \
-                        f"Processing id: {processing_id}"
+            email_body = "Error while loading a mosaic." \
+                        f"Mosaic id: {mosaic_id}"
             ErrorMessageWidget(parent=QApplication.activeWindow(),
                             text=error_summary,
                             title=title,
