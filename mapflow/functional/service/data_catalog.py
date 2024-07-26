@@ -6,12 +6,14 @@ import json
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
+from PyQt5.QtWidgets import QMessageBox, QApplication
 
 from ...dialogs.main_dialog import MainDialog
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
 from ..api.data_catalog_api import DataCatalogApi
 from ..view.data_catalog_view import DataCatalogView
 from ...http import Http
+from ...functional import layer_utils
 
 
 class DataCatalogService(QObject):
@@ -28,13 +30,15 @@ class DataCatalogService(QObject):
     def __init__(self,
                  http: Http,
                  server: str,
-                 dlg: MainDialog):
+                 dlg: MainDialog,
+                 iface,
+                 result_loader):
         super().__init__()
         self.dlg = dlg
-        self.api = DataCatalogApi(http=http, server=server)
+        self.result_loader = result_loader
+        self.api = DataCatalogApi(http=http, server=server, dlg=dlg, iface=iface, result_loader=self.result_loader)
         self.view = DataCatalogView(dlg=dlg)
         self.mosaics = {}
-        
 
     # Mosaics CRUD
     def create_mosaic(self, mosaic: MosaicCreateSchema):
@@ -160,3 +164,16 @@ class DataCatalogService(QObject):
         if not first:
             return None
         return first[0]
+
+    def mosaic_preview(self):
+        try:
+            mosaic = self.selected_mosaic()
+            url = mosaic.rasterLayer.tileUrl
+            url_json = mosaic.rasterLayer.tileJsonUrl
+            name = mosaic.name
+            layer = layer_utils.generate_raster_layer(url, name)
+            self.api.request_mosaic_extent(url_json, layer)
+        except AttributeError:
+            message = 'Please, select mosaic'
+            info_box = QMessageBox(QMessageBox.Information, "Mapflow", message, parent=QApplication.activeWindow())
+            return info_box.exec()

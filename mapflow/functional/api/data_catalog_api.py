@@ -4,9 +4,15 @@ from uuid import UUID
 
 from PyQt5.QtCore import QObject, pyqtSignal, QFile, QIODevice
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
+from PyQt5.QtWidgets import QApplication
+from qgis.core import QgsMapLayer
 
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
 from ...http import Http
+from ...functional import layer_utils
+from ...dialogs.dialogs import ErrorMessageWidget
+from ...dialogs.main_dialog import MainDialog
+
 
 class DataCatalogApi(QObject):
     """
@@ -16,10 +22,16 @@ class DataCatalogApi(QObject):
 
     def __init__(self,
                  http: Http,
-                 server: str):
+                 server: str,
+                 dlg: MainDialog,
+                 iface,
+                 result_loader):
         super().__init__()
         self.server = server
         self.http = http
+        self.iface = iface
+        self.dlg = dlg
+        self.result_loader = result_loader
 
     # Mosaics CRUD
     def create_mosaic(self, mosaic: MosaicCreateSchema, callback: Callable = lambda *args: None):
@@ -50,6 +62,54 @@ class DataCatalogApi(QObject):
                           use_default_error_handler=True,
                           callback_kwargs=callback_kwargs or {}
                       )
+        
+    def request_mosaic_extent(self,
+                             tilejson_uri: str,
+                             layer: QgsMapLayer,
+                             errors: bool = False,
+                             mosaic_id: Optional[str] = None
+                             ):
+        self.http.get(url=tilejson_uri,
+                      callback=self.add_mosaic_with_extent,
+                      callback_kwargs={"layer": layer,
+                                       "mosaic_id": mosaic_id,
+                                       "errors": errors},
+                      error_handler=self.add_mosaic_with_extent,
+                      error_handler_kwargs={"layer": layer,
+                                            "mosaic_id": mosaic_id,
+                                            "errors": errors},
+                      use_default_error_handler=False,
+                      )
+    
+    def add_mosaic_with_extent(self,
+                                response: QNetworkReply,
+                                layer: QgsMapLayer,
+                                errors: bool = False,
+                                mosaic_id: Optional[str] = None
+                                ) -> None:
+        if response.error() != QNetworkReply.NoError:
+            errors = True
+        else:
+            try:
+                bounding_box = layer_utils.get_bounding_box_from_tile_json(response=response)
+            except Exception as e:
+                errors = True
+            else:
+                layer.setExtent(rect=bounding_box)
+                self.result_loader.add_layer(layer)
+            self.iface.setActiveLayer(layer)
+            self.iface.zoomToActiveLayer()
+        if errors:
+            error_summary =  self.tr('Failed to load mosaic \n'
+                                     'please try again later or report error').format(mosaic_id)
+            title = self.tr("Error")
+            email_body = "Error while loading a mosaic." \
+                        f"Mosaic id: {mosaic_id}"
+            ErrorMessageWidget(parent=QApplication.activeWindow(),
+                            text=error_summary,
+                            title=title,
+                            email_body=email_body).show()
+
     # Images CRUD
     def upload_image(self,
                      mosaic_id: UUID,
