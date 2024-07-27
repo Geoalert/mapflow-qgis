@@ -29,21 +29,17 @@ class DataCatalogView(QObject):
     def display_mosaic_info(self, mosaic: MosaicReturnSchema):
         if not mosaic:
             return
-        try:
-            self.dlg.mosaicInfo.setText("ID: {id} \n"
-                                        "created {date} at {h}:{m} \n"
-                                        "tags: {tags}".format(id=mosaic.id,
-                                                              date=mosaic.created_at.date(),
-                                                              h=mosaic.created_at.hour,
-                                                              m=mosaic.created_at.minute,
-                                                              tags=", ".join(mosaic.tags)))
-        except TypeError:
-            self.dlg.mosaicInfo.setText("ID: {id} \n"
-                                        "created {date} at {h}:{m} \n"
-                                        "tags: ".format(id=mosaic.id,
-                                                        date=mosaic.created_at.date(),
-                                                        h=mosaic.created_at.hour,
-                                                        m=mosaic.created_at.minute))
+        if mosaic.tags:
+            tags_str = ', '.join(mosaic.tags)
+        else:
+            tags_str = ''
+        self.dlg.mosaicInfo.setText("ID: {id} \n"
+                                    "created {date} at {h}:{m} \n"
+                                    "tags: {tags}".format(id=mosaic.id,
+                                                          date=mosaic.created_at.date(),
+                                                          h=mosaic.created_at.hour,
+                                                          m=mosaic.created_at.minute,
+                                                          tags=tags_str))
             
     def display_image_info(self, image: ImageReturnSchema):
         if not image:

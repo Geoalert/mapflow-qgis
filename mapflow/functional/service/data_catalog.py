@@ -132,7 +132,6 @@ class DataCatalogService(QObject):
         if not image:
             return
         self.view.display_image_info(image)
-        pass
 
     def get_image_preview_s(self,
                            image: ImageReturnSchema,
