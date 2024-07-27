@@ -99,7 +99,7 @@ class DataCatalogApi(QObject):
                       )
 
     def preview_s_error_handler(self, image):
-        if not image:
+        if not image.preview_url_s:
             self.dlg.imagePreview.setText("Preview is unavailable")
 
     # Legacy:

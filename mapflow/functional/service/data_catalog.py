@@ -6,6 +6,7 @@ import json
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
+from PyQt5.QtWidgets import QMessageBox, QApplication
 
 from ...dialogs.main_dialog import MainDialog
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
@@ -158,9 +159,8 @@ class DataCatalogService(QObject):
     # Selection
     def selected_mosaics(self, limit=None) -> List[MosaicReturnSchema]:
         ids = self.view.selected_mosaic_ids(limit=limit)
-        print(ids)
         # limit None will give full selection
-        mosaics = [m for mid, m in self.mosaics.items() if mid in ids]
+        mosaics = [self.mosaics[id] for id in ids]
         return mosaics
 
     def selected_mosaic(self) -> Optional[MosaicReturnSchema]:
@@ -170,9 +170,8 @@ class DataCatalogService(QObject):
         return first[0]
 
     def selected_images(self, limit=None) -> List[MosaicReturnSchema]:
-        ids = self.view.selected_images_ids(limit=limit)
-        print(ids)
-        images = [i for i in self.images if i.id in ids]
+        indices = self.view.selected_images_indecies(limit=limit)
+        images = [i for i in self.images if self.images.index(i) in indices]
         return images
 
     def selected_image(self) -> Optional[ImageReturnSchema]:
