@@ -39,6 +39,7 @@ class DataCatalogService(QObject):
         self.api = DataCatalogApi(http=http, server=server, dlg=dlg, iface=iface, result_loader=self.result_loader)
         self.view = DataCatalogView(dlg=dlg)
         self.mosaics = {}
+        self.images = []
 
     # Mosaics CRUD
     def create_mosaic(self, mosaic: MosaicCreateSchema):
@@ -111,13 +112,15 @@ class DataCatalogService(QObject):
             return
         self.view.display_mosaic_info(mosaic)
         self.get_mosaic_images(mosaic.id)
+        self.dlg.imageTable.clearSelection()
+        self.dlg.imageDetails.setText("Image Info")
 
     def get_mosaic_images(self, mosaic_id):
         self.api.get_mosaic_images(mosaic_id=mosaic_id, callback=self.get_mosaic_images_callback)
 
     def get_mosaic_images_callback(self, response: QNetworkReply):
-        images = [ImageReturnSchema.from_dict(data) for data in json.loads(response.readAll().data())]
-        self.view.display_images(images)
+        self.images = [ImageReturnSchema.from_dict(data) for data in json.loads(response.readAll().data())]
+        self.view.display_images(self.images)
 
     def get_image(self, image_id: UUID, callback: Callable):
         self.api.get_image(image_id=image_id, callback=callback)
@@ -129,7 +132,10 @@ class DataCatalogService(QObject):
         pass
 
     def image_clicked(self):
-        pass
+        image = self.selected_image()
+        if not image:
+            return
+        self.view.display_image_info(image)
 
     def get_image_preview_s(self,
                            image: ImageReturnSchema,
@@ -156,7 +162,7 @@ class DataCatalogService(QObject):
         ids = self.view.selected_mosaic_ids(limit=limit)
         print(ids)
         # limit None will give full selection
-        mosaics = [m for mid, m in self.mosaics.items() if mid in ids]
+        mosaics = [self.mosaics[id] for id in ids]
         return mosaics
 
     def selected_mosaic(self) -> Optional[MosaicReturnSchema]:
@@ -177,3 +183,20 @@ class DataCatalogService(QObject):
             message = 'Please, select mosaic'
             info_box = QMessageBox(QMessageBox.Information, "Mapflow", message, parent=QApplication.activeWindow())
             return info_box.exec()
+        
+    def selected_images(self, limit=None) -> List[MosaicReturnSchema]:
+        indices = self.view.selected_images_indecies(limit=limit)
+        images = [i for i in self.images if self.images.index(i) in indices]
+        return images
+
+    def selected_image(self) -> Optional[ImageReturnSchema]:
+        first = self.selected_images(limit=1)
+        if not first:
+            return None
+        return first[0]
+    
+    def image_info(self):
+        image = self.selected_image()
+        if not image:
+            return
+        self.view.full_image_info(image=image)

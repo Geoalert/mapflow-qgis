@@ -2,7 +2,7 @@ from typing import List
 
 from ...dialogs.main_dialog import MainDialog
 from PyQt5.QtCore import QObject, Qt
-from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox, QTableWidgetItem
+from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox, QTableWidgetItem, QMessageBox, QApplication
 from PyQt5.QtGui import QPixmap
 
 from ...schema.data_catalog import MosaicReturnSchema, ImageReturnSchema
@@ -25,15 +25,58 @@ class DataCatalogView(QObject):
             name_item = QTableWidgetItem()
             name_item.setData(Qt.DisplayRole, mosaic.name)
             self.dlg.mosaicTable.setItem(row, 1, name_item)
-
+        
     def display_mosaic_info(self, mosaic: MosaicReturnSchema):
         if not mosaic:
             return
+        if mosaic.tags:
+            tags_str = ', '.join(mosaic.tags)
+        else:
+            tags_str = ''
         self.dlg.mosaicInfo.setText("ID: {id} \n"
-                                    "created at {created} \n"
+                                    "created {date} at {h}:{m} \n"
                                     "tags: {tags}".format(id=mosaic.id,
-                                                          created=mosaic.created_at,
-                                                          tags=", ".join(mosaic.tags)))
+                                                          date=mosaic.created_at.date(),
+                                                          h=mosaic.created_at.hour,
+                                                          m=mosaic.created_at.minute,
+                                                          tags=tags_str))
+
+    def display_image_info(self, image: ImageReturnSchema):
+        if not image:
+            return
+        self.dlg.imageDetails.setText("created {date} at {h}:{m} \n"
+                                      "bands: {count} \n"
+                                      "pixel size: {pixel_size}"
+                                      .format(date=image.uploaded_at.date(),
+                                              h=image.uploaded_at.hour,
+                                              m=image.uploaded_at.minute,
+                                              count=list(image.meta_data.values())[1],
+                                              pixel_size=round(sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6]), 2)))
+
+    def full_image_info(self, image: ImageReturnSchema):
+        try:
+            message = '<b>Name</b>: {filename}\
+                        <br><b>Uploaded</b></br>: {date} at {h}:{m}\
+                        <br><b>Size</b></br>: {file_size} MB\
+                        <br><b>CRS</b></br>: {crs}\
+                        <br><b>Number of bands</br></b>: {bands}\
+                        <br><b>Width</br></b>: {width} pixels\
+                        <br><b>Height</br></b>: {height} pixels\
+                        <br><b>Pixel size</br></b>: {pixel_size} m'\
+                        .format(filename=image.filename, 
+                                date=image.uploaded_at.date(),
+                                h=image.uploaded_at.hour,
+                                m=image.uploaded_at.minute,
+                                file_size=round(image.file_size/1000000, 1), 
+                                crs=list(image.meta_data.values())[0],
+                                bands=list(image.meta_data.values())[1],
+                                width=list(image.meta_data.values())[2],
+                                height=list(image.meta_data.values())[4],
+                                pixel_size=round(sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6]), 2))
+            info_box = QMessageBox(QMessageBox.Information, "Mapflow", message, parent=QApplication.activeWindow())
+            return info_box.exec()
+        except IndexError:
+            return
 
     def display_images(self, images: list[ImageReturnSchema]):
         self.dlg.imageTable.setRowCount(len(images))
@@ -55,3 +98,9 @@ class DataCatalogView(QObject):
                 for row in selected_rows[:limit]]
         return pids
 
+    def selected_images_indecies(self, limit=None):
+        selected_rows = list(set(index.row() for index in self.dlg.imageTable.selectionModel().selectedIndexes()))
+        if not selected_rows:
+            return []
+        return selected_rows
+    
