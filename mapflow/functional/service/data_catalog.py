@@ -7,6 +7,7 @@ from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
 from PyQt5.QtWidgets import QMessageBox, QApplication
+from qgis.core import QgsGeometry, QgsCoordinateTransform, QgsCoordinateReferenceSystem, QgsProject
 
 from ...dialogs.main_dialog import MainDialog
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
@@ -32,11 +33,14 @@ class DataCatalogService(QObject):
                  server: str,
                  dlg: MainDialog,
                  iface,
-                 result_loader):
+                 result_loader,
+                 plugin_version):
         super().__init__()
         self.dlg = dlg
+        self.iface = iface
         self.result_loader = result_loader
-        self.api = DataCatalogApi(http=http, server=server, dlg=dlg, iface=iface, result_loader=self.result_loader)
+        self.plugin_version = plugin_version
+        self.api = DataCatalogApi(http=http, server=server, dlg=dlg, iface=iface, result_loader=self.result_loader, plugin_version=self.plugin_version)
         self.view = DataCatalogView(dlg=dlg)
         self.mosaics = {}
         self.images = []
@@ -145,6 +149,23 @@ class DataCatalogService(QObject):
     def get_image_preview_s_callback(self, response: QNetworkReply):
         image = QImage.fromData(response.readAll().data())
         self.view.show_preview_s(image)
+
+    def get_image_preview_l(self, image: ImageReturnSchema):
+        try:
+            image = self.selected_image()
+            extent = self.footprint_to_extent(image)
+            self.api.get_image_preview_l(image=image, extent=extent, callback=self.api.display_image_preview, image_id=image.id)
+        except AttributeError:
+            return
+
+    def footprint_to_extent(self, image):
+        source_crs = QgsCoordinateReferenceSystem(4326)
+        dest_crs = QgsCoordinateReferenceSystem(3857)
+        tr = QgsCoordinateTransform(source_crs, dest_crs, QgsProject.instance())
+        geom = QgsGeometry.fromWkt(image.footprint)
+        geom.transform(tr)
+        extent = geom.boundingBox()
+        return extent
 
     # Legacy:
     def upload_to_new_mosaic(self,

@@ -12,3 +12,4 @@ class DataCatalogController(QObject):
         self.dlg.imageTable.cellClicked.connect(self.service.image_clicked)
         self.dlg.previewMosaicButton.clicked.connect(self.service.mosaic_preview)
         self.dlg.imageInfoButton.clicked.connect(self.service.image_info)
+        self.dlg.imagePreviewButton.clicked.connect(self.service.get_image_preview_l)

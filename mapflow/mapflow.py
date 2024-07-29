@@ -189,7 +189,7 @@ class Mapflow(QObject):
                                                        temp_dir=self.temp_dir
                                                        )
 
-        self.data_catalog_service = DataCatalogService(self.http, self.server, self.dlg, self.iface, self.result_loader)
+        self.data_catalog_service = DataCatalogService(self.http, self.server, self.dlg, self.iface, self.result_loader, self.plugin_version)
         self.data_catalog_controller = DataCatalogController(self.dlg, self.data_catalog_service)
 
         self.project_service = ProjectService(self.http, self.server)
