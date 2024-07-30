@@ -21,7 +21,8 @@ from qgis.core import (Qgis,
                        QgsDistanceArea,
                        QgsVectorFileWriter,
                        QgsProject,
-                       QgsMessageLog
+                       QgsMessageLog,
+                       QgsCoordinateTransform
                        )
 from pathlib import Path
 
@@ -229,6 +230,14 @@ def generate_vector_layer(layer_uri,
     )
     return layer
 
+def footprint_to_extent(footprint):
+        source_crs = QgsCoordinateReferenceSystem(4326)
+        dest_crs = QgsCoordinateReferenceSystem(3857)
+        tr = QgsCoordinateTransform(source_crs, dest_crs, QgsProject.instance())
+        geom = QgsGeometry.fromWkt(footprint)
+        geom.transform(tr)
+        extent = geom.boundingBox()
+        return extent
 
 # Layer management for results
 class ResultsLoader(QObject):

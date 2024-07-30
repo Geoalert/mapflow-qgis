@@ -1,21 +1,17 @@
 from typing import Union, Callable, Optional
 from pathlib import Path
 from uuid import UUID
-import os.path
-import tempfile
-from osgeo import gdal
 
 
 from PyQt5.QtCore import QObject, pyqtSignal, QFile, QIODevice
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtWidgets import QApplication
-from qgis.core import QgsMapLayer, QgsRasterLayer, QgsCoordinateReferenceSystem, QgsRectangle, QgsProject
+from qgis.core import QgsMapLayer, QgsRectangle
 
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
 from ...http import Http, get_error_report_body
 from ...functional import layer_utils
 from ...dialogs.dialogs import ErrorMessageWidget
-from ...dialogs.main_dialog import MainDialog
 
 
 class DataCatalogApi(QObject):
@@ -27,7 +23,6 @@ class DataCatalogApi(QObject):
     def __init__(self,
                  http: Http,
                  server: str,
-                 dlg: MainDialog,
                  iface,
                  result_loader,
                  plugin_version):
@@ -35,10 +30,7 @@ class DataCatalogApi(QObject):
         self.server = server
         self.http = http
         self.iface = iface
-        self.dlg = dlg
         self.result_loader = result_loader
-        self.temp_dir = tempfile.gettempdir()
-        self.project = QgsProject.instance()
         self.plugin_version = plugin_version
 
     # Mosaics CRUD
@@ -177,32 +169,6 @@ class DataCatalogApi(QObject):
                       callback_kwargs={"extent": extent,
                                        "image_id": image_id})
 
-    def display_image_preview(self,
-                              response: QNetworkReply,
-                              extent: QgsRectangle,
-                              crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857"),
-                              image_id: str = ""):
-        with open(Path(self.temp_dir)/os.urandom(32).hex(), mode='wb') as f:
-            f.write(response.readAll().data())
-        preview = gdal.Open(f.name)
-        pixel_xsize = extent.width() / preview.RasterXSize
-        pixel_ysize = extent.height() / preview.RasterYSize
-        preview.SetProjection(crs.toWkt())
-        preview.SetGeoTransform([
-            extent.xMinimum(),  # north-west corner x
-            pixel_xsize,  # pixel horizontal resolution (m)
-            0,  # x-axis rotation
-            extent.yMaximum(),  # north-west corner y
-            0,  # y-axis rotation
-            -pixel_ysize  # pixel vertical resolution (m)
-        ])
-        preview.FlushCache()
-        layer = QgsRasterLayer(f.name, f"preview {image_id}", 'gdal')
-        layer.setExtent(extent)
-        self.project.addMapLayer(layer)
-        self.iface.setActiveLayer(layer)
-        self.iface.zoomToActiveLayer()
-
     def image_preview_l_error_handler(self, response: QNetworkReply):
         error_summary, email_body = get_error_report_body(response=response,
                                                           plugin_version=self.plugin_version)
@@ -210,6 +176,7 @@ class DataCatalogApi(QObject):
                            text=error_summary,
                            title="Error. Could not display preview",
                            email_body=email_body).show()
+
     # Legacy:
     def upload_to_new_mosaic(self,
                              image_path: Union[Path, str],

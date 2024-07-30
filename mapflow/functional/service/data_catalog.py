@@ -2,12 +2,15 @@ from typing import Sequence, Union, Optional, Callable, List
 from pathlib import Path
 from uuid import UUID
 import json
+import tempfile
+import os.path
+from osgeo import gdal
 
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
 from PyQt5.QtWidgets import QMessageBox, QApplication
-from qgis.core import QgsGeometry, QgsCoordinateTransform, QgsCoordinateReferenceSystem, QgsProject
+from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsRasterLayer, QgsRectangle
 
 from ...dialogs.main_dialog import MainDialog
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
@@ -38,9 +41,11 @@ class DataCatalogService(QObject):
         super().__init__()
         self.dlg = dlg
         self.iface = iface
+        self.temp_dir = tempfile.gettempdir()
+        self.project = QgsProject.instance()
         self.result_loader = result_loader
         self.plugin_version = plugin_version
-        self.api = DataCatalogApi(http=http, server=server, dlg=dlg, iface=iface, result_loader=self.result_loader, plugin_version=self.plugin_version)
+        self.api = DataCatalogApi(http=http, server=server, iface=iface, result_loader=self.result_loader, plugin_version=self.plugin_version)
         self.view = DataCatalogView(dlg=dlg)
         self.mosaics = {}
         self.images = []
@@ -153,19 +158,36 @@ class DataCatalogService(QObject):
     def get_image_preview_l(self, image: ImageReturnSchema):
         try:
             image = self.selected_image()
-            extent = self.footprint_to_extent(image)
-            self.api.get_image_preview_l(image=image, extent=extent, callback=self.api.display_image_preview, image_id=image.id)
+            extent = layer_utils.footprint_to_extent(image.footprint)
+            self.api.get_image_preview_l(image=image, extent=extent, callback=self.display_image_preview, image_id=image.id)
         except AttributeError:
             return
-
-    def footprint_to_extent(self, image):
-        source_crs = QgsCoordinateReferenceSystem(4326)
-        dest_crs = QgsCoordinateReferenceSystem(3857)
-        tr = QgsCoordinateTransform(source_crs, dest_crs, QgsProject.instance())
-        geom = QgsGeometry.fromWkt(image.footprint)
-        geom.transform(tr)
-        extent = geom.boundingBox()
-        return extent
+    
+    def display_image_preview(self,
+                              response: QNetworkReply,
+                              extent: QgsRectangle,
+                              crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857"),
+                              image_id: str = ""):
+        with open(Path(self.temp_dir)/os.urandom(32).hex(), mode='wb') as f:
+            f.write(response.readAll().data())
+        preview = gdal.Open(f.name)
+        pixel_xsize = extent.width() / preview.RasterXSize
+        pixel_ysize = extent.height() / preview.RasterYSize
+        preview.SetProjection(crs.toWkt())
+        preview.SetGeoTransform([
+            extent.xMinimum(),  # north-west corner x
+            pixel_xsize,  # pixel horizontal resolution (m)
+            0,  # x-axis rotation
+            extent.yMaximum(),  # north-west corner y
+            0,  # y-axis rotation
+            -pixel_ysize  # pixel vertical resolution (m)
+        ])
+        preview.FlushCache()
+        layer = QgsRasterLayer(f.name, f"preview {image_id}", 'gdal')
+        layer.setExtent(extent)
+        self.project.addMapLayer(layer)
+        self.iface.setActiveLayer(layer)
+        self.iface.zoomToActiveLayer()
 
     # Legacy:
     def upload_to_new_mosaic(self,
