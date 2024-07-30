@@ -15,6 +15,12 @@ class RasterLayer(SkipDataClass):
     tileUrl: str
     tileJsonUrl: str
 
+@dataclass
+class UserLimitSchema(SkipDataClass):
+    memoryLimit: int
+    memoryUsed: int
+    memoryFree: int
+
 
 # ========== MOSAIC ============== #
 

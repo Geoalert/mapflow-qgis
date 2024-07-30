@@ -8,7 +8,7 @@ from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
 
 from ...dialogs.main_dialog import MainDialog
-from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
+from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema, UserLimitSchema
 from ..api.data_catalog_api import DataCatalogApi
 from ..view.data_catalog_view import DataCatalogView
 from ...http import Http
@@ -148,9 +148,9 @@ class DataCatalogService(QObject):
         self.api.get_user_limit(callback=self.get_user_limit_callback)
     
     def get_user_limit_callback(self, response: QNetworkReply):
-        data_limit = list(json.loads(response.readAll().data()).values())
-        taken = data_limit[1]
-        free = data_limit[2]
+        data_limit = UserLimitSchema.from_dict(json.loads(response.readAll().data()))
+        taken = data_limit.memoryUsed
+        free = data_limit.memoryFree
         self.view.show_storage(taken, free)
 
     # Selection
