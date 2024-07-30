@@ -816,7 +816,7 @@
           </size>
          </property>
          <property name="currentIndex">
-          <number>0</number>
+          <number>2</number>
          </property>
          <property name="movable">
           <bool>false</bool>
@@ -1548,7 +1548,10 @@
                   <enum>QFrame::NoFrame</enum>
                  </property>
                  <property name="text">
-                  <string/>
+                  <string>test</string>
+                 </property>
+                 <property name="textFormat">
+                  <enum>Qt::AutoText</enum>
                  </property>
                 </widget>
                </item>

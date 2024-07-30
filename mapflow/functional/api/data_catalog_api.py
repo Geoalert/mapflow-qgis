@@ -7,6 +7,7 @@ from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHtt
 
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
 from ...http import Http
+from ...dialogs.main_dialog import MainDialog
 
 class DataCatalogApi(QObject):
     """
@@ -16,10 +17,12 @@ class DataCatalogApi(QObject):
 
     def __init__(self,
                  http: Http,
-                 server: str):
+                 server: str,
+                 dlg: MainDialog):
         super().__init__()
         self.server = server
         self.http = http
+        self.dlg = dlg
 
     # Mosaics CRUD
     def create_mosaic(self, mosaic: MosaicCreateSchema, callback: Callable = lambda *args: None):
@@ -97,11 +100,10 @@ class DataCatalogApi(QObject):
                       use_default_error_handler=False,
                       error_handler=self.preview_s_error_handler
                       )
-
+        
     def preview_s_error_handler(self, image):
-        if not image.preview_url_s:
-            self.dlg.imagePreview.setText("Preview is unavailable")
-
+        self.dlg.imagePreview.setText("Preview is unavailable")
+        
     # Legacy:
     def upload_to_new_mosaic(self,
                              image_path: Union[Path, str],

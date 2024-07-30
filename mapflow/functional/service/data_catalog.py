@@ -32,7 +32,7 @@ class DataCatalogService(QObject):
                  dlg: MainDialog):
         super().__init__()
         self.dlg = dlg
-        self.api = DataCatalogApi(http=http, server=server)
+        self.api = DataCatalogApi(http=http, server=server, dlg=dlg)
         self.view = DataCatalogView(dlg=dlg)
         self.mosaics = {}
         self.images = []
