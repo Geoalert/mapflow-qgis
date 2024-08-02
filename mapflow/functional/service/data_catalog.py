@@ -6,10 +6,11 @@ import json
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
+from PyQt5.QtWidgets import QMessageBox, QApplication
 
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs.mosaic_dialog import CreateMosaicDialog, UpdateMosaicDialog
-from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
+from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema, MosaicCreateReturnSchema
 from ..api.data_catalog_api import DataCatalogApi
 from ..view.data_catalog_view import DataCatalogView
 from ...http import Http
@@ -40,7 +41,7 @@ class DataCatalogService(QObject):
     # Mosaics CRUD
     def create_mosaic(self, mosaic: MosaicCreateSchema):
         dialog = CreateMosaicDialog(self.dlg)
-        dialog.accepted.connect(lambda: self.api.create_mosaic(dialog.mosaic()))
+        dialog.accepted.connect(lambda: self.api.create_mosaic(dialog.mosaic(), callback=self.create_mosaic_callback))
         dialog.setup()
         dialog.deleteLater()
 
@@ -57,7 +58,6 @@ class DataCatalogService(QObject):
             mosaic = MosaicReturnSchema.from_dict(data)
             self.mosaics[mosaic.id] = mosaic
         self.view.display_mosaics(list(self.mosaics.values()))
-        #self.mosaicsUpdated.emit()
 
     def get_mosaic(self, mosaic_id: UUID):
         self.api.get_mosaic(mosaic_id=mosaic_id,
@@ -68,22 +68,29 @@ class DataCatalogService(QObject):
         self.mosaics.update({mosaic.id: mosaic})
         self.mosaicsUpdated.emit()
     
-    def update_mosaic(self):
-        try:
-            mosaic = self.selected_mosaic()
-            dialog = UpdateMosaicDialog(self.dlg)
-            dialog.accepted.connect(lambda: self.api.update_mosaic(mosaic.id, dialog.mosaic()))
-            dialog.setup(mosaic)
-            dialog.deleteLater()
-        except TypeError:
-            return    
+    def update_mosaic(self):  
+        mosaic = self.selected_mosaic()
+        dialog = UpdateMosaicDialog(self.dlg)
+        dialog.accepted.connect(lambda: self.api.update_mosaic(mosaic_id=mosaic.id, mosaic=dialog.mosaic(), callback=self.update_mosaic_callback))
+        dialog.setup(mosaic)
+        dialog.deleteLater()
+        self.dlg.mosaicTable.clearSelection()
+        self.dlg.mosaicInfo.setText("Mosaic info")
+    
+    def update_mosaic_callback(self, response: QNetworkReply):
+        self.get_mosaics()
+        """ new_mosaic = self.selected_mosaic()
+        self.view.display_mosaic_info(new_mosaic)
+        self.get_mosaic_images(new_mosaic.id) """
 
-    def delete_mosaic(self, mosaic_id: UUID):
-        self.api.delete_mosaic(mosaic_id=mosaic_id,
+    def delete_mosaic(self):
+        mosaic = self.selected_mosaic()
+        self.api.delete_mosaic(mosaic_id=mosaic.id,
                                callback=self.delete_mosaic_callback,
-                               callback_kwargs={'mosaic_id': mosaic_id})
+                               callback_kwargs={'mosaic_id': mosaic.id})
 
     def delete_mosaic_callback(self, response: QNetworkReply, mosaic_id: UUID):
+        self.get_mosaics()
         self.mosaics.pop(mosaic_id)
         self.mosaicsUpdated.emit()
 

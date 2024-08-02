@@ -42,18 +42,13 @@ class DataCatalogApi(QObject):
                       use_default_error_handler=True
                       )
         
-    def update_mosaic(self, mosaic_id, mosaic: MosaicUpdateSchema):
+    def update_mosaic(self, mosaic_id, mosaic: MosaicUpdateSchema, callback: Callable):
         self.http.put(url=f"{self.server}/rasters/mosaic/{mosaic_id}",
                        body=mosaic.as_json().encode(),
                        headers={},
-                       callback=self.update_mosaic_callback,
+                       callback=callback,
                        use_default_error_handler=True,
                        timeout=5)
-    
-    def update_mosaic_callback(self, response: QNetworkReply):
-        mosaic = MosaicReturnSchema.from_dict(json.loads(response.readAll().data()))
-        new_mosaic_id = mosaic.id
-        self.get_mosaic(mosaic_id=new_mosaic_id)
 
     def delete_mosaic(self,
                       mosaic_id: UUID,
