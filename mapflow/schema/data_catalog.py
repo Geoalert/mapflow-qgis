@@ -15,6 +15,12 @@ class RasterLayer(SkipDataClass):
     tileUrl: str
     tileJsonUrl: str
 
+@dataclass
+class UserLimitSchema(SkipDataClass):
+    memoryLimit: int
+    memoryUsed: int
+    memoryFree: int
+
 
 # ========== MOSAIC ============== #
 
@@ -67,3 +73,4 @@ class ImageReturnSchema(SkipDataClass):
 
     def __post_init__(self):
         self.uploaded_at = datetime.fromisoformat(self.uploaded_at.replace("Z", "+00:00"))
+    
