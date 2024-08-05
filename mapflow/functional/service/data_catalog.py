@@ -93,6 +93,17 @@ class DataCatalogService(QObject):
         self.get_mosaics()
         self.mosaics.pop(mosaic_id)
         self.mosaicsUpdated.emit()
+    
+    def check_mosaic_selection(self):
+        if self.dlg.mosaicTable.selectionModel().hasSelection() is False:
+            self.dlg.mosaicInfo.setText("Mosaic info")
+            self.dlg.previewMosaicButton.setEnabled(False)
+            self.dlg.editMosaicButton.setEnabled(False)
+            self.dlg.deleteMosaicButton.setEnabled(False)
+        else:
+            self.dlg.previewMosaicButton.setEnabled(True)
+            self.dlg.editMosaicButton.setEnabled(True)
+            self.dlg.deleteMosaicButton.setEnabled(True)
 
     # Images CRUD
 
