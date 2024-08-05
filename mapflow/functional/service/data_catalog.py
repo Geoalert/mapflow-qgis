@@ -149,6 +149,11 @@ class DataCatalogService(QObject):
         image = QImage.fromData(response.readAll().data())
         self.view.show_preview_s(image)
 
+    def check_image_selection(self):
+        if self.dlg.imageTable.selectionModel().hasSelection() is False:
+            self.dlg.imagePreview.setText(" ")
+            self.dlg.imageDetails.setText("Image info")
+
     # Legacy:
     def upload_to_new_mosaic(self,
                              image_path: Union[Path, str],
