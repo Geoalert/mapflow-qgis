@@ -627,4 +627,3 @@ class ResultsLoader(QObject):
         self.add_layer(vector)
         self.iface.setActiveLayer(vector)
         self.iface.zoomToActiveLayer()
-    
