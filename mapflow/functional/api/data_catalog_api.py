@@ -101,7 +101,7 @@ class DataCatalogApi(QObject):
                       error_handler=self.preview_s_error_handler
                       )
         
-    def preview_s_error_handler(self, image):
+    def preview_s_error_handler(self, response: QNetworkReply):
         self.dlg.imagePreview.setText("Preview is unavailable")
         
     # Legacy:
