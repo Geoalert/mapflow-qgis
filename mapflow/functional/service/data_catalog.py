@@ -9,7 +9,7 @@ from PyQt5.QtNetwork import QNetworkReply
 from PyQt5.QtWidgets import QMessageBox, QApplication
 
 from ...dialogs.main_dialog import MainDialog
-from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
+from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema, UserLimitSchema
 from ..api.data_catalog_api import DataCatalogApi
 from ..view.data_catalog_view import DataCatalogView
 from ...http import Http
@@ -77,7 +77,6 @@ class DataCatalogService(QObject):
         self.mosaicsUpdated.emit()
 
     # Images CRUD
-
     def upload_images(self,
                       mosaic_id: UUID,
                       image_paths: Sequence[Union[Path, str]],
@@ -154,8 +153,14 @@ class DataCatalogService(QObject):
                                       callback=callback)
 
     # Status
-    def get_user_limit(self, callback):
-        self.api.get_user_limit(callback=callback)
+    def get_user_limit(self):
+        self.api.get_user_limit(callback=self.get_user_limit_callback)
+
+    def get_user_limit_callback(self, response: QNetworkReply):
+        data_limit = UserLimitSchema.from_dict(json.loads(response.readAll().data()))
+        taken = data_limit.memoryUsed
+        free = data_limit.memoryFree
+        self.view.show_storage(taken, free)
 
     # Selection
     def selected_mosaics(self, limit=None) -> List[MosaicReturnSchema]:
@@ -200,3 +205,4 @@ class DataCatalogService(QObject):
         if not image:
             return
         self.view.full_image_info(image=image)
+    
