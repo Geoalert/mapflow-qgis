@@ -1531,9 +1531,9 @@
                 </widget>
                </item>
                <item>
-                <widget class="QGraphicsView" name="imagePreview">
+                <widget class="QLabel" name="imagePreview">
                  <property name="sizePolicy">
-                  <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                  <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
                    <horstretch>0</horstretch>
                    <verstretch>0</verstretch>
                   </sizepolicy>
@@ -1549,6 +1549,12 @@
                    <width>256</width>
                    <height>256</height>
                   </size>
+                 </property>
+                 <property name="frameShape">
+                  <enum>QFrame::NoFrame</enum>
+                 </property>
+                 <property name="text">
+                  <string/>
                  </property>
                 </widget>
                </item>

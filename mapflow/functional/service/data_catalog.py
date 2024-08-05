@@ -113,9 +113,11 @@ class DataCatalogService(QObject):
         self.get_mosaic_images(mosaic.id)
         self.dlg.imageTable.clearSelection()
         self.dlg.imageDetails.setText("Image Info")
+        self.dlg.imagePreview.setText(" ")
 
     def get_mosaic_images(self, mosaic_id):
         self.api.get_mosaic_images(mosaic_id=mosaic_id, callback=self.get_mosaic_images_callback)
+        return self.images
 
     def get_mosaic_images_callback(self, response: QNetworkReply):
         self.images = [ImageReturnSchema.from_dict(data) for data in json.loads(response.readAll().data())]
@@ -135,6 +137,8 @@ class DataCatalogService(QObject):
         if not image:
             return
         self.view.display_image_info(image)
+        self.get_image_preview_s(image, PreviewSize.small)
+        return image
 
     def get_image_preview_s(self,
                            image: ImageReturnSchema,
@@ -144,6 +148,11 @@ class DataCatalogService(QObject):
     def get_image_preview_s_callback(self, response: QNetworkReply):
         image = QImage.fromData(response.readAll().data())
         self.view.show_preview_s(image)
+
+    def check_image_selection(self):
+        if self.dlg.imageTable.selectionModel().hasSelection() is False:
+            self.dlg.imagePreview.setText(" ")
+            self.dlg.imageDetails.setText("Image info")
 
     # Legacy:
     def upload_to_new_mosaic(self,
@@ -205,4 +214,3 @@ class DataCatalogService(QObject):
         if not image:
             return
         self.view.full_image_info(image=image)
-    
