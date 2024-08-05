@@ -73,4 +73,3 @@ class ImageReturnSchema(SkipDataClass):
 
     def __post_init__(self):
         self.uploaded_at = datetime.fromisoformat(self.uploaded_at.replace("Z", "+00:00"))
-    

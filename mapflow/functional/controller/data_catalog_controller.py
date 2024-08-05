@@ -13,4 +13,3 @@ class DataCatalogController(QObject):
         self.dlg.previewMosaicButton.clicked.connect(self.service.mosaic_preview)
         self.dlg.imageInfoButton.clicked.connect(self.service.image_info)
         self.dlg.tabWidget.tabBarClicked.connect(self.service.get_user_limit)
-        

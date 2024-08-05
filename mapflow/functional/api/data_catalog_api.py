@@ -154,8 +154,12 @@ class DataCatalogApi(QObject):
         url = image.preview_url_l if size == PreviewSize.large else image.preview_url_s
         self.http.get(url=url,
                       callback=callback,
-                      use_default_error_handler=True
+                      use_default_error_handler=False,
+                      error_handler=self.preview_s_error_handler
                       )
+
+    def preview_s_error_handler(self, response: QNetworkReply):
+        self.dlg.imagePreview.setText("Preview is unavailable")
 
     # Legacy:
     def upload_to_new_mosaic(self,
