@@ -21,7 +21,8 @@ from qgis.core import (Qgis,
                        QgsDistanceArea,
                        QgsVectorFileWriter,
                        QgsProject,
-                       QgsMessageLog
+                       QgsMessageLog,
+                       QgsCoordinateTransform
                        )
 from pathlib import Path
 
@@ -228,6 +229,20 @@ def generate_vector_layer(layer_uri,
         name
     )
     return layer
+
+def footprint_to_extent(footprint: dict) -> QgsRectangle:
+    """Construct bounding box from response got from image footprint.
+    As tile server returns tile_json in epsg:4326, first transform it to epsg:3857.
+    :param: footprint: dict, which should be geojson-like dict (geometry).
+    :return: QgsRectangle
+    """
+    source_crs = QgsCoordinateReferenceSystem(4326)
+    dest_crs = QgsCoordinateReferenceSystem(3857)
+    tr = QgsCoordinateTransform(source_crs, dest_crs, QgsProject.instance())
+    geom = QgsGeometry.fromWkt(footprint)
+    geom.transform(tr)
+    extent = geom.boundingBox()
+    return extent
 
 
 # Layer management for results

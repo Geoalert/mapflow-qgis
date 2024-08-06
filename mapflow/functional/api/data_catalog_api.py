@@ -5,10 +5,10 @@ from uuid import UUID
 from PyQt5.QtCore import QObject, pyqtSignal, QFile, QIODevice
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtWidgets import QApplication
-from qgis.core import QgsMapLayer
+from qgis.core import QgsMapLayer, QgsRectangle
 
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
-from ...http import Http
+from ...http import Http, get_error_report_body
 from ...functional import layer_utils
 from ...dialogs.dialogs import ErrorMessageWidget
 from ...dialogs.main_dialog import MainDialog
@@ -25,13 +25,15 @@ class DataCatalogApi(QObject):
                  server: str,
                  dlg: MainDialog,
                  iface,
-                 result_loader):
+                 result_loader,
+                 plugin_version):
         super().__init__()
         self.server = server
         self.http = http
         self.iface = iface
         self.dlg = dlg
         self.result_loader = result_loader
+        self.plugin_version = plugin_version
 
     # Mosaics CRUD
     def create_mosaic(self, mosaic: MosaicCreateSchema, callback: Callable = lambda *args: None):
@@ -160,6 +162,26 @@ class DataCatalogApi(QObject):
 
     def preview_s_error_handler(self, response: QNetworkReply):
         self.dlg.imagePreview.setText("Preview is unavailable")
+    
+    def get_image_preview_l(self,
+                            image: ImageReturnSchema,
+                            extent: QgsRectangle,
+                            callback: Callable,
+                            image_id: str = ""):
+        self.http.get(url=image.preview_url_l,
+                      callback=callback,
+                      use_default_error_handler=False,
+                      error_handler=self.image_preview_l_error_handler,
+                      callback_kwargs={"extent": extent,
+                                       "image_id": image_id})
+
+    def image_preview_l_error_handler(self, response: QNetworkReply):
+        error_summary, email_body = get_error_report_body(response=response,
+                                                          plugin_version=self.plugin_version)
+        ErrorMessageWidget(parent=QApplication.activeWindow(),
+                           text=error_summary,
+                           title="Error. Could not display preview",
+                           email_body=email_body).show()
 
     # Legacy:
     def upload_to_new_mosaic(self,
