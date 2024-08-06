@@ -1495,7 +1495,7 @@
                <item>
                 <layout class="QHBoxLayout" name="horizontalLayout_12">
                  <item>
-                  <widget class="QPushButton" name="pushButton">
+                  <widget class="QPushButton" name="imagePreviewButton">
                    <property name="text">
                     <string>preview</string>
                    </property>

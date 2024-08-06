@@ -2,11 +2,15 @@ from typing import Sequence, Union, Optional, Callable, List
 from pathlib import Path
 from uuid import UUID
 import json
+import tempfile
+import os.path
+from osgeo import gdal
 
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
 from PyQt5.QtWidgets import QMessageBox, QApplication
+from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsRasterLayer, QgsRectangle
 
 from ...dialogs.main_dialog import MainDialog
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema, UserLimitSchema
@@ -32,14 +36,20 @@ class DataCatalogService(QObject):
                  server: str,
                  dlg: MainDialog,
                  iface,
-                 result_loader):
+                 result_loader,
+                 plugin_version):
         super().__init__()
         self.dlg = dlg
+        self.iface = iface
+        self.temp_dir = tempfile.gettempdir()
+        self.project = QgsProject.instance()
         self.result_loader = result_loader
-        self.api = DataCatalogApi(http=http, server=server, dlg=dlg, iface=iface, result_loader=self.result_loader)
+        self.plugin_version = plugin_version
+        self.api = DataCatalogApi(http=http, server=server, dlg=dlg, iface=iface, result_loader=self.result_loader, plugin_version=self.plugin_version)
         self.view = DataCatalogView(dlg=dlg)
         self.mosaics = {}
         self.images = []
+
 
     # Mosaics CRUD
     def create_mosaic(self, mosaic: MosaicCreateSchema):
@@ -76,6 +86,30 @@ class DataCatalogService(QObject):
         self.mosaics.pop(mosaic_id)
         self.mosaicsUpdated.emit()
 
+    def mosaic_clicked(self):
+        mosaic = self.selected_mosaic()
+        if not mosaic:
+            return
+        self.view.display_mosaic_info(mosaic)
+        self.get_mosaic_images(mosaic.id)
+        self.dlg.imageTable.clearSelection()
+        self.dlg.imageDetails.setText("Image Info")
+        self.dlg.imagePreview.setText(" ")
+
+    def mosaic_preview(self):
+        try:
+            mosaic = self.selected_mosaic()
+            url = mosaic.rasterLayer.tileUrl
+            url_json = mosaic.rasterLayer.tileJsonUrl
+            name = mosaic.name
+            layer = layer_utils.generate_raster_layer(url, name)
+            self.api.request_mosaic_extent(url_json, layer)
+        except AttributeError:
+            message = 'Please, select mosaic'
+            info_box = QMessageBox(QMessageBox.Information, "Mapflow", message, parent=QApplication.activeWindow())
+            return info_box.exec()
+
+
     # Images CRUD
     def upload_images(self,
                       mosaic_id: UUID,
@@ -105,16 +139,6 @@ class DataCatalogService(QObject):
         for image_path in non_uploaded:
             self.api.upload_image(mosaic_id=mosaic_id, image_path=image_path)
 
-    def mosaic_clicked(self):
-        mosaic = self.selected_mosaic()
-        if not mosaic:
-            return
-        self.view.display_mosaic_info(mosaic)
-        self.get_mosaic_images(mosaic.id)
-        self.dlg.imageTable.clearSelection()
-        self.dlg.imageDetails.setText("Image Info")
-        self.dlg.imagePreview.setText(" ")
-
     def get_mosaic_images(self, mosaic_id):
         self.api.get_mosaic_images(mosaic_id=mosaic_id, callback=self.get_mosaic_images_callback)
         return self.images
@@ -140,6 +164,12 @@ class DataCatalogService(QObject):
         self.get_image_preview_s(image, PreviewSize.small)
         return image
 
+    def image_info(self):
+        image = self.selected_image()
+        if not image:
+            return
+        self.view.full_image_info(image=image)
+
     def get_image_preview_s(self,
                            image: ImageReturnSchema,
                            size: PreviewSize):
@@ -149,10 +179,40 @@ class DataCatalogService(QObject):
         image = QImage.fromData(response.readAll().data())
         self.view.show_preview_s(image)
 
-    def check_image_selection(self):
-        if self.dlg.imageTable.selectionModel().hasSelection() is False:
-            self.dlg.imagePreview.setText(" ")
-            self.dlg.imageDetails.setText("Image info")
+    def get_image_preview_l(self, image: ImageReturnSchema):
+        try:
+            image = self.selected_image()
+            extent = layer_utils.footprint_to_extent(image.footprint)
+            self.api.get_image_preview_l(image=image, extent=extent, callback=self.display_image_preview, image_id=image.id)
+        except AttributeError:
+            return
+
+    def display_image_preview(self,
+                                response: QNetworkReply,
+                                extent: QgsRectangle,
+                                crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857"),
+                                image_id: str = ""):
+        with open(Path(self.temp_dir)/os.urandom(32).hex(), mode='wb') as f:
+            f.write(response.readAll().data())
+        preview = gdal.Open(f.name)
+        pixel_xsize = extent.width() / preview.RasterXSize
+        pixel_ysize = extent.height() / preview.RasterYSize
+        preview.SetProjection(crs.toWkt())
+        preview.SetGeoTransform([
+            extent.xMinimum(),  # north-west corner x
+            pixel_xsize,  # pixel horizontal resolution (m)
+            0,  # x-axis rotation
+            extent.yMaximum(),  # north-west corner y
+            0,  # y-axis rotation
+            -pixel_ysize  # pixel vertical resolution (m)
+        ])
+        preview.FlushCache()
+        layer = QgsRasterLayer(f.name, f"preview {image_id}", 'gdal')
+        layer.setExtent(extent)
+        self.project.addMapLayer(layer)
+        self.iface.setActiveLayer(layer)
+        self.iface.zoomToActiveLayer()
+
 
     # Legacy:
     def upload_to_new_mosaic(self,
@@ -160,6 +220,7 @@ class DataCatalogService(QObject):
                              callback: Callable):
         self.api.upload_to_new_mosaic(image_path=image_path,
                                       callback=callback)
+
 
     # Status
     def get_user_limit(self):
@@ -170,6 +231,7 @@ class DataCatalogService(QObject):
         taken = data_limit.memoryUsed
         free = data_limit.memoryFree
         self.view.show_storage(taken, free)
+
 
     # Selection
     def selected_mosaics(self, limit=None) -> List[MosaicReturnSchema]:
@@ -184,19 +246,6 @@ class DataCatalogService(QObject):
         if not first:
             return None
         return first[0]
-
-    def mosaic_preview(self):
-        try:
-            mosaic = self.selected_mosaic()
-            url = mosaic.rasterLayer.tileUrl
-            url_json = mosaic.rasterLayer.tileJsonUrl
-            name = mosaic.name
-            layer = layer_utils.generate_raster_layer(url, name)
-            self.api.request_mosaic_extent(url_json, layer)
-        except AttributeError:
-            message = 'Please, select mosaic'
-            info_box = QMessageBox(QMessageBox.Information, "Mapflow", message, parent=QApplication.activeWindow())
-            return info_box.exec()
         
     def selected_images(self, limit=None) -> List[MosaicReturnSchema]:
         indices = self.view.selected_images_indecies(limit=limit)
@@ -209,8 +258,7 @@ class DataCatalogService(QObject):
             return None
         return first[0]
     
-    def image_info(self):
-        image = self.selected_image()
-        if not image:
-            return
-        self.view.full_image_info(image=image)
+    def check_image_selection(self):
+        if self.dlg.imageTable.selectionModel().hasSelection() is False:
+            self.dlg.imagePreview.setText(" ")
+            self.dlg.imageDetails.setText("Image info")
