@@ -22,4 +22,3 @@ class DataCatalogController(QObject):
 
         # Image
         self.dlg.imageTable.cellClicked.connect(self.service.image_clicked)
-

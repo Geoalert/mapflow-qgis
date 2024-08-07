@@ -42,11 +42,12 @@ class DataCatalogApi(QObject):
                       use_default_error_handler=True
                       )
         
-    def update_mosaic(self, mosaic_id, mosaic: MosaicUpdateSchema, callback: Callable):
+    def update_mosaic(self, mosaic_id, mosaic: MosaicUpdateSchema, callback: Callable, callback_kwargs: Optional[dict] = None):
         self.http.put(url=f"{self.server}/rasters/mosaic/{mosaic_id}",
                        body=mosaic.as_json().encode(),
                        headers={},
                        callback=callback,
+                       callback_kwargs=callback_kwargs,
                        use_default_error_handler=True,
                        timeout=5)
 

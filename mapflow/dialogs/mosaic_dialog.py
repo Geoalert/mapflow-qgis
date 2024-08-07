@@ -36,8 +36,9 @@ class CreateMosaicDialog(MosaicDialog):
     def mosaic(self):
         if not self.mosaicName:
             raise AssertionError("Mosaic name must not be empty!")
-        return MosaicCreateSchema(name = self.mosaicName.text(),
-                                  tags = [self.mosaicTags.text()] or None)
+        tags_list = self.mosaicTags.text().split(", ") if self.mosaicTags.text() else None
+        return MosaicUpdateSchema(name = self.mosaicName.text(),
+                                  tags = tags_list if self.mosaicTags.text() else [])
 
 class UpdateMosaicDialog(MosaicDialog):
     def __init__(self, parent: QWidget):
@@ -58,5 +59,6 @@ class UpdateMosaicDialog(MosaicDialog):
     def mosaic(self):
         if not self.mosaicName:
             raise AssertionError("Mosaic name must not be empty!")
+        tags_list = self.mosaicTags.text().split(", ") if self.mosaicTags.text() else None
         return MosaicUpdateSchema(name = self.mosaicName.text(),
-                                  tags = [self.mosaicTags.text()] or None)
+                                  tags = tags_list if self.mosaicTags.text() else [])
