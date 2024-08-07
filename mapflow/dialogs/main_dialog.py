@@ -408,4 +408,3 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.updateProject.setDisabled(is_default)
         self.deleteProject.setToolTip(tooltip)
         self.updateProject.setToolTip(tooltip)
-
