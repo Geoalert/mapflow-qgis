@@ -328,6 +328,8 @@ class Mapflow(QObject):
                                                        plugin_name=self.plugin_name,
                                                        temp_dir=self.temp_dir
                                                        )
+        
+        self.dlg.tabWidget.tabBarClicked.connect(self.filter_metadata)
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
@@ -540,6 +542,9 @@ class Mapflow(QObject):
             f' and cloudCover is null or cloudCover <= {max_cloud_cover}'
         )
         aoi = helpers.from_wgs84(self.metadata_aoi, crs)
+        if not aoi:
+            geom = layer_utils.collect_geometry_from_layer(self.dlg.polygonCombo.currentLayer())
+            aoi = helpers.from_wgs84(geom, crs)
         self.calculator.setEllipsoid(crs.ellipsoidAcronym())
         self.calculator.setSourceCrs(crs, self.project.transformContext())
         min_intersection_size = self.calculator.measureArea(aoi) * (min_intersection / 100)
