@@ -257,6 +257,12 @@ class Mapflow(QObject):
         self.dlg.removeProvider.clicked.connect(self.remove_provider)
         self.dlg.maxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
 
+        # If user goes to "Imagery search" tab through tab wigget
+        # or chages data source (possibly to "Imagery search" provider),
+        # apply filters to existing metadata file
+        self.dlg.tabWidget.tabBarClicked.connect(self.filter_metadata)
+        self.dlg.rasterCombo.activated.connect(self.filter_metadata)
+
         # Projects
         self.dlg.createProject.clicked.connect(self.create_project)
         self.dlg.deleteProject.clicked.connect(self.delete_project)
@@ -328,8 +334,6 @@ class Mapflow(QObject):
                                                        plugin_name=self.plugin_name,
                                                        temp_dir=self.temp_dir
                                                        )
-        
-        self.dlg.tabWidget.tabBarClicked.connect(self.filter_metadata)
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
@@ -470,7 +474,11 @@ class Mapflow(QObject):
     def filter_aoi_layers(self):
         if self.dlg.useAllVectorLayers.isChecked():
             return []
-        return [layer for layer in self.project.mapLayers().values() if layer not in self.aoi_layers]
+        layers = [layer for layer in self.project.mapLayers().values() if layer not in self.aoi_layers]
+        if self.search_provider:
+            return [layer for layer in layers if self.search_provider.name in layer.name()]
+        else:
+            return []
 
     def on_options_change(self):
         wd_name = self.dlg.modelCombo.currentText()
@@ -543,8 +551,9 @@ class Mapflow(QObject):
         )
         aoi = helpers.from_wgs84(self.metadata_aoi, crs)
         if not aoi:
-            geom = layer_utils.collect_geometry_from_layer(self.dlg.polygonCombo.currentLayer())
-            aoi = helpers.from_wgs84(geom, crs)
+            if self.dlg.polygonCombo.currentLayer():
+                geom = layer_utils.collect_geometry_from_layer(self.dlg.polygonCombo.currentLayer())
+                aoi = helpers.from_wgs84(geom, crs)
         self.calculator.setEllipsoid(crs.ellipsoidAcronym())
         self.calculator.setSourceCrs(crs, self.project.transformContext())
         min_intersection_size = self.calculator.measureArea(aoi) * (min_intersection / 100)
