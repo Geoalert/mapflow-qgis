@@ -615,7 +615,7 @@ class Mapflow(QObject):
         provider_index = self.dlg.providerIndex()
         provider = self.providers[provider_index]
         # Changes in search tab
-        self.toggle_imagery_search(provider=provider)
+        self.toggle_imagery_search(provider)
         self.filter_metadata()
         # Changes in case provider is raster layer
         self.toggle_processing_checkboxes(provider_layer)
