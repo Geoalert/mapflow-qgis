@@ -257,12 +257,6 @@ class Mapflow(QObject):
         self.dlg.removeProvider.clicked.connect(self.remove_provider)
         self.dlg.maxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
 
-        # If user goes to "Imagery search" tab through tab wigget
-        # or chages data source (possibly to "Imagery search" provider),
-        # apply filters to existing metadata file
-        self.dlg.tabWidget.tabBarClicked.connect(self.filter_metadata)
-        self.dlg.rasterCombo.activated.connect(self.filter_metadata)
-
         # Projects
         self.dlg.createProject.clicked.connect(self.create_project)
         self.dlg.deleteProject.clicked.connect(self.delete_project)
@@ -476,7 +470,7 @@ class Mapflow(QObject):
             return []
         layers = [layer for layer in self.project.mapLayers().values() if layer not in self.aoi_layers]
         if self.search_provider:
-            return [layer for layer in layers if self.search_provider.name in layer.name()]
+            return [layer for layer in layers if self.search_provider.name + ' metadata' in layer.name()]
         else:
             return []
 
@@ -621,7 +615,8 @@ class Mapflow(QObject):
         provider_index = self.dlg.providerIndex()
         provider = self.providers[provider_index]
         # Changes in search tab
-        self.toggle_imagery_search(provider)
+        self.toggle_imagery_search(provider=provider)
+        self.filter_metadata()
         # Changes in case provider is raster layer
         self.toggle_processing_checkboxes(provider_layer)
         # re-calculate AOI because it may change due to intersection of image/area
