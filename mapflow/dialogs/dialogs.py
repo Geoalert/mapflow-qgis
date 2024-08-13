@@ -15,6 +15,7 @@ class ErrorMessageWidget(*uic.loadUiType(ui_path / 'error_message.ui')):
         self.setupUi(self)
         self.setWindowIcon(plugin_icon)
         self.text.setText(text)
+        self.text.setOpenExternalLinks(True)
         if title:
             self.title.setText(title)
         self.mailTo.setText(
