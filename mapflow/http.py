@@ -188,6 +188,29 @@ def api_message_parser(response_body: str) -> str:
                            message=error_data.get("message", "Unknown error"))
     return message.to_str()
 
+def not_found_message_parser(response_body: str) -> str:
+    """
+    Custom message parser to add message about the pricing and premium options
+    """
+    error_data = json.loads(response_body)
+    if "data provider" in error_data.get('message', '').lower():
+        return '<html><body>Data provider is unavailable on your plan. \n '\
+               ' Contact us to upgrade your plan to Custom. \n' \
+               ' See pricing at <a href=\"https://mapflow.ai/pricing\">mapflow.ai</a></body></html>'
+    else:
+        return api_message_parser(response_body=response_body)
+
+def access_denied_message_parser(response_body: str) -> str:
+    """
+    Custom message parser to add message about the pricing and premium options
+    """
+    error_data = json.loads(response_body)
+    if "data provider" in error_data.get('message', '').lower():
+        return '<html><body><p>Data provider is unavailable on your plan. \n '\
+               ' Upgrade your subscription to get access to the data. \n' \
+               ' See pricing at <a href=\"https://mapflow.ai/pricing\">mapflow.ai</a></p></body></html>'
+    else:
+        return api_message_parser(response_body=response_body)
 
 def securewatch_message_parser(response_body: str) -> str:
     # todo: parse this HTML page for useful info, or display it as is?

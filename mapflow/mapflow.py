@@ -42,6 +42,8 @@ from .http import (Http,
                    data_catalog_message_parser,
                    securewatch_message_parser,
                    api_message_parser,
+                   access_denied_message_parser,
+                   not_found_message_parser,
                    )
 from .config import Config
 from .entity.processing import parse_processings_request, Processing, ProcessingHistory, updated_processings
@@ -1996,19 +1998,15 @@ class Mapflow(QObject):
         :param response: The HTTP response.
         """
         error = response.error()
-        response_body = response.readAll().data().decode()
-        if error == QNetworkReply.ContentAccessDenied \
-                and "data provider" in response_body.lower():
-            self.alert(self.tr('Data provider with id is unavailable on your plan. \n '
-                               'Upgrade your subscription to get access to the data. \n'
-                               'See pricing at <a href=\"https://mapflow.ai/pricing\">mapflow.ai</a>'),
-                       QMessageBox.Information)
-            # provider ID is the last "word" in the message.
-            # In this case, when "data provider" is in the message, there can't be index error
+        if error == QNetworkReply.ContentAccessDenied:
+            message_parser = access_denied_message_parser
+        elif error == QNetworkReply.ContentNotFoundError:
+            message_parser = not_found_message_parser
         else:
-            self.report_http_error(response,
-                                   self.tr('Processing creation failed'),
-                                   error_message_parser=api_message_parser)
+            message_parser = api_message_parser
+        self.report_http_error(response,
+                               self.tr('Processing creation failed'),
+                               error_message_parser=message_parser)
 
     def update_processing_limit(self) -> None:
         """Set the user's processing limit as reported by Mapflow."""
