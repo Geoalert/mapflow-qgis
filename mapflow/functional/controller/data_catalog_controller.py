@@ -15,3 +15,5 @@ class DataCatalogController(QObject):
         self.dlg.imageInfoButton.clicked.connect(self.service.image_info)
         self.dlg.tabWidget.tabBarClicked.connect(self.service.get_user_limit)
         self.dlg.imageTable.selectionModel().selectionChanged.connect(self.service.check_image_selection)
+        self.dlg.addImageButton.clicked.connect(self.service.upload_images_to_mosaic)
+        self.dlg.deleteImageButton.clicked.connect(self.service.delete_image)

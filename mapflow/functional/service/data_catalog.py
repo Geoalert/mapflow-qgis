@@ -9,7 +9,7 @@ from osgeo import gdal
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
-from PyQt5.QtWidgets import QMessageBox, QApplication
+from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog
 from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsRasterLayer, QgsRectangle
 
 from ...dialogs.main_dialog import MainDialog
@@ -73,7 +73,7 @@ class DataCatalogService(QObject):
                             callback=self.get_mosaic_callback)
 
     def get_mosaic_callback(self, response: QNetworkReply):
-        mosaic = MosaicReturnSchema.from_dict(response.readAll().data())
+        mosaic = MosaicReturnSchema.from_dict(json.loads(response.readAll().data()))
         self.mosaics.update({mosaic.id: mosaic})
         self.mosaicsUpdated.emit()
 
@@ -111,14 +111,14 @@ class DataCatalogService(QObject):
 
 
     # Images CRUD
-    def upload_images(self,
+    """ def upload_images(self,
                       mosaic_id: UUID,
                       image_paths: Sequence[Union[Path, str]],
                       upoaded: Sequence[Union[Path, str]],
                       failed: Sequence[Union[Path, str]]):
         if not image_paths:
             return
-
+        
         image_to_upload = image_paths[0]
         non_uploaded = image_paths[1:]
 
@@ -137,7 +137,29 @@ class DataCatalogService(QObject):
                               )
 
         for image_path in non_uploaded:
-            self.api.upload_image(mosaic_id=mosaic_id, image_path=image_path)
+            self.api.upload_image(mosaic_id=mosaic_id, image_path=image_path) """
+
+    def upload_images(self,
+                      mosaic_id: UUID,
+                      image_paths: Sequence[Union[Path, str]]):
+        if not image_paths:
+            return
+        for image_path in image_paths:
+            self.api.upload_image(mosaic_id=mosaic_id, 
+                                    image_path=image_path, 
+                                    callback=self.upload_images_callback, 
+                                    callback_kwargs={'mosaic_id': mosaic_id},
+                                    error_handler=self.api.upload_image_error_handler,
+                                    error_handler_kwargs={'image_path': image_path})
+
+    def upload_images_callback (self, response: QNetworkReply, mosaic_id: UUID):
+        self.get_mosaic(mosaic_id)
+        self.get_mosaic_images(mosaic_id)
+    
+    def upload_images_to_mosaic(self):
+        mosaic = self.selected_mosaic()
+        image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), "Choose image to upload", filter='(TIF files *.tif; *.tiff)')[0]
+        self.upload_images(mosaic_id=mosaic.id, image_paths=image_paths) #, upoaded=[], failed=[])
 
     def get_mosaic_images(self, mosaic_id):
         self.api.get_mosaic_images(mosaic_id=mosaic_id, callback=self.get_mosaic_images_callback)
@@ -150,11 +172,15 @@ class DataCatalogService(QObject):
     def get_image(self, image_id: UUID, callback: Callable):
         self.api.get_image(image_id=image_id, callback=callback)
 
-    def delete_image(self, image_id: UUID):
-        self.api.delete_image(image_id=image_id, callback=self.delete_image_callback)
+    def delete_image(self):
+        images = self.selected_images()
+        for image in images:
+            self.api.delete_image(image_id=image.id, callback=self.delete_image_callback)
 
     def delete_image_callback(self, response: QNetworkReply):
-        pass
+        mosaic = self.selected_mosaic()
+        self.get_mosaic(mosaic.id)
+        self.get_mosaic_images(mosaic.id)
 
     def image_clicked(self):
         image = self.selected_image()
@@ -262,3 +288,5 @@ class DataCatalogService(QObject):
         if self.dlg.imageTable.selectionModel().hasSelection() is False:
             self.dlg.imagePreview.setText(" ")
             self.dlg.imageDetails.setText("Image info")
+        else:
+            self.image_clicked()

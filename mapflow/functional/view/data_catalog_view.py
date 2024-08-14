@@ -80,11 +80,15 @@ class DataCatalogView(QObject):
 
     def display_images(self, images: list[ImageReturnSchema]):
         self.dlg.imageTable.setRowCount(len(images))
-        self.dlg.imageTable.setColumnCount(1)
+        self.dlg.imageTable.setColumnCount(2)
+        self.dlg.imageTable.setColumnHidden(0, True)
         for row, image in enumerate(images):
             table_item = QTableWidgetItem()
             table_item.setData(Qt.DisplayRole, image.id)
             self.dlg.imageTable.setItem(row, 0, table_item)
+            name_item = QTableWidgetItem()
+            name_item.setData(Qt.DisplayRole, image.filename)
+            self.dlg.imageTable.setItem(row, 1, name_item)
 
     def show_preview_s(self, preview_image):
         self.dlg.imagePreview.setPixmap(QPixmap.fromImage(preview_image))

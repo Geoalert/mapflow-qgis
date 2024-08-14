@@ -113,6 +113,25 @@ class DataCatalogApi(QObject):
                             email_body=email_body).show()
 
     # Images CRUD
+    """ def upload_image(self,
+                     mosaic_id: UUID,
+                     image_path: Union[Path, str],
+                     callback: Callable = lambda *args: None,
+                     callback_kwargs: Optional[dict] = None,
+                     error_handler: Optional[Callable] = None,
+                     error_handler_kwargs: Optional[dict] = None):
+        body = self.create_upload_image_body(image_path = image_path)
+        url = f"{self.server}/rasters/mosaic/{mosaic_id}/image"
+        response = self.http.post(url=url,
+                       body=body,
+                       callback=callback,
+                       callback_kwargs=callback_kwargs,
+                       use_default_error_handler=error_handler is None,
+                       error_handler=error_handler,
+                       error_handler_kwargs=error_handler_kwargs or {}
+                       )
+        body.setParent(response) """
+    
     def upload_image(self,
                      mosaic_id: UUID,
                      image_path: Union[Path, str],
@@ -122,7 +141,7 @@ class DataCatalogApi(QObject):
                      error_handler_kwargs: Optional[dict] = None):
         body = self.create_upload_image_body(image_path = image_path)
         url = f"{self.server}/rasters/mosaic/{mosaic_id}/image"
-        self.http.post(url=url,
+        response = self.http.post(url=url,
                        body=body,
                        callback=callback,
                        callback_kwargs=callback_kwargs,
@@ -130,6 +149,21 @@ class DataCatalogApi(QObject):
                        error_handler=error_handler,
                        error_handler_kwargs=error_handler_kwargs or {}
                        )
+        body.setParent(response)
+
+    def upload_image_error_handler(self, response: QNetworkReply, image_path: str):
+        ErrorMessageWidget(parent=QApplication.activeWindow(),
+                           text=f'Could not upload "{image_path}" to mosaic',
+                           title=f'Error',
+                           email_body='').show()
+
+    def image_preview_l_error_handler(self, response: QNetworkReply):
+        error_summary, email_body = get_error_report_body(response=response,
+                                                          plugin_version=self.plugin_version)
+        ErrorMessageWidget(parent=QApplication.activeWindow(),
+                           text=error_summary,
+                           title="Error. Could not display preview",
+                           email_body=email_body).show()
 
     def get_mosaic_images(self, mosaic_id: UUID, callback: Callable):
         self.http.get(url=f"{self.server}/rasters/mosaic/{mosaic_id}/image",
