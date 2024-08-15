@@ -2198,29 +2198,22 @@ class Mapflow(QObject):
             # Then we can check min and max coords from bounding box
             # And scecify that the point that has the same x as xmin is SW, xmax - NE, 
             # Same y as ymin - SE, ymax - NW
-        # South-East (third clockwise)
-        se_x = corners[2][0]
-        se_y = corners[2][1]
-        # South-West (fourth clockwise)
-        sw_x = corners[3][0]
-        sw_y = corners[3][1]
-        # North-East (second clockwise)
-        ne_x = corners[1][0]
-        ne_y = corners[1][1]
-        # North-West (first clockwise)
-        nw_x = corners[0][0]
-        nw_y = corners[0][1]
         # Create a list of GCPS
         gcp_list = []
-        # Where each GCP is (x, y, z, pixel, line)
-        gcp_00_nw = gdal.GCP(nw_x, nw_y, 0, 0, 0)
-        gcp_0n_sw = gdal.GCP(sw_x, sw_y, 0, 0, preview.RasterXSize)
-        gcp_n0_ne = gdal.GCP(ne_x, ne_y, 0, preview.RasterYSize, 0)
-        gcp_nn_se = gdal.GCP(se_x, se_y, 0, preview.RasterYSize, preview.RasterXSize)
-        gcp_list.append(gcp_00_nw)
-        gcp_list.append(gcp_0n_sw)
-        gcp_list.append(gcp_n0_ne)
-        gcp_list.append(gcp_nn_se)
+        # Assuming raster is n*m size, where n is width and m is height, we get: 
+            # NW is a 1 point in a list (clockwise) and 0,0 - in our image
+            # NE - 2 and n,0
+            # SW - 4 and 0,m
+            # SE - 3 and n,m
+        gcp_00 = gdal.GCP(corners[0][0], corners[0][1], 0, 0, 0)
+        gcp_n0 = gdal.GCP(corners[1][0], corners[1][1], 0, preview.RasterXSize-1, 0)
+        gcp_0m = gdal.GCP(corners[3][0], corners[3][1], 0, 0, preview.RasterYSize-1)
+        gcp_nm = gdal.GCP(corners[2][0], corners[2][1], 0, preview.RasterXSize-1, preview.RasterYSize-1)
+        # Where each GCP is (x, y, z, pixel(n or width), line(m or height))
+        gcp_list.append(gcp_00)
+        gcp_list.append(gcp_n0)
+        gcp_list.append(gcp_0m)
+        gcp_list.append(gcp_nm)
         # Set control points, clear cache, add preview layer
         preview.SetGCPs(gcp_list, crs.toWkt())
         preview.FlushCache()
