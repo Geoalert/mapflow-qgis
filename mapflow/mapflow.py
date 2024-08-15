@@ -468,7 +468,11 @@ class Mapflow(QObject):
     def filter_aoi_layers(self):
         if self.dlg.useAllVectorLayers.isChecked():
             return []
-        return [layer for layer in self.project.mapLayers().values() if layer not in self.aoi_layers]
+        layers = [layer for layer in self.project.mapLayers().values() if layer not in self.aoi_layers]
+        if self.search_provider:
+            return [layer for layer in layers if self.search_provider.name + ' metadata' in layer.name()]
+        else:
+            return []
 
     def on_options_change(self):
         wd_name = self.dlg.modelCombo.currentText()
@@ -540,6 +544,10 @@ class Mapflow(QObject):
             f' and cloudCover is null or cloudCover <= {max_cloud_cover}'
         )
         aoi = helpers.from_wgs84(self.metadata_aoi, crs)
+        if not aoi:
+            if self.dlg.polygonCombo.currentLayer():
+                geom = layer_utils.collect_geometry_from_layer(self.dlg.polygonCombo.currentLayer())
+                aoi = helpers.from_wgs84(geom, crs)
         self.calculator.setEllipsoid(crs.ellipsoidAcronym())
         self.calculator.setSourceCrs(crs, self.project.transformContext())
         min_intersection_size = self.calculator.measureArea(aoi) * (min_intersection / 100)
@@ -608,6 +616,7 @@ class Mapflow(QObject):
         provider = self.providers[provider_index]
         # Changes in search tab
         self.toggle_imagery_search(provider)
+        self.filter_metadata()
         # Changes in case provider is raster layer
         self.toggle_processing_checkboxes(provider_layer)
         # re-calculate AOI because it may change due to intersection of image/area
