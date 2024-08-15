@@ -2117,24 +2117,27 @@ class Mapflow(QObject):
             self.alert(self.tr("Preview is unavailable when metadata layer is removed"))
             return
         extent = self.metadata_extent(feature=feature)
+        footprint = self.metadata_footprint(feature=feature)
         url = feature.attribute('previewUrl')
         preview_type = feature.attribute('previewType')
         if preview_type == PreviewType.png:
-            self.preview_png(url, extent, image_id)
+            self.preview_png(url, extent, footprint, image_id)
         else:
             raise NotImplementedError("Only PNG preview type is supported")
 
     def preview_png(self,
                     url: str,
                     extent: QgsRectangle,
+                    footprint: QgsGeometry,
                     image_id: str = ""):
         self.http.get(url=url,
                       timeout=30,
                       auth='null'.encode(),
-                      callback=self.display_png_preview,
+                      callback=self.display_png_preview_gcp,
                       use_default_error_handler=False,
                       error_handler=self.preview_png_error_handler,
                       callback_kwargs={"extent": extent,
+                                       "footprint": footprint,
                                        "image_id": image_id})
 
     def display_png_preview(self,
@@ -2163,6 +2166,65 @@ class Mapflow(QObject):
         preview.FlushCache()
         layer = QgsRasterLayer(f.name, f"{image_id} preview", 'gdal')
         layer.setExtent(extent)
+        self.project.addMapLayer(layer)
+
+    def display_png_preview_gcp(self,
+                                response: QNetworkReply,
+                                extent: QgsRectangle,
+                                footprint: QgsGeometry,
+                                crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857"),
+                                image_id: str = ""):
+        """
+        We take corner points of a polygon that represents image footprint
+        and put their coordinates as GCPs (ground control points)
+        """
+        # Return a list of coordinate pairs
+        corners = []
+        footprint = footprint.asPolygon()
+        for point in range(4):
+            pt = footprint[0][point]
+            coords = (pt.x(), pt.y())
+            corners.append(coords)
+        # Get non-referenced raster and set its projection
+        with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb') as f:
+            f.write(response.readAll().data())
+        preview = gdal.Open(f.name)
+        preview.SetProjection(crs.toWkt())
+        # Specify (inter)cardinal directions
+            # Right now it is implemented just by points order in a list
+            # We assume that points go from NE in clockwise direcrtion
+            # If we won't find a different and more accurate solution
+            # I would suggest creating a dictionary, storing x and y coordinates as values
+            # Then we can check min and max coords from bounding box
+            # And scecify that the point that has the same x as xmin is SW, xmax - NE, 
+            # Same y as ymin - SE, ymax - NW
+        # South-East (third clockwise)
+        se_x = corners[2][0]
+        se_y = corners[2][1]
+        # South-West (fourth clockwise)
+        sw_x = corners[3][0]
+        sw_y = corners[3][1]
+        # North-East (second clockwise)
+        ne_x = corners[1][0]
+        ne_y = corners[1][1]
+        # North-West (first clockwise)
+        nw_x = corners[0][0]
+        nw_y = corners[0][1]
+        # Create a list of GCPS
+        gcp_list = []
+        # Where each GCP is (x, y, z, pixel, line)
+        gcp_00_nw = gdal.GCP(nw_x, nw_y, 0, 0, 0)
+        gcp_0n_sw = gdal.GCP(sw_x, sw_y, 0, 0, preview.RasterXSize)
+        gcp_n0_ne = gdal.GCP(ne_x, ne_y, 0, preview.RasterYSize, 0)
+        gcp_nn_se = gdal.GCP(se_x, se_y, 0, preview.RasterYSize, preview.RasterXSize)
+        gcp_list.append(gcp_00_nw)
+        gcp_list.append(gcp_0n_sw)
+        gcp_list.append(gcp_n0_ne)
+        gcp_list.append(gcp_nn_se)
+        # Set control points, clear cache, add preview layer
+        preview.SetGCPs(gcp_list, crs.toWkt())
+        preview.FlushCache()
+        layer = QgsRasterLayer(f.name, f"{image_id} preview", 'gdal')
         self.project.addMapLayer(layer)
 
     def preview_png_error_handler(self, response: QNetworkReply):
@@ -2223,6 +2285,16 @@ class Mapflow(QObject):
         if not feature:
             return None
         return helpers.from_wgs84(feature.geometry(), crs).boundingBox()
+
+    def metadata_footprint(self,
+                           image_id=None,
+                           feature=None,
+                           crs: QgsCoordinateReferenceSystem = helpers.WEB_MERCATOR):
+        if not feature:
+            feature = self.metadata_feature(image_id)
+        if not feature:
+            return None
+        return helpers.from_wgs84(feature.geometry(), crs)
 
     def metadata_feature(self, image_id):
         if not image_id:
