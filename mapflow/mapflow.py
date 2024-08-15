@@ -2125,18 +2125,16 @@ class Mapflow(QObject):
         if not feature:
             self.alert(self.tr("Preview is unavailable when metadata layer is removed"))
             return
-        extent = self.metadata_extent(feature=feature)
         footprint = self.metadata_footprint(feature=feature)
         url = feature.attribute('previewUrl')
         preview_type = feature.attribute('previewType')
         if preview_type == PreviewType.png:
-            self.preview_png(url, extent, footprint, image_id)
+            self.preview_png(url, footprint, image_id)
         else:
             raise NotImplementedError("Only PNG preview type is supported")
 
     def preview_png(self,
                     url: str,
-                    extent: QgsRectangle,
                     footprint: QgsGeometry,
                     image_id: str = ""):
         self.http.get(url=url,
@@ -2145,8 +2143,7 @@ class Mapflow(QObject):
                       callback=self.display_png_preview_gcp,
                       use_default_error_handler=False,
                       error_handler=self.preview_png_error_handler,
-                      callback_kwargs={"extent": extent,
-                                       "footprint": footprint,
+                      callback_kwargs={"footprint": footprint,
                                        "image_id": image_id})
 
     def display_png_preview(self,
@@ -2179,7 +2176,6 @@ class Mapflow(QObject):
 
     def display_png_preview_gcp(self,
                                 response: QNetworkReply,
-                                extent: QgsRectangle,
                                 footprint: QgsGeometry,
                                 crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857"),
                                 image_id: str = ""):
@@ -2190,6 +2186,10 @@ class Mapflow(QObject):
         # Return a list of coordinate pairs
         corners = []
         footprint = footprint.asPolygon()
+        if len(footprint[0]) != 5:
+            self.alert(str(len(footprint)),QMessageBox.Warning)
+            #self.alert(self.tr("Footprint of the image {image_id} is corrupted!").format(image_id=image_id),QMessageBox.Warning)
+            return
         for point in range(4):
             pt = footprint[0][point]
             coords = (pt.x(), pt.y())
@@ -2207,22 +2207,19 @@ class Mapflow(QObject):
             # Then we can check min and max coords from bounding box
             # And scecify that the point that has the same x as xmin is SW, xmax - NE, 
             # Same y as ymin - SE, ymax - NW
-        # Create a list of GCPS
-        gcp_list = []
         # Assuming raster is n*m size, where n is width and m is height, we get: 
             # NW is a 1 point in a list (clockwise) and 0,0 - in our image
             # NE - 2 and n,0
             # SW - 4 and 0,m
             # SE - 3 and n,m
-        gcp_00 = gdal.GCP(corners[0][0], corners[0][1], 0, 0, 0)
-        gcp_n0 = gdal.GCP(corners[1][0], corners[1][1], 0, preview.RasterXSize-1, 0)
-        gcp_0m = gdal.GCP(corners[3][0], corners[3][1], 0, 0, preview.RasterYSize-1)
-        gcp_nm = gdal.GCP(corners[2][0], corners[2][1], 0, preview.RasterXSize-1, preview.RasterYSize-1)
+        # Create a list of GCPS
         # Where each GCP is (x, y, z, pixel(n or width), line(m or height))
-        gcp_list.append(gcp_00)
-        gcp_list.append(gcp_n0)
-        gcp_list.append(gcp_0m)
-        gcp_list.append(gcp_nm)
+        gcp_list = [
+        gdal.GCP(corners[0][0], corners[0][1], 0, 0, 0),
+        gdal.GCP(corners[1][0], corners[1][1], 0, preview.RasterXSize-1, 0),
+        gdal.GCP(corners[3][0], corners[3][1], 0, 0, preview.RasterYSize-1),
+        gdal.GCP(corners[2][0], corners[2][1], 0, preview.RasterXSize-1, preview.RasterYSize-1)
+        ]
         # Set control points, clear cache, add preview layer
         preview.SetGCPs(gcp_list, crs.toWkt())
         preview.FlushCache()
