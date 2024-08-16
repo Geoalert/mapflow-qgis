@@ -2187,8 +2187,7 @@ class Mapflow(QObject):
         corners = []
         footprint = footprint.asPolygon()
         if len(footprint[0]) != 5:
-            self.alert(str(len(footprint)),QMessageBox.Warning)
-            #self.alert(self.tr("Footprint of the image {image_id} is corrupted!").format(image_id=image_id),QMessageBox.Warning)
+            self.message_bar.pushInfo(self.plugin_name, self.tr('Preview is unavailable'))
             return
         for point in range(4):
             pt = footprint[0][point]
