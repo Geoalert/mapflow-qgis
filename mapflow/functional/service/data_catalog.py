@@ -13,7 +13,8 @@ from PyQt5.QtWidgets import QMessageBox, QApplication
 from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsRasterLayer, QgsRectangle
 
 from ...dialogs.main_dialog import MainDialog
-from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema, UserLimitSchema
+from ...dialogs.mosaic_dialog import CreateMosaicDialog, UpdateMosaicDialog
+from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema, MosaicCreateReturnSchema, UserLimitSchema
 from ..api.data_catalog_api import DataCatalogApi
 from ..view.data_catalog_view import DataCatalogView
 from ...http import Http
@@ -53,7 +54,10 @@ class DataCatalogService(QObject):
 
     # Mosaics CRUD
     def create_mosaic(self, mosaic: MosaicCreateSchema):
-        self.api.create_mosaic(mosaic, callback=self.create_mosaic_callback)
+        dialog = CreateMosaicDialog(self.dlg)
+        dialog.accepted.connect(lambda: self.api.create_mosaic(dialog.mosaic(), callback=self.create_mosaic_callback))
+        dialog.setup()
+        dialog.deleteLater()
 
     def create_mosaic_callback(self, response: QNetworkReply):
         self.get_mosaics()
@@ -73,16 +77,30 @@ class DataCatalogService(QObject):
                             callback=self.get_mosaic_callback)
 
     def get_mosaic_callback(self, response: QNetworkReply):
-        mosaic = MosaicReturnSchema.from_dict(response.readAll().data())
+        mosaic = MosaicReturnSchema.from_dict(json.loads(response.readAll().data()))
         self.mosaics.update({mosaic.id: mosaic})
         self.mosaicsUpdated.emit()
+        self.view.display_mosaic_info(mosaic)
+        self.view.display_mosaics(list(self.mosaics.values()))
 
-    def delete_mosaic(self, mosaic_id: UUID):
-        self.api.delete_mosaic(mosaic_id=mosaic_id,
+    def update_mosaic(self):  
+        mosaic = self.selected_mosaic()
+        dialog = UpdateMosaicDialog(self.dlg)
+        dialog.accepted.connect(lambda: self.api.update_mosaic(mosaic_id=mosaic.id, mosaic=dialog.mosaic(), callback=self.update_mosaic_callback, callback_kwargs={'mosaic': mosaic}))
+        dialog.setup(mosaic)
+        dialog.deleteLater()
+
+    def update_mosaic_callback(self, response: QNetworkReply, mosaic: MosaicReturnSchema):
+        self.get_mosaic(mosaic.id)
+
+    def delete_mosaic(self):
+        mosaic = self.selected_mosaic()
+        self.api.delete_mosaic(mosaic_id=mosaic.id,
                                callback=self.delete_mosaic_callback,
-                               callback_kwargs={'mosaic_id': mosaic_id})
+                               callback_kwargs={'mosaic_id': mosaic.id})
 
     def delete_mosaic_callback(self, response: QNetworkReply, mosaic_id: UUID):
+        self.get_mosaics()
         self.mosaics.pop(mosaic_id)
         self.mosaicsUpdated.emit()
 
@@ -258,7 +276,29 @@ class DataCatalogService(QObject):
             return None
         return first[0]
     
+    def check_mosaic_selection(self):
+        if self.dlg.mosaicTable.selectionModel().hasSelection() is False:
+            self.dlg.mosaicInfo.setText("Mosaic info")
+            self.dlg.previewMosaicButton.setEnabled(False)
+            self.dlg.editMosaicButton.setEnabled(False)
+            self.dlg.deleteMosaicButton.setEnabled(False)
+            self.dlg.addImageButton.setEnabled(False)
+            self.dlg.imageTable.setColumnCount(0)
+            self.dlg.imageTable.setRowCount(0)
+        else:
+            self.dlg.previewMosaicButton.setEnabled(True)
+            self.dlg.editMosaicButton.setEnabled(True)
+            self.dlg.deleteMosaicButton.setEnabled(True)
+            self.dlg.addImageButton.setEnabled(True)
+    
     def check_image_selection(self):
         if self.dlg.imageTable.selectionModel().hasSelection() is False:
             self.dlg.imagePreview.setText(" ")
             self.dlg.imageDetails.setText("Image info")
+            self.dlg.deleteImageButton.setEnabled(False)
+            self.dlg.imagePreviewButton.setEnabled(False)
+            self.dlg.imageInfoButton.setEnabled(False)
+        else:
+            self.dlg.deleteImageButton.setEnabled(True)
+            self.dlg.imagePreviewButton.setEnabled(True)
+            self.dlg.imageInfoButton.setEnabled(True)

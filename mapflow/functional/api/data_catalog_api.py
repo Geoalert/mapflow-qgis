@@ -7,7 +7,7 @@ from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHtt
 from PyQt5.QtWidgets import QApplication
 from qgis.core import QgsMapLayer, QgsRectangle
 
-from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema
+from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, ImageReturnSchema, MosaicUpdateSchema
 from ...http import Http, get_error_report_body
 from ...functional import layer_utils
 from ...dialogs.dialogs import ErrorMessageWidget
@@ -54,6 +54,15 @@ class DataCatalogApi(QObject):
                       callback=callback,
                       use_default_error_handler=True
                       )
+    
+    def update_mosaic(self, mosaic_id, mosaic: MosaicUpdateSchema, callback: Callable, callback_kwargs: Optional[dict] = None):
+        self.http.put(url=f"{self.server}/rasters/mosaic/{mosaic_id}",
+                       body=mosaic.as_json().encode(),
+                       headers={},
+                       callback=callback,
+                       callback_kwargs=callback_kwargs,
+                       use_default_error_handler=True,
+                       timeout=5)
 
     def delete_mosaic(self,
                       mosaic_id: UUID,

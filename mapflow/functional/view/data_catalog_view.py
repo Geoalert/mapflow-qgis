@@ -25,6 +25,7 @@ class DataCatalogView(QObject):
             name_item = QTableWidgetItem()
             name_item.setData(Qt.DisplayRole, mosaic.name)
             self.dlg.mosaicTable.setItem(row, 1, name_item)
+            self.dlg.mosaicTable.setHorizontalHeaderLabels(["ID", "Mosaic"])
         
     def display_mosaic_info(self, mosaic: MosaicReturnSchema):
         if not mosaic:
@@ -85,6 +86,7 @@ class DataCatalogView(QObject):
             table_item = QTableWidgetItem()
             table_item.setData(Qt.DisplayRole, image.id)
             self.dlg.imageTable.setItem(row, 0, table_item)
+        self.dlg.imageTable.setHorizontalHeaderLabels(["Image"])
 
     def show_preview_s(self, preview_image):
         self.dlg.imagePreview.setPixmap(QPixmap.fromImage(preview_image))
