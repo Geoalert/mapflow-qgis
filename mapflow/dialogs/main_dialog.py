@@ -26,6 +26,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     # SIGNALS
     modelOptionsChanged = pyqtSignal()
     rasterSourceChanged = pyqtSignal()
+    metadataTableFilled = pyqtSignal()
 
     def __init__(self, parent: QWidget, settings: QgsSettings) -> None:
         """Plugin's main dialog."""
@@ -272,7 +273,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
         if fill:
             self.fill_metadata_table(fill)
-            
+
     def show_wd_price(self,
                       wd_price: float,
                       wd_description: str,
@@ -396,6 +397,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                 self.metadataTable.setItem(row, col, table_item)
         # Turn sorting on again
         self.metadataTable.setSortingEnabled(True)
+        self.metadataTableFilled.emit()
 
     def setup_project_combo(self, projects: List[MapflowProject], current_position: int):
         self.projectsCombo.clear()
