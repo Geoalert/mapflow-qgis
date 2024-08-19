@@ -1,33 +1,32 @@
 import json
-from pathlib import Path
 import os.path
 import shutil
 import tempfile
 from base64 import b64encode, b64decode
-from typing import List, Optional, Union, Callable, Tuple
-from datetime import datetime  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
+from datetime import datetime  # processing creation datetime formatting
+from pathlib import Path
+from typing import List, Optional, Union, Callable, Tuple
 
-from osgeo import gdal
-from PyQt5.QtXml import QDomDocument
+from PyQt5.QtCore import (
+    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, QTextStream, QByteArray
+)
 from PyQt5.QtGui import QColor
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
-from PyQt5.QtCore import (
-    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, QTextStream, QByteArray, QUrl
-)
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction,
-    QAbstractItemView, QLabel, QProgressBar, QMenu, QWidget
+    QAbstractItemView, QProgressBar, QMenu, QWidget
 )
-
-from qgis.gui import QgsMessageBarItem
+from PyQt5.QtXml import QDomDocument
+from osgeo import gdal
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
-    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter,
-    QgsWkbTypes, QgsPoint, QgsMapLayerType, QgsRectangle
+    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsWkbTypes, QgsPoint, QgsMapLayerType, QgsRectangle
 )
+from qgis.gui import QgsMessageBarItem
 
-from .functional import layer_utils, helpers
+from . import constants
+from .config import Config
 from .dialogs import (MainDialog,
                       MapflowLoginDialog,
                       ErrorMessageWidget,
@@ -38,13 +37,7 @@ from .dialogs import (MainDialog,
                       UpdateProcessingDialog,
                       )
 from .dialogs.icons import plugin_icon
-from .http import (Http,
-                   get_error_report_body,
-                   data_catalog_message_parser,
-                   securewatch_message_parser,
-                   api_message_parser,
-                   )
-from .config import Config
+from .entity.billing import BillingType
 from .entity.processing import parse_processings_request, Processing, ProcessingHistory, updated_processings
 from .entity.provider import (UsersProvider,
                               MaxarProvider,
@@ -54,26 +47,31 @@ from .entity.provider import (UsersProvider,
                               DefaultProvider,
                               ImagerySearchProvider,
                               ProviderInterface)
-from .schema.project import MapflowProject
-from .entity.billing import BillingType
 from .entity.workflow_def import WorkflowDef
-from .schema import (PostSourceSchema,
-                     PostProcessingSchema,
-                     ProviderReturnSchema,
-                     ImageCatalogRequestSchema,
-                     ImageCatalogResponseSchema)
 from .errors import (ProcessingInputDataMissing,
                      BadProcessingInput,
                      PluginError,
                      ImageIdRequired,
                      AoiNotIntersectsImage,
                      ProxyIsAlreadySet)
-from .functional.geometry import clip_aoi_to_image_extent
-from .functional.project import ProjectService
-from .functional.processing import ProcessingService
+from .functional import layer_utils, helpers
 from .functional.auth import get_auth_id
-from . import constants
+from .functional.geometry import clip_aoi_to_image_extent
+from .functional.processing import ProcessingService
+from .functional.project import ProjectService
+from .http import (Http,
+                   get_error_report_body,
+                   data_catalog_message_parser,
+                   securewatch_message_parser,
+                   api_message_parser,
+                   )
+from .schema import (PostSourceSchema,
+                     PostProcessingSchema,
+                     ProviderReturnSchema,
+                     ImageCatalogRequestSchema,
+                     ImageCatalogResponseSchema)
 from .schema.catalog import PreviewType
+from .schema.project import MapflowProject
 
 
 class Mapflow(QObject):

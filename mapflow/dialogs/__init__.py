@@ -1,6 +1,6 @@
 from .dialogs import ErrorMessageWidget, ReviewDialog
-from .main_dialog import MainDialog
-from .provider_dialog import ProviderDialog
 from .login_dialog import MapflowLoginDialog
-from .project_dialog import UpdateProjectDialog, CreateProjectDialog
+from .main_dialog import MainDialog
 from .processing_dialog import UpdateProcessingDialog
+from .project_dialog import UpdateProjectDialog, CreateProjectDialog
+from .provider_dialog import ProviderDialog

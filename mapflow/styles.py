@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from qgis.core import QgsVectorLayer, QgsVectorTileLayer
 
 STYLES = {
