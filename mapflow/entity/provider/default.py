@@ -1,9 +1,10 @@
 from typing import Optional
-from .provider import ProviderInterface, SourceType, CRS
+
 from .provider import BasicAuth
-from ...schema import PostSourceSchema, PostProviderSchema
+from .provider import ProviderInterface, SourceType, CRS
 from ...constants import SENTINEL_OPTION_NAME, SEARCH_OPTION_NAME
-from ...errors.plugin_errors import PluginError, ImageIdRequired
+from ...errors.plugin_errors import ImageIdRequired
+from ...schema import PostSourceSchema, PostProviderSchema
 from ...schema.provider import ProviderReturnSchema
 
 

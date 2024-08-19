@@ -3,6 +3,7 @@ from PyQt5.QtNetwork import QNetworkReply
 
 from ..schema.processing import UpdateProcessingSchema
 
+
 class ProcessingService(QObject):
     processingUpdated = pyqtSignal()
 

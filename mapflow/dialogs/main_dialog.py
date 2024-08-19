@@ -1,20 +1,19 @@
 import sys
-
 from pathlib import Path
 from typing import Iterable, Optional, List
 
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QPalette, QStandardItemModel
-from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox, QCheckBox, QTableWidgetItem
+from PyQt5.QtGui import QPalette
+from PyQt5.QtWidgets import QWidget, QPushButton, QCheckBox, QTableWidgetItem
 from qgis.core import QgsMapLayerProxyModel, QgsMapLayer, QgsSettings
 
+from . import icons
+from ..config import config
 from ..entity.billing import BillingType
 from ..entity.provider import ProviderInterface
-from ..schema.project import MapflowProject
 from ..functional import helpers
-from ..config import config
-from . import icons
+from ..schema.project import MapflowProject
 
 ui_path = Path(__file__).parent/'static'/'ui'
 

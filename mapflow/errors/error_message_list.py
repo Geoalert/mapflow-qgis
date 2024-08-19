@@ -1,4 +1,3 @@
-from typing import Dict
 from PyQt5.QtCore import QObject
 
 

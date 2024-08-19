@@ -1,8 +1,8 @@
-from typing import Iterable, Union, Optional
-from enum import Enum
-from abc import ABC
-import os
 import json
+import os
+from abc import ABC
+from enum import Enum
+from typing import Iterable, Union, Optional
 
 
 class staticproperty(staticmethod):
