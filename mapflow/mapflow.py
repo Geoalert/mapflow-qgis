@@ -2229,6 +2229,14 @@ class Mapflow(QObject):
         preview.SetGCPs(gcp_list, crs.toWkt())
         preview.FlushCache()
         layer = QgsRasterLayer(f.name, f"{image_id} preview", 'gdal')
+        # If (for some reason) transparent band is not set automatically, but it exists, set it
+        if layer.bandCount() == 4:
+            if layer.renderer().alphaBand() != 4:
+                layer.renderer().setAlphaBand(4)
+        # Otherwise, for each band set "0" as No Data value
+        else:
+            for band in range(layer.bandCount()):
+                layer.dataProvider().setNoDataValue(band, 0)
         self.project.addMapLayer(layer)
 
     def preview_png_error_handler(self, response: QNetworkReply):
