@@ -2022,6 +2022,7 @@ class Mapflow(QObject):
             # In this case, when "data provider" is in the message, there can't be index error
         else:
             self.report_http_error(response,
+                                   response_body,
                                    self.tr('Processing creation failed'),
                                    error_message_parser=api_message_parser)
 
@@ -2917,6 +2918,7 @@ class Mapflow(QObject):
 
     def report_http_error(self,
                           response: QNetworkReply,
+                          response_body: str,
                           title: str = None,
                           error_message_parser: Optional[Callable] = None):
         """Prepare and show an error message for the supplied response.
@@ -2927,10 +2929,11 @@ class Mapflow(QObject):
             Default parser (if None) searches for 'message' section in response json
         """
         error_summary, email_body = get_error_report_body(response=response,
+                                                          response_body=response_body,
                                                           plugin_version=self.plugin_version,
                                                           error_message_parser=error_message_parser)
         ErrorMessageWidget(parent=QApplication.activeWindow(),
-                           text=error_summary,
+                           text= error_summary,
                            title=title,
                            email_body=email_body).show()
 

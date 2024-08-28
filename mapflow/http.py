@@ -184,10 +184,10 @@ def data_catalog_message_parser(response_body: str) -> str:
 
 def api_message_parser(response_body: str) -> str:
     error_data = json.loads(response_body)
-    message = ErrorMessage(code=error_data.get("code", "API_ERROR"),
+    message_widget = ErrorMessage(code=error_data.get("code", "API_ERROR"),
                            parameters=error_data.get("parameters", {}),
                            message=error_data.get("message", "Unknown error"))
-    return message.to_str()
+    return message_widget.message
 
 
 def securewatch_message_parser(response_body: str) -> str:
@@ -196,6 +196,7 @@ def securewatch_message_parser(response_body: str) -> str:
 
 
 def get_error_report_body(response: QNetworkReply,
+                          response_body: str,
                           plugin_version: str,
                           error_message_parser: Optional[Callable] = None):
     if error_message_parser is None:
@@ -203,7 +204,6 @@ def get_error_report_body(response: QNetworkReply,
     if response.error() == QNetworkReply.OperationCanceledError:
         send_error_text = show_error_text = 'Request timed out'
     else:
-        response_body = response.readAll().data().decode()
         try:  # handled standardized backend exception ({"code": <int>, "message": <str>})
             show_error_text = error_message_parser(response_body=response_body)
         except:  # unhandled error - plain text
