@@ -1539,13 +1539,17 @@ class Mapflow(QObject):
             return
 
         features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
-        if self.max_aois_per_processing >= len(features) > 0:
+        if layer.wkbType() == QgsWkbTypes.MultiPolygon:
+            geoms_count = layer_utils.count_polygons_in_layer(features)
+        else:
+            geoms_count = len(features)     
+        if self.max_aois_per_processing >= geoms_count:
             if len(features) == 1:
                 aoi = features[0].geometry()
             else:
                 aoi = QgsGeometry.collectGeometry([feature.geometry() for feature in features])
             self.calculate_aoi_area(aoi, layer.crs())
-        else:  # self.max_aois_per_processing < layer.featureCount():
+        else:  # self.max_aois_per_processing < number of polygons (as features and as parts of multipolygons):
             self.dlg.disable_processing_start(reason=self.tr('AOI must contain not more than'
                                                              ' {} polygons').format(self.max_aois_per_processing),
                                               clear_area=True)
