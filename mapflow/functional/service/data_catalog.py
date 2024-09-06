@@ -1,4 +1,4 @@
-from typing import Sequence, Union, Optional, Callable, List
+from typing import Sequence, Union, Optional, Callable, List, Tuple
 from pathlib import Path
 from uuid import UUID
 import json
@@ -111,55 +111,54 @@ class DataCatalogService(QObject):
 
 
     # Images CRUD
-    """ def upload_images(self,
+    def upload_images(self,
+                      response: QNetworkReply,
                       mosaic_id: UUID,
                       image_paths: Sequence[Union[Path, str]],
-                      upoaded: Sequence[Union[Path, str]],
-                      failed: Sequence[Union[Path, str]]):
+                      uploaded: Sequence[Union[Path, str]],
+                      failed: Sequence[Union[Path, str]]):             
         if not image_paths:
             return
-        
+
         image_to_upload = image_paths[0]
         non_uploaded = image_paths[1:]
 
-        self.api.upload_image(mosaic_id=mosaic_id,
-                              image_path=image_to_upload,
-                              callback=self.upload_images,
-                              callback_kwargs={'mosaic_id': mosaic_id,
-                                               'image_paths': non_uploaded,
-                                               'uploaded': list(upoaded) + [image_to_upload],
-                                               'failed': failed},
-                              error_handler=self.upload_images,
-                              error_handler_kwargs={'mosaic_id': mosaic_id,
-                                                    'image_paths': non_uploaded,
-                                                    'uploaded': upoaded,
-                                                    'failed': list(failed) + [image_to_upload]},
-                              )
+        if len(image_paths) == 1:
+            self.api.upload_image(mosaic_id=mosaic_id,
+                                  image_path=image_to_upload,
+                                  callback=self.upload_images_callback,
+                                  callback_kwargs={'uploaded': list(uploaded) + [image_to_upload],
+                                                   'failed': failed},
+                                  error_handler=self.upload_images_callback,
+                                  error_handler_kwargs={'uploaded': uploaded,
+                                                        'failed': list(failed) + [image_to_upload]},
+                                  )
+        else:
+            self.api.upload_image(mosaic_id=mosaic_id,
+                                  image_path=image_to_upload,
+                                  callback=self.upload_images,
+                                  callback_kwargs={'mosaic_id':mosaic_id,
+                                                   'image_paths': non_uploaded,
+                                                   'uploaded': list(uploaded) + [image_to_upload],
+                                                   'failed': failed},
+                                  error_handler=self.upload_images,
+                                  error_handler_kwargs={'mosaic_id':mosaic_id,
+                                                        'image_paths': non_uploaded,
+                                                        'uploaded': uploaded,
+                                                        'failed': list(failed) + [image_to_upload]},
+                                  )
 
-        for image_path in non_uploaded:
-            self.api.upload_image(mosaic_id=mosaic_id, image_path=image_path) """
-
-    def upload_images(self,
-                      mosaic_id: UUID,
-                      image_paths: Sequence[Union[Path, str]]):
-        if not image_paths:
-            return
-        for image_path in image_paths:
-            self.api.upload_image(mosaic_id=mosaic_id, 
-                                    image_path=image_path, 
-                                    callback=self.upload_images_callback, 
-                                    callback_kwargs={'mosaic_id': mosaic_id},
-                                    error_handler=self.api.upload_image_error_handler,
-                                    error_handler_kwargs={'image_path': image_path})
-
-    def upload_images_callback (self, response: QNetworkReply, mosaic_id: UUID):
+    def upload_images_callback (self, mosaic_id: UUID, uploaded: List[str], failed: List[str]):
+        if failed:
+            self.api.upload_image_error_handler(image_paths=failed)
+        mosaic_id = self.selected_mosaic().id
         self.get_mosaic(mosaic_id)
         self.get_mosaic_images(mosaic_id)
     
     def upload_images_to_mosaic(self):
         mosaic = self.selected_mosaic()
         image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), "Choose image to upload", filter='(TIF files *.tif; *.tiff)')[0]
-        self.upload_images(mosaic_id=mosaic.id, image_paths=image_paths) #, upoaded=[], failed=[])
+        self.upload_images(response=None, mosaic_id=mosaic.id, image_paths=image_paths, uploaded=[], failed=[])
 
     def get_mosaic_images(self, mosaic_id):
         self.api.get_mosaic_images(mosaic_id=mosaic_id, callback=self.get_mosaic_images_callback)
@@ -173,14 +172,49 @@ class DataCatalogService(QObject):
         self.api.get_image(image_id=image_id, callback=callback)
 
     def delete_image(self):
-        images = self.selected_images()
-        for image in images:
-            self.api.delete_image(image_id=image.id, callback=self.delete_image_callback)
+        images = {}
+        for image in self.selected_images():
+            images[image.id] = image.filename
+        self.delete_images(response = None, images=list(images.items()), deleted=[], failed=[])
 
-    def delete_image_callback(self, response: QNetworkReply):
-        mosaic = self.selected_mosaic()
-        self.get_mosaic(mosaic.id)
-        self.get_mosaic_images(mosaic.id)
+    def delete_images(self, 
+                      response: QNetworkReply, 
+                      images: List[Tuple[str, str]],
+                      deleted: List[str], 
+                      failed: List[str]):
+        if not images:
+            return
+
+        image_to_delete = images[0]
+        non_deleted = images[1:]
+
+        if len(images) == 1:
+            self.api.delete_image(image_id=image_to_delete[0],
+                                  callback=self.delete_images_callback,
+                                  callback_kwargs={'deleted': list(deleted) + [image_to_delete[1]],
+                                                   'failed': failed},
+                                  error_handler=self.delete_images_callback,
+                                  error_handler_kwargs={'deleted': deleted,
+                                                        'failed': list(failed) + [image_to_delete[1]]},
+                                  )
+        else:
+            self.api.delete_image(image_id=image_to_delete[0],
+                                  callback=self.delete_images,
+                                  callback_kwargs={'images': non_deleted,
+                                                   'deleted': list(deleted) + [image_to_delete[1]],
+                                                   'failed': failed},
+                                  error_handler=self.delete_images,
+                                  error_handler_kwargs={'images': non_deleted,
+                                                        'deleted': deleted,
+                                                        'failed': list(failed) + [image_to_delete[1]]},
+                                  )
+            
+    def delete_images_callback (self, mosaic_id: UUID, deleted: List[str], failed: List[str]):
+        if failed:
+            self.api.delete_image_error_handler(image_paths=failed)
+        mosaic_id = self.selected_mosaic().id
+        self.get_mosaic(mosaic_id)
+        self.get_mosaic_images(mosaic_id)
 
     def image_clicked(self):
         image = self.selected_image()
@@ -262,7 +296,6 @@ class DataCatalogService(QObject):
     # Selection
     def selected_mosaics(self, limit=None) -> List[MosaicReturnSchema]:
         ids = self.view.selected_mosaic_ids(limit=limit)
-        print(ids)
         # limit None will give full selection
         mosaics = [self.mosaics[id] for id in ids]
         return mosaics

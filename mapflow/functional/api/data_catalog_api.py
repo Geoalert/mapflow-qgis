@@ -113,25 +113,6 @@ class DataCatalogApi(QObject):
                             email_body=email_body).show()
 
     # Images CRUD
-    """ def upload_image(self,
-                     mosaic_id: UUID,
-                     image_path: Union[Path, str],
-                     callback: Callable = lambda *args: None,
-                     callback_kwargs: Optional[dict] = None,
-                     error_handler: Optional[Callable] = None,
-                     error_handler_kwargs: Optional[dict] = None):
-        body = self.create_upload_image_body(image_path = image_path)
-        url = f"{self.server}/rasters/mosaic/{mosaic_id}/image"
-        response = self.http.post(url=url,
-                       body=body,
-                       callback=callback,
-                       callback_kwargs=callback_kwargs,
-                       use_default_error_handler=error_handler is None,
-                       error_handler=error_handler,
-                       error_handler_kwargs=error_handler_kwargs or {}
-                       )
-        body.setParent(response) """
-    
     def upload_image(self,
                      mosaic_id: UUID,
                      image_path: Union[Path, str],
@@ -151,9 +132,9 @@ class DataCatalogApi(QObject):
                        )
         body.setParent(response)
 
-    def upload_image_error_handler(self, response: QNetworkReply, image_path: str):
+    def upload_image_error_handler(self, image_paths: list):
         ErrorMessageWidget(parent=QApplication.activeWindow(),
-                           text=f'Could not upload "{image_path}" to mosaic',
+                           text=f'Could not upload {str(image_paths)[1:-1]} to mosaic',
                            title=f'Error',
                            email_body='').show()
 
@@ -177,11 +158,25 @@ class DataCatalogApi(QObject):
                       use_default_error_handler=True
                       )
 
-    def delete_image(self, image_id: UUID, callback: Callable = lambda *args: None):
+    def delete_image(self,
+                     image_id: UUID,
+                     callback: Callable = lambda *args: None,
+                     callback_kwargs: Optional[dict] = None,
+                     error_handler: Optional[Callable] = None,
+                     error_handler_kwargs: Optional[dict] = None):
         self.http.delete(url=f"{self.server}/rasters/image/{image_id}",
-                      callback=callback,
-                      use_default_error_handler=True
-                      )
+                       callback=callback,
+                       callback_kwargs=callback_kwargs,
+                       use_default_error_handler=error_handler is None,
+                       error_handler=error_handler,
+                       error_handler_kwargs=error_handler_kwargs or {}
+                       )
+        
+    def delete_image_error_handler(self, image_paths: list):
+        ErrorMessageWidget(parent=QApplication.activeWindow(),
+                           text=f'Could not delete {str(image_paths)[1:-1]} from mosaic',
+                           title=f'Error',
+                           email_body='').show()
 
     def get_image_preview(self,
                           image: ImageReturnSchema,
