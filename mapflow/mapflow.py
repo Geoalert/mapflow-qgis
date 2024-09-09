@@ -1541,8 +1541,12 @@ class Mapflow(QObject):
         features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
         if layer.wkbType() == QgsWkbTypes.MultiPolygon:
             geoms_count = layer_utils.count_polygons_in_layer(features)
-        else:
-            geoms_count = len(features)     
+        elif layer.wkbType() == QgsWkbTypes.Polygon:
+            geoms_count = len(features)
+        else: # type of layer is not supported
+              # (but it shouldn't be the case, because point and line layers will not appear in AOI-combo,
+              # and collections are devided by QGIS into separate layers with different types)
+            raise ValueError("Only polygon and multipolyon layers supported for this operation")
         if self.max_aois_per_processing >= geoms_count:
             if len(features) == 1:
                 aoi = features[0].geometry()
