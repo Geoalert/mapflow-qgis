@@ -119,39 +119,34 @@ class DataCatalogService(QObject):
                       failed: Sequence[Union[Path, str]]):             
         if not image_paths:
             return
-
         image_to_upload = image_paths[0]
-        non_uploaded = image_paths[1:]
-
+        non_uploaded = image_paths[1:] 
         if len(image_paths) == 1:
-            self.api.upload_image(mosaic_id=mosaic_id,
-                                  image_path=image_to_upload,
-                                  callback=self.upload_images_callback,
-                                  callback_kwargs={'uploaded': list(uploaded) + [image_to_upload],
-                                                   'failed': failed},
-                                  error_handler=self.upload_images_callback,
-                                  error_handler_kwargs={'uploaded': uploaded,
-                                                        'failed': list(failed) + [image_to_upload]},
-                                  )
+            callback=self.upload_images_callback
         else:
-            self.api.upload_image(mosaic_id=mosaic_id,
-                                  image_path=image_to_upload,
-                                  callback=self.upload_images,
-                                  callback_kwargs={'mosaic_id':mosaic_id,
-                                                   'image_paths': non_uploaded,
-                                                   'uploaded': list(uploaded) + [image_to_upload],
-                                                   'failed': failed},
-                                  error_handler=self.upload_images,
-                                  error_handler_kwargs={'mosaic_id':mosaic_id,
-                                                        'image_paths': non_uploaded,
-                                                        'uploaded': uploaded,
-                                                        'failed': list(failed) + [image_to_upload]},
-                                  )
+            callback=self.upload_images
+        self.api.upload_image(mosaic_id=mosaic_id,
+                              image_path=image_to_upload,
+                              callback=callback,
+                              callback_kwargs={'mosaic_id':mosaic_id,
+                                               'image_paths': non_uploaded,
+                                               'uploaded': list(uploaded) + [image_to_upload],
+                                               'failed': failed},
+                              error_handler=callback,
+                              error_handler_kwargs={'mosaic_id':mosaic_id,
+                                                    'image_paths': non_uploaded,
+                                                    'uploaded': uploaded,
+                                                    'failed': list(failed) + [image_to_upload]},
+                              )
 
-    def upload_images_callback (self, mosaic_id: UUID, uploaded: List[str], failed: List[str]):
+    def upload_images_callback (self, 
+                                response: QNetworkReply, 
+                                mosaic_id: UUID, 
+                                image_paths: Sequence[Union[Path, str]], 
+                                uploaded: List[str], 
+                                failed: List[str]):
         if failed:
             self.api.upload_image_error_handler(image_paths=failed)
-        mosaic_id = self.selected_mosaic().id
         self.get_mosaic(mosaic_id)
         self.get_mosaic_images(mosaic_id)
     
@@ -184,32 +179,28 @@ class DataCatalogService(QObject):
                       failed: List[str]):
         if not images:
             return
-
         image_to_delete = images[0]
         non_deleted = images[1:]
-
         if len(images) == 1:
-            self.api.delete_image(image_id=image_to_delete[0],
-                                  callback=self.delete_images_callback,
-                                  callback_kwargs={'deleted': list(deleted) + [image_to_delete[1]],
-                                                   'failed': failed},
-                                  error_handler=self.delete_images_callback,
-                                  error_handler_kwargs={'deleted': deleted,
-                                                        'failed': list(failed) + [image_to_delete[1]]},
-                                  )
+            callback=self.delete_images_callback
         else:
-            self.api.delete_image(image_id=image_to_delete[0],
-                                  callback=self.delete_images,
-                                  callback_kwargs={'images': non_deleted,
-                                                   'deleted': list(deleted) + [image_to_delete[1]],
-                                                   'failed': failed},
-                                  error_handler=self.delete_images,
-                                  error_handler_kwargs={'images': non_deleted,
-                                                        'deleted': deleted,
-                                                        'failed': list(failed) + [image_to_delete[1]]},
-                                  )
+            callback=self.delete_images
+        self.api.delete_image(image_id=image_to_delete[0],
+                              callback=callback,
+                              callback_kwargs={'images': non_deleted,
+                                               'deleted': list(deleted) + [image_to_delete[1]],
+                                               'failed': failed},
+                              error_handler=callback,
+                              error_handler_kwargs={'images': non_deleted,
+                                                    'deleted': deleted,
+                                                    'failed': list(failed) + [image_to_delete[1]]},
+                              )        
             
-    def delete_images_callback (self, mosaic_id: UUID, deleted: List[str], failed: List[str]):
+    def delete_images_callback (self, 
+                                response: QNetworkReply, 
+                                images: List[Tuple[str, str]],
+                                deleted: List[str], 
+                                failed: List[str]):
         if failed:
             self.api.delete_image_error_handler(image_paths=failed)
         mosaic_id = self.selected_mosaic().id
