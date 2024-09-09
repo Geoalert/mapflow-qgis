@@ -1539,13 +1539,21 @@ class Mapflow(QObject):
             return
 
         features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
-        if self.max_aois_per_processing >= len(features) > 0:
+        if layer.wkbType() == QgsWkbTypes.MultiPolygon:
+            geoms_count = layer_utils.count_polygons_in_layer(features)
+        elif layer.wkbType() == QgsWkbTypes.Polygon:
+            geoms_count = len(features)
+        else: # type of layer is not supported
+              # (but it shouldn't be the case, because point and line layers will not appear in AOI-combo,
+              # and collections are devided by QGIS into separate layers with different types)
+            raise ValueError("Only polygon and multipolyon layers supported for this operation")
+        if self.max_aois_per_processing >= geoms_count:
             if len(features) == 1:
                 aoi = features[0].geometry()
             else:
                 aoi = QgsGeometry.collectGeometry([feature.geometry() for feature in features])
             self.calculate_aoi_area(aoi, layer.crs())
-        else:  # self.max_aois_per_processing < layer.featureCount():
+        else:  # self.max_aois_per_processing < number of polygons (as features and as parts of multipolygons):
             self.dlg.disable_processing_start(reason=self.tr('AOI must contain not more than'
                                                              ' {} polygons').format(self.max_aois_per_processing),
                                               clear_area=True)
@@ -2022,6 +2030,7 @@ class Mapflow(QObject):
             # In this case, when "data provider" is in the message, there can't be index error
         else:
             self.report_http_error(response,
+                                   response_body,
                                    self.tr('Processing creation failed'),
                                    error_message_parser=api_message_parser)
 
@@ -2925,6 +2934,7 @@ class Mapflow(QObject):
 
     def report_http_error(self,
                           response: QNetworkReply,
+                          response_body: str,
                           title: str = None,
                           error_message_parser: Optional[Callable] = None):
         """Prepare and show an error message for the supplied response.
@@ -2935,10 +2945,11 @@ class Mapflow(QObject):
             Default parser (if None) searches for 'message' section in response json
         """
         error_summary, email_body = get_error_report_body(response=response,
+                                                          response_body=response_body,
                                                           plugin_version=self.plugin_version,
                                                           error_message_parser=error_message_parser)
         ErrorMessageWidget(parent=QApplication.activeWindow(),
-                           text=error_summary,
+                           text= error_summary,
                            title=title,
                            email_body=email_body).show()
 

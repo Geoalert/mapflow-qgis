@@ -150,6 +150,12 @@ def calculate_aoi_area(aoi: QgsGeometry,
     aoi_size = calculator.measureArea(aoi) / 10 ** 6  # sq. m to sq.km
     return aoi_size
 
+def count_polygons_in_layer(features: list) -> int:
+    """ Count polygon geometries in a multipolygon layer (instead of counting features).
+    :param features: A list of fetures, obtained by "list(layer.getFeatures())"
+    """
+    count = sum(len(feature.geometry().asMultiPolygon()) for feature in features)
+    return count
 
 def collect_geometry_from_layer(layer: QgsMapLayer) -> QgsGeometry:
     features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
