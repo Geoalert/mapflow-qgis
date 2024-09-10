@@ -92,7 +92,7 @@ class DataCatalogView(QObject):
             name_item = QTableWidgetItem()
             name_item.setData(Qt.DisplayRole, image.filename)
             self.dlg.imageTable.setItem(row, 1, name_item)
-        self.dlg.imageTable.setHorizontalHeaderLabels(["Image"])
+        self.dlg.imageTable.setHorizontalHeaderLabels(["ID", "Image"])
         if len(images) == 0:
             self.dlg.previewMosaicButton.setEnabled(False)
         else:
