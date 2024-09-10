@@ -1,4 +1,4 @@
-from typing import Sequence, Union, Optional, Callable, List
+from typing import Sequence, Union, Optional, Callable, List, Tuple
 from pathlib import Path
 from uuid import UUID
 import json
@@ -9,7 +9,7 @@ from osgeo import gdal
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
-from PyQt5.QtWidgets import QMessageBox, QApplication
+from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog
 from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsRasterLayer, QgsRectangle
 
 from ...dialogs.main_dialog import MainDialog
@@ -86,7 +86,10 @@ class DataCatalogService(QObject):
     def update_mosaic(self):  
         mosaic = self.selected_mosaic()
         dialog = UpdateMosaicDialog(self.dlg)
-        dialog.accepted.connect(lambda: self.api.update_mosaic(mosaic_id=mosaic.id, mosaic=dialog.mosaic(), callback=self.update_mosaic_callback, callback_kwargs={'mosaic': mosaic}))
+        dialog.accepted.connect(lambda: self.api.update_mosaic(mosaic_id=mosaic.id, 
+                                                               mosaic=dialog.mosaic(), 
+                                                               callback=self.update_mosaic_callback, 
+                                                               callback_kwargs={'mosaic': mosaic}))
         dialog.setup(mosaic)
         dialog.deleteLater()
 
@@ -129,33 +132,49 @@ class DataCatalogService(QObject):
 
 
     # Images CRUD
+    def upload_images_to_mosaic(self):
+        mosaic = self.selected_mosaic()
+        image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), "Choose image to upload", filter='(TIF files *.tif; *.tiff)')[0]
+        self.upload_images(response=None, mosaic_id=mosaic.id, image_paths=image_paths, uploaded=[], failed=[])
+
     def upload_images(self,
+                      response: QNetworkReply,
                       mosaic_id: UUID,
                       image_paths: Sequence[Union[Path, str]],
-                      upoaded: Sequence[Union[Path, str]],
-                      failed: Sequence[Union[Path, str]]):
+                      uploaded: Sequence[Union[Path, str]],
+                      failed: Sequence[Union[Path, str]]):             
         if not image_paths:
             return
-
         image_to_upload = image_paths[0]
-        non_uploaded = image_paths[1:]
-
+        non_uploaded = image_paths[1:] 
+        if len(image_paths) == 1:
+            callback=self.upload_images_callback
+        else:
+            callback=self.upload_images
         self.api.upload_image(mosaic_id=mosaic_id,
                               image_path=image_to_upload,
-                              callback=self.upload_images,
-                              callback_kwargs={'mosaic_id': mosaic_id,
+                              callback=callback,
+                              callback_kwargs={'mosaic_id':mosaic_id,
                                                'image_paths': non_uploaded,
-                                               'uploaded': list(upoaded) + [image_to_upload],
+                                               'uploaded': list(uploaded) + [image_to_upload],
                                                'failed': failed},
-                              error_handler=self.upload_images,
-                              error_handler_kwargs={'mosaic_id': mosaic_id,
+                              error_handler=callback,
+                              error_handler_kwargs={'mosaic_id':mosaic_id,
                                                     'image_paths': non_uploaded,
-                                                    'uploaded': upoaded,
+                                                    'uploaded': uploaded,
                                                     'failed': list(failed) + [image_to_upload]},
-                              )
+                             )
 
-        for image_path in non_uploaded:
-            self.api.upload_image(mosaic_id=mosaic_id, image_path=image_path)
+    def upload_images_callback (self, 
+                                response: QNetworkReply, 
+                                mosaic_id: UUID, 
+                                image_paths: Sequence[Union[Path, str]], 
+                                uploaded: List[str], 
+                                failed: List[str]):
+        if failed:
+            self.api.upload_image_error_handler(image_paths=failed)
+        self.get_mosaic(mosaic_id)
+        self.get_mosaic_images(mosaic_id)
 
     def get_mosaic_images(self, mosaic_id):
         self.api.get_mosaic_images(mosaic_id=mosaic_id, callback=self.get_mosaic_images_callback)
@@ -168,11 +187,46 @@ class DataCatalogService(QObject):
     def get_image(self, image_id: UUID, callback: Callable):
         self.api.get_image(image_id=image_id, callback=callback)
 
-    def delete_image(self, image_id: UUID):
-        self.api.delete_image(image_id=image_id, callback=self.delete_image_callback)
+    def delete_image(self):
+        images = {}
+        for image in self.selected_images():
+            images[image.id] = image.filename
+        self.delete_images(response = None, images=list(images.items()), deleted=[], failed=[])
 
-    def delete_image_callback(self, response: QNetworkReply):
-        pass
+    def delete_images(self, 
+                      response: QNetworkReply, 
+                      images: List[Tuple[str, str]],
+                      deleted: List[str], 
+                      failed: List[str]):
+        if not images:
+            return
+        image_to_delete = images[0]
+        non_deleted = images[1:]
+        if len(images) == 1:
+            callback=self.delete_images_callback
+        else:
+            callback=self.delete_images
+        self.api.delete_image(image_id=image_to_delete[0],
+                              callback=callback,
+                              callback_kwargs={'images': non_deleted,
+                                               'deleted': list(deleted) + [image_to_delete[1]],
+                                               'failed': failed},
+                              error_handler=callback,
+                              error_handler_kwargs={'images': non_deleted,
+                                                    'deleted': deleted,
+                                                    'failed': list(failed) + [image_to_delete[1]]},
+                             )        
+
+    def delete_images_callback (self, 
+                                response: QNetworkReply, 
+                                images: List[Tuple[str, str]],
+                                deleted: List[str], 
+                                failed: List[str]):
+        if failed:
+            self.api.delete_image_error_handler(image_paths=failed)
+        mosaic_id = self.selected_mosaic().id
+        self.get_mosaic(mosaic_id)
+        self.get_mosaic_images(mosaic_id)
 
     def image_clicked(self):
         image = self.selected_image()
@@ -189,8 +243,8 @@ class DataCatalogService(QObject):
         self.view.full_image_info(image=image)
 
     def get_image_preview_s(self,
-                           image: ImageReturnSchema,
-                           size: PreviewSize):
+                            image: ImageReturnSchema,
+                            size: PreviewSize):
         self.api.get_image_preview(image=image, size=PreviewSize.small, callback=self.get_image_preview_s_callback)
 
     def get_image_preview_s_callback(self, response: QNetworkReply):
@@ -206,10 +260,10 @@ class DataCatalogService(QObject):
             return
 
     def display_image_preview(self,
-                                response: QNetworkReply,
-                                extent: QgsRectangle,
-                                crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857"),
-                                image_id: str = ""):
+                              response: QNetworkReply,
+                              extent: QgsRectangle,
+                              crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857"),
+                              image_id: str = ""):
         with open(Path(self.temp_dir)/os.urandom(32).hex(), mode='wb') as f:
             f.write(response.readAll().data())
         preview = gdal.Open(f.name)
@@ -302,3 +356,4 @@ class DataCatalogService(QObject):
             self.dlg.deleteImageButton.setEnabled(True)
             self.dlg.imagePreviewButton.setEnabled(True)
             self.dlg.imageInfoButton.setEnabled(True)
+            self.image_clicked()
