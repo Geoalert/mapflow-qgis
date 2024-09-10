@@ -28,6 +28,8 @@ class DataCatalogController(QObject):
         # Image
         self.dlg.imageTable.cellClicked.connect(self.service.image_clicked)
         self.dlg.imagePreviewButton.clicked.connect(self.service.get_image_preview_l)
+        self.dlg.addImageButton.clicked.connect(self.service.upload_images_to_mosaic)
+        self.dlg.deleteImageButton.clicked.connect(self.service.delete_image)
         self.dlg.imageInfoButton.clicked.connect(self.service.image_info)
         self.dlg.imageTable.selectionModel().selectionChanged.connect(self.service.check_image_selection)
 

@@ -2,7 +2,7 @@ from typing import List
 
 from ...dialogs.main_dialog import MainDialog
 from PyQt5.QtCore import QObject, Qt
-from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox, QTableWidgetItem, QMessageBox, QApplication
+from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox, QTableWidget, QTableWidgetItem, QMessageBox, QApplication
 from PyQt5.QtGui import QPixmap
 
 from ...schema.data_catalog import MosaicReturnSchema, ImageReturnSchema
@@ -18,6 +18,7 @@ class DataCatalogView(QObject):
 
     def display_mosaics(self, mosaics: list[MosaicReturnSchema]):
         self.dlg.mosaicTable.setRowCount(len(mosaics))
+        self.dlg.mosaicTable.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         for row, mosaic in enumerate(mosaics):
             id_item = QTableWidgetItem()
             id_item.setData(Qt.DisplayRole, mosaic.id)
@@ -81,12 +82,21 @@ class DataCatalogView(QObject):
 
     def display_images(self, images: list[ImageReturnSchema]):
         self.dlg.imageTable.setRowCount(len(images))
-        self.dlg.imageTable.setColumnCount(1)
+        self.dlg.imageTable.setColumnCount(2)
+        self.dlg.imageTable.setColumnHidden(0, True)
+        self.dlg.imageTable.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         for row, image in enumerate(images):
             table_item = QTableWidgetItem()
             table_item.setData(Qt.DisplayRole, image.id)
             self.dlg.imageTable.setItem(row, 0, table_item)
+            name_item = QTableWidgetItem()
+            name_item.setData(Qt.DisplayRole, image.filename)
+            self.dlg.imageTable.setItem(row, 1, name_item)
         self.dlg.imageTable.setHorizontalHeaderLabels(["Image"])
+        if len(images) == 0:
+            self.dlg.previewMosaicButton.setEnabled(False)
+        else:
+            self.dlg.previewMosaicButton.setEnabled(True)
 
     def show_preview_s(self, preview_image):
         self.dlg.imagePreview.setPixmap(QPixmap.fromImage(preview_image))

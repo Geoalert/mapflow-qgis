@@ -42,18 +42,20 @@ class DataCatalogApi(QObject):
                        headers={},
                        callback=callback,
                        use_default_error_handler=True,
-                       timeout=5)
+                       timeout=5
+                      )
 
     def get_mosaics(self, callback: Callable):
         self.http.get(url=f"{self.server}/rasters/mosaic",
                       callback=callback,
-                      use_default_error_handler=True)
+                      use_default_error_handler=True
+                     )
 
     def get_mosaic(self, mosaic_id: UUID, callback: Callable):
         self.http.get(url=f"{self.server}/rasters/mosaic/{mosaic_id}",
                       callback=callback,
                       use_default_error_handler=True
-                      )
+                     )
     
     def update_mosaic(self, mosaic_id, mosaic: MosaicUpdateSchema, callback: Callable, callback_kwargs: Optional[dict] = None):
         self.http.put(url=f"{self.server}/rasters/mosaic/{mosaic_id}",
@@ -62,24 +64,24 @@ class DataCatalogApi(QObject):
                        callback=callback,
                        callback_kwargs=callback_kwargs,
                        use_default_error_handler=True,
-                       timeout=5)
+                       timeout=5
+                      )
 
     def delete_mosaic(self,
                       mosaic_id: UUID,
                       callback: Callable = lambda *args: None,
                       callback_kwargs: Optional[dict] = None):
         self.http.delete(url=f"{self.server}/rasters/mosaic/{mosaic_id}",
-                          callback=callback,
-                          use_default_error_handler=True,
-                          callback_kwargs=callback_kwargs or {}
-                      )
+                         callback=callback,
+                         use_default_error_handler=True,
+                         callback_kwargs=callback_kwargs or {}
+                        )
         
     def request_mosaic_extent(self,
-                             tilejson_uri: str,
-                             layer: QgsMapLayer,
-                             errors: bool = False,
-                             mosaic_id: Optional[str] = None
-                             ):
+                              tilejson_uri: str,
+                              layer: QgsMapLayer,
+                              errors: bool = False,
+                              mosaic_id: Optional[str] = None):
         self.http.get(url=tilejson_uri,
                       callback=self.add_mosaic_with_extent,
                       callback_kwargs={"layer": layer,
@@ -90,14 +92,13 @@ class DataCatalogApi(QObject):
                                             "mosaic_id": mosaic_id,
                                             "errors": errors},
                       use_default_error_handler=False,
-                      )
+                     )
     
     def add_mosaic_with_extent(self,
-                                response: QNetworkReply,
-                                layer: QgsMapLayer,
-                                errors: bool = False,
-                                mosaic_id: Optional[str] = None
-                                ) -> None:
+                               response: QNetworkReply,
+                               layer: QgsMapLayer,
+                               errors: bool = False,
+                               mosaic_id: Optional[str] = None) -> None:
         if response.error() != QNetworkReply.NoError:
             errors = True
         else:
@@ -117,9 +118,9 @@ class DataCatalogApi(QObject):
             email_body = "Error while loading a mosaic." \
                         f"Mosaic id: {mosaic_id}"
             ErrorMessageWidget(parent=QApplication.activeWindow(),
-                            text=error_summary,
-                            title=title,
-                            email_body=email_body).show()
+                               text=error_summary,
+                               title=title,
+                               email_body=email_body).show()
 
     # Images CRUD
     def upload_image(self,
@@ -131,32 +132,53 @@ class DataCatalogApi(QObject):
                      error_handler_kwargs: Optional[dict] = None):
         body = self.create_upload_image_body(image_path = image_path)
         url = f"{self.server}/rasters/mosaic/{mosaic_id}/image"
-        self.http.post(url=url,
-                       body=body,
-                       callback=callback,
-                       callback_kwargs=callback_kwargs,
-                       use_default_error_handler=error_handler is None,
-                       error_handler=error_handler,
-                       error_handler_kwargs=error_handler_kwargs or {}
-                       )
+        response = self.http.post(url=url,
+                                  body=body,
+                                  callback=callback,
+                                  callback_kwargs=callback_kwargs,
+                                  use_default_error_handler=error_handler is None,
+                                  error_handler=error_handler,
+                                  error_handler_kwargs=error_handler_kwargs or {}
+                                 )
+        body.setParent(response)
+
+    def upload_image_error_handler(self, image_paths: list):
+        ErrorMessageWidget(parent=QApplication.activeWindow(),
+                           text=f'Could not upload {str(image_paths)[1:-1]} to mosaic',
+                           title=f'Error',
+                           email_body='').show()
 
     def get_mosaic_images(self, mosaic_id: UUID, callback: Callable):
         self.http.get(url=f"{self.server}/rasters/mosaic/{mosaic_id}/image",
                       callback=callback,
                       use_default_error_handler=True
-                      )
+                     )
 
     def get_image(self, image_id: UUID, callback: Callable):
         self.http.get(url=f"{self.server}/rasters/image/{image_id}",
                       callback=callback,
                       use_default_error_handler=True
-                      )
-
-    def delete_image(self, image_id: UUID, callback: Callable = lambda *args: None):
+                     )
+        
+    def delete_image(self,
+                     image_id: UUID,
+                     callback: Callable = lambda *args: None,
+                     callback_kwargs: Optional[dict] = None,
+                     error_handler: Optional[Callable] = None,
+                     error_handler_kwargs: Optional[dict] = None):
         self.http.delete(url=f"{self.server}/rasters/image/{image_id}",
-                      callback=callback,
-                      use_default_error_handler=True
-                      )
+                         callback=callback,
+                         callback_kwargs=callback_kwargs,
+                         use_default_error_handler=error_handler is None,
+                         error_handler=error_handler,
+                         error_handler_kwargs=error_handler_kwargs or {}
+                        )
+
+    def delete_image_error_handler(self, image_paths: list):
+        ErrorMessageWidget(parent=QApplication.activeWindow(),
+                           text=f'Could not delete {str(image_paths)[1:-1]} from mosaic',
+                           title=f'Error',
+                           email_body='').show()
 
     def get_image_preview(self,
                           image: ImageReturnSchema,
@@ -167,7 +189,7 @@ class DataCatalogApi(QObject):
                       callback=callback,
                       use_default_error_handler=False,
                       error_handler=self.preview_s_error_handler
-                      )
+                     )
 
     def preview_s_error_handler(self, response: QNetworkReply):
         self.dlg.imagePreview.setText("Preview is unavailable")
@@ -182,7 +204,8 @@ class DataCatalogApi(QObject):
                       use_default_error_handler=False,
                       error_handler=self.image_preview_l_error_handler,
                       callback_kwargs={"extent": extent,
-                                       "image_id": image_id})
+                                       "image_id": image_id}
+                     )
 
     def image_preview_l_error_handler(self, response: QNetworkReply):
         error_summary, email_body = get_error_report_body(response=response,
@@ -204,7 +227,7 @@ class DataCatalogApi(QObject):
                        callback_kwargs=callback_kwargs,
                        body=body,
                        timeout=3600  # one hour
-                       )
+                      )
 
     # Status
     def get_user_limit(self, callback):
