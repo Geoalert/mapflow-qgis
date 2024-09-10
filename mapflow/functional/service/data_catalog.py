@@ -334,4 +334,3 @@ class DataCatalogService(QObject):
             self.dlg.deleteImageButton.setEnabled(True)
             self.dlg.imagePreviewButton.setEnabled(True)
             self.dlg.imageInfoButton.setEnabled(True)
-            self.image_clicked()
