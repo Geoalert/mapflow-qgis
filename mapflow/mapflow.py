@@ -1539,9 +1539,9 @@ class Mapflow(QObject):
             return
 
         features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
-        if layer.wkbType() == QgsWkbTypes.MultiPolygon:
+        if layer.wkbType() == QgsWkbTypes.MultiPolygon or QgsWkbTypes.MultiPolygonZ or QgsWkbTypes.MultiPolygonZM:
             geoms_count = layer_utils.count_polygons_in_layer(features)
-        elif layer.wkbType() == QgsWkbTypes.Polygon:
+        elif layer.wkbType() == QgsWkbTypes.Polygon or QgsWkbTypes.PolygonZ or QgsWkbTypes.PolygonZM:
             geoms_count = len(features)
         else: # type of layer is not supported
               # (but it shouldn't be the case, because point and line layers will not appear in AOI-combo,
