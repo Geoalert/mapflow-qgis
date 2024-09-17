@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1033</width>
+    <width>1110</width>
     <height>550</height>
    </rect>
   </property>
@@ -142,10 +142,10 @@
            <property name="maxVisibleItems">
             <number>30</number>
            </property>
-           <property name="allowEmptyLayer" stdset="0">
+           <property name="allowEmptyLayer">
             <bool>false</bool>
            </property>
-           <property name="showCrs" stdset="0">
+           <property name="showCrs">
             <bool>true</bool>
            </property>
           </widget>
@@ -186,7 +186,7 @@
          <item>
           <widget class="QCheckBox" name="useImageExtentAsAoi">
            <property name="text">
-            <string>Use image extent</string>
+            <string>Use image / mosaic extent</string>
            </property>
           </widget>
          </item>
@@ -252,10 +252,10 @@
              <height>16777215</height>
             </size>
            </property>
-           <property name="showCrs" stdset="0">
+           <property name="showCrs">
             <bool>true</bool>
            </property>
-           <property name="excludedProviders" stdset="0">
+           <property name="excludedProviders">
             <stringlist notr="true">
              <string>wms</string>
              <string>postgresraster</string>
@@ -1260,7 +1260,7 @@
                 <property name="checked">
                  <bool>false</bool>
                 </property>
-                <property name="collapsed" stdset="0">
+                <property name="collapsed">
                  <bool>true</bool>
                 </property>
                 <layout class="QGridLayout" name="layoutMetadataFilters" columnstretch="0,1,0">
@@ -1362,6 +1362,233 @@
               </item>
              </layout>
             </widget>
+           </item>
+          </layout>
+         </widget>
+         <widget class="QWidget" name="catalogTab">
+          <attribute name="title">
+           <string>My imagery</string>
+          </attribute>
+          <layout class="QVBoxLayout" name="verticalLayout_12">
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_11">
+             <item>
+              <layout class="QVBoxLayout" name="verticalLayout_8">
+               <item>
+                <layout class="QHBoxLayout" name="horizontalLayout_15">
+                 <property name="bottomMargin">
+                  <number>11</number>
+                 </property>
+                 <item>
+                  <widget class="QLabel" name="label_6">
+                   <property name="text">
+                    <string>Mosaics</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="addMosaicButton">
+                   <property name="text">
+                    <string>+</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="deleteMosaicButton">
+                   <property name="text">
+                    <string>-</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item>
+                <widget class="QTableWidget" name="mosaicTable">
+                 <property name="minimumSize">
+                  <size>
+                   <width>100</width>
+                   <height>0</height>
+                  </size>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="mosaicInfo">
+                 <property name="text">
+                  <string>Mosaic info</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <layout class="QHBoxLayout" name="horizontalLayout_13">
+                 <property name="topMargin">
+                  <number>0</number>
+                 </property>
+                 <item>
+                  <widget class="QPushButton" name="previewMosaicButton">
+                   <property name="text">
+                    <string>preview</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="editMosaicButton">
+                   <property name="text">
+                    <string>edit</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+              </layout>
+             </item>
+             <item>
+              <layout class="QVBoxLayout" name="verticalLayout_9">
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <layout class="QHBoxLayout" name="horizontalLayout_16">
+                 <property name="bottomMargin">
+                  <number>11</number>
+                 </property>
+                 <item>
+                  <widget class="QLabel" name="label_7">
+                   <property name="text">
+                    <string>Images</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="addImageButton">
+                   <property name="text">
+                    <string>+</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="deleteImageButton">
+                   <property name="text">
+                    <string>-</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item>
+                <widget class="QTableWidget" name="imageTable">
+                 <property name="minimumSize">
+                  <size>
+                   <width>100</width>
+                   <height>0</height>
+                  </size>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="imageDetails">
+                 <property name="text">
+                  <string>Image info</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <layout class="QHBoxLayout" name="horizontalLayout_12">
+                 <item>
+                  <widget class="QPushButton" name="imagePreviewButton">
+                   <property name="text">
+                    <string>preview</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="imageInfoButton">
+                   <property name="text">
+                    <string>info</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+              </layout>
+             </item>
+             <item>
+              <layout class="QVBoxLayout" name="verticalLayout_10">
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <widget class="QLabel" name="label_8">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="text">
+                  <string>Preview</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="imagePreview">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="minimumSize">
+                  <size>
+                   <width>256</width>
+                   <height>256</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>256</width>
+                   <height>256</height>
+                  </size>
+                 </property>
+                 <property name="frameShape">
+                  <enum>QFrame::NoFrame</enum>
+                 </property>
+                 <property name="text">
+                  <string/>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QRadioButton" name="radioButton_2">
+                 <property name="text">
+                  <string>Use Mosaic</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QRadioButton" name="radioButton">
+                 <property name="text">
+                  <string>Use Image</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_14">
+             <property name="topMargin">
+              <number>11</number>
+             </property>
+             <item>
+              <widget class="QLabel" name="dataLimit">
+               <property name="text">
+                <string>Your data: 0 B. Free space: 1 GB</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </item>
           </layout>
          </widget>
@@ -1565,7 +1792,7 @@
                <item>
                 <layout class="QHBoxLayout" name="horizontalLayout_11" stretch="1,0">
                  <property name="spacing">
-                  <number>-1</number>
+                  <number>7</number>
                  </property>
                  <property name="bottomMargin">
                   <number>0</number>

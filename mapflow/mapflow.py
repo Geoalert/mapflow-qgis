@@ -26,7 +26,6 @@ from qgis.core import (
 from qgis.gui import QgsMessageBarItem
 
 from . import constants
-from .config import Config
 from .dialogs import (MainDialog,
                       MapflowLoginDialog,
                       ErrorMessageWidget,
@@ -37,6 +36,8 @@ from .dialogs import (MainDialog,
                       UpdateProcessingDialog,
                       )
 from .dialogs.icons import plugin_icon
+from .functional.controller.data_catalog_controller import DataCatalogController
+from .config import Config
 from .entity.billing import BillingType
 from .entity.processing import parse_processings_request, Processing, ProcessingHistory, updated_processings
 from .entity.provider import (UsersProvider,
@@ -59,6 +60,7 @@ from .functional.auth import get_auth_id
 from .functional.geometry import clip_aoi_to_image_extent
 from .functional.processing import ProcessingService
 from .functional.project import ProjectService
+from .functional.service.data_catalog import DataCatalogService
 from .http import (Http,
                    get_error_report_body,
                    data_catalog_message_parser,
@@ -183,6 +185,19 @@ class Mapflow(QObject):
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or self.config.DEFAULT_ZOOM))
 
         # Initialize services
+        self.result_loader = layer_utils.ResultsLoader(iface=self.iface,
+                                                       maindialog=self.dlg,
+                                                       http=self.http,
+                                                       server=self.server,
+                                                       project=self.project,
+                                                       settings=self.settings,
+                                                       plugin_name=self.plugin_name,
+                                                       temp_dir=self.temp_dir
+                                                       )
+
+        self.data_catalog_service = DataCatalogService(self.http, self.server, self.dlg, self.iface, self.result_loader, self.plugin_version)
+        self.data_catalog_controller = DataCatalogController(self.dlg, self.data_catalog_service)
+
         self.project_service = ProjectService(self.http, self.server)
         self.project_service.projectsUpdated.connect(self.update_projects)
 
@@ -333,7 +348,7 @@ class Mapflow(QObject):
                                                        project=self.project,
                                                        settings=self.settings,
                                                        plugin_name=self.plugin_name,
-                                                       temp_dir=self.temp_dir_name
+                                                       temp_dir=self.temp_dir
                                                        )
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
@@ -2219,9 +2234,9 @@ class Mapflow(QObject):
             # If we won't find a different and more accurate solution
             # I would suggest creating a dictionary, storing x and y coordinates as values
             # Then we can check min and max coords from bounding box
-            # And scecify that the point that has the same x as xmin is SW, xmax - NE, 
+            # And scecify that the point that has the same x as xmin is SW, xmax - NE,
             # Same y as ymin - SE, ymax - NW
-        # Assuming raster is n*m size, where n is width and m is height, we get: 
+        # Assuming raster is n*m size, where n is width and m is height, we get:
             # NW is a 1 point in a list (clockwise) and 0,0 - in our image
             # NE - 2 and n,0
             # SW - 4 and 0,m
@@ -3018,6 +3033,7 @@ class Mapflow(QObject):
             self.setup_processings_table()
         else:
             self.project_service.get_projects(current_project_id=self.project_id)
+            self.data_catalog_service.get_mosaics()
         self.dlg.setup_for_billing(self.billing_type)
         self.dlg.show()
         self.user_status_update_timer.start()
@@ -3123,6 +3139,12 @@ class Mapflow(QObject):
         dialog.setup(processing)
         dialog.deleteLater()
 
+    def create_project(self):
+        dialog = CreateProjectDialog(self.dlg)
+        dialog.accepted.connect(lambda: self.project_service.create_project(dialog.project()))
+        dialog.setup()
+        dialog.deleteLater()
+
     @property
     def basemap_providers(self):
         return ProvidersList(self.default_providers + self.user_providers)
@@ -3146,7 +3168,6 @@ class Mapflow(QObject):
         if not self.version_ok:
             self.dlg.close()
             return
-
 
         if self.logged_in:
             # with any auth method
