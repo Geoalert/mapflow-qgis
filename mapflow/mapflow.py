@@ -243,6 +243,8 @@ class Mapflow(QObject):
         # Calculate AOI size
         self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area_polygon_layer)
         self.dlg.useImageExtentAsAoi.toggled.connect(self.calculate_aoi_area_use_image_extent)
+        self.dlg.mosaicTable.cellClicked.connect(self.calculate_aoi_area_catalog)
+        self.dlg.imageTable.cellClicked.connect(self.calculate_aoi_area_catalog)
         self.monitor_polygon_layer_feature_selection([
             self.project.mapLayer(layer_id) for layer_id in self.project.mapLayers(validOnly=True)
         ])
@@ -1610,13 +1612,16 @@ class Mapflow(QObject):
     def calculate_aoi_area_catalog(self) -> None:
         """Get the AOI size when a new mosaic or image in 'My imagery' is selected.
         """
-        image = self.data_catalog_service.selected_image()
-        mosaic = self.data_catalog_service.selected_mosaic()
-        if image:
-            self.calculate_aoi_area(QgsGeometry().fromWkt(image.footprint), helpers.WGS84)
-        elif mosaic:
-            # Doesn't work!!!
-            self.calculate_aoi_area(QgsGeometry().fromWkt(mosaic.rasterLayer.tileJsonUrl), helpers.WGS84)
+        provider = self.providers[self.dlg.providerIndex()]
+        if isinstance(provider, MyImageryProvider):
+            image = self.data_catalog_service.selected_image()
+            mosaic = self.data_catalog_service.selected_mosaic()
+            if image:
+                self.calculate_aoi_area(QgsGeometry().fromWkt(image.footprint), helpers.WGS84)
+            elif mosaic and not image:
+                #Doesn't work!!!
+                #self.calculate_aoi_area(QgsGeometry().fromWkt(mosaic.rasterLayer.tileJsonUrl), helpers.WGS84)
+                return
 
     def calculate_aoi_area_selection(self, _: List[QgsFeature]) -> None:
         """Get the AOI size when the selection changed on a polygon layer.
@@ -1651,15 +1656,11 @@ class Mapflow(QObject):
         selected_image = self.dlg.metadataTable.selectedItems()
         # This is AOI with respect to selected Maxar images and raster image extent
         try:
-            provider = self.providers[provider_index]
-            if isinstance(provider, MyImageryProvider):
-                real_aoi = self.calculate_aoi_area_catalog()
-            else:
-                real_aoi = self.get_aoi(provider_index=provider_index,
-                                        raster_layer=imagery,
-                                        use_image_extent_as_aoi=use_image_extent_as_aoi,
-                                        selected_image=selected_image,
-                                        selected_aoi=self.aoi)
+            real_aoi = self.get_aoi(provider_index=provider_index,
+                                    raster_layer=imagery,
+                                    use_image_extent_as_aoi=use_image_extent_as_aoi,
+                                    selected_image=selected_image,
+                                    selected_aoi=self.aoi)
         except ImageIdRequired:
             # AOI is OK, but image ID is not selected,
             # in this case we should use selected AOI without cut by AOI
@@ -1929,6 +1930,33 @@ class Mapflow(QObject):
         selected_image = self.dlg.metadataTable.selectedItems()
         wd_name = self.dlg.modelCombo.currentText()
         wd = self.workflow_defs.get(wd_name)
+
+        provider = self.providers[self.dlg.providerCombo.currentIndex()]
+        if isinstance(provider, MyImageryProvider):
+            image = self.data_catalog_service.selected_image()
+            mosaic = self.data_catalog_service.selected_mosaic()
+            if image:
+                aoi = QgsGeometry().fromWkt(image.footprint)
+            elif mosaic:
+                #self.tileJson_to_aoi(tileJsonUrl=mosaic.rasterLayer.tileJsonUrl)
+                layer = QgsVectorLayer('Polygon?crs=epsg:4326', 'Mosaic_Extent', 'memory')
+                layer.startEditing()
+                for i in self.data_catalog_service.get_mosaic_images(mosaic.id):
+                    #geoms.append(QgsGeometry().fromWkt(i.footprint))
+                    #geom = QgsGeometry().fromWkt(i.footprint)
+                    geom = QgsGeometry().fromWkt(i.footprint)
+                    feat = QgsFeature()
+                    feat.setGeometry(geom)
+                    layer.dataProvider().addFeatures([feat])
+                    layer.commitChanges()
+                aoi = QgsGeometry().fromRect(layer.extent())
+        else:
+            aoi = self.get_aoi(provider_index=provider_index,
+                                raster_layer=imagery,
+                                use_image_extent_as_aoi=use_image_extent_as_aoi,
+                                selected_image=selected_image,
+                                selected_aoi=self.aoi)
+            
         try:
             self.check_processing_ui(allow_empty_name=allow_empty_name)
             if imagery:
@@ -1976,6 +2004,18 @@ class Mapflow(QObject):
         if not processing_params:
             self.alert(error, icon=QMessageBox.Warning)
             return
+        
+        provider = self.providers[self.dlg.providerCombo.currentIndex()]
+        if isinstance(provider, MyImageryProvider):
+            image = self.data_catalog_service.selected_image()
+            mosaic = self.data_catalog_service.selected_mosaic()
+            if image:
+                processing_params.params.url = image.image_url
+            elif mosaic:
+                #Doesn't work!!!
+                processing_params.params.url = mosaic.rasterLayer.tileUrl
+                #processing_params.params.url = 's3://users-data/d.ignatenko@geoalert.io_4051b511-a932-49fb-a621-d301bc285ffb/92651f09-da63-46cd-a224-d723fa9defad'
+            print (processing_params)
 
         if not helpers.check_processing_limit(billing_type=self.billing_type,
                                               remaining_limit=self.remaining_limit,
@@ -1988,7 +2028,6 @@ class Mapflow(QObject):
                        icon=QMessageBox.Warning)
             return
 
-        provider_index = self.dlg.providerIndex()
         imagery = self.dlg.rasterCombo.currentLayer()
 
         self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
