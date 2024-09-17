@@ -651,6 +651,7 @@ class Mapflow(QObject):
         elif isinstance(provider, MyImageryProvider):
             my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
             self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
+            self.calculate_aoi_area_catalog()
         else:
             self.calculate_aoi_area_polygon_layer(polygon_layer)
 
@@ -806,7 +807,8 @@ class Mapflow(QObject):
         :param raster_source: Provider name or None, depending on the signal, if one of the
             tile providers, otherwise the selected raster layer
         """
-        enabled = isinstance(raster_source, QgsRasterLayer)
+        provider = self.providers[self.dlg.providerIndex()]
+        enabled = isinstance(raster_source, QgsRasterLayer) or isinstance(provider, MyImageryProvider)
         self.dlg.useImageExtentAsAoi.setEnabled(enabled)
         self.dlg.useImageExtentAsAoi.setChecked(enabled)
 
@@ -1583,9 +1585,12 @@ class Mapflow(QObject):
 
         :param layer: The current raster layer
         """
+        provider = self.providers[self.dlg.providerIndex()]
         if layer:
             geometry = QgsGeometry.collectGeometry([QgsGeometry.fromRect(layer.extent())])
             self.calculate_aoi_area(geometry, layer.crs())
+        elif isinstance(provider, MyImageryProvider):
+            self.calculate_aoi_area_catalog()
         else:
             self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
 
@@ -1594,10 +1599,24 @@ class Mapflow(QObject):
 
         :param use_image_extent: The current state of the checkbox
         """
+        provider = self.providers[self.dlg.providerIndex()]
         if use_image_extent:
             self.calculate_aoi_area_raster(self.dlg.rasterCombo.currentLayer())
+        elif isinstance(provider, MyImageryProvider):
+            self.calculate_aoi_area_catalog()
         else:
             self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+    
+    def calculate_aoi_area_catalog(self) -> None:
+        """Get the AOI size when a new mosaic or image in 'My imagery' is selected.
+        """
+        image = self.data_catalog_service.selected_image()
+        mosaic = self.data_catalog_service.selected_mosaic()
+        if image:
+            self.calculate_aoi_area(QgsGeometry().fromWkt(image.footprint), helpers.WGS84)
+        elif mosaic:
+            # Doesn't work!!!
+            self.calculate_aoi_area(QgsGeometry().fromWkt(mosaic.rasterLayer.tileJsonUrl), helpers.WGS84)
 
     def calculate_aoi_area_selection(self, _: List[QgsFeature]) -> None:
         """Get the AOI size when the selection changed on a polygon layer.
@@ -1632,11 +1651,15 @@ class Mapflow(QObject):
         selected_image = self.dlg.metadataTable.selectedItems()
         # This is AOI with respect to selected Maxar images and raster image extent
         try:
-            real_aoi = self.get_aoi(provider_index=provider_index,
-                                    raster_layer=imagery,
-                                    use_image_extent_as_aoi=use_image_extent_as_aoi,
-                                    selected_image=selected_image,
-                                    selected_aoi=self.aoi)
+            provider = self.providers[provider_index]
+            if isinstance(provider, MyImageryProvider):
+                real_aoi = self.calculate_aoi_area_catalog()
+            else:
+                real_aoi = self.get_aoi(provider_index=provider_index,
+                                        raster_layer=imagery,
+                                        use_image_extent_as_aoi=use_image_extent_as_aoi,
+                                        selected_image=selected_image,
+                                        selected_aoi=self.aoi)
         except ImageIdRequired:
             # AOI is OK, but image ID is not selected,
             # in this case we should use selected AOI without cut by AOI
