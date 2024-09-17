@@ -1,4 +1,11 @@
-
+## 2.6.2
+    - Fixed preview georeference for Mapflow Imagery Search
+    - Fixed search results filtering after search provider change
+    - Search results are now cleared on exit from QGIS
+    - Force clearing of temporary files from previous launch on plugin startup
+    - Optimized imports via PyCharm to avoid circular dependency
+## 2.6.1
+    - Fix python error on logout/login
 ## 2.6.0
     - Allow to create, modify and delete projects
     - Rename processings

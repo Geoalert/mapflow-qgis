@@ -26,4 +26,4 @@ To learn how to use the plugin, please, follow our [guide](https://docs.mapflow.
 
 ## License
 
-This software is released under the [GNU Public License (GPL)](LICENSE) Version 2 or any later version. This license means that you can inspect and modify the source code and guarantees that you always have access to this software under the same termas as QGIS, that is free of cost and can be freely modified.
+This software is released under the [GNU Public License (GPL)](mapflow/LICENSE) Version 2 or any later version. This license means that you can inspect and modify the source code and guarantees that you always have access to this software under the same termas as QGIS, that is free of cost and can be freely modified.

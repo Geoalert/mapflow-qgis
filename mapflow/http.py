@@ -9,6 +9,7 @@ from qgis.core import QgsNetworkAccessManager, Qgis, QgsApplication, QgsAuthMeth
 from .constants import DEFAULT_HTTP_TIMEOUT_SECONDS
 from .errors import ErrorMessage, ProxyIsAlreadySet
 
+
 class Http(QObject):
     """"""
 
@@ -186,7 +187,7 @@ def api_message_parser(response_body: str) -> str:
     message = ErrorMessage(code=error_data.get("code", "API_ERROR"),
                            parameters=error_data.get("parameters", {}),
                            message=error_data.get("message", "Unknown error"))
-    return message.to_str()
+    return message.message
 
 
 def securewatch_message_parser(response_body: str) -> str:
@@ -195,6 +196,7 @@ def securewatch_message_parser(response_body: str) -> str:
 
 
 def get_error_report_body(response: QNetworkReply,
+                          response_body: str,
                           plugin_version: str,
                           error_message_parser: Optional[Callable] = None):
     if error_message_parser is None:
@@ -202,7 +204,6 @@ def get_error_report_body(response: QNetworkReply,
     if response.error() == QNetworkReply.OperationCanceledError:
         send_error_text = show_error_text = 'Request timed out'
     else:
-        response_body = response.readAll().data().decode()
         try:  # handled standardized backend exception ({"code": <int>, "message": <str>})
             show_error_text = error_message_parser(response_body=response_body)
         except:  # unhandled error - plain text

@@ -1,6 +1,7 @@
 import sys
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional, Tuple, Union
+from typing import List, Dict, Optional, Tuple
+
 from .status import ProcessingStatus, ProcessingReviewStatus
 from ..errors import ErrorMessage
 from ..schema.processing import ProcessingParamsSchema, BlockOption

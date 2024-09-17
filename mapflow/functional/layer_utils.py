@@ -1,12 +1,13 @@
-import os
 import json
-from typing import Optional, List, Iterable
-from pyproj import Proj, transform
-from PyQt5.QtNetwork import QNetworkReply
+import os
+from pathlib import Path
+from typing import Optional, List
+
 from PyQt5.QtCore import QObject
+from PyQt5.QtNetwork import QNetworkReply
 from PyQt5.QtWidgets import QFileDialog, QApplication
-from qgis.core import (Qgis,
-                       QgsRectangle,
+from pyproj import Proj, transform
+from qgis.core import (QgsRectangle,
                        QgsRasterLayer,
                        QgsFeature,
                        QgsMapLayer,
@@ -15,7 +16,6 @@ from qgis.core import (Qgis,
                        QgsJsonExporter,
                        QgsGeometry,
                        QgsMapLayerType,
-                       QgsDataSourceUri,
                        QgsWkbTypes,
                        QgsCoordinateReferenceSystem,
                        QgsDistanceArea,
@@ -24,13 +24,13 @@ from qgis.core import (Qgis,
                        QgsMessageLog,
                        QgsCoordinateTransform
                        )
-from pathlib import Path
 
 from .geometry import clip_aoi_to_image_extent
 from .helpers import WGS84, to_wgs84, WGS84_ELLIPSOID
-from ..styles import get_style_name
-from ..schema.catalog import AoiResponseSchema
 from ..dialogs.dialogs import ErrorMessageWidget
+from ..schema.catalog import AoiResponseSchema
+from ..styles import get_style_name
+
 
 def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
     """Get a layer's bounding box aka extent/envelope
@@ -152,6 +152,12 @@ def calculate_aoi_area(aoi: QgsGeometry,
     aoi_size = calculator.measureArea(aoi) / 10 ** 6  # sq. m to sq.km
     return aoi_size
 
+def count_polygons_in_layer(features: list) -> int:
+    """ Count polygon geometries in a multipolygon layer (instead of counting features).
+    :param features: A list of fetures, obtained by "list(layer.getFeatures())"
+    """
+    count = sum(len(feature.geometry().asMultiPolygon()) for feature in features)
+    return count
 
 def collect_geometry_from_layer(layer: QgsMapLayer) -> QgsGeometry:
     features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())

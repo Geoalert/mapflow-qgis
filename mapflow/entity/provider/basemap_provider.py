@@ -4,10 +4,11 @@ Basic, non-authentification XYZ provider
 from abc import ABC
 from typing import Optional
 from urllib.parse import urlparse, parse_qs
+
 from .provider import SourceType, CRS, UsersProvider, staticproperty
-from ...schema.processing import PostSourceSchema
 from ...functional.layer_utils import maxar_tile_url, add_connect_id
 from ...requests.maxar_metadata_request import MAXAR_REQUEST_BODY, MAXAR_META_URL
+from ...schema.processing import PostSourceSchema
 
 
 class BasemapProvider(UsersProvider, ABC):

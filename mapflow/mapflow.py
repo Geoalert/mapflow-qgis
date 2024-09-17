@@ -1,32 +1,31 @@
 import json
-from pathlib import Path
 import os.path
+import shutil
 import tempfile
 from base64 import b64encode, b64decode
-from typing import List, Optional, Union, Callable, Tuple
-from datetime import datetime  # processing creation datetime formatting
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
+from datetime import datetime  # processing creation datetime formatting
+from pathlib import Path
+from typing import List, Optional, Union, Callable, Tuple
 
-from osgeo import gdal
-from PyQt5.QtXml import QDomDocument
+from PyQt5.QtCore import (
+    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, QTextStream, QByteArray
+)
 from PyQt5.QtGui import QColor
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
-from PyQt5.QtCore import (
-    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, QTextStream, QByteArray, QUrl
-)
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction,
-    QAbstractItemView, QLabel, QProgressBar, QMenu, QWidget
+    QAbstractItemView, QProgressBar, QMenu, QWidget
 )
-
-from qgis.gui import QgsMessageBarItem
+from PyQt5.QtXml import QDomDocument
+from osgeo import gdal
 from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
-    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsVectorFileWriter,
-    QgsWkbTypes, QgsPoint, QgsMapLayerType, QgsRectangle
+    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsWkbTypes, QgsPoint, QgsMapLayerType, QgsRectangle
 )
+from qgis.gui import QgsMessageBarItem
 
-from .functional import layer_utils, helpers
+from . import constants
 from .dialogs import (MainDialog,
                       MapflowLoginDialog,
                       ErrorMessageWidget,
@@ -38,13 +37,8 @@ from .dialogs import (MainDialog,
                       )
 from .dialogs.icons import plugin_icon
 from .functional.controller.data_catalog_controller import DataCatalogController
-from .http import (Http,
-                   get_error_report_body,
-                   data_catalog_message_parser,
-                   securewatch_message_parser,
-                   api_message_parser,
-                   )
 from .config import Config
+from .entity.billing import BillingType
 from .entity.processing import parse_processings_request, Processing, ProcessingHistory, updated_processings
 from .entity.provider import (UsersProvider,
                               MaxarProvider,
@@ -54,27 +48,32 @@ from .entity.provider import (UsersProvider,
                               DefaultProvider,
                               ImagerySearchProvider,
                               ProviderInterface)
-from .schema.project import MapflowProject
-from .entity.billing import BillingType
 from .entity.workflow_def import WorkflowDef
-from .schema import (PostSourceSchema,
-                     PostProcessingSchema,
-                     ProviderReturnSchema,
-                     ImageCatalogRequestSchema,
-                     ImageCatalogResponseSchema)
 from .errors import (ProcessingInputDataMissing,
                      BadProcessingInput,
                      PluginError,
                      ImageIdRequired,
                      AoiNotIntersectsImage,
                      ProxyIsAlreadySet)
-from .functional.geometry import clip_aoi_to_image_extent
-from .functional.project import ProjectService
-from .functional.processing import ProcessingService
+from .functional import layer_utils, helpers
 from .functional.auth import get_auth_id
+from .functional.geometry import clip_aoi_to_image_extent
+from .functional.processing import ProcessingService
+from .functional.project import ProjectService
 from .functional.service.data_catalog import DataCatalogService
-from . import constants
+from .http import (Http,
+                   get_error_report_body,
+                   data_catalog_message_parser,
+                   securewatch_message_parser,
+                   api_message_parser,
+                   )
+from .schema import (PostSourceSchema,
+                     PostProcessingSchema,
+                     ProviderReturnSchema,
+                     ImageCatalogRequestSchema,
+                     ImageCatalogResponseSchema)
 from .schema.catalog import PreviewType
+from .schema.project import MapflowProject
 
 
 class Mapflow(QObject):
@@ -115,7 +114,6 @@ class Mapflow(QObject):
         self.project = QgsProject.instance()
         self.message_bar = self.iface.messageBar()
         self.plugin_dir = os.path.dirname(__file__)
-        self.temp_dir = tempfile.gettempdir()
         self.plugin_name = self.config.PLUGIN_NAME  # aliased here to be overloaded in submodules
         # Settings will be used to store credentials and various UI customizations
         self.settings = QgsSettings()
@@ -153,6 +151,14 @@ class Mapflow(QObject):
             .get(self.username, {})
             .get(self.project_id, {}))
         self.processings = []
+
+        # Clear previous temp dir, as it is not cleared automatically in exit from QGis
+        previous_temp_dir = self.settings.value("tempdir", None)
+        if previous_temp_dir:
+            shutil.rmtree(previous_temp_dir, ignore_errors=True)
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.temp_dir_name = self.temp_dir.name
+        self.settings.setValue("tempdir", self.temp_dir_name)
 
         # Init dialogs
         self.use_oauth = (self.settings.value('use_oauth', 'false').lower() == 'true')
@@ -287,6 +293,7 @@ class Mapflow(QObject):
         self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
         self.dlg.rasterSourceChanged.connect(self.on_provider_change)
         self.dlg.clearSearch.clicked.connect(self.clear_metadata)
+        self.dlg.metadataTableFilled.connect(self.filter_metadata)
         # Poll processings
         self.processing_fetch_timer = QTimer(self.dlg)
         self.processing_fetch_timer.setInterval(self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
@@ -334,7 +341,7 @@ class Mapflow(QObject):
         self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
 
         # Service init
-        """ self.result_loader = layer_utils.ResultsLoader(iface=self.iface,
+        self.result_loader = layer_utils.ResultsLoader(iface=self.iface,
                                                        maindialog=self.dlg,
                                                        http=self.http,
                                                        server=self.server,
@@ -342,7 +349,7 @@ class Mapflow(QObject):
                                                        settings=self.settings,
                                                        plugin_name=self.plugin_name,
                                                        temp_dir=self.temp_dir
-                                                       ) """
+                                                       )
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
@@ -482,8 +489,15 @@ class Mapflow(QObject):
 
     def filter_aoi_layers(self):
         if self.dlg.useAllVectorLayers.isChecked():
-            return []
-        return [layer for layer in self.project.mapLayers().values() if layer not in self.aoi_layers]
+            # We exclude search metadata layers from AOI layers list because they are big, crowded
+            # and lead to topology errors
+            if self.search_provider:
+                return [layer for layer in self.project.mapLayers().values()
+                             if self.search_provider.name + ' metadata' == layer.name()]
+            else:
+                return []
+        else:
+            return [layer for layer in self.project.mapLayers().values() if layer not in self.aoi_layers]
 
     def on_options_change(self):
         wd_name = self.dlg.modelCombo.currentText()
@@ -514,7 +528,7 @@ class Mapflow(QObject):
     def show_wd_options(self, wd: WorkflowDef):
         self.dlg.clear_model_options()
         for block in wd.optional_blocks:
-            self.dlg.add_model_option(block.name, checked=bool(self.settings.value(f"wd/{wd.id}/{block.name}", False)))
+            self.dlg.add_model_option(block.displayName, checked=bool(self.settings.value(f"wd/{wd.id}/{block.name}", False)))
 
     def save_options_settings(self, wd: WorkflowDef, enabled_blocks: List[bool]):
         enabled_blocks_dict = wd.get_enabled_blocks(enabled_blocks)
@@ -555,6 +569,10 @@ class Mapflow(QObject):
             f' and cloudCover is null or cloudCover <= {max_cloud_cover}'
         )
         aoi = helpers.from_wgs84(self.metadata_aoi, crs)
+        if not aoi:
+            if self.dlg.polygonCombo.currentLayer():
+                geom = layer_utils.collect_geometry_from_layer(self.dlg.polygonCombo.currentLayer())
+                aoi = helpers.from_wgs84(geom, crs)
         self.calculator.setEllipsoid(crs.ellipsoidAcronym())
         self.calculator.setSourceCrs(crs, self.project.transformContext())
         min_intersection_size = self.calculator.measureArea(aoi) * (min_intersection / 100)
@@ -823,10 +841,10 @@ class Mapflow(QObject):
 
             # If we have searched with current provider previously, we want to restore the search results as it were
             # We store the results in a temp folder, separate file for each provider
-            geoms = self.search_provider.load_search_layer(self.temp_dir)
+            geoms = self.search_provider.load_search_layer(self.temp_dir_name)
             if geoms:
                 self.display_metadata_geojson_layer(
-                    os.path.join(self.temp_dir, self.search_provider.metadata_layer_name),
+                    os.path.join(self.temp_dir_name, self.search_provider.metadata_layer_name),
                     f"{self.search_provider.name} metadata")
             else:
                 self.clear_metadata()
@@ -968,7 +986,7 @@ class Mapflow(QObject):
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
         #provider = self.providers[self.dlg.providerIndex()]
-        self.search_provider.clear_saved_search(self.temp_dir)
+        self.search_provider.clear_saved_search(self.temp_dir_name)
 
     def request_mapflow_metadata(self,
                                  aoi: QgsGeometry,
@@ -1038,10 +1056,9 @@ class Mapflow(QObject):
 
         # Save the current search results to load later
         provider = self.imagery_search_provider
-        filename = provider.save_search_layer(self.temp_dir, geoms)
-        self.dlg.fill_metadata_table(geoms)
+        filename = provider.save_search_layer(self.temp_dir_name, geoms)
         self.display_metadata_geojson_layer(filename, f"{provider.name} metadata")
-        self.filter_metadata(min_intersection=min_intersection, max_cloud_cover=max_cloud_cover)
+        self.dlg.fill_metadata_table(geoms)
 
     def request_skywatch_metadata(
             self,
@@ -1242,7 +1259,7 @@ class Mapflow(QObject):
             for feature in metadata['features']
         })
         # Create a temporary layer for the current page of metadata
-        output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex())
+        output_file_name = os.path.join(self.temp_dir_name, os.urandom(32).hex())
         with open(output_file_name, 'w') as file:
             json.dump(metadata, file)
         metadata_layer = QgsVectorLayer(output_file_name, '', 'ogr')
@@ -1387,12 +1404,10 @@ class Mapflow(QObject):
             if feature['properties']['cloudCover']:
                 feature['properties']['cloudCover'] = round(feature['properties']['cloudCover'] * 100)
         # Save metadata to file to return to previous search
-        filename = provider.save_search_layer(self.temp_dir, metadata)
+        filename = provider.save_search_layer(self.temp_dir_name, metadata)
         self.display_metadata_geojson_layer(filename, f'{provider.name} metadata')
         # Memorize IDs and extents to be able to clip the user's AOI to image on processing creation
-
         self.dlg.fill_metadata_table(metadata)
-        self.filter_metadata(min_intersection=min_intersection, max_cloud_cover=max_cloud_cover)
 
     def get_maxar_metadata_error_handler(self, response: QNetworkReply) -> None:
         """Error handler for metadata requests.
@@ -1539,13 +1554,21 @@ class Mapflow(QObject):
             return
 
         features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
-        if self.max_aois_per_processing >= len(features) > 0:
+        if layer.wkbType() == QgsWkbTypes.MultiPolygon:
+            geoms_count = layer_utils.count_polygons_in_layer(features)
+        elif layer.wkbType() == QgsWkbTypes.Polygon:
+            geoms_count = len(features)
+        else: # type of layer is not supported
+              # (but it shouldn't be the case, because point and line layers will not appear in AOI-combo,
+              # and collections are devided by QGIS into separate layers with different types)
+            raise ValueError("Only polygon and multipolyon layers supported for this operation")
+        if self.max_aois_per_processing >= geoms_count:
             if len(features) == 1:
                 aoi = features[0].geometry()
             else:
                 aoi = QgsGeometry.collectGeometry([feature.geometry() for feature in features])
             self.calculate_aoi_area(aoi, layer.crs())
-        else:  # self.max_aois_per_processing < layer.featureCount():
+        else:  # self.max_aois_per_processing < number of polygons (as features and as parts of multipolygons):
             self.dlg.disable_processing_start(reason=self.tr('AOI must contain not more than'
                                                              ' {} polygons').format(self.max_aois_per_processing),
                                               clear_area=True)
@@ -2022,6 +2045,7 @@ class Mapflow(QObject):
             # In this case, when "data provider" is in the message, there can't be index error
         else:
             self.report_http_error(response,
+                                   response_body,
                                    self.tr('Processing creation failed'),
                                    error_message_parser=api_message_parser)
 
@@ -2073,11 +2097,11 @@ class Mapflow(QObject):
         self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
         # We want to clear the data from previous lauunch to avoid confusion
         for provider in self.providers:
-            provider.clear_saved_search(self.temp_dir)
+            provider.clear_saved_search(self.temp_dir_name)
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
         """Save and open the preview image as a layer."""
-        with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb') as f:
+        with open(os.path.join(self.temp_dir_name, os.urandom(32).hex()), mode='wb') as f:
             f.write(response.readAll().data())
         # Some previews aren't georef-ed
         preview = gdal.Open(f.name)
@@ -2131,25 +2155,25 @@ class Mapflow(QObject):
         if not feature:
             self.alert(self.tr("Preview is unavailable when metadata layer is removed"))
             return
-        extent = self.metadata_extent(feature=feature)
+        footprint = self.metadata_footprint(feature=feature)
         url = feature.attribute('previewUrl')
         preview_type = feature.attribute('previewType')
         if preview_type == PreviewType.png:
-            self.preview_png(url, extent, image_id)
+            self.preview_png(url, footprint, image_id)
         else:
             raise NotImplementedError("Only PNG preview type is supported")
 
     def preview_png(self,
                     url: str,
-                    extent: QgsRectangle,
+                    footprint: QgsGeometry,
                     image_id: str = ""):
         self.http.get(url=url,
                       timeout=30,
                       auth='null'.encode(),
-                      callback=self.display_png_preview,
+                      callback=self.display_png_preview_gcp,
                       use_default_error_handler=False,
                       error_handler=self.preview_png_error_handler,
-                      callback_kwargs={"extent": extent,
+                      callback_kwargs={"footprint": footprint,
                                        "image_id": image_id})
 
     def display_png_preview(self,
@@ -2161,7 +2185,7 @@ class Mapflow(QObject):
         We assume that png preview is not internally georeferenced,
         but the footprint specified in the metadata has the same extent, so we generate georef for the image
         """
-        with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb') as f:
+        with open(os.path.join(self.temp_dir_name, os.urandom(32).hex()), mode='wb') as f:
             f.write(response.readAll().data())
         preview = gdal.Open(f.name)
         pixel_xsize = extent.width() / preview.RasterXSize
@@ -2178,6 +2202,65 @@ class Mapflow(QObject):
         preview.FlushCache()
         layer = QgsRasterLayer(f.name, f"{image_id} preview", 'gdal')
         layer.setExtent(extent)
+        self.project.addMapLayer(layer)
+
+    def display_png_preview_gcp(self,
+                                response: QNetworkReply,
+                                footprint: QgsGeometry,
+                                crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857"),
+                                image_id: str = ""):
+        """
+        We take corner points of a polygon that represents image footprint
+        and put their coordinates as GCPs (ground control points)
+        """
+        # Return a list of coordinate pairs
+        corners = []
+        footprint = footprint.asPolygon()
+        if len(footprint[0]) != 5:
+            self.message_bar.pushInfo(self.plugin_name, self.tr('Preview is unavailable'))
+            return
+        for point in range(4):
+            pt = footprint[0][point]
+            coords = (pt.x(), pt.y())
+            corners.append(coords)
+        # Get non-referenced raster and set its projection
+        with open(os.path.join(self.temp_dir_name, os.urandom(32).hex()), mode='wb') as f:
+            f.write(response.readAll().data())
+        preview = gdal.Open(f.name)
+        preview.SetProjection(crs.toWkt())
+        # Specify (inter)cardinal directions
+            # Right now it is implemented just by points order in a list
+            # We assume that points go from NE in clockwise direcrtion
+            # If we won't find a different and more accurate solution
+            # I would suggest creating a dictionary, storing x and y coordinates as values
+            # Then we can check min and max coords from bounding box
+            # And scecify that the point that has the same x as xmin is SW, xmax - NE,
+            # Same y as ymin - SE, ymax - NW
+        # Assuming raster is n*m size, where n is width and m is height, we get:
+            # NW is a 1 point in a list (clockwise) and 0,0 - in our image
+            # NE - 2 and n,0
+            # SW - 4 and 0,m
+            # SE - 3 and n,m
+        # Create a list of GCPS
+        # Where each GCP is (x, y, z, pixel(n or width), line(m or height))
+        gcp_list = [
+        gdal.GCP(corners[0][0], corners[0][1], 0, 0, 0),
+        gdal.GCP(corners[1][0], corners[1][1], 0, preview.RasterXSize-1, 0),
+        gdal.GCP(corners[3][0], corners[3][1], 0, 0, preview.RasterYSize-1),
+        gdal.GCP(corners[2][0], corners[2][1], 0, preview.RasterXSize-1, preview.RasterYSize-1)
+        ]
+        # Set control points, clear cache, add preview layer
+        preview.SetGCPs(gcp_list, crs.toWkt())
+        preview.FlushCache()
+        layer = QgsRasterLayer(f.name, f"{image_id} preview", 'gdal')
+        # If (for some reason) transparent band is not set automatically, but it exists, set it
+        if layer.bandCount() == 4:
+            if layer.renderer().alphaBand() != 4:
+                layer.renderer().setAlphaBand(4)
+        # Otherwise, for each band set "0" as No Data value
+        else:
+            for band in range(layer.bandCount()):
+                layer.dataProvider().setNoDataValue(band, 0)
         self.project.addMapLayer(layer)
 
     def preview_png_error_handler(self, response: QNetworkReply):
@@ -2238,6 +2321,16 @@ class Mapflow(QObject):
         if not feature:
             return None
         return helpers.from_wgs84(feature.geometry(), crs).boundingBox()
+
+    def metadata_footprint(self,
+                           image_id=None,
+                           feature=None,
+                           crs: QgsCoordinateReferenceSystem = helpers.WEB_MERCATOR):
+        if not feature:
+            feature = self.metadata_feature(image_id)
+        if not feature:
+            return None
+        return helpers.from_wgs84(feature.geometry(), crs)
 
     def metadata_feature(self, image_id):
         if not image_id:
@@ -2784,9 +2877,6 @@ class Mapflow(QObject):
 
     def logout(self) -> None:
         """Close the plugin and clear credentials from cache."""
-        # disconnect what was connected on login
-        if self.project_connection is not None:
-            self.dlg.projectsCombo.currentIndexChanged.disconnect(self.project_connection)
         # set token to empty to delete it from settings
         self.settings.setValue('token', '')
         self.processing_fetch_timer.stop()
@@ -2859,6 +2949,7 @@ class Mapflow(QObject):
 
     def report_http_error(self,
                           response: QNetworkReply,
+                          response_body: str,
                           title: str = None,
                           error_message_parser: Optional[Callable] = None):
         """Prepare and show an error message for the supplied response.
@@ -2869,10 +2960,11 @@ class Mapflow(QObject):
             Default parser (if None) searches for 'message' section in response json
         """
         error_summary, email_body = get_error_report_body(response=response,
+                                                          response_body=response_body,
                                                           plugin_version=self.plugin_version,
                                                           error_message_parser=error_message_parser)
         ErrorMessageWidget(parent=QApplication.activeWindow(),
-                           text=error_summary,
+                           text= error_summary,
                            title=title,
                            email_body=email_body).show()
 

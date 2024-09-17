@@ -1,8 +1,9 @@
-from typing import Optional, List
 from dataclasses import dataclass
+from typing import Optional, List
 
-from ..entity.workflow_def import WorkflowDef
 from .base import Serializable, SkipDataClass
+from ..entity.workflow_def import WorkflowDef
+
 
 @dataclass
 class PostProjectSchema(Serializable):
