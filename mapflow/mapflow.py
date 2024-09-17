@@ -47,6 +47,7 @@ from .entity.provider import (UsersProvider,
                               create_provider,
                               DefaultProvider,
                               ImagerySearchProvider,
+                              MyImageryProvider,
                               ProviderInterface)
 from .entity.workflow_def import WorkflowDef
 from .errors import (ProcessingInputDataMissing,
@@ -647,6 +648,9 @@ class Mapflow(QObject):
         polygon_layer = self.dlg.polygonCombo.currentLayer()
         if provider_layer:
             self.calculate_aoi_area_raster(provider_layer)
+        elif isinstance(provider, MyImageryProvider):
+            my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
+            self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
         else:
             self.calculate_aoi_area_polygon_layer(polygon_layer)
 
@@ -2092,6 +2096,7 @@ class Mapflow(QObject):
 
     def setup_providers(self, providers_data):
         self.default_providers = ProvidersList([ImagerySearchProvider(proxy=self.server)] +
+                                               [MyImageryProvider()] +
                                                [DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
                                                 for data in providers_data])
         self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
