@@ -353,6 +353,8 @@ class Mapflow(QObject):
                                                        plugin_name=self.plugin_name,
                                                        temp_dir=self.temp_dir
                                                        )
+        
+        self.dlg.mosaicTable.cellClicked.connect(self.create_processing_request)
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
@@ -1621,7 +1623,19 @@ class Mapflow(QObject):
             elif mosaic and not image:
                 #Doesn't work!!!
                 #self.calculate_aoi_area(QgsGeometry().fromWkt(mosaic.rasterLayer.tileJsonUrl), helpers.WGS84)
-                return
+                layer = QgsVectorLayer('Polygon?crs=epsg:4326', 'Mosaic_Extent', 'memory')
+                layer.startEditing()
+                for i in self.data_catalog_service.get_mosaic_images(mosaic.id):
+                    #geoms.append(QgsGeometry().fromWkt(i.footprint))
+                    #geom = QgsGeometry().fromWkt(i.footprint)
+                    geom = QgsGeometry().fromWkt(i.footprint)
+                    feat = QgsFeature()
+                    feat.setGeometry(geom)
+                    layer.dataProvider().addFeatures([feat])
+                    layer.commitChanges()
+                aoi = QgsGeometry().fromRect(layer.extent())
+                self.calculate_aoi_area(aoi, helpers.WGS84)
+
 
     def calculate_aoi_area_selection(self, _: List[QgsFeature]) -> None:
         """Get the AOI size when the selection changed on a polygon layer.
@@ -1937,7 +1951,9 @@ class Mapflow(QObject):
             mosaic = self.data_catalog_service.selected_mosaic()
             if image:
                 aoi = QgsGeometry().fromWkt(image.footprint)
+                print ("I", aoi)
             elif mosaic:
+                # !!!
                 #self.tileJson_to_aoi(tileJsonUrl=mosaic.rasterLayer.tileJsonUrl)
                 layer = QgsVectorLayer('Polygon?crs=epsg:4326', 'Mosaic_Extent', 'memory')
                 layer.startEditing()
@@ -1950,6 +1966,7 @@ class Mapflow(QObject):
                     layer.dataProvider().addFeatures([feat])
                     layer.commitChanges()
                 aoi = QgsGeometry().fromRect(layer.extent())
+                print (aoi)
         else:
             aoi = self.get_aoi(provider_index=provider_index,
                                 raster_layer=imagery,
@@ -2013,8 +2030,8 @@ class Mapflow(QObject):
                 processing_params.params.url = image.image_url
             elif mosaic:
                 #Doesn't work!!!
-                processing_params.params.url = mosaic.rasterLayer.tileUrl
-                #processing_params.params.url = 's3://users-data/d.ignatenko@geoalert.io_4051b511-a932-49fb-a621-d301bc285ffb/92651f09-da63-46cd-a224-d723fa9defad'
+                #processing_params.params.url = mosaic.rasterLayer.tileUrl
+                processing_params.params.url = 's3://users-data/d.ignatenko@geoalert.io_4051b511-a932-49fb-a621-d301bc285ffb/92651f09-da63-46cd-a224-d723fa9defad/'
             print (processing_params)
 
         if not helpers.check_processing_limit(billing_type=self.billing_type,
