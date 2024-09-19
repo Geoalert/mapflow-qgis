@@ -336,6 +336,13 @@ class Mapflow(QObject):
                                                        temp_dir=self.temp_dir_name
                                                        )
 
+        # Zoom selection for data source
+        self.zoom_selector = self.config.ZOOM_SELECTOR.lower()
+        self.zoom = None
+        if self.zoom_selector == 'true':
+            self.dlg.dataSourceZoom.valueChanged.connect(lambda value: self.settings.setValue('zoom', value))
+            self.dlg.dataSourceZoom.setValue(self.config.SOURCE_DEFAULT_ZOOM if not self.zoom else self.zoom)
+
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
             self.iface.addCustomActionForLayer(self.add_layer_action, layer)
@@ -1667,11 +1674,14 @@ class Mapflow(QObject):
 
         If the user tries to start the processing, he will see the errors
         """
-        response_text = response.readAll().data().decode()
-        message = api_message_parser(response_text)
-        self.dlg.disable_processing_start(reason=self.tr('Processing cost is not available:\n'
-                                                         '{message}').format(message=message),
-                                          clear_area=False)
+        try:
+            response_text = response.readAll().data().decode()
+            message = api_message_parser(response_text)
+            self.dlg.disable_processing_start(reason=self.tr('Processing cost is not available:\n'
+                                                            '{message}').format(message=message),
+                                                clear_area=False)
+        except:
+            return
 
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         response_data = response.readAll().data().decode()
@@ -1824,9 +1834,13 @@ class Mapflow(QObject):
                 'source': provider.name.lower()}
         if not provider:
             raise PluginError(self.tr('Providers are not initialized'))
-        provider_params, provider_meta = provider.to_processing_params(image_id=image_id,
-                                                                       provider_name=provider_name)
-
+        if isinstance(provider, ImagerySearchProvider): # Add "or MyImagery" later!!!
+            provider_params, provider_meta = provider.to_processing_params(image_id=image_id,
+                                                                           provider_name=provider_name)
+        else:
+            provider_params, provider_meta = provider.to_processing_params(image_id=image_id,
+                                                                           provider_name=provider_name,
+                                                                           zoom=self.zoom)
         meta.update(**provider_meta)
         return provider_params, meta
 
@@ -1934,8 +1948,21 @@ class Mapflow(QObject):
         if not processing_params:
             self.alert(error, icon=QMessageBox.Warning)
             return
+        
+        # Add zoom to params if zoom_selector is true
+        if self.zoom_selector == 'true':
+            self.zoom = self.settings.value('zoom')
+            if self.zoom:
+                processing_params.params.zoom = self.zoom
+            else:
+                processing_params.params.zoom = self.config.SOURCE_DEFAULT_ZOOM
+            if isinstance (processing_params.params, PostSourceSchema): # No zoom for tifs
+                if processing_params.params.source_type == 'local' or 'tif':
+                    processing_params.params.zoom = None
+        
+        print (processing_params)
 
-        if not helpers.check_processing_limit(billing_type=self.billing_type,
+        """ if not helpers.check_processing_limit(billing_type=self.billing_type,
                                               remaining_limit=self.remaining_limit,
                                               remaining_credits=self.remaining_credits,
                                               aoi_size=self.aoi_size,
@@ -1961,7 +1988,7 @@ class Mapflow(QObject):
                 self.post_processing(processing_params)
             except Exception as e:
                 self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
-            return
+            return """
 
     def upload_tif_callback(self,
                             response: QNetworkReply,

@@ -142,10 +142,10 @@
            <property name="maxVisibleItems">
             <number>30</number>
            </property>
-           <property name="allowEmptyLayer" stdset="0">
+           <property name="allowEmptyLayer">
             <bool>false</bool>
            </property>
-           <property name="showCrs" stdset="0">
+           <property name="showCrs">
             <bool>true</bool>
            </property>
           </widget>
@@ -203,7 +203,7 @@
         </layout>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="0,1,0">
+        <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="0,1,0,0">
          <property name="sizeConstraint">
           <enum>QLayout::SetMinimumSize</enum>
          </property>
@@ -252,15 +252,46 @@
              <height>16777215</height>
             </size>
            </property>
-           <property name="showCrs" stdset="0">
+           <property name="showCrs">
             <bool>true</bool>
            </property>
-           <property name="excludedProviders" stdset="0">
+           <property name="excludedProviders">
             <stringlist notr="true">
              <string>wms</string>
              <string>postgresraster</string>
              <string>grassraster</string>
             </stringlist>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QgsSpinBox" name="dataSourceZoom">
+           <property name="minimumSize">
+            <size>
+             <width>38</width>
+             <height>22</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>Zoom</string>
+           </property>
+           <property name="suffix">
+            <string/>
+           </property>
+           <property name="prefix">
+            <string/>
+           </property>
+           <property name="minimum">
+            <number>14</number>
+           </property>
+           <property name="maximum">
+            <number>20</number>
+           </property>
+           <property name="stepType">
+            <enum>QAbstractSpinBox::DefaultStepType</enum>
+           </property>
+           <property name="showClearButton">
+            <bool>false</bool>
            </property>
           </widget>
          </item>
@@ -1260,7 +1291,7 @@
                 <property name="checked">
                  <bool>false</bool>
                 </property>
-                <property name="collapsed" stdset="0">
+                <property name="collapsed">
                  <bool>true</bool>
                 </property>
                 <layout class="QGridLayout" name="layoutMetadataFilters" columnstretch="0,1,0">
@@ -1565,7 +1596,7 @@
                <item>
                 <layout class="QHBoxLayout" name="horizontalLayout_11" stretch="1,0">
                  <property name="spacing">
-                  <number>-1</number>
+                  <number>7</number>
                  </property>
                  <property name="bottomMargin">
                   <number>0</number>
@@ -2071,6 +2102,11 @@
    <class>QgsMapLayerComboBox</class>
    <extends>QComboBox</extends>
    <header>qgsmaplayercombobox.h</header>
+  </customwidget>
+  <customwidget>
+   <class>QgsSpinBox</class>
+   <extends>QSpinBox</extends>
+   <header>qgsspinbox.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

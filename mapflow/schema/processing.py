@@ -11,6 +11,7 @@ class PostSourceSchema(Serializable, SkipDataClass):
     projection: Optional[str] = None
     raster_login: Optional[str] = None
     raster_password: Optional[str] = None
+    zoom: Optional[int] = None    
 
 
 @dataclass
@@ -24,6 +25,7 @@ class PostProviderSchema(Serializable, SkipDataClass):
     # Data provider name
     data_provider: str
     url: Optional[str] = None
+    zoom: Optional[int] = None
 
 
 @dataclass
@@ -49,6 +51,7 @@ class PostProcessingSchema(Serializable):
             self.blocks = [BlockOption(**item) for item in self.blocks]
         else:
             self.blocks = []
+
 
 @dataclass
 class UpdateProcessingSchema(Serializable):
