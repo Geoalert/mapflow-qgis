@@ -340,7 +340,7 @@ class Mapflow(QObject):
         self.zoom_selector = self.config.ZOOM_SELECTOR.lower()
         self.zoom = None
         if self.zoom_selector == 'true':
-            self.dlg.dataSourceZoom.valueChanged.connect(lambda value: self.settings.setValue('zoom', value))
+            self.dlg.dataSourceZoom.valueChanged.connect(lambda value: self.settings.setValue('zoom', str(value)))
             self.dlg.dataSourceZoom.setValue(self.config.SOURCE_DEFAULT_ZOOM if not self.zoom else self.zoom)
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
