@@ -337,11 +337,12 @@ class Mapflow(QObject):
                                                        )
 
         # Zoom selection for data source
-        self.zoom_selector = self.config.ZOOM_SELECTOR.lower()
+        self.zoom_selector = (QgsSettings().value("variables/zoom_selector", "false").lower() == "true")
         self.zoom = None
-        if self.zoom_selector == 'true':
-            self.dlg.dataSourceZoom.valueChanged.connect(lambda value: self.settings.setValue('zoom', str(value)))
-            self.dlg.dataSourceZoom.setValue(self.config.SOURCE_DEFAULT_ZOOM if not self.zoom else self.zoom)
+        if self.zoom_selector:
+            self.dlg.zoomCombo.currentIndexChanged.connect(lambda: self.settings.setValue('zoom', str(self.dlg.zoomCombo.currentText())) 
+                                                           if self.dlg.zoomCombo.currentIndex() != 0 else
+                                                           self.settings.setValue('zoom', None))
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
@@ -1674,14 +1675,11 @@ class Mapflow(QObject):
 
         If the user tries to start the processing, he will see the errors
         """
-        try:
-            response_text = response.readAll().data().decode()
-            message = api_message_parser(response_text)
-            self.dlg.disable_processing_start(reason=self.tr('Processing cost is not available:\n'
-                                                            '{message}').format(message=message),
-                                                clear_area=False)
-        except:
-            return
+        response_text = response.readAll().data().decode()
+        message = api_message_parser(response_text)
+        self.dlg.disable_processing_start(reason=self.tr('Processing cost is not available:\n'
+                                                        '{message}').format(message=message),
+                                          clear_area=False)
 
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         response_data = response.readAll().data().decode()
@@ -1834,13 +1832,9 @@ class Mapflow(QObject):
                 'source': provider.name.lower()}
         if not provider:
             raise PluginError(self.tr('Providers are not initialized'))
-        if isinstance(provider, ImagerySearchProvider): # Add "or MyImagery" later!!!
-            provider_params, provider_meta = provider.to_processing_params(image_id=image_id,
-                                                                           provider_name=provider_name)
-        else:
-            provider_params, provider_meta = provider.to_processing_params(image_id=image_id,
-                                                                           provider_name=provider_name,
-                                                                           zoom=self.zoom)
+        provider_params, provider_meta = provider.to_processing_params(image_id=image_id,
+                                                                       provider_name=provider_name,
+                                                                       zoom=self.zoom)
         meta.update(**provider_meta)
         return provider_params, meta
 
@@ -1950,15 +1944,15 @@ class Mapflow(QObject):
             return
         
         # Add zoom to params if zoom_selector is true
-        if self.zoom_selector == 'true':
+        if self.zoom_selector:
             self.zoom = self.settings.value('zoom')
             if self.zoom:
                 processing_params.params.zoom = self.zoom
-            else:
-                processing_params.params.zoom = self.config.SOURCE_DEFAULT_ZOOM
             if isinstance (processing_params.params, PostSourceSchema): # No zoom for tifs
-                if processing_params.params.source_type == 'local' or 'tif':
+                if processing_params.params.source_type == 'tif':
                     processing_params.params.zoom = None
+            
+        print (processing_params)
 
         if not helpers.check_processing_limit(billing_type=self.billing_type,
                                               remaining_limit=self.remaining_limit,

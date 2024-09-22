@@ -265,34 +265,65 @@
           </widget>
          </item>
          <item>
-          <widget class="QgsSpinBox" name="dataSourceZoom">
+          <widget class="QComboBox" name="zoomCombo">
            <property name="minimumSize">
             <size>
-             <width>38</width>
-             <height>22</height>
+             <width>45</width>
+             <height>0</height>
             </size>
            </property>
            <property name="toolTip">
             <string>Zoom</string>
            </property>
-           <property name="suffix">
-            <string/>
-           </property>
-           <property name="prefix">
-            <string/>
-           </property>
-           <property name="minimum">
-            <number>14</number>
-           </property>
-           <property name="maximum">
-            <number>20</number>
-           </property>
-           <property name="stepType">
-            <enum>QAbstractSpinBox::DefaultStepType</enum>
-           </property>
-           <property name="showClearButton">
+           <property name="editable">
             <bool>false</bool>
            </property>
+           <property name="currentText">
+            <string> –</string>
+           </property>
+           <property name="placeholderText">
+            <string/>
+           </property>
+           <item>
+            <property name="text">
+             <string> –</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>14</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>15</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>16</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>17</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>18</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>19</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>20</string>
+            </property>
+           </item>
           </widget>
          </item>
          <item>
@@ -2102,11 +2133,6 @@
    <class>QgsMapLayerComboBox</class>
    <extends>QComboBox</extends>
    <header>qgsmaplayercombobox.h</header>
-  </customwidget>
-  <customwidget>
-   <class>QgsSpinBox</class>
-   <extends>QSpinBox</extends>
-   <header>qgsspinbox.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

@@ -11,7 +11,7 @@ class PostSourceSchema(Serializable, SkipDataClass):
     projection: Optional[str] = None
     raster_login: Optional[str] = None
     raster_password: Optional[str] = None
-    zoom: Optional[int] = None    
+    zoom: Optional[str] = None    
 
 
 @dataclass
@@ -25,7 +25,7 @@ class PostProviderSchema(Serializable, SkipDataClass):
     # Data provider name
     data_provider: str
     url: Optional[str] = None
-    zoom: Optional[int] = None
+    zoom: Optional[str] = None
 
 
 @dataclass

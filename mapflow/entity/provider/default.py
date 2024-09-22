@@ -64,11 +64,13 @@ class ImagerySearchProvider(ProviderInterface):
 
     def to_processing_params(self,
                              image_id: Optional[str] = None,
-                             provider_name: Optional[str] = None):
+                             provider_name: Optional[str] = None,
+                             zoom: Optional[str] = None):
         if not image_id:
             raise ImageIdRequired("Search provider must have image ID to launch the processing")
         return PostProviderSchema(data_provider=provider_name,
-                                  url=image_id), {}
+                                  url=image_id,
+                                  zoom=zoom), {}
 
     @property
     def meta_url(self):
@@ -139,7 +141,7 @@ class DefaultProvider(ProviderInterface):
                    preview_url=response.previewUrl)
 
     def to_processing_params(self,
-                             zoom: int,
+                             zoom: str,
                              image_id: Optional[str] = None,
                              provider_name: Optional[str] = None):
         return PostProviderSchema(data_provider=self.api_name, zoom=zoom), {}
