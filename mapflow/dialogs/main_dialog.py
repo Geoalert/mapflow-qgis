@@ -91,7 +91,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.set_state_from_settings()
 
         # Hide zoom spinbox
-        if QgsSettings().value("variables/zoom_selector", "false").lower() == "true":
+        if config.ZOOM_SELECTOR.lower() == "true":
             pass
         else:
             self.zoomCombo.hide()

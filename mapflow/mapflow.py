@@ -337,7 +337,7 @@ class Mapflow(QObject):
                                                        )
 
         # Zoom selection for data source
-        self.zoom_selector = (QgsSettings().value("variables/zoom_selector", "false").lower() == "true")
+        self.zoom_selector = (self.config.ZOOM_SELECTOR.lower() == "true")
         self.zoom = None
         if self.zoom_selector:
             self.dlg.zoomCombo.currentIndexChanged.connect(lambda: self.settings.setValue('zoom', str(self.dlg.zoomCombo.currentText())) 
@@ -1951,8 +1951,6 @@ class Mapflow(QObject):
             if isinstance (processing_params.params, PostSourceSchema): # No zoom for tifs
                 if processing_params.params.source_type == 'tif':
                     processing_params.params.zoom = None
-            
-        print (processing_params)
 
         if not helpers.check_processing_limit(billing_type=self.billing_type,
                                               remaining_limit=self.remaining_limit,
