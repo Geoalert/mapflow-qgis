@@ -90,6 +90,12 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # Restored saved state
         self.set_state_from_settings()
 
+        # Hide zoom spinbox
+        if config.ZOOM_SELECTOR.lower() == "true":
+            pass
+        else:
+            self.zoomCombo.hide()
+
     # ===== Settings management ===== #
     def save_view_results_mode(self):
         if self.viewAsTiles.isChecked():
