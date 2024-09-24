@@ -353,8 +353,6 @@ class Mapflow(QObject):
                                                        plugin_name=self.plugin_name,
                                                        temp_dir=self.temp_dir
                                                        )
-        
-        self.dlg.mosaicTable.cellClicked.connect(self.create_processing_request)
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
@@ -1604,9 +1602,9 @@ class Mapflow(QObject):
         :param use_image_extent: The current state of the checkbox
         """
         provider = self.providers[self.dlg.providerIndex()]
-        if use_image_extent:
+        if use_image_extent and not isinstance(provider, MyImageryProvider):
             self.calculate_aoi_area_raster(self.dlg.rasterCombo.currentLayer())
-        elif isinstance(provider, MyImageryProvider):
+        elif use_image_extent and isinstance(provider, MyImageryProvider):
             self.calculate_aoi_area_catalog()
         else:
             self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
@@ -1619,23 +1617,15 @@ class Mapflow(QObject):
             image = self.data_catalog_service.selected_image()
             mosaic = self.data_catalog_service.selected_mosaic()
             if image:
-                self.calculate_aoi_area(QgsGeometry().fromWkt(image.footprint), helpers.WGS84)
-            elif mosaic and not image:
-                #Doesn't work!!!
-                #self.calculate_aoi_area(QgsGeometry().fromWkt(mosaic.rasterLayer.tileJsonUrl), helpers.WGS84)
-                layer = QgsVectorLayer('Polygon?crs=epsg:4326', 'Mosaic_Extent', 'memory')
-                layer.startEditing()
-                for i in self.data_catalog_service.get_mosaic_images(mosaic.id):
-                    #geoms.append(QgsGeometry().fromWkt(i.footprint))
-                    #geom = QgsGeometry().fromWkt(i.footprint)
-                    geom = QgsGeometry().fromWkt(i.footprint)
-                    feat = QgsFeature()
-                    feat.setGeometry(geom)
-                    layer.dataProvider().addFeatures([feat])
-                    layer.commitChanges()
-                aoi = QgsGeometry().fromRect(layer.extent())
+                aoi = QgsGeometry().fromWkt(image.footprint)
                 self.calculate_aoi_area(aoi, helpers.WGS84)
-
+            elif mosaic and not image:
+                self.http.get(url=mosaic.rasterLayer.tileJsonUrl, callback=self.get_aoi_from_tileJson)
+    
+    def get_aoi_from_tileJson(self, response: QNetworkReply):
+        bounds = json.loads(response.readAll().data()).get('bounds')
+        aoi = QgsGeometry().fromRect(QgsRectangle(bounds[0], bounds[1], bounds[2], bounds[3]))
+        self.calculate_aoi_area(aoi, helpers.WGS84)
 
     def calculate_aoi_area_selection(self, _: List[QgsFeature]) -> None:
         """Get the AOI size when the selection changed on a polygon layer.
@@ -1921,7 +1911,7 @@ class Mapflow(QObject):
                     # raise PluginError(self.tr("Selection is not available for  {}").format(provider.name))
             elif provider.requires_image_id:
                 aoi = selected_aoi
-                # raise PluginError(self.tr("Please select image in Search table for {}").format(provider.name))
+                # raise PluginError(self.tr("Please select image in Search table for {}").format(provider.name))       
             else:
                 aoi = selected_aoi
         return aoi
@@ -1943,36 +1933,7 @@ class Mapflow(QObject):
                 provider_name = None
         selected_image = self.dlg.metadataTable.selectedItems()
         wd_name = self.dlg.modelCombo.currentText()
-        wd = self.workflow_defs.get(wd_name)
-
-        provider = self.providers[self.dlg.providerCombo.currentIndex()]
-        if isinstance(provider, MyImageryProvider):
-            image = self.data_catalog_service.selected_image()
-            mosaic = self.data_catalog_service.selected_mosaic()
-            if image:
-                aoi = QgsGeometry().fromWkt(image.footprint)
-                print ("I", aoi)
-            elif mosaic:
-                # !!!
-                #self.tileJson_to_aoi(tileJsonUrl=mosaic.rasterLayer.tileJsonUrl)
-                layer = QgsVectorLayer('Polygon?crs=epsg:4326', 'Mosaic_Extent', 'memory')
-                layer.startEditing()
-                for i in self.data_catalog_service.get_mosaic_images(mosaic.id):
-                    #geoms.append(QgsGeometry().fromWkt(i.footprint))
-                    #geom = QgsGeometry().fromWkt(i.footprint)
-                    geom = QgsGeometry().fromWkt(i.footprint)
-                    feat = QgsFeature()
-                    feat.setGeometry(geom)
-                    layer.dataProvider().addFeatures([feat])
-                    layer.commitChanges()
-                aoi = QgsGeometry().fromRect(layer.extent())
-                print (aoi)
-        else:
-            aoi = self.get_aoi(provider_index=provider_index,
-                                raster_layer=imagery,
-                                use_image_extent_as_aoi=use_image_extent_as_aoi,
-                                selected_image=selected_image,
-                                selected_aoi=self.aoi)
+        wd = self.workflow_defs.get(wd_name)   
             
         try:
             self.check_processing_ui(allow_empty_name=allow_empty_name)
@@ -2029,10 +1990,9 @@ class Mapflow(QObject):
             if image:
                 processing_params.params.url = image.image_url
             elif mosaic:
-                #Doesn't work!!!
-                #processing_params.params.url = mosaic.rasterLayer.tileUrl
-                processing_params.params.url = 's3://users-data/d.ignatenko@geoalert.io_4051b511-a932-49fb-a621-d301bc285ffb/92651f09-da63-46cd-a224-d723fa9defad/'
-            print (processing_params)
+                image_url = self.data_catalog_service.get_mosaic_images(mosaic.id)[0].image_url
+                mosaic_url = image_url.rsplit('/',1)[0]+'/'
+                processing_params.params.url = mosaic_url
 
         if not helpers.check_processing_limit(billing_type=self.billing_type,
                                               remaining_limit=self.remaining_limit,
