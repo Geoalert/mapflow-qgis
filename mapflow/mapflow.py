@@ -1997,10 +1997,8 @@ class Mapflow(QObject):
                 image_url = self.data_catalog_service.get_mosaic_images(mosaic.id)[0].image_url
                 mosaic_url = image_url.rsplit('/',1)[0]+'/'
                 processing_params.params.url = mosaic_url
-        
-        print (processing_params)
 
-        """ if not helpers.check_processing_limit(billing_type=self.billing_type,
+        if not helpers.check_processing_limit(billing_type=self.billing_type,
                                               remaining_limit=self.remaining_limit,
                                               remaining_credits=self.remaining_credits,
                                               aoi_size=self.aoi_size,
@@ -2025,7 +2023,7 @@ class Mapflow(QObject):
                 self.post_processing(processing_params)
             except Exception as e:
                 self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
-            return """
+            return
 
     def upload_tif_callback(self,
                             response: QNetworkReply,
