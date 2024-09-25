@@ -1937,8 +1937,7 @@ class Mapflow(QObject):
                 provider_name = None
         selected_image = self.dlg.metadataTable.selectedItems()
         wd_name = self.dlg.modelCombo.currentText()
-        wd = self.workflow_defs.get(wd_name)   
-            
+        wd = self.workflow_defs.get(wd_name)
         try:
             self.check_processing_ui(allow_empty_name=allow_empty_name)
             if imagery:
@@ -1973,7 +1972,6 @@ class Mapflow(QObject):
             meta=processing_meta,
             params=provider_params,
             geometry=json.loads(aoi.asJson()))
-
         return processing_params, ""
 
     def create_processing(self) -> None:
