@@ -1915,7 +1915,7 @@ class Mapflow(QObject):
                     # raise PluginError(self.tr("Selection is not available for  {}").format(provider.name))
             elif provider.requires_image_id:
                 aoi = selected_aoi
-                # raise PluginError(self.tr("Please select image in Search table for {}").format(provider.name))       
+                # raise PluginError(self.tr("Please select image in Search table for {}").format(provider.name))
             else:
                 aoi = selected_aoi
         return aoi
