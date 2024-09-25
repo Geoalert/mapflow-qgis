@@ -243,8 +243,8 @@ class Mapflow(QObject):
         # Calculate AOI size
         self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area_polygon_layer)
         self.dlg.useImageExtentAsAoi.toggled.connect(self.calculate_aoi_area_use_image_extent)
-        self.dlg.mosaicTable.cellClicked.connect(self.calculate_aoi_area_catalog)
-        self.dlg.imageTable.cellClicked.connect(self.calculate_aoi_area_catalog)
+        self.dlg.mosaicTable.itemSelectionChanged.connect(self.calculate_aoi_area_catalog)
+        self.dlg.imageTable.itemSelectionChanged.connect(self.calculate_aoi_area_catalog)
         self.monitor_polygon_layer_feature_selection([
             self.project.mapLayer(layer_id) for layer_id in self.project.mapLayers(validOnly=True)
         ])
@@ -1621,6 +1621,10 @@ class Mapflow(QObject):
                 self.calculate_aoi_area(aoi, helpers.WGS84)
             elif mosaic and not image:
                 self.http.get(url=mosaic.rasterLayer.tileJsonUrl, callback=self.get_aoi_from_tileJson)
+            else:
+                self.dlg.disable_processing_start(reason=self.tr('Choose mosaic or image to start processing'),
+                                                  clear_area=True)
+                self.aoi = self.aoi_size = None
     
     def get_aoi_from_tileJson(self, response: QNetworkReply):
         bounds = json.loads(response.readAll().data()).get('bounds')
@@ -1993,8 +1997,10 @@ class Mapflow(QObject):
                 image_url = self.data_catalog_service.get_mosaic_images(mosaic.id)[0].image_url
                 mosaic_url = image_url.rsplit('/',1)[0]+'/'
                 processing_params.params.url = mosaic_url
+        
+        print (processing_params)
 
-        if not helpers.check_processing_limit(billing_type=self.billing_type,
+        """ if not helpers.check_processing_limit(billing_type=self.billing_type,
                                               remaining_limit=self.remaining_limit,
                                               remaining_credits=self.remaining_credits,
                                               aoi_size=self.aoi_size,
@@ -2019,7 +2025,7 @@ class Mapflow(QObject):
                 self.post_processing(processing_params)
             except Exception as e:
                 self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
-            return
+            return """
 
     def upload_tif_callback(self,
                             response: QNetworkReply,
