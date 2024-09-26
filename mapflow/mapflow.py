@@ -1619,7 +1619,7 @@ class Mapflow(QObject):
             if image:
                 aoi = QgsGeometry().fromWkt(image.footprint)
                 self.calculate_aoi_area(aoi, helpers.WGS84)
-            elif mosaic and not image:
+            elif mosaic:
                 self.http.get(url=mosaic.rasterLayer.tileJsonUrl, callback=self.get_aoi_from_tileJson)
             else:
                 self.dlg.disable_processing_start(reason=self.tr('Choose mosaic or image to start processing'),
@@ -1876,7 +1876,8 @@ class Mapflow(QObject):
         if not provider:
             raise PluginError(self.tr('Providers are not initialized'))
         provider_params, provider_meta = provider.to_processing_params(image_id=image_id,
-                                                                       provider_name=provider_name)
+                                                                       provider_name=provider_name,
+                                                                       url=s3_uri)
 
         meta.update(**provider_meta)
         return provider_params, meta
@@ -1949,8 +1950,22 @@ class Mapflow(QObject):
                                                      " MB").format(size=self.config.MAX_FILE_SIZE_PIXELS,
                                                                    memory=self.config.MAX_FILE_SIZE_BYTES // (
                                                                            1024 * 1024)))
+                
+            provider = self.providers[provider_index]
+            if isinstance(provider, MyImageryProvider):
+                image = self.data_catalog_service.selected_image()
+                mosaic = self.data_catalog_service.selected_mosaic()
+                if image:
+                    s3_uri = image.image_url
+                elif mosaic:
+                    image_uri = self.data_catalog_service.get_mosaic_images(mosaic.id)[0].image_url
+                    s3_uri = image_uri.rsplit('/',1)[0]+'/'
+            else:
+                s3_uri = None
+
             provider_params, processing_meta = self.get_processing_params(provider_index=provider_index,
                                                                           raster_layer=imagery,
+                                                                          s3_uri=s3_uri,
                                                                           image_id=image_id,
                                                                           provider_name=provider_name)
             aoi = self.get_aoi(provider_index=provider_index,

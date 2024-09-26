@@ -24,7 +24,8 @@ class SentinelProvider(ProviderInterface):
 
     def to_processing_params(self,
                              image_id: Optional[str] = None,
-                             provider_name: Optional[str] = None):
+                             provider_name: Optional[str] = None,
+                             url: Optional[str] = None):
         if not image_id:
             raise ImageIdRequired("Sentinel provider must have image ID to launch the processing")
         return PostSourceSchema(url=image_id,
@@ -64,7 +65,8 @@ class ImagerySearchProvider(ProviderInterface):
 
     def to_processing_params(self,
                              image_id: Optional[str] = None,
-                             provider_name: Optional[str] = None):
+                             provider_name: Optional[str] = None,
+                             url: Optional[str] = None):
         if not image_id:
             raise ImageIdRequired("Search provider must have image ID to launch the processing")
         return PostProviderSchema(data_provider=provider_name,
@@ -103,8 +105,14 @@ class MyImageryProvider(ProviderInterface):
     @classmethod
     def to_processing_params(self,
                              image_id: Optional[str] = None,
+                             provider_name: Optional[str] = None,
+                             url: Optional[str] = None):
+        return PostSourceSchema(url=url,
+                                source_type='local'), {}
+    """ def to_processing_params(self,
+                             image_id: Optional[str] = None,
                              provider_name: Optional[str] = None):
-        return PostProviderSchema(data_provider=provider_name), {}
+        return PostProviderSchema(data_provider=provider_name), {} """
 
 
 class DefaultProvider(ProviderInterface):
@@ -168,5 +176,6 @@ class DefaultProvider(ProviderInterface):
 
     def to_processing_params(self,
                              image_id: Optional[str] = None,
-                             provider_name: Optional[str] = None):
+                             provider_name: Optional[str] = None,
+                             url: Optional[str] = None):
         return PostProviderSchema(data_provider=self.api_name), {}
