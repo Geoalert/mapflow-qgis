@@ -138,7 +138,7 @@ class DataCatalogApi(QObject):
                                   callback_kwargs=callback_kwargs,
                                   use_default_error_handler=error_handler is None,
                                   error_handler=error_handler,
-                                  error_handler_kwargs=error_handler_kwargs or {}
+                                  error_handler_kwargs=error_handler_kwargs or {},
                                   timeout=3600
                                  )
         body.setParent(response)
