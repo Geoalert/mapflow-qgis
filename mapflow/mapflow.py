@@ -1981,8 +1981,6 @@ class Mapflow(QObject):
                         s3_uri = image_uri.rsplit('/',1)[0]+'/'
                     except:
                         s3_uri = None
-            """ else:
-                s3_uri = None """
 
             provider_params, processing_meta = self.get_processing_params(provider_index=provider_index,
                                                                           raster_layer=imagery,

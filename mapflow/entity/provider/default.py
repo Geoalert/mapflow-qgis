@@ -109,11 +109,6 @@ class MyImageryProvider(ProviderInterface):
                              url: Optional[str] = None):
         return PostSourceSchema(url=url,
                                 source_type='local'), {}
-    """ def to_processing_params(self,
-                             image_id: Optional[str] = None,
-                             provider_name: Optional[str] = None):
-        return PostProviderSchema(data_provider=provider_name), {} """
-
 
 class DefaultProvider(ProviderInterface):
     """
