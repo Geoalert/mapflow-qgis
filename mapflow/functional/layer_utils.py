@@ -25,7 +25,7 @@ from qgis.core import (QgsRectangle,
                        QgsCoordinateTransform
                        )
 
-from .geometry import clip_aoi_to_image_extent
+from .geometry import clip_aoi_to_image_extent, clip_aoi_to_catalog_extent
 from .helpers import WGS84, to_wgs84, WGS84_ELLIPSOID
 from ..dialogs.dialogs import ErrorMessageWidget
 from ..schema.catalog import AoiResponseSchema
@@ -135,6 +135,21 @@ def get_raster_aoi(raster_layer: QgsRasterLayer,
     else:
         feature = layer_extent
     return feature.geometry()
+
+
+def get_catalog_aoi(catalog_aoi: QgsGeometry,
+                    selected_aoi: QgsVectorLayer,
+                    use_image_extent_as_aoi: bool) -> QgsGeometry:
+    if not use_image_extent_as_aoi:
+        try:
+            clipped_aoi_feature = next(clip_aoi_to_catalog_extent(catalog_aoi=catalog_aoi,
+                                                                selected_aoi=selected_aoi))
+            clipped_aoi = clipped_aoi_feature.geometry()
+        except StopIteration:
+            return None
+    else:
+        clipped_aoi = catalog_aoi
+    return clipped_aoi
 
 
 def is_polygon_layer(layer: QgsMapLayer) -> bool:

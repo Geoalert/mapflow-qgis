@@ -1614,17 +1614,20 @@ class Mapflow(QObject):
         """
         provider = self.providers[self.dlg.providerIndex()]
         if isinstance(provider, MyImageryProvider):
-            image = self.data_catalog_service.selected_image()
-            mosaic = self.data_catalog_service.selected_mosaic()
-            if image:
-                aoi = QgsGeometry().fromWkt(image.footprint)
-                self.calculate_aoi_area(aoi, helpers.WGS84)
-            elif mosaic:
-                self.http.get(url=mosaic.rasterLayer.tileJsonUrl, callback=self.get_aoi_from_tileJson)
+            if self.dlg.useImageExtentAsAoi.isChecked():
+                image = self.data_catalog_service.selected_image()
+                mosaic = self.data_catalog_service.selected_mosaic()
+                if image:
+                    aoi = QgsGeometry().fromWkt(image.footprint)
+                    self.calculate_aoi_area(aoi, helpers.WGS84)
+                elif mosaic:
+                    self.http.get(url=mosaic.rasterLayer.tileJsonUrl, callback=self.get_aoi_from_tileJson)
+                else:
+                    self.dlg.disable_processing_start(reason=self.tr('Choose mosaic or image to start processing'),
+                                                    clear_area=True)
+                    self.aoi = self.aoi_size = None
             else:
-                self.dlg.disable_processing_start(reason=self.tr('Choose mosaic or image to start processing'),
-                                                  clear_area=True)
-                self.aoi = self.aoi_size = None
+                self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
     
     def get_aoi_from_tileJson(self, response: QNetworkReply):
         bounds = json.loads(response.readAll().data()).get('bounds')
@@ -1917,6 +1920,20 @@ class Mapflow(QObject):
             elif provider.requires_image_id:
                 aoi = selected_aoi
                 # raise PluginError(self.tr("Please select image in Search table for {}").format(provider.name))
+            elif isinstance(provider, MyImageryProvider):
+                image = self.data_catalog_service.selected_image()
+                mosaic = self.data_catalog_service.selected_mosaic()
+                if image:
+                    catalog_aoi = QgsGeometry().fromWkt(image.footprint)
+                elif mosaic:
+                    #catalog_aoi = self.http.get(url=mosaic.rasterLayer.tileJsonUrl, callback=self.get_aoi_from_tileJson)
+                    #wait untill mosaic.footprint (API), because previous line with callback does not work !!!
+                    catalog_aoi = selected_aoi
+                aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
+                                                selected_aoi=self.dlg.polygonCombo.currentLayer(),
+                                                use_image_extent_as_aoi=use_image_extent_as_aoi)
+                if not aoi:
+                    raise AoiNotIntersectsImage()
             else:
                 aoi = selected_aoi
         return aoi
@@ -1952,16 +1969,20 @@ class Mapflow(QObject):
                                                                            1024 * 1024)))
                 
             provider = self.providers[provider_index]
+            s3_uri = None
             if isinstance(provider, MyImageryProvider):
                 image = self.data_catalog_service.selected_image()
                 mosaic = self.data_catalog_service.selected_mosaic()
                 if image:
                     s3_uri = image.image_url
                 elif mosaic:
-                    image_uri = self.data_catalog_service.get_mosaic_images(mosaic.id)[0].image_url
-                    s3_uri = image_uri.rsplit('/',1)[0]+'/'
-            else:
-                s3_uri = None
+                    try:
+                        image_uri = self.data_catalog_service.get_mosaic_images(mosaic.id)[0].image_url
+                        s3_uri = image_uri.rsplit('/',1)[0]+'/'
+                    except:
+                        s3_uri = None
+            """ else:
+                s3_uri = None """
 
             provider_params, processing_meta = self.get_processing_params(provider_index=provider_index,
                                                                           raster_layer=imagery,
@@ -1974,7 +1995,7 @@ class Mapflow(QObject):
                                selected_image=selected_image,
                                selected_aoi=self.aoi)
         except AoiNotIntersectsImage:
-            return None, self.tr("Selected AOI does not intestect the selected image")
+            return None, self.tr("Selected AOI does not intestect the selected imagery")
         except ImageIdRequired:
             return None, self.tr("This provider requires image ID. Use search tab to find imagery for you requirements, "
                                  "and select image in the table.")
