@@ -532,7 +532,7 @@ class ResultsLoader(QObject):
         # Layer creation options for QGIS 3.10.3+
         write_options = QgsVectorFileWriter.SaveVectorOptions()
         write_options.layerOptions = ['fid=id']
-        with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb+') as f:
+        with open(os.path.join(str(self.temp_dir), os.urandom(32).hex()), mode='wb+') as f:
             f.write(response.readAll().data())
             f.seek(0)
             layer = QgsVectorLayer(f.name, '', 'ogr')
