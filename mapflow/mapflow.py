@@ -193,7 +193,7 @@ class Mapflow(QObject):
                                                        project=self.project,
                                                        settings=self.settings,
                                                        plugin_name=self.plugin_name,
-                                                       temp_dir=self.temp_dir
+                                                       temp_dir=self.temp_dir_name
                                                        )
 
         self.data_catalog_service = DataCatalogService(self.http, self.server, self.dlg, self.iface, self.result_loader, self.plugin_version)
@@ -342,17 +342,6 @@ class Mapflow(QObject):
         iface.addCustomActionForLayerType(self.remove_layer_action, None, QgsMapLayerType.VectorLayer, False)
         self.dlg.useAllVectorLayers.stateChanged.connect(self.toggle_all_layers)
         self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
-
-        # Service init
-        self.result_loader = layer_utils.ResultsLoader(iface=self.iface,
-                                                       maindialog=self.dlg,
-                                                       http=self.http,
-                                                       server=self.server,
-                                                       project=self.project,
-                                                       settings=self.settings,
-                                                       plugin_name=self.plugin_name,
-                                                       temp_dir=self.temp_dir
-                                                       )
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
