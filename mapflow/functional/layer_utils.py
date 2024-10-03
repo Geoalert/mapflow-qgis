@@ -141,14 +141,24 @@ def get_catalog_aoi(catalog_aoi: QgsGeometry,
                     selected_aoi: QgsVectorLayer,
                     use_image_extent_as_aoi: bool) -> QgsGeometry:
     if not use_image_extent_as_aoi:
-        try:
-            clipped_aoi_feature = next(clip_aoi_to_catalog_extent(catalog_aoi=catalog_aoi,
-                                                                selected_aoi=selected_aoi))
-            clipped_aoi = clipped_aoi_feature.geometry()
+        """ try:
+            clipped_aoi_features = clip_aoi_to_catalog_extent(catalog_aoi=catalog_aoi,
+                                                                selected_aoi=selected_aoi)
+            clipped_aoi_list = []
+            for feature in clipped_aoi_features:
+                clipped_aoi = feature.geometry()
+                clipped_aoi_list.append(clipped_aoi)
+            print (clipped_aoi_list)
         except StopIteration:
-            return None
+            return None """
+        #try:
+        clipped_aoi = QgsGeometry.fromMultipolygon(clip_aoi_to_catalog_extent(catalog_aoi=catalog_aoi,
+                                                                                selected_aoi=selected_aoi))
+        #except StopIteration:
+        #    return None
     else:
         clipped_aoi = catalog_aoi
+    print (clipped_aoi)
     return clipped_aoi
 
 

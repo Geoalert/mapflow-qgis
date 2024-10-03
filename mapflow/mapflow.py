@@ -2019,7 +2019,9 @@ class Mapflow(QObject):
             self.alert(error, icon=QMessageBox.Warning)
             return
         
-        provider = self.providers[self.dlg.providerCombo.currentIndex()]
+        print (processing_params)
+        
+        """ provider = self.providers[self.dlg.providerCombo.currentIndex()]
         if isinstance(provider, MyImageryProvider):
             image = self.data_catalog_service.selected_image()
             mosaic = self.data_catalog_service.selected_mosaic()
@@ -2055,7 +2057,7 @@ class Mapflow(QObject):
                 self.post_processing(processing_params)
             except Exception as e:
                 self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
-            return
+            return """
 
     def upload_tif_callback(self,
                             response: QNetworkReply,
