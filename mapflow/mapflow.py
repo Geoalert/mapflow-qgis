@@ -1918,11 +1918,14 @@ class Mapflow(QObject):
                     #catalog_aoi = self.http.get(url=mosaic.rasterLayer.tileJsonUrl, callback=self.get_aoi_from_tileJson)
                     #wait untill mosaic.footprint (API), because previous line with callback does not work !!!
                     catalog_aoi = selected_aoi
-                aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
-                                                selected_aoi=self.dlg.polygonCombo.currentLayer(),
-                                                use_image_extent_as_aoi=use_image_extent_as_aoi)
-                if not aoi:
-                    raise AoiNotIntersectsImage()
+                if image or mosaic:
+                    aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
+                                                    selected_aoi=self.dlg.polygonCombo.currentLayer(),
+                                                    use_image_extent_as_aoi=use_image_extent_as_aoi)
+                    if not aoi:
+                        raise AoiNotIntersectsImage()
+                else:
+                    aoi = selected_aoi
             else:
                 aoi = selected_aoi
         return aoi
@@ -2007,10 +2010,7 @@ class Mapflow(QObject):
         if not processing_params:
             self.alert(error, icon=QMessageBox.Warning)
             return
-        
-        print (processing_params)
-        
-        """ provider = self.providers[self.dlg.providerCombo.currentIndex()]
+        provider = self.providers[self.dlg.providerCombo.currentIndex()]
         if isinstance(provider, MyImageryProvider):
             image = self.data_catalog_service.selected_image()
             mosaic = self.data_catalog_service.selected_mosaic()
@@ -2046,7 +2046,7 @@ class Mapflow(QObject):
                 self.post_processing(processing_params)
             except Exception as e:
                 self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
-            return """
+            return
 
     def upload_tif_callback(self,
                             response: QNetworkReply,

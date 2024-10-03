@@ -37,4 +37,4 @@ def clip_aoi_to_catalog_extent(catalog_aoi: QgsGeometry,
     intersection = qgis_processing.run('qgis:intersection',
                                       {'INPUT': selected_aoi, 'OVERLAY': catalog_layer, 'OUTPUT': 'memory:'}
                                       )['OUTPUT']
-    return intersection#.getFeatures()
+    return intersection.getFeatures()

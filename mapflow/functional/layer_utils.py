@@ -140,25 +140,18 @@ def get_raster_aoi(raster_layer: QgsRasterLayer,
 def get_catalog_aoi(catalog_aoi: QgsGeometry,
                     selected_aoi: QgsVectorLayer,
                     use_image_extent_as_aoi: bool) -> QgsGeometry:
+    """Return either AOI geometry if it intersects with imagery frootprint or the footprint itself.
+    :param catalog_aoi: Image or mosaic footprint.
+    :param selected_aoi: Currently selected in polygonCombo AOI layer.
+    """
     if not use_image_extent_as_aoi:
-        """ try:
-            clipped_aoi_features = clip_aoi_to_catalog_extent(catalog_aoi=catalog_aoi,
-                                                                selected_aoi=selected_aoi)
-            clipped_aoi_list = []
-            for feature in clipped_aoi_features:
-                clipped_aoi = feature.geometry()
-                clipped_aoi_list.append(clipped_aoi)
-            print (clipped_aoi_list)
-        except StopIteration:
-            return None """
-        #try:
-        clipped_aoi = QgsGeometry.fromMultipolygon(clip_aoi_to_catalog_extent(catalog_aoi=catalog_aoi,
-                                                                                selected_aoi=selected_aoi))
-        #except StopIteration:
-        #    return None
+        clipped_aoi_features = clip_aoi_to_catalog_extent(catalog_aoi=catalog_aoi, selected_aoi=selected_aoi)
+        clipped_aoi = QgsGeometry.fromWkt('GEOMETRYCOLLECTION()')
+        for feature in clipped_aoi_features:
+            geom = feature.geometry()
+            clipped_aoi = clipped_aoi.combine(geom)
     else:
         clipped_aoi = catalog_aoi
-    print (clipped_aoi)
     return clipped_aoi
 
 
