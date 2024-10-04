@@ -1918,12 +1918,23 @@ class Mapflow(QObject):
                     #catalog_aoi = self.http.get(url=mosaic.rasterLayer.tileJsonUrl, callback=self.get_aoi_from_tileJson)
                     #wait untill mosaic.footprint (API), because previous line with callback does not work !!!
                     catalog_aoi = selected_aoi
-                if image or mosaic:
+                """ if image or mosaic:
                     aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
                                                     selected_aoi=self.dlg.polygonCombo.currentLayer(),
-                                                    use_image_extent_as_aoi=use_image_extent_as_aoi)
-                    if not aoi:
-                        raise AoiNotIntersectsImage()
+                                                    use_image_extent_as_aoi=use_image_extent_as_aoi) """
+                
+                # Temporaty fix
+
+                if not use_image_extent_as_aoi:
+                    aoi = selected_aoi
+                else:
+                    aoi = catalog_aoi
+
+                #
+
+                if not aoi:
+                    raise AoiNotIntersectsImage()
+                
                 else:
                     aoi = selected_aoi
             else:
