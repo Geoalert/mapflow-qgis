@@ -1613,7 +1613,7 @@ class Mapflow(QObject):
                     self.http.get(url=mosaic.rasterLayer.tileJsonUrl, callback=self.get_aoi_from_tileJson)
                 else:
                     self.dlg.disable_processing_start(reason=self.tr('Choose mosaic or image to start processing'),
-                                                    clear_area=True)
+                                                      clear_area=True)
                     self.aoi = self.aoi_size = None
             else:
                 self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
@@ -1672,6 +1672,7 @@ class Mapflow(QObject):
             self.aoi_size = layer_utils.calculate_aoi_area(real_aoi, self.project.transformContext())
         except Exception as e:
             self.aoi_size = 0
+        
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
         self.update_processing_cost()
 
@@ -1918,23 +1919,13 @@ class Mapflow(QObject):
                     #catalog_aoi = self.http.get(url=mosaic.rasterLayer.tileJsonUrl, callback=self.get_aoi_from_tileJson)
                     #wait untill mosaic.footprint (API), because previous line with callback does not work !!!
                     catalog_aoi = selected_aoi
-                """ if image or mosaic:
+                if image or mosaic:
                     aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
-                                                    selected_aoi=self.dlg.polygonCombo.currentLayer(),
-                                                    use_image_extent_as_aoi=use_image_extent_as_aoi) """
-                
-                # Temporaty fix
-
-                if not use_image_extent_as_aoi:
+                                                      selected_aoi=self.dlg.polygonCombo.currentLayer(),
+                                                      use_image_extent_as_aoi=use_image_extent_as_aoi)
+                    if not aoi:
+                        raise AoiNotIntersectsImage()
                     aoi = selected_aoi
-                else:
-                    aoi = catalog_aoi
-
-                #
-
-                if not aoi:
-                    raise AoiNotIntersectsImage()
-                
                 else:
                     aoi = selected_aoi
             else:
