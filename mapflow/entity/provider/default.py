@@ -2,7 +2,7 @@ from typing import Optional
 
 from .provider import BasicAuth
 from .provider import ProviderInterface, SourceType, CRS
-from ...constants import SENTINEL_OPTION_NAME, SEARCH_OPTION_NAME
+from ...constants import SENTINEL_OPTION_NAME, SEARCH_OPTION_NAME, CATALOG_OPTION_NAME
 from ...errors.plugin_errors import ImageIdRequired
 from ...schema import PostSourceSchema, PostProviderSchema
 from ...schema.provider import ProviderReturnSchema
@@ -24,7 +24,8 @@ class SentinelProvider(ProviderInterface):
 
     def to_processing_params(self,
                              image_id: Optional[str] = None,
-                             provider_name: Optional[str] = None):
+                             provider_name: Optional[str] = None,
+                             url: Optional[str] = None):
         if not image_id:
             raise ImageIdRequired("Sentinel provider must have image ID to launch the processing")
         return PostSourceSchema(url=image_id,
@@ -64,7 +65,8 @@ class ImagerySearchProvider(ProviderInterface):
 
     def to_processing_params(self,
                              image_id: Optional[str] = None,
-                             provider_name: Optional[str] = None):
+                             provider_name: Optional[str] = None,
+                             url: Optional[str] = None):
         if not image_id:
             raise ImageIdRequired("Search provider must have image ID to launch the processing")
         return PostProviderSchema(data_provider=provider_name,
@@ -78,6 +80,35 @@ class ImagerySearchProvider(ProviderInterface):
     def is_default(self):
         return True
 
+
+class MyImageryProvider(ProviderInterface):
+    """
+    Allows to create mosaics and upload user's imagery 
+    to later run a processing using it
+    """
+
+    def __init__(self):
+        super().__init__(name=CATALOG_OPTION_NAME)
+
+    @property
+    def meta_url(self):
+        return None
+
+    @property
+    def is_default(self):
+        return True
+    
+    @property
+    def requires_image_id(self):
+        return False
+    
+    @classmethod
+    def to_processing_params(self,
+                             image_id: Optional[str] = None,
+                             provider_name: Optional[str] = None,
+                             url: Optional[str] = None):
+        return PostSourceSchema(url=url,
+                                source_type='local'), {}
 
 class DefaultProvider(ProviderInterface):
     """
@@ -140,5 +171,6 @@ class DefaultProvider(ProviderInterface):
 
     def to_processing_params(self,
                              image_id: Optional[str] = None,
-                             provider_name: Optional[str] = None):
+                             provider_name: Optional[str] = None,
+                             url: Optional[str] = None):
         return PostProviderSchema(data_provider=self.api_name), {}

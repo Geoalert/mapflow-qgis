@@ -90,6 +90,10 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # Restored saved state
         self.set_state_from_settings()
 
+        # Hide progress bar that appers only when uploading images to mosaic
+        self.uploadProgressBar.setVisible(False)
+        self.uploadingImagesLabel.setVisible(False)
+
     # ===== Settings management ===== #
     def save_view_results_mode(self):
         if self.viewAsTiles.isChecked():

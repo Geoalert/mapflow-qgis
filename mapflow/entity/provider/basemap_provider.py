@@ -14,7 +14,8 @@ from ...schema.processing import PostSourceSchema
 class BasemapProvider(UsersProvider, ABC):
     def to_processing_params(self,
                              image_id: Optional[str] = None,
-                             provider_name: Optional[str] = None):
+                             provider_name: Optional[str] = None,
+                             url: Optional[str] = None):
         params = {
             'url': self.url,
             'projection': self.crs.value.lower(),
@@ -119,7 +120,8 @@ class MaxarProvider(UsersProvider):
 
     def to_processing_params(self,
                              image_id: Optional[str] = None,
-                             provider_name: Optional[str] = None):
+                             provider_name: Optional[str] = None,
+                             url: Optional[str] = None):
         params = PostSourceSchema(url=maxar_tile_url(self.url, image_id),
                                   source_type=self.source_type,
                                   projection=self.crs.value,

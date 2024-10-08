@@ -136,13 +136,17 @@ class DataCatalogService(QObject):
         mosaic = self.selected_mosaic()
         image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), "Choose image to upload", filter='(TIF files *.tif; *.tiff)')[0]
         self.upload_images(response=None, mosaic_id=mosaic.id, image_paths=image_paths, uploaded=[], failed=[])
+        if image_paths:
+            self.dlg.uploadProgressBar.setVisible(True)
+            self.dlg.uploadingImagesLabel.setVisible(True)
+            self.dlg.uploadProgressBar.setMaximum(len(image_paths))
 
     def upload_images(self,
                       response: QNetworkReply,
                       mosaic_id: UUID,
                       image_paths: Sequence[Union[Path, str]],
                       uploaded: Sequence[Union[Path, str]],
-                      failed: Sequence[Union[Path, str]]):             
+                      failed: Sequence[Union[Path, str]]):           
         if len(image_paths) == 0:
             if failed:
                 self.api.upload_image_error_handler(image_paths=failed)
@@ -164,6 +168,10 @@ class DataCatalogService(QObject):
                                                         'uploaded': uploaded,
                                                         'failed': list(failed) + [image_to_upload]},
                                 )
+        self.dlg.uploadProgressBar.setValue(len(uploaded))
+        if self.dlg.uploadProgressBar.value() == self.dlg.uploadProgressBar.maximum():
+            self.dlg.uploadProgressBar.setVisible(False)
+            self.dlg.uploadingImagesLabel.setVisible(False)
 
     def get_mosaic_images(self, mosaic_id):
         self.api.get_mosaic_images(mosaic_id=mosaic_id, callback=self.get_mosaic_images_callback)
