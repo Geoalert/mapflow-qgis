@@ -49,6 +49,7 @@ class MosaicReturnSchema(SkipDataClass):
     rasterLayer: RasterLayer
     name: str
     created_at: datetime
+    footprint: str
     tags: Union[Sequence[str], None] = ()
 
     def __post_init__(self):
