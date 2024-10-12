@@ -105,6 +105,8 @@ class Mapflow(QObject):
         self.iface = iface
         self.main_window = self.iface.mainWindow()
         self.workflow_defs = {}
+        self.current_project = None
+        self.user_role = None
         self.aoi_layers = []
         self.preview_dict = {}
         self.project_connection = None
@@ -343,6 +345,11 @@ class Mapflow(QObject):
             self.dlg.zoomCombo.currentIndexChanged.connect(lambda: self.settings.setValue('zoom', str(self.dlg.zoomCombo.currentText())) 
                                                            if self.dlg.zoomCombo.currentIndex() != 0 else
                                                            self.settings.setValue('zoom', None))
+        
+        # ...
+        self.app_startup_user_update_timer.timeout.connect(self.check_project_sharing)
+        self.dlg.projectsCombo.currentIndexChanged.connect(self.check_project_sharing)
+       
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
@@ -605,7 +612,7 @@ class Mapflow(QObject):
         dlg_login = MapflowLoginDialog(self.main_window, self.use_oauth, self.settings.value("token", ""))
         dlg_login.setWindowTitle(helpers.generate_plugin_header(self.tr("Log in ") + self.plugin_name,
                                                                      self.config.MAPFLOW_ENV,
-                                                                     None))
+                                                                     None, None, None))
         dlg_login.logIn.clicked.connect(self.read_mapflow_token)
         dlg_login.useOauth.toggled.connect(self.set_auth_type)
         return dlg_login
@@ -670,6 +677,16 @@ class Mapflow(QObject):
         # Manually toggle function to avoid race condition
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
         self.setup_processings_table()
+        if self.user_role in ('readonly', 'contributor', 'maintainer'):
+            self.dlg.deleteProject.setEnabled(False)
+            self.dlg.deleteProject.setToolTip(self.tr(f'Not enougth rights to delete shared project ({self.user_role})'))
+            self.dlg.updateProject.setEnabled(False)
+            self.dlg.updateProject.setToolTip(self.tr(f'Not enougth rights to update shared project ({self.user_role})'))
+        else:
+            self.dlg.deleteProject.setEnabled(True)
+            self.dlg.deleteProject.setToolTip('')
+            self.dlg.updateProject.setEnabled(True)
+            self.dlg.updateProject.setToolTip('')
 
     def create_project(self):
         dialog = CreateProjectDialog(self.dlg)
@@ -1014,6 +1031,7 @@ class Mapflow(QObject):
 
     def request_mapflow_metadata_error_handler(self, response: QNetworkReply):
         self.report_http_error(response,
+                               response.readAll().data().decode(),
                                self.tr("We couldn't get metadata from the Mapflow Imagery Catalog, "
                                        "error {error}").format(
                                    error=response.attribute(QNetworkRequest.HttpStatusCodeAttribute)),
@@ -1175,7 +1193,7 @@ class Mapflow(QObject):
         if error == QNetworkReply.ContentAccessDenied:
             self.alert(self.tr('Please, check your credentials'))
         else:
-            self.report_http_error(response, self.tr("We couldn't fetch Sentinel metadata"))
+            self.report_http_error(response, response.readAll().data().decode(), self.tr("We couldn't fetch Sentinel metadata"))
 
     def fetch_skywatch_metadata(
             self,
@@ -1323,7 +1341,7 @@ class Mapflow(QObject):
             timer.deleteLater()
         except (RuntimeError, AttributeError):  # None or has been destroyed
             pass
-        self.report_http_error(response, self.tr("We couldn't fetch Sentinel metadata"))
+        self.report_http_error(response, response.readAll().data().decode(), self.tr("We couldn't fetch Sentinel metadata"))
 
     def get_maxar_metadata(
             self,
@@ -1412,6 +1430,7 @@ class Mapflow(QObject):
             self.alert(self.tr('Please, check your Maxar credentials'))
         else:
             self.report_http_error(response,
+                                   response.readAll().data().decode(),
                                    self.tr("We couldn't get metadata from Maxar, "
                                            "error {error}").format(
                                        error=response.attribute(QNetworkRequest.HttpStatusCodeAttribute)),
@@ -1544,6 +1563,9 @@ class Mapflow(QObject):
             self.dlg.disable_processing_start(reason=self.tr('Set AOI to start processing'),
                                               clear_area=True)
             self.aoi = self.aoi_size = None
+            if self.user_role == 'readonly':
+                self.dlg.disable_processing_start(reason=self.tr(f'Not enougth rights to start processing in a shared project ({self.user_role})'),
+                                                  clear_area=True)
             return
 
         features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
@@ -1645,10 +1667,10 @@ class Mapflow(QObject):
             # Here the button must already be disabled, and the warning text set
             if self.dlg.startProcessing.isEnabled():
                 self.dlg.disable_processing_start(reason=self.tr("Set AOI to start processing"),
-                                                  clear_area=False)
+                                                clear_area=False)
         elif not self.workflow_defs:
             self.dlg.disable_processing_start(reason=self.tr("Error! Models are not initialized"),
-                                              clear_area=True)
+                                              clear_area=True)            
         elif self.billing_type != BillingType.credits:
             self.dlg.startProcessing.setEnabled(True)
             self.dlg.processingProblemsLabel.clear()
@@ -1684,6 +1706,9 @@ class Mapflow(QObject):
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         response_data = response.readAll().data().decode()
         self.processing_cost = int(response_data)
+        if self.user_role == 'readonly':
+            self.dlg.disable_processing_start(reason=self.tr(f'Not enougth rights to start processing in a shared project ({self.user_role})'), clear_area=True)
+            return
         self.dlg.processingProblemsLabel.setPalette(self.dlg.default_palette)
         self.dlg.processingProblemsLabel.setText(self.tr("Processsing cost: {cost} credits").format(cost=response_data))
         self.dlg.startProcessing.setEnabled(True)
@@ -1724,7 +1749,7 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        self.report_http_error(response, self.tr("Error deleting a processing"))
+        self.report_http_error(response, response.readAll().data().decode(), self.tr("Error deleting a processing"))
 
     def upload_image(self, layer,
                      processing_params: Optional[PostProcessingSchema] = None,
@@ -1996,6 +2021,7 @@ class Mapflow(QObject):
 
         """
         self.report_http_error(response=response,
+                               response_body=response.readAll().data().decode(),
                                title=self.tr("We couldn't upload your GeoTIFF"),
                                error_message_parser=data_catalog_message_parser)
 
@@ -2036,7 +2062,6 @@ class Mapflow(QObject):
         :param response: The HTTP response.
         """
         error = response.error()
-        response_body = response.readAll().data().decode()
         if error == QNetworkReply.ContentAccessDenied \
                 and "data provider" in response_body.lower():
             self.alert(self.tr('Data provider with id is unavailable on your plan. \n '
@@ -2047,7 +2072,7 @@ class Mapflow(QObject):
             # In this case, when "data provider" is in the message, there can't be index error
         else:
             self.report_http_error(response,
-                                   response_body,
+                                   response.readAll().data().decode(),
                                    self.tr('Processing creation failed'),
                                    error_message_parser=api_message_parser)
 
@@ -2150,7 +2175,7 @@ class Mapflow(QObject):
             )
             return
         self.alert(self.tr("Sorry, we couldn't load the image"))
-        self.report_http_error(response, self.tr('Error previewing Sentinel imagery'))
+        self.report_http_error(response, response.readAll().data().decode(), self.tr('Error previewing Sentinel imagery'))
 
     def preview_catalog(self, image_id):
         feature = self.metadata_feature(image_id)
@@ -2266,7 +2291,7 @@ class Mapflow(QObject):
         self.project.addMapLayer(layer)
 
     def preview_png_error_handler(self, response: QNetworkReply):
-        self.report_http_error(response, "Could not display preview")
+        self.report_http_error(response, response.readAll().data().decode(), self.tr("Could not display preview"))
 
     def preview_sentinel(self, image_id):
         selected_cells = self.dlg.metadataTable.selectedItems()
@@ -2554,9 +2579,12 @@ class Mapflow(QObject):
             reason = self.tr("Please select rating to submit")
         else:
             reason = ""
-        self.dlg.enable_rating(status_ok,
-                               rating_selected,
-                               reason)
+        if self.user_role not in ('readonly', 'contributor'):
+            self.dlg.enable_rating(status_ok,
+                                   rating_selected,
+                                   reason)
+        else:
+            self.dlg.ratingComboBox.setToolTip(self.tr(f"Not enougth rights to rate processing in a shared project ({self.user_role})"))
 
     def enable_feedback(self) -> None:
         """
@@ -2779,7 +2807,9 @@ class Mapflow(QObject):
         # Set main dialog title dynamically so it could be overridden when used as a submodule
         self.dlg.setWindowTitle(helpers.generate_plugin_header(self.plugin_name,
                                                                env=self.config.MAPFLOW_ENV,
-                                                               project_name=None))
+                                                               project_name=None,
+                                                               user_role=None,
+                                                               project_owner=None))
         # Display plugin icon in own toolbar
         plugin_button = QAction(self.plugin_icon, self.plugin_name, self.main_window)
         plugin_button.triggered.connect(self.main)
@@ -2922,7 +2952,7 @@ class Mapflow(QObject):
                 QNetworkReply.RemoteHostClosedError,
                 QNetworkReply.NetworkSessionFailedError,
         ):
-            self.report_http_error(response, self.tr(
+            self.report_http_error(response, response.readAll().data().decode(), self.tr(
                 service + ' is not responding. Please, try again.\n\n'
                           'If you are behind a proxy or firewall,\ncheck your QGIS proxy settings.\n'),
                                    error_message_parser=parser)
@@ -2938,15 +2968,23 @@ class Mapflow(QObject):
                 QNetworkReply.ProxyTimeoutError,
                 QNetworkReply.ProxyAuthenticationRequiredError,
         ):
-            self.report_http_error(response, self.tr('Proxy error. Please, check your proxy settings.'))
+            self.report_http_error(response, response.readAll().data().decode(), self.tr('Proxy error. Please, check your proxy settings.'))
             return True
         elif error == QNetworkReply.ContentAccessDenied:
-            self.report_http_error(response,
-                                   self.tr("This operation is forbidden for your account, contact us"),
-                                   error_message_parser=parser)
+            if self.user_role in ('readonly', 'contributor', 'maintainer'):
+                self.report_http_error(response,
+                                       response.readAll().data().decode(),
+                                       self.tr("Not enougth rights for this action\n" +
+                                            self.tr(f"in a shared project '{self.current_project.name}' ({self.user_role})")),
+                                       error_message_parser=parser)
+            else:
+                self.report_http_error(response,
+                                       response.readAll().data().decode(),
+                                       self.tr("This operation is forbidden for your account, contact us"),
+                                       error_message_parser=parser)
             return True
         else:
-            self.report_http_error(response, self.tr("Error"), error_message_parser=parser)
+            self.report_http_error(response, response.readAll().data().decode(), self.tr("Error"), error_message_parser=parser)
         return False
 
     def report_http_error(self,
@@ -3139,6 +3177,46 @@ class Mapflow(QObject):
                                                                                   dialog.processing()))
         dialog.setup(processing)
         dialog.deleteLater()
+
+    def check_project_sharing(self):
+        if len(self.dlg.projectsCombo) != 0:
+            self.current_project = self.projects[self.dlg.projectsCombo.currentIndex()]
+            project_name = self.current_project.name
+            if self.current_project.shareProject:
+                # Get user role, if project is shared
+                users = self.current_project.shareProject.users
+                self.user_role = None
+                if users:
+                    for user in users:
+                        if user.email == self.username:
+                            self.user_role = user.role
+                            # And remove/add back renaming option from save options menu
+                            if self.user_role in ('readonly', 'contributor'):
+                                self.options_menu.removeAction(self.processing_update_action)
+                            else:
+                                self.options_menu.addAction(self.processing_update_action)
+                # Disable needed buttons
+                self.dlg.disable_shared_project(self.user_role)
+                # Get project owner
+                owners = self.current_project.shareProject.owners
+                project_owner = None
+                if owners:
+                    # If user is an owner of a project, show only project name
+                    for owner in owners:
+                        if owner.email == self.username:
+                            project_owner = None
+                            self.user_role = None
+                    # Else - show first owner
+                    project_owner = owners[0].email
+            else:
+                project_owner = None
+                self.user_role = None
+            # Specify new main window header
+            self.dlg.setWindowTitle(helpers.generate_plugin_header(self.plugin_name,
+                                                                   env=self.config.MAPFLOW_ENV,
+                                                                   project_name=project_name,
+                                                                   user_role=self.user_role,
+                                                                   project_owner=project_owner))
 
     @property
     def basemap_providers(self):

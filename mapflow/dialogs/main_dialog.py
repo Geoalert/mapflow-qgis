@@ -416,3 +416,58 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.deleteProject.setToolTip(tooltip)
         self.updateProject.setToolTip(tooltip)
 
+    def disable_shared_project(self, user_role: str):
+        """Disable buttons depending on user role in a shared project.
+        Does not handle:
+        - startProcessing button (it instantly turns back on in 'calculate_processing_cost_callback' in mapflow.py, 
+                                  so it should be disabled there);
+        - processing renaming option that's inside saveOptionsButton (it's a QMenu(), so to not pass it to dlg, this option should be 
+                                                                      removed/added there the menu was initialized - in mapflow.py);
+        - deleteProject and updateProject (buttons instantly turn back on in 'on_project_change' in mapflow.py,
+                                           so it should be disabled there).
+
+        :param user_role: current user's role in a project (from ShareProject schema).
+        """
+        if user_role in ('readonly', 'contributor'):
+            self.deleteProcessings.setEnabled(False)
+            self.deleteProcessings.setToolTip(self.tr(f'Not enougth rights to delete processing in a shared project ({user_role})'))
+        else:
+            self.deleteProcessings.setEnabled(True)
+            self.deleteProcessings.setToolTip('')
+        
+        if user_role == 'readonly': 
+            self.polygonCombo.setEnabled(False)
+            self.addAoiButton.setEnabled(False)
+            self.processingName.setEnabled(False)
+            self.rasterCombo.setEnabled(False)
+            self.zoomCombo.setEnabled(False)
+            self.modelCombo.setEnabled(False)
+            self.searchImageryButton.setEnabled(False)
+            self.modelInfo.setEnabled(False)  
+        else:
+            self.startProcessing.setEnabled(True)
+            self.polygonCombo.setEnabled(True)
+            self.addAoiButton.setEnabled(True)
+            self.processingName.setEnabled(True)
+            self.rasterCombo.setEnabled(True)
+            self.zoomCombo.setEnabled(True)
+            self.modelCombo.setEnabled(True)
+            self.searchImageryButton.setEnabled(True)
+            self.modelInfo.setEnabled(True)
+
+        if user_role not in ('readonly', 'contributor', 'maintainer'):
+            # Turn every button back on
+            self.startProcessing.setEnabled(True)
+            self.polygonCombo.setEnabled(True)
+            self.addAoiButton.setEnabled(True)
+            self.processingName.setEnabled(True)
+            self.rasterCombo.setEnabled(True)
+            self.zoomCombo.setEnabled(True)
+            self.modelCombo.setEnabled(True)
+            self.searchImageryButton.setEnabled(True)
+            self.modelInfo.setEnabled(True)
+            self.deleteProcessings.setEnabled(True)
+
+
+
+
