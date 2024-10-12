@@ -346,7 +346,7 @@ class Mapflow(QObject):
                                                            if self.dlg.zoomCombo.currentIndex() != 0 else
                                                            self.settings.setValue('zoom', None))
         
-        # ...
+        # Check if a project is shared after startup and when changing project
         self.app_startup_user_update_timer.timeout.connect(self.check_project_sharing)
         self.dlg.projectsCombo.currentIndexChanged.connect(self.check_project_sharing)
        
@@ -1670,7 +1670,7 @@ class Mapflow(QObject):
                                                 clear_area=False)
         elif not self.workflow_defs:
             self.dlg.disable_processing_start(reason=self.tr("Error! Models are not initialized"),
-                                              clear_area=True)            
+                                              clear_area=True)
         elif self.billing_type != BillingType.credits:
             self.dlg.startProcessing.setEnabled(True)
             self.dlg.processingProblemsLabel.clear()

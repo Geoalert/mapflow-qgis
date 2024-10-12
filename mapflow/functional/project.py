@@ -45,18 +45,12 @@ class ProjectService(QObject):
                        headers={},
                        callback=self.update_project_callback,
                        use_default_error_handler=True,
-                       #error_handler=self.shared_project_error_handler,
                        timeout=5)
 
     def update_project_callback(self, response: QNetworkReply):
         project = MapflowProject.from_dict(json.loads(response.readAll().data()))
         new_project_id = project.id
         self.get_projects(current_project_id=new_project_id)
-    
-    def shared_project_error_handler(self, response: QNetworkReply):
-        """ response_data = json.loads(response.readAll().data())
-        if response_data.get('code') == 'FORBIDEN': """
-        #print (response.error())
 
 
     def get_project(self, project_id):

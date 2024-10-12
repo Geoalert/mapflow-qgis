@@ -467,7 +467,3 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.searchImageryButton.setEnabled(True)
             self.modelInfo.setEnabled(True)
             self.deleteProcessings.setEnabled(True)
-
-
-
-
