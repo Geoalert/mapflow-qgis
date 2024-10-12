@@ -199,7 +199,6 @@ def get_error_report_body(response: QNetworkReply,
                           response_body: str,
                           plugin_version: str,
                           error_message_parser: Optional[Callable] = None):
-    print (response_body)
     if error_message_parser is None:
         error_message_parser = default_message_parser
     if response.error() == QNetworkReply.OperationCanceledError:
