@@ -148,6 +148,7 @@ class DataCatalogApi(QObject):
                            text=f'Could not upload {str(image_paths)[1:-1]} to mosaic',
                            title=f'Error',
                            email_body='').show()
+        self.iface.messageBar().clearWidgets()
 
     def get_mosaic_images(self, mosaic_id: UUID, callback: Callable):
         self.http.get(url=f"{self.server}/rasters/mosaic/{mosaic_id}/image",

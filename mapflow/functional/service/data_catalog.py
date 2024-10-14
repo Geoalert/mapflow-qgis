@@ -9,7 +9,7 @@ from osgeo import gdal
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
-from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog
+from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog, QProgressBar
 from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsRasterLayer, QgsRectangle
 
 from ...dialogs.main_dialog import MainDialog
@@ -135,18 +135,21 @@ class DataCatalogService(QObject):
     def upload_images_to_mosaic(self):
         mosaic = self.selected_mosaic()
         image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), "Choose image to upload", filter='(TIF files *.tif; *.tiff)')[0]
-        self.upload_images(response=None, mosaic_id=mosaic.id, image_paths=image_paths, uploaded=[], failed=[])
         if image_paths:
-            self.dlg.uploadProgressBar.setVisible(True)
-            self.dlg.uploadingImagesLabel.setVisible(True)
-            self.dlg.uploadProgressBar.setMaximum(len(image_paths))
-
+            progressMessageBar = self.iface.messageBar().createMessage("Uploading images...")
+            progress = QProgressBar()
+            progress.setMaximum(len(image_paths))
+            progressMessageBar.layout().addWidget(progress)
+            self.iface.messageBar().pushWidget(progressMessageBar)
+            self.upload_images(response=None, mosaic_id=mosaic.id, image_paths=image_paths, uploaded=[], failed=[], progress = progress)
+        
     def upload_images(self,
                       response: QNetworkReply,
                       mosaic_id: UUID,
                       image_paths: Sequence[Union[Path, str]],
                       uploaded: Sequence[Union[Path, str]],
-                      failed: Sequence[Union[Path, str]]):           
+                      failed: Sequence[Union[Path, str]],
+                      progress: QProgressBar):
         if len(image_paths) == 0:
             if failed:
                 self.api.upload_image_error_handler(image_paths=failed)
@@ -161,17 +164,18 @@ class DataCatalogService(QObject):
                                 callback_kwargs={'mosaic_id':mosaic_id,
                                                 'image_paths': non_uploaded,
                                                 'uploaded': list(uploaded) + [image_to_upload],
-                                                'failed': failed},
+                                                'failed': failed,
+                                                'progress': progress},
                                 error_handler=self.upload_images,
                                 error_handler_kwargs={'mosaic_id':mosaic_id,
-                                                        'image_paths': non_uploaded,
-                                                        'uploaded': uploaded,
-                                                        'failed': list(failed) + [image_to_upload]},
+                                                      'image_paths': non_uploaded,
+                                                      'uploaded': uploaded,
+                                                      'failed': list(failed) + [image_to_upload],
+                                                      'progress': progress},
                                 )
-        self.dlg.uploadProgressBar.setValue(len(uploaded))
-        if self.dlg.uploadProgressBar.value() == self.dlg.uploadProgressBar.maximum():
-            self.dlg.uploadProgressBar.setVisible(False)
-            self.dlg.uploadingImagesLabel.setVisible(False)
+        progress.setValue(len(uploaded))
+        if progress.value() == progress.maximum():
+            self.iface.messageBar().clearWidgets()
 
     def get_mosaic_images(self, mosaic_id):
         self.api.get_mosaic_images(mosaic_id=mosaic_id, callback=self.get_mosaic_images_callback)
