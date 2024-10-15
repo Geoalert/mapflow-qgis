@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional, List
+from enum import Enum
 
 from .base import Serializable, SkipDataClass
 from ..entity.workflow_def import WorkflowDef
@@ -55,3 +56,21 @@ class MapflowProject(SkipDataClass):
             self.shareProject = ShareProject.from_dict(self.shareProject)
         else:
             self.shareProject = []
+    
+class UserRole(str, Enum):
+    readonly = "readonly"
+    contributor = "contributor"
+    maintainer = "maintainer"
+    owner = "owner"
+
+    @property
+    def can_start_processing(self):
+        return self.value != UserRole.readonly
+
+    @property
+    def can_delete_rename_review_processing(self):
+        return self.value in (UserRole.maintainer, UserRole.owner)
+    
+    @property
+    def can_delete_rename_project(self):
+        return self.value == UserRole.owner

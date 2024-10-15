@@ -11,6 +11,7 @@ from qgis.core import (
 
 from ..config import config
 from ..entity.billing import BillingType
+from ..schema.project import UserRole
 
 PROJECT = QgsProject.instance()
 WGS84 = QgsCoordinateReferenceSystem('EPSG:4326')
@@ -154,5 +155,6 @@ def generate_plugin_header(plugin_name: str,
         if project_name and project_name != "Default":
             header = header + f" | Project: {project_name}"
         if user_role and project_owner:
-            header = header + f" ({user_role}, owner: {project_owner})"
+            if user_role != UserRole.owner:
+                header = header + f" ({user_role}, owner: {project_owner})"
         return header
