@@ -425,8 +425,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     def disable_shared_project(self, user_role: UserRole):
         """Disable buttons depending on user role in a shared project.
         Does not handle:
-        - startProcessing button (it instantly turns back on in 'calculate_processing_cost_callback' in mapflow.py, 
-                                  so it should be disabled there);
         - processing renaming option that's inside saveOptionsButton (it's a QMenu(), so to not pass it to dlg, this option should be 
                                                                       removed/added there the menu was initialized - in mapflow.py);
         - deleteProject and updateProject (buttons instantly turn back on in 'on_project_change' in mapflow.py,
@@ -435,6 +433,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         :param user_role: current user's role in a project (from ShareProject schema).
         """        
         if not user_role.can_start_processing:
+            self.disable_processing_start(reason=self.tr(f'Not enougth rights to start processing in a shared project ({user_role})'),
+                                                         clear_area=True,
+                                                         user_role=user_role)
             # Disable widgets in a left panel
             for i in range(self.procesingControlLayout.count()):
                 layout = self.procesingControlLayout.itemAt(i).layout()
@@ -443,7 +444,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                         widget = layout.itemAt(i).widget()
                         if widget:
                             widget.setEnabled(False)
-                            #widget.setToolTip((self.tr(f'Not enougth rights in a shared project ({user_role})')))
             # Disable separetly, because they fill and enable later than this disabling
             self.polygonCombo.setEnabled(False)
             self.modelCombo.setEnabled(False)
@@ -456,7 +456,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                         widget = layout.itemAt(i).widget()
                         if widget:
                             widget.setEnabled(True)
-                            #widget.setToolTip('')
             self.polygonCombo.setEnabled(True)
             self.modelCombo.setEnabled(True)
                             

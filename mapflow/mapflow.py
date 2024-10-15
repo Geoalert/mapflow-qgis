@@ -3201,10 +3201,6 @@ class Mapflow(QObject):
                                 self.options_menu.addAction(self.processing_update_action)
                 # Disable needed buttons
                 self.dlg.disable_shared_project(self.user_role)
-                if not self.user_role.can_start_processing:
-                    self.dlg.disable_processing_start(reason=self.tr(f'Not enougth rights to start processing in a shared project ({self.user_role})'),
-                                                      clear_area=True,
-                                                      user_role=self.user_role)
                 # Get project owner
                 owners = self.current_project.shareProject.owners
                 project_owner = None
