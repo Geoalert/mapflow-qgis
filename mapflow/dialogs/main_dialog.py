@@ -14,6 +14,7 @@ from ..entity.billing import BillingType
 from ..entity.provider import ProviderInterface
 from ..functional import helpers
 from ..schema.project import MapflowProject
+from ..schema.project import UserRole
 
 ui_path = Path(__file__).parent/'static'/'ui'
 
@@ -323,8 +324,10 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
         if can_interact and can_send:
             self.ratingSubmitButton.setToolTip("")
+            self.ratingComboBox.setToolTip("")
         elif not can_interact:
             self.ratingSubmitButton.setToolTip(reason)
+            self.ratingComboBox.setToolTip(reason)
         else:
             self.ratingSubmitButton.setToolTip(self.tr("Please select processing and rating to submit"))
 
@@ -348,9 +351,12 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
     def disable_processing_start(self,
                                  reason: str,
-                                 clear_area: bool = False):
+                                 clear_area: bool = False,
+                                 user_role: UserRole = UserRole.owner):
         if clear_area:
             self.labelAoiArea.clear()
+        if not user_role.can_start_processing:
+            reason = self.tr(f'Not enougth rights to start processing in a shared project ({user_role})')
         self.processingProblemsLabel.setPalette(self.alert_palette)
         self.processingProblemsLabel.setText(reason)
         self.startProcessing.setDisabled(True)
@@ -416,7 +422,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.deleteProject.setToolTip(tooltip)
         self.updateProject.setToolTip(tooltip)
 
-    def disable_shared_project(self, user_role: str):
+    def disable_shared_project(self, user_role: UserRole):
         """Disable buttons depending on user role in a shared project.
         Does not handle:
         - startProcessing button (it instantly turns back on in 'calculate_processing_cost_callback' in mapflow.py, 
@@ -427,43 +433,42 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                                            so it should be disabled there).
 
         :param user_role: current user's role in a project (from ShareProject schema).
-        """
-        if user_role in ('readonly', 'contributor'):
+        """        
+        if not user_role.can_start_processing:
+            # Disable widgets in a left panel
+            for i in range(self.procesingControlLayout.count()):
+                layout = self.procesingControlLayout.itemAt(i).layout()
+                if layout:
+                    for i in range(layout.count()):
+                        widget = layout.itemAt(i).widget()
+                        if widget:
+                            widget.setEnabled(False)
+                            #widget.setToolTip((self.tr(f'Not enougth rights in a shared project ({user_role})')))
+            # Disable separetly, because they fill and enable later than this disabling
+            self.polygonCombo.setEnabled(False)
+            self.modelCombo.setEnabled(False)
+        else:
+            # Enable back
+            for i in range(self.procesingControlLayout.count()):
+                layout = self.procesingControlLayout.itemAt(i).layout()
+                if layout:
+                    for i in range(layout.count()):
+                        widget = layout.itemAt(i).widget()
+                        if widget:
+                            widget.setEnabled(True)
+                            #widget.setToolTip('')
+            self.polygonCombo.setEnabled(True)
+            self.modelCombo.setEnabled(True)
+                            
+        if not user_role.can_delete_rename_review_processing:
             self.deleteProcessings.setEnabled(False)
             self.deleteProcessings.setToolTip(self.tr(f'Not enougth rights to delete processing in a shared project ({user_role})'))
+            self.enable_rating(False, False, self.tr(f'Not enougth rights to rate processing in a shared project ({user_role})'))
+            self.rateProcessingLabel.setText(self.tr('Rate processing:'))
+            self.ratingComboBox.setCurrentIndex(0)
         else:
             self.deleteProcessings.setEnabled(True)
             self.deleteProcessings.setToolTip('')
-        
-        if user_role == 'readonly': 
-            self.polygonCombo.setEnabled(False)
-            self.addAoiButton.setEnabled(False)
-            self.processingName.setEnabled(False)
-            self.rasterCombo.setEnabled(False)
-            self.zoomCombo.setEnabled(False)
-            self.modelCombo.setEnabled(False)
-            self.searchImageryButton.setEnabled(False)
-            self.modelInfo.setEnabled(False)  
-        else:
-            self.startProcessing.setEnabled(True)
-            self.polygonCombo.setEnabled(True)
-            self.addAoiButton.setEnabled(True)
-            self.processingName.setEnabled(True)
-            self.rasterCombo.setEnabled(True)
-            self.zoomCombo.setEnabled(True)
-            self.modelCombo.setEnabled(True)
-            self.searchImageryButton.setEnabled(True)
-            self.modelInfo.setEnabled(True)
-
-        if user_role not in ('readonly', 'contributor', 'maintainer'):
-            # Turn every button back on
-            self.startProcessing.setEnabled(True)
-            self.polygonCombo.setEnabled(True)
-            self.addAoiButton.setEnabled(True)
-            self.processingName.setEnabled(True)
-            self.rasterCombo.setEnabled(True)
-            self.zoomCombo.setEnabled(True)
-            self.modelCombo.setEnabled(True)
-            self.searchImageryButton.setEnabled(True)
-            self.modelInfo.setEnabled(True)
-            self.deleteProcessings.setEnabled(True)
+            self.enable_rating(False, True, self.tr('Please select processing'))
+            self.rateProcessingLabel.setText(self.tr('Rate processing:'))
+            self.ratingComboBox.setCurrentIndex(0)
