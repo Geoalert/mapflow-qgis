@@ -2585,12 +2585,9 @@ class Mapflow(QObject):
             reason = self.tr("Please select rating to submit")
         else:
             reason = ""
-        if self.user_role.can_delete_rename_review_processing:
-            self.dlg.enable_rating(status_ok,
-                                   rating_selected,
-                                   reason)
-        else:
-            self.dlg.ratingComboBox.setToolTip(self.tr(f"Not enougth rights to rate processing in a shared project ({self.user_role})"))
+        self.dlg.enable_rating(can_interact=(status_ok and self.user_role.can_delete_rename_review_processing),
+                               can_send=rating_selected,
+                               reason=reason)
 
     def enable_feedback(self) -> None:
         """

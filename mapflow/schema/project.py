@@ -21,9 +21,7 @@ class UpdateProjectSchema(PostProjectSchema):
 
 @dataclass
 class ShareProjectUser(SkipDataClass):
-    projectId: str
     role: str
-    userId: str
     email: str
 
 @dataclass

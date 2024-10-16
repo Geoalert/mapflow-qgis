@@ -330,6 +330,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.ratingComboBox.setToolTip(reason)
         else:
             self.ratingSubmitButton.setToolTip(self.tr("Please select processing and rating to submit"))
+            self.ratingComboBox.setToolTip("")
 
     def enable_review(self,
                       can_interact: bool = True,
