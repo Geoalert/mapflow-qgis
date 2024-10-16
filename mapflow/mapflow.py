@@ -72,6 +72,7 @@ from .schema import (PostSourceSchema,
                      ImageCatalogResponseSchema)
 from .schema.catalog import PreviewType
 from .schema.project import MapflowProject
+from .schema.project import UserRole
 
 
 class Mapflow(QObject):
@@ -105,6 +106,8 @@ class Mapflow(QObject):
         self.iface = iface
         self.main_window = self.iface.mainWindow()
         self.workflow_defs = {}
+        self.current_project = None
+        self.user_role = UserRole.owner
         self.aoi_layers = []
         self.preview_dict = {}
         self.project_connection = None
@@ -343,6 +346,11 @@ class Mapflow(QObject):
             self.dlg.zoomCombo.currentIndexChanged.connect(lambda: self.settings.setValue('zoom', str(self.dlg.zoomCombo.currentText())) 
                                                            if self.dlg.zoomCombo.currentIndex() != 0 else
                                                            self.settings.setValue('zoom', None))
+        
+        # Check if a project is shared after startup and when changing project
+        self.app_startup_user_update_timer.timeout.connect(self.check_project_sharing)
+        self.dlg.projectsCombo.currentIndexChanged.connect(self.check_project_sharing)
+       
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
@@ -522,6 +530,15 @@ class Mapflow(QObject):
         self.dlg.clear_model_options()
         for block in wd.optional_blocks:
             self.dlg.add_model_option(block.name, checked=bool(self.settings.value(f"wd/{wd.id}/{block.name}", False)))
+        # This layout sometimes fills after checking if a project is shared, if models take longer to initialize,
+        # and needed wigets are disabled before the appearence of these checkboxes, so we do it separately after adding boxes
+        for i in range(self.dlg.modelOptionsLayout.count()):
+            widget = self.dlg.modelOptionsLayout.itemAt(i).widget()
+            if not self.user_role.can_start_processing:
+                widget.setEnabled(False)
+                widget.setChecked(False)
+            else:
+                widget.setEnabled(True)
 
     def save_options_settings(self, wd: WorkflowDef, enabled_blocks: List[bool]):
         enabled_blocks_dict = wd.get_enabled_blocks(enabled_blocks)
@@ -605,7 +622,7 @@ class Mapflow(QObject):
         dlg_login = MapflowLoginDialog(self.main_window, self.use_oauth, self.settings.value("token", ""))
         dlg_login.setWindowTitle(helpers.generate_plugin_header(self.tr("Log in ") + self.plugin_name,
                                                                      self.config.MAPFLOW_ENV,
-                                                                     None))
+                                                                     None, None, None))
         dlg_login.logIn.clicked.connect(self.read_mapflow_token)
         dlg_login.useOauth.toggled.connect(self.set_auth_type)
         return dlg_login
@@ -670,6 +687,16 @@ class Mapflow(QObject):
         # Manually toggle function to avoid race condition
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
         self.setup_processings_table()
+        if not self.user_role.can_delete_rename_project:
+            self.dlg.deleteProject.setEnabled(False)
+            self.dlg.deleteProject.setToolTip(self.tr(f'Not enougth rights to delete shared project ({self.user_role})'))
+            self.dlg.updateProject.setEnabled(False)
+            self.dlg.updateProject.setToolTip(self.tr(f'Not enougth rights to update shared project ({self.user_role})'))
+        else:
+            self.dlg.deleteProject.setEnabled(True)
+            self.dlg.deleteProject.setToolTip('')
+            self.dlg.updateProject.setEnabled(True)
+            self.dlg.updateProject.setToolTip('')
 
     def create_project(self):
         dialog = CreateProjectDialog(self.dlg)
@@ -1542,7 +1569,8 @@ class Mapflow(QObject):
 
         if not layer or layer.featureCount() == 0:
             self.dlg.disable_processing_start(reason=self.tr('Set AOI to start processing'),
-                                              clear_area=True)
+                                              clear_area=True,
+                                              user_role=self.user_role)
             self.aoi = self.aoi_size = None
             return
 
@@ -1564,7 +1592,8 @@ class Mapflow(QObject):
         else:  # self.max_aois_per_processing < number of polygons (as features and as parts of multipolygons):
             self.dlg.disable_processing_start(reason=self.tr('AOI must contain not more than'
                                                              ' {} polygons').format(self.max_aois_per_processing),
-                                              clear_area=True)
+                                              clear_area=True,
+                                              user_role=self.user_role)
             self.aoi = self.aoi_size = None
 
     def calculate_aoi_area_raster(self, layer: Optional[QgsRasterLayer]) -> None:
@@ -1645,10 +1674,12 @@ class Mapflow(QObject):
             # Here the button must already be disabled, and the warning text set
             if self.dlg.startProcessing.isEnabled():
                 self.dlg.disable_processing_start(reason=self.tr("Set AOI to start processing"),
-                                                  clear_area=False)
+                                                  clear_area=False,
+                                                  user_role=self.user_role)
         elif not self.workflow_defs:
             self.dlg.disable_processing_start(reason=self.tr("Error! Models are not initialized"),
-                                              clear_area=True)
+                                              clear_area=True,
+                                              user_role=self.user_role)
         elif self.billing_type != BillingType.credits:
             self.dlg.startProcessing.setEnabled(True)
             self.dlg.processingProblemsLabel.clear()
@@ -1660,13 +1691,14 @@ class Mapflow(QObject):
                                                                  "{error}").format(error=error))
 
             else:
-                self.http.post(
-                    url=f"{self.server}/processing/cost",
-                    callback=self.calculate_processing_cost_callback,
-                    body=request_body.as_json().encode(),
-                    use_default_error_handler=False,
-                    error_handler=self.clear_processing_cost
-                )
+                if self.user_role.can_start_processing:
+                    self.http.post(
+                        url=f"{self.server}/processing/cost",
+                        callback=self.calculate_processing_cost_callback,
+                        body=request_body.as_json().encode(),
+                        use_default_error_handler=False,
+                        error_handler=self.clear_processing_cost
+                    )
 
     def clear_processing_cost(self, response: QNetworkReply):
         """
@@ -1679,7 +1711,8 @@ class Mapflow(QObject):
         message = api_message_parser(response_text)
         self.dlg.disable_processing_start(reason=self.tr('Processing cost is not available:\n'
                                                         '{message}').format(message=message),
-                                          clear_area=False)
+                                          clear_area=False,
+                                          user_role=self.user_role)
 
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         response_data = response.readAll().data().decode()
@@ -2036,7 +2069,6 @@ class Mapflow(QObject):
         :param response: The HTTP response.
         """
         error = response.error()
-        response_body = response.readAll().data().decode()
         if error == QNetworkReply.ContentAccessDenied \
                 and "data provider" in response_body.lower():
             self.alert(self.tr('Data provider with id is unavailable on your plan. \n '
@@ -2047,7 +2079,6 @@ class Mapflow(QObject):
             # In this case, when "data provider" is in the message, there can't be index error
         else:
             self.report_http_error(response,
-                                   response_body,
                                    self.tr('Processing creation failed'),
                                    error_message_parser=api_message_parser)
 
@@ -2266,7 +2297,7 @@ class Mapflow(QObject):
         self.project.addMapLayer(layer)
 
     def preview_png_error_handler(self, response: QNetworkReply):
-        self.report_http_error(response, "Could not display preview")
+        self.report_http_error(response, self.tr("Could not display preview"))
 
     def preview_sentinel(self, image_id):
         selected_cells = self.dlg.metadataTable.selectedItems()
@@ -2554,9 +2585,9 @@ class Mapflow(QObject):
             reason = self.tr("Please select rating to submit")
         else:
             reason = ""
-        self.dlg.enable_rating(status_ok,
-                               rating_selected,
-                               reason)
+        self.dlg.enable_rating(can_interact=(status_ok and self.user_role.can_delete_rename_review_processing),
+                               can_send=rating_selected,
+                               reason=reason)
 
     def enable_feedback(self) -> None:
         """
@@ -2779,7 +2810,9 @@ class Mapflow(QObject):
         # Set main dialog title dynamically so it could be overridden when used as a submodule
         self.dlg.setWindowTitle(helpers.generate_plugin_header(self.plugin_name,
                                                                env=self.config.MAPFLOW_ENV,
-                                                               project_name=None))
+                                                               project_name=None,
+                                                               user_role=None,
+                                                               project_owner=None))
         # Display plugin icon in own toolbar
         plugin_button = QAction(self.plugin_icon, self.plugin_name, self.main_window)
         plugin_button.triggered.connect(self.main)
@@ -2941,9 +2974,15 @@ class Mapflow(QObject):
             self.report_http_error(response, self.tr('Proxy error. Please, check your proxy settings.'))
             return True
         elif error == QNetworkReply.ContentAccessDenied:
-            self.report_http_error(response,
-                                   self.tr("This operation is forbidden for your account, contact us"),
-                                   error_message_parser=parser)
+            if not self.user_role.can_delete_rename_project:
+                self.report_http_error(response,
+                                       self.tr("Not enougth rights for this action\n" +
+                                            self.tr(f"in a shared project '{self.current_project.name}' ({self.user_role})")),
+                                       error_message_parser=parser)
+            else:
+                self.report_http_error(response,
+                                       self.tr("This operation is forbidden for your account, contact us"),
+                                       error_message_parser=parser)
             return True
         else:
             self.report_http_error(response, self.tr("Error"), error_message_parser=parser)
@@ -2951,7 +2990,6 @@ class Mapflow(QObject):
 
     def report_http_error(self,
                           response: QNetworkReply,
-                          response_body: str,
                           title: str = None,
                           error_message_parser: Optional[Callable] = None):
         """Prepare and show an error message for the supplied response.
@@ -2961,6 +2999,7 @@ class Mapflow(QObject):
         :param error_message_parser: function to parse error message, depends on server which is requested.
             Default parser (if None) searches for 'message' section in response json
         """
+        response_body = response.readAll().data().decode()
         error_summary, email_body = get_error_report_body(response=response,
                                                           response_body=response_body,
                                                           plugin_version=self.plugin_version,
@@ -3139,6 +3178,40 @@ class Mapflow(QObject):
                                                                                   dialog.processing()))
         dialog.setup(processing)
         dialog.deleteLater()
+
+    def check_project_sharing(self):
+        if len(self.dlg.projectsCombo) != 0:
+            self.current_project = self.projects[self.dlg.projectsCombo.currentIndex()]
+            project_name = self.current_project.name
+            if self.current_project.shareProject:
+                # Get user role, if project is shared
+                users = self.current_project.shareProject.users
+                self.user_role = UserRole.owner
+                if users:
+                    for user in users:
+                        if user.email == self.username:
+                            self.user_role = UserRole(user.role)
+                            # And remove/add back renaming option from save options menu
+                            if not self.user_role.can_delete_rename_review_processing:
+                                self.options_menu.removeAction(self.processing_update_action)
+                            else:
+                                self.options_menu.addAction(self.processing_update_action)
+                # Disable needed buttons
+                self.dlg.disable_shared_project(self.user_role)
+                # Get project owner
+                owners = self.current_project.shareProject.owners
+                project_owner = None
+                if owners:
+                    project_owner = owners[0].email
+                    for owner in owners:
+                        if owner.email == self.username:
+                            self.user_role = UserRole.owner                    
+            # Specify new main window header
+            self.dlg.setWindowTitle(helpers.generate_plugin_header(self.plugin_name,
+                                                                   env=self.config.MAPFLOW_ENV,
+                                                                   project_name=project_name,
+                                                                   user_role=self.user_role,
+                                                                   project_owner=project_owner))
 
     @property
     def basemap_providers(self):
