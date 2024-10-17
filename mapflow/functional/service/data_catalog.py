@@ -141,7 +141,7 @@ class DataCatalogService(QObject):
             progress.setMaximum(len(image_paths))
             progressMessageBar.layout().addWidget(progress)
             self.iface.messageBar().pushWidget(progressMessageBar)
-            self.upload_images(response=None, mosaic_id=mosaic.id, image_paths=image_paths, uploaded=[], failed=[], progress = progress)
+            response = self.upload_images(response=None, mosaic_id=mosaic.id, image_paths=image_paths, uploaded=[], failed=[], progress = progress)
         
     def upload_images(self,
                       response: QNetworkReply,
@@ -149,7 +149,7 @@ class DataCatalogService(QObject):
                       image_paths: Sequence[Union[Path, str]],
                       uploaded: Sequence[Union[Path, str]],
                       failed: Sequence[Union[Path, str]],
-                      progress: QProgressBar):
+                      progress: QProgressBar):        
         if len(image_paths) == 0:
             if failed:
                 self.api.upload_image_error_handler(image_paths=failed)
@@ -175,7 +175,7 @@ class DataCatalogService(QObject):
                                 )
         progress.setValue(len(uploaded))
         if progress.value() == progress.maximum():
-            self.iface.messageBar().clearWidgets()
+            self.iface.messageBar().clearWidgets()      
 
     def get_mosaic_images(self, mosaic_id):
         self.api.get_mosaic_images(mosaic_id=mosaic_id, callback=self.get_mosaic_images_callback)

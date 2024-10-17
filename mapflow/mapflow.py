@@ -1610,18 +1610,14 @@ class Mapflow(QObject):
                     aoi = QgsGeometry().fromWkt(image.footprint)
                     self.calculate_aoi_area(aoi, helpers.WGS84)
                 elif mosaic:
-                    self.http.get(url=mosaic.rasterLayer.tileJsonUrl, callback=self.get_aoi_from_tileJson)
+                    aoi = QgsGeometry().fromWkt(mosaic.footprint)
+                    self.calculate_aoi_area(aoi, helpers.WGS84)
                 else:
                     self.dlg.disable_processing_start(reason=self.tr('Choose mosaic or image to start processing'),
                                                       clear_area=True)
                     self.aoi = self.aoi_size = None
             else:
                 self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
-    
-    def get_aoi_from_tileJson(self, response: QNetworkReply):
-        bounds = json.loads(response.readAll().data()).get('bounds')
-        aoi = QgsGeometry().fromRect(QgsRectangle(bounds[0], bounds[1], bounds[2], bounds[3]))
-        self.calculate_aoi_area(aoi, helpers.WGS84)
 
     def calculate_aoi_area_selection(self, _: List[QgsFeature]) -> None:
         """Get the AOI size when the selection changed on a polygon layer.
@@ -1916,9 +1912,7 @@ class Mapflow(QObject):
                 if image:
                     catalog_aoi = QgsGeometry().fromWkt(image.footprint)
                 elif mosaic:
-                    #catalog_aoi = self.http.get(url=mosaic.rasterLayer.tileJsonUrl, callback=self.get_aoi_from_tileJson)
-                    #wait untill mosaic.footprint (API), because previous line with callback does not work !!!
-                    catalog_aoi = selected_aoi
+                    catalog_aoi = QgsGeometry().fromWkt(mosaic.footprint)
                 if image or mosaic:
                     aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
                                                       selected_aoi=self.dlg.polygonCombo.currentLayer(),
