@@ -24,3 +24,17 @@ def clip_aoi_to_image_extent(aoi_geometry: QgsGeometry,
         {'INPUT': aoi_layer, 'OVERLAY': image_extent_layer, 'OUTPUT': 'memory:'}
     )['OUTPUT']
     return intersection.getFeatures()
+
+def clip_aoi_to_catalog_extent(catalog_aoi: QgsGeometry,
+                               selected_aoi:QgsVectorLayer) -> QgsFeatureIterator:
+    # Create a layer from chosen mosaic or image footprint
+    catalog_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
+    catalog_feature = QgsFeature()
+    catalog_feature.setGeometry(catalog_aoi)
+    catalog_layer.dataProvider().addFeatures([catalog_feature])
+    catalog_layer.updateExtents()
+    # Find the intersection
+    intersection = qgis_processing.run('qgis:intersection',
+                                      {'INPUT': selected_aoi, 'OVERLAY': catalog_layer, 'OUTPUT': 'memory:'}
+                                      )['OUTPUT']
+    return intersection.getFeatures()
