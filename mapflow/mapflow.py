@@ -1543,33 +1543,37 @@ class Mapflow(QObject):
         """
         if self.dlg.useImageExtentAsAoi.isChecked():  # GeoTIFF extent used; no difference
             return
+        
+        provider = self.providers[self.dlg.providerIndex()]
+        if isinstance(provider, MyImageryProvider):
+            self.calculate_aoi_area_catalog()
+        else:
+            if not layer or layer.featureCount() == 0:
+                self.dlg.disable_processing_start(reason=self.tr('Set AOI to start processing'),
+                                                clear_area=True)
+                self.aoi = self.aoi_size = None
+                return
 
-        if not layer or layer.featureCount() == 0:
-            self.dlg.disable_processing_start(reason=self.tr('Set AOI to start processing'),
-                                              clear_area=True)
-            self.aoi = self.aoi_size = None
-            return
-
-        features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
-        if layer.wkbType() == QgsWkbTypes.MultiPolygon:
-            geoms_count = layer_utils.count_polygons_in_layer(features)
-        elif layer.wkbType() == QgsWkbTypes.Polygon:
-            geoms_count = len(features)
-        else: # type of layer is not supported
-              # (but it shouldn't be the case, because point and line layers will not appear in AOI-combo,
-              # and collections are devided by QGIS into separate layers with different types)
-            raise ValueError("Only polygon and multipolyon layers supported for this operation")
-        if self.max_aois_per_processing >= geoms_count:
-            if len(features) == 1:
-                aoi = features[0].geometry()
-            else:
-                aoi = QgsGeometry.collectGeometry([feature.geometry() for feature in features])
-            self.calculate_aoi_area(aoi, layer.crs())
-        else:  # self.max_aois_per_processing < number of polygons (as features and as parts of multipolygons):
-            self.dlg.disable_processing_start(reason=self.tr('AOI must contain not more than'
-                                                             ' {} polygons').format(self.max_aois_per_processing),
-                                              clear_area=True)
-            self.aoi = self.aoi_size = None
+            features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
+            if layer.wkbType() == QgsWkbTypes.MultiPolygon:
+                geoms_count = layer_utils.count_polygons_in_layer(features)
+            elif layer.wkbType() == QgsWkbTypes.Polygon:
+                geoms_count = len(features)
+            else: # type of layer is not supported
+                # (but it shouldn't be the case, because point and line layers will not appear in AOI-combo,
+                # and collections are devided by QGIS into separate layers with different types)
+                raise ValueError("Only polygon and multipolyon layers supported for this operation")
+            if self.max_aois_per_processing >= geoms_count:
+                if len(features) == 1:
+                    aoi = features[0].geometry()
+                else:
+                    aoi = QgsGeometry.collectGeometry([feature.geometry() for feature in features])
+                self.calculate_aoi_area(aoi, layer.crs())
+            else:  # self.max_aois_per_processing < number of polygons (as features and as parts of multipolygons):
+                self.dlg.disable_processing_start(reason=self.tr('AOI must contain not more than'
+                                                                ' {} polygons').format(self.max_aois_per_processing),
+                                                clear_area=True)
+                self.aoi = self.aoi_size = None
 
     def calculate_aoi_area_raster(self, layer: Optional[QgsRasterLayer]) -> None:
         """Get the AOI size when a new entry in the raster combo box is selected.
@@ -1593,7 +1597,7 @@ class Mapflow(QObject):
         provider = self.providers[self.dlg.providerIndex()]
         if use_image_extent and not isinstance(provider, MyImageryProvider):
             self.calculate_aoi_area_raster(self.dlg.rasterCombo.currentLayer())
-        elif use_image_extent and isinstance(provider, MyImageryProvider):
+        elif isinstance(provider, MyImageryProvider):
             self.calculate_aoi_area_catalog()
         else:
             self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
@@ -1603,21 +1607,34 @@ class Mapflow(QObject):
         """
         provider = self.providers[self.dlg.providerIndex()]
         if isinstance(provider, MyImageryProvider):
+            image = self.data_catalog_service.selected_image()
+            mosaic = self.data_catalog_service.selected_mosaic()
             if self.dlg.useImageExtentAsAoi.isChecked():
-                image = self.data_catalog_service.selected_image()
-                mosaic = self.data_catalog_service.selected_mosaic()
                 if image:
                     aoi = QgsGeometry().fromWkt(image.footprint)
-                    self.calculate_aoi_area(aoi, helpers.WGS84)
                 elif mosaic:
                     aoi = QgsGeometry().fromWkt(mosaic.footprint)
-                    self.calculate_aoi_area(aoi, helpers.WGS84)
                 else:
                     self.dlg.disable_processing_start(reason=self.tr('Choose mosaic or image to start processing'),
                                                       clear_area=True)
-                    self.aoi = self.aoi_size = None
+                    aoi = self.aoi = self.aoi_size = None
+                self.calculate_aoi_area(aoi, helpers.WGS84)
             else:
-                self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+                if image:
+                    catalog_aoi = QgsGeometry().fromWkt(image.footprint)
+                elif mosaic:
+                    catalog_aoi = QgsGeometry().fromWkt(mosaic.footprint)
+                else:
+                    catalog_aoi = None
+                aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
+                                                  selected_aoi=self.dlg.polygonCombo.currentLayer(),
+                                                  use_image_extent_as_aoi=False)
+                self.calculate_aoi_area(aoi, helpers.WGS84)
+                if not aoi:
+                    self.dlg.disable_processing_start(reason=self.tr("Selected AOI does not intersect the selected imagery"),
+                                                      clear_area=True)
+        else:
+            self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
 
     def calculate_aoi_area_selection(self, _: List[QgsFeature]) -> None:
         """Get the AOI size when the selection changed on a polygon layer.
@@ -1981,7 +1998,7 @@ class Mapflow(QObject):
                                selected_image=selected_image,
                                selected_aoi=self.aoi)
         except AoiNotIntersectsImage:
-            return None, self.tr("Selected AOI does not intestect the selected imagery")
+            return None, self.tr("Selected AOI does not intersect the selected imagery")
         except ImageIdRequired:
             return None, self.tr("This provider requires image ID. Use search tab to find imagery for you requirements, "
                                  "and select image in the table.")
