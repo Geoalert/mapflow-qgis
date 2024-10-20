@@ -4,7 +4,7 @@ from uuid import UUID
 
 from PyQt5.QtCore import QObject, pyqtSignal, QFile, QIODevice
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QProgressBar
 from qgis.core import QgsMapLayer, QgsRectangle
 
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, ImageReturnSchema, MosaicUpdateSchema
@@ -129,7 +129,9 @@ class DataCatalogApi(QObject):
                      callback: Callable = lambda *args: None,
                      callback_kwargs: Optional[dict] = None,
                      error_handler: Optional[Callable] = None,
-                     error_handler_kwargs: Optional[dict] = None):
+                     error_handler_kwargs: Optional[dict] = None,
+                     image_number: Optional[int] = None,
+                     image_count: Optional[int] = None):
         body = self.create_upload_image_body(image_path = image_path)
         url = f"{self.server}/rasters/mosaic/{mosaic_id}/image"
         response = self.http.post(url=url,
@@ -138,15 +140,33 @@ class DataCatalogApi(QObject):
                                   callback_kwargs=callback_kwargs,
                                   use_default_error_handler=error_handler is None,
                                   error_handler=error_handler,
-                                  error_handler_kwargs=error_handler_kwargs or {}
+                                  error_handler_kwargs=error_handler_kwargs or {},
+                                  timeout=3600
                                  )
         body.setParent(response)
+
+        progressMessageBar = self.iface.messageBar().createMessage(f"Uploading image {image_number}/{image_count}:")
+        progress = QProgressBar()
+        progressMessageBar.layout().addWidget(progress)
+        self.iface.messageBar().pushWidget(progressMessageBar)
+
+        def display_upload_progress(bytes_sent: int, bytes_total: int):
+            try:
+                progress.setValue(round(bytes_sent / bytes_total * 100))
+            except ZeroDivisionError:
+                return
+            if bytes_total > 0:
+                if bytes_sent == bytes_total:
+                    self.iface.messageBar().popWidget(progressMessageBar)
+
+        response.uploadProgress.connect(display_upload_progress)
 
     def upload_image_error_handler(self, image_paths: list):
         ErrorMessageWidget(parent=QApplication.activeWindow(),
                            text=f'Could not upload {str(image_paths)[1:-1]} to mosaic',
                            title=f'Error',
                            email_body='').show()
+        self.iface.messageBar().clearWidgets()
 
     def get_mosaic_images(self, mosaic_id: UUID, callback: Callable):
         self.http.get(url=f"{self.server}/rasters/mosaic/{mosaic_id}/image",

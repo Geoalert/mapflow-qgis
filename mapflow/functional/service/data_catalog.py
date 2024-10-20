@@ -135,14 +135,15 @@ class DataCatalogService(QObject):
     def upload_images_to_mosaic(self):
         mosaic = self.selected_mosaic()
         image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), "Choose image to upload", filter='(TIF files *.tif; *.tiff)')[0]
-        self.upload_images(response=None, mosaic_id=mosaic.id, image_paths=image_paths, uploaded=[], failed=[])
+        if image_paths:
+            self.upload_images(response=None, mosaic_id=mosaic.id, image_paths=image_paths, uploaded=[], failed=[])
 
     def upload_images(self,
                       response: QNetworkReply,
                       mosaic_id: UUID,
                       image_paths: Sequence[Union[Path, str]],
                       uploaded: Sequence[Union[Path, str]],
-                      failed: Sequence[Union[Path, str]]):             
+                      failed: Sequence[Union[Path, str]]):        
         if len(image_paths) == 0:
             if failed:
                 self.api.upload_image_error_handler(image_paths=failed)
@@ -152,17 +153,19 @@ class DataCatalogService(QObject):
             image_to_upload = image_paths[0]
             non_uploaded = image_paths[1:] 
             self.api.upload_image(mosaic_id=mosaic_id,
-                                image_path=image_to_upload,
-                                callback=self.upload_images,
-                                callback_kwargs={'mosaic_id':mosaic_id,
-                                                'image_paths': non_uploaded,
-                                                'uploaded': list(uploaded) + [image_to_upload],
-                                                'failed': failed},
+                                  image_path=image_to_upload,
+                                  callback=self.upload_images,
+                                  callback_kwargs={'mosaic_id':mosaic_id,
+                                                   'image_paths': non_uploaded,
+                                                   'uploaded': list(uploaded) + [image_to_upload],
+                                                   'failed': failed},
                                 error_handler=self.upload_images,
                                 error_handler_kwargs={'mosaic_id':mosaic_id,
-                                                        'image_paths': non_uploaded,
-                                                        'uploaded': uploaded,
-                                                        'failed': list(failed) + [image_to_upload]},
+                                                      'image_paths': non_uploaded,
+                                                      'uploaded': uploaded,
+                                                      'failed': list(failed) + [image_to_upload]},
+                                image_number=len(uploaded+[image_to_upload]+failed),
+                                image_count=len(uploaded+[image_to_upload]+non_uploaded+failed)
                                 )
 
     def get_mosaic_images(self, mosaic_id):
