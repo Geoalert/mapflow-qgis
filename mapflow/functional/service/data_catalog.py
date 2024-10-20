@@ -9,7 +9,7 @@ from osgeo import gdal
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
-from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog, QProgressBar
+from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog
 from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsRasterLayer, QgsRectangle
 
 from ...dialogs.main_dialog import MainDialog
@@ -136,20 +136,14 @@ class DataCatalogService(QObject):
         mosaic = self.selected_mosaic()
         image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), "Choose image to upload", filter='(TIF files *.tif; *.tiff)')[0]
         if image_paths:
-            progressMessageBar = self.iface.messageBar().createMessage("Uploading images...")
-            progress = QProgressBar()
-            progress.setMaximum(len(image_paths))
-            progressMessageBar.layout().addWidget(progress)
-            self.iface.messageBar().pushWidget(progressMessageBar)
-            response = self.upload_images(response=None, mosaic_id=mosaic.id, image_paths=image_paths, uploaded=[], failed=[], progress = progress)
-        
+            self.upload_images(response=None, mosaic_id=mosaic.id, image_paths=image_paths, uploaded=[], failed=[])
+
     def upload_images(self,
                       response: QNetworkReply,
                       mosaic_id: UUID,
                       image_paths: Sequence[Union[Path, str]],
                       uploaded: Sequence[Union[Path, str]],
-                      failed: Sequence[Union[Path, str]],
-                      progress: QProgressBar):        
+                      failed: Sequence[Union[Path, str]]):        
         if len(image_paths) == 0:
             if failed:
                 self.api.upload_image_error_handler(image_paths=failed)
@@ -159,23 +153,20 @@ class DataCatalogService(QObject):
             image_to_upload = image_paths[0]
             non_uploaded = image_paths[1:] 
             self.api.upload_image(mosaic_id=mosaic_id,
-                                image_path=image_to_upload,
-                                callback=self.upload_images,
-                                callback_kwargs={'mosaic_id':mosaic_id,
-                                                'image_paths': non_uploaded,
-                                                'uploaded': list(uploaded) + [image_to_upload],
-                                                'failed': failed,
-                                                'progress': progress},
+                                  image_path=image_to_upload,
+                                  callback=self.upload_images,
+                                  callback_kwargs={'mosaic_id':mosaic_id,
+                                                   'image_paths': non_uploaded,
+                                                   'uploaded': list(uploaded) + [image_to_upload],
+                                                   'failed': failed},
                                 error_handler=self.upload_images,
                                 error_handler_kwargs={'mosaic_id':mosaic_id,
                                                       'image_paths': non_uploaded,
                                                       'uploaded': uploaded,
-                                                      'failed': list(failed) + [image_to_upload],
-                                                      'progress': progress},
+                                                      'failed': list(failed) + [image_to_upload]},
+                                image_number=len(uploaded+[image_to_upload]+failed),
+                                image_count=len(uploaded+[image_to_upload]+non_uploaded+failed)
                                 )
-        progress.setValue(len(uploaded))
-        if progress.value() == progress.maximum():
-            self.iface.messageBar().clearWidgets()      
 
     def get_mosaic_images(self, mosaic_id):
         self.api.get_mosaic_images(mosaic_id=mosaic_id, callback=self.get_mosaic_images_callback)
