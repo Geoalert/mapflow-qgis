@@ -5,7 +5,7 @@ from typing import Iterable, Optional, List
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette
-from PyQt5.QtWidgets import QWidget, QPushButton, QCheckBox, QTableWidgetItem
+from PyQt5.QtWidgets import QWidget, QPushButton, QCheckBox, QTableWidgetItem, QAction, QMenu
 from qgis.core import QgsMapLayerProxyModel, QgsMapLayer, QgsSettings
 
 from . import icons
@@ -423,7 +423,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.deleteProject.setToolTip(tooltip)
         self.updateProject.setToolTip(tooltip)
 
-    def disable_shared_project(self, user_role: UserRole):
+    def enable_shared_project(self, options_menu, processing_update_action, user_role: UserRole):
         """Disable buttons depending on user role in a shared project.
         Does not handle:
         - processing renaming option that's inside saveOptionsButton (it's a QMenu(), so to not pass it to dlg, this option should be 
@@ -432,43 +432,68 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                                            so it should be disabled there).
 
         :param user_role: current user's role in a project (from ShareProject schema).
-        """        
-        if not user_role.can_start_processing:
-            self.disable_processing_start(reason=self.tr(f'Not enougth rights to start processing in a shared project ({user_role})'),
-                                                         clear_area=True,
-                                                         user_role=user_role)
-            # Disable widgets in a left panel
-            for i in range(self.procesingControlLayout.count()):
-                layout = self.procesingControlLayout.itemAt(i).layout()
-                if layout:
-                    for i in range(layout.count()):
-                        widget = layout.itemAt(i).widget()
-                        if widget:
-                            widget.setEnabled(False)
-            # Disable separetly, because they fill and enable later than this disabling
-            self.polygonCombo.setEnabled(False)
-            self.modelCombo.setEnabled(False)
-        else:
-            # Enable back
-            for i in range(self.procesingControlLayout.count()):
-                layout = self.procesingControlLayout.itemAt(i).layout()
-                if layout:
-                    for i in range(layout.count()):
-                        widget = layout.itemAt(i).widget()
-                        if widget:
-                            widget.setEnabled(True)
-            self.polygonCombo.setEnabled(True)
-            self.modelCombo.setEnabled(True)
-                            
+        """
+        # Disable processing panel
+        self.disable_processing_start(reason="", clear_area=True, user_role=user_role)
+        for control in self.project_controls:
+            control.setEnabled(user_role.can_start_processing)
+        # Disable processing rating
+        for control in self.rating_controls:
+            control.setEnabled(user_role.can_delete_rename_review_processing)
+            self.deleteProcessings.setEnabled(user_role.can_delete_rename_review_processing)
+        self.rateProcessingLabel.setText(self.tr('Rate processing:'))
+        self.ratingComboBox.setCurrentIndex(0)
         if not user_role.can_delete_rename_review_processing:
-            self.deleteProcessings.setEnabled(False)
-            self.deleteProcessings.setToolTip(self.tr(f'Not enougth rights to delete processing in a shared project ({user_role})'))
             self.enable_rating(False, False, self.tr(f'Not enougth rights to rate processing in a shared project ({user_role})'))
-            self.rateProcessingLabel.setText(self.tr('Rate processing:'))
-            self.ratingComboBox.setCurrentIndex(0)
         else:
-            self.deleteProcessings.setEnabled(True)
-            self.deleteProcessings.setToolTip('')
             self.enable_rating(False, True, self.tr('Please select processing'))
-            self.rateProcessingLabel.setText(self.tr('Rate processing:'))
-            self.ratingComboBox.setCurrentIndex(0)
+        # Disable processing deletion
+        self.deleteProcessings.setEnabled(user_role.can_delete_rename_review_processing)
+        if not user_role.can_delete_rename_review_processing:
+            self.deleteProcessings.setToolTip(self.tr(f'Not enougth rights to delete processing in a shared project ({user_role})'))
+        else:
+            self.deleteProcessings.setToolTip('')
+        # And remove/add back renaming option from save options menu
+        self.enable_rename_processing(options_menu, processing_update_action, user_role)
+
+    def enable_model_options(self, user_role: UserRole = UserRole.owner):
+        for i in range(self.modelOptionsLayout.count()):
+            widget = self.modelOptionsLayout.itemAt(i).widget()
+            widget.setEnabled(user_role.can_start_processing)
+            widget.setChecked(user_role.can_start_processing)
+    
+    def enable_project_change(self, user_role: UserRole = UserRole.owner):
+        self.deleteProject.setEnabled(user_role.can_delete_rename_project)
+        self.updateProject.setEnabled(user_role.can_delete_rename_project) 
+        if not user_role.can_delete_rename_project:
+            self.deleteProject.setToolTip(self.tr(f'Not enougth rights to delete shared project ({user_role})'))
+            self.updateProject.setToolTip(self.tr(f'Not enougth rights to update shared project ({user_role})'))
+        else:
+            self.deleteProject.setToolTip('')
+            self.updateProject.setToolTip('')
+    
+    def enable_rename_processing(self, 
+                                 options_menu: QMenu,
+                                 processing_update_action: QAction, 
+                                 user_role: UserRole = UserRole.owner):
+        if not user_role.can_delete_rename_review_processing:
+            options_menu.removeAction(processing_update_action)
+        else:
+            options_menu.addAction(processing_update_action)
+    
+    @property
+    def project_controls(self):
+        return [self.labelProcessingName, self.processingName,
+                self.labelAoiLayer, self.polygonCombo, self.addAoiButton,
+                self.labelImagerySource, self.rasterCombo, self.zoomCombo, self.searchImageryButton,
+                self.labelAiModel, self.labelCoins_1, self.labelWdPrice, self.modelCombo, self.modelInfo,
+                self.modelOptionsLabel,
+                self.startProcessing]
+    
+    @property
+    def rating_controls(self):
+        return [self.rateProcessingLabel, self.ratingComboBox,
+                self.processingRatingFeedbackText,
+                self.acceptButton, self.reviewButton,
+                self.ratingSubmitButton]
+    

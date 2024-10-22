@@ -348,8 +348,8 @@ class Mapflow(QObject):
                                                            self.settings.setValue('zoom', None))
         
         # Check if a project is shared after startup and when changing project
-        self.app_startup_user_update_timer.timeout.connect(self.check_project_sharing)
-        self.dlg.projectsCombo.currentIndexChanged.connect(self.check_project_sharing)
+        self.app_startup_user_update_timer.timeout.connect(self.get_project_sharing)
+        self.dlg.projectsCombo.currentIndexChanged.connect(self.get_project_sharing)
        
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
@@ -530,15 +530,8 @@ class Mapflow(QObject):
         self.dlg.clear_model_options()
         for block in wd.optional_blocks:
             self.dlg.add_model_option(block.name, checked=bool(self.settings.value(f"wd/{wd.id}/{block.name}", False)))
-        # This layout sometimes fills after checking if a project is shared, if models take longer to initialize,
-        # and needed wigets are disabled before the appearence of these checkboxes, so we do it separately after adding boxes
-        for i in range(self.dlg.modelOptionsLayout.count()):
-            widget = self.dlg.modelOptionsLayout.itemAt(i).widget()
-            if not self.user_role.can_start_processing:
-                widget.setEnabled(False)
-                widget.setChecked(False)
-            else:
-                widget.setEnabled(True)
+        # Other wigets are disabled before the appearence of these checkboxes, so we do it here separately after adding them
+        self.dlg.enable_model_options(self.user_role)
 
     def save_options_settings(self, wd: WorkflowDef, enabled_blocks: List[bool]):
         enabled_blocks_dict = wd.get_enabled_blocks(enabled_blocks)
@@ -687,16 +680,7 @@ class Mapflow(QObject):
         # Manually toggle function to avoid race condition
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
         self.setup_processings_table()
-        if not self.user_role.can_delete_rename_project:
-            self.dlg.deleteProject.setEnabled(False)
-            self.dlg.deleteProject.setToolTip(self.tr(f'Not enougth rights to delete shared project ({self.user_role})'))
-            self.dlg.updateProject.setEnabled(False)
-            self.dlg.updateProject.setToolTip(self.tr(f'Not enougth rights to update shared project ({self.user_role})'))
-        else:
-            self.dlg.deleteProject.setEnabled(True)
-            self.dlg.deleteProject.setToolTip('')
-            self.dlg.updateProject.setEnabled(True)
-            self.dlg.updateProject.setToolTip('')
+        self.dlg.enable_project_change(self.user_role)
 
     def create_project(self):
         dialog = CreateProjectDialog(self.dlg)
@@ -2579,9 +2563,14 @@ class Mapflow(QObject):
 
     def enable_rating_submit(self, status_ok: bool) -> None:
         rating_selected = 5 >= self.dlg.ratingComboBox.currentIndex() > 0
-        if not status_ok:
-            reason = self.tr("Only correctly finished processings (status OK) can be rated")
-        elif not rating_selected:
+        if not self.user_role.can_delete_rename_review_processing:
+            reason = self.tr(f'Not enougth rights to rate processing in a shared project ({self.user_role})')
+        elif not status_ok:
+            if not self.selected_processing():
+                reason = self.tr('Please select processing')
+            else:
+                reason = self.tr("Only correctly finished processings (status OK) can be rated")
+        elif not rating_selected and self.user_role.can_delete_rename_review_processing:
             reason = self.tr("Please select rating to submit")
         else:
             reason = ""
@@ -3179,39 +3168,31 @@ class Mapflow(QObject):
         dialog.setup(processing)
         dialog.deleteLater()
 
-    def check_project_sharing(self):
-        if len(self.dlg.projectsCombo) != 0:
-            self.current_project = self.projects[self.dlg.projectsCombo.currentIndex()]
-            project_name = self.current_project.name
-            if self.current_project.shareProject:
-                # Get user role, if project is shared
-                users = self.current_project.shareProject.users
-                self.user_role = UserRole.owner
-                if users:
-                    for user in users:
-                        if user.email == self.username:
-                            self.user_role = UserRole(user.role)
-                            # And remove/add back renaming option from save options menu
-                            if not self.user_role.can_delete_rename_review_processing:
-                                self.options_menu.removeAction(self.processing_update_action)
-                            else:
-                                self.options_menu.addAction(self.processing_update_action)
-                # Disable needed buttons
-                self.dlg.disable_shared_project(self.user_role)
-                # Get project owner
-                owners = self.current_project.shareProject.owners
-                project_owner = None
-                if owners:
-                    project_owner = owners[0].email
-                    for owner in owners:
-                        if owner.email == self.username:
-                            self.user_role = UserRole.owner                    
-            # Specify new main window header
-            self.dlg.setWindowTitle(helpers.generate_plugin_header(self.plugin_name,
-                                                                   env=self.config.MAPFLOW_ENV,
-                                                                   project_name=project_name,
-                                                                   user_role=self.user_role,
-                                                                   project_owner=project_owner))
+    def get_project_sharing(self):
+        if len(self.dlg.projectsCombo) == 0:
+            return
+        self.current_project = self.projects[self.dlg.projectsCombo.currentIndex()]
+        project_name = self.current_project.name
+        if self.current_project.shareProject:
+            # Get user role, if project is shared
+            users = self.current_project.shareProject.users
+            for user in users:
+                if user.email == self.username:
+                    self.user_role = UserRole(user.role)
+            # Get project owner
+            owners = self.current_project.shareProject.owners
+            for owner in owners:
+                if owner.email == self.username:
+                    self.user_role = UserRole.owner
+            project_owner = owners[0].email
+            # Disable buttons
+            self.dlg.enable_shared_project(self.options_menu, self.processing_update_action, self.user_role)
+        # Specify new main window header
+        self.dlg.setWindowTitle(helpers.generate_plugin_header(self.plugin_name,
+                                                               env=self.config.MAPFLOW_ENV,
+                                                               project_name=project_name,
+                                                               user_role=self.user_role,
+                                                               project_owner=project_owner))
 
     @property
     def basemap_providers(self):
