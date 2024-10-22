@@ -504,7 +504,7 @@ class ResultsLoader(QObject):
         self.dlg.processingsTable.setEnabled(True)
         # Avoid overwriting existing files by adding (n) to their names
         output_path = os.path.join(self.dlg.outputDirectory.text(), processing.id_)
-        extension = '.gpkg'
+        extension = '.geojson'
         if os.path.exists(output_path + extension):
             count = 1
             while os.path.exists(output_path + f'({count})' + extension):
@@ -515,6 +515,7 @@ class ResultsLoader(QObject):
         transform = self.project.transformContext()
         # Layer creation options for QGIS 3.10.3+
         write_options = QgsVectorFileWriter.SaveVectorOptions()
+        write_options.driverName = "GeoJSON"
         write_options.layerOptions = ['fid=id']
         with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb+') as f:
             f.write(response.readAll().data())
