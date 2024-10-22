@@ -502,7 +502,6 @@ class ResultsLoader(QObject):
         :param pid: ID of the inspected processing.
         """
         self.dlg.processingsTable.setEnabled(True)
-        self.write_vector_file(response, processing, '.gpkg', 'GeoPackage')
         # Avoid overwriting existing files by adding (n) to their names
         output_path = os.path.join(self.dlg.outputDirectory.text(), processing.id_)
         extension = '.gpkg'
