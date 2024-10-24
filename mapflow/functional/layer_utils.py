@@ -520,7 +520,7 @@ class ResultsLoader(QObject):
             response_data = response.readAll().data()
             f.write(response_data)
             f.seek(0)
-            layer = QgsVectorLayer(f.name, '', 'ogr')
+            layer = QgsVectorLayer(f.name, '', 'ogr')            
             # V3 returns two additional str values but they're not documented, so just discard them
             error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(
                 layer,
@@ -529,11 +529,11 @@ class ResultsLoader(QObject):
                 write_options
             )
         if error:
-            self.message_bar.pushWarning(self.tr("Error"),
+            self.message_bar.pushWarning(self.tr("Warning"),
                                 self.tr('Failed to save results to GeoPackage. '
                                         'Error code: {code}. Message: {message}. ' 
                                         'File will be saved as GeoJSON instead.').format(code=error, message=msg))
-            # Save as GeoGSON instead of GeoPackage
+            # Save as GeoJSON instead of GeoPackage
             output_path = os.path.join(self.dlg.outputDirectory.text(), processing.id_)
             extension = '.geojson'
             if os.path.exists(output_path + extension):
@@ -543,23 +543,13 @@ class ResultsLoader(QObject):
                 output_path += f'({count})' + extension
             else:
                 output_path += extension
-            write_options.driverName = "GeoJSON"
-            with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb+') as f:
-                f.write(response_data)
-                f.seek(0)
-                layer = QgsVectorLayer(f.name, '', 'ogr')
-                error_geojson, msg_geojson, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(
-                    layer,
-                    output_path,
-                    transform,
-                    write_options
-                )
-                if error_geojson:
-                    self.message_bar.pushWarning(self.tr("Error"),
-                                                 self.tr('Failed to save results to file. '
-                                                 'Error code: {code}. Message: {message}').format(code=error_geojson,
-                                                                                                  message=msg_geojson))
-                    return
+            try:
+                with open(output_path, mode='wb+') as f:
+                    f.write(response_data)
+                    f.seek(0)
+            except:
+                self.message_bar.pushWarning(self.tr("Error"), self.tr('Failed to save results to file.'))
+                return
         # Load the results into QGIS
         results_layer = QgsVectorLayer(output_path, processing.name, 'ogr')
         results_layer.loadNamedStyle(get_style_name(processing.workflow_def, layer))
