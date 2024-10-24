@@ -520,7 +520,7 @@ class ResultsLoader(QObject):
             response_data = response.readAll().data()
             f.write(response_data)
             f.seek(0)
-            layer = QgsVectorLayer(f.name, '', 'ogr')            
+            layer = QgsVectorLayer(f.name, '', 'ogr')
             # V3 returns two additional str values but they're not documented, so just discard them
             error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(
                 layer,
