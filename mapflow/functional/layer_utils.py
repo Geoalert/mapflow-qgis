@@ -533,7 +533,9 @@ class ResultsLoader(QObject):
                                 self.tr('Failed to save results to GeoPackage. '
                                         'Error code: {code}. Message: {message}. ' 
                                         'File will be saved as GeoJSON instead.').format(code=error, message=msg))
-            # Save as GeoJSON instead of GeoPackage
+            # Delete empty GeoPackage
+            Path(output_path).unlink()
+            # Save as GeoJSON instead
             output_path = os.path.join(self.dlg.outputDirectory.text(), processing.id_)
             extension = '.geojson'
             if os.path.exists(output_path + extension):
