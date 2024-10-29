@@ -141,7 +141,7 @@ class DefaultProvider(ProviderInterface):
                    preview_url=response.previewUrl)
 
     def to_processing_params(self,
-                             zoom: str,
+                             zoom: Optional[str] = None,
                              image_id: Optional[str] = None,
                              provider_name: Optional[str] = None):
         return PostProviderSchema(data_provider=self.api_name, zoom=zoom), {}
