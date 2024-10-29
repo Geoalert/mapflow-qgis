@@ -343,6 +343,19 @@ class Mapflow(QObject):
             self.dlg.zoomCombo.currentIndexChanged.connect(lambda: self.settings.setValue('zoom', str(self.dlg.zoomCombo.currentText())) 
                                                            if self.dlg.zoomCombo.currentIndex() != 0 else
                                                            self.settings.setValue('zoom', None))
+            saved_zoom = self.settings.value('zoom')
+            if saved_zoom is None:
+                self.dlg.zoomCombo.setCurrentIndex(0)
+            else:
+                zoom_index = self.dlg.zoomCombo.findText(saved_zoom)
+                if zoom_index == -1:
+                    # Fallback for situation if the settings contain value not available in the list
+                    self.dlg.zoomCombo.setCurrentIndex(0)
+                    self.settings.setValue('zoom', None)
+                else:
+                    self.dlg.zoomCombo.setCurrentIndex(zoom_index)
+
+
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
@@ -1946,7 +1959,7 @@ class Mapflow(QObject):
         # Add zoom to params if zoom_selector is true
         if self.zoom_selector:
             self.zoom = self.settings.value('zoom')
-            if self.zoom:
+            if self.zoom is not None:
                 processing_params.params.zoom = self.zoom
             if isinstance (processing_params.params, PostSourceSchema): # No zoom for tifs
                 if processing_params.params.source_type == 'tif':
