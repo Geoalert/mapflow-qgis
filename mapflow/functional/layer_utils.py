@@ -5,7 +5,7 @@ from typing import Optional, List
 
 from PyQt5.QtCore import QObject
 from PyQt5.QtNetwork import QNetworkReply
-from PyQt5.QtWidgets import QFileDialog, QApplication
+from PyQt5.QtWidgets import QFileDialog, QApplication, QMessageBox
 from pyproj import Proj, transform
 from qgis.core import (QgsRectangle,
                        QgsRasterLayer,
@@ -501,6 +501,7 @@ class ResultsLoader(QObject):
         :param response: The HTTP response.
         :param pid: ID of the inspected processing.
         """
+        self.temp_dir = self.settings.value("tempdir")
         self.dlg.processingsTable.setEnabled(True)
         # Avoid overwriting existing files by adding (n) to their names
         output_path = Path(self.dlg.outputDirectory.text(), processing.id_).with_suffix(".gpkg")
@@ -513,9 +514,6 @@ class ResultsLoader(QObject):
         # Layer creation options for QGIS 3.10.3+
         write_options = QgsVectorFileWriter.SaveVectorOptions()
         write_options.layerOptions = ['fid=id']
-        
-        print ("lu", self.temp_dir)
-
         with open(Path(self.temp_dir, os.urandom(32).hex()), mode='wb+') as f:
             response_data = response.readAll().data()
             f.write(response_data)
