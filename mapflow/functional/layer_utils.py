@@ -5,7 +5,7 @@ from typing import Optional, List
 
 from PyQt5.QtCore import QObject
 from PyQt5.QtNetwork import QNetworkReply
-from PyQt5.QtWidgets import QFileDialog, QApplication, QMessageBox
+from PyQt5.QtWidgets import QFileDialog, QApplication
 from pyproj import Proj, transform
 from qgis.core import (QgsRectangle,
                        QgsRasterLayer,
