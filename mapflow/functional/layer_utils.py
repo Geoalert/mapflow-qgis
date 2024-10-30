@@ -503,20 +503,20 @@ class ResultsLoader(QObject):
         """
         self.dlg.processingsTable.setEnabled(True)
         # Avoid overwriting existing files by adding (n) to their names
-        output_path = os.path.join(self.dlg.outputDirectory.text(), processing.id_)
-        extension = '.gpkg'
-        if os.path.exists(output_path + extension):
+        output_path = Path(self.dlg.outputDirectory.text(), processing.id_).with_suffix(".gpkg")
+        if output_path.exists():
             count = 1
-            while os.path.exists(output_path + f'({count})' + extension):
+            while output_path.with_stem(processing.id_ + f"_{count}").exists():
                 count += 1
-            output_path += f'({count})' + extension
-        else:
-            output_path += extension
+            output_path = output_path.with_stem(processing.id_ + f"_{count}")
         transform = self.project.transformContext()
         # Layer creation options for QGIS 3.10.3+
         write_options = QgsVectorFileWriter.SaveVectorOptions()
         write_options.layerOptions = ['fid=id']
-        with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb+') as f:
+        
+        print ("lu", self.temp_dir)
+
+        with open(Path(self.temp_dir, os.urandom(32).hex()), mode='wb+') as f:
             response_data = response.readAll().data()
             f.write(response_data)
             f.seek(0)
@@ -524,7 +524,7 @@ class ResultsLoader(QObject):
             # V3 returns two additional str values but they're not documented, so just discard them
             error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(
                 layer,
-                output_path,
+                str(output_path),
                 transform,
                 write_options
             )
@@ -534,26 +534,23 @@ class ResultsLoader(QObject):
                                         'Error code: {code}. Message: {message}. ' 
                                         'File will be saved as GeoJSON instead.').format(code=error, message=msg))
             # Delete empty GeoPackage
-            Path(output_path).unlink()
+            output_path.unlink()
             # Save as GeoJSON instead
-            output_path = os.path.join(self.dlg.outputDirectory.text(), processing.id_)
-            extension = '.geojson'
-            if os.path.exists(output_path + extension):
+            output_path = output_path.with_suffix(".geojson")
+            if output_path.exists():
                 count = 1
-                while os.path.exists(output_path + f'({count})' + extension):
+                while output_path.with_stem(processing.id_ + f"_{count}").exists():
                     count += 1
-                output_path += f'({count})' + extension
-            else:
-                output_path += extension
+                output_path = output_path.with_stem(processing.id_ + f"_{count}")
             try:
-                with open(output_path, mode='wb+') as f:
-                    f.write(response_data)
-                    f.seek(0)
+                with open(str(output_path), mode='wb+') as f:
+                        f.write(response_data)
+                        f.seek(0)
             except:
                 self.message_bar.pushWarning(self.tr("Error"), self.tr('Failed to save results to file.'))
                 return
         # Load the results into QGIS
-        results_layer = QgsVectorLayer(output_path, processing.name, 'ogr')
+        results_layer = QgsVectorLayer(str(output_path), processing.name, 'ogr')
         results_layer.loadNamedStyle(get_style_name(processing.workflow_def, layer))
         # Add the source raster (COG) if it has been created
         raster_url = processing.raster_layer.get('tileUrl')
