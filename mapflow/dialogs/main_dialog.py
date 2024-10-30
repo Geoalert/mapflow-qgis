@@ -96,6 +96,14 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             pass
         else:
             self.zoomCombo.hide()
+        
+        # Add options menu
+        self.options_menu = QMenu()
+        self.save_result_action = QAction(self.tr("Save results"))
+        self.download_aoi_action = QAction(self.tr("Download AOI"))
+        self.see_details_action = QAction(self.tr("See details"))
+        self.processing_update_action = QAction(self.tr("Rename"))
+        self.setup_options_menu()
 
     # ===== Settings management ===== #
     def save_view_results_mode(self):
@@ -352,12 +360,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
     def disable_processing_start(self,
                                  reason: str,
-                                 clear_area: bool = False,
-                                 user_role: UserRole = UserRole.owner):
+                                 clear_area: bool = False):
         if clear_area:
             self.labelAoiArea.clear()
-        if not user_role.can_start_processing:
-            reason = self.tr(f'Not enougth rights to start processing in a shared project ({user_role})')
         self.processingProblemsLabel.setPalette(self.alert_palette)
         self.processingProblemsLabel.setText(reason)
         self.startProcessing.setDisabled(True)
@@ -422,19 +427,26 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.updateProject.setDisabled(is_default)
         self.deleteProject.setToolTip(tooltip)
         self.updateProject.setToolTip(tooltip)
+    
+    def setup_options_menu(self):
+        self.options_menu.addAction(self.save_result_action)
+        self.options_menu.addAction(self.download_aoi_action)
+        self.options_menu.addAction(self.see_details_action)
+        self.options_menu.addAction(self.processing_update_action)
 
-    def enable_shared_project(self, options_menu, processing_update_action, user_role: UserRole):
+    def enable_shared_project(self, user_role: UserRole):
         """Disable buttons depending on user role in a shared project.
-        Does not handle:
-        - processing renaming option that's inside saveOptionsButton (it's a QMenu(), so to not pass it to dlg, this option should be 
-                                                                      removed/added there the menu was initialized - in mapflow.py);
-        - deleteProject and updateProject (buttons instantly turn back on in 'on_project_change' in mapflow.py,
-                                           so it should be disabled there).
 
         :param user_role: current user's role in a project (from ShareProject schema).
         """
+        if not user_role:
+            user_role = UserRole.owner
         # Disable processing panel
-        self.disable_processing_start(reason="", clear_area=True, user_role=user_role)
+        if not user_role.can_start_processing:
+            reason = self.tr(f'Not enougth rights to start processing in a shared project ({user_role})')
+        else:
+            reason = ""
+        self.disable_processing_start(reason, clear_area=True)
         for control in self.project_controls:
             control.setEnabled(user_role.can_start_processing)
         # Disable processing rating
@@ -454,32 +466,40 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         else:
             self.deleteProcessings.setToolTip('')
         # And remove/add back renaming option from save options menu
-        self.enable_rename_processing(options_menu, processing_update_action, user_role)
+        self.enable_rename_processing(user_role.can_delete_rename_review_processing)
 
-    def enable_model_options(self, user_role: UserRole = UserRole.owner):
+    def enable_model_options(self, can_start_processing: bool = True):
+        """
+        Set the whole group of checkboxes for model options disabled depending on user role property.
+        Is called from 'show_wd_options' in 'mapflow.py'.
+        """
+        if not can_start_processing:
+            can_start_processing = True
         for i in range(self.modelOptionsLayout.count()):
             widget = self.modelOptionsLayout.itemAt(i).widget()
-            widget.setEnabled(user_role.can_start_processing)
-            widget.setChecked(user_role.can_start_processing)
+            widget.setEnabled(can_start_processing)
+            widget.setChecked(can_start_processing)
     
-    def enable_project_change(self, user_role: UserRole = UserRole.owner):
-        self.deleteProject.setEnabled(user_role.can_delete_rename_project)
-        self.updateProject.setEnabled(user_role.can_delete_rename_project) 
-        if not user_role.can_delete_rename_project:
-            self.deleteProject.setToolTip(self.tr(f'Not enougth rights to delete shared project ({user_role})'))
-            self.updateProject.setToolTip(self.tr(f'Not enougth rights to update shared project ({user_role})'))
-        else:
-            self.deleteProject.setToolTip('')
-            self.updateProject.setToolTip('')
+    def enable_project_change(self, reason: str, can_delete_rename_project: bool = True):
+        """
+        Disable project controls in a 'Settings' tab depending on user role property.
+        Is called from 'on_project_change' in 'mapflow.py'.
+        """
+        if not can_delete_rename_project:
+            can_delete_rename_project = True
+        self.deleteProject.setEnabled(can_delete_rename_project)
+        self.updateProject.setEnabled(can_delete_rename_project) 
+        self.deleteProject.setToolTip(reason)
+        self.updateProject.setToolTip(reason)
     
-    def enable_rename_processing(self, 
-                                 options_menu: QMenu,
-                                 processing_update_action: QAction, 
-                                 user_role: UserRole = UserRole.owner):
-        if not user_role.can_delete_rename_review_processing:
-            options_menu.removeAction(processing_update_action)
+    def enable_rename_processing(self, can_delete_rename_review_processing: bool = True):
+        """
+        Remove processing's renaming option from '...' menu near 'View results' button depending on user role property.
+        """
+        if can_delete_rename_review_processing is False:
+            self.options_menu.removeAction(self.processing_update_action)
         else:
-            options_menu.addAction(processing_update_action)
+            self.options_menu.addAction(self.processing_update_action)
     
     @property
     def project_controls(self):
@@ -496,4 +516,3 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                 self.processingRatingFeedbackText,
                 self.acceptButton, self.reviewButton,
                 self.ratingSubmitButton]
-    

@@ -308,14 +308,8 @@ class Mapflow(QObject):
         self.draw_aoi = QAction(self.tr("Draw AOI at the map"))
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
-        # Add options menu
-        self.options_menu = QMenu()
-        self.save_result_action = QAction(self.tr("Save results"))
-        self.download_aoi_action = QAction(self.tr("Download AOI"))
-        self.see_details_action = QAction(self.tr("See details"))
-        self.processing_update_action = QAction(self.tr("Rename"))
-        self.setup_options_menu()
-
+        # Add options menu functionality
+        self.setup_options_menu_connections()
         # Layer actions
         self.add_layer_action = QAction(u"Use as AOI in Mapflow")
         self.add_layer_action.setIcon(plugin_icon)
@@ -405,17 +399,12 @@ class Mapflow(QObject):
         self.draw_aoi.triggered.connect(self.create_editable_aoi_layer)
         self.dlg.addAoiButton.setMenu(self.add_layer_menu)
 
-    def setup_options_menu(self):
-        self.options_menu.addAction(self.save_result_action)
-        self.options_menu.addAction(self.download_aoi_action)
-        self.options_menu.addAction(self.see_details_action)
-        self.options_menu.addAction(self.processing_update_action)
-
-        self.save_result_action.triggered.connect(self.download_results_file)
-        self.download_aoi_action.triggered.connect(self.download_aoi_file)
-        self.see_details_action.triggered.connect(self.show_details)
-        self.processing_update_action.triggered.connect(self.update_processing)
-        self.dlg.saveOptionsButton.setMenu(self.options_menu)
+    def setup_options_menu_connections(self):
+        self.dlg.save_result_action.triggered.connect(self.download_results_file)
+        self.dlg.download_aoi_action.triggered.connect(self.download_aoi_file)
+        self.dlg.see_details_action.triggered.connect(self.show_details)
+        self.dlg.processing_update_action.triggered.connect(self.update_processing)
+        self.dlg.saveOptionsButton.setMenu(self.dlg.options_menu)
 
     def create_aoi_layer_from_map(self, action: QAction):
         aoi_geometry = helpers.to_wgs84(
@@ -531,7 +520,7 @@ class Mapflow(QObject):
         for block in wd.optional_blocks:
             self.dlg.add_model_option(block.name, checked=bool(self.settings.value(f"wd/{wd.id}/{block.name}", False)))
         # Other wigets are disabled before the appearence of these checkboxes, so we do it here separately after adding them
-        self.dlg.enable_model_options(self.user_role)
+        self.dlg.enable_model_options(self.user_role.can_start_processing)
 
     def save_options_settings(self, wd: WorkflowDef, enabled_blocks: List[bool]):
         enabled_blocks_dict = wd.get_enabled_blocks(enabled_blocks)
@@ -680,7 +669,11 @@ class Mapflow(QObject):
         # Manually toggle function to avoid race condition
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
         self.setup_processings_table()
-        self.dlg.enable_project_change(self.user_role)
+        if not self.user_role.can_delete_rename_project:
+            reason = self.tr(f'Not enougth rights to delete or update shared project ({self.user_role})')
+        else:
+            reason = ""
+        self.dlg.enable_project_change(reason, self.user_role.can_delete_rename_project)
 
     def create_project(self):
         dialog = CreateProjectDialog(self.dlg)
@@ -1552,9 +1545,11 @@ class Mapflow(QObject):
             return
 
         if not layer or layer.featureCount() == 0:
-            self.dlg.disable_processing_start(reason=self.tr('Set AOI to start processing'),
-                                              clear_area=True,
-                                              user_role=self.user_role)
+            if not self.user_role.can_start_processing:
+                reason = self.tr(f'Not enougth rights to start processing in a shared project ({self.user_role})')
+            else:
+                reason = self.tr('Set AOI to start processing')
+            self.dlg.disable_processing_start(reason, clear_area=True)
             self.aoi = self.aoi_size = None
             return
 
@@ -1574,10 +1569,11 @@ class Mapflow(QObject):
                 aoi = QgsGeometry.collectGeometry([feature.geometry() for feature in features])
             self.calculate_aoi_area(aoi, layer.crs())
         else:  # self.max_aois_per_processing < number of polygons (as features and as parts of multipolygons):
-            self.dlg.disable_processing_start(reason=self.tr('AOI must contain not more than'
-                                                             ' {} polygons').format(self.max_aois_per_processing),
-                                              clear_area=True,
-                                              user_role=self.user_role)
+            if not self.user_role.can_start_processing:
+                reason = self.tr(f'Not enougth rights to start processing in a shared project ({self.user_role})')
+            else:
+                reason = self.tr('AOI must contain not more than {} polygons').format(self.max_aois_per_processing)
+            self.dlg.disable_processing_start(reason, clear_area=True)
             self.aoi = self.aoi_size = None
 
     def calculate_aoi_area_raster(self, layer: Optional[QgsRasterLayer]) -> None:
@@ -1657,13 +1653,14 @@ class Mapflow(QObject):
         if not self.aoi:
             # Here the button must already be disabled, and the warning text set
             if self.dlg.startProcessing.isEnabled():
-                self.dlg.disable_processing_start(reason=self.tr("Set AOI to start processing"),
-                                                  clear_area=False,
-                                                  user_role=self.user_role)
+                if not self.user_role.can_start_processing:
+                    reason = self.tr(f'Not enougth rights to start processing in a shared project ({self.user_role})')
+                else:
+                    reason = self.tr("Set AOI to start processing")
+                self.dlg.disable_processing_start(reason, clear_area=False)
         elif not self.workflow_defs:
             self.dlg.disable_processing_start(reason=self.tr("Error! Models are not initialized"),
-                                              clear_area=True,
-                                              user_role=self.user_role)
+                                              clear_area=True)
         elif self.billing_type != BillingType.credits:
             self.dlg.startProcessing.setEnabled(True)
             self.dlg.processingProblemsLabel.clear()
@@ -1693,10 +1690,11 @@ class Mapflow(QObject):
         """
         response_text = response.readAll().data().decode()
         message = api_message_parser(response_text)
-        self.dlg.disable_processing_start(reason=self.tr('Processing cost is not available:\n'
-                                                        '{message}').format(message=message),
-                                          clear_area=False,
-                                          user_role=self.user_role)
+        if not self.user_role.can_start_processing:
+            reason = self.tr(f'Not enougth rights to start processing in a shared project ({self.user_role})')
+        else:
+            reason = self.tr('Processing cost is not available:\n{message}').format(message=message)
+        self.dlg.disable_processing_start(reason, clear_area=False)
 
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         response_data = response.readAll().data().decode()
@@ -3186,7 +3184,7 @@ class Mapflow(QObject):
                     self.user_role = UserRole.owner
             project_owner = owners[0].email
             # Disable buttons
-            self.dlg.enable_shared_project(self.options_menu, self.processing_update_action, self.user_role)
+            self.dlg.enable_shared_project(self.user_role)
         # Specify new main window header
         self.dlg.setWindowTitle(helpers.generate_plugin_header(self.plugin_name,
                                                                env=self.config.MAPFLOW_ENV,
