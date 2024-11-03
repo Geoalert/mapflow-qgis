@@ -252,6 +252,7 @@ class ResultsLoader(QObject):
         self.settings = settings
         self.plugin_name = plugin_name
         self.temp_dir = temp_dir
+        
 
     # ======= General layer management  ====== #
 
@@ -501,7 +502,8 @@ class ResultsLoader(QObject):
         :param response: The HTTP response.
         :param pid: ID of the inspected processing.
         """
-        self.temp_dir = self.settings.value("tempdir")
+        if self.temp_dir != self.settings.value("tempdir"):
+            self.temp_dir = self.settings.value("tempdir")
         self.dlg.processingsTable.setEnabled(True)
         # Avoid overwriting existing files by adding (n) to their names
         output_path = Path(self.dlg.outputDirectory.text(), processing.id_).with_suffix(".gpkg")
@@ -517,7 +519,6 @@ class ResultsLoader(QObject):
         with open(Path(self.temp_dir, os.urandom(32).hex()), mode='wb+') as f:
             response_data = response.readAll().data()
             f.write(response_data)
-            f.seek(0)
             layer = QgsVectorLayer(f.name, '', 'ogr')
             # V3 returns two additional str values but they're not documented, so just discard them
             error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(
@@ -527,12 +528,10 @@ class ResultsLoader(QObject):
                 write_options
             )
         if error:
-            self.message_bar.pushWarning(self.tr("Warning"),
-                                self.tr('Failed to save results to GeoPackage. '
-                                        'Error code: {code}. Message: {message}. ' 
-                                        'File will be saved as GeoJSON instead.').format(code=error, message=msg))
-            # Delete empty GeoPackage
-            output_path.unlink()
+            self.message_bar.pushMessage(self.tr("Warning"),
+                                 self.tr('Failed to save results to GeoPackage. '
+                                         'Error code: {code}. Message: {message}. ' 
+                                         'File will be saved as GeoJSON instead.').format(code=error, message=msg))
             # Save as GeoJSON instead
             output_path = output_path.with_suffix(".geojson")
             if output_path.exists():
@@ -543,7 +542,6 @@ class ResultsLoader(QObject):
             try:
                 with open(str(output_path), mode='wb+') as f:
                         f.write(response_data)
-                        f.seek(0)
             except:
                 self.message_bar.pushWarning(self.tr("Error"), self.tr('Failed to save results to file.'))
                 return
