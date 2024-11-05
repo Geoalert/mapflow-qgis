@@ -2050,9 +2050,25 @@ class Mapflow(QObject):
 
         :param response: The HTTP response.
         """
-        self.report_http_error(response,
-                               self.tr('Processing creation failed'),
-                               error_message_parser=api_message_parser)
+        error = response.error()
+        response_body = response.readAll().data().decode()
+        if error == QNetworkReply.ContentAccessDenied \
+                and "data provider" in response_body.lower():
+            self.alert(self.tr('Data provider with id is unavailable on your plan. \n '
+                               'Upgrade your subscription to get access to the data. \n'
+                               'See pricing at <a href=\"https://mapflow.ai/pricing\">mapflow.ai</a>'),
+                       QMessageBox.Information)
+            # provider ID is the last "word" in the message.
+            # In this case, when "data provider" is in the message, there can't be index error
+        else:
+            error_summary, email_body = get_error_report_body(response=response,
+                                                              response_body=response_body,
+                                                              plugin_version=self.plugin_version,
+                                                              error_message_parser=api_message_parser)
+            ErrorMessageWidget(parent=QApplication.activeWindow(),
+                               text= error_summary,
+                               title=self.tr('Processing creation failed'),
+                               email_body=email_body).show()
 
     def update_processing_limit(self) -> None:
         """Set the user's processing limit as reported by Mapflow."""
@@ -2977,25 +2993,15 @@ class Mapflow(QObject):
         :param error_message_parser: function to parse error message, depends on server which is requested.
             Default parser (if None) searches for 'message' section in response json
         """
-        error = response.error()
         response_body = response.readAll().data().decode()
-        if error == QNetworkReply.ContentAccessDenied \
-                and "data provider" in response_body.lower():
-            self.alert(self.tr('Data provider with id is unavailable on your plan. \n '
-                               'Upgrade your subscription to get access to the data. \n'
-                               'See pricing at <a href=\"https://mapflow.ai/pricing\">mapflow.ai</a>'),
-                       QMessageBox.Information)
-            # provider ID is the last "word" in the message.
-            # In this case, when "data provider" is in the message, there can't be index error
-        else:
-            error_summary, email_body = get_error_report_body(response=response,
-                                                            response_body=response_body,
-                                                            plugin_version=self.plugin_version,
-                                                            error_message_parser=error_message_parser)
-            ErrorMessageWidget(parent=QApplication.activeWindow(),
-                            text= error_summary,
-                            title=title,
-                            email_body=email_body).show()
+        error_summary, email_body = get_error_report_body(response=response,
+                                                          response_body=response_body,
+                                                          plugin_version=self.plugin_version,
+                                                          error_message_parser=error_message_parser)
+        ErrorMessageWidget(parent=QApplication.activeWindow(),
+                           text= error_summary,
+                           title=title,
+                           email_body=email_body).show()
 
     def setup_processings_table(self):
         table_item = QTableWidgetItem("Loading...")
