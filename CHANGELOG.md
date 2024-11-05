@@ -1,3 +1,6 @@
+## 2.6.3
+    - Added schemas for shared projects
+    - Disabled certain buttons depending on user role in a project
 ## 2.6.2
     - Fixed preview georeference for Mapflow Imagery Search
     - Fixed search results filtering after search provider change
