@@ -13,6 +13,8 @@ version=2.6.2
 author=Geoalert
 email=hello@geoalert.io
 changelog:
+    2.6.3
+    - Define functionality based on a role if a project was shared
     2.6.2
     - Fixed preview georeference for Mapflow Imagery Search
     - Fixed search results filtering after search provider change
