@@ -385,6 +385,7 @@ class Mapflow(QObject):
             callback_kwargs={'app_startup_request': True},
             use_default_error_handler=False
         )
+        self.data_catalog_service.get_user_limit()
 
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.create_aoi_from_map_action)

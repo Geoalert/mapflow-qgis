@@ -20,6 +20,8 @@ class UserLimitSchema(SkipDataClass):
     memoryLimit: int
     memoryUsed: int
     memoryFree: int
+    maxUploadFileSize: int
+    maxPixelCount: int
 
 
 # ========== MOSAIC ============== #
@@ -58,6 +60,7 @@ class MosaicReturnSchema(SkipDataClass):
 
 
 # ============ IMAGE  =============== #
+
 @dataclass
 class ImageReturnSchema(SkipDataClass):
     id: UUID

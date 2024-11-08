@@ -126,6 +126,7 @@ class DataCatalogApi(QObject):
     def upload_image(self,
                      mosaic_id: UUID,
                      image_path: Union[Path, str],
+                     content_length: int,
                      callback: Callable = lambda *args: None,
                      callback_kwargs: Optional[dict] = None,
                      error_handler: Optional[Callable] = None,
