@@ -117,5 +117,8 @@ class DataCatalogView(QObject):
         return selected_rows
     
     def show_storage(self, taken_storage, free_storage):
-        self.dlg.dataLimit.setText("Your data: {taken} MB. Free space: {free} MB".format(taken=round(taken_storage/1048576, 1), 
-                                                                                         free=round(free_storage/1048576, 1)))
+        if free_storage:
+            self.dlg.dataLimit.setText("Your data: {taken} MB. Free space: {free} MB".format(taken=round(taken_storage/1048576, 1), 
+                                                                                             free=round(free_storage/1048576, 1)))
+        else:
+            self.dlg.dataLimit.setText("")
