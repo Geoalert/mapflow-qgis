@@ -17,9 +17,9 @@ class RasterLayer(SkipDataClass):
 
 @dataclass
 class UserLimitSchema(SkipDataClass):
-    memoryLimit: int
+    memoryLimit: Optional[int]
     memoryUsed: int
-    memoryFree: int
+    memoryFree: Optional[int]
     maxUploadFileSize: int
     maxPixelCount: int
 

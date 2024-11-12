@@ -54,6 +54,7 @@ class DataCatalogService(QObject):
         self.images = []
         self.image_max_size_pixels = Config.MAX_FILE_SIZE_PIXELS
         self.image_max_size_bytes = Config.MAX_FILE_SIZE_BYTES
+        self.free_storage = None
 
     # Mosaics CRUD
     def create_mosaic(self, mosaic: MosaicCreateSchema):
@@ -139,18 +140,17 @@ class DataCatalogService(QObject):
         mosaic = self.selected_mosaic()
         image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), "Choose image to upload", filter='(TIF files *.tif; *.tiff)')[0]
         if image_paths:
-            self.upload_images(response=None, mosaic_id=mosaic.id, image_paths=image_paths, uploaded=[], failed=[], content_length=None)
+            self.upload_images(response=None, mosaic_id=mosaic.id, image_paths=image_paths, uploaded=[], failed=[])
 
     def upload_images(self,
                       response: QNetworkReply,
                       mosaic_id: UUID,
                       image_paths: Sequence[Union[Path, str]],
                       uploaded: Sequence[Union[Path, str]],
-                      failed: Sequence[Union[Path, str]],
-                      content_length: int):        
+                      failed: Sequence[Union[Path, str]]):        
         if len(image_paths) == 0:
             if failed:
-                self.api.upload_image_error_handler(image_paths=failed)
+                self.api.upload_image_error_handler(response=response, image_paths=failed)
             self.get_mosaic(mosaic_id)
             self.get_mosaic_images(mosaic_id)
             self.mosaicsUpdated.emit()
@@ -160,19 +160,21 @@ class DataCatalogService(QObject):
             # Check if raster to be uploaded meets restrictions
             layer = QgsRasterLayer(image_to_upload, "rasterLayerCheck", 'gdal')
             if not helpers.raster_layer_is_allowed(layer, self.image_max_size_pixels, self.image_max_size_bytes):
-                raise BadProcessingInput(self.tr("Raster TIFF file must be georeferenced,"
-                                                 " have size less than {size} pixels"
-                                                 " and file size less than {memory}"
-                                                 " MB").format(size=self.image_max_size_pixels,
-                                                               memory=self.image_max_size_bytes // (1024 * 1024)))
+                message = self.tr("Raster TIFF file must be georeferenced,"
+                                  " have size less than {size} pixels"
+                                  " and file size less than {memory}"
+                                  " MB").format(size=self.image_max_size_pixels,
+                                                memory=self.image_max_size_bytes // (1024 * 1024))
+                self.view.alert(self.tr("<center><b>Error uploading '{name}'</b>".format(name=Path(image_to_upload).name))+"<br>"+message)
+                return
             # Check if user has enougth stogage
-            content_length=Path(image_to_upload).stat().st_size
-            if content_length > self.free_storage:
+            image_size=Path(image_to_upload).stat().st_size
+            if self.free_storage and image_size > self.free_storage:
                 message = (self.tr("<b>Not enough storage space. </b>"
                                    "You have {free_storage} MB left, but '{name}' is "
-                                   "{content_length} MB".format(free_storage=round(self.free_storage/(1024*1024), 1),
+                                   "{image_size} MB".format(free_storage=round(self.free_storage/(1024*1024), 1),
                                                                 name=Path(image_to_upload).name,
-                                                                content_length=round(content_length/(1024*1024), 1)
+                                                                image_size=round(image_size/(1024*1024), 1)
                                                                )))
                 self.iface.messageBar().pushWarning("Mapflow", message)
                 self.get_mosaic(mosaic_id)
@@ -182,15 +184,13 @@ class DataCatalogService(QObject):
             # Upload allowed raster 
             self.api.upload_image(mosaic_id=mosaic_id,
                                   image_path=image_to_upload,
-                                  content_length=content_length,
                                   callback=self.upload_images,
-                                  callback_kwargs={'mosaic_id':mosaic_id,
+                                  callback_kwargs={'mosaic_id': mosaic_id,
                                                    'image_paths': non_uploaded,
                                                    'uploaded': list(uploaded) + [image_to_upload],
-                                                   'failed': failed,
-                                                   'content_length': content_length},
+                                                   'failed': failed},
                                   error_handler=self.upload_images,
-                                  error_handler_kwargs={'mosaic_id':mosaic_id,
+                                  error_handler_kwargs={'mosaic_id': mosaic_id,
                                                         'image_paths': non_uploaded,
                                                         'uploaded': uploaded,
                                                         'failed': list(failed) + [image_to_upload]},
@@ -314,12 +314,13 @@ class DataCatalogService(QObject):
         data_limit = UserLimitSchema.from_dict(json.loads(response.readAll().data()))
         taken = data_limit.memoryUsed
         free = data_limit.memoryFree
-        self.view.show_storage(taken, free)
         if data_limit.maxPixelCount:
             self.image_max_size_pixels = int(data_limit.maxPixelCount)
         if data_limit.maxUploadFileSize:
             self.image_max_size_bytes = int(data_limit.maxUploadFileSize)
-        self.free_storage = free
+        if data_limit.memoryLimit:
+            self.free_storage = free
+        self.view.show_storage(taken, free)
 
 
     # Selection
