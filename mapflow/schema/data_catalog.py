@@ -17,11 +17,11 @@ class RasterLayer(SkipDataClass):
 
 @dataclass
 class UserLimitSchema(SkipDataClass):
-    memoryLimit: Optional[int]
-    memoryUsed: int
-    memoryFree: Optional[int]
-    maxUploadFileSize: int
-    maxPixelCount: int
+    memoryLimit: Optional[int] = None
+    memoryUsed: Optional[int] = None
+    memoryFree: Optional[int] = None
+    maxUploadFileSize: Optional[int] = None
+    maxPixelCount: Optional[int] = None
 
 
 # ========== MOSAIC ============== #
