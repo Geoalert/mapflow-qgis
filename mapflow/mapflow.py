@@ -1536,6 +1536,34 @@ class Mapflow(QObject):
         if items[0] not in self.dlg.metadataTable.selectedItems():
             self.dlg.metadataTable.selectRow(items[0].row())
 
+    def get_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
+        if not layer or layer.featureCount() == 0:
+            self.dlg.disable_processing_start(reason=self.tr('Set AOI to start processing'),
+                                            clear_area=True)
+            self.aoi = self.aoi_size = None
+            return
+
+        features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
+        if layer.wkbType() == QgsWkbTypes.MultiPolygon:
+            geoms_count = layer_utils.count_polygons_in_layer(features)
+        elif layer.wkbType() == QgsWkbTypes.Polygon:
+            geoms_count = len(features)
+        else: # type of layer is not supported
+            # (but it shouldn't be the case, because point and line layers will not appear in AOI-combo,
+            # and collections are devided by QGIS into separate layers with different types)
+            raise ValueError("Only polygon and multipolyon layers supported for this operation")
+        if self.max_aois_per_processing >= geoms_count:
+            if len(features) == 1:
+                aoi = features[0].geometry()
+            else:
+                aoi = QgsGeometry.collectGeometry([feature.geometry() for feature in features])
+            self.calculate_aoi_area(aoi, layer.crs())
+        else:  # self.max_aois_per_processing < number of polygons (as features and as parts of multipolygons):
+            self.dlg.disable_processing_start(reason=self.tr('AOI must contain not more than'
+                                                             ' {} polygons').format(self.max_aois_per_processing),
+                                            clear_area=True)
+            self.aoi = self.aoi_size = None
+
     def calculate_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
         """Get the AOI size total when polygon another layer is chosen,
         current layer's selection is changed or the layer's features are modified.
@@ -1544,37 +1572,11 @@ class Mapflow(QObject):
         """
         if self.dlg.useImageExtentAsAoi.isChecked():  # GeoTIFF extent used; no difference
             return
-        
         provider = self.providers[self.dlg.providerIndex()]
         if isinstance(provider, MyImageryProvider):
             self.calculate_aoi_area_catalog()
         else:
-            if not layer or layer.featureCount() == 0:
-                self.dlg.disable_processing_start(reason=self.tr('Set AOI to start processing'),
-                                                clear_area=True)
-                self.aoi = self.aoi_size = None
-                return
-
-            features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
-            if layer.wkbType() == QgsWkbTypes.MultiPolygon:
-                geoms_count = layer_utils.count_polygons_in_layer(features)
-            elif layer.wkbType() == QgsWkbTypes.Polygon:
-                geoms_count = len(features)
-            else: # type of layer is not supported
-                # (but it shouldn't be the case, because point and line layers will not appear in AOI-combo,
-                # and collections are devided by QGIS into separate layers with different types)
-                raise ValueError("Only polygon and multipolyon layers supported for this operation")
-            if self.max_aois_per_processing >= geoms_count:
-                if len(features) == 1:
-                    aoi = features[0].geometry()
-                else:
-                    aoi = QgsGeometry.collectGeometry([feature.geometry() for feature in features])
-                self.calculate_aoi_area(aoi, layer.crs())
-            else:  # self.max_aois_per_processing < number of polygons (as features and as parts of multipolygons):
-                self.dlg.disable_processing_start(reason=self.tr('AOI must contain not more than'
-                                                                ' {} polygons').format(self.max_aois_per_processing),
-                                                clear_area=True)
-                self.aoi = self.aoi_size = None
+            self.get_aoi_area_polygon_layer(layer)
 
     def calculate_aoi_area_raster(self, layer: Optional[QgsRasterLayer]) -> None:
         """Get the AOI size when a new entry in the raster combo box is selected.
@@ -1621,6 +1623,8 @@ class Mapflow(QObject):
                     aoi = self.aoi = self.aoi_size = None
                 self.calculate_aoi_area(aoi, helpers.WGS84)
             else:
+                # Get polygon AOI to set self.aoi for intersection check later
+                self.get_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
                 if image:
                     catalog_aoi = QgsGeometry().fromWkt(image.footprint)
                 elif mosaic:
@@ -1628,7 +1632,7 @@ class Mapflow(QObject):
                 else:
                     catalog_aoi = None
                 aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
-                                                  selected_aoi=self.dlg.polygonCombo.currentLayer(),
+                                                  selected_aoi=self.aoi,
                                                   use_image_extent_as_aoi=False)
                 self.calculate_aoi_area(aoi, helpers.WGS84)
                 if not aoi:
@@ -1933,7 +1937,7 @@ class Mapflow(QObject):
                     catalog_aoi = QgsGeometry().fromWkt(mosaic.footprint)
                 if image or mosaic:
                     aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
-                                                      selected_aoi=self.dlg.polygonCombo.currentLayer(),
+                                                      selected_aoi=selected_aoi,
                                                       use_image_extent_as_aoi=use_image_extent_as_aoi)
                     if not aoi:
                         raise AoiNotIntersectsImage()

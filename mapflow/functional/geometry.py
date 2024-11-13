@@ -26,7 +26,13 @@ def clip_aoi_to_image_extent(aoi_geometry: QgsGeometry,
     return intersection.getFeatures()
 
 def clip_aoi_to_catalog_extent(catalog_aoi: QgsGeometry,
-                               selected_aoi:QgsVectorLayer) -> QgsFeatureIterator:
+                               selected_aoi: QgsGeometry) -> QgsFeatureIterator:
+    # Create AOI layer from WGS84 geometry
+    aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
+    aoi_feature = QgsFeature()
+    aoi_feature.setGeometry(selected_aoi)
+    aoi_layer.dataProvider().addFeatures([aoi_feature])
+    aoi_layer.updateExtents()
     # Create a layer from chosen mosaic or image footprint
     catalog_layer = QgsVectorLayer('Polygon?crs=epsg:4326', '', 'memory')
     catalog_feature = QgsFeature()
@@ -35,6 +41,6 @@ def clip_aoi_to_catalog_extent(catalog_aoi: QgsGeometry,
     catalog_layer.updateExtents()
     # Find the intersection
     intersection = qgis_processing.run('qgis:intersection',
-                                      {'INPUT': selected_aoi, 'OVERLAY': catalog_layer, 'OUTPUT': 'memory:'}
+                                      {'INPUT': aoi_layer, 'OVERLAY': catalog_layer, 'OUTPUT': 'memory:'}
                                       )['OUTPUT']
     return intersection.getFeatures()
