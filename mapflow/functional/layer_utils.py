@@ -5,7 +5,7 @@ from typing import Optional, List
 
 from PyQt5.QtCore import QObject
 from PyQt5.QtNetwork import QNetworkReply
-from PyQt5.QtWidgets import QFileDialog, QApplication, QMessageBox
+from PyQt5.QtWidgets import QFileDialog, QApplication
 from pyproj import Proj, transform
 from qgis.core import (QgsRectangle,
                        QgsRasterLayer,
@@ -20,11 +20,8 @@ from qgis.core import (QgsRectangle,
                        QgsCoordinateReferenceSystem,
                        QgsDistanceArea,
                        QgsVectorFileWriter,
-                       QgsProject,
-                       QgsSettings
+                       QgsProject
                        )
-
-
 
 from .geometry import clip_aoi_to_image_extent
 from .helpers import WGS84, to_wgs84, WGS84_ELLIPSOID
@@ -503,8 +500,7 @@ class ResultsLoader(QObject):
 
         :param response: The HTTP response.
         :param pid: ID of the inspected processing.
-        """  
-        print (self.temp_dir)
+        """
         self.dlg.processingsTable.setEnabled(True)
         # Avoid overwriting existing files by adding (n) to their names
         output_path = Path(self.dlg.outputDirectory.text(), processing.id_).with_suffix(".gpkg")

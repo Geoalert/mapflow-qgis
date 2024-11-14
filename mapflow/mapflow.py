@@ -341,7 +341,7 @@ class Mapflow(QObject):
         if self.zoom_selector:
             self.dlg.zoomCombo.currentIndexChanged.connect(lambda: self.settings.setValue('zoom', str(self.dlg.zoomCombo.currentText())) 
                                                            if self.dlg.zoomCombo.currentIndex() != 0 else
-                                                           self.settings.setValue('zoom', None))        
+                                                           self.settings.setValue('zoom', None))
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
