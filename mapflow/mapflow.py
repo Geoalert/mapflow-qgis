@@ -1,7 +1,6 @@
 import json
 import os.path
 import shutil
-import tempfile
 from base64 import b64encode, b64decode
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 from datetime import datetime  # processing creation datetime formatting
@@ -9,7 +8,7 @@ from pathlib import Path
 from typing import List, Optional, Union, Callable, Tuple
 
 from PyQt5.QtCore import (
-    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, QTextStream, QByteArray
+    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, QTextStream, QByteArray, QTemporaryDir
 )
 from PyQt5.QtGui import QColor
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
@@ -151,12 +150,12 @@ class Mapflow(QObject):
         self.processings = []
 
         # Clear previous temp dir, as it is not cleared automatically in exit from QGis
-        previous_temp_dir = self.settings.value("tempdir", None)
+        previous_temp_dir = self.settings.value("temp_dir", None)
         if previous_temp_dir:
             shutil.rmtree(previous_temp_dir, ignore_errors=True)
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.temp_dir_name = self.temp_dir.name
-        self.settings.setValue("tempdir", self.temp_dir_name)
+        self.temp_dir = QTemporaryDir()
+        self.temp_dir_name = self.temp_dir.path()
+        self.settings.setValue("temp_dir", self.temp_dir_name)
 
         # Init dialogs
         self.use_oauth = (self.settings.value('use_oauth', 'false').lower() == 'true')
@@ -342,7 +341,7 @@ class Mapflow(QObject):
         if self.zoom_selector:
             self.dlg.zoomCombo.currentIndexChanged.connect(lambda: self.settings.setValue('zoom', str(self.dlg.zoomCombo.currentText())) 
                                                            if self.dlg.zoomCombo.currentIndex() != 0 else
-                                                           self.settings.setValue('zoom', None))
+                                                           self.settings.setValue('zoom', None))        
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
