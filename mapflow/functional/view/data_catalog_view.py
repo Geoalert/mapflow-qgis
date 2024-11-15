@@ -15,7 +15,7 @@ class DataCatalogView(QObject):
         # First column is ID, hidden; second is name
         self.dlg.mosaicTable.setColumnCount(2)
         self.dlg.mosaicTable.setColumnHidden(0, True)
-        # !!!
+        # Setup menu for uploadinf images to mosaic
         self.upload_image_menu = QMenu()
         self.upload_from_file = QAction(self.tr("Upload from file"))
         self.choose_raster_layer = QAction(self.tr("Choose raster layer"))
