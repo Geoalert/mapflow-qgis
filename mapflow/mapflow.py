@@ -47,6 +47,7 @@ from .entity.provider import (UsersProvider,
                               create_provider,
                               DefaultProvider,
                               ImagerySearchProvider,
+                              MyImageryProvider,
                               ProviderInterface)
 from .entity.workflow_def import WorkflowDef
 from .errors import (ProcessingInputDataMissing,
@@ -242,6 +243,8 @@ class Mapflow(QObject):
         # Calculate AOI size
         self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area_polygon_layer)
         self.dlg.useImageExtentAsAoi.toggled.connect(self.calculate_aoi_area_use_image_extent)
+        self.dlg.mosaicTable.itemSelectionChanged.connect(self.calculate_aoi_area_catalog)
+        self.dlg.imageTable.itemSelectionChanged.connect(self.calculate_aoi_area_catalog)
         self.monitor_polygon_layer_feature_selection([
             self.project.mapLayer(layer_id) for layer_id in self.project.mapLayers(validOnly=True)
         ])
@@ -382,6 +385,7 @@ class Mapflow(QObject):
             callback_kwargs={'app_startup_request': True},
             use_default_error_handler=False
         )
+        self.data_catalog_service.get_user_limit()
 
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.create_aoi_from_map_action)
@@ -636,6 +640,10 @@ class Mapflow(QObject):
         polygon_layer = self.dlg.polygonCombo.currentLayer()
         if provider_layer:
             self.calculate_aoi_area_raster(provider_layer)
+        elif isinstance(provider, MyImageryProvider):
+            my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
+            self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
+            self.calculate_aoi_area_catalog()
         else:
             self.calculate_aoi_area_polygon_layer(polygon_layer)
 
@@ -791,7 +799,8 @@ class Mapflow(QObject):
         :param raster_source: Provider name or None, depending on the signal, if one of the
             tile providers, otherwise the selected raster layer
         """
-        enabled = isinstance(raster_source, QgsRasterLayer)
+        provider = self.providers[self.dlg.providerIndex()]
+        enabled = isinstance(raster_source, QgsRasterLayer) or isinstance(provider, MyImageryProvider)
         self.dlg.useImageExtentAsAoi.setEnabled(enabled)
         self.dlg.useImageExtentAsAoi.setChecked(enabled)
 
@@ -1527,18 +1536,10 @@ class Mapflow(QObject):
         if items[0] not in self.dlg.metadataTable.selectedItems():
             self.dlg.metadataTable.selectRow(items[0].row())
 
-    def calculate_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
-        """Get the AOI size total when polygon another layer is chosen,
-        current layer's selection is changed or the layer's features are modified.
-
-        :param layer: The current polygon layer
-        """
-        if self.dlg.useImageExtentAsAoi.isChecked():  # GeoTIFF extent used; no difference
-            return
-
+    def get_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
         if not layer or layer.featureCount() == 0:
             self.dlg.disable_processing_start(reason=self.tr('Set AOI to start processing'),
-                                              clear_area=True)
+                                            clear_area=True)
             self.aoi = self.aoi_size = None
             return
 
@@ -1548,8 +1549,8 @@ class Mapflow(QObject):
         elif layer.wkbType() == QgsWkbTypes.Polygon:
             geoms_count = len(features)
         else: # type of layer is not supported
-              # (but it shouldn't be the case, because point and line layers will not appear in AOI-combo,
-              # and collections are devided by QGIS into separate layers with different types)
+            # (but it shouldn't be the case, because point and line layers will not appear in AOI-combo,
+            # and collections are devided by QGIS into separate layers with different types)
             raise ValueError("Only polygon and multipolyon layers supported for this operation")
         if self.max_aois_per_processing >= geoms_count:
             if len(features) == 1:
@@ -1560,17 +1561,34 @@ class Mapflow(QObject):
         else:  # self.max_aois_per_processing < number of polygons (as features and as parts of multipolygons):
             self.dlg.disable_processing_start(reason=self.tr('AOI must contain not more than'
                                                              ' {} polygons').format(self.max_aois_per_processing),
-                                              clear_area=True)
+                                            clear_area=True)
             self.aoi = self.aoi_size = None
+
+    def calculate_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
+        """Get the AOI size total when polygon another layer is chosen,
+        current layer's selection is changed or the layer's features are modified.
+
+        :param layer: The current polygon layer
+        """
+        if self.dlg.useImageExtentAsAoi.isChecked():  # GeoTIFF extent used; no difference
+            return
+        provider = self.providers[self.dlg.providerIndex()]
+        if isinstance(provider, MyImageryProvider):
+            self.calculate_aoi_area_catalog()
+        else:
+            self.get_aoi_area_polygon_layer(layer)
 
     def calculate_aoi_area_raster(self, layer: Optional[QgsRasterLayer]) -> None:
         """Get the AOI size when a new entry in the raster combo box is selected.
 
         :param layer: The current raster layer
         """
+        provider = self.providers[self.dlg.providerIndex()]
         if layer:
             geometry = QgsGeometry.collectGeometry([QgsGeometry.fromRect(layer.extent())])
             self.calculate_aoi_area(geometry, layer.crs())
+        elif isinstance(provider, MyImageryProvider):
+            self.calculate_aoi_area_catalog()
         else:
             self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
 
@@ -1579,8 +1597,47 @@ class Mapflow(QObject):
 
         :param use_image_extent: The current state of the checkbox
         """
-        if use_image_extent:
+        provider = self.providers[self.dlg.providerIndex()]
+        if use_image_extent and not isinstance(provider, MyImageryProvider):
             self.calculate_aoi_area_raster(self.dlg.rasterCombo.currentLayer())
+        elif isinstance(provider, MyImageryProvider):
+            self.calculate_aoi_area_catalog()
+        else:
+            self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+    
+    def calculate_aoi_area_catalog(self) -> None:
+        """Get the AOI size when a new mosaic or image in 'My imagery' is selected.
+        """
+        provider = self.providers[self.dlg.providerIndex()]
+        if isinstance(provider, MyImageryProvider):
+            image = self.data_catalog_service.selected_image()
+            mosaic = self.data_catalog_service.selected_mosaic()
+            if self.dlg.useImageExtentAsAoi.isChecked():
+                if image:
+                    aoi = QgsGeometry().fromWkt(image.footprint)
+                elif mosaic:
+                    aoi = QgsGeometry().fromWkt(mosaic.footprint)
+                else:
+                    self.dlg.disable_processing_start(reason=self.tr('Choose mosaic or image to start processing'),
+                                                      clear_area=True)
+                    aoi = self.aoi = self.aoi_size = None
+                self.calculate_aoi_area(aoi, helpers.WGS84)
+            else:
+                # Get polygon AOI to set self.aoi for intersection check later
+                self.get_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+                if image:
+                    catalog_aoi = QgsGeometry().fromWkt(image.footprint)
+                elif mosaic:
+                    catalog_aoi = QgsGeometry().fromWkt(mosaic.footprint)
+                else:
+                    catalog_aoi = None
+                aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
+                                                  selected_aoi=self.aoi,
+                                                  use_image_extent_as_aoi=False)
+                self.calculate_aoi_area(aoi, helpers.WGS84)
+                if not aoi:
+                    self.dlg.disable_processing_start(reason=self.tr("Selected AOI does not intersect the selected imagery"),
+                                                      clear_area=True)
         else:
             self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
 
@@ -1633,6 +1690,7 @@ class Mapflow(QObject):
             self.aoi_size = layer_utils.calculate_aoi_area(real_aoi, self.project.transformContext())
         except Exception as e:
             self.aoi_size = 0
+        
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
         self.update_processing_cost()
 
@@ -1829,7 +1887,8 @@ class Mapflow(QObject):
         if not provider:
             raise PluginError(self.tr('Providers are not initialized'))
         provider_params, provider_meta = provider.to_processing_params(image_id=image_id,
-                                                                       provider_name=provider_name)
+                                                                       provider_name=provider_name,
+                                                                       url=s3_uri)
 
         meta.update(**provider_meta)
         return provider_params, meta
@@ -1869,6 +1928,22 @@ class Mapflow(QObject):
             elif provider.requires_image_id:
                 aoi = selected_aoi
                 # raise PluginError(self.tr("Please select image in Search table for {}").format(provider.name))
+            elif isinstance(provider, MyImageryProvider):
+                image = self.data_catalog_service.selected_image()
+                mosaic = self.data_catalog_service.selected_mosaic()
+                if image:
+                    catalog_aoi = QgsGeometry().fromWkt(image.footprint)
+                elif mosaic:
+                    catalog_aoi = QgsGeometry().fromWkt(mosaic.footprint)
+                if image or mosaic:
+                    aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
+                                                      selected_aoi=selected_aoi,
+                                                      use_image_extent_as_aoi=use_image_extent_as_aoi)
+                    if not aoi:
+                        raise AoiNotIntersectsImage()
+                    aoi = selected_aoi
+                else:
+                    aoi = selected_aoi
             else:
                 aoi = selected_aoi
         return aoi
@@ -1902,8 +1977,24 @@ class Mapflow(QObject):
                                                      " MB").format(size=self.config.MAX_FILE_SIZE_PIXELS,
                                                                    memory=self.config.MAX_FILE_SIZE_BYTES // (
                                                                            1024 * 1024)))
+                
+            provider = self.providers[provider_index]
+            s3_uri = None
+            if isinstance(provider, MyImageryProvider):
+                image = self.data_catalog_service.selected_image()
+                mosaic = self.data_catalog_service.selected_mosaic()
+                if image:
+                    s3_uri = image.image_url
+                elif mosaic:
+                    try:
+                        image_uri = self.data_catalog_service.get_mosaic_images(mosaic.id)[0].image_url
+                        s3_uri = image_uri.rsplit('/',1)[0]+'/'
+                    except:
+                        s3_uri = None
+
             provider_params, processing_meta = self.get_processing_params(provider_index=provider_index,
                                                                           raster_layer=imagery,
+                                                                          s3_uri=s3_uri,
                                                                           image_id=image_id,
                                                                           provider_name=provider_name)
             aoi = self.get_aoi(provider_index=provider_index,
@@ -1912,7 +2003,7 @@ class Mapflow(QObject):
                                selected_image=selected_image,
                                selected_aoi=self.aoi)
         except AoiNotIntersectsImage:
-            return None, self.tr("Selected AOI does not intestect the selected image")
+            return None, self.tr("Selected AOI does not intersect the selected imagery")
         except ImageIdRequired:
             return None, self.tr("This provider requires image ID. Use search tab to find imagery for you requirements, "
                                  "and select image in the table.")
@@ -1925,7 +2016,6 @@ class Mapflow(QObject):
             meta=processing_meta,
             params=provider_params,
             geometry=json.loads(aoi.asJson()))
-
         return processing_params, ""
 
     def create_processing(self) -> None:
@@ -1938,6 +2028,16 @@ class Mapflow(QObject):
         if not processing_params:
             self.alert(error, icon=QMessageBox.Warning)
             return
+        provider = self.providers[self.dlg.providerCombo.currentIndex()]
+        if isinstance(provider, MyImageryProvider):
+            image = self.data_catalog_service.selected_image()
+            mosaic = self.data_catalog_service.selected_mosaic()
+            if image:
+                processing_params.params.url = image.image_url
+            elif mosaic:
+                image_url = self.data_catalog_service.get_mosaic_images(mosaic.id)[0].image_url
+                mosaic_url = image_url.rsplit('/',1)[0]+'/'
+                processing_params.params.url = mosaic_url
 
         if not helpers.check_processing_limit(billing_type=self.billing_type,
                                               remaining_limit=self.remaining_limit,
@@ -1950,7 +2050,6 @@ class Mapflow(QObject):
                        icon=QMessageBox.Warning)
             return
 
-        provider_index = self.dlg.providerIndex()
         imagery = self.dlg.rasterCombo.currentLayer()
 
         self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
@@ -2081,6 +2180,7 @@ class Mapflow(QObject):
 
     def setup_providers(self, providers_data):
         self.default_providers = ProvidersList([ImagerySearchProvider(proxy=self.server)] +
+                                               [MyImageryProvider()] +
                                                [DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
                                                 for data in providers_data])
         self.set_available_imagery_sources(self.dlg.modelCombo.currentText())

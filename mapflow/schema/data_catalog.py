@@ -17,9 +17,11 @@ class RasterLayer(SkipDataClass):
 
 @dataclass
 class UserLimitSchema(SkipDataClass):
-    memoryLimit: Optional[int]
-    memoryUsed: int
-    memoryFree: int
+    memoryLimit: Optional[int] = None
+    memoryUsed: Optional[int] = None
+    memoryFree: Optional[int] = None
+    maxUploadFileSize: Optional[int] = None
+    maxPixelCount: Optional[int] = None
 
 
 # ========== MOSAIC ============== #
@@ -49,6 +51,7 @@ class MosaicReturnSchema(SkipDataClass):
     rasterLayer: RasterLayer
     name: str
     created_at: datetime
+    footprint: str
     tags: Union[Sequence[str], None] = ()
 
     def __post_init__(self):
@@ -57,6 +60,7 @@ class MosaicReturnSchema(SkipDataClass):
 
 
 # ============ IMAGE  =============== #
+
 @dataclass
 class ImageReturnSchema(SkipDataClass):
     id: UUID

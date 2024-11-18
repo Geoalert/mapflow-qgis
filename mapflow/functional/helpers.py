@@ -79,14 +79,16 @@ def check_version(local_version: str,
     return major_changed, (minor_changed or patch_changed)
 
 
-def raster_layer_is_allowed(layer: QgsRasterLayer):
+def raster_layer_is_allowed(layer: QgsRasterLayer, 
+                            max_size_pixels: int = config.MAX_FILE_SIZE_PIXELS,
+                            max_size_bytes: int = config.MAX_FILE_SIZE_BYTES):
     filepath = Path(layer.dataProvider().dataSourceUri())
     res = layer.crs().isValid() \
-        and (layer.width() < config.MAX_FILE_SIZE_PIXELS) \
-        and (layer.height() < config.MAX_FILE_SIZE_PIXELS) \
+        and (layer.width() < max_size_pixels) \
+        and (layer.height() < max_size_pixels) \
         and filepath.suffix.lower() in ('.tif', '.tiff') \
         and filepath.exists() \
-        and filepath.stat().st_size < config.MAX_FILE_SIZE_BYTES
+        and filepath.stat().st_size < max_size_bytes
     return res
 
 

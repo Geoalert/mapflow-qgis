@@ -122,3 +122,12 @@ class DataCatalogView(QObject):
                                                                                              free=round(free_storage/1048576, 1)))
         else:
             self.dlg.dataLimit.setText("")
+
+    def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
+        """A duplicate of alert function from mapflow.py to avoid circular import.
+        """
+        box = QMessageBox(icon, "Mapflow", message, parent=QApplication.activeWindow())
+        box.setTextFormat(Qt.RichText)
+        if icon == QMessageBox.Question:  # by default, only OK is added
+            box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
+        return box.exec() == QMessageBox.Ok if blocking else box.open()

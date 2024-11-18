@@ -18,7 +18,9 @@ from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturn
 from ..api.data_catalog_api import DataCatalogApi
 from ..view.data_catalog_view import DataCatalogView
 from ...http import Http
-from ...functional import layer_utils
+from ...functional import layer_utils, helpers
+from ...config import Config
+from ...errors import BadProcessingInput
 
 
 class DataCatalogService(QObject):
@@ -50,7 +52,9 @@ class DataCatalogService(QObject):
         self.view = DataCatalogView(dlg=dlg)
         self.mosaics = {}
         self.images = []
-
+        self.image_max_size_pixels = Config.MAX_FILE_SIZE_PIXELS
+        self.image_max_size_bytes = Config.MAX_FILE_SIZE_BYTES
+        self.free_storage = None
 
     # Mosaics CRUD
     def create_mosaic(self, mosaic: MosaicCreateSchema):
@@ -135,35 +139,64 @@ class DataCatalogService(QObject):
     def upload_images_to_mosaic(self):
         mosaic = self.selected_mosaic()
         image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), "Choose image to upload", filter='(TIF files *.tif; *.tiff)')[0]
-        self.upload_images(response=None, mosaic_id=mosaic.id, image_paths=image_paths, uploaded=[], failed=[])
+        if image_paths:
+            self.upload_images(response=None, mosaic_id=mosaic.id, image_paths=image_paths, uploaded=[], failed=[])
 
     def upload_images(self,
                       response: QNetworkReply,
                       mosaic_id: UUID,
                       image_paths: Sequence[Union[Path, str]],
                       uploaded: Sequence[Union[Path, str]],
-                      failed: Sequence[Union[Path, str]]):             
+                      failed: Sequence[Union[Path, str]]):        
         if len(image_paths) == 0:
             if failed:
-                self.api.upload_image_error_handler(image_paths=failed)
+                self.api.upload_image_error_handler(response=response, image_paths=failed)
             self.get_mosaic(mosaic_id)
             self.get_mosaic_images(mosaic_id)
+            self.mosaicsUpdated.emit()
         else:
             image_to_upload = image_paths[0]
-            non_uploaded = image_paths[1:] 
+            non_uploaded = image_paths[1:]
+            # Check if raster to be uploaded meets restrictions
+            layer = QgsRasterLayer(image_to_upload, "rasterLayerCheck", 'gdal')
+            if not helpers.raster_layer_is_allowed(layer, self.image_max_size_pixels, self.image_max_size_bytes):
+                message = self.tr("Raster TIFF file must be georeferenced,"
+                                  " have size less than {size} pixels"
+                                  " and file size less than {memory}"
+                                  " MB").format(size=self.image_max_size_pixels,
+                                                memory=self.image_max_size_bytes // (1024 * 1024))
+                self.view.alert(self.tr("<center><b>Error uploading '{name}'</b>".format(name=Path(image_to_upload).name))+"<br>"+message)
+                return
+            # Check if user has enougth stogage
+            image_size=Path(image_to_upload).stat().st_size
+            if self.free_storage and image_size > self.free_storage:
+                message = (self.tr("<b>Not enough storage space. </b>"
+                                   "You have {free_storage} MB left, but '{name}' is "
+                                   "{image_size} MB".format(free_storage=round(self.free_storage/(1024*1024), 1),
+                                                                name=Path(image_to_upload).name,
+                                                                image_size=round(image_size/(1024*1024), 1)
+                                                               )))
+                self.iface.messageBar().pushWarning("Mapflow", message)
+                self.get_mosaic(mosaic_id)
+                self.get_mosaic_images(mosaic_id)
+                self.mosaicsUpdated.emit()
+                return
+            # Upload allowed raster 
             self.api.upload_image(mosaic_id=mosaic_id,
-                                image_path=image_to_upload,
-                                callback=self.upload_images,
-                                callback_kwargs={'mosaic_id':mosaic_id,
-                                                'image_paths': non_uploaded,
-                                                'uploaded': list(uploaded) + [image_to_upload],
-                                                'failed': failed},
-                                error_handler=self.upload_images,
-                                error_handler_kwargs={'mosaic_id':mosaic_id,
+                                  image_path=image_to_upload,
+                                  callback=self.upload_images,
+                                  callback_kwargs={'mosaic_id': mosaic_id,
+                                                   'image_paths': non_uploaded,
+                                                   'uploaded': list(uploaded) + [image_to_upload],
+                                                   'failed': failed},
+                                  error_handler=self.upload_images,
+                                  error_handler_kwargs={'mosaic_id': mosaic_id,
                                                         'image_paths': non_uploaded,
                                                         'uploaded': uploaded,
                                                         'failed': list(failed) + [image_to_upload]},
-                                )
+                                  image_number=len(uploaded+[image_to_upload]+failed),
+                                  image_count=len(uploaded+[image_to_upload]+non_uploaded+failed)
+                                 )
 
     def get_mosaic_images(self, mosaic_id):
         self.api.get_mosaic_images(mosaic_id=mosaic_id, callback=self.get_mosaic_images_callback)
@@ -281,6 +314,12 @@ class DataCatalogService(QObject):
         data_limit = UserLimitSchema.from_dict(json.loads(response.readAll().data()))
         taken = data_limit.memoryUsed
         free = data_limit.memoryFree
+        if data_limit.maxPixelCount:
+            self.image_max_size_pixels = int(data_limit.maxPixelCount)
+        if data_limit.maxUploadFileSize:
+            self.image_max_size_bytes = int(data_limit.maxUploadFileSize)
+        if data_limit.memoryLimit:
+            self.free_storage = free
         self.view.show_storage(taken, free)
 
 

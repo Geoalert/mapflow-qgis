@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QObject
+from PyQt5.QtCore import QObject, QTimer
 from ..service.data_catalog import DataCatalogService
 from ...dialogs.main_dialog import MainDialog
 
@@ -33,5 +33,4 @@ class DataCatalogController(QObject):
         self.dlg.imageInfoButton.clicked.connect(self.service.image_info)
         self.dlg.imageTable.selectionModel().selectionChanged.connect(self.service.check_image_selection)
 
-        self.dlg.tabWidget.tabBarClicked.connect(self.service.get_user_limit)
-        
+        self.service.mosaicsUpdated.connect(self.service.get_user_limit)
