@@ -616,6 +616,9 @@ class Mapflow(QObject):
             my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
             self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
             self.calculate_aoi_area_catalog()
+        if provider.requires_image_id:
+            imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
+            self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
         else:
             self.calculate_aoi_area_polygon_layer(polygon_layer)
 
@@ -891,9 +894,6 @@ class Mapflow(QObject):
         except (NotImplementedError, AttributeError):
             provider_supports_search = False
 
-        # IF current rasterSourse is a layer, id does not support search, let's switch it to Search provider
-        if self.dlg.current_raster_layer is not None:
-            provider_supports_search = False
         if not provider_supports_search:
             self.dlg.setProviderIndex(self.imagery_search_provider_index)
 
