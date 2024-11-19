@@ -223,13 +223,13 @@ class DataCatalogApi(QObject):
                             image: ImageReturnSchema,
                             extent: QgsRectangle,
                             callback: Callable,
-                            image_id: str = ""):
+                            image_name: str = ""):
         self.http.get(url=image.preview_url_l,
                       callback=callback,
                       use_default_error_handler=False,
                       error_handler=self.image_preview_l_error_handler,
                       callback_kwargs={"extent": extent,
-                                       "image_id": image_id}
+                                       "image_name": image_name}
                      )
 
     def image_preview_l_error_handler(self, response: QNetworkReply):

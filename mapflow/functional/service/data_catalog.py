@@ -281,11 +281,11 @@ class DataCatalogService(QObject):
         image = QImage.fromData(response.readAll().data())
         self.view.show_preview_s(image)
 
-    def get_image_preview_l(self, image: ImageReturnSchema):
+    def get_image_preview_l(self):
         try:
             image = self.selected_image()
             extent = layer_utils.footprint_to_extent(image.footprint)
-            self.api.get_image_preview_l(image=image, extent=extent, callback=self.display_image_preview, image_id=image.id)
+            self.api.get_image_preview_l(image=image, extent=extent, callback=self.display_image_preview, image_name=image.filename)
         except AttributeError:
             return
 
@@ -293,7 +293,7 @@ class DataCatalogService(QObject):
                               response: QNetworkReply,
                               extent: QgsRectangle,
                               crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857"),
-                              image_id: str = ""):
+                              image_name: str = ""):
         with open(Path(self.temp_dir)/os.urandom(32).hex(), mode='wb') as f:
             f.write(response.readAll().data())
         preview = gdal.Open(f.name)
@@ -309,11 +309,54 @@ class DataCatalogService(QObject):
             -pixel_ysize  # pixel vertical resolution (m)
         ])
         preview.FlushCache()
-        layer = QgsRasterLayer(f.name, f"preview {image_id}", 'gdal')
+        layer = QgsRasterLayer(f.name, f"preview {image_name}", 'gdal')
         layer.setExtent(extent)
         self.project.addMapLayer(layer)
         self.iface.setActiveLayer(layer)
         self.iface.zoomToActiveLayer()
+
+
+    # Functions that depend on mosaic or image selection
+    def preview_mosaic_or_image(self):
+        image = self.selected_image()
+        mosaic = self.selected_mosaic()
+        if image:
+            self.get_image_preview_l()
+        elif mosaic:
+            self.mosaic_preview()
+        else:
+            return
+
+    def update_or_show_info(self):
+        image = self.selected_image()
+        mosaic = self.selected_mosaic()
+        if image:
+            self.image_info()
+        elif mosaic:
+            self.update_mosaic()
+        else:
+            return
+        
+    def delete_mosaic_or_image(self):
+        image = self.selected_image()
+        mosaic = self.selected_mosaic()
+        if image:
+            self.delete_image()
+        elif mosaic:
+            self.delete_mosaic()
+        else:
+            return
+        
+    def check_catalog_selection(self):
+        image = self.selected_image()
+        mosaic = self.selected_mosaic()
+        image_name = None
+        mosaic_name = None
+        if image:
+            image_name = image.filename
+        elif mosaic:
+            mosaic_name = mosaic.name
+        self.view.check_mosaic_or_image_selection(mosaic_name, image_name)
 
 
     # Legacy:
