@@ -102,9 +102,9 @@ class DataCatalogView(QObject):
             self.dlg.imageTable.setItem(row, 1, name_item)
         self.dlg.imageTable.setHorizontalHeaderLabels(["ID", "Image"])
         if len(images) == 0:
-            self.dlg.previewMosaicButton.setEnabled(False)
+            self.dlg.previewCatalogButton.setEnabled(False)
         else:
-            self.dlg.previewMosaicButton.setEnabled(True)
+            self.dlg.previewCatalogButton.setEnabled(True)
         self.dlg.imageTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
 
     def show_preview_s(self, preview_image):
@@ -136,42 +136,43 @@ class DataCatalogView(QObject):
         self.upload_image_menu.addAction(self.upload_from_file)
         self.upload_image_menu.addAction(self.choose_raster_layer)
 
-    def check_mosaic_selection(self):
+    def check_mosaic_or_image_selection(self, mosaic_name, image_name):
+        if not mosaic_name and not image_name:
+            self.dlg.catalogSelectionLabel.setText("No current selection")
+
         # Enable buttons upon mosaics' table selection change
         if self.dlg.mosaicTable.selectionModel().hasSelection() is False:
             self.dlg.mosaicInfo.setText("Mosaic info")
-            self.dlg.previewMosaicButton.setEnabled(False)
-            self.dlg.editMosaicButton.setEnabled(False)
-            self.dlg.deleteMosaicButton.setEnabled(False)
+            self.dlg.previewCatalogButton.setEnabled(False)
+            self.dlg.editCatalogButton.setEnabled(False)
+            self.dlg.deleteCatalogButton.setEnabled(False)
             self.dlg.addImageButton.setEnabled(False)
+            self.dlg.imageTable.clearSelection()
             self.dlg.imageTable.setColumnCount(0)
             self.dlg.imageTable.setRowCount(0)
         else:
-            self.dlg.previewMosaicButton.setEnabled(True)
-            self.dlg.editMosaicButton.setEnabled(True)
-            self.dlg.deleteMosaicButton.setEnabled(True)
+            self.dlg.previewCatalogButton.setEnabled(True)
+            self.dlg.editCatalogButton.setEnabled(True)
+            self.dlg.deleteCatalogButton.setEnabled(True)
             self.dlg.addImageButton.setEnabled(True)
-        # Set deselection tooltip
+            self.dlg.catalogSelectionLabel.setText("Selected mosaic: <b>{mosaic_name}".format(mosaic_name=mosaic_name))
+        # Set mosaic deselection tooltip
         for row in range(self.dlg.mosaicTable.rowCount()): 
             item = self.dlg.mosaicTable.item(row, 1)
             if item.isSelected():
                 item.setToolTip("'Ctrl' + click to deselect")
             else:
                 item.setToolTip("")
-    
-    def check_image_selection(self):
+
         # Enable buttons upon images' table selection change
         if self.dlg.imageTable.selectionModel().hasSelection() is False:
             self.dlg.imagePreview.setText(" ")
             self.dlg.imageDetails.setText("Image info")
-            self.dlg.deleteImageButton.setEnabled(False)
-            self.dlg.imagePreviewButton.setEnabled(False)
-            self.dlg.imageInfoButton.setEnabled(False)
+            self.dlg.editCatalogButton.setText("Edit")
         else:
-            self.dlg.deleteImageButton.setEnabled(True)
-            self.dlg.imagePreviewButton.setEnabled(True)
-            self.dlg.imageInfoButton.setEnabled(True)
-        # Set deselection tooltip
+            self.dlg.editCatalogButton.setText("Info")
+            self.dlg.catalogSelectionLabel.setText("Selected image: <b>{image_name}".format(image_name=image_name))
+        # Set image deselection tooltip
         for row in range(self.dlg.imageTable.rowCount()): 
             item = self.dlg.imageTable.item(row, 1)
             if item.isSelected():
