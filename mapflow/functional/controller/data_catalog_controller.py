@@ -15,6 +15,7 @@ class DataCatalogController(QObject):
         self.dlg.editCatalogButton.setEnabled(False)
         self.dlg.deleteCatalogButton.setEnabled(False)
         self.dlg.addImageButton.setEnabled(False)
+        self.dlg.switchTablesButton.setEnabled(False)
 
         # Mosaic
         self.dlg.mosaicTable.cellClicked.connect(self.service.mosaic_clicked)
@@ -32,6 +33,7 @@ class DataCatalogController(QObject):
         self.dlg.previewCatalogButton.clicked.connect(self.service.preview_mosaic_or_image)
         self.dlg.editCatalogButton.clicked.connect(self.service.update_or_show_info)
         self.dlg.deleteCatalogButton.clicked.connect(self.service.delete_mosaic_or_image)
+        self.dlg.switchTablesButton.clicked.connect(self.view.switch_catalog_table)
 
 
         self.service.mosaicsUpdated.connect(self.service.get_user_limit)
