@@ -5,7 +5,7 @@ from typing import Iterable, Optional, List
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette
-from PyQt5.QtWidgets import QWidget, QPushButton, QCheckBox, QTableWidgetItem
+from PyQt5.QtWidgets import QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QTableWidget
 from qgis.core import QgsMapLayerProxyModel, QgsMapLayer, QgsSettings
 
 from . import icons
@@ -87,6 +87,12 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
         # Restored saved state
         self.set_state_from_settings()
+
+        # Create data catalog table wigets
+        self.stackedLayout = QStackedLayout()
+        self.stackedLayout.addWidget(self.mosaicTable)
+        self.stackedLayout.addWidget(self.imageTable)
+        self.catalogTableLayout.addLayout(self.stackedLayout)
 
     # ===== Settings management ===== #
     def save_view_results_mode(self):
