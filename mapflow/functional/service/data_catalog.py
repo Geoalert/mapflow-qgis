@@ -85,7 +85,7 @@ class DataCatalogService(QObject):
         mosaic = MosaicReturnSchema.from_dict(json.loads(response.readAll().data()))
         self.mosaics.update({mosaic.id: mosaic})
         self.mosaicsUpdated.emit()
-        self.view.display_mosaic_info(mosaic)
+        self.view.display_mosaic_info(mosaic, self.images)
         self.view.display_mosaics(list(self.mosaics.values()))
 
     def update_mosaic(self):  
@@ -116,11 +116,10 @@ class DataCatalogService(QObject):
         mosaic = self.selected_mosaic()
         if not mosaic:
             return
-        self.view.display_mosaic_info(mosaic)
+        self.view.display_mosaic_info(mosaic, self.images)
         self.get_mosaic_images(mosaic.id)
         # Clear previous image details
         self.dlg.imageTable.clearSelection()
-        self.dlg.imageDetails.setText("Image Info")
         self.dlg.imagePreview.setText("")
 
     def mosaic_preview(self):
@@ -223,6 +222,7 @@ class DataCatalogService(QObject):
     def get_mosaic_images_callback(self, response: QNetworkReply):
         self.images = [ImageReturnSchema.from_dict(data) for data in json.loads(response.readAll().data())]
         self.view.display_images(self.images)
+        self.view.display_mosaic_info(self.selected_mosaic(), self.images)
 
     def get_image(self, image_id: UUID, callback: Callable):
         self.api.get_image(image_id=image_id, callback=callback)
@@ -356,7 +356,9 @@ class DataCatalogService(QObject):
             image_name = image.filename
         elif mosaic:
             mosaic_name = mosaic.name
+            self.view.display_mosaic_info(mosaic, self.images)
         self.view.check_mosaic_or_image_selection(mosaic_name, image_name)
+
 
 
     # Legacy:
