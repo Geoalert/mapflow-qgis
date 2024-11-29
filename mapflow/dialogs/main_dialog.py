@@ -94,6 +94,14 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.stackedLayout.addWidget(self.imageTable)
         self.catalogTableLayout.addLayout(self.stackedLayout)
 
+        # Add buttons for catalog table cells
+        self.addImageButton = QPushButton()
+        self.showImagesButton = QPushButton()
+        self.previewMosaicButton = QPushButton()
+        self.editMosaicButton = QPushButton()
+        self.previewImageButton = QPushButton()
+        self.imageInfoButton = QPushButton()
+
     # ===== Settings management ===== #
     def save_view_results_mode(self):
         if self.viewAsTiles.isChecked():

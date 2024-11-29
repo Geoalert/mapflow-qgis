@@ -121,6 +121,7 @@ class DataCatalogService(QObject):
         # Clear previous image details
         self.dlg.imageTable.clearSelection()
         self.dlg.imagePreview.setText("")
+        self.view.add_mosaic_cell_buttons()
 
     def mosaic_preview(self):
         try:
@@ -264,6 +265,7 @@ class DataCatalogService(QObject):
             return
         self.view.display_image_info(image)
         self.get_image_preview_s(image, PreviewSize.small)
+        self.view.add_image_cell_buttons()
         return image
 
     def image_info(self):
@@ -316,27 +318,7 @@ class DataCatalogService(QObject):
         self.iface.zoomToActiveLayer()
 
 
-    # Functions that depend on mosaic or image selection
-    def preview_mosaic_or_image(self):
-        image = self.selected_image()
-        mosaic = self.selected_mosaic()
-        if image:
-            self.get_image_preview_l()
-        elif mosaic:
-            self.mosaic_preview()
-        else:
-            return
-
-    def update_or_show_info(self):
-        image = self.selected_image()
-        mosaic = self.selected_mosaic()
-        if image:
-            self.image_info()
-        elif mosaic:
-            self.update_mosaic()
-        else:
-            return
-        
+    # Functions that depend on mosaic or image selection       
     def delete_mosaic_or_image(self):
         image = self.selected_image()
         mosaic = self.selected_mosaic()
@@ -358,7 +340,6 @@ class DataCatalogService(QObject):
             mosaic_name = mosaic.name
             self.view.display_mosaic_info(mosaic, self.images)
         self.view.check_mosaic_or_image_selection(mosaic_name, image_name)
-
 
 
     # Legacy:
