@@ -1,4 +1,5 @@
 from typing import Union, Callable, Optional
+import json
 from pathlib import Path
 from uuid import UUID
 
@@ -70,12 +71,28 @@ class DataCatalogApi(QObject):
     def delete_mosaic(self,
                       mosaic_id: UUID,
                       callback: Callable = lambda *args: None,
-                      callback_kwargs: Optional[dict] = None):
+                      callback_kwargs: Optional[dict] = None,
+                      error_handler: Optional[Callable] = None,
+                      error_handler_kwargs: Optional[dict] = None):
         self.http.delete(url=f"{self.server}/rasters/mosaic/{mosaic_id}",
                          callback=callback,
-                         use_default_error_handler=True,
-                         callback_kwargs=callback_kwargs or {}
+                         callback_kwargs=callback_kwargs or {},
+                         use_default_error_handler=error_handler is None,
+                         error_handler=error_handler,
+                         error_handler_kwargs=error_handler_kwargs or {}
                         )
+
+    def delete_mosaic_error_handler(self, response: QNetworkReply, mosaic_name: str):
+        if json.loads(response.readAll().data())['detail'][0]['type'] == "type_error.uuid":
+            message = self.tr("Mosaic '{mosaic_name}' does not exist".format(mosaic_name=mosaic_name))
+            title = self.tr("Error: could not delete mosaic")
+        else:
+            message = self.tr("Could not delete mosaic '{mosaic_name}'".format(mosaic_name=mosaic_name))
+            title = self.tr("Error")
+        ErrorMessageWidget(parent=QApplication.activeWindow(),
+                           text=message,
+                           title=title,
+                           email_body='').show()
         
     def request_mosaic_extent(self,
                               tilejson_uri: str,
@@ -201,7 +218,7 @@ class DataCatalogApi(QObject):
 
     def delete_image_error_handler(self, image_paths: list):
         ErrorMessageWidget(parent=QApplication.activeWindow(),
-                           text=f'Could not delete {str(image_paths)[1:-1]} from mosaic',
+                           text=self.tr('Could not delete str({image_paths})[1:-1] from mosaic'.format(image_paths=image_paths)),
                            title=f'Error',
                            email_body='').show()
 
