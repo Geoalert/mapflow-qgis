@@ -58,7 +58,7 @@ class DataCatalogService(QObject):
 
 
     # Mosaics CRUD
-    def create_mosaic(self, mosaic: MosaicCreateSchema):
+    def create_mosaic(self):
         dialog = CreateMosaicDialog(self.dlg)
         dialog.accepted.connect(lambda: self.api.create_mosaic(dialog.mosaic(), callback=self.create_mosaic_callback))
         dialog.setup()
@@ -102,10 +102,20 @@ class DataCatalogService(QObject):
         self.get_mosaic(mosaic.id)
 
     def delete_mosaic(self):
+        # Store widgets before deleting a row
+        self.view.containerLayout.addWidget(self.dlg.addImageButton)
+        self.view.containerLayout.addWidget(self.dlg.showImagesButton)
+        self.view.containerLayout.addWidget(self.dlg.previewMosaicButton)
+        self.view.containerLayout.addWidget(self.dlg.editMosaicButton)
+        self.view.containerWidget.setLayout(self.view.containerLayout)
+        # Delete mosaic
         mosaic = self.selected_mosaic()
         self.api.delete_mosaic(mosaic_id=mosaic.id,
                                callback=self.delete_mosaic_callback,
-                               callback_kwargs={'mosaic_id': mosaic.id})
+                               callback_kwargs={'mosaic_id': mosaic.id},
+                               error_handler=self.api.delete_mosaic_error_handler,
+                               error_handler_kwargs={'mosaic_name': mosaic.name})
+        self.dlg.mosaicTable.clearSelection()
 
     def delete_mosaic_callback(self, response: QNetworkReply, mosaic_id: UUID):
         self.get_mosaics()
@@ -113,6 +123,9 @@ class DataCatalogService(QObject):
         self.mosaicsUpdated.emit()
 
     def mosaic_clicked(self):
+        if self.dlg.mosaicTable.selectionModel().hasSelection():
+            if self.dlg.mosaicTable.selectedIndexes()[0] == self.dlg.selected_mosaic_cell:
+                return # i.e. do noting when clicking on the same cell
         mosaic = self.selected_mosaic()
         if not mosaic:
             return
@@ -229,10 +242,16 @@ class DataCatalogService(QObject):
         self.api.get_image(image_id=image_id, callback=callback)
 
     def delete_image(self):
+        # Store widgets before deleting a row
+        self.view.containerLayout.addWidget(self.dlg.previewImageButton)
+        self.view.containerLayout.addWidget(self.dlg.imageInfoButton)
+        self.view.containerWidget.setLayout(self.view.containerLayout)
+        # Delete images
         images = {}
         for image in self.selected_images():
             images[image.id] = image.filename
         self.delete_images(response = None, images=list(images.items()), deleted=[], failed=[])
+        self.dlg.imageTable.clearSelection()
 
     def delete_images(self, 
                       response: QNetworkReply, 
@@ -318,7 +337,11 @@ class DataCatalogService(QObject):
         self.iface.zoomToActiveLayer()
 
 
-    # Functions that depend on mosaic or image selection       
+    # Functions that depend on mosaic or image selection
+    def add_mosaic_or_image(self):
+        if self.dlg.stackedLayout.currentIndex() == 0:
+            self.create_mosaic()
+
     def delete_mosaic_or_image(self):
         image = self.selected_image()
         mosaic = self.selected_mosaic()
