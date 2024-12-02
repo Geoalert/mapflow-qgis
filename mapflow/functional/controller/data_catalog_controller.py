@@ -16,11 +16,11 @@ class DataCatalogController(QObject):
 
         # Mosaic
         self.dlg.mosaicTable.cellClicked.connect(self.service.mosaic_clicked)
-        self.dlg.addMosaicButton.clicked.connect(self.service.create_mosaic)
         self.dlg.editMosaicButton.clicked.connect(self.service.update_mosaic)
         self.dlg.previewMosaicButton.clicked.connect(self.service.mosaic_preview)
         self.dlg.mosaicTable.selectionModel().selectionChanged.connect(self.service.check_catalog_selection)
         self.dlg.showImagesButton.clicked.connect(self.view.switch_catalog_table)
+        self.dlg.mosaicTable.cellDoubleClicked.connect(self.view.switch_catalog_table)
 
         # Image
         self.dlg.imageTable.cellClicked.connect(self.service.image_clicked)
@@ -33,6 +33,7 @@ class DataCatalogController(QObject):
         self.dlg.showMosaicsButton.clicked.connect(self.view.switch_catalog_table)
 
         # Mosaic or image (depending on selection)
+        self.dlg.addCatalogButton.clicked.connect(self.service.add_mosaic_or_image)
         self.dlg.deleteCatalogButton.clicked.connect(self.service.delete_mosaic_or_image)
 
         # Show free and taken space if limit is not None

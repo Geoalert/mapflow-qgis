@@ -1455,7 +1455,7 @@
                <item row="6" column="2">
                 <layout class="QHBoxLayout" name="horizontalLayout_16">
                  <item>
-                  <widget class="QPushButton" name="addMosaicButton">
+                  <widget class="QPushButton" name="addCatalogButton">
                    <property name="maximumSize">
                     <size>
                      <width>16777215</width>

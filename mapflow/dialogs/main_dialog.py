@@ -90,12 +90,14 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # Restored saved state
         self.set_state_from_settings()
 
+        # Store latest cell selections from data catalog tables
+        self.selected_mosaic_cell = None
+        self.selected_image_cell = None
         # Create data catalog table wigets
         self.stackedLayout = QStackedLayout()
         self.stackedLayout.addWidget(self.mosaicTable)
         self.stackedLayout.addWidget(self.imageTable)
         self.catalogTableLayout.addLayout(self.stackedLayout)
-
         # Add buttons for catalog table cells
         self.addImageButton = QPushButton()
         self.showImagesButton = QPushButton()
