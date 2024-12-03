@@ -48,6 +48,8 @@ class DataCatalogView(QObject):
         self.dlg.previewImageButton.setFixedWidth(buttons_width)
         self.dlg.imageInfoButton.setFixedWidth(buttons_width)
 
+        self.dlg.catalogInfo.setAlignment(Qt.AlignBottom | Qt.AlignLeft)
+
     def display_mosaics(self, mosaics: list[MosaicReturnSchema]):
         if not mosaics:
             return
@@ -286,10 +288,12 @@ class DataCatalogView(QObject):
             # Remove menu for add mosaic
             self.dlg.addCatalogButton.setText(self.tr("Add mosaic"))
             self.dlg.addCatalogButton.setMenu(None)
-            # Show mosaics
+            # Clear image table
             self.dlg.imageTable.clearSelection()
-            self.dlg.stackedLayout.setCurrentIndex(0)
+            self.dlg.imageTable.setRowCount(0)
             self.dlg.showMosaicsButton.setVisible(False)
+            # Show mosaics
+            self.dlg.stackedLayout.setCurrentIndex(0)
         self.dlg.mosaicTable.setCurrentCell(self.dlg.selected_mosaic_cell.row(), self.dlg.selected_mosaic_cell.column())
 
     def add_mosaic_cell_buttons(self):
