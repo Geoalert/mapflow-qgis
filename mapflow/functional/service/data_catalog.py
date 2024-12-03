@@ -133,8 +133,13 @@ class DataCatalogService(QObject):
             return
         self.view.display_mosaic_info(mosaic, self.images)
         self.get_mosaic_images(mosaic.id)
+        # Store widgets before deleting previous mosaic's image table
+        self.view.containerLayout.addWidget(self.dlg.previewImageButton)
+        self.view.containerLayout.addWidget(self.dlg.imageInfoButton)
+        self.view.containerWidget.setLayout(self.view.containerLayout)
         # Clear previous image details
         self.dlg.imageTable.clearSelection()
+        self.dlg.imageTable.setRowCount(0)
         self.dlg.imagePreview.setText("")
         self.view.add_mosaic_cell_buttons()
 
