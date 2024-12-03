@@ -21,6 +21,7 @@ from ..view.data_catalog_view import DataCatalogView
 from ...http import Http
 from ...functional import layer_utils, helpers
 from ...config import Config
+from ...entity.provider import MyImageryProvider
 
 
 class DataCatalogService(QObject):
@@ -420,3 +421,20 @@ class DataCatalogService(QObject):
         if not first:
             return None
         return first[0]
+
+
+    # Provider
+    def set_catalog_provider(self, providers):
+        """ Sets current provider to 'My imagery' if catalog table cell was clicked.
+        """
+        # Check current provider
+        current_provider = providers[self.dlg.providerIndex()]
+        if not isinstance (current_provider, MyImageryProvider):
+            # Get index of My imagery provider
+            for index in range(len(providers)):
+                provider = providers[index]
+                if isinstance(provider, MyImageryProvider):
+                    my_imagery_index = index
+            # Set My imagery data source
+            if my_imagery_index:
+                self.dlg.rasterCombo.setCurrentIndex(my_imagery_index)
