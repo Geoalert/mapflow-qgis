@@ -27,7 +27,7 @@ class DataCatalogView(QObject):
         self.containerLayout = QHBoxLayout()
         # Add icons to mosaic and image cell widgets
         self.dlg.addImageButton.setIcon(icons.plus_icon)
-        self.dlg.showImagesButton.setIcon(icons.images_icon)
+        self.dlg.showImagesButton.setIcon(icons.arrow_right_icon)
         self.dlg.previewMosaicButton.setIcon(icons.lens_icon)
         self.dlg.editMosaicButton.setIcon(icons.edit_icon)
         self.dlg.previewImageButton.setIcon(icons.lens_icon)
