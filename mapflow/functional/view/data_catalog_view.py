@@ -22,12 +22,15 @@ class DataCatalogView(QObject):
         self.choose_raster_layer = QAction(self.tr("Choose raster layer"))
         self.setup_upload_image_menu()
 
+        # Add icons to '<' and '>' catalog buttons
+        self.dlg.seeMosaicsButton.setIcon(icons.arrow_left_icon)
+        self.dlg.seeImagesButton.setIcon(icons.arrow_right_icon)
         # Create containers for image cells widget (so widgets don't get deleted by Qt)
         self.containerWidget = QWidget()
         self.containerLayout = QHBoxLayout()
         # Add icons to mosaic and image cell widgets
         self.dlg.addImageButton.setIcon(icons.plus_icon)
-        self.dlg.showImagesButton.setIcon(icons.arrow_right_icon)
+        self.dlg.showImagesButton.setIcon(icons.images_icon)
         self.dlg.previewMosaicButton.setIcon(icons.lens_icon)
         self.dlg.editMosaicButton.setIcon(icons.edit_icon)
         self.dlg.previewImageButton.setIcon(icons.lens_icon)
@@ -199,10 +202,13 @@ class DataCatalogView(QObject):
             self.dlg.imageTable.clearSelection()
             self.dlg.imageTable.setColumnCount(0)
             self.dlg.imageTable.setRowCount(0)
+            self.dlg.seeImagesButton.setEnabled(False)
             self.show_cell_widgets(mosaic=True, on=False)
         else:
             self.dlg.deleteCatalogButton.setEnabled(True)
             self.dlg.catalogSelectionLabel.setText(self.tr("Selected mosaic: <b>{mosaic_name}".format(mosaic_name=mosaic_name)))
+            if self.dlg.stackedLayout.currentIndex() == 0:
+                self.dlg.seeImagesButton.setEnabled(True)
             self.show_cell_widgets(mosaic=True, on=True)
         
         # Images: dis(en)able buttons and update widgets and labels upon table selection change
@@ -273,7 +279,8 @@ class DataCatalogView(QObject):
         # If mosaics are opened before the click
         if self.dlg.stackedLayout.currentIndex() == 0:
             self.dlg.stackedLayout.setCurrentIndex(1)
-            self.dlg.showMosaicsButton.setVisible(True)
+            self.dlg.seeMosaicsButton.setEnabled(True)
+            self.dlg.seeImagesButton.setEnabled(False)      
             # Setup add image menu
             self.dlg.addCatalogButton.setText(self.tr("Add image"))
             self.dlg.addCatalogButton.setMenu(self.upload_image_menu)
@@ -287,7 +294,8 @@ class DataCatalogView(QObject):
             self.dlg.addCatalogButton.setMenu(None)
             # Clear image table
             self.dlg.imageTable.clearSelection()
-            self.dlg.showMosaicsButton.setVisible(False)
+            self.dlg.seeMosaicsButton.setEnabled(False)
+            self.dlg.seeImagesButton.setEnabled(True)
             # Show mosaics
             self.dlg.stackedLayout.setCurrentIndex(0)
         self.dlg.mosaicTable.setCurrentCell(self.dlg.selected_mosaic_cell.row(), self.dlg.selected_mosaic_cell.column())
