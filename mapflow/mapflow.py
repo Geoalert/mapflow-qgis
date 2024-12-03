@@ -1615,6 +1615,8 @@ class Mapflow(QObject):
                                                       clear_area=True)
         else:
             self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+        # If different provider is chosen, set it to My imagery
+        self.data_catalog_service.set_catalog_provider(self.providers)
 
     def calculate_aoi_area_selection(self, _: List[QgsFeature]) -> None:
         """Get the AOI size when the selection changed on a polygon layer.
