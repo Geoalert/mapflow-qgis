@@ -1497,10 +1497,35 @@
                <item row="0" column="0">
                 <layout class="QHBoxLayout" name="horizontalLayout_14">
                  <item>
-                  <widget class="QPushButton" name="showMosaicsButton">
+                  <widget class="QPushButton" name="seeMosaicsButton">
+                   <property name="minimumSize">
+                    <size>
+                     <width>35</width>
+                     <height>0</height>
+                    </size>
+                   </property>
                    <property name="maximumSize">
                     <size>
-                     <width>16777215</width>
+                     <width>35</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string/>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="seeImagesButton">
+                   <property name="minimumSize">
+                    <size>
+                     <width>35</width>
+                     <height>0</height>
+                    </size>
+                   </property>
+                   <property name="maximumSize">
+                    <size>
+                     <width>35</width>
                      <height>16777215</height>
                     </size>
                    </property>
@@ -1508,7 +1533,7 @@
                     <enum>Qt::LeftToRight</enum>
                    </property>
                    <property name="text">
-                    <string>Back</string>
+                    <string/>
                    </property>
                   </widget>
                  </item>
