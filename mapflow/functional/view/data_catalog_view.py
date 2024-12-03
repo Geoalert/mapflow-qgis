@@ -48,8 +48,6 @@ class DataCatalogView(QObject):
         self.dlg.previewImageButton.setFixedWidth(buttons_width)
         self.dlg.imageInfoButton.setFixedWidth(buttons_width)
 
-        self.dlg.catalogInfo.setAlignment(Qt.AlignBottom | Qt.AlignLeft)
-
     def display_mosaics(self, mosaics: list[MosaicReturnSchema]):
         if not mosaics:
             return
@@ -225,7 +223,6 @@ class DataCatalogView(QObject):
         else:
             self.add_cell_tooltip(mosaic=False)
 
-
     def show_cell_widgets(self, mosaic: bool, on: bool):
         """ Called upon selection/deselection in tables to show/hide buttons.
 
@@ -290,7 +287,6 @@ class DataCatalogView(QObject):
             self.dlg.addCatalogButton.setMenu(None)
             # Clear image table
             self.dlg.imageTable.clearSelection()
-            self.dlg.imageTable.setRowCount(0)
             self.dlg.showMosaicsButton.setVisible(False)
             # Show mosaics
             self.dlg.stackedLayout.setCurrentIndex(0)
