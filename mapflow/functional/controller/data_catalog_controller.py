@@ -12,7 +12,8 @@ class DataCatalogController(QObject):
 
         # At first, when mosaic and image are not selected, make buttons unavailable or hidden
         self.dlg.deleteCatalogButton.setEnabled(False)
-        self.dlg.showMosaicsButton.setVisible(False)
+        self.dlg.seeMosaicsButton.setEnabled(False)
+        self.dlg.seeImagesButton.setEnabled(False)
 
         # Mosaic
         self.dlg.mosaicTable.cellClicked.connect(self.service.mosaic_clicked)
@@ -20,6 +21,7 @@ class DataCatalogController(QObject):
         self.dlg.previewMosaicButton.clicked.connect(self.service.mosaic_preview)
         self.dlg.mosaicTable.selectionModel().selectionChanged.connect(self.service.check_catalog_selection)
         self.dlg.showImagesButton.clicked.connect(self.view.switch_catalog_table)
+        self.dlg.seeImagesButton.clicked.connect(self.view.switch_catalog_table)
         self.dlg.mosaicTable.cellDoubleClicked.connect(self.view.switch_catalog_table)
 
         # Image
@@ -30,7 +32,7 @@ class DataCatalogController(QObject):
         self.dlg.imageInfoButton.clicked.connect(self.service.image_info)
         self.dlg.previewImageButton.clicked.connect(self.service.get_image_preview_l)
         self.dlg.imageTable.selectionModel().selectionChanged.connect(self.service.check_catalog_selection)
-        self.dlg.showMosaicsButton.clicked.connect(self.view.switch_catalog_table)
+        self.dlg.seeMosaicsButton.clicked.connect(self.view.switch_catalog_table)
 
         # Mosaic or image (depending on selection)
         self.dlg.addCatalogButton.clicked.connect(self.service.add_mosaic_or_image)
