@@ -112,14 +112,16 @@ class DataCatalogService(QObject):
         mosaic = self.selected_mosaic()
         self.api.delete_mosaic(mosaic_id=mosaic.id,
                                callback=self.delete_mosaic_callback,
-                               callback_kwargs={'mosaic_id': mosaic.id},
+                               callback_kwargs={'mosaic_id': mosaic.id,
+                                                'mosaic_name': mosaic.name},
                                error_handler=self.api.delete_mosaic_error_handler,
                                error_handler_kwargs={'mosaic_name': mosaic.name})
         self.dlg.mosaicTable.clearSelection()
 
-    def delete_mosaic_callback(self, response: QNetworkReply, mosaic_id: UUID):
+    def delete_mosaic_callback(self, response: QNetworkReply, mosaic_id: UUID, mosaic_name: str):
         self.get_mosaics()
         self.mosaics.pop(mosaic_id)
+        self.iface.messageBar().pushMessage("Mapflow", self.tr("Mosaic '{name}' was deleted".format(name=mosaic_name)))
         self.mosaicsUpdated.emit()
 
     def mosaic_clicked(self):
