@@ -74,8 +74,7 @@ class UploadRasterLayersDialog(*uic.loadUiType(ui_path / 'raster_layers_dialog.u
     def get_selected_rasters_list(self, callback):
         # Get selected layers' paths
         layers_paths = []
-        for item_index in range(len(self.listWidget.selectedItems())):
-            item_data = self.listWidget.item(item_index).data(Qt.UserRole)
-            layers_paths.append(item_data)
+        for item in self.listWidget.selectedItems():
+            layers_paths.append(item.data(Qt.UserRole))
         # Run service.upload_raster_layers_to_mosaic
         callback(layers_paths)
