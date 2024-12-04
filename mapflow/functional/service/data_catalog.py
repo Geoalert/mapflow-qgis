@@ -460,4 +460,4 @@ class DataCatalogService(QObject):
                     my_imagery_index = index
             # Set My imagery data source
             if my_imagery_index:
-                self.dlg.rasterCombo.setCurrentIndex(my_imagery_index)
+                self.dlg.sourceCombo.setCurrentIndex(my_imagery_index)
