@@ -102,7 +102,7 @@ class DataCatalogService(QObject):
     def update_mosaic_callback(self, response: QNetworkReply, mosaic: MosaicReturnSchema):
         self.get_mosaic(mosaic.id)
 
-    def delete_mosaic(self):
+    def delete_mosaic(self, mosaic):
         # Store widgets before deleting a row
         self.view.containerLayout.addWidget(self.dlg.addImageButton)
         self.view.containerLayout.addWidget(self.dlg.showImagesButton)
@@ -110,20 +110,25 @@ class DataCatalogService(QObject):
         self.view.containerLayout.addWidget(self.dlg.editMosaicButton)
         self.view.containerWidget.setLayout(self.view.containerLayout)
         # Delete mosaic
-        mosaic = self.selected_mosaic()
         self.api.delete_mosaic(mosaic_id=mosaic.id,
                                callback=self.delete_mosaic_callback,
-                               callback_kwargs={'mosaic_id': mosaic.id,
-                                                'mosaic_name': mosaic.name},
+                               callback_kwargs={'mosaic_id': mosaic.id},
                                error_handler=self.api.delete_mosaic_error_handler,
                                error_handler_kwargs={'mosaic_name': mosaic.name})
         self.dlg.mosaicTable.clearSelection()
 
-    def delete_mosaic_callback(self, response: QNetworkReply, mosaic_id: UUID, mosaic_name: str):
+    def delete_mosaic_callback(self, response: QNetworkReply, mosaic_id: UUID):
         self.get_mosaics()
         self.mosaics.pop(mosaic_id)
-        self.iface.messageBar().pushMessage("Mapflow", self.tr("Mosaic '{name}' was deleted".format(name=mosaic_name)))
-        self.mosaicsUpdated.emit()
+
+    def confirm_mosaic_deletion(self):
+        mosaic = self.selected_mosaic()
+        message = self.tr("Delete mosaic '{name}'?".format(name=mosaic.name))
+        box = QMessageBox(QMessageBox.Question, "Mapflow", message, parent=QApplication.activeWindow())
+        box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
+        box_exec = box.exec()
+        if box_exec == QMessageBox.Ok:
+            self.delete_mosaic(mosaic)
 
     def mosaic_clicked(self):
         if self.dlg.mosaicTable.selectionModel().hasSelection():
@@ -249,14 +254,14 @@ class DataCatalogService(QObject):
     def get_image(self, image_id: UUID, callback: Callable):
         self.api.get_image(image_id=image_id, callback=callback)
 
-    def delete_image(self):
+    def delete_image(self, selected_images):
         # Store widgets before deleting a row
         self.view.containerLayout.addWidget(self.dlg.previewImageButton)
         self.view.containerLayout.addWidget(self.dlg.imageInfoButton)
         self.view.containerWidget.setLayout(self.view.containerLayout)
         # Delete images
         images = {}
-        for image in self.selected_images():
+        for image in selected_images:
             images[image.id] = image.filename
         self.delete_images(response = None, images=list(images.items()), deleted=[], failed=[])
         self.dlg.imageTable.clearSelection()
@@ -285,6 +290,24 @@ class DataCatalogService(QObject):
                                                         'deleted': deleted,
                                                         'failed': list(failed) + [image_to_delete[1]]},
                                  )
+            
+    def confirm_image_deletion(self):
+        mosaic = self.selected_mosaic()
+        images = self.selected_images()
+        image_names = []
+        for image in images:
+            image_names.append(image.filename)
+        if len(image_names) == 1:
+            message = self.tr("Delete image '{name}' from '{mosaic}' mosaic?".format(name=image_names[0], mosaic=mosaic.name))
+        elif len(image_names) <= 3:
+            message = self.tr("Delete '{names}' images from '{mosaic}' mosaic?".format(names="', '".join(image_names), mosaic=mosaic.name))
+        else:
+            message = self.tr("Delete {len} images from '{mosaic}' mosaic?".format(len=len(image_names), mosaic=mosaic.name))
+        box = QMessageBox(QMessageBox.Question, "Mapflow", message, parent=QApplication.activeWindow())
+        box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
+        box_exec = box.exec()
+        if box_exec == QMessageBox.Ok:
+            self.delete_image(images)
 
     def image_clicked(self):
         image = self.selected_image()
@@ -354,9 +377,9 @@ class DataCatalogService(QObject):
         image = self.selected_image()
         mosaic = self.selected_mosaic()
         if image:
-            self.delete_image()
+            self.confirm_image_deletion()
         elif mosaic:
-            self.delete_mosaic()
+            self.confirm_mosaic_deletion()
         else:
             return
         
