@@ -2,7 +2,7 @@ from typing import List
 
 from ...dialogs.main_dialog import MainDialog
 from PyQt5.QtCore import QObject, Qt
-from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox, QTableWidget, QTableWidgetItem, QMessageBox, QApplication
+from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox, QTableWidget, QTableWidgetItem, QMessageBox, QApplication, QMenu, QAction, QHeaderView
 from PyQt5.QtGui import QPixmap
 
 from ...schema.data_catalog import MosaicReturnSchema, ImageReturnSchema
@@ -15,8 +15,15 @@ class DataCatalogView(QObject):
         # First column is ID, hidden; second is name
         self.dlg.mosaicTable.setColumnCount(2)
         self.dlg.mosaicTable.setColumnHidden(0, True)
+        # Setup menu for uploadinf images to mosaic
+        self.upload_image_menu = QMenu()
+        self.upload_from_file = QAction(self.tr("Upload from file"))
+        self.choose_raster_layer = QAction(self.tr("Choose raster layer"))
+        self.setup_upload_image_menu()
 
     def display_mosaics(self, mosaics: list[MosaicReturnSchema]):
+        if not mosaics:
+            return
         self.dlg.mosaicTable.setRowCount(len(mosaics))
         self.dlg.mosaicTable.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         for row, mosaic in enumerate(mosaics):
@@ -27,6 +34,7 @@ class DataCatalogView(QObject):
             name_item.setData(Qt.DisplayRole, mosaic.name)
             self.dlg.mosaicTable.setItem(row, 1, name_item)
             self.dlg.mosaicTable.setHorizontalHeaderLabels(["ID", "Mosaic"])
+            self.dlg.mosaicTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         
     def display_mosaic_info(self, mosaic: MosaicReturnSchema):
         if not mosaic:
@@ -97,6 +105,7 @@ class DataCatalogView(QObject):
             self.dlg.previewMosaicButton.setEnabled(False)
         else:
             self.dlg.previewMosaicButton.setEnabled(True)
+        self.dlg.imageTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
 
     def show_preview_s(self, preview_image):
         self.dlg.imagePreview.setPixmap(QPixmap.fromImage(preview_image))
@@ -122,6 +131,53 @@ class DataCatalogView(QObject):
                                                                                              free=round(free_storage/1048576, 1)))
         else:
             self.dlg.dataLimit.setText("")
+
+    def setup_upload_image_menu(self):
+        self.upload_image_menu.addAction(self.upload_from_file)
+        self.upload_image_menu.addAction(self.choose_raster_layer)
+
+    def check_mosaic_selection(self):
+        # Enable buttons upon mosaics' table selection change
+        if self.dlg.mosaicTable.selectionModel().hasSelection() is False:
+            self.dlg.mosaicInfo.setText("Mosaic info")
+            self.dlg.previewMosaicButton.setEnabled(False)
+            self.dlg.editMosaicButton.setEnabled(False)
+            self.dlg.deleteMosaicButton.setEnabled(False)
+            self.dlg.addImageButton.setEnabled(False)
+            self.dlg.imageTable.setColumnCount(0)
+            self.dlg.imageTable.setRowCount(0)
+        else:
+            self.dlg.previewMosaicButton.setEnabled(True)
+            self.dlg.editMosaicButton.setEnabled(True)
+            self.dlg.deleteMosaicButton.setEnabled(True)
+            self.dlg.addImageButton.setEnabled(True)
+        # Set deselection tooltip
+        for row in range(self.dlg.mosaicTable.rowCount()): 
+            item = self.dlg.mosaicTable.item(row, 1)
+            if item.isSelected():
+                item.setToolTip("'Ctrl' + click to deselect")
+            else:
+                item.setToolTip("")
+    
+    def check_image_selection(self):
+        # Enable buttons upon images' table selection change
+        if self.dlg.imageTable.selectionModel().hasSelection() is False:
+            self.dlg.imagePreview.setText(" ")
+            self.dlg.imageDetails.setText("Image info")
+            self.dlg.deleteImageButton.setEnabled(False)
+            self.dlg.imagePreviewButton.setEnabled(False)
+            self.dlg.imageInfoButton.setEnabled(False)
+        else:
+            self.dlg.deleteImageButton.setEnabled(True)
+            self.dlg.imagePreviewButton.setEnabled(True)
+            self.dlg.imageInfoButton.setEnabled(True)
+        # Set deselection tooltip
+        for row in range(self.dlg.imageTable.rowCount()): 
+            item = self.dlg.imageTable.item(row, 1)
+            if item.isSelected():
+                item.setToolTip("'Ctrl' + click to deselect")
+            else:
+                item.setToolTip("")
 
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """A duplicate of alert function from mapflow.py to avoid circular import.
