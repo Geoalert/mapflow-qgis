@@ -154,7 +154,7 @@ class DataCatalogService(QObject):
         dialog.accepted.connect(lambda: dialog.get_selected_rasters_list(callback=self.upload_raster_layers_to_mosaic))
         # Show all acceptable (TIFF) raster layers
         layers = []
-        for layer in self.iface.mapCanvas().layers():
+        for layer in self.project.mapLayers().values():
             if Path(layer.source()).suffix.lower() in ['.tif', '.tiff']:
                 layers.append(layer)
         dialog.setup(layers)
