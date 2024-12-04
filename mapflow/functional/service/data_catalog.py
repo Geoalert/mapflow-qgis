@@ -108,6 +108,8 @@ class DataCatalogService(QObject):
         self.view.containerLayout.addWidget(self.dlg.showImagesButton)
         self.view.containerLayout.addWidget(self.dlg.previewMosaicButton)
         self.view.containerLayout.addWidget(self.dlg.editMosaicButton)
+        for spacer in self.dlg.mosaic_spacers:
+            self.view.containerLayout.addWidget(spacer)
         self.view.containerWidget.setLayout(self.view.containerLayout)
         # Delete mosaic
         self.api.delete_mosaic(mosaic_id=mosaic.id,
@@ -142,6 +144,7 @@ class DataCatalogService(QObject):
         # Store widgets before deleting previous mosaic's image table
         self.view.containerLayout.addWidget(self.dlg.previewImageButton)
         self.view.containerLayout.addWidget(self.dlg.imageInfoButton)
+        self.view.containerLayout.addWidget(self.dlg.image_spacer)
         self.view.containerWidget.setLayout(self.view.containerLayout)
         # Clear previous image details
         self.dlg.imageTable.clearSelection()
@@ -258,6 +261,7 @@ class DataCatalogService(QObject):
         # Store widgets before deleting a row
         self.view.containerLayout.addWidget(self.dlg.previewImageButton)
         self.view.containerLayout.addWidget(self.dlg.imageInfoButton)
+        self.view.containerLayout.addWidget(self.dlg.image_spacer)
         self.view.containerWidget.setLayout(self.view.containerLayout)
         # Delete images
         images = {}

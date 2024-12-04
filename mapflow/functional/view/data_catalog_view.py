@@ -3,7 +3,7 @@ from typing import List
 from ...dialogs.main_dialog import MainDialog
 from PyQt5.QtCore import QObject, Qt
 from PyQt5.QtWidgets import (QWidget, QTableWidget, QTableWidgetItem, QHeaderView, QHBoxLayout, QAbstractItemView,
-                            QMessageBox, QApplication, QMenu, QAction)
+                             QMessageBox, QApplication, QMenu, QAction)
 from PyQt5.QtGui import QPixmap
 
 from ...schema.data_catalog import MosaicReturnSchema, ImageReturnSchema
@@ -288,6 +288,7 @@ class DataCatalogView(QObject):
             # Save buttons before deleting cells and therefore widgets
             self.containerLayout.addWidget(self.dlg.previewImageButton)
             self.containerLayout.addWidget(self.dlg.imageInfoButton)
+            self.containerLayout.addWidget(self.dlg.image_spacer)
             self.containerWidget.setLayout(self.containerLayout)
             # Remove menu for add mosaic
             self.dlg.addCatalogButton.setText(self.tr("Add mosaic"))
@@ -306,10 +307,13 @@ class DataCatalogView(QObject):
         # Create layout of mosaic cell buttons
         layout = QHBoxLayout()
         layout.setContentsMargins(0,0,3,0)
-        layout.setSpacing(3)
+        layout.setSpacing(0)
         layout.addWidget(self.dlg.addImageButton)
+        layout.addWidget(self.dlg.mosaic_spacers[0])
         layout.addWidget(self.dlg.showImagesButton)
+        layout.addWidget(self.dlg.mosaic_spacers[1])
         layout.addWidget(self.dlg.previewMosaicButton)
+        layout.addWidget(self.dlg.mosaic_spacers[2])
         layout.addWidget(self.dlg.editMosaicButton)
         layout.setAlignment(Qt.AlignRight)
         # Create mosaic cell widget with this layout        
@@ -325,8 +329,9 @@ class DataCatalogView(QObject):
         # Create layout of image cell buttons
         layout = QHBoxLayout()
         layout.setContentsMargins(0,0,3,0)
-        layout.setSpacing(3)
+        layout.setSpacing(0)
         layout.addWidget(self.dlg.previewImageButton)
+        layout.addWidget(self.dlg.image_spacer)
         layout.addWidget(self.dlg.imageInfoButton)
         layout.setAlignment(Qt.AlignRight)
         # Create image cell widget with this layout 
