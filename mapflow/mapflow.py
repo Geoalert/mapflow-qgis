@@ -337,14 +337,22 @@ class Mapflow(QObject):
         self.zoom_selector = (self.config.ZOOM_SELECTOR.lower() == "true")
         self.zoom = None
         if self.zoom_selector:
-            self.dlg.zoomCombo.currentIndexChanged.connect(lambda: self.settings.setValue('zoom', str(self.dlg.zoomCombo.currentText())) 
-                                                           if self.dlg.zoomCombo.currentIndex() != 0 else
-                                                           self.settings.setValue('zoom', None))
-        
+            self.dlg.zoomCombo.currentIndexChanged.connect(self.on_zoom_change)
+        saved_zoom = self.settings.value('zoom')
+        if saved_zoom is None:
+            self.dlg.zoomCombo.setCurrentIndex(0)
+        else:
+            zoom_index = self.dlg.zoomCombo.findText(saved_zoom)
+            if zoom_index == -1:
+                # Fallback for situation if the settings contain value not available in the list
+                self.dlg.zoomCombo.setCurrentIndex(0)
+                self.settings.setValue('zoom', None)
+            else:
+                self.dlg.zoomCombo.setCurrentIndex(zoom_index)
+
         # Check if a project is shared after startup and when changing project
         self.app_startup_user_update_timer.timeout.connect(self.get_project_sharing)
         self.dlg.projectsCombo.currentIndexChanged.connect(self.get_project_sharing)
-       
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
@@ -641,6 +649,15 @@ class Mapflow(QObject):
             self.calculate_aoi_area_raster(provider_layer)
         else:
             self.calculate_aoi_area_polygon_layer(polygon_layer)
+    
+    def on_zoom_change(self):
+        """ Set chosen zoom and update cost (if it depends on zoom for provider).
+        """
+        if self.dlg.zoomCombo.currentIndex() != 0:
+            self.settings.setValue('zoom', str(self.dlg.zoomCombo.currentText())) 
+        else:
+            self.settings.setValue('zoom', None)
+        self.update_processing_cost()
 
     def setup_workflow_defs(self, workflow_defs: List[WorkflowDef]):
         self.workflow_defs = {wd.name: wd for wd in workflow_defs}
@@ -1689,12 +1706,13 @@ class Mapflow(QObject):
         If the user tries to start the processing, he will see the errors
         """
         response_text = response.readAll().data().decode()
-        message = api_message_parser(response_text)
-        if not self.user_role.can_start_processing:
-            reason = self.tr('Not enougth rights to start processing in a shared project ({})').format(self.user_role)
-        else:
-            reason = self.tr('Processing cost is not available:\n{message}').format(message=message)
-        self.dlg.disable_processing_start(reason, clear_area=False)
+        if response_text is not None:
+            message = api_message_parser(response_text)
+            if not self.user_role.can_start_processing:
+                reason = self.tr('Not enougth rights to start processing in a shared project ({})').format(self.user_role)
+            else:
+                reason = self.tr('Processing cost is not available:\n{message}').format(message=message)
+            self.dlg.disable_processing_start(reason, clear_area=False)
 
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         response_data = response.readAll().data().decode()
@@ -1925,6 +1943,15 @@ class Mapflow(QObject):
                                                                           raster_layer=imagery,
                                                                           image_id=image_id,
                                                                           provider_name=provider_name)
+            
+            # Add zoom to params if zoom_selector is true
+            if self.zoom_selector:
+                self.zoom = self.settings.value('zoom')
+                provider_params.zoom = self.zoom
+                if isinstance (provider_params, PostSourceSchema): # no zoom for tifs
+                    if provider_params.source_type == 'tif':
+                        provider_params.zoom = None
+
             aoi = self.get_aoi(provider_index=provider_index,
                                raster_layer=imagery,
                                use_image_extent_as_aoi=use_image_extent_as_aoi,
@@ -1957,15 +1984,6 @@ class Mapflow(QObject):
         if not processing_params:
             self.alert(error, icon=QMessageBox.Warning)
             return
-        
-        # Add zoom to params if zoom_selector is true
-        if self.zoom_selector:
-            self.zoom = self.settings.value('zoom')
-            if self.zoom is not None:
-                processing_params.params.zoom = self.zoom
-            if isinstance (processing_params.params, PostSourceSchema): # No zoom for tifs
-                if processing_params.params.source_type == 'tif':
-                    processing_params.params.zoom = None
 
         if not helpers.check_processing_limit(billing_type=self.billing_type,
                                               remaining_limit=self.remaining_limit,
@@ -2791,8 +2809,6 @@ class Mapflow(QObject):
         self.dlg.processingsTable.setSortingEnabled(True)
         # Restore extended selection
         self.dlg.processingsTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
-
-        # test
 
     def initGui(self) -> None:
         """Create the menu entries and toolbar icons inside the QGIS GUI.
