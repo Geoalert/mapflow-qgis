@@ -185,9 +185,13 @@ class DataCatalogApi(QObject):
                                                           response_body=response_body,
                                                           plugin_version=self.plugin_version,
                                                           error_message_parser=data_catalog_message_parser)
+        if len(image_paths) == 1:
+            message = self.tr("Could not upload '{image}' to mosaic".format(image=image_paths[0]))
+        else:
+            message = self.tr("Could not upload following images:\n{images}".format(images= ', \n'.join(image_paths)))
         ErrorMessageWidget(parent=QApplication.activeWindow(),
                            text= error_summary,
-                           title='Error. Could not upload {images} to mosaic'.format(images=str(image_paths)[1:-1]),
+                           title=message,
                            email_body=email_body).show()
 
     def get_mosaic_images(self, mosaic_id: UUID, callback: Callable):
@@ -217,9 +221,15 @@ class DataCatalogApi(QObject):
                         )
 
     def delete_image_error_handler(self, image_paths: list):
+        if len(image_paths) == 1:
+            title = self.tr("Error")
+            message = self.tr("Could not delete '{image}' from mosaic".format(image=image_paths[0]))
+        else:
+            title = self.tr("Error. Could not delete following images:")
+            message = ', \n'.join(image_paths)
         ErrorMessageWidget(parent=QApplication.activeWindow(),
-                           text=self.tr('Could not delete str({image_paths})[1:-1] from mosaic'.format(image_paths=image_paths)),
-                           title=f'Error',
+                           text=message,
+                           title=title,
                            email_body='').show()
 
     def get_image_preview(self,

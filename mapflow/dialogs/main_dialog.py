@@ -5,7 +5,7 @@ from typing import Iterable, Optional, List
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette
-from PyQt5.QtWidgets import QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel
+from PyQt5.QtWidgets import QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton
 from qgis.core import QgsMapLayerProxyModel, QgsSettings
 
 from . import icons
@@ -98,16 +98,16 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.stackedLayout.addWidget(self.imageTable)
         self.catalogTableLayout.addLayout(self.stackedLayout)
         # Add buttons for catalog table cells
-        self.addImageButton = QPushButton()
+        self.addImageButton = QToolButton()
         self.showImagesButton = QPushButton()
         self.previewMosaicButton = QPushButton()
         self.editMosaicButton = QPushButton()
         self.previewImageButton = QPushButton()
         self.imageInfoButton = QPushButton()
         # Create colored spacers for tables' cell widgets (so long names won't be seen inbetween buttons)
-        self.image_spacer = QLabel()
-        self.mosaic_spacers = [QLabel(), QLabel(), QLabel()]
-        for spacer in self.mosaic_spacers+[self.image_spacer]:
+        self.imageSpacer = QLabel()
+        self.mosaicSpacers = [QLabel(), QLabel(), QLabel()]
+        for spacer in self.mosaicSpacers+[self.imageSpacer]:
             spacer.setFixedSize(3,26)
             spacer.setStyleSheet("background-color: rgb(23,133,220);")
 
