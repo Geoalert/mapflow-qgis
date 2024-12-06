@@ -86,7 +86,6 @@ class DataCatalogService(QObject):
         mosaic = MosaicReturnSchema.from_dict(json.loads(response.readAll().data()))
         self.mosaics.update({mosaic.id: mosaic})
         self.mosaicsUpdated.emit()
-        self.view.display_mosaic_info(mosaic, self.images)
         self.view.display_mosaics(list(self.mosaics.values()))
 
     def update_mosaic(self):  
@@ -108,7 +107,7 @@ class DataCatalogService(QObject):
         self.view.containerLayout.addWidget(self.dlg.showImagesButton)
         self.view.containerLayout.addWidget(self.dlg.previewMosaicButton)
         self.view.containerLayout.addWidget(self.dlg.editMosaicButton)
-        for spacer in self.dlg.mosaic_spacers:
+        for spacer in self.dlg.mosaicSpacers:
             self.view.containerLayout.addWidget(spacer)
         self.view.containerWidget.setLayout(self.view.containerLayout)
         # Delete mosaic
@@ -133,24 +132,26 @@ class DataCatalogService(QObject):
             self.delete_mosaic(mosaic)
 
     def mosaic_clicked(self):
-        if self.dlg.mosaicTable.selectionModel().hasSelection():
+        if self.dlg.selected_mosaic_cell is not None:
             if self.dlg.mosaicTable.selectedIndexes()[0] == self.dlg.selected_mosaic_cell:
                 return # i.e. do noting when clicking on the same cell
+        else: # assign selected cell if it is None
+            self.dlg.selected_mosaic_cell = self.dlg.mosaicTable.selectedIndexes()[0]
         mosaic = self.selected_mosaic()
         if not mosaic:
             return
-        self.view.display_mosaic_info(mosaic, self.images)
         self.get_mosaic_images(mosaic.id)
         # Store widgets before deleting previous mosaic's image table
         self.view.containerLayout.addWidget(self.dlg.previewImageButton)
         self.view.containerLayout.addWidget(self.dlg.imageInfoButton)
-        self.view.containerLayout.addWidget(self.dlg.image_spacer)
+        self.view.containerLayout.addWidget(self.dlg.imageSpacer)
         self.view.containerWidget.setLayout(self.view.containerLayout)
         # Clear previous image details
         self.dlg.imageTable.clearSelection()
         self.dlg.imageTable.setRowCount(0)
         self.dlg.imagePreview.setText("")
-        self.view.add_mosaic_cell_buttons()
+        # Assing newly selected cell
+        self.dlg.selected_mosaic_cell = self.dlg.mosaicTable.selectedIndexes()[0]
 
     def mosaic_preview(self):
         try:
@@ -261,7 +262,7 @@ class DataCatalogService(QObject):
         # Store widgets before deleting a row
         self.view.containerLayout.addWidget(self.dlg.previewImageButton)
         self.view.containerLayout.addWidget(self.dlg.imageInfoButton)
-        self.view.containerLayout.addWidget(self.dlg.image_spacer)
+        self.view.containerLayout.addWidget(self.dlg.imageSpacer)
         self.view.containerWidget.setLayout(self.view.containerLayout)
         # Delete images
         images = {}
@@ -302,11 +303,14 @@ class DataCatalogService(QObject):
         for image in images:
             image_names.append(image.filename)
         if len(image_names) == 1:
-            message = self.tr("Delete image '{name}' from '{mosaic}' mosaic?".format(name=image_names[0], mosaic=mosaic.name))
+            message = self.tr("<center>Delete image <b>'{name}'</b> from '{mosaic}' mosaic?"
+                              .format(name=image_names[0], mosaic=mosaic.name))
         elif len(image_names) <= 3:
-            message = self.tr("Delete '{names}' images from '{mosaic}' mosaic?".format(names="', '".join(image_names), mosaic=mosaic.name))
+            message = self.tr("<center>Delete following images from '{mosaic}' mosaic:<br><b>'{names}'</b>?"
+                              .format(names="', <br>'".join(image_names), mosaic=mosaic.name))
         else:
-            message = self.tr("Delete {len} images from '{mosaic}' mosaic?".format(len=len(image_names), mosaic=mosaic.name))
+            message = self.tr("<center>Delete <b>{len}</b> images from '{mosaic}' mosaic?"
+                              .format(len=len(image_names), mosaic=mosaic.name))
         box = QMessageBox(QMessageBox.Question, "Mapflow", message, parent=QApplication.activeWindow())
         box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
         box_exec = box.exec()
@@ -388,6 +392,8 @@ class DataCatalogService(QObject):
             return
         
     def check_catalog_selection(self):
+        if self.dlg.mosaicTable.selectionModel().hasSelection():
+            self.mosaic_clicked()
         image = self.selected_image()
         mosaic = self.selected_mosaic()
         image_name = None
