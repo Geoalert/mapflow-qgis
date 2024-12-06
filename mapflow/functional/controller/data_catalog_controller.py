@@ -16,7 +16,6 @@ class DataCatalogController(QObject):
         self.dlg.seeImagesButton.setEnabled(False)
 
         # Mosaic
-        self.dlg.mosaicTable.cellClicked.connect(self.service.mosaic_clicked)
         self.dlg.editMosaicButton.clicked.connect(self.service.update_mosaic)
         self.dlg.previewMosaicButton.clicked.connect(self.service.mosaic_preview)
         self.dlg.mosaicTable.selectionModel().selectionChanged.connect(self.service.check_catalog_selection)

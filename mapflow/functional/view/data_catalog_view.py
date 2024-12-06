@@ -2,7 +2,7 @@ from typing import List
 
 from ...dialogs.main_dialog import MainDialog
 from PyQt5.QtCore import QObject, Qt
-from PyQt5.QtWidgets import (QWidget, QTableWidget, QTableWidgetItem, QHeaderView, QHBoxLayout, QAbstractItemView,
+from PyQt5.QtWidgets import (QWidget, QTableWidget, QTableWidgetItem, QHeaderView, QHBoxLayout, QAbstractItemView, QToolButton,
                              QMessageBox, QApplication, QMenu, QAction)
 from PyQt5.QtGui import QPixmap
 
@@ -186,13 +186,15 @@ class DataCatalogView(QObject):
     def setup_upload_image_menu(self):
         self.upload_image_menu.addAction(self.upload_from_file)
         self.upload_image_menu.addAction(self.choose_raster_layer)
+        self.dlg.addImageButton.setPopupMode(QToolButton.InstantPopup)
+        self.dlg.addImageButton.setMenu(self.upload_image_menu)
 
     def check_mosaic_or_image_selection(self, mosaic_name, image_name):
         """ Called when selection in any catalog table is changed.
 
         :param mosaic_name: str (to display if mosaics table is used) or None (no current sellection).
         :param image_name: str (to display if image table is used) or None (so mosaic_name is displayed).
-        """        
+        """
         if not mosaic_name and not image_name:
             self.dlg.catalogSelectionLabel.setText(self.tr("No current selection"))
 
@@ -301,9 +303,12 @@ class DataCatalogView(QObject):
                 item.setToolTip("")
 
     def switch_catalog_table(self):
+        row = self.dlg.selected_mosaic_cell.row()
+        column = self.dlg.selected_mosaic_cell.column()
         # If mosaics are opened before the click
         if self.dlg.stackedLayout.currentIndex() == 0:
             self.dlg.stackedLayout.setCurrentIndex(1)
+            self.dlg.mosaicTable.setCurrentCell(row, column)
             self.dlg.seeMosaicsButton.setEnabled(True)
             self.dlg.seeImagesButton.setEnabled(False)      
             # Setup add image menu
@@ -313,7 +318,7 @@ class DataCatalogView(QObject):
             # Save buttons before deleting cells and therefore widgets
             self.containerLayout.addWidget(self.dlg.previewImageButton)
             self.containerLayout.addWidget(self.dlg.imageInfoButton)
-            self.containerLayout.addWidget(self.dlg.image_spacer)
+            self.containerLayout.addWidget(self.dlg.imageSpacer)
             self.containerWidget.setLayout(self.containerLayout)
             # Remove menu for add mosaic
             self.dlg.addCatalogButton.setText(self.tr("Add mosaic"))
@@ -324,21 +329,18 @@ class DataCatalogView(QObject):
             self.dlg.seeImagesButton.setEnabled(True)
             # Show mosaics
             self.dlg.stackedLayout.setCurrentIndex(0)
-        self.dlg.mosaicTable.setCurrentCell(self.dlg.selected_mosaic_cell.row(), self.dlg.selected_mosaic_cell.column())
 
     def add_mosaic_cell_buttons(self):
-        if self.dlg.mosaicTable.selectionModel().hasSelection():
-            self.dlg.selected_mosaic_cell = self.dlg.mosaicTable.selectedIndexes()[0]
         # Create layout of mosaic cell buttons
         layout = QHBoxLayout()
         layout.setContentsMargins(0,0,3,0)
         layout.setSpacing(0)
         layout.addWidget(self.dlg.addImageButton)
-        layout.addWidget(self.dlg.mosaic_spacers[0])
+        layout.addWidget(self.dlg.mosaicSpacers[0])
         layout.addWidget(self.dlg.showImagesButton)
-        layout.addWidget(self.dlg.mosaic_spacers[1])
+        layout.addWidget(self.dlg.mosaicSpacers[1])
         layout.addWidget(self.dlg.previewMosaicButton)
-        layout.addWidget(self.dlg.mosaic_spacers[2])
+        layout.addWidget(self.dlg.mosaicSpacers[2])
         layout.addWidget(self.dlg.editMosaicButton)
         layout.setAlignment(Qt.AlignRight)
         # Create mosaic cell widget with this layout        
@@ -356,7 +358,7 @@ class DataCatalogView(QObject):
         layout.setContentsMargins(0,0,3,0)
         layout.setSpacing(0)
         layout.addWidget(self.dlg.previewImageButton)
-        layout.addWidget(self.dlg.image_spacer)
+        layout.addWidget(self.dlg.imageSpacer)
         layout.addWidget(self.dlg.imageInfoButton)
         layout.setAlignment(Qt.AlignRight)
         # Create image cell widget with this layout 
