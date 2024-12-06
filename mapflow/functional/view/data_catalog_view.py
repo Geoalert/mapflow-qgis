@@ -25,6 +25,7 @@ class DataCatalogView(QObject):
         # Add icons to '<' and '>' catalog buttons
         self.dlg.seeMosaicsButton.setIcon(icons.arrow_left_icon)
         self.dlg.seeImagesButton.setIcon(icons.arrow_right_icon)
+
         # Create containers for image cells widget (so widgets don't get deleted by Qt)
         self.containerWidget = QWidget()
         self.containerLayout = QHBoxLayout()
@@ -50,6 +51,10 @@ class DataCatalogView(QObject):
         self.dlg.editMosaicButton.setFixedWidth(buttons_width)
         self.dlg.previewImageButton.setFixedWidth(buttons_width)
         self.dlg.imageInfoButton.setFixedWidth(buttons_width)
+        
+        # Transfer labels' long text to a new line
+        self.dlg.catalogSelectionLabel.setWordWrap(True)
+        self.dlg.imagePreview.setWordWrap(True)
 
     def display_mosaics(self, mosaics: list[MosaicReturnSchema]):
         if not mosaics:
@@ -73,36 +78,33 @@ class DataCatalogView(QObject):
         if not mosaic:
             return
         if mosaic.tags:
-            tags_str = ', '.join(mosaic.tags)
+            elided_tags = []
+            for tag in mosaic.tags:
+                elided_tag = self.dlg.imagePreview.fontMetrics().elidedText(tag, Qt.ElideRight, self.dlg.imagePreview.width() - 10)
+                elided_tags.append(elided_tag)
+            tags_str = ', '.join(elided_tags)
         else:
             tags_str = ''
+        text = self.tr("Mosaic: {name} \n"
+                       "Number of images: {count} \n".format(name=self.dlg.imagePreview.fontMetrics().elidedText(
+                                                                  mosaic.name, 
+                                                                  Qt.ElideRight, 
+                                                                  self.dlg.imagePreview.width() - 10), 
+                                                             count=len(images)))
         if images:
-            self.dlg.imagePreview.setText(self.tr("Mosaic: {name} \n"
-                                                  "Number of images: {count} \n"
-                                                  "Size: {mosaic_size} MB \n"
-                                                  "Pixel size: {pixel_size} m \n"
-                                                  "Created {date} at {time} \n"
-                                                  "Tags: {tags}".format(name=mosaic.name,
-                                                                        count=len(images),
-                                                                        mosaic_size=round(sum(i.file_size for i in images)/1000000, 1),
-                                                                        pixel_size=round(sum(list(images[0].meta_data.values())[6])/len(list(images[0].meta_data.values())[6]), 2),
-                                                                        date=mosaic.created_at.date(),
-                                                                        time=mosaic.created_at.strftime('%H:%M'),
-                                                                        tags=tags_str)))
-        else:
-            self.dlg.imagePreview.setText(self.tr("Mosaic: {name} \n"
-                                                  "Number of images: None \n"
-                                                  "Created {date} at {time} \n"
-                                                  "Tags: {tags}".format(name=mosaic.name,
-                                                                        date=mosaic.created_at.date(),
-                                                                        time=mosaic.created_at.strftime('%H:%M'),
-                                                                        tags=tags_str)))
+            text += self.tr("Size: {mosaic_size} MB \nPixel size: {pixel_size} m \n"
+                            .format(mosaic_size=round(sum(i.file_size for i in images)/1000000, 1),
+                                    pixel_size=round(sum(list(images[0].meta_data.values())[6])/len(list(images[0].meta_data.values())[6]), 2)))
+        text += self.tr("Created: {date} at {time} \nTags: {tags}"
+                        .format(date=mosaic.created_at.date(), time=mosaic.created_at.strftime('%H:%M'),
+                                tags=tags_str))
+        self.dlg.imagePreview.setText(text)
         self.dlg.imagePreview.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
 
     def display_image_info(self, image: ImageReturnSchema):
         if not image:
             return
-        self.dlg.catalogInfo.setText(self.tr("created {date} at {time} \n"
+        self.dlg.catalogInfo.setText(self.tr("uploaded: {date} at {time} \n"
                                              "bands: {count} \n"
                                              "pixel size: {pixel_size}"
                                              .format(date=image.uploaded_at.date(),
@@ -194,33 +196,56 @@ class DataCatalogView(QObject):
         if not mosaic_name and not image_name:
             self.dlg.catalogSelectionLabel.setText(self.tr("No current selection"))
 
-        # Mosaics: dis(en)able buttons and update widgets and labels upon table selection change
+        # Mosaics:
         if self.dlg.mosaicTable.selectionModel().hasSelection() is False:
+            # Clear info
             self.dlg.catalogInfo.setText("")
             self.dlg.imagePreview.setText("")
+            # Disable buttons
             self.dlg.deleteCatalogButton.setEnabled(False)
+            self.dlg.seeImagesButton.setEnabled(False)
+            # Clear images table
             self.dlg.imageTable.clearSelection()
             self.dlg.imageTable.setColumnCount(0)
             self.dlg.imageTable.setRowCount(0)
-            self.dlg.seeImagesButton.setEnabled(False)
+            # Hide widgets
             self.show_cell_widgets(mosaic=True, on=False)
         else:
+            # Add buttons on selection change only for mosaics, because images have multiselect
+            self.add_mosaic_cell_buttons()
+            # Show mosaic info
+            self.dlg.catalogSelectionLabel.setText(self.tr("Selected mosaic: <b>{mosaic_name}".format(
+                                                            mosaic_name=self.dlg.imagePreview.fontMetrics().elidedText(
+                                                                        mosaic_name, 
+                                                                        Qt.ElideRight, 
+                                                                        self.dlg.imagePreview.width() - 10))))
+            # Enable buttons
             self.dlg.deleteCatalogButton.setEnabled(True)
-            self.dlg.catalogSelectionLabel.setText(self.tr("Selected mosaic: <b>{mosaic_name}".format(mosaic_name=mosaic_name)))
             if self.dlg.stackedLayout.currentIndex() == 0:
                 self.dlg.seeImagesButton.setEnabled(True)
+            # Show widgets
             self.show_cell_widgets(mosaic=True, on=True)
-        
-        # Images: dis(en)able buttons and update widgets and labels upon table selection change
+
+        # Images:
         if self.dlg.imageTable.selectionModel().hasSelection() is False:
+            # Change text to mosaic-related
             self.dlg.infoPreviewLabel.setText(self.tr("Mosaic info"))
             self.dlg.deleteCatalogButton.setText(self.tr("Delete mosaic"))
+            # Clear bottom info label
             self.dlg.catalogInfo.setText("")
+            # Hide widgets
             self.show_cell_widgets(mosaic=False, on=False)
         else:
+            # Change text to image-related
             self.dlg.infoPreviewLabel.setText(self.tr("Image preview"))
             self.dlg.deleteCatalogButton.setText(self.tr("Delete image"))
-            self.dlg.catalogSelectionLabel.setText(self.tr("Selected image: <b>{image_name}".format(image_name=image_name)))
+            # Show image info in a bottom label
+            self.dlg.catalogSelectionLabel.setText(self.tr("Selected image: <b>{image_name}".format(
+                                                            image_name=self.dlg.imagePreview.fontMetrics().elidedText(
+                                                                       image_name, 
+                                                                       Qt.ElideRight, 
+                                                                       self.dlg.imagePreview.width() - 10))))
+            # Show widgets
             self.show_cell_widgets(mosaic=False, on=True)
         
         # Set mosaic or image cell deselection tooltip
