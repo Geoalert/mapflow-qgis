@@ -73,6 +73,7 @@ class DataCatalogView(QObject):
             self.dlg.mosaicTable.setItem(row, 1, name_item)
             self.dlg.mosaicTable.setHorizontalHeaderLabels(["ID", self.tr("Mosaics")])
             self.dlg.mosaicTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.dlg.mosaicTable.sortItems(1, Qt.AscendingOrder)
         
     def display_mosaic_info(self, mosaic: MosaicReturnSchema, images: list[ImageReturnSchema]):
         if not mosaic:
@@ -105,12 +106,14 @@ class DataCatalogView(QObject):
         if not image:
             return
         self.dlg.catalogInfo.setText(self.tr("uploaded: {date} at {time} \n"
-                                             "bands: {count} \n"
-                                             "pixel size: {pixel_size}"
+                                             "file size: {size} MB \n"
+                                             "pixel size: {pixel_size} m \n"
+                                             "bands: {count}"
                                              .format(date=image.uploaded_at.date(),
                                                      time=image.uploaded_at.strftime('%H:%M'),
-                                                     count=list(image.meta_data.values())[1],
-                                                     pixel_size=round(sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6]), 2))))
+                                                     size=round(image.file_size/1048576, 1),
+                                                     pixel_size=round(sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6]), 2),
+                                                     count=list(image.meta_data.values())[1])))
 
     def full_image_info(self, image: ImageReturnSchema):
         try:
@@ -125,7 +128,7 @@ class DataCatalogView(QObject):
                              .format(filename=image.filename, 
                                      date=image.uploaded_at.date(),
                                      time=image.uploaded_at.strftime('%H:%M'),
-                                     file_size=round(image.file_size/1000000, 1), 
+                                     file_size=round(image.file_size/1048576, 1), 
                                      crs=list(image.meta_data.values())[0],
                                      bands=list(image.meta_data.values())[1],
                                      width=list(image.meta_data.values())[2],
@@ -149,6 +152,7 @@ class DataCatalogView(QObject):
             name_item.setData(Qt.DisplayRole, image.filename)
             self.dlg.imageTable.setItem(row, 1, name_item)
         self.dlg.imageTable.setHorizontalHeaderLabels(["ID", self.tr("Images")])
+        self.dlg.imageTable.sortItems(1, Qt.AscendingOrder)
         if len(images) == 0:
             self.dlg.previewMosaicButton.setEnabled(False)
             self.dlg.showImagesButton.setEnabled(False)
