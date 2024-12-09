@@ -21,6 +21,7 @@ from ..view.data_catalog_view import DataCatalogView
 from ...http import Http
 from ...functional import layer_utils, helpers
 from ...config import Config
+from ...entity.provider import MyImageryProvider
 
 
 class DataCatalogService(QObject):
@@ -58,7 +59,7 @@ class DataCatalogService(QObject):
 
 
     # Mosaics CRUD
-    def create_mosaic(self, mosaic: MosaicCreateSchema):
+    def create_mosaic(self):
         dialog = CreateMosaicDialog(self.dlg)
         dialog.accepted.connect(lambda: self.api.create_mosaic(dialog.mosaic(), callback=self.create_mosaic_callback))
         dialog.setup()
@@ -85,7 +86,6 @@ class DataCatalogService(QObject):
         mosaic = MosaicReturnSchema.from_dict(json.loads(response.readAll().data()))
         self.mosaics.update({mosaic.id: mosaic})
         self.mosaicsUpdated.emit()
-        self.view.display_mosaic_info(mosaic)
         self.view.display_mosaics(list(self.mosaics.values()))
 
     def update_mosaic(self):  
@@ -101,27 +101,57 @@ class DataCatalogService(QObject):
     def update_mosaic_callback(self, response: QNetworkReply, mosaic: MosaicReturnSchema):
         self.get_mosaic(mosaic.id)
 
-    def delete_mosaic(self):
-        mosaic = self.selected_mosaic()
+    def delete_mosaic(self, mosaic):
+        # Store widgets before deleting a row
+        self.view.containerLayout.addWidget(self.dlg.addImageButton)
+        self.view.containerLayout.addWidget(self.dlg.showImagesButton)
+        self.view.containerLayout.addWidget(self.dlg.previewMosaicButton)
+        self.view.containerLayout.addWidget(self.dlg.editMosaicButton)
+        for spacer in self.dlg.mosaicSpacers:
+            self.view.containerLayout.addWidget(spacer)
+        self.view.containerWidget.setLayout(self.view.containerLayout)
+        # Delete mosaic
         self.api.delete_mosaic(mosaic_id=mosaic.id,
                                callback=self.delete_mosaic_callback,
-                               callback_kwargs={'mosaic_id': mosaic.id})
+                               callback_kwargs={'mosaic_id': mosaic.id},
+                               error_handler=self.api.delete_mosaic_error_handler,
+                               error_handler_kwargs={'mosaic_name': mosaic.name})
+        self.dlg.mosaicTable.clearSelection()
 
     def delete_mosaic_callback(self, response: QNetworkReply, mosaic_id: UUID):
         self.get_mosaics()
         self.mosaics.pop(mosaic_id)
-        self.mosaicsUpdated.emit()
+
+    def confirm_mosaic_deletion(self):
+        mosaic = self.selected_mosaic()
+        message = self.tr("Delete mosaic '{name}'?".format(name=mosaic.name))
+        box = QMessageBox(QMessageBox.Question, "Mapflow", message, parent=QApplication.activeWindow())
+        box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
+        box_exec = box.exec()
+        if box_exec == QMessageBox.Ok:
+            self.delete_mosaic(mosaic)
 
     def mosaic_clicked(self):
+        if self.dlg.selected_mosaic_cell is not None:
+            if self.dlg.mosaicTable.selectedIndexes()[0] == self.dlg.selected_mosaic_cell:
+                return # i.e. do noting when clicking on the same cell
+        else: # assign selected cell if it is None
+            self.dlg.selected_mosaic_cell = self.dlg.mosaicTable.selectedIndexes()[0]
         mosaic = self.selected_mosaic()
         if not mosaic:
             return
-        self.view.display_mosaic_info(mosaic)
         self.get_mosaic_images(mosaic.id)
+        # Store widgets before deleting previous mosaic's image table
+        self.view.containerLayout.addWidget(self.dlg.previewImageButton)
+        self.view.containerLayout.addWidget(self.dlg.imageInfoButton)
+        self.view.containerLayout.addWidget(self.dlg.imageSpacer)
+        self.view.containerWidget.setLayout(self.view.containerLayout)
         # Clear previous image details
         self.dlg.imageTable.clearSelection()
-        self.dlg.imageDetails.setText("Image Info")
+        self.dlg.imageTable.setRowCount(0)
         self.dlg.imagePreview.setText("")
+        # Assing newly selected cell
+        self.dlg.selected_mosaic_cell = self.dlg.mosaicTable.selectedIndexes()[0]
 
     def mosaic_preview(self):
         try:
@@ -223,15 +253,23 @@ class DataCatalogService(QObject):
     def get_mosaic_images_callback(self, response: QNetworkReply):
         self.images = [ImageReturnSchema.from_dict(data) for data in json.loads(response.readAll().data())]
         self.view.display_images(self.images)
+        self.view.display_mosaic_info(self.selected_mosaic(), self.images)
 
     def get_image(self, image_id: UUID, callback: Callable):
         self.api.get_image(image_id=image_id, callback=callback)
 
-    def delete_image(self):
+    def delete_image(self, selected_images):
+        # Store widgets before deleting a row
+        self.view.containerLayout.addWidget(self.dlg.previewImageButton)
+        self.view.containerLayout.addWidget(self.dlg.imageInfoButton)
+        self.view.containerLayout.addWidget(self.dlg.imageSpacer)
+        self.view.containerWidget.setLayout(self.view.containerLayout)
+        # Delete images
         images = {}
-        for image in self.selected_images():
+        for image in selected_images:
             images[image.id] = image.filename
         self.delete_images(response = None, images=list(images.items()), deleted=[], failed=[])
+        self.dlg.imageTable.clearSelection()
 
     def delete_images(self, 
                       response: QNetworkReply, 
@@ -257,6 +295,27 @@ class DataCatalogService(QObject):
                                                         'deleted': deleted,
                                                         'failed': list(failed) + [image_to_delete[1]]},
                                  )
+            
+    def confirm_image_deletion(self):
+        mosaic = self.selected_mosaic()
+        images = self.selected_images()
+        image_names = []
+        for image in images:
+            image_names.append(image.filename)
+        if len(image_names) == 1:
+            message = self.tr("<center>Delete image <b>'{name}'</b> from '{mosaic}' mosaic?"
+                              .format(name=image_names[0], mosaic=mosaic.name))
+        elif len(image_names) <= 3:
+            message = self.tr("<center>Delete following images from '{mosaic}' mosaic:<br><b>'{names}'</b>?"
+                              .format(names="', <br>'".join(image_names), mosaic=mosaic.name))
+        else:
+            message = self.tr("<center>Delete <b>{len}</b> images from '{mosaic}' mosaic?"
+                              .format(len=len(image_names), mosaic=mosaic.name))
+        box = QMessageBox(QMessageBox.Question, "Mapflow", message, parent=QApplication.activeWindow())
+        box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
+        box_exec = box.exec()
+        if box_exec == QMessageBox.Ok:
+            self.delete_image(images)
 
     def image_clicked(self):
         image = self.selected_image()
@@ -264,6 +323,7 @@ class DataCatalogService(QObject):
             return
         self.view.display_image_info(image)
         self.get_image_preview_s(image, PreviewSize.small)
+        self.view.add_image_cell_buttons()
         return image
 
     def image_info(self):
@@ -281,11 +341,11 @@ class DataCatalogService(QObject):
         image = QImage.fromData(response.readAll().data())
         self.view.show_preview_s(image)
 
-    def get_image_preview_l(self, image: ImageReturnSchema):
+    def get_image_preview_l(self):
         try:
             image = self.selected_image()
             extent = layer_utils.footprint_to_extent(image.footprint)
-            self.api.get_image_preview_l(image=image, extent=extent, callback=self.display_image_preview, image_id=image.id)
+            self.api.get_image_preview_l(image=image, extent=extent, callback=self.display_image_preview, image_name=image.filename)
         except AttributeError:
             return
 
@@ -293,7 +353,7 @@ class DataCatalogService(QObject):
                               response: QNetworkReply,
                               extent: QgsRectangle,
                               crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857"),
-                              image_id: str = ""):
+                              image_name: str = ""):
         with open(Path(self.temp_dir)/os.urandom(32).hex(), mode='wb') as f:
             f.write(response.readAll().data())
         preview = gdal.Open(f.name)
@@ -309,11 +369,41 @@ class DataCatalogService(QObject):
             -pixel_ysize  # pixel vertical resolution (m)
         ])
         preview.FlushCache()
-        layer = QgsRasterLayer(f.name, f"preview {image_id}", 'gdal')
+        layer = QgsRasterLayer(f.name, f"preview {image_name}", 'gdal')
         layer.setExtent(extent)
         self.project.addMapLayer(layer)
         self.iface.setActiveLayer(layer)
         self.iface.zoomToActiveLayer()
+
+
+    # Functions that depend on mosaic or image selection
+    def add_mosaic_or_image(self):
+        if self.dlg.stackedLayout.currentIndex() == 0:
+            self.create_mosaic()
+
+    def delete_mosaic_or_image(self):
+        image = self.selected_image()
+        mosaic = self.selected_mosaic()
+        if image:
+            self.confirm_image_deletion()
+        elif mosaic:
+            self.confirm_mosaic_deletion()
+        else:
+            return
+        
+    def check_catalog_selection(self):
+        if self.dlg.mosaicTable.selectionModel().hasSelection():
+            self.mosaic_clicked()
+        image = self.selected_image()
+        mosaic = self.selected_mosaic()
+        image_name = None
+        mosaic_name = None
+        if image:
+            image_name = image.filename
+        elif mosaic:
+            mosaic_name = mosaic.name
+            self.view.display_mosaic_info(mosaic, self.images)
+        self.view.check_mosaic_or_image_selection(mosaic_name, image_name)
 
 
     # Legacy:
@@ -364,3 +454,20 @@ class DataCatalogService(QObject):
         if not first:
             return None
         return first[0]
+
+
+    # Provider
+    def set_catalog_provider(self, providers):
+        """ Sets current provider to 'My imagery' if catalog table cell was clicked.
+        """
+        # Check current provider
+        current_provider = providers[self.dlg.providerIndex()]
+        if not isinstance (current_provider, MyImageryProvider):
+            # Get index of My imagery provider
+            for index in range(len(providers)):
+                provider = providers[index]
+                if isinstance(provider, MyImageryProvider):
+                    my_imagery_index = index
+            # Set My imagery data source
+            if my_imagery_index:
+                self.dlg.sourceCombo.setCurrentIndex(my_imagery_index)
