@@ -185,6 +185,9 @@ class DataCatalogApi(QObject):
                                                           response_body=response_body,
                                                           plugin_version=self.plugin_version,
                                                           error_message_parser=data_catalog_message_parser)
+        if json.loads(response_body)['detail']['code'] == "FileValidationFailed":
+            error_summary = self.tr("The image does not meet this mosaic paremeters. \n"
+                                    "Either modify your image or upload it to a different mosaic")
         if len(image_paths) == 1:
             message = self.tr("Could not upload '{image}' to mosaic".format(image=image_paths[0]))
         else:
