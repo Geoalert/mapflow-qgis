@@ -338,17 +338,17 @@ class Mapflow(QObject):
         self.zoom = None
         if self.zoom_selector:
             self.dlg.zoomCombo.currentIndexChanged.connect(self.on_zoom_change)
-        saved_zoom = self.settings.value('zoom')
-        if saved_zoom is None:
-            self.dlg.zoomCombo.setCurrentIndex(0)
-        else:
-            zoom_index = self.dlg.zoomCombo.findText(saved_zoom)
-            if zoom_index == -1:
-                # Fallback for situation if the settings contain value not available in the list
+            saved_zoom = self.settings.value('zoom')
+            if saved_zoom is None:
                 self.dlg.zoomCombo.setCurrentIndex(0)
-                self.settings.setValue('zoom', None)
             else:
-                self.dlg.zoomCombo.setCurrentIndex(zoom_index)
+                zoom_index = self.dlg.zoomCombo.findText(saved_zoom)
+                if zoom_index == -1:
+                    # Fallback for situation if the settings contain value not available in the list
+                    self.dlg.zoomCombo.setCurrentIndex(0)
+                    self.settings.setValue('zoom', None)
+                else:
+                    self.dlg.zoomCombo.setCurrentIndex(zoom_index)
 
         # Check if a project is shared after startup and when changing project
         self.app_startup_user_update_timer.timeout.connect(self.get_project_sharing)
@@ -687,7 +687,7 @@ class Mapflow(QObject):
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
         self.setup_processings_table()
         if not self.user_role.can_delete_rename_project:
-            reason = self.tr('Not enougth rights to delete or update shared project ({})').format(self.user_role)
+            reason = self.tr('Not enough rights to delete or update shared project ({})').format(self.user_role)
         else:
             reason = ""
         self.dlg.enable_project_change(reason, self.user_role.can_delete_rename_project)
@@ -1563,7 +1563,7 @@ class Mapflow(QObject):
 
         if not layer or layer.featureCount() == 0:
             if not self.user_role.can_start_processing:
-                reason = self.tr('Not enougth rights to start processing in a shared project ({})').format(self.user_role)
+                reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.user_role)
             else:
                 reason = self.tr('Set AOI to start processing')
             self.dlg.disable_processing_start(reason, clear_area=True)
@@ -1587,7 +1587,7 @@ class Mapflow(QObject):
             self.calculate_aoi_area(aoi, layer.crs())
         else:  # self.max_aois_per_processing < number of polygons (as features and as parts of multipolygons):
             if not self.user_role.can_start_processing:
-                reason = self.tr('Not enougth rights to start processing in a shared project ({})').format(self.user_role)
+                reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.user_role)
             else:
                 reason = self.tr('AOI must contain not more than {} polygons').format(self.max_aois_per_processing)
             self.dlg.disable_processing_start(reason, clear_area=True)
@@ -1671,7 +1671,7 @@ class Mapflow(QObject):
             # Here the button must already be disabled, and the warning text set
             if self.dlg.startProcessing.isEnabled():
                 if not self.user_role.can_start_processing:
-                    reason = self.tr('Not enougth rights to start processing in a shared project ({})').format(self.user_role)
+                    reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.user_role)
                 else:
                     reason = self.tr("Set AOI to start processing")
                 self.dlg.disable_processing_start(reason, clear_area=False)
@@ -1709,7 +1709,7 @@ class Mapflow(QObject):
         if response_text is not None:
             message = api_message_parser(response_text)
             if not self.user_role.can_start_processing:
-                reason = self.tr('Not enougth rights to start processing in a shared project ({})').format(self.user_role)
+                reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.user_role)
             else:
                 reason = self.tr('Processing cost is not available:\n{message}').format(message=message)
             self.dlg.disable_processing_start(reason, clear_area=False)
@@ -2586,7 +2586,7 @@ class Mapflow(QObject):
     def enable_rating_submit(self, status_ok: bool) -> None:
         rating_selected = 5 >= self.dlg.ratingComboBox.currentIndex() > 0
         if not self.user_role.can_delete_rename_review_processing:
-            reason = self.tr('Not enougth rights to rate processing in a shared project ({})').format(self.user_role)
+            reason = self.tr('Not enough rights to rate processing in a shared project ({})').format(self.user_role)
         elif not status_ok:
             if not self.selected_processing():
                 reason = self.tr('Please select processing')
@@ -2985,7 +2985,7 @@ class Mapflow(QObject):
         elif error == QNetworkReply.ContentAccessDenied:
             if not self.user_role.can_delete_rename_project:
                 self.report_http_error(response,
-                                       self.tr("Not enougth rights for this action\n"+
+                                       self.tr("Not enough rights for this action\n"+
                                                 "in a shared project '{project_name}' ({user_role})").format(project_name=self.current_project.name, 
                                                                                                             user_role=self.user_role),
                                        error_message_parser=parser)
