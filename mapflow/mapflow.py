@@ -1007,7 +1007,7 @@ class Mapflow(QObject):
         self.meta_layer_table_connection = self.metadata_layer.selectionChanged.connect(
             self.sync_layer_selection_with_table)
         self.search_footprints = {
-            feature['id']: feature
+            feature['local_index']: feature
             for feature in self.metadata_layer.getFeatures()
         }
 
@@ -1646,11 +1646,16 @@ class Mapflow(QObject):
         provider_index = self.dlg.providerIndex()
         use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
         selected_image = self.dlg.metadataTable.selectedItems()
+        if selected_image:
+            row = selected_image[0].row()
+            local_image_index = int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text())
+        else:
+            local_image_index = None
         # This is AOI with respect to selected Maxar images and raster image extent
         try:
             real_aoi = self.get_aoi(provider_index=provider_index,
                                     use_image_extent_as_aoi=use_image_extent_as_aoi,
-                                    selected_image=selected_image,
+                                    local_image_index=local_image_index,
                                     selected_aoi=self.aoi)
         except ImageIdRequired:
             # AOI is OK, but image ID is not selected,
@@ -1833,8 +1838,8 @@ class Mapflow(QObject):
 
     def crop_aoi_with_maxar_image_footprint(self,
                                             aoi: QgsFeature,
-                                            selected_image: QTableWidgetItem):
-        extent = self.search_footprints[selected_image[self.config.MAXAR_ID_COLUMN_INDEX].text()]
+                                            local_image_index: int):
+        extent = self.search_footprints[local_image_index]
         try:
             aoi = next(clip_aoi_to_image_extent(aoi, extent)).geometry()
         except StopIteration:
@@ -1863,7 +1868,7 @@ class Mapflow(QObject):
                 provider_index: Optional[int],
                 use_image_extent_as_aoi: bool,
                 selected_aoi: QgsGeometry,
-                selected_image: Optional[str] = None) -> QgsGeometry:
+                local_image_index: Optional[int]) -> QgsGeometry:
         if not helpers.check_aoi(selected_aoi):
             raise BadProcessingInput(self.tr('Bad AOI. AOI must be inside boundaries:'
                                              ' \n[-180, 180] by longitude, [-90, 90] by latitude'))
@@ -1871,9 +1876,9 @@ class Mapflow(QObject):
             provider = self.providers[provider_index]
             if not provider:
                 raise PluginError(self.tr('Providers are not initialized'))
-            if selected_image:
+            if local_image_index is not None:
                 if isinstance(provider, (MaxarProvider, ImagerySearchProvider)):
-                    aoi = self.crop_aoi_with_maxar_image_footprint(selected_aoi, selected_image)
+                    aoi = self.crop_aoi_with_maxar_image_footprint(selected_aoi, local_image_index)
                 elif isinstance(provider, SentinelProvider):
                     # todo: crop sentinel aoi with image footprint?
                     aoi = selected_aoi
@@ -1911,14 +1916,15 @@ class Mapflow(QObject):
         use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
         image_id = self.dlg.imageId.text()
         provider_name = None
-        if image_id:
-            # for ImagerySearchProvider we must get the internal provider name from the features,
-            # it is as necessary as image_id for it
-            try:
-                provider_name = self.search_footprints[image_id].attribute("providerName")
-            except KeyError:
-                provider_name = None
         selected_image = self.dlg.metadataTable.selectedItems()
+        if selected_image:
+            try:
+                row = selected_image[0].row()
+                local_image_index = int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text())
+                provider_name = self.search_footprints[local_image_index].attribute("providerName")
+            except:
+                local_image_index = None
+                provider_name = None
         wd_name = self.dlg.modelCombo.currentText()
         wd = self.workflow_defs.get(wd_name)
         try:
@@ -1943,7 +1949,7 @@ class Mapflow(QObject):
                                                                           provider_name=provider_name)
             aoi = self.get_aoi(provider_index=provider_index,
                                use_image_extent_as_aoi=use_image_extent_as_aoi,
-                               selected_image=selected_image,
+                               local_image_index=local_image_index,
                                selected_aoi=self.aoi)
         except AoiNotIntersectsImage:
             return None, self.tr("Selected AOI does not intersect the selected imagery")
