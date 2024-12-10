@@ -802,7 +802,7 @@ class Mapflow(QObject):
             geoms = None
         else:  # any non-sentinel provider: setup table as for ImagerySearch provider
             columns = self.config.METADATA_TABLE_ATTRIBUTES
-            hidden_columns = tuple()
+            hidden_columns = (len(columns) - 1,)
             sort_by = self.config.MAXAR_DATETIME_COLUMN_INDEX
             max_zoom = self.config.MAX_ZOOM
             current_zoom = int(self.settings.value('maxZoom', self.config.DEFAULT_ZOOM))
@@ -1023,6 +1023,9 @@ class Mapflow(QObject):
             return
         response_data = ImageCatalogResponseSchema(**response_json)
         geoms = response_data.as_geojson()
+        # Add index to map table and layer
+        for position, feature in enumerate(geoms.get("features", ())):
+            feature['properties']['local_index'] = position
 
         # Save the current search results to load later
         provider = self.imagery_search_provider
@@ -1400,19 +1403,26 @@ class Mapflow(QObject):
         corresponding feature in the metadata layer and put the selected image's
         id into the "Image ID" field.
         """
-        id_column_index = (
-            self.config.SENTINEL_ID_COLUMN_INDEX
-            if self.dlg.sourceCombo.currentText() == constants.SENTINEL_OPTION_NAME
-            else self.config.MAXAR_ID_COLUMN_INDEX
-        )
+        if self.dlg.sourceCombo.currentText() == constants.SENTINEL_OPTION_NAME:
+            id_column_index = self.config.SENTINEL_ID_COLUMN_INDEX
+            # sentinel is indexed by the image ID
+            local_index_column = id_column_index
+            key = 'id'
+        else:
+            id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
+            local_index_column = self.config.LOCAL_INDEX_COLUMN
+            key = 'local_index'
+
         selected_cells = self.dlg.metadataTable.selectedItems()
         if not selected_cells:
-            self.dlg.imageId.setText('')
             image_id = None
+            local_index = None
+            self.dlg.imageId.setText('')
         else:
-            image_id = next(cell for cell in selected_cells if cell.column() == id_column_index).text()
+            selected_row = selected_cells[0].row()
+            image_id = self.dlg.metadataTable.item(selected_row, id_column_index).text()
+            local_index = self.dlg.metadataTable.item(selected_row, local_index_column).text()
             self.dlg.imageId.setText(image_id)
-
         try:
             self.metadata_layer.selectionChanged.disconnect(self.meta_layer_table_connection)
             # disconnect to prevent loop of signals
@@ -1422,7 +1432,7 @@ class Mapflow(QObject):
         self.replace_search_provider_index()
 
         try:
-            self.metadata_layer.selectByExpression(f"id='{image_id}'")
+            self.metadata_layer.selectByExpression(f"{key}='{local_index}'")
         except RuntimeError:  # layer has been deleted
             pass
         except Exception as e:
@@ -1443,33 +1453,28 @@ class Mapflow(QObject):
         """
         # Disconnect to avoid backwards signal and possible infinite loop;
         # connection is restored before return
+        key = 'id' if self.dlg.sourceCombo.currentText() == constants.SENTINEL_OPTION_NAME else 'local_index'
+        id_column_index = self.config.SENTINEL_ID_COLUMN_INDEX \
+            if self.dlg.sourceCombo.currentText() == constants.SENTINEL_OPTION_NAME \
+            else self.config.LOCAL_INDEX_COLUMN
+
         self.dlg.metadataTable.itemSelectionChanged.disconnect(self.meta_table_layer_connection)
-        if not selected_ids:
-            self.dlg.metadataTable.clearSelection()
-            self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
-                self.sync_table_selection_with_image_id_and_layer)
-            return
+
         try:
-            selected_id = self.metadata_layer.getFeature(selected_ids[-1])['id']
-        except RuntimeError as e:
+            if not selected_ids:
+                self.dlg.metadataTable.clearSelection()
+                return
+            selected_local_index = self.metadata_layer.getFeature(selected_ids[-1])[key]
+            found_items = [item
+                          for item in self.dlg.metadataTable.findItems(str(selected_local_index), Qt.MatchExactly)
+                          if item.column() == id_column_index]
+            if not found_items:
+                self.dlg.metadataTable.clearSelection()
+                return
+            self.dlg.metadataTable.selectRow(found_items[0].row())
+        finally:
             self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
                 self.sync_table_selection_with_image_id_and_layer)
-            return
-        id_column_index = [
-            self.config.SENTINEL_ID_COLUMN_INDEX
-            if self.dlg.sourceCombo.currentText() == constants.SENTINEL_OPTION_NAME
-            else self.config.MAXAR_ID_COLUMN_INDEX
-        ]
-        already_selected = [
-            item.text() for item in self.dlg.metadataTable.selectedItems()
-            if item.column() == id_column_index
-        ]
-        if selected_id not in already_selected:
-            self.dlg.metadataTable.selectRow(
-                self.dlg.metadataTable.findItems(selected_id, Qt.MatchExactly)[0].row()
-            )
-        self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
-            self.sync_table_selection_with_image_id_and_layer)
 
     def sync_image_id_with_table_and_layer(self, image_id: str) -> None:
         """
@@ -2054,7 +2059,7 @@ class Mapflow(QObject):
         response_body = response.readAll().data().decode()
         if error == QNetworkReply.ContentAccessDenied \
                 and "data provider" in response_body.lower():
-            self.alert(self.tr('Data provider with id is unavailable on your plan. \n '
+            self.alert(self.tr('The selected data provider is unavailable on your plan. \n '
                                'Upgrade your subscription to get access to the data. \n'
                                'See pricing at <a href=\"https://mapflow.ai/pricing\">mapflow.ai</a>'),
                        QMessageBox.Information)

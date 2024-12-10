@@ -51,9 +51,11 @@ class Config:
         'Cloud %': 'cloudCover',
         f'\N{DEGREE SIGN} Off Nadir': 'offNadirAngle',
         f'Date & Time ({TIMEZONE})': 'acquisitionDate',
-        'Image ID': 'id'
+        'Image ID': 'id',
+        'local_index': 'local_index'
     }
     MAXAR_ID_COLUMN_INDEX = tuple(METADATA_TABLE_ATTRIBUTES.values()).index('id')
+    LOCAL_INDEX_COLUMN = tuple(METADATA_TABLE_ATTRIBUTES.values()).index('local_index')
     MAXAR_DATETIME_COLUMN_INDEX = tuple(METADATA_TABLE_ATTRIBUTES.keys()).index(f'Date & Time ({TIMEZONE})')
     MAXAR_CLOUD_COLUMN_INDEX = tuple(METADATA_TABLE_ATTRIBUTES.keys()).index(f'Cloud %')
     MAXAR_MAX_FREE_ZOOM = 12
