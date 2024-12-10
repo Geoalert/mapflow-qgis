@@ -177,6 +177,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.sourceCombo.addItems(provider_names)
         self.providerCombo.clear()
         self.providerCombo.addItems(provider_names)
+
         for name in default_provider_names:
             if name in provider_names:
                 self.sourceCombo.setCurrentText(name)

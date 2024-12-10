@@ -517,7 +517,7 @@ class Mapflow(QObject):
             return
         provider_names = [p.name for p in self.providers]
         self.dlg.set_raster_sources(provider_names=provider_names,
-                                    default_provider_names=['Mapbox', '🌎 Mapbox Satellite'])
+                                    default_provider_names=['Mapbox', '🌍 Mapbox Satellite'])
 
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
         """Filter out the metadata table and layer every time user changes a filter."""

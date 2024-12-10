@@ -210,7 +210,7 @@ class DataCatalogService(QObject):
                                                 memory=self.image_max_size_bytes // (1024 * 1024))
                 self.view.alert(self.tr("<center><b>Error uploading '{name}'</b>".format(name=Path(image_to_upload).name))+"<br>"+message)
                 return
-            # Check if user has enougth stogage
+            # Check if user has enough stogage
             image_size=Path(image_to_upload).stat().st_size
             if self.free_storage and image_size > self.free_storage:
                 message = (self.tr("<b>Not enough storage space. </b>"
