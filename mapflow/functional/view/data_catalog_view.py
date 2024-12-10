@@ -1,5 +1,3 @@
-from typing import List
-
 from ...dialogs.main_dialog import MainDialog
 from PyQt5.QtCore import QObject, Qt
 from PyQt5.QtWidgets import (QWidget, QTableWidget, QTableWidgetItem, QHeaderView, QHBoxLayout, QAbstractItemView, QToolButton,
@@ -73,7 +71,6 @@ class DataCatalogView(QObject):
             self.dlg.mosaicTable.setItem(row, 1, name_item)
             self.dlg.mosaicTable.setHorizontalHeaderLabels(["ID", self.tr("Mosaics")])
             self.dlg.mosaicTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.dlg.mosaicTable.sortItems(1, Qt.AscendingOrder)
         
     def display_mosaic_info(self, mosaic: MosaicReturnSchema, images: list[ImageReturnSchema]):
         if not mosaic:
@@ -152,7 +149,6 @@ class DataCatalogView(QObject):
             name_item.setData(Qt.DisplayRole, image.filename)
             self.dlg.imageTable.setItem(row, 1, name_item)
         self.dlg.imageTable.setHorizontalHeaderLabels(["ID", self.tr("Images")])
-        self.dlg.imageTable.sortItems(1, Qt.AscendingOrder)
         if len(images) == 0:
             self.dlg.previewMosaicButton.setEnabled(False)
             self.dlg.showImagesButton.setEnabled(False)

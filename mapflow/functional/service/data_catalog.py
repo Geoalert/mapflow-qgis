@@ -5,6 +5,7 @@ import json
 import tempfile
 import os.path
 from osgeo import gdal
+import re
 
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QImage
@@ -75,7 +76,8 @@ class DataCatalogService(QObject):
         for data in json.loads(response.readAll().data()):
             mosaic = MosaicReturnSchema.from_dict(data)
             self.mosaics[mosaic.id] = mosaic
-        self.view.display_mosaics(list(self.mosaics.values()))
+        sorted_mosaics = sorted(self.mosaics.values(), key=lambda x: [int(s) if s.isdigit() else s.lower() for s in re.split(r'(\d+)', x.name)])
+        self.view.display_mosaics(sorted_mosaics)
         #self.mosaicsUpdated.emit()
 
     def get_mosaic(self, mosaic_id: UUID):
@@ -86,7 +88,8 @@ class DataCatalogService(QObject):
         mosaic = MosaicReturnSchema.from_dict(json.loads(response.readAll().data()))
         self.mosaics.update({mosaic.id: mosaic})
         self.mosaicsUpdated.emit()
-        self.view.display_mosaics(list(self.mosaics.values())) 
+        sorted_mosaics = sorted(self.mosaics.values(), key=lambda x: [int(s) if s.isdigit() else s.lower() for s in re.split(r'(\d+)', x.name)])
+        self.view.display_mosaics(sorted_mosaics)
         # Go to the right cell in case sorting changed items' order
         self.view.select_mosaic_cell(mosaic.id)
 
@@ -247,6 +250,7 @@ class DataCatalogService(QObject):
 
     def get_mosaic_images_callback(self, response: QNetworkReply):
         self.images = [ImageReturnSchema.from_dict(data) for data in json.loads(response.readAll().data())]
+        self.images = sorted(self.images, key=lambda x: [int(s) if s.isdigit() else s.lower() for s in re.split(r'(\d+)', x.filename)])
         self.view.display_images(self.images)
         self.view.display_mosaic_info(self.selected_mosaic(), self.images)
 
