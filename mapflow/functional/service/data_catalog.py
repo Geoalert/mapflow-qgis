@@ -14,13 +14,13 @@ from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsRasterLayer, 
 
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs.mosaic_dialog import CreateMosaicDialog, UpdateMosaicDialog
+from ...dialogs.dialogs import UploadRasterLayersDialog
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema, MosaicCreateReturnSchema, UserLimitSchema
 from ..api.data_catalog_api import DataCatalogApi
 from ..view.data_catalog_view import DataCatalogView
 from ...http import Http
 from ...functional import layer_utils, helpers
 from ...config import Config
-from ...errors import BadProcessingInput
 
 
 class DataCatalogService(QObject):
@@ -55,6 +55,7 @@ class DataCatalogService(QObject):
         self.image_max_size_pixels = Config.MAX_FILE_SIZE_PIXELS
         self.image_max_size_bytes = Config.MAX_FILE_SIZE_BYTES
         self.free_storage = None
+
 
     # Mosaics CRUD
     def create_mosaic(self, mosaic: MosaicCreateSchema):
@@ -117,9 +118,10 @@ class DataCatalogService(QObject):
             return
         self.view.display_mosaic_info(mosaic)
         self.get_mosaic_images(mosaic.id)
+        # Clear previous image details
         self.dlg.imageTable.clearSelection()
         self.dlg.imageDetails.setText("Image Info")
-        self.dlg.imagePreview.setText(" ")
+        self.dlg.imagePreview.setText("")
 
     def mosaic_preview(self):
         try:
@@ -141,6 +143,22 @@ class DataCatalogService(QObject):
         image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), "Choose image to upload", filter='(TIF files *.tif; *.tiff)')[0]
         if image_paths:
             self.upload_images(response=None, mosaic_id=mosaic.id, image_paths=image_paths, uploaded=[], failed=[])
+
+    def upload_raster_layers_to_mosaic(self, layers_paths):
+        mosaic = self.selected_mosaic()
+        if layers_paths:
+            self.upload_images(response=None, mosaic_id=mosaic.id, image_paths=layers_paths, uploaded=[], failed=[])
+
+    def choose_raster_layers(self):
+        dialog = UploadRasterLayersDialog(self.dlg)
+        dialog.accepted.connect(lambda: dialog.get_selected_rasters_list(callback=self.upload_raster_layers_to_mosaic))
+        # Show all acceptable (TIFF) raster layers
+        layers = []
+        for layer in self.project.mapLayers().values():
+            if Path(layer.source()).suffix.lower() in ['.tif', '.tiff']:
+                layers.append(layer)
+        dialog.setup(layers)
+        dialog.deleteLater()
 
     def upload_images(self,
                       response: QNetworkReply,
@@ -346,30 +364,3 @@ class DataCatalogService(QObject):
         if not first:
             return None
         return first[0]
-    
-    def check_mosaic_selection(self):
-        if self.dlg.mosaicTable.selectionModel().hasSelection() is False:
-            self.dlg.mosaicInfo.setText("Mosaic info")
-            self.dlg.previewMosaicButton.setEnabled(False)
-            self.dlg.editMosaicButton.setEnabled(False)
-            self.dlg.deleteMosaicButton.setEnabled(False)
-            self.dlg.addImageButton.setEnabled(False)
-            self.dlg.imageTable.setColumnCount(0)
-            self.dlg.imageTable.setRowCount(0)
-        else:
-            self.dlg.previewMosaicButton.setEnabled(True)
-            self.dlg.editMosaicButton.setEnabled(True)
-            self.dlg.deleteMosaicButton.setEnabled(True)
-            self.dlg.addImageButton.setEnabled(True)
-    
-    def check_image_selection(self):
-        if self.dlg.imageTable.selectionModel().hasSelection() is False:
-            self.dlg.imagePreview.setText(" ")
-            self.dlg.imageDetails.setText("Image info")
-            self.dlg.deleteImageButton.setEnabled(False)
-            self.dlg.imagePreviewButton.setEnabled(False)
-            self.dlg.imageInfoButton.setEnabled(False)
-        else:
-            self.dlg.deleteImageButton.setEnabled(True)
-            self.dlg.imagePreviewButton.setEnabled(True)
-            self.dlg.imageInfoButton.setEnabled(True)
