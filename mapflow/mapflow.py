@@ -1927,6 +1927,8 @@ class Mapflow(QObject):
             except:
                 local_image_index = None
                 provider_name = None
+        else:
+            local_image_index = None
         wd_name = self.dlg.modelCombo.currentText()
         wd = self.workflow_defs.get(wd_name)
         try:
