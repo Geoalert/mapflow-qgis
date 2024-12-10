@@ -86,9 +86,11 @@ class DataCatalogService(QObject):
         mosaic = MosaicReturnSchema.from_dict(json.loads(response.readAll().data()))
         self.mosaics.update({mosaic.id: mosaic})
         self.mosaicsUpdated.emit()
-        self.view.display_mosaics(list(self.mosaics.values()))
+        self.view.display_mosaics(list(self.mosaics.values())) 
+        # Go to the right cell in case sorting changed items' order
+        self.view.select_mosaic_cell(mosaic.id)
 
-    def update_mosaic(self):  
+    def update_mosaic(self):
         mosaic = self.selected_mosaic()
         dialog = UpdateMosaicDialog(self.dlg)
         dialog.accepted.connect(lambda: self.api.update_mosaic(mosaic_id=mosaic.id, 
@@ -99,17 +101,11 @@ class DataCatalogService(QObject):
         dialog.deleteLater()
 
     def update_mosaic_callback(self, response: QNetworkReply, mosaic: MosaicReturnSchema):
-        self.get_mosaic(mosaic.id)
+        self.get_mosaic(mosaic.id)        
 
     def delete_mosaic(self, mosaic):
         # Store widgets before deleting a row
-        self.view.containerLayout.addWidget(self.dlg.addImageButton)
-        self.view.containerLayout.addWidget(self.dlg.showImagesButton)
-        self.view.containerLayout.addWidget(self.dlg.previewMosaicButton)
-        self.view.containerLayout.addWidget(self.dlg.editMosaicButton)
-        for spacer in self.dlg.mosaicSpacers:
-            self.view.containerLayout.addWidget(spacer)
-        self.view.containerWidget.setLayout(self.view.containerLayout)
+        self.view.contain_mosaic_cell_buttons()
         # Delete mosaic
         self.api.delete_mosaic(mosaic_id=mosaic.id,
                                callback=self.delete_mosaic_callback,
@@ -132,6 +128,8 @@ class DataCatalogService(QObject):
             self.delete_mosaic(mosaic)
 
     def mosaic_clicked(self):
+        if not self.dlg.mosaicTable.selectedIndexes():
+            return
         if self.dlg.selected_mosaic_cell is not None:
             if self.dlg.mosaicTable.selectedIndexes()[0] == self.dlg.selected_mosaic_cell:
                 return # i.e. do noting when clicking on the same cell
@@ -142,10 +140,7 @@ class DataCatalogService(QObject):
             return
         self.get_mosaic_images(mosaic.id)
         # Store widgets before deleting previous mosaic's image table
-        self.view.containerLayout.addWidget(self.dlg.previewImageButton)
-        self.view.containerLayout.addWidget(self.dlg.imageInfoButton)
-        self.view.containerLayout.addWidget(self.dlg.imageSpacer)
-        self.view.containerWidget.setLayout(self.view.containerLayout)
+        self.view.contain_image_cell_buttons()
         # Clear previous image details
         self.dlg.imageTable.clearSelection()
         self.dlg.imageTable.setRowCount(0)
@@ -260,10 +255,7 @@ class DataCatalogService(QObject):
 
     def delete_image(self, selected_images):
         # Store widgets before deleting a row
-        self.view.containerLayout.addWidget(self.dlg.previewImageButton)
-        self.view.containerLayout.addWidget(self.dlg.imageInfoButton)
-        self.view.containerLayout.addWidget(self.dlg.imageSpacer)
-        self.view.containerWidget.setLayout(self.view.containerLayout)
+        self.view.contain_image_cell_buttons()
         # Delete images
         images = {}
         for image in selected_images:

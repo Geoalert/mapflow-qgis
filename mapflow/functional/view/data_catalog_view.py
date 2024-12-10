@@ -173,6 +173,12 @@ class DataCatalogView(QObject):
         pids = [self.dlg.mosaicTable.item(row, 0).text()
                 for row in selected_rows[:limit]]
         return pids
+    
+    def select_mosaic_cell(self, mosaic_id):
+        # Store widgets before deleting a row
+        self.contain_mosaic_cell_buttons()
+        item = self.dlg.mosaicTable.findItems(mosaic_id, Qt.MatchExactly)[0]
+        self.dlg.mosaicTable.setCurrentCell(item.row(), 1)
 
     def selected_images_indecies(self, limit=None):
         selected_rows = list(set(index.row() for index in self.dlg.imageTable.selectionModel().selectedIndexes()))
@@ -320,10 +326,7 @@ class DataCatalogView(QObject):
             self.dlg.addCatalogButton.setMenu(self.upload_image_menu)
         else: # if images are opened before the click
             # Save buttons before deleting cells and therefore widgets
-            self.containerLayout.addWidget(self.dlg.previewImageButton)
-            self.containerLayout.addWidget(self.dlg.imageInfoButton)
-            self.containerLayout.addWidget(self.dlg.imageSpacer)
-            self.containerWidget.setLayout(self.containerLayout)
+            self.contain_image_cell_buttons()
             # Remove menu for add mosaic
             self.dlg.addCatalogButton.setText(self.tr("Add mosaic"))
             self.dlg.addCatalogButton.setMenu(None)
@@ -371,6 +374,21 @@ class DataCatalogView(QObject):
         self.dlg.imageTable.setCellWidget(self.dlg.selected_image_cell.row(),
                                           self.dlg.selected_image_cell.column(),
                                           cellWidget)
+        
+    def contain_mosaic_cell_buttons(self):
+        self.containerLayout.addWidget(self.dlg.editMosaicButton)
+        self.containerLayout.addWidget(self.dlg.previewMosaicButton)
+        self.containerLayout.addWidget(self.dlg.showImagesButton)
+        self.containerLayout.addWidget(self.dlg.addImageButton)
+        for spacer in self.dlg.mosaicSpacers:
+            self.containerLayout.addWidget(spacer)
+        self.containerWidget.setLayout(self.containerLayout)
+
+    def contain_image_cell_buttons(self):
+        self.containerLayout.addWidget(self.dlg.previewImageButton)
+        self.containerLayout.addWidget(self.dlg.imageSpacer)
+        self.containerLayout.addWidget(self.dlg.imageInfoButton)
+        self.containerWidget.setLayout(self.containerLayout)
         
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """A duplicate of alert function from mapflow.py to avoid circular import.
