@@ -5,8 +5,8 @@ from typing import Iterable, Optional, List
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette
-from PyQt5.QtWidgets import QWidget, QPushButton, QCheckBox, QTableWidgetItem
-from qgis.core import QgsMapLayerProxyModel, QgsMapLayer, QgsSettings
+from PyQt5.QtWidgets import QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton
+from qgis.core import QgsMapLayerProxyModel, QgsSettings
 
 from . import icons
 from ..config import config
@@ -45,8 +45,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.modelInfo.setIcon(icons.info_icon)
         self.tabWidget.setTabIcon(0, icons.processing_icon)
         self.tabWidget.setTabIcon(1, icons.lens_icon)
-        self.tabWidget.setTabIcon(2, icons.user_gear_icon)
-        self.tabWidget.setTabIcon(3, icons.info_icon)
+        self.tabWidget.setTabIcon(2, icons.images_icon)
+        self.tabWidget.setTabIcon(3, icons.user_gear_icon)
+        self.tabWidget.setTabIcon(4, icons.info_icon)
         self.saveOptionsButton.setIcon(icons.options_icon)
         self.createProject.setIcon(icons.plus_icon)
         self.deleteProject.setIcon(icons.minus_icon)
@@ -87,6 +88,28 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
         # Restored saved state
         self.set_state_from_settings()
+
+        # Store latest cell selections from data catalog tables
+        self.selected_mosaic_cell = None
+        self.selected_image_cell = None
+        # Create data catalog table wigets
+        self.stackedLayout = QStackedLayout()
+        self.stackedLayout.addWidget(self.mosaicTable)
+        self.stackedLayout.addWidget(self.imageTable)
+        self.catalogTableLayout.addLayout(self.stackedLayout)
+        # Add buttons for catalog table cells
+        self.addImageButton = QToolButton()
+        self.showImagesButton = QPushButton()
+        self.previewMosaicButton = QPushButton()
+        self.editMosaicButton = QPushButton()
+        self.previewImageButton = QPushButton()
+        self.imageInfoButton = QPushButton()
+        # Create colored spacers for tables' cell widgets (so long names won't be seen inbetween buttons)
+        self.imageSpacer = QLabel()
+        self.mosaicSpacers = [QLabel(), QLabel(), QLabel()]
+        for spacer in self.mosaicSpacers+[self.imageSpacer]:
+            spacer.setFixedSize(3,26)
+            spacer.setStyleSheet("background-color: rgb(23,133,220);")
 
     # ===== Settings management ===== #
     def save_view_results_mode(self):
@@ -154,6 +177,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.sourceCombo.addItems(provider_names)
         self.providerCombo.clear()
         self.providerCombo.addItems(provider_names)
+
         for name in default_provider_names:
             if name in provider_names:
                 self.sourceCombo.setCurrentText(name)
