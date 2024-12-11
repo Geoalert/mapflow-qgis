@@ -55,7 +55,7 @@ class DataCatalogApi(QObject):
     def get_mosaic(self, mosaic_id: UUID, callback: Callable):
         self.http.get(url=f"{self.server}/rasters/mosaic/{mosaic_id}",
                       callback=callback,
-                      use_default_error_handler=True
+                      use_default_error_handler=False
                      )
     
     def update_mosaic(self, mosaic_id, mosaic: MosaicUpdateSchema, callback: Callable, callback_kwargs: Optional[dict] = None):
@@ -180,7 +180,7 @@ class DataCatalogApi(QObject):
         connection = response.uploadProgress.connect(display_upload_progress)
         progressMessageBar.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
 
-    def upload_image_error_handler(self, response: QNetworkReply, image_paths: list):
+    def upload_image_error_handler(self, response: QNetworkReply, mosaic_name: str, image_paths: list):
         response_body = response.readAll().data().decode()
         error_summary, email_body = get_error_report_body(response=response,
                                                           response_body=response_body,
@@ -190,6 +190,8 @@ class DataCatalogApi(QObject):
             if json.loads(response_body).get('detail', {}).get('code') == "FileValidationFailed":
                 error_summary = self.tr("The image does not meet this mosaic paremeters. \n"
                                         "Either modify your image or upload it to a different mosaic")
+            if json.loads(response_body).get('detail', {}).get('code') == "ItemNotFound":
+                error_summary = self.tr("Mosaic '{mosaic_name}' does not exist".format(mosaic_name=mosaic_name))
         if len(image_paths) == 1:
             message = self.tr("Could not upload '{image}' to mosaic".format(image=image_paths[0]))
         else:
@@ -202,7 +204,7 @@ class DataCatalogApi(QObject):
     def get_mosaic_images(self, mosaic_id: UUID, callback: Callable):
         self.http.get(url=f"{self.server}/rasters/mosaic/{mosaic_id}/image",
                       callback=callback,
-                      use_default_error_handler=True
+                      use_default_error_handler=False
                      )
 
     def get_image(self, image_id: UUID, callback: Callable):

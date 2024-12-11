@@ -67,6 +67,7 @@ class DataCatalogService(QObject):
 
     def create_mosaic_callback(self, response: QNetworkReply):
         self.get_mosaics()
+        self.dlg.mosaicTable.clearSelection()
 
     def get_mosaics(self):
         self.api.get_mosaics(callback=self.get_mosaics_callback)
@@ -167,7 +168,9 @@ class DataCatalogService(QObject):
         mosaic = self.selected_mosaic()
         image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), "Choose image to upload", filter='(TIF files *.tif; *.tiff)')[0]
         if image_paths:
-            self.upload_images(response=None, mosaic_id=mosaic.id, image_paths=image_paths, uploaded=[], failed=[])
+            self.upload_images(response=None, 
+                               mosaic_id=mosaic.id, mosaic_name=mosaic.name, 
+                               image_paths=image_paths, uploaded=[], failed=[])
 
     def upload_raster_layers_to_mosaic(self, layers_paths):
         mosaic = self.selected_mosaic()
@@ -188,12 +191,13 @@ class DataCatalogService(QObject):
     def upload_images(self,
                       response: QNetworkReply,
                       mosaic_id: UUID,
+                      mosaic_name: str,
                       image_paths: Sequence[Union[Path, str]],
                       uploaded: Sequence[Union[Path, str]],
                       failed: Sequence[Union[Path, str]]):        
         if len(image_paths) == 0:
             if failed:
-                self.api.upload_image_error_handler(response=response, image_paths=failed)
+                self.api.upload_image_error_handler(response=response, mosaic_name=mosaic_name, image_paths=failed)
             self.get_mosaic(mosaic_id)
             self.get_mosaic_images(mosaic_id)
             self.mosaicsUpdated.emit()
@@ -229,11 +233,13 @@ class DataCatalogService(QObject):
                                   image_path=image_to_upload,
                                   callback=self.upload_images,
                                   callback_kwargs={'mosaic_id': mosaic_id,
+                                                   'mosaic_name': mosaic_name,
                                                    'image_paths': non_uploaded,
                                                    'uploaded': list(uploaded) + [image_to_upload],
                                                    'failed': failed},
                                   error_handler=self.upload_images,
                                   error_handler_kwargs={'mosaic_id': mosaic_id,
+                                                        'mosaic_name': mosaic_name,
                                                         'image_paths': non_uploaded,
                                                         'uploaded': uploaded,
                                                         'failed': list(failed) + [image_to_upload]},
