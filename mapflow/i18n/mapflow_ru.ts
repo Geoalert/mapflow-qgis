@@ -982,7 +982,7 @@ Price: {} credits per square km</source>
     </message>
     <message>
         <location filename="../dialogs/main_dialog.py" line="465"/>
-        <source>Not enougth rights to delete processing in a shared project ({})</source>
+        <source>Not enough rights to delete processing in a shared project ({})</source>
         <translation>Недостаточно прав для удаления проекта ({})</translation>
     </message>
     <message>
@@ -1042,12 +1042,12 @@ Price: {} credits per square km</source>
     </message>
     <message>
         <location filename="../dialogs/main_dialog.py" line="446"/>
-        <source>Not enougth rights to start processing in a shared project ({})</source>
+        <source>Not enough rights to start processing in a shared project ({})</source>
         <translation>Недостаточно прав в проекте для запауска обработки ({})</translation>
     </message>
     <message>
         <location filename="../dialogs/main_dialog.py" line="459"/>
-        <source>Not enougth rights to rate processing in a shared project ({})</source>
+        <source>Not enough rights to rate processing in a shared project ({})</source>
         <translation>Недостаточно прав в проекте для оценивания обработки ({})</translation>
     </message>
     <message>
@@ -1843,12 +1843,12 @@ OSM layer will be added instead.</source>
     </message>
     <message>
         <location filename="../mapflow.py" line="673"/>
-        <source>Not enougth rights to delete or update shared project ({})</source>
+        <source>Not enough rights to delete or update shared project ({})</source>
         <translation>Недостаточно прав для удаления или изменения проекта ({})</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1694"/>
-        <source>Not enougth rights to start processing in a shared project ({})</source>
+        <source>Not enough rights to start processing in a shared project ({})</source>
         <translation>Недостаточно прав в проекте для запауска обработки ({})</translation>
     </message>
     <message>
@@ -1863,7 +1863,7 @@ OSM layer will be added instead.</source>
     </message>
     <message>
         <location filename="../mapflow.py" line="2565"/>
-        <source>Not enougth rights to rate processing in a shared project ({})</source>
+        <source>Not enough rights to rate processing in a shared project ({})</source>
         <translation>Недостаточно прав в проекте для оценивания обработки ({})</translation>
     </message>
     <message>
@@ -1873,7 +1873,7 @@ OSM layer will be added instead.</source>
     </message>
     <message>
         <location filename="../mapflow.py" line="2965"/>
-        <source>Not enougth rights for this action
+        <source>Not enough rights for this action
 in a shared project &apos;{project_name}&apos; ({user_role})</source>
         <translation>Недостаточно прав для этого действия
 в проекте &apos;{project_name}&apos; ({user_role})</translation>

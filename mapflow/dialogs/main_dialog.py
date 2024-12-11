@@ -443,7 +443,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             user_role = UserRole.owner
         # Disable processing panel
         if not user_role.can_start_processing:
-            reason = self.tr('Not enougth rights to start processing in a shared project ({})').format(user_role)
+            reason = self.tr('Not enough rights to start processing in a shared project ({})').format(user_role)
         else:
             reason = ""
         self.disable_processing_start(reason, clear_area=True)
@@ -456,13 +456,13 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.rateProcessingLabel.setText(self.tr('Rate processing:'))
         self.ratingComboBox.setCurrentIndex(0)
         if not user_role.can_delete_rename_review_processing:
-            self.enable_rating(False, False, self.tr('Not enougth rights to rate processing in a shared project ({})').format(user_role))
+            self.enable_rating(False, False, self.tr('Not enough rights to rate processing in a shared project ({})').format(user_role))
         else:
             self.enable_rating(False, True, self.tr('Please select processing'))
         # Disable processing deletion
         self.deleteProcessings.setEnabled(user_role.can_delete_rename_review_processing)
         if not user_role.can_delete_rename_review_processing:
-            self.deleteProcessings.setToolTip(self.tr('Not enougth rights to delete processing in a shared project ({})').format(user_role))
+            self.deleteProcessings.setToolTip(self.tr('Not enough rights to delete processing in a shared project ({})').format(user_role))
         else:
             self.deleteProcessings.setToolTip('')
         # And remove/add back renaming option from save options menu
