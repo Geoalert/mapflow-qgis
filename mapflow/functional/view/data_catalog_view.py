@@ -152,7 +152,6 @@ class DataCatalogView(QObject):
             name_item.setData(Qt.DisplayRole, image.filename)
             self.dlg.imageTable.setItem(row, 1, name_item)
         self.dlg.imageTable.setHorizontalHeaderLabels(["ID", self.tr("Images")])
-        self.dlg.imageTable.sortItems(1, Qt.AscendingOrder)
         if len(images) == 0:
             self.dlg.previewMosaicButton.setEnabled(False)
             self.dlg.showImagesButton.setEnabled(False)
@@ -160,6 +159,7 @@ class DataCatalogView(QObject):
             self.dlg.previewMosaicButton.setEnabled(True)
             self.dlg.showImagesButton.setEnabled(True)
         self.dlg.imageTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.dlg.imageTable.sortItems(1, Qt.AscendingOrder)
 
     def show_preview_s(self, preview_image):
         self.dlg.imagePreview.setPixmap(QPixmap.fromImage(preview_image))

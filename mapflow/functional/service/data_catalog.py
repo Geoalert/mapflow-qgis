@@ -254,14 +254,10 @@ class DataCatalogService(QObject):
         self.api.get_image(image_id=image_id, callback=callback)
 
     def delete_image(self, selected_images):
-        # Store widgets before deleting a row
-        self.view.contain_image_cell_buttons()
-        # Delete images
         images = {}
         for image in selected_images:
             images[image.id] = image.filename
         self.delete_images(response = None, images=list(images.items()), deleted=[], failed=[])
-        self.dlg.imageTable.clearSelection()
 
     def delete_images(self, 
                       response: QNetworkReply, 
@@ -274,6 +270,9 @@ class DataCatalogService(QObject):
             mosaic_id = self.selected_mosaic().id
             self.get_mosaic(mosaic_id)
             self.get_mosaic_images(mosaic_id)
+            # Store widgets before deleting a row
+            self.view.contain_image_cell_buttons()
+            self.dlg.imageTable.clearSelection()
         else:
             image_to_delete = images[0]
             non_deleted = images[1:] 
