@@ -293,6 +293,8 @@ class DataCatalogService(QObject):
         image_names = []
         for image in images:
             image_names.append(image.filename)
+        if len(image_names) == 0:
+            return
         if len(image_names) == 1:
             message = self.tr("<center>Delete image <b>'{name}'</b> from '{mosaic}' mosaic?"
                               .format(name=image_names[0], mosaic=mosaic.name))
@@ -379,8 +381,6 @@ class DataCatalogService(QObject):
             self.confirm_image_deletion()
         elif mosaic:
             self.confirm_mosaic_deletion()
-        else:
-            return
         
     def check_catalog_selection(self):
         if self.dlg.mosaicTable.selectionModel().hasSelection():
