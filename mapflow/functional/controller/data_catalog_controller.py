@@ -10,31 +10,32 @@ class DataCatalogController(QObject):
         self.service = data_catalog_service
         self.view = DataCatalogView(self.dlg)
 
-        # At first, when mosaic and image are not selected, make buttons unavailable
-        self.dlg.previewMosaicButton.setEnabled(False)
-        self.dlg.editMosaicButton.setEnabled(False)
-        self.dlg.deleteMosaicButton.setEnabled(False)
-        self.dlg.addImageButton.setEnabled(False)
-        self.dlg.deleteImageButton.setEnabled(False)
-        self.dlg.imagePreviewButton.setEnabled(False)
-        self.dlg.imageInfoButton.setEnabled(False)
+        # At first, when mosaic and image are not selected, make buttons unavailable or hidden
+        self.dlg.deleteCatalogButton.setEnabled(False)
+        self.dlg.seeMosaicsButton.setEnabled(False)
+        self.dlg.seeImagesButton.setEnabled(False)
 
         # Mosaic
-        self.dlg.mosaicTable.cellClicked.connect(self.service.mosaic_clicked)
-        self.dlg.previewMosaicButton.clicked.connect(self.service.mosaic_preview)
-        self.dlg.addMosaicButton.clicked.connect(self.service.create_mosaic)
         self.dlg.editMosaicButton.clicked.connect(self.service.update_mosaic)
-        self.dlg.deleteMosaicButton.clicked.connect(self.service.delete_mosaic)
-        self.dlg.mosaicTable.selectionModel().selectionChanged.connect(self.view.check_mosaic_selection)
+        self.dlg.previewMosaicButton.clicked.connect(self.service.mosaic_preview)
+        self.dlg.mosaicTable.selectionModel().selectionChanged.connect(self.service.check_catalog_selection)
+        self.dlg.showImagesButton.clicked.connect(self.view.switch_catalog_table)
+        self.dlg.seeImagesButton.clicked.connect(self.view.switch_catalog_table)
+        self.dlg.mosaicTable.cellDoubleClicked.connect(self.view.switch_catalog_table)
 
         # Image
         self.dlg.imageTable.cellClicked.connect(self.service.image_clicked)
-        self.dlg.imagePreviewButton.clicked.connect(self.service.get_image_preview_l)
         self.dlg.addImageButton.setMenu(self.view.upload_image_menu)
         self.view.upload_from_file.triggered.connect(self.service.upload_images_to_mosaic)
         self.view.choose_raster_layer.triggered.connect(self.service.choose_raster_layers)
-        self.dlg.deleteImageButton.clicked.connect(self.service.delete_image)
         self.dlg.imageInfoButton.clicked.connect(self.service.image_info)
-        self.dlg.imageTable.selectionModel().selectionChanged.connect(self.view.check_image_selection)
+        self.dlg.previewImageButton.clicked.connect(self.service.get_image_preview_l)
+        self.dlg.imageTable.selectionModel().selectionChanged.connect(self.service.check_catalog_selection)
+        self.dlg.seeMosaicsButton.clicked.connect(self.view.switch_catalog_table)
 
+        # Mosaic or image (depending on selection)
+        self.dlg.addCatalogButton.clicked.connect(self.service.add_mosaic_or_image)
+        self.dlg.deleteCatalogButton.clicked.connect(self.service.delete_mosaic_or_image)
+
+        # Show free and taken space if limit is not None
         self.service.mosaicsUpdated.connect(self.service.get_user_limit)

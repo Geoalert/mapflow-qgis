@@ -517,7 +517,7 @@ class Mapflow(QObject):
             return
         provider_names = [p.name for p in self.providers]
         self.dlg.set_raster_sources(provider_names=provider_names,
-                                    default_provider_names=['Mapbox', '🌎 Mapbox Satellite'])
+                                    default_provider_names=['Mapbox', '🌍 Mapbox Satellite'])
 
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
         """Filter out the metadata table and layer every time user changes a filter."""
@@ -1615,6 +1615,8 @@ class Mapflow(QObject):
                                                       clear_area=True)
         else:
             self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+        # If different provider is chosen, set it to My imagery
+        self.data_catalog_service.set_catalog_provider(self.providers)
 
     def calculate_aoi_area_selection(self, _: List[QgsFeature]) -> None:
         """Get the AOI size when the selection changed on a polygon layer.

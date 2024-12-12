@@ -1,4 +1,5 @@
 from typing import Union, Callable, Optional
+import json
 from pathlib import Path
 from uuid import UUID
 
@@ -54,7 +55,7 @@ class DataCatalogApi(QObject):
     def get_mosaic(self, mosaic_id: UUID, callback: Callable):
         self.http.get(url=f"{self.server}/rasters/mosaic/{mosaic_id}",
                       callback=callback,
-                      use_default_error_handler=True
+                      use_default_error_handler=False
                      )
     
     def update_mosaic(self, mosaic_id, mosaic: MosaicUpdateSchema, callback: Callable, callback_kwargs: Optional[dict] = None):
@@ -70,12 +71,29 @@ class DataCatalogApi(QObject):
     def delete_mosaic(self,
                       mosaic_id: UUID,
                       callback: Callable = lambda *args: None,
-                      callback_kwargs: Optional[dict] = None):
+                      callback_kwargs: Optional[dict] = None,
+                      error_handler: Optional[Callable] = None,
+                      error_handler_kwargs: Optional[dict] = None):
         self.http.delete(url=f"{self.server}/rasters/mosaic/{mosaic_id}",
                          callback=callback,
-                         use_default_error_handler=True,
-                         callback_kwargs=callback_kwargs or {}
+                         callback_kwargs=callback_kwargs or {},
+                         use_default_error_handler=error_handler is None,
+                         error_handler=error_handler,
+                         error_handler_kwargs=error_handler_kwargs or {}
                         )
+
+    def delete_mosaic_error_handler(self, response: QNetworkReply, mosaic_name: str):
+        response_body = response.readAll().data()
+        message = self.tr("Could not delete mosaic '{mosaic_name}'".format(mosaic_name=mosaic_name))
+        title = self.tr("Error")
+        if isinstance(json.loads(response_body).get('detail', {}), dict):
+            if json.loads(response_body).get('detail', {}).get('code') == "ItemNotFound":
+                message = self.tr("Mosaic '{mosaic_name}' does not exist".format(mosaic_name=mosaic_name))
+                title = self.tr("Error: could not delete mosaic")
+        ErrorMessageWidget(parent=QApplication.activeWindow(),
+                           text=message,
+                           title=title,
+                           email_body='').show()
         
     def request_mosaic_extent(self,
                               tilejson_uri: str,
@@ -162,21 +180,31 @@ class DataCatalogApi(QObject):
         connection = response.uploadProgress.connect(display_upload_progress)
         progressMessageBar.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
 
-    def upload_image_error_handler(self, response: QNetworkReply, image_paths: list):
+    def upload_image_error_handler(self, response: QNetworkReply, mosaic_name: str, image_paths: list):
         response_body = response.readAll().data().decode()
         error_summary, email_body = get_error_report_body(response=response,
                                                           response_body=response_body,
                                                           plugin_version=self.plugin_version,
                                                           error_message_parser=data_catalog_message_parser)
+        if isinstance(json.loads(response_body).get('detail', {}), dict):
+            if json.loads(response_body).get('detail', {}).get('code') == "FileValidationFailed":
+                error_summary = self.tr("The image does not meet this mosaic paremeters. \n"
+                                        "Either modify your image or upload it to a different mosaic")
+            if json.loads(response_body).get('detail', {}).get('code') == "ItemNotFound":
+                error_summary = self.tr("Mosaic '{mosaic_name}' does not exist".format(mosaic_name=mosaic_name))
+        if len(image_paths) == 1:
+            message = self.tr("Could not upload '{image}' to mosaic".format(image=image_paths[0]))
+        else:
+            message = self.tr("Could not upload following images:\n{images}".format(images= ', \n'.join(image_paths)))
         ErrorMessageWidget(parent=QApplication.activeWindow(),
                            text= error_summary,
-                           title='Error. Could not upload {images} to mosaic'.format(images=str(image_paths)[1:-1]),
+                           title=message,
                            email_body=email_body).show()
 
     def get_mosaic_images(self, mosaic_id: UUID, callback: Callable):
         self.http.get(url=f"{self.server}/rasters/mosaic/{mosaic_id}/image",
                       callback=callback,
-                      use_default_error_handler=True
+                      use_default_error_handler=False
                      )
 
     def get_image(self, image_id: UUID, callback: Callable):
@@ -200,9 +228,15 @@ class DataCatalogApi(QObject):
                         )
 
     def delete_image_error_handler(self, image_paths: list):
+        if len(image_paths) == 1:
+            title = self.tr("Error")
+            message = self.tr("Could not delete '{image}' from mosaic".format(image=image_paths[0]))
+        else:
+            title = self.tr("Error. Could not delete following images:")
+            message = ', \n'.join(image_paths)
         ErrorMessageWidget(parent=QApplication.activeWindow(),
-                           text=f'Could not delete {str(image_paths)[1:-1]} from mosaic',
-                           title=f'Error',
+                           text=message,
+                           title=title,
                            email_body='').show()
 
     def get_image_preview(self,
@@ -223,13 +257,13 @@ class DataCatalogApi(QObject):
                             image: ImageReturnSchema,
                             extent: QgsRectangle,
                             callback: Callable,
-                            image_id: str = ""):
+                            image_name: str = ""):
         self.http.get(url=image.preview_url_l,
                       callback=callback,
                       use_default_error_handler=False,
                       error_handler=self.image_preview_l_error_handler,
                       callback_kwargs={"extent": extent,
-                                       "image_id": image_id}
+                                       "image_name": image_name}
                      )
 
     def image_preview_l_error_handler(self, response: QNetworkReply):
