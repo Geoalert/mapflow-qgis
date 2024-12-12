@@ -204,12 +204,12 @@ class DataCatalogService(QObject):
         else:
             image_to_upload = image_paths[0]
             non_uploaded = image_paths[1:]
-            # When first failed image occures, stop uploading if mosaic was deleted
-            if len(failed)== 1:
-                if self.get_mosaic(mosaic_id) is None:
-                    failed += [image_to_upload] + non_uploaded
-                    self.api.upload_image_error_handler(response=response, mosaic_name=mosaic_name, image_paths=failed)
-                    return
+            # Stop uploading if mosaic was deleted
+            if failed and response.error() == 203: # ContentNotFoundError (like 404)
+                failed += [image_to_upload] + non_uploaded
+                self.api.upload_image_error_handler(response=response, mosaic_name=mosaic_name, image_paths=failed)
+                self.get_mosaics()
+                return
             # Check if raster to be uploaded meets restrictions
             layer = QgsRasterLayer(image_to_upload, "rasterLayerCheck", 'gdal')
             if not helpers.raster_layer_is_allowed(layer, self.image_max_size_pixels, self.image_max_size_bytes):
