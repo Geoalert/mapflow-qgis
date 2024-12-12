@@ -128,26 +128,15 @@ class DataCatalogService(QObject):
         if box_exec == QMessageBox.Ok:
             self.delete_mosaic(mosaic)
 
-    def mosaic_clicked(self):
-        if not self.dlg.mosaicTable.selectedIndexes():
-            return
-        if self.dlg.selected_mosaic_cell is not None:
-            if self.dlg.mosaicTable.selectedIndexes()[0] == self.dlg.selected_mosaic_cell:
-                return # i.e. do noting when clicking on the same cell
-        else: # assign selected cell if it is None
-            self.dlg.selected_mosaic_cell = self.dlg.mosaicTable.selectedIndexes()[0]
-        mosaic = self.selected_mosaic()
-        if not mosaic:
-            return
+    def on_mosaic_selection(self, mosaic: MosaicReturnSchema):
+        self.dlg.selected_mosaic_cell = self.dlg.mosaicTable.selectedIndexes()[0]
         self.get_mosaic_images(mosaic.id)
         # Store widgets before deleting previous mosaic's image table
         self.view.contain_image_cell_buttons()
+        self.view.show_mosaic_info(mosaic.name)
         # Clear previous image details
         self.dlg.imageTable.clearSelection()
-        self.dlg.imageTable.setRowCount(0)
-        self.dlg.imagePreview.setText("")
         # Assing newly selected cell
-        self.dlg.selected_mosaic_cell = self.dlg.mosaicTable.selectedIndexes()[0]
 
     def mosaic_preview(self):
         try:
@@ -316,12 +305,9 @@ class DataCatalogService(QObject):
         if box_exec == QMessageBox.Ok:
             self.delete_image(images)
 
-    def image_clicked(self):
-        image = self.selected_image()
-        if not image:
-            return
+    def on_image_selection(self, image: ImageReturnSchema):
         self.view.display_image_info(image)
-        self.get_image_preview_s(image, PreviewSize.small)
+        self.get_image_preview_s(image)
         self.view.add_image_cell_buttons()
         return image
 
@@ -332,9 +318,10 @@ class DataCatalogService(QObject):
         self.view.full_image_info(image=image)
 
     def get_image_preview_s(self,
-                            image: ImageReturnSchema,
-                            size: PreviewSize):
-        self.api.get_image_preview(image=image, size=PreviewSize.small, callback=self.get_image_preview_s_callback)
+                            image: ImageReturnSchema):
+        self.api.get_image_preview(image=image,
+                                   size=PreviewSize.small,
+                                   callback=self.get_image_preview_s_callback)
 
     def get_image_preview_s_callback(self, response: QNetworkReply):
         image = QImage.fromData(response.readAll().data())
@@ -344,7 +331,10 @@ class DataCatalogService(QObject):
         try:
             image = self.selected_image()
             extent = layer_utils.footprint_to_extent(image.footprint)
-            self.api.get_image_preview_l(image=image, extent=extent, callback=self.display_image_preview, image_name=image.filename)
+            self.api.get_image_preview_l(image=image,
+                                         extent=extent,
+                                         callback=self.display_image_preview,
+                                         image_name=image.filename)
         except AttributeError:
             return
 
@@ -374,7 +364,6 @@ class DataCatalogService(QObject):
         self.iface.setActiveLayer(layer)
         self.iface.zoomToActiveLayer()
 
-
     # Functions that depend on mosaic or image selection
     def add_mosaic_or_image(self):
         if self.dlg.stackedLayout.currentIndex() == 0:
@@ -387,21 +376,28 @@ class DataCatalogService(QObject):
             self.confirm_image_deletion()
         elif mosaic:
             self.confirm_mosaic_deletion()
-        
-    def check_catalog_selection(self):
-        if self.dlg.mosaicTable.selectionModel().hasSelection():
-            self.mosaic_clicked()
-        image = self.selected_image()
-        mosaic = self.selected_mosaic()
-        image_name = None
-        mosaic_name = None
-        if image:
-            image_name = image.filename
-        elif mosaic:
-            mosaic_name = mosaic.name
-            self.view.display_mosaic_info(mosaic, self.images)
-        self.view.check_mosaic_or_image_selection(mosaic_name, image_name)
 
+    def switch_to_images_table(self):
+        self.view.show_images_table()
+        self.check_image_selection()
+
+    def switch_to_mosaics_table(self):
+        self.view.show_mosaics_table()
+        self.check_mosaic_selection()
+
+    def check_image_selection(self):
+        image = self.selected_image()
+        if image:
+            self.on_image_selection(image)
+        else:
+            self.view.clear_image_info()
+
+    def check_mosaic_selection(self):
+        mosaic = self.selected_mosaic()
+        if mosaic:
+            self.on_mosaic_selection(mosaic)
+        else:
+            self.view.clear_mosaic_info()
 
     # Legacy:
     def upload_to_new_mosaic(self,
@@ -409,7 +405,6 @@ class DataCatalogService(QObject):
                              callback: Callable):
         self.api.upload_to_new_mosaic(image_path=image_path,
                                       callback=callback)
-
 
     # Status
     def get_user_limit(self):
