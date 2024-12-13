@@ -365,7 +365,7 @@ class DataCatalogService(QObject):
 
     # Functions that depend on mosaic or image selection
     def add_mosaic_or_image(self):
-        if self.view.mosaic_table_visible:
+        if self.view.mosaic_table_visible == 0:
             self.create_mosaic()
         else:
             self.upload_images_to_mosaic()

@@ -238,8 +238,6 @@ class DataCatalogView(QObject):
         # Show widgets
         self.show_cell_widgets(mosaic=False, on=True)
         self.dlg.deleteCatalogButton.setEnabled(True)
-        self.set_table_tooltip(self.dlg.imageTable)
-
 
     def clear_image_info(self):
         self.dlg.catalogSelectionLabel.setText(self.tr("No image selected"))

@@ -24,7 +24,7 @@ class DataCatalogController(QObject):
         self.dlg.mosaicTable.cellDoubleClicked.connect(self.view.show_images_table)
 
         # Image
-        self.dlg.addImageButton.setMenu(self.view.upload_image_menu)
+        #self.dlg.addImageButton.setMenu(self.view.upload_image_menu)
         self.view.upload_from_file.triggered.connect(self.service.upload_images_to_mosaic)
         self.view.choose_raster_layer.triggered.connect(self.service.choose_raster_layers)
         self.dlg.imageInfoButton.clicked.connect(self.service.image_info)
