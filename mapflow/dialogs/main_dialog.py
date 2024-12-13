@@ -109,7 +109,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.mosaicSpacers = [QLabel(), QLabel(), QLabel()]
         for spacer in self.mosaicSpacers+[self.imageSpacer]:
             spacer.setFixedSize(3,26)
-            spacer.setStyleSheet("background-color: rgb(23,133,220);")
+            highlight_color = self.mosaicTable.palette().highlight().color().name()
+            spacer.setStyleSheet("background-color:" + highlight_color + ";")
 
     # ===== Settings management ===== #
     def save_view_results_mode(self):
