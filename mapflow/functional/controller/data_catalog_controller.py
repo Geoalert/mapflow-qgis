@@ -1,6 +1,5 @@
 from PyQt5.QtCore import QObject, QTimer
 from ..service.data_catalog import DataCatalogService
-from ..view.data_catalog_view import DataCatalogView
 from ...dialogs.main_dialog import MainDialog
 
 
@@ -8,7 +7,7 @@ class DataCatalogController(QObject):
     def __init__(self, dlg: MainDialog, data_catalog_service: DataCatalogService):
         self.dlg = dlg
         self.service = data_catalog_service
-        self.view = DataCatalogView(self.dlg)
+        self.view = self.service.view
 
         # At first, when mosaic and image are not selected, make buttons unavailable or hidden
         self.dlg.deleteCatalogButton.setEnabled(False)

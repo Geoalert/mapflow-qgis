@@ -67,7 +67,7 @@ class DataCatalogService(QObject):
 
     def create_mosaic_callback(self, response: QNetworkReply):
         self.get_mosaics()
-        self.dlg.mosaicTable.clearSelection()
+
 
     def get_mosaics(self):
         self.api.get_mosaics(callback=self.get_mosaics_callback)
@@ -106,9 +106,6 @@ class DataCatalogService(QObject):
         self.get_mosaic(mosaic.id)        
 
     def delete_mosaic(self, mosaic):
-        # Store widgets before deleting a row
-        self.view.contain_mosaic_cell_buttons()
-        # Delete mosaic
         self.api.delete_mosaic(mosaic_id=mosaic.id,
                                callback=self.delete_mosaic_callback,
                                callback_kwargs={'mosaic_id': mosaic.id},
@@ -117,8 +114,6 @@ class DataCatalogService(QObject):
 
     def delete_mosaic_callback(self, response: QNetworkReply, mosaic_id: UUID):
         self.get_mosaics()
-        self.mosaics.pop(mosaic_id)
-        self.dlg.mosaicTable.clearSelection()
 
     def confirm_mosaic_deletion(self):
         mosaic = self.selected_mosaic()
@@ -131,9 +126,9 @@ class DataCatalogService(QObject):
 
     def on_mosaic_selection(self, mosaic: MosaicReturnSchema):
         self.dlg.selected_mosaic_cell = self.dlg.mosaicTable.selectedIndexes()[0]
+        self.view.add_mosaic_cell_buttons()
         self.get_mosaic_images(mosaic.id)
         # Store widgets before deleting previous mosaic's image table
-        self.view.contain_image_cell_buttons()
         self.view.show_mosaic_info(mosaic.name)
         # Clear previous image details
         self.dlg.imageTable.clearSelection()
@@ -190,7 +185,6 @@ class DataCatalogService(QObject):
                 self.api.upload_image_error_handler(response=response, mosaic_name=mosaic_name, image_paths=failed)
             self.get_mosaic_images(mosaic_id)
             self.mosaicsUpdated.emit()
-            # Doesn't actually deselect, but allows to reload cellWidget
         else:
             image_to_upload = image_paths[0]
             non_uploaded = image_paths[1:]
@@ -260,10 +254,8 @@ class DataCatalogService(QObject):
                       deleted: List[str], 
                       failed: List[str]):
         if len(images) == 0:
-            # Store widgets before deleting a row
             if failed:
                 self.api.delete_image_error_handler(image_paths=failed)
-            self.view.contain_image_cell_buttons()
             mosaic_id = self.selected_mosaic().id
             self.get_mosaic_images(mosaic_id)
             self.dlg.imageTable.clearSelection()
@@ -306,8 +298,8 @@ class DataCatalogService(QObject):
 
     def on_image_selection(self, image: ImageReturnSchema):
         self.view.show_image_info(image)
-        self.get_image_preview_s(image)
         self.view.add_image_cell_buttons()
+        self.get_image_preview_s(image)
         return image
 
     def image_info(self):
@@ -394,13 +386,6 @@ class DataCatalogService(QObject):
             self.on_mosaic_selection(mosaic)
         else:
             self.view.clear_mosaic_info()
-
-    # Legacy:
-    def upload_to_new_mosaic(self,
-                             image_path: Union[Path, str],
-                             callback: Callable):
-        self.api.upload_to_new_mosaic(image_path=image_path,
-                                      callback=callback)
 
     # Status
     def get_user_limit(self):
