@@ -190,6 +190,8 @@ class DataCatalogService(QObject):
             self.get_mosaic(mosaic_id)
             self.get_mosaic_images(mosaic_id)
             self.mosaicsUpdated.emit()
+            # Doesn't actually deselect, but allows to reload cellWidget
+            self.dlg.mosaicTable.clearSelection()
         else:
             image_to_upload = image_paths[0]
             non_uploaded = image_paths[1:]
