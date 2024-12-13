@@ -83,13 +83,11 @@ class DataCatalogApi(QObject):
                         )
 
     def delete_mosaic_error_handler(self, response: QNetworkReply, mosaic_name: str):
-        response_body = response.readAll().data()
         message = self.tr("Could not delete mosaic '{mosaic_name}'".format(mosaic_name=mosaic_name))
         title = self.tr("Error")
-        if isinstance(json.loads(response_body).get('detail', {}), dict):
-            if json.loads(response_body).get('detail', {}).get('code') == "ItemNotFound":
-                message = self.tr("Mosaic '{mosaic_name}' does not exist".format(mosaic_name=mosaic_name))
-                title = self.tr("Error: could not delete mosaic")
+        if response.error() == 203: # ContentNotFoundError (like 404)
+            message = self.tr("Mosaic '{mosaic_name}' does not exist".format(mosaic_name=mosaic_name))
+            title = self.tr("Error: could not delete mosaic")
         ErrorMessageWidget(parent=QApplication.activeWindow(),
                            text=message,
                            title=title,
@@ -186,12 +184,15 @@ class DataCatalogApi(QObject):
                                                           response_body=response_body,
                                                           plugin_version=self.plugin_version,
                                                           error_message_parser=data_catalog_message_parser)
-        if isinstance(json.loads(response_body).get('detail', {}), dict):
-            if json.loads(response_body).get('detail', {}).get('code') == "FileValidationFailed":
-                error_summary = self.tr("The image does not meet this mosaic paremeters. \n"
-                                        "Either modify your image or upload it to a different mosaic")
-            if json.loads(response_body).get('detail', {}).get('code') == "ItemNotFound":
-                error_summary = self.tr("Mosaic '{mosaic_name}' does not exist".format(mosaic_name=mosaic_name))
+        if response.error() == 201: # ContentAccessDenied (like 403)
+            error_summary = self.tr("This operation is forbidden for your account, contact us")
+        if response.error() == 203: # ContentNotFoundError (like 404)
+            error_summary = self.tr("Mosaic '{mosaic_name}' does not exist".format(mosaic_name=mosaic_name))
+        if response.error() == 204: # AuthenticationRequiredError (like 401)
+            error_summary = self.tr("Authentication error. Please log in to your account")
+        if response.error() == 299: # UnknownContentError
+            error_summary = self.tr("The image does not meet mosaic '{mosaic_name}' paremeters. \n"
+                                    "Either modify your image or upload it to a different mosaic".format(mosaic_name=mosaic_name))
         if len(image_paths) == 1:
             message = self.tr("Could not upload '{image}' to mosaic".format(image=image_paths[0]))
         else:

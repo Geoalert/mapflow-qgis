@@ -204,8 +204,8 @@ class DataCatalogService(QObject):
         else:
             image_to_upload = image_paths[0]
             non_uploaded = image_paths[1:]
-            # Stop uploading if mosaic was deleted
-            if failed and response.error() == 203: # ContentNotFoundError (like 404)
+            # Check for erros that should stop further uploading
+            if failed and response.error() in (201, 203, 204):
                 failed += [image_to_upload] + non_uploaded
                 self.api.upload_image_error_handler(response=response, mosaic_name=mosaic_name, image_paths=failed)
                 self.get_mosaics()
