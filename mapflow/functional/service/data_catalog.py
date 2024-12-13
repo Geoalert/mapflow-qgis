@@ -377,10 +377,6 @@ class DataCatalogService(QObject):
         elif mosaic:
             self.confirm_mosaic_deletion()
 
-    def switch_to_images_table(self):
-        self.view.show_images_table()
-        self.check_image_selection()
-
     def switch_to_mosaics_table(self):
         self.view.show_mosaics_table()
         self.check_mosaic_selection()
@@ -437,8 +433,8 @@ class DataCatalogService(QObject):
         return first[0]
         
     def selected_images(self, limit=None) -> List[MosaicReturnSchema]:
-        indices = self.view.selected_images_indecies(limit=limit)
-        images = [i for i in self.images if self.images.index(i) in indices]
+        ids = self.view.selected_images_indecies(limit=limit)
+        images = [i for i in self.images if i.id in ids]
         return images
 
     def selected_image(self) -> Optional[ImageReturnSchema]:
