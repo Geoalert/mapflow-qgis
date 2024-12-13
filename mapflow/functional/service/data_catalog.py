@@ -175,7 +175,7 @@ class DataCatalogService(QObject):
     def upload_raster_layers_to_mosaic(self, layers_paths):
         mosaic = self.selected_mosaic()
         if layers_paths:
-            self.upload_images(response=None, mosaic_id=mosaic.id, image_paths=layers_paths, uploaded=[], failed=[])
+            self.upload_images(response=None, mosaic_id=mosaic.id, mosaic_name=mosaic.name, image_paths=layers_paths, uploaded=[], failed=[])
 
     def choose_raster_layers(self):
         dialog = UploadRasterLayersDialog(self.dlg)
