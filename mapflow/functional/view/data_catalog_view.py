@@ -1,4 +1,5 @@
 from typing import List, Optional
+import sys
 
 from ...dialogs.main_dialog import MainDialog
 from PyQt5.QtCore import QObject, Qt
@@ -86,6 +87,10 @@ class DataCatalogView(QObject):
             self.dlg.mosaicTable.setHorizontalHeaderLabels(["ID", self.tr("Mosaics")])
         self.dlg.mosaicTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.dlg.mosaicTable.sortItems(1, Qt.AscendingOrder)
+        # Set show-images tooltip for mosaics' cells
+        for row in range(self.dlg.mosaicTable.rowCount()):
+            item = self.dlg.mosaicTable.item(row, 1)
+            item.setToolTip(self.tr("Double-click to show images"))
         
     def display_mosaic_info(self, mosaic: MosaicReturnSchema, images: list[ImageReturnSchema]):
         if not mosaic:
@@ -258,10 +263,12 @@ class DataCatalogView(QObject):
     def set_table_tooltip(self, table):
         for row in range(table.rowCount()):
             item = table.item(row, 1)
-            if item.isSelected():
-                item.setToolTip(self.tr("'Ctrl' + click to deselect"))
-            else:
-                item.setToolTip("")
+            if item.isSelected(): # set deselection tooltip for both tables' selected items
+                text = self.tr("'Cmd' + click to deselect") if sys.platform == 'darwin' else self.tr("'Ctrl' + click to deselect")
+                item.setToolTip(text)
+            else: # when not selected, set show-images tooltip for mosaics and none for images
+                text = self.tr("Double-click to show images") if table == self.dlg.mosaicTable else ""
+                item.setToolTip(text)
 
     def show_images_table(self):
         row = self.dlg.selected_mosaic_cell.row()
