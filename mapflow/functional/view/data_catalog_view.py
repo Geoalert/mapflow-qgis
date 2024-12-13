@@ -56,6 +56,10 @@ class DataCatalogView(QObject):
         self.dlg.catalogSelectionLabel.setWordWrap(True)
         self.dlg.imagePreview.setWordWrap(True)
 
+    @property
+    def mosaic_table_visible(self):
+        return self.dlg.stackedLayout.currentIndex() == 0
+
     def display_mosaics(self, mosaics: list[MosaicReturnSchema]):
         if not mosaics:
             return
@@ -101,30 +105,6 @@ class DataCatalogView(QObject):
                                 tags=tags_str))
         self.dlg.imagePreview.setText(text)
         self.dlg.imagePreview.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
-
-    def display_image_info(self, image: ImageReturnSchema):
-        if not image:
-            return
-        self.dlg.catalogInfo.setText(self.tr("uploaded: {date} at {time} \n"
-                                             "file size: {size} MB \n"
-                                             "pixel size: {pixel_size} m \n"
-                                             "bands: {count}"
-                                             .format(date=image.uploaded_at.date(),
-                                                     time=image.uploaded_at.strftime('%H:%M'),
-                                                     size=round(image.file_size/1048576, 1),
-                                                     pixel_size=round(sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6]), 2),
-                                                     count=list(image.meta_data.values())[1])))
-        self.dlg.catalogSelectionLabel.setText(self.tr("Selected image: <b>{image_name}".format(
-            image_name=self.dlg.imagePreview.fontMetrics().elidedText(
-                image.filename,
-                Qt.ElideRight,
-                self.dlg.imagePreview.width() - 10))))
-        # Enable buttons
-        self.dlg.deleteCatalogButton.setEnabled(True)
-        # Show widgets
-        self.show_cell_widgets(mosaic=False, on=True)
-        self.set_table_tooltip(self.dlg.imageTable)
-
 
     def full_image_info(self, image: ImageReturnSchema):
         try:
@@ -228,8 +208,8 @@ class DataCatalogView(QObject):
         self.set_table_tooltip(self.dlg.mosaicTable)
 
     def clear_mosaic_info(self):
-        self.dlg.catalogInfo.setText("")
-        self.dlg.imagePreview.setText("")
+        self.dlg.catalogInfo.clear()
+        self.dlg.imagePreview.clear()
         self.dlg.catalogSelectionLabel.setText(self.tr("No mosaic selected"))
         # Disable buttons
         self.dlg.deleteCatalogButton.setEnabled(False)
@@ -238,10 +218,32 @@ class DataCatalogView(QObject):
         self.show_cell_widgets(mosaic=True, on=False)
         self.set_table_tooltip(self.dlg.mosaicTable)
 
+    def show_image_info(self, image: ImageReturnSchema):
+        if not image:
+            return
+        self.dlg.catalogInfo.setText(self.tr("uploaded: {date} at {time} \n"
+                                             "file size: {size} MB \n"
+                                             "pixel size: {pixel_size} m \n"
+                                             "bands: {count}"
+                                             .format(date=image.uploaded_at.date(),
+                                                     time=image.uploaded_at.strftime('%H:%M'),
+                                                     size=round(image.file_size/1048576, 1),
+                                                     pixel_size=round(sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6]), 2),
+                                                     count=list(image.meta_data.values())[1])))
+        self.dlg.catalogSelectionLabel.setText(self.tr("Selected image: <b>{image_name}".format(
+            image_name=self.dlg.imagePreview.fontMetrics().elidedText(
+                image.filename,
+                Qt.ElideRight,
+                self.dlg.imagePreview.width() - 10))))
+        # Show widgets
+        self.show_cell_widgets(mosaic=False, on=True)
+        self.dlg.deleteCatalogButton.setEnabled(True)
+
     def clear_image_info(self):
         self.dlg.catalogSelectionLabel.setText(self.tr("No image selected"))
         self.dlg.deleteCatalogButton.setEnabled(False)
-        self.dlg.imagePreview.setText("")
+        self.dlg.imagePreview.clear()
+        self.dlg.catalogInfo.clear()
         self.show_cell_widgets(mosaic=False, on=False)
         self.set_table_tooltip(self.dlg.imageTable)
 

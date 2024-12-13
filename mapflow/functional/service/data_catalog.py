@@ -89,7 +89,8 @@ class DataCatalogService(QObject):
         self.mosaicsUpdated.emit()
         self.view.display_mosaics(list(self.mosaics.values())) 
         # Go to the right cell in case sorting changed items' order
-        self.view.select_mosaic_cell(mosaic.id)
+        if self.view.mosaic_table_visible:
+            self.view.select_mosaic_cell(mosaic.id)
 
     def update_mosaic(self):
         mosaic = self.selected_mosaic()
@@ -113,11 +114,11 @@ class DataCatalogService(QObject):
                                callback_kwargs={'mosaic_id': mosaic.id},
                                error_handler=self.api.delete_mosaic_error_handler,
                                error_handler_kwargs={'mosaic_name': mosaic.name})
-        self.dlg.mosaicTable.clearSelection()
 
     def delete_mosaic_callback(self, response: QNetworkReply, mosaic_id: UUID):
         self.get_mosaics()
         self.mosaics.pop(mosaic_id)
+        self.dlg.mosaicTable.clearSelection()
 
     def confirm_mosaic_deletion(self):
         mosaic = self.selected_mosaic()
@@ -245,7 +246,8 @@ class DataCatalogService(QObject):
     def get_mosaic_images_callback(self, response: QNetworkReply):
         self.images = [ImageReturnSchema.from_dict(data) for data in json.loads(response.readAll().data())]
         self.view.display_images(self.images)
-        self.view.display_mosaic_info(self.selected_mosaic(), self.images)
+        if self.view.mosaic_table_visible:
+            self.view.display_mosaic_info(self.selected_mosaic(), self.images)
 
     def get_image(self, image_id: UUID, callback: Callable):
         self.api.get_image(image_id=image_id, callback=callback)
@@ -258,17 +260,16 @@ class DataCatalogService(QObject):
 
     def delete_images(self, 
                       response: QNetworkReply, 
-                      images: List[Tuple[str, str]],
+                      images: List[Tuple[UUID, str]],
                       deleted: List[str], 
                       failed: List[str]):
         if len(images) == 0:
+            # Store widgets before deleting a row
             if failed:
                 self.api.delete_image_error_handler(image_paths=failed)
-            mosaic_id = self.selected_mosaic().id
-            self.get_mosaic(mosaic_id)
-            self.get_mosaic_images(mosaic_id)
-            # Store widgets before deleting a row
             self.view.contain_image_cell_buttons()
+            mosaic_id = self.selected_mosaic().id
+            self.get_mosaic_images(mosaic_id)
             self.dlg.imageTable.clearSelection()
         else:
             image_to_delete = images[0]
@@ -308,7 +309,7 @@ class DataCatalogService(QObject):
             self.delete_image(images)
 
     def on_image_selection(self, image: ImageReturnSchema):
-        self.view.display_image_info(image)
+        self.view.show_image_info(image)
         self.get_image_preview_s(image)
         self.view.add_image_cell_buttons()
         return image
@@ -368,8 +369,10 @@ class DataCatalogService(QObject):
 
     # Functions that depend on mosaic or image selection
     def add_mosaic_or_image(self):
-        if self.dlg.stackedLayout.currentIndex() == 0:
+        if self.view.mosaic_table_visible == 0:
             self.create_mosaic()
+        else:
+            self.upload_images_to_mosaic()
 
     def delete_mosaic_or_image(self):
         image = self.selected_image()
@@ -425,8 +428,8 @@ class DataCatalogService(QObject):
     def selected_mosaics(self, limit=None) -> List[MosaicReturnSchema]:
         ids = self.view.selected_mosaic_ids(limit=limit)
         # limit None will give full selection
-        mosaics = [self.mosaics[id] for id in ids]
-        return mosaics
+        mosaics = (self.mosaics.get(id) for id in ids)
+        return [m for m in mosaics if m is not None]
 
     def selected_mosaic(self) -> Optional[MosaicReturnSchema]:
         first = self.selected_mosaics(limit=1)
@@ -445,13 +448,13 @@ class DataCatalogService(QObject):
             return None
         return first[0]
 
-
     # Provider
     def set_catalog_provider(self, providers):
         """ Sets current provider to 'My imagery' if catalog table cell was clicked.
         """
         # Check current provider
         current_provider = providers[self.dlg.providerIndex()]
+        my_imagery_index = None
         if not isinstance (current_provider, MyImageryProvider):
             # Get index of My imagery provider
             for index in range(len(providers)):
