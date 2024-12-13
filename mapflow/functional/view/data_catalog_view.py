@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from ...dialogs.main_dialog import MainDialog
 from PyQt5.QtCore import QObject, Qt
@@ -238,6 +238,8 @@ class DataCatalogView(QObject):
         # Show widgets
         self.show_cell_widgets(mosaic=False, on=True)
         self.dlg.deleteCatalogButton.setEnabled(True)
+        self.set_table_tooltip(self.dlg.imageTable)
+
 
     def clear_image_info(self):
         self.dlg.catalogSelectionLabel.setText(self.tr("No image selected"))
@@ -298,8 +300,10 @@ class DataCatalogView(QObject):
         self.dlg.deleteCatalogButton.setText(self.tr("Delete image"))
         self.dlg.addCatalogButton.setText(self.tr("Add image"))
         self.dlg.addCatalogButton.setMenu(self.upload_image_menu)
+        # Because we open images table always with empty selection
+        self.clear_image_info()
 
-    def show_mosaics_table(self):
+    def show_mosaics_table(self, selected_mosaic_name: Optional[str]):
         # Save buttons before deleting cells and therefore widgets
         self.contain_image_cell_buttons()
         # En(dis)able buttons and change labels
@@ -313,6 +317,11 @@ class DataCatalogView(QObject):
         self.dlg.imageTable.clearSelection()
         # Show mosaics
         self.dlg.stackedLayout.setCurrentIndex(0)
+        if selected_mosaic_name:
+            self.show_mosaic_info(selected_mosaic_name)
+        else:
+            self.clear_mosaic_info()
+
 
     def add_mosaic_cell_buttons(self):
         # Create layout of mosaic cell buttons
