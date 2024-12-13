@@ -1942,7 +1942,8 @@ class Mapflow(QObject):
                     s3_uri = image.image_url
                 elif mosaic:
                     try:
-                        image_uri = self.data_catalog_service.get_mosaic_images(mosaic.id)[0].image_url
+                        image_uri = self.data_catalog_service.images[0].image_url
+                        # to launch for the whole mosaic we need to use minio path without the filename
                         s3_uri = image_uri.rsplit('/',1)[0]+'/'
                     except:
                         s3_uri = None
@@ -1981,17 +1982,6 @@ class Mapflow(QObject):
         if not processing_params:
             self.alert(error, icon=QMessageBox.Warning)
             return
-        provider = self.providers[self.dlg.providerCombo.currentIndex()]
-        if isinstance(provider, MyImageryProvider):
-            image = self.data_catalog_service.selected_image()
-            mosaic = self.data_catalog_service.selected_mosaic()
-            if image:
-                processing_params.params.url = image.image_url
-            elif mosaic:
-                image_url = self.data_catalog_service.get_mosaic_images(mosaic.id)[0].image_url
-                mosaic_url = image_url.rsplit('/',1)[0]+'/'
-                processing_params.params.url = mosaic_url
-
         if not helpers.check_processing_limit(billing_type=self.billing_type,
                                               remaining_limit=self.remaining_limit,
                                               remaining_credits=self.remaining_credits,
