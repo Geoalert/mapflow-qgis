@@ -377,7 +377,9 @@ class DataCatalogService(QObject):
             self.confirm_mosaic_deletion()
 
     def switch_to_mosaics_table(self):
-        self.view.show_mosaics_table(self.selected_mosaic().name)
+        mosaic = self.selected_mosaic()
+        self.view.show_mosaics_table(mosaic.name)
+        self.view.display_mosaic_info(mosaic, self.images)
 
     def check_image_selection(self):
         image = self.selected_image()

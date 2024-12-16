@@ -2028,6 +2028,7 @@ class Mapflow(QObject):
         """
         # get the data from UI
         processing_params, error = self.create_processing_request()
+        print (processing_params)
         if not processing_params:
             self.alert(error, icon=QMessageBox.Warning)
             return
@@ -2041,7 +2042,7 @@ class Mapflow(QObject):
                                'to top up your balance'),
                        icon=QMessageBox.Warning)
             return
-
+        print (processing_params)
         self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
         try:
             self.post_processing(processing_params)
@@ -3227,7 +3228,7 @@ class Mapflow(QObject):
         dialog.accepted.connect(lambda: self.project_service.create_project(dialog.project()))
         dialog.setup()
         dialog.deleteLater()
-        
+
     def get_project_sharing(self):
         if len(self.dlg.projectsCombo) == 0:
             return

@@ -246,25 +246,12 @@
              <height>26</height>
             </size>
            </property>
-<<<<<<< HEAD
-=======
            <property name="maximumSize">
             <size>
              <width>16777215</width>
              <height>16777215</height>
             </size>
            </property>
-           <property name="showCrs">
-            <bool>true</bool>
-           </property>
-           <property name="excludedProviders">
-            <stringlist notr="true">
-             <string>wms</string>
-             <string>postgresraster</string>
-             <string>grassraster</string>
-            </stringlist>
-           </property>
->>>>>>> master
           </widget>
          </item>
          <item>

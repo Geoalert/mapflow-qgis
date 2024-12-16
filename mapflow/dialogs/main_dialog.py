@@ -525,7 +525,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     def project_controls(self):
         return [self.labelProcessingName, self.processingName,
                 self.labelAoiLayer, self.polygonCombo, self.addAoiButton,
-                self.labelImagerySource, self.rasterCombo, self.zoomCombo, self.searchImageryButton,
+                self.labelImagerySource, self.sourceCombo, self.zoomCombo, self.searchImageryButton,
                 self.labelAiModel, self.labelCoins_1, self.labelWdPrice, self.modelCombo, self.modelInfo,
                 self.modelOptionsLabel,
                 self.startProcessing]
