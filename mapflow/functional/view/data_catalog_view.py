@@ -1,4 +1,5 @@
-from typing import List
+from typing import List, Optional
+import sys
 
 from ...dialogs.main_dialog import MainDialog
 from PyQt5.QtCore import QObject, Qt
@@ -27,8 +28,8 @@ class DataCatalogView(QObject):
         self.dlg.seeImagesButton.setIcon(icons.arrow_right_icon)
 
         # Create containers for image cells widget (so widgets don't get deleted by Qt)
-        self.containerWidget = QWidget()
-        self.containerLayout = QHBoxLayout()
+        self.imageContainerWidget = QWidget()
+        self.mosaicContainerWidget = QWidget()
         # Add icons to mosaic and image cell widgets
         self.dlg.addImageButton.setIcon(icons.plus_icon)
         self.dlg.showImagesButton.setIcon(icons.images_icon)
@@ -56,7 +57,19 @@ class DataCatalogView(QObject):
         self.dlg.catalogSelectionLabel.setWordWrap(True)
         self.dlg.imagePreview.setWordWrap(True)
 
+        # Setup layouts
+        self.mosaic_cell_layout = QHBoxLayout()
+        self.image_cell_layout = QHBoxLayout()
+        self.create_mosaic_cell_buttons_layout()
+        self.create_image_cell_buttons_layout()
+
+    @property
+    def mosaic_table_visible(self):
+        return self.dlg.stackedLayout.currentIndex() == 0
+
     def display_mosaics(self, mosaics: list[MosaicReturnSchema]):
+        self.dlg.mosaicTable.clearSelection()
+        self.contain_mosaic_cell_buttons()
         if not mosaics:
             return
         # First column is ID, hidden; second is name
@@ -72,8 +85,12 @@ class DataCatalogView(QObject):
             name_item.setData(Qt.DisplayRole, mosaic.name)
             self.dlg.mosaicTable.setItem(row, 1, name_item)
             self.dlg.mosaicTable.setHorizontalHeaderLabels(["ID", self.tr("Mosaics")])
-            self.dlg.mosaicTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.dlg.mosaicTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.dlg.mosaicTable.sortItems(1, Qt.AscendingOrder)
+        # Set show-images tooltip for mosaics' cells
+        for row in range(self.dlg.mosaicTable.rowCount()):
+            item = self.dlg.mosaicTable.item(row, 1)
+            item.setToolTip(self.tr("Double-click to show images"))
         
     def display_mosaic_info(self, mosaic: MosaicReturnSchema, images: list[ImageReturnSchema]):
         if not mosaic:
@@ -102,19 +119,6 @@ class DataCatalogView(QObject):
         self.dlg.imagePreview.setText(text)
         self.dlg.imagePreview.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
 
-    def display_image_info(self, image: ImageReturnSchema):
-        if not image:
-            return
-        self.dlg.catalogInfo.setText(self.tr("uploaded: {date} at {time} \n"
-                                             "file size: {size} MB \n"
-                                             "pixel size: {pixel_size} m \n"
-                                             "bands: {count}"
-                                             .format(date=image.uploaded_at.date(),
-                                                     time=image.uploaded_at.strftime('%H:%M'),
-                                                     size=round(image.file_size/1048576, 1),
-                                                     pixel_size=round(sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6]), 2),
-                                                     count=list(image.meta_data.values())[1])))
-
     def full_image_info(self, image: ImageReturnSchema):
         try:
             message = self.tr('<b>Name</b>: {filename}\
@@ -140,6 +144,8 @@ class DataCatalogView(QObject):
             return
 
     def display_images(self, images: list[ImageReturnSchema]):
+        self.dlg.imageTable.clearSelection()
+        self.contain_image_cell_buttons()
         self.dlg.imageTable.setRowCount(len(images))
         self.dlg.imageTable.setColumnCount(2)
         self.dlg.imageTable.setColumnHidden(0, True)
@@ -152,21 +158,21 @@ class DataCatalogView(QObject):
             name_item.setData(Qt.DisplayRole, image.filename)
             self.dlg.imageTable.setItem(row, 1, name_item)
         self.dlg.imageTable.setHorizontalHeaderLabels(["ID", self.tr("Images")])
+        self.dlg.imageTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.dlg.imageTable.sortItems(1, Qt.AscendingOrder)
         if len(images) == 0:
             self.dlg.previewMosaicButton.setEnabled(False)
             self.dlg.showImagesButton.setEnabled(False)
         else:
             self.dlg.previewMosaicButton.setEnabled(True)
             self.dlg.showImagesButton.setEnabled(True)
-        self.dlg.imageTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.dlg.imageTable.sortItems(1, Qt.AscendingOrder)
 
     def show_preview_s(self, preview_image):
         self.dlg.imagePreview.setPixmap(QPixmap.fromImage(preview_image))
         self.dlg.imagePreview.setAlignment(Qt.AlignVCenter | Qt.AlignHCenter)
 
     def selected_mosaic_ids(self, limit=None):
-        # add unique selected rows
+        # Add unique selected rows
         selected_rows = list(set(index.row() for index in self.dlg.mosaicTable.selectionModel().selectedIndexes()))
         if not selected_rows:
             return []
@@ -176,7 +182,6 @@ class DataCatalogView(QObject):
     
     def select_mosaic_cell(self, mosaic_id):
         # Store widgets before deleting a row
-        self.contain_mosaic_cell_buttons()
         item = self.dlg.mosaicTable.findItems(mosaic_id, Qt.MatchExactly)[0]
         self.dlg.mosaicTable.setCurrentCell(item.row(), 1)
 
@@ -184,7 +189,9 @@ class DataCatalogView(QObject):
         selected_rows = list(set(index.row() for index in self.dlg.imageTable.selectionModel().selectedIndexes()))
         if not selected_rows:
             return []
-        return selected_rows
+        pids = [self.dlg.imageTable.item(row, 0).text()
+                for row in selected_rows[:limit]]
+        return pids
     
     def show_storage(self, taken_storage, free_storage):
         if free_storage:
@@ -199,160 +206,130 @@ class DataCatalogView(QObject):
         self.dlg.addImageButton.setPopupMode(QToolButton.InstantPopup)
         self.dlg.addImageButton.setMenu(self.upload_image_menu)
 
-    def check_mosaic_or_image_selection(self, mosaic_name, image_name):
-        """ Called when selection in any catalog table is changed.
+    def show_mosaic_info(self, mosaic_name):
+        self.add_mosaic_cell_buttons()
+        # Show mosaic info
+        self.dlg.catalogSelectionLabel.setText(self.tr("Selected mosaic: <b>{mosaic_name}".format(
+            mosaic_name=self.dlg.imagePreview.fontMetrics().elidedText(
+                mosaic_name,
+                Qt.ElideRight,
+                self.dlg.imagePreview.width() - 10))))
+        # Enable buttons
+        self.dlg.deleteCatalogButton.setEnabled(True)
+        self.dlg.seeImagesButton.setEnabled(True)
+        # Show widgets
+        self.set_table_tooltip(self.dlg.mosaicTable)
 
-        :param mosaic_name: str (to display if mosaics table is used) or None (no current sellection).
-        :param image_name: str (to display if image table is used) or None (so mosaic_name is displayed).
-        """
-        if not mosaic_name and not image_name:
-            self.dlg.catalogSelectionLabel.setText(self.tr("No current selection"))
+    def clear_mosaic_info(self):
+        self.contain_mosaic_cell_buttons()
+        self.dlg.catalogInfo.clear()
+        self.dlg.imagePreview.clear()
+        self.dlg.catalogSelectionLabel.setText(self.tr("No mosaic selected"))
+        # Disable buttons
+        self.dlg.deleteCatalogButton.setEnabled(False)
+        self.dlg.seeImagesButton.setEnabled(False)
+        # Hide widgets
+        self.set_table_tooltip(self.dlg.mosaicTable)
 
-        # Mosaics:
-        if self.dlg.mosaicTable.selectionModel().hasSelection() is False:
-            # Clear info
-            self.dlg.catalogInfo.setText("")
-            self.dlg.imagePreview.setText("")
-            # Disable buttons
-            self.dlg.deleteCatalogButton.setEnabled(False)
-            self.dlg.seeImagesButton.setEnabled(False)
-            # Clear images table
-            self.dlg.imageTable.clearSelection()
-            self.dlg.imageTable.setColumnCount(0)
-            self.dlg.imageTable.setRowCount(0)
-            # Hide widgets
-            self.show_cell_widgets(mosaic=True, on=False)
-        else:
-            # Add buttons on selection change only for mosaics, because images have multiselect
-            self.add_mosaic_cell_buttons()
-            # Show mosaic info
-            self.dlg.catalogSelectionLabel.setText(self.tr("Selected mosaic: <b>{mosaic_name}".format(
-                                                            mosaic_name=self.dlg.imagePreview.fontMetrics().elidedText(
-                                                                        mosaic_name, 
-                                                                        Qt.ElideRight, 
-                                                                        self.dlg.imagePreview.width() - 10))))
-            # Enable buttons
-            self.dlg.deleteCatalogButton.setEnabled(True)
-            if self.dlg.stackedLayout.currentIndex() == 0:
-                self.dlg.seeImagesButton.setEnabled(True)
-            # Show widgets
-            self.show_cell_widgets(mosaic=True, on=True)
+    def show_image_info(self, image: ImageReturnSchema):
+        if not image:
+            return
+        self.dlg.catalogInfo.setText(self.tr("uploaded: {date} at {time} \n"
+                                             "file size: {size} MB \n"
+                                             "pixel size: {pixel_size} m \n"
+                                             "bands: {count}"
+                                             .format(date=image.uploaded_at.date(),
+                                                     time=image.uploaded_at.strftime('%H:%M'),
+                                                     size=round(image.file_size/1048576, 1),
+                                                     pixel_size=round(sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6]), 2),
+                                                     count=list(image.meta_data.values())[1])))
+        self.dlg.catalogSelectionLabel.setText(self.tr("Selected image: <b>{image_name}".format(
+            image_name=self.dlg.imagePreview.fontMetrics().elidedText(
+                image.filename,
+                Qt.ElideRight,
+                self.dlg.imagePreview.width() - 10))))
+        # Show widgets
+        self.dlg.deleteCatalogButton.setEnabled(True)
+        self.set_table_tooltip(self.dlg.imageTable)
 
-        # Images:
-        if self.dlg.imageTable.selectionModel().hasSelection() is False:
-            # Change text to mosaic-related
-            self.dlg.infoPreviewLabel.setText(self.tr("Mosaic info"))
-            self.dlg.deleteCatalogButton.setText(self.tr("Delete mosaic"))
-            # Clear bottom info label
-            self.dlg.catalogInfo.setText("")
-            # Hide widgets
-            self.show_cell_widgets(mosaic=False, on=False)
-        else:
-            # Change text to image-related
-            self.dlg.infoPreviewLabel.setText(self.tr("Image preview"))
-            self.dlg.deleteCatalogButton.setText(self.tr("Delete image"))
-            # Show image info in a bottom label
-            self.dlg.catalogSelectionLabel.setText(self.tr("Selected image: <b>{image_name}".format(
-                                                            image_name=self.dlg.imagePreview.fontMetrics().elidedText(
-                                                                       image_name, 
-                                                                       Qt.ElideRight, 
-                                                                       self.dlg.imagePreview.width() - 10))))
-            # Show widgets
-            self.show_cell_widgets(mosaic=False, on=True)
-        
-        # Set mosaic or image cell deselection tooltip
-        if self.dlg.stackedLayout.currentIndex() == 0:
-            self.add_cell_tooltip(mosaic=True)
-        else:
-            self.add_cell_tooltip(mosaic=False)
+    def clear_image_info(self):
+        self.contain_image_cell_buttons()
+        self.dlg.catalogSelectionLabel.setText(self.tr("No image selected"))
+        self.dlg.deleteCatalogButton.setEnabled(False)
+        self.dlg.imagePreview.clear()
+        self.dlg.catalogInfo.clear()
+        self.set_table_tooltip(self.dlg.imageTable)
 
-    def show_cell_widgets(self, mosaic: bool, on: bool):
-        """ Called upon selection/deselection in tables to show/hide buttons.
-
-        :param mosaic: whether mosaic (True) or image (False) tables is used.
-        :param on: show (True) or hide (False) mosaic or image.
-        """
-        # Specify table and position
-        if mosaic: # mosaic table is opened
-            if not self.dlg.selected_mosaic_cell:
-                return
-            row = self.dlg.selected_mosaic_cell.row()
-            column = self.dlg.selected_mosaic_cell.column()
-            table = self.dlg.mosaicTable
-        else: # image table is opened
-            if not self.dlg.selected_image_cell:
-                return
-            row = self.dlg.selected_image_cell.row()
-            column = self.dlg.selected_image_cell.column()
-            table = self.dlg.imageTable
-        # Show or hide widgets
-        if table.cellWidget(row, column):
-            for widget in table.cellWidget(row, column).children():
-                if isinstance(widget, QWidget):
-                    widget.setVisible(on)
-        else:
-            if mosaic:
-                self.add_mosaic_cell_buttons()
-            else:
-                self.add_image_cell_buttons()
-    
-    def add_cell_tooltip(self, mosaic: bool):
-        """ Called upon selection/deselection in tables to show/hide deselection tooltip.
-
-        :param mosaic: whether mosaic (True) or image (False) table needs deselection tooltip.
-        """
-        if mosaic:
-            table = self.dlg.mosaicTable
-        else:
-            table = self.dlg.imageTable
-        for row in range(table.rowCount()): 
+    def set_table_tooltip(self, table):
+        for row in range(table.rowCount()):
             item = table.item(row, 1)
-            if item.isSelected():
-                item.setToolTip(self.tr("'Ctrl' + click to deselect"))
-            else:
-                item.setToolTip("")
+            if item.isSelected(): # set deselection tooltip for both tables' selected items
+                text = self.tr("'Cmd' + click to deselect") if sys.platform == 'darwin' else self.tr("'Ctrl' + click to deselect")
+                item.setToolTip(text)
+            else: # when not selected, set show-images tooltip for mosaics and none for images
+                text = self.tr("Double-click to show images") if table == self.dlg.mosaicTable else ""
+                item.setToolTip(text)
 
-    def switch_catalog_table(self):
+    def show_images_table(self):
         row = self.dlg.selected_mosaic_cell.row()
         column = self.dlg.selected_mosaic_cell.column()
-        # If mosaics are opened before the click
-        if self.dlg.stackedLayout.currentIndex() == 0:
-            self.dlg.stackedLayout.setCurrentIndex(1)
-            self.dlg.mosaicTable.setCurrentCell(row, column)
-            self.dlg.seeMosaicsButton.setEnabled(True)
-            self.dlg.seeImagesButton.setEnabled(False)      
-            # Setup add image menu
-            self.dlg.addCatalogButton.setText(self.tr("Add image"))
-            self.dlg.addCatalogButton.setMenu(self.upload_image_menu)
-        else: # if images are opened before the click
-            # Save buttons before deleting cells and therefore widgets
-            self.contain_image_cell_buttons()
-            # Remove menu for add mosaic
-            self.dlg.addCatalogButton.setText(self.tr("Add mosaic"))
-            self.dlg.addCatalogButton.setMenu(None)
-            # Clear image table
-            self.dlg.imageTable.clearSelection()
-            self.dlg.seeMosaicsButton.setEnabled(False)
-            self.dlg.seeImagesButton.setEnabled(True)
-            # Show mosaics
-            self.dlg.stackedLayout.setCurrentIndex(0)
+        # Show images
+        self.dlg.stackedLayout.setCurrentIndex(1)
+        self.dlg.mosaicTable.setCurrentCell(row, column)
+        # En(dis)able buttons and change labels
+        self.dlg.seeMosaicsButton.setEnabled(True)
+        self.dlg.seeImagesButton.setEnabled(False)
+        self.dlg.infoPreviewLabel.setText(self.tr("Image preview"))
+        self.dlg.deleteCatalogButton.setText(self.tr("Delete image"))
+        self.dlg.addCatalogButton.setText(self.tr("Add image"))
+        self.dlg.addCatalogButton.setMenu(self.upload_image_menu)
+        # Because we open images table always with empty selection
+        self.clear_image_info()
+
+    def show_mosaics_table(self, selected_mosaic_name: Optional[str]):
+        # Save buttons before deleting cells and therefore widgets
+        # En(dis)able buttons and change labels
+        self.dlg.seeMosaicsButton.setEnabled(False)
+        self.dlg.seeImagesButton.setEnabled(True)
+        self.dlg.infoPreviewLabel.setText(self.tr("Mosaic data"))
+        self.dlg.deleteCatalogButton.setText(self.tr("Delete mosaic"))
+        self.dlg.addCatalogButton.setText(self.tr("Add mosaic"))
+        self.dlg.addCatalogButton.setMenu(None)
+        # Clear image table
+        self.dlg.imageTable.clearSelection()
+        # Show mosaics
+        self.dlg.stackedLayout.setCurrentIndex(0)
+        if selected_mosaic_name:
+            self.show_mosaic_info(selected_mosaic_name)
+        else:
+            self.clear_mosaic_info()
+
+    def create_mosaic_cell_buttons_layout(self):
+        self.mosaic_cell_layout.setContentsMargins(0,0,3,0)
+        self.mosaic_cell_layout.setSpacing(0)
+        self.mosaic_cell_layout.addWidget(self.dlg.addImageButton)
+        self.mosaic_cell_layout.addWidget(self.dlg.mosaicSpacers[0])
+        #self.mosaic_cell_layout.addWidget(self.dlg.showImagesButton)
+        #self.mosaic_cell_layout.addWidget(self.dlg.mosaicSpacers[1])
+        self.mosaic_cell_layout.addWidget(self.dlg.previewMosaicButton)
+        self.mosaic_cell_layout.addWidget(self.dlg.mosaicSpacers[2])
+        self.mosaic_cell_layout.addWidget(self.dlg.editMosaicButton)
+        self.mosaic_cell_layout.setAlignment(Qt.AlignRight)
+
+    def create_image_cell_buttons_layout(self):
+        self.image_cell_layout.setContentsMargins(0,0,3,0)
+        self.image_cell_layout.setSpacing(0)
+        self.image_cell_layout.addWidget(self.dlg.previewImageButton)
+        self.image_cell_layout.addWidget(self.dlg.imageSpacer)
+        self.image_cell_layout.addWidget(self.dlg.imageInfoButton)
+        self.image_cell_layout.setAlignment(Qt.AlignRight)
+
 
     def add_mosaic_cell_buttons(self):
         # Create layout of mosaic cell buttons
-        layout = QHBoxLayout()
-        layout.setContentsMargins(0,0,3,0)
-        layout.setSpacing(0)
-        layout.addWidget(self.dlg.addImageButton)
-        layout.addWidget(self.dlg.mosaicSpacers[0])
-        layout.addWidget(self.dlg.showImagesButton)
-        layout.addWidget(self.dlg.mosaicSpacers[1])
-        layout.addWidget(self.dlg.previewMosaicButton)
-        layout.addWidget(self.dlg.mosaicSpacers[2])
-        layout.addWidget(self.dlg.editMosaicButton)
-        layout.setAlignment(Qt.AlignRight)
-        # Create mosaic cell widget with this layout        
+        # Create mosaic cell widget with this layout
         cellWidget = QWidget()
-        cellWidget.setLayout(layout)
+        cellWidget.setLayout(self.mosaic_cell_layout)
         self.dlg.mosaicTable.setCellWidget(self.dlg.selected_mosaic_cell.row(), 
                                            self.dlg.selected_mosaic_cell.column(),
                                            cellWidget)
@@ -361,34 +338,18 @@ class DataCatalogView(QObject):
         if self.dlg.imageTable.selectionModel().hasSelection():
             self.dlg.selected_image_cell = self.dlg.imageTable.selectedIndexes()[0]
         # Create layout of image cell buttons
-        layout = QHBoxLayout()
-        layout.setContentsMargins(0,0,3,0)
-        layout.setSpacing(0)
-        layout.addWidget(self.dlg.previewImageButton)
-        layout.addWidget(self.dlg.imageSpacer)
-        layout.addWidget(self.dlg.imageInfoButton)
-        layout.setAlignment(Qt.AlignRight)
-        # Create image cell widget with this layout 
+        # Create image cell widget with this layout
         cellWidget = QWidget()
-        cellWidget.setLayout(layout)
+        cellWidget.setLayout(self.image_cell_layout)
         self.dlg.imageTable.setCellWidget(self.dlg.selected_image_cell.row(),
                                           self.dlg.selected_image_cell.column(),
                                           cellWidget)
         
     def contain_mosaic_cell_buttons(self):
-        self.containerLayout.addWidget(self.dlg.editMosaicButton)
-        self.containerLayout.addWidget(self.dlg.previewMosaicButton)
-        self.containerLayout.addWidget(self.dlg.showImagesButton)
-        self.containerLayout.addWidget(self.dlg.addImageButton)
-        for spacer in self.dlg.mosaicSpacers:
-            self.containerLayout.addWidget(spacer)
-        self.containerWidget.setLayout(self.containerLayout)
+        self.mosaicContainerWidget.setLayout(self.mosaic_cell_layout)
 
     def contain_image_cell_buttons(self):
-        self.containerLayout.addWidget(self.dlg.previewImageButton)
-        self.containerLayout.addWidget(self.dlg.imageSpacer)
-        self.containerLayout.addWidget(self.dlg.imageInfoButton)
-        self.containerWidget.setLayout(self.containerLayout)
+        self.imageContainerWidget.setLayout(self.image_cell_layout)
         
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """A duplicate of alert function from mapflow.py to avoid circular import.
