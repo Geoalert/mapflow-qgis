@@ -436,8 +436,8 @@ class ResultsLoader(QObject):
                            title=title,
                            email_body=email_body).show()
 
-
     # ====== Download as geojson ===== #
+
     def download_results_file(self, pid) -> None:
         """
         Download result and save directly to a geojson file
@@ -537,38 +537,50 @@ class ResultsLoader(QObject):
         """
         self.dlg.processingsTable.setEnabled(True)
         # Avoid overwriting existing files by adding (n) to their names
-        output_path = os.path.join(self.dlg.outputDirectory.text(), processing.id_)
-        extension = '.gpkg'
-        if os.path.exists(output_path + extension):
+        output_path = Path(self.dlg.outputDirectory.text(), processing.id_).with_suffix(".gpkg")
+        if output_path.exists():
             count = 1
-            while os.path.exists(output_path + f'({count})' + extension):
+            while output_path.with_stem(processing.id_ + f"_{count}").exists():
                 count += 1
-            output_path += f'({count})' + extension
-        else:
-            output_path += extension
+            output_path = output_path.with_stem(processing.id_ + f"_{count}")
         transform = self.project.transformContext()
         # Layer creation options for QGIS 3.10.3+
         write_options = QgsVectorFileWriter.SaveVectorOptions()
         write_options.layerOptions = ['fid=id']
-        with open(os.path.join(self.temp_dir, os.urandom(32).hex()), mode='wb+') as f:
-            f.write(response.readAll().data())
-            f.seek(0)
+        with open(Path(self.temp_dir, os.urandom(32).hex()), mode='wb+') as f:
+            response_data = response.readAll().data()
+            f.write(response_data)
             layer = QgsVectorLayer(f.name, '', 'ogr')
             # V3 returns two additional str values but they're not documented, so just discard them
             error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(
                 layer,
-                output_path,
+                str(output_path),
                 transform,
                 write_options
             )
         if error:
-            self.message_bar.pushWarning(self.tr("Error"),
-                                         self.tr('Failed to save results to file. '
-                                                 'Error code: {code}. Message: {message}').format(code=error,
-                                                                                                  message=msg))
-            return
+            # Give an info message
+            text = self.tr('Failed to save results to GeoPackage. '
+                           'Error code: {code}. '.format(code=error))
+            if msg:
+                text +=self.tr('Message: {message}. '.format(message=msg))
+            text += self.tr('File will be saved as GeoJSON instead.')
+            self.message_bar.pushMessage(self.tr("Warning"), text)
+            # Save as GeoJSON instead
+            output_path = output_path.with_suffix(".geojson")
+            if output_path.exists():
+                count = 1
+                while output_path.with_stem(processing.id_ + f"_{count}").exists():
+                    count += 1
+                output_path = output_path.with_stem(processing.id_ + f"_{count}")
+            try:
+                with open(str(output_path), mode='wb+') as f:
+                        f.write(response_data)
+            except:
+                self.message_bar.pushWarning(self.tr("Error"), self.tr('Failed to save results to file.'))
+                return
         # Load the results into QGIS
-        results_layer = QgsVectorLayer(output_path, processing.name, 'ogr')
+        results_layer = QgsVectorLayer(str(output_path), processing.name, 'ogr')
         results_layer.loadNamedStyle(get_style_name(processing.workflow_def, layer))
         # Add the source raster (COG) if it has been created
         raster_url = processing.raster_layer.get('tileUrl')

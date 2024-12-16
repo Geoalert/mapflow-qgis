@@ -15,6 +15,7 @@ class Config:
     BILLING_HISTORY_URL = "https://app.mapflow.ai/account/billing-history"
     TOP_UP_URL = "https://app.mapflow.ai/account/balance"
     MODEL_DOCS_URL = "https://docs.mapflow.ai/userguides/pipelines.html"
+    ZOOM_SELECTOR = QgsSettings().value("variables/zoom_selector", "false")
 
     # PROCESSINGS
     PROCESSING_TABLE_REFRESH_INTERVAL = 6  # in seconds

@@ -246,6 +246,87 @@
              <height>26</height>
             </size>
            </property>
+<<<<<<< HEAD
+=======
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="showCrs">
+            <bool>true</bool>
+           </property>
+           <property name="excludedProviders">
+            <stringlist notr="true">
+             <string>wms</string>
+             <string>postgresraster</string>
+             <string>grassraster</string>
+            </stringlist>
+           </property>
+>>>>>>> master
+          </widget>
+         </item>
+         <item>
+          <widget class="QComboBox" name="zoomCombo">
+           <property name="minimumSize">
+            <size>
+             <width>50</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>Zoom</string>
+           </property>
+           <property name="editable">
+            <bool>false</bool>
+           </property>
+           <property name="currentText">
+            <string> –</string>
+           </property>
+           <property name="placeholderText">
+            <string/>
+           </property>
+           <item>
+            <property name="text">
+             <string> –</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>14</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>15</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>16</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>17</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>18</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>19</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>20</string>
+            </property>
+           </item>
           </widget>
          </item>
          <item>

@@ -11,6 +11,7 @@ from qgis.core import (
 
 from ..config import config
 from ..entity.billing import BillingType
+from ..schema.project import UserRole
 
 PROJECT = QgsProject.instance()
 WGS84 = QgsCoordinateReferenceSystem('EPSG:4326')
@@ -145,10 +146,17 @@ def check_processing_limit(billing_type: BillingType,
         return True
 
 
-def generate_plugin_header(plugin_name: str, env: Optional[str], project_name: Optional[str]) -> str:
+def generate_plugin_header(plugin_name: str, 
+                           env: Optional[str], 
+                           project_name: Optional[str], 
+                           user_role: Optional[str],
+                           project_owner: Optional[str]) -> str:
         header = plugin_name
         if env and env != "production":
             header = header + f" {env}"
         if project_name and project_name != "Default":
             header = header + f" | Project: {project_name}"
+        if user_role and project_owner:
+            if user_role != UserRole.owner:
+                header = header + f" ({user_role}, owner: {project_owner})"
         return header

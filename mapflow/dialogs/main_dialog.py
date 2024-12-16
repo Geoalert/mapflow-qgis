@@ -5,7 +5,7 @@ from typing import Iterable, Optional, List
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette
-from PyQt5.QtWidgets import QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton
+from PyQt5.QtWidgets import QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton, QAction, QMenu
 from qgis.core import QgsMapLayerProxyModel, QgsSettings
 
 from . import icons
@@ -14,6 +14,7 @@ from ..entity.billing import BillingType
 from ..entity.provider import ProviderInterface
 from ..functional import helpers
 from ..schema.project import MapflowProject
+from ..schema.project import UserRole
 
 ui_path = Path(__file__).parent/'static'/'ui'
 
@@ -111,6 +112,20 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             spacer.setFixedSize(3,26)
             highlight_color = self.mosaicTable.palette().highlight().color().name() 
             spacer.setStyleSheet("background-color:" + highlight_color + ";")
+        
+        # Hide zoom spinbox
+        if config.ZOOM_SELECTOR.lower() == "true":
+            pass
+        else:
+            self.zoomCombo.hide()
+        
+        # Add options menu
+        self.options_menu = QMenu()
+        self.save_result_action = QAction(self.tr("Save results"))
+        self.download_aoi_action = QAction(self.tr("Download AOI"))
+        self.see_details_action = QAction(self.tr("See details"))
+        self.processing_update_action = QAction(self.tr("Rename"))
+        self.setup_options_menu()
 
     # ===== Settings management ===== #
     def save_view_results_mode(self):
@@ -337,10 +352,13 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
         if can_interact and can_send:
             self.ratingSubmitButton.setToolTip("")
+            self.ratingComboBox.setToolTip("")
         elif not can_interact:
             self.ratingSubmitButton.setToolTip(reason)
+            self.ratingComboBox.setToolTip(reason)
         else:
             self.ratingSubmitButton.setToolTip(self.tr("Please select processing and rating to submit"))
+            self.ratingComboBox.setToolTip("")
 
     def enable_review(self,
                       can_interact: bool = True,
@@ -429,3 +447,92 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.updateProject.setDisabled(is_default)
         self.deleteProject.setToolTip(tooltip)
         self.updateProject.setToolTip(tooltip)
+    
+    def setup_options_menu(self):
+        self.options_menu.addAction(self.save_result_action)
+        self.options_menu.addAction(self.download_aoi_action)
+        self.options_menu.addAction(self.see_details_action)
+        self.options_menu.addAction(self.processing_update_action)
+
+    def enable_shared_project(self, user_role: UserRole):
+        """Disable buttons depending on user role in a shared project.
+
+        :param user_role: current user's role in a project (from ShareProject schema).
+        """
+        if not user_role:
+            user_role = UserRole.owner
+        # Disable processing panel
+        if not user_role.can_start_processing:
+            reason = self.tr('Not enough rights to start processing in a shared project ({})').format(user_role)
+        else:
+            reason = ""
+        self.disable_processing_start(reason, clear_area=True)
+        for control in self.project_controls:
+            control.setEnabled(user_role.can_start_processing)
+        # Disable processing rating
+        for control in self.rating_controls:
+            control.setEnabled(user_role.can_delete_rename_review_processing)
+            self.deleteProcessings.setEnabled(user_role.can_delete_rename_review_processing)
+        self.rateProcessingLabel.setText(self.tr('Rate processing:'))
+        self.ratingComboBox.setCurrentIndex(0)
+        if not user_role.can_delete_rename_review_processing:
+            self.enable_rating(False, False, self.tr('Not enough rights to rate processing in a shared project ({})').format(user_role))
+        else:
+            self.enable_rating(False, True, self.tr('Please select processing'))
+        # Disable processing deletion
+        self.deleteProcessings.setEnabled(user_role.can_delete_rename_review_processing)
+        if not user_role.can_delete_rename_review_processing:
+            self.deleteProcessings.setToolTip(self.tr('Not enough rights to delete processing in a shared project ({})').format(user_role))
+        else:
+            self.deleteProcessings.setToolTip('')
+        # And remove/add back renaming option from save options menu
+        self.enable_rename_processing(user_role.can_delete_rename_review_processing)
+
+    def enable_model_options(self, can_start_processing: bool = True):
+        """
+        Set the whole group of checkboxes for model options disabled depending on user role property.
+        Is called from 'show_wd_options' in 'mapflow.py'.
+        """
+        if not can_start_processing:
+            can_start_processing = True
+        for i in range(self.modelOptionsLayout.count()):
+            widget = self.modelOptionsLayout.itemAt(i).widget()
+            widget.setEnabled(can_start_processing)
+            widget.setChecked(can_start_processing)
+    
+    def enable_project_change(self, reason: str, can_delete_rename_project: bool = True):
+        """
+        Disable project controls in a 'Settings' tab depending on user role property.
+        Is called from 'on_project_change' in 'mapflow.py'.
+        """
+        if can_delete_rename_project is None:
+            can_delete_rename_project = True
+        self.deleteProject.setEnabled(can_delete_rename_project)
+        self.updateProject.setEnabled(can_delete_rename_project) 
+        self.deleteProject.setToolTip(reason)
+        self.updateProject.setToolTip(reason)
+    
+    def enable_rename_processing(self, can_delete_rename_review_processing: bool = True):
+        """
+        Remove processing's renaming option from '...' menu near 'View results' button depending on user role property.
+        """
+        if can_delete_rename_review_processing is False:
+            self.options_menu.removeAction(self.processing_update_action)
+        else:
+            self.options_menu.addAction(self.processing_update_action)
+    
+    @property
+    def project_controls(self):
+        return [self.labelProcessingName, self.processingName,
+                self.labelAoiLayer, self.polygonCombo, self.addAoiButton,
+                self.labelImagerySource, self.rasterCombo, self.zoomCombo, self.searchImageryButton,
+                self.labelAiModel, self.labelCoins_1, self.labelWdPrice, self.modelCombo, self.modelInfo,
+                self.modelOptionsLabel,
+                self.startProcessing]
+    
+    @property
+    def rating_controls(self):
+        return [self.rateProcessingLabel, self.ratingComboBox,
+                self.processingRatingFeedbackText,
+                self.acceptButton, self.reviewButton,
+                self.ratingSubmitButton]

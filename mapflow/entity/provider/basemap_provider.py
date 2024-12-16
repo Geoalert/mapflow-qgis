@@ -15,7 +15,8 @@ class BasemapProvider(UsersProvider, ABC):
     def to_processing_params(self,
                              image_id: Optional[str] = None,
                              provider_name: Optional[str] = None,
-                             url: Optional[str] = None):
+                             url: Optional[str] = None,
+                             zoom: Optional[str] = None):
         params = {
             'url': self.url,
             'projection': self.crs.value.lower(),
