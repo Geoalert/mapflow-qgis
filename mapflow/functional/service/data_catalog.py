@@ -103,7 +103,7 @@ class DataCatalogService(QObject):
         dialog.deleteLater()
 
     def update_mosaic_callback(self, response: QNetworkReply, mosaic: MosaicReturnSchema):
-        self.get_mosaic(mosaic.id)        
+        self.get_mosaic(mosaic.id)
 
     def delete_mosaic(self, mosaic):
         self.api.delete_mosaic(mosaic_id=mosaic.id,
@@ -117,7 +117,7 @@ class DataCatalogService(QObject):
 
     def confirm_mosaic_deletion(self):
         mosaic = self.selected_mosaic()
-        message = self.tr("Delete mosaic '{name}'?".format(name=mosaic.name))
+        message = self.tr("Delete mosaic '{name}'?").format(name=mosaic.name)
         box = QMessageBox(QMessageBox.Question, "Mapflow", message, parent=QApplication.activeWindow())
         box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
         box_exec = box.exec()
@@ -151,7 +151,7 @@ class DataCatalogService(QObject):
     # Images CRUD
     def upload_images_to_mosaic(self):
         mosaic = self.selected_mosaic()
-        image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), "Choose image to upload", filter='(TIF files *.tif; *.tiff)')[0]
+        image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), self.tr("Choose image to upload"), filter='(TIF files *.tif; *.tiff)')[0]
         if image_paths:
             self.upload_images(response=None, 
                                mosaic_id=mosaic.id, mosaic_name=mosaic.name, 
@@ -202,17 +202,16 @@ class DataCatalogService(QObject):
                                   " and file size less than {memory}"
                                   " MB").format(size=self.image_max_size_pixels,
                                                 memory=self.image_max_size_bytes // (1024 * 1024))
-                self.view.alert(self.tr("<center><b>Error uploading '{name}'</b>".format(name=Path(image_to_upload).name))+"<br>"+message)
+                self.view.alert(self.tr("<center><b>Error uploading '{name}'</b>").format(name=Path(image_to_upload).name)+"<br>"+message)
                 return
             # Check if user has enough stogage
             image_size=Path(image_to_upload).stat().st_size
             if self.free_storage and image_size > self.free_storage:
                 message = (self.tr("<b>Not enough storage space. </b>"
                                    "You have {free_storage} MB left, but '{name}' is "
-                                   "{image_size} MB".format(free_storage=round(self.free_storage/(1024*1024), 1),
+                                   "{image_size} MB").format(free_storage=round(self.free_storage/(1024*1024), 1),
                                                                 name=Path(image_to_upload).name,
-                                                                image_size=round(image_size/(1024*1024), 1)
-                                                               )))
+                                                                image_size=round(image_size/(1024*1024), 1)))
                 self.iface.messageBar().pushWarning("Mapflow", message)
                 self.get_mosaic_images(mosaic_id)
                 self.mosaicsUpdated.emit()
@@ -289,13 +288,13 @@ class DataCatalogService(QObject):
             return
         if len(image_names) == 1:
             message = self.tr("<center>Delete image <b>'{name}'</b> from '{mosaic}' mosaic?"
-                              .format(name=image_names[0], mosaic=mosaic.name))
+                             ).format(name=image_names[0], mosaic=mosaic.name)
         elif len(image_names) <= 3:
             message = self.tr("<center>Delete following images from '{mosaic}' mosaic:<br><b>'{names}'</b>?"
-                              .format(names="', <br>'".join(image_names), mosaic=mosaic.name))
+                             ).format(names="', <br>'".join(image_names), mosaic=mosaic.name)
         else:
             message = self.tr("<center>Delete <b>{len}</b> images from '{mosaic}' mosaic?"
-                              .format(len=len(image_names), mosaic=mosaic.name))
+                             ).format(len=len(image_names), mosaic=mosaic.name)
         box = QMessageBox(QMessageBox.Question, "Mapflow", message, parent=QApplication.activeWindow())
         box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
         box_exec = box.exec()

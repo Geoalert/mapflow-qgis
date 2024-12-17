@@ -104,18 +104,18 @@ class DataCatalogView(QObject):
         else:
             tags_str = ''
         text = self.tr("Mosaic: {name} \n"
-                       "Number of images: {count} \n".format(name=self.dlg.imagePreview.fontMetrics().elidedText(
+                       "Number of images: {count} \n").format(name=self.dlg.imagePreview.fontMetrics().elidedText(
                                                                   mosaic.name, 
                                                                   Qt.ElideRight, 
                                                                   self.dlg.imagePreview.width() - 10), 
-                                                             count=len(images)))
+                                                             count=len(images))
         if images:
             text += self.tr("Size: {mosaic_size} MB \nPixel size: {pixel_size} m \n"
-                            .format(mosaic_size=round(sum(i.file_size for i in images)/1000000, 1),
-                                    pixel_size=round(sum(list(images[0].meta_data.values())[6])/len(list(images[0].meta_data.values())[6]), 2)))
+                           ).format(mosaic_size=round(sum(i.file_size for i in images)/1000000, 1),
+                                    pixel_size=round(sum(list(images[0].meta_data.values())[6])/len(list(images[0].meta_data.values())[6]), 2))
         text += self.tr("Created: {date} at {time} \nTags: {tags}"
-                        .format(date=mosaic.created_at.date(), time=mosaic.created_at.strftime('%H:%M'),
-                                tags=tags_str))
+                       ).format(date=mosaic.created_at.date(), time=mosaic.created_at.strftime('%H:%M'),
+                                tags=tags_str)
         self.dlg.imagePreview.setText(text)
         self.dlg.imagePreview.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
 
@@ -129,7 +129,7 @@ class DataCatalogView(QObject):
                               <br><b>Width</br></b>: {width} pixels\
                               <br><b>Height</br></b>: {height} pixels\
                               <br><b>Pixel size</br></b>: {pixel_size} m'\
-                             .format(filename=image.filename, 
+                             ).format(filename=image.filename, 
                                      date=image.uploaded_at.date(),
                                      time=image.uploaded_at.strftime('%H:%M'),
                                      file_size=round(image.file_size/1048576, 1), 
@@ -137,7 +137,7 @@ class DataCatalogView(QObject):
                                      bands=list(image.meta_data.values())[1],
                                      width=list(image.meta_data.values())[2],
                                      height=list(image.meta_data.values())[4],
-                                     pixel_size=round(sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6]), 2)))
+                                     pixel_size=round(sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6]), 2))
             info_box = QMessageBox(QMessageBox.Information, "Mapflow", message, parent=QApplication.activeWindow())
             return info_box.exec()
         except IndexError:
@@ -195,8 +195,8 @@ class DataCatalogView(QObject):
     
     def show_storage(self, taken_storage, free_storage):
         if free_storage:
-            self.dlg.dataLimit.setText(self.tr("Your data: {taken} MB. Free space: {free} MB".format(taken=round(taken_storage/1048576, 1), 
-                                                                                                     free=round(free_storage/1048576, 1))))
+            self.dlg.dataLimit.setText(self.tr("Your data: {taken} MB. Free space: {free} MB").format(taken=round(taken_storage/1048576, 1), 
+                                                                                                     free=round(free_storage/1048576, 1)))
         else:
             self.dlg.dataLimit.setText("")
 
@@ -209,11 +209,11 @@ class DataCatalogView(QObject):
     def show_mosaic_info(self, mosaic_name):
         self.add_mosaic_cell_buttons()
         # Show mosaic info
-        self.dlg.catalogSelectionLabel.setText(self.tr("Selected mosaic: <b>{mosaic_name}".format(
+        self.dlg.catalogSelectionLabel.setText(self.tr("Selected mosaic: <b>{mosaic_name}").format(
             mosaic_name=self.dlg.imagePreview.fontMetrics().elidedText(
                 mosaic_name,
                 Qt.ElideRight,
-                self.dlg.imagePreview.width() - 10))))
+                self.dlg.imagePreview.width() - 10)))
         # Enable buttons
         self.dlg.deleteCatalogButton.setEnabled(True)
         self.dlg.seeImagesButton.setEnabled(True)
@@ -238,16 +238,16 @@ class DataCatalogView(QObject):
                                              "file size: {size} MB \n"
                                              "pixel size: {pixel_size} m \n"
                                              "bands: {count}"
-                                             .format(date=image.uploaded_at.date(),
+                                            ).format(date=image.uploaded_at.date(),
                                                      time=image.uploaded_at.strftime('%H:%M'),
                                                      size=round(image.file_size/1048576, 1),
                                                      pixel_size=round(sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6]), 2),
-                                                     count=list(image.meta_data.values())[1])))
-        self.dlg.catalogSelectionLabel.setText(self.tr("Selected image: <b>{image_name}".format(
+                                                     count=list(image.meta_data.values())[1]))
+        self.dlg.catalogSelectionLabel.setText(self.tr("Selected image: <b>{image_name}").format(
             image_name=self.dlg.imagePreview.fontMetrics().elidedText(
                 image.filename,
                 Qt.ElideRight,
-                self.dlg.imagePreview.width() - 10))))
+                self.dlg.imagePreview.width() - 10)))
         # Show widgets
         self.dlg.deleteCatalogButton.setEnabled(True)
         self.set_table_tooltip(self.dlg.imageTable)
@@ -323,7 +323,6 @@ class DataCatalogView(QObject):
         self.image_cell_layout.addWidget(self.dlg.imageSpacer)
         self.image_cell_layout.addWidget(self.dlg.imageInfoButton)
         self.image_cell_layout.setAlignment(Qt.AlignRight)
-
 
     def add_mosaic_cell_buttons(self):
         # Create layout of mosaic cell buttons

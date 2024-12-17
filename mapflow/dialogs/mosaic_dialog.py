@@ -35,7 +35,7 @@ class CreateMosaicDialog(MosaicDialog):
 
     def mosaic(self):
         if not self.mosaicName:
-            raise AssertionError("Mosaic name must not be empty!")
+            raise AssertionError(self.tr("Mosaic name must not be empty!"))
         tags_list = self.mosaicTags.text().split(", ") if self.mosaicTags.text() else None
         return MosaicUpdateSchema(name = self.mosaicName.text(),
                                   tags = tags_list if self.mosaicTags.text() else [])
@@ -47,7 +47,7 @@ class UpdateMosaicDialog(MosaicDialog):
 
     def setup(self, mosaic: MosaicReturnSchema):
         if not mosaic:
-            raise TypeError("UpdateMosaicDialog requires a mosaic to update")
+            raise TypeError(self.tr("UpdateMosaicDialog requires a mosaic to update"))
         self.setWindowTitle(self.tr("Edit mosaic {}").format(mosaic.name))
         self.mosaicName.setText(mosaic.name)
         if mosaic.tags:
@@ -58,7 +58,7 @@ class UpdateMosaicDialog(MosaicDialog):
 
     def mosaic(self):
         if not self.mosaicName:
-            raise AssertionError("Mosaic name must not be empty!")
+            raise AssertionError(self.tr("Mosaic name must not be empty!"))
         tags_list = self.mosaicTags.text().split(", ") if self.mosaicTags.text() else None
         return MosaicUpdateSchema(name = self.mosaicName.text(),
                                   tags = tags_list if self.mosaicTags.text() else [])

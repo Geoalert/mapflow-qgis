@@ -111,7 +111,7 @@
           <widget class="QLineEdit" name="processingName">
            <property name="minimumSize">
             <size>
-             <width>250</width>
+             <width>270</width>
              <height>0</height>
             </size>
            </property>
@@ -209,7 +209,10 @@
         </layout>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="0,0,0">
+        <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="0,0,0,0">
+         <property name="spacing">
+          <number>7</number>
+         </property>
          <property name="sizeConstraint">
           <enum>QLayout::SetMinimumSize</enum>
          </property>
@@ -240,6 +243,12 @@
          </item>
          <item>
           <widget class="QComboBox" name="sourceCombo">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
            <property name="minimumSize">
             <size>
              <width>120</width>
@@ -260,6 +269,12 @@
             <size>
              <width>50</width>
              <height>0</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>75</width>
+             <height>16777215</height>
             </size>
            </property>
            <property name="toolTip">

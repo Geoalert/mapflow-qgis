@@ -10,6 +10,221 @@
     </message>
 </context>
 <context>
+    <name>CreateMosaicDialog</name>
+    <message>
+        <location filename="../dialogs/mosaic_dialog.py" line="38"/>
+        <source>Mosaic name must not be empty!</source>
+        <translation>Имя мозаики должно быть заполнено!</translation>
+    </message>
+</context>
+<context>
+    <name>DataCatalogService</name>
+    <message>
+        <location filename="../functional/service/data_catalog.py" line="120"/>
+        <source>Delete mosaic &apos;{name}&apos;?</source>
+        <translation>Удалить мозаику &apos;{name}&apos;?</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/data_catalog.py" line="154"/>
+        <source>Choose image to upload</source>
+        <translation>Выберите изображение для загрузки</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/data_catalog.py" line="200"/>
+        <source>Raster TIFF file must be georeferenced, have size less than {size} pixels and file size less than {memory} MB</source>
+        <translation>Растровый TIFF файл должен иметь географическую привязку, размер растра менее {size} пикселей и менее {memory} Мб</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/data_catalog.py" line="205"/>
+        <source>&lt;center&gt;&lt;b&gt;Error uploading &apos;{name}&apos;&lt;/b&gt;</source>
+        <translation>&lt;center&gt;&lt;b&gt;Ошибка загрузки &apos;{name}&apos;&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/data_catalog.py" line="210"/>
+        <source>&lt;b&gt;Not enough storage space. &lt;/b&gt;You have {free_storage} MB left, but &apos;{name}&apos; is {image_size} MB</source>
+        <translation>&lt;b&gt;Недостаточно свободного места. &lt;/b&gt;Свободно: {free_storage} Мб, а размер &apos;{name}&apos; составляет {image_size} Мб</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/data_catalog.py" line="290"/>
+        <source>&lt;center&gt;Delete image &lt;b&gt;&apos;{name}&apos;&lt;/b&gt; from &apos;{mosaic}&apos; mosaic?</source>
+        <translation>&lt;center&gt;Удалить изображение &lt;b&gt;&apos;{name}&apos;&lt;/b&gt; из мозаики &apos;{mosaic}&apos;?</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/data_catalog.py" line="293"/>
+        <source>&lt;center&gt;Delete following images from &apos;{mosaic}&apos; mosaic:&lt;br&gt;&lt;b&gt;&apos;{names}&apos;&lt;/b&gt;?</source>
+        <translation>&lt;center&gt;Удалить следующие изображения из мозаики &apos;{mosaic}&apos;:&lt;br&gt;&lt;b&gt;&apos;{names}&apos;&lt;/b&gt;?</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/data_catalog.py" line="296"/>
+        <source>&lt;center&gt;Delete &lt;b&gt;{len}&lt;/b&gt; images from &apos;{mosaic}&apos; mosaic?</source>
+        <translation>&lt;center&gt;Удалить &lt;b&gt;{len}&lt;/b&gt; изображений из мозаики &apos;{mosaic}&apos;?</translation>
+    </message>
+</context>
+<context>
+    <name>DataCatalogView</name>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="22"/>
+        <source>Upload from file</source>
+        <translation>Из файла</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="23"/>
+        <source>Choose raster layer</source>
+        <translation>Из растрового слоя</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="41"/>
+        <source>Add images</source>
+        <translation>Загрузить изображения</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="42"/>
+        <source>Show images</source>
+        <translation>Показать изображения</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="45"/>
+        <source>Preview</source>
+        <translation>Просмотр</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="44"/>
+        <source>Edit</source>
+        <translation>Редактировать</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="46"/>
+        <source>Info</source>
+        <translation>Информация</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="87"/>
+        <source>Mosaics</source>
+        <translation>Мозаики</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="270"/>
+        <source>Double-click to show images</source>
+        <translation>Нажмите дважды для просмотра изображений</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="106"/>
+        <source>Mosaic: {name} 
+Number of images: {count} 
+</source>
+        <translation>Мозаика: {name} 
+Количество изображений: {count} 
+</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="113"/>
+        <source>Size: {mosaic_size} MB 
+Pixel size: {pixel_size} m 
+</source>
+        <translation>Размер файла: {mosaic_size} Мб 
+Размер пикселя: {pixel_size} м 
+</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="116"/>
+        <source>Created: {date} at {time} 
+Tags: {tags}</source>
+        <translation>Создана: {date} в {time} 
+Тэги: {tags}</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="124"/>
+        <source>&lt;b&gt;Name&lt;/b&gt;: {filename}                              &lt;br&gt;&lt;b&gt;Uploaded&lt;/b&gt;&lt;/br&gt;: {date} at {time}                              &lt;br&gt;&lt;b&gt;Size&lt;/b&gt;&lt;/br&gt;: {file_size} MB                              &lt;br&gt;&lt;b&gt;CRS&lt;/b&gt;&lt;/br&gt;: {crs}                              &lt;br&gt;&lt;b&gt;Number of bands&lt;/br&gt;&lt;/b&gt;: {bands}                              &lt;br&gt;&lt;b&gt;Width&lt;/br&gt;&lt;/b&gt;: {width} pixels                              &lt;br&gt;&lt;b&gt;Height&lt;/br&gt;&lt;/b&gt;: {height} pixels                              &lt;br&gt;&lt;b&gt;Pixel size&lt;/br&gt;&lt;/b&gt;: {pixel_size} m</source>
+        <translation>&lt;b&gt;Имя файла&lt;/b&gt;: {filename}                              &lt;br&gt;&lt;b&gt;Загружено&lt;/b&gt;&lt;/br&gt;: {date} в {time}                              &lt;br&gt;&lt;b&gt;Размер файла&lt;/b&gt;&lt;/br&gt;: {file_size} Мб                              &lt;br&gt;&lt;b&gt;Система координат&lt;/b&gt;&lt;/br&gt;: {crs}                              &lt;br&gt;&lt;b&gt;Количество каналов&lt;/br&gt;&lt;/b&gt;: {bands}                              &lt;br&gt;&lt;b&gt;Ширина&lt;/br&gt;&lt;/b&gt;: {width} пикселей                              &lt;br&gt;&lt;b&gt;Высота&lt;/br&gt;&lt;/b&gt;: {height} пикселей                              &lt;br&gt;&lt;b&gt;Размер пикселя&lt;/br&gt;&lt;/b&gt;: {pixel_size} м</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="160"/>
+        <source>Images</source>
+        <translation>Изображения</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="198"/>
+        <source>Your data: {taken} MB. Free space: {free} MB</source>
+        <translation>Занято: {taken} Мб. Свободно: {free} Мб</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="212"/>
+        <source>Selected mosaic: &lt;b&gt;{mosaic_name}</source>
+        <translation>Выбранная мозаика: &lt;b&gt;{mosaic_name}</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="227"/>
+        <source>No mosaic selected</source>
+        <translation>Мозаика не выбрана</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="237"/>
+        <source>uploaded: {date} at {time} 
+file size: {size} MB 
+pixel size: {pixel_size} m 
+bands: {count}</source>
+        <translation>загружено: {date} в {time} 
+размер файла: {size} Мб 
+размер пиксела: {pixel_size} м 
+каналы: {count}</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="246"/>
+        <source>Selected image: &lt;b&gt;{image_name}</source>
+        <translation>Выбранное изображение: &lt;b&gt;{image_name}</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="257"/>
+        <source>No image selected</source>
+        <translation>Изображение не выбрано</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="267"/>
+        <source>&apos;Cmd&apos; + click to deselect</source>
+        <translation>Нажмите на ячейку, зажав &apos;Cmd&apos;, чтобы снять выделение</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="267"/>
+        <source>&apos;Ctrl&apos; + click to deselect</source>
+        <translation>Нажмите на ячейку, зажав &apos;Ctrl&apos;, чтобы снять выделение</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="282"/>
+        <source>Image preview</source>
+        <translation>Предпросмотр изображения</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="283"/>
+        <source>Delete image</source>
+        <translation>Удалить изображение</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="284"/>
+        <source>Add image</source>
+        <translation>Загрузить изображение</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="294"/>
+        <source>Mosaic data</source>
+        <translation>Информация о мозаике</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="295"/>
+        <source>Delete mosaic</source>
+        <translation>Удалить мозаику</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="296"/>
+        <source>Add mosaic</source>
+        <translation>Создать мозаику</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/data_catalog_view.py" line="237"/>
+        <source>uploaded: {date} at {time}</source>
+        <translation type="obsolete">Загружено: {date} в {time}</translation>
+    </message>
+</context>
+<context>
     <name>DataErrors</name>
     <message>
         <location filename="../errors/data_errors.py" line="8"/>
@@ -384,7 +599,7 @@
 <context>
     <name>MainDialog</name>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="888"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="890"/>
         <source>Processing</source>
         <translation>Обработка</translation>
     </message>
@@ -399,7 +614,7 @@
         <translation type="obsolete">Модель Mapflow:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="133"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="139"/>
         <source>Area:</source>
         <translation>Область:</translation>
     </message>
@@ -411,55 +626,55 @@
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="189"/>
         <source>Use image extent</source>
-        <translation>По изображению</translation>
+        <translation type="obsolete">По изображению</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="573"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="575"/>
         <source>Start processing</source>
         <translation>Начать обработку</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1893"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="2183"/>
         <source>Name</source>
         <translation>Название</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1794"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="2084"/>
         <source>Model</source>
         <translation>Модель</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1810"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="2100"/>
         <source>Status</source>
         <translation>Состояние</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1874"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="2164"/>
         <source>Created</source>
         <translation>Дата</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="856"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="858"/>
         <source>Log out</source>
         <translation>Выйти</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1044"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1046"/>
         <source>Delete</source>
         <translation>Удалить</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="2020"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="2310"/>
         <source>Output directory:</source>
         <translation>Рабочая папка:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1571"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1861"/>
         <source>Max zoom:</source>
         <translation>Макс зум:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1591"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1881"/>
         <source>Preview</source>
         <translation>Просмотр</translation>
     </message>
@@ -484,24 +699,24 @@
         <translation type="obsolete">Запомнить</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="2088"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="2378"/>
         <source>Help</source>
         <translation>Помощь</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="260"/>
         <source>wms</source>
-        <translation>wms</translation>
+        <translation type="obsolete">wms</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="261"/>
         <source>postgresraster</source>
-        <translation>postgresraster</translation>
+        <translation type="obsolete">postgresraster</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="262"/>
         <source>grassraster</source>
-        <translation>grassraster</translation>
+        <translation type="obsolete">grassraster</translation>
     </message>
     <message>
         <location filename="../dialogs/static/ui/main_dialog.ui" line="185"/>
@@ -509,7 +724,7 @@
         <translation type="obsolete">Источники данных</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="960"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="962"/>
         <source>Area, sq. km</source>
         <translation>Площадь, кв. км</translation>
     </message>
@@ -529,37 +744,37 @@
         <translation type="obsolete">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#caching&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как это работает&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="955"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="957"/>
         <source>Progress %</source>
         <translation>Прогресс %</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1066"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1068"/>
         <source>Image ID:</source>
         <translation>ID снимка:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1073"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1075"/>
         <source>Select in the table below or paste here</source>
         <translation>Выберите в таблице ниже или вставьте сюда</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1112"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1114"/>
         <source>Provider Imagery Catalog</source>
         <translation>Каталог снимков</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1286"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1288"/>
         <source>Use canvas extent</source>
         <translation>По видимой области</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1170"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1172"/>
         <source>From:</source>
         <translation>С:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1266"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1268"/>
         <source>yyyy-MM-dd</source>
         <translation>yyyy-MM-dd</translation>
     </message>
@@ -569,42 +784,42 @@
         <translation type="obsolete">Искать снимки</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1242"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1244"/>
         <source>To:</source>
         <translation>По:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1320"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1322"/>
         <source>Additional filters</source>
         <translation>Дополнительные фильтры</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1332"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1334"/>
         <source>Min intersection:</source>
         <translation>Минимальное пересечение:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1409"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1411"/>
         <source>%</source>
         <translation>%</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1377"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1379"/>
         <source>Cloud cover up to:</source>
         <translation>Облачность не более:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1436"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1726"/>
         <source>Settings</source>
         <translation>Настройки</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1484"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1774"/>
         <source>Add your own web imagery provider</source>
         <translation>Добавьте собственный источник снимков</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1109"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1111"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Here, you can search Maxar or Sentinel imagery for your area and timespan.&lt;/p&gt;&lt;p&gt;Additional filters are also available below.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Здесь вы можете искать подходящие для ваших области и времени снимки Maxar и Sentinel-2.&lt;/p&gt;&lt;p&gt;Дополнительные параметры поиска находятся во вкладке ниже.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
@@ -614,42 +829,42 @@
         <translation type="obsolete">Любые (мульти-)полигон(ы)</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1283"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1285"/>
         <source>Use your current screen area</source>
         <translation>Область ограниченная вашим экраном</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1167"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1169"/>
         <source>Earlier images won&apos;t be shown</source>
         <translation>Более ранние снимки не будут показаны</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1249"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1251"/>
         <source>Dates are inclusive</source>
         <translation>Даты включительны</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1229"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1231"/>
         <source>Click and wait for a few seconds until the table below is filled out</source>
         <translation>Нажмите и подождите несколько секунд пока данные загрузятся</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1239"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1241"/>
         <source>More recent images won&apos;t be shown</source>
         <translation>Более поздние снимки не будут показаны</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1317"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1319"/>
         <source>Click to specify additional search criteria</source>
         <translation>Нажмите чтобы указать дополнительные условия поиска</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1339"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1341"/>
         <source>Images that cover fewer % of your area won&apos;t be shown</source>
         <translation>Снимки покрывающие меньший % вашей области не будут показаны</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1129"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1131"/>
         <source>Double-click on a row to preview its image</source>
         <translation>Двойной щелчок мыши загрузит предпросмотр снимка</translation>
     </message>
@@ -659,12 +874,12 @@
         <translation type="obsolete">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Пользовательский интерфейс&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/userguides/prices.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Тарифы&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#id19&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать собственный снимок для обработки&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#id17&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать снимки из других источников&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как подключить Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow Agro&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://agro.geoalert.io/&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;О проекте&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow.html#sentinel-2&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Снимки Sentinel&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/userguides/iterative_mapping.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Пошаговый способ картирования полей&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Если у вас есть предложения или замечания по работе плагина,&lt;br/&gt;мы будем рады если вы создадите задачу на нашем &lt;/span&gt;&lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="140"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="146"/>
         <source>Create or load vector layer with your area of interest</source>
         <translation>Создать или загрузить векторный слой с вашей областью интереса</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="648"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="650"/>
         <source>...</source>
         <translation>...</translation>
     </message>
@@ -674,7 +889,7 @@
         <translation type="obsolete">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Пользовательский интерфейс&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/userguides/prices.html#mapflow-qgis-pricing-model&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Тарифы&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#id19&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать собственный снимок для обработки&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#id17&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать снимки из других источников&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow#maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как подключить Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow Agro&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://agro.geoalert.io/&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;О проекте&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/api/qgis_mapflow.html#sentinel-2&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Снимки Sentinel&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://ru.docs.mapflow.ai/userguides/iterative_mapping.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Пошаговый способ картирования полей&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Если у вас есть предложения или замечания по работе плагина,&lt;br/&gt;мы будем рады если вы создадите задачу на нашем &lt;/span&gt;&lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="990"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="992"/>
         <source>View results</source>
         <translation>Просмотр результатов</translation>
     </message>
@@ -694,7 +909,7 @@
         <translation type="obsolete">Оценить обработку</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="340"/>
+        <location filename="../dialogs/main_dialog.py" line="360"/>
         <source>Please select processing and rating to submit</source>
         <translation>Пожалуйста, выберите обработку и оценку для отправки</translation>
     </message>
@@ -739,77 +954,77 @@
         <translation type="obsolete">Пополнить</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="389"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="391"/>
         <source>AI model:</source>
         <translation>Модель:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="436"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="438"/>
         <source>Price of the processing per sq.km</source>
         <translation>Цена обработки за кв.км</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="417"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="419"/>
         <source>CC</source>
         <translation>СС</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="439"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="441"/>
         <source>10</source>
         <translation>10</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="508"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="510"/>
         <source>Ctrl+S</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="231"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="237"/>
         <source>Data source:</source>
         <translation>Данные:</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="456"/>
+        <location filename="../dialogs/main_dialog.py" line="476"/>
         <source>Rate processing:</source>
         <translation>Оцените обработку:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="653"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="655"/>
         <source>⭐⭐⭐⭐⭐</source>
         <translation>⭐⭐⭐⭐⭐</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="658"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="660"/>
         <source>⭐⭐⭐⭐</source>
         <translation>⭐⭐⭐⭐</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="663"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="665"/>
         <source>⭐⭐⭐</source>
         <translation>⭐⭐⭐</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="668"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="670"/>
         <source>⭐⭐</source>
         <translation>⭐⭐</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="673"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="675"/>
         <source>⭐</source>
         <translation>⭐</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="701"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="703"/>
         <source>Share your thoughts on what aspects of this data processing work well or could be improved</source>
         <translation>Поделитесь с нами, что вам понравилось в этой обработке, а что можно было бы улучшить</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="750"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="752"/>
         <source>Submit feedback</source>
         <translation>Отправить отзыв</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1058"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1060"/>
         <source>Imagery search</source>
         <translation>Поиск снимков</translation>
     </message>
@@ -824,17 +1039,17 @@
         <translation type="obsolete">Упаравление вашим аккаунтом Mapflow</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="797"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="799"/>
         <source>Your balance:</source>
         <translation>Ваш баланс:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="810"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="812"/>
         <source> Top up balance </source>
         <translation> Пополнить баланс </translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="827"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="829"/>
         <source>Open billing history</source>
         <translation>Открыть историю</translation>
     </message>
@@ -849,7 +1064,7 @@
         <translation type="obsolete">Провайдеры данных:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="2005"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="2295"/>
         <source>Set up local working directory, where all the temporary files will be stored</source>
         <translation>Настройка рабочей папки на вашем компьютере, где будут храниться все временные файлы</translation>
     </message>
@@ -864,196 +1079,226 @@
         <translation type="obsolete">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Описание пользовательского интерфейса&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow.html#how-to-upload-your-image&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как загрузить и обработать свои данные&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать другие тайловые сервисы (XYZ или TMS)&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как подключиться к Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:14px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow credits&lt;/span&gt;&lt;span style=&quot; font-size:large; font-weight:700;&quot;&gt;&lt;br/&gt;&lt;/span&gt;&lt;/h3&gt;&lt;table border=&quot;0&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px;&quot; align=&quot;center&quot; cellspacing=&quot;2&quot; cellpadding=&quot;0&quot;&gt;&lt;thead&gt;&lt;tr&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Единовременная покупка&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:696;&quot;&gt;$50&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:696;&quot;&gt;$90&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:696;&quot;&gt;$800&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tr&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;Количество кредитов&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;500&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;1000&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;10000&lt;/p&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;p&gt;См. также – &lt;a href=&quot;https://docs.mapflow.ai/userguides/prices.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#094fd1;&quot;&gt;*Сколько стоят данные и их обработка?*&lt;/span&gt;&lt;/a&gt;&lt;br/&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:14px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Присоединяйтесь к проекту на  &lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt; или &lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis/issues&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;сообщите об ошибке&lt;/span&gt;&lt;/a&gt;&lt;/span&gt;&lt;/h3&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="713"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="715"/>
         <source>Accept</source>
         <translation>Принять</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1909"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="2199"/>
         <source>Review</source>
         <translation>Статус отзыва</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1858"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="2148"/>
         <source>Cost</source>
         <translation>Стоимость</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="975"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="977"/>
         <source>Review until</source>
         <translation>Отзыв до</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1442"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1732"/>
         <source>Add or edit imagery providers:</source>
         <translation>Добавить или изменить провайдеров данных:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1720"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="2010"/>
         <source>Configure processings table:</source>
         <translation>Настроить таблицу обработок:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1781"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="2071"/>
         <source>Id</source>
         <translation>Id</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1826"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="2116"/>
         <source>Area</source>
         <translation>Площадь</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1842"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="2132"/>
         <source>Progress</source>
         <translation>Прогресс</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="522"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="524"/>
         <source>Model options: </source>
         <translation>Опции: </translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="104"/>
+        <location filename="../dialogs/main_dialog.py" line="126"/>
         <source>See details</source>
         <translation>Подробности</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="284"/>
+        <location filename="../dialogs/main_dialog.py" line="304"/>
         <source>Search </source>
         <translation>Искать </translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1310"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1312"/>
         <source>Clear </source>
         <translation>Очистить </translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1935"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="2225"/>
         <source>Use all vector layers as Areas Of Interest</source>
         <translation>Добавлять все векторные слои</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="102"/>
+        <location filename="../dialogs/main_dialog.py" line="124"/>
         <source>Save results</source>
         <translation>Сохранить результаты</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1945"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="2235"/>
         <source>view results as a vector layer</source>
         <translation>просмотр результатов в виде векторного слоя</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1958"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="2248"/>
         <source>save local gpkg file to view results</source>
         <translation>сохранять локальный файл gpkg для просмотра результатов</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="2097"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="2387"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;User Interface walkthrough&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow.html#how-to-upload-your-image&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to process your own image&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to use a different imagery tileset (XYZ or TMS)&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;How to connect to Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:14px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow credits&lt;/span&gt;&lt;span style=&quot; font-size:large; font-weight:700;&quot;&gt;&lt;br/&gt;&lt;/span&gt;&lt;/h3&gt;&lt;table border=&quot;0&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px;&quot; align=&quot;center&quot; cellspacing=&quot;2&quot; cellpadding=&quot;0&quot;&gt;&lt;thead&gt;&lt;tr&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Pay as you go&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:696;&quot;&gt;$50&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:696;&quot;&gt;$90&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:696;&quot;&gt;$800&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tr&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;Credits for processing&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;500&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;1000&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;10000&lt;/p&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;p&gt;See also – &lt;a href=&quot;https://docs.mapflow.ai/userguides/prices.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#094fd1;&quot;&gt;How much do the processings and data cost?&lt;/span&gt;&lt;/a&gt;&lt;br/&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:14px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Join the project on &lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt; or &lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis/issues&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;report an issue&lt;/span&gt;&lt;/a&gt;&lt;/span&gt;&lt;/h3&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;h3 style=&quot; margin-top:30px; margin-bottom:20px; margin-left:30px; margin-right:30px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow&lt;/span&gt;&lt;/h3&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#user-interface&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Описание пользовательского интерфейса&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow.html#how-to-upload-your-image&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как загрузить и обработать свои данные&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-use-other-imagery-services&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как использовать другие тайловые сервисы (XYZ или TMS)&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;https://docs.mapflow.ai/api/qgis_mapflow#how-to-connect-to-maxar-securewatch&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Как подключиться к Maxar SecureWatch&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:14px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Mapflow credits&lt;/span&gt;&lt;span style=&quot; font-size:large; font-weight:700;&quot;&gt;&lt;br/&gt;&lt;/span&gt;&lt;/h3&gt;&lt;table border=&quot;0&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px;&quot; align=&quot;center&quot; cellspacing=&quot;2&quot; cellpadding=&quot;0&quot;&gt;&lt;thead&gt;&lt;tr&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Единовременная покупка&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:696;&quot;&gt;$50&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:696;&quot;&gt;$90&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-weight:696;&quot;&gt;$800&lt;/span&gt;&lt;/p&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tr&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;Количество кредитов&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;500&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;1000&lt;/p&gt;&lt;/td&gt;&lt;td style=&quot; padding-left:10; padding-right:10; padding-top:10; padding-bottom:10; border-top:1px; border-right:1px; border-bottom:1px; border-left:1px; border-top-color:#8f8f8f; border-right-color:#8f8f8f; border-bottom-color:#8f8f8f; border-left-color:#8f8f8f; border-top-style:solid; border-right-style:solid; border-bottom-style:solid; border-left-style:solid;&quot;&gt;&lt;p&gt;10000&lt;/p&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;p&gt;См. также – &lt;a href=&quot;https://docs.mapflow.ai/userguides/prices.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#094fd1;&quot;&gt;Сколько стоят данные и их обработка?&lt;/span&gt;&lt;/a&gt;&lt;br/&gt;&lt;/p&gt;&lt;h3 style=&quot; margin-top:14px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:large; font-weight:600;&quot;&gt;Присоединяйтесь к проекту на  &lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;GitHub&lt;/span&gt;&lt;/a&gt; или &lt;a href=&quot;https://github.com/Geoalert/mapflow-qgis/issues&quot;&gt;&lt;span style=&quot; font-weight:600; text-decoration: underline; color:#0000ff;&quot;&gt;сообщите об ошибке&lt;/span&gt;&lt;/a&gt;&lt;/span&gt;&lt;/h3&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="1623"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1913"/>
         <source>Select Mapflow project:</source>
         <translation>Выберите проект:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="2121"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="2411"/>
         <source>see_details_action</source>
         <translation>see_details_action</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="301"/>
+        <location filename="../dialogs/main_dialog.py" line="321"/>
         <source>
 Price: {} credits per square km</source>
         <translation>
 Цена: {} кредитов за кв.км</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="312"/>
+        <location filename="../dialogs/main_dialog.py" line="332"/>
         <source>Rate processing &lt;b&gt;{name}&lt;/b&gt;:</source>
         <translation>Оценить процессинг &lt;b&gt;{name}&lt;/b&gt;:</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="425"/>
+        <location filename="../dialogs/main_dialog.py" line="445"/>
         <source>You can&apos;t remove or modify default project</source>
         <translation>Нельзя удалять или менять проект по умолчанию</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="465"/>
+        <location filename="../dialogs/main_dialog.py" line="485"/>
         <source>Not enough rights to delete processing in a shared project ({})</source>
         <translation>Недостаточно прав для удаления проекта ({})</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="276"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="278"/>
         <source>Zoom</source>
         <translation type="unfinished">Масштабный уровень</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="289"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="291"/>
         <source> –</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="294"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="296"/>
         <source>14</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="299"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="301"/>
         <source>15</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="304"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="306"/>
         <source>16</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="309"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="311"/>
         <source>17</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="314"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="316"/>
         <source>18</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="319"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="321"/>
         <source>19</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/main_dialog.ui" line="324"/>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="326"/>
         <source>20</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="103"/>
+        <location filename="../dialogs/main_dialog.py" line="125"/>
         <source>Download AOI</source>
         <translation>Скачать область интереса</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="105"/>
+        <location filename="../dialogs/main_dialog.py" line="127"/>
         <source>Rename</source>
         <translation>Переименовать</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="446"/>
+        <location filename="../dialogs/main_dialog.py" line="466"/>
         <source>Not enough rights to start processing in a shared project ({})</source>
         <translation>Недостаточно прав в проекте для запауска обработки ({})</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="459"/>
+        <location filename="../dialogs/main_dialog.py" line="479"/>
         <source>Not enough rights to rate processing in a shared project ({})</source>
         <translation>Недостаточно прав в проекте для оценивания обработки ({})</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="461"/>
+        <location filename="../dialogs/main_dialog.py" line="481"/>
         <source>Please select processing</source>
         <translation>Пожалуйста, выберите обработку</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="195"/>
+        <source>Use image / mosaic extent</source>
+        <translation>Использовать охват растра</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1434"/>
+        <source>My imagery</source>
+        <translation>Мои изображения</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1526"/>
+        <source>No current selection</source>
+        <translation>Нет выбранных данных</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1555"/>
+        <source>Mosaic info</source>
+        <translation>Информация о мозаике</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1658"/>
+        <source>Add mosaic</source>
+        <translation>Добавить мозаику</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/main_dialog.ui" line="1671"/>
+        <source>Delete mosaic</source>
+        <translation>Удалить мозаику</translation>
     </message>
 </context>
 <context>
@@ -1069,19 +1314,19 @@ Price: {} credits per square km</source>
         <translation type="obsolete">Вход</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="833"/>
+        <location filename="../mapflow.py" line="837"/>
         <source>If you already know which {provider_name} image you want to process,
 simply paste its ID here. Otherwise, search suitable images in the catalog below.</source>
         <translation>Если вы уже знаете ID снимка {provider_name} который вы хотите обработать,
 просто вставьте его в это поле. Иначе, используйте каталог ниже чтобы найти подходящий снимок.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="825"/>
+        <location filename="../mapflow.py" line="829"/>
         <source>e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00</source>
         <translation>например S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="837"/>
+        <location filename="../mapflow.py" line="841"/>
         <source>e.g. a3b154c40cc74f3b934c0ffc9b34ecd1</source>
         <translation>например a3b154c40cc74f3b934c0ffc9b34ecd1</translation>
     </message>
@@ -1101,17 +1346,17 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete"> - Каталог снимков</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="713"/>
+        <location filename="../mapflow.py" line="716"/>
         <source>Permanently remove {}?</source>
         <translation>Удалить {}?</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="866"/>
+        <location filename="../mapflow.py" line="870"/>
         <source>Select output directory</source>
         <translation>Выберите папку для сохранения данных</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="882"/>
+        <location filename="../mapflow.py" line="886"/>
         <source>Please, specify an existing output directory</source>
         <translation>Пожалуйста, выберите папку для сохранения данных</translation>
     </message>
@@ -1126,27 +1371,27 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Пожалуйста, выберите слой с областью обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1077"/>
+        <location filename="../mapflow.py" line="1081"/>
         <source>Your area of interest is too large.</source>
         <translation>Слишком большая область запроса метаданных.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1180"/>
+        <location filename="../mapflow.py" line="1184"/>
         <source>Please, check your credentials</source>
         <translation>Пожалуйста, проверьте реквизиты</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1330"/>
+        <location filename="../mapflow.py" line="1334"/>
         <source>We couldn&apos;t fetch Sentinel metadata</source>
         <translation>Мы не смогли получить метаданные Сентинел</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1387"/>
+        <location filename="../mapflow.py" line="1391"/>
         <source>No images match your criteria. Try relaxing the filters.</source>
         <translation>Нет подходящий снимков. Попробуйте изменить параметры поиска.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1297"/>
+        <location filename="../mapflow.py" line="1301"/>
         <source>More</source>
         <translation>Еще</translation>
     </message>
@@ -1156,27 +1401,27 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Мы не смогли получить метаданные от Максар</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1519"/>
+        <location filename="../mapflow.py" line="1525"/>
         <source>A Sentinel image ID should look like S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 or /36/S/XA/2022/02/09/0/</source>
         <translation>ID снимка Sentinel должен иметь формат S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 или /36/S/XA/2022/02/09/0/</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1649"/>
+        <location filename="../mapflow.py" line="1707"/>
         <source>Area: {:.2f} sq.km</source>
         <translation>Площадь: {:.2f} кв.км</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1716"/>
+        <location filename="../mapflow.py" line="1775"/>
         <source>Delete selected processings?</source>
         <translation>Удалить выбранные обработки?</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1742"/>
+        <location filename="../mapflow.py" line="1801"/>
         <source>Error deleting a processing</source>
         <translation>Ошибка при удалении обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1806"/>
+        <location filename="../mapflow.py" line="1865"/>
         <source>Please, specify a name for your processing</source>
         <translation>Пожалуйста, выберите название обработки</translation>
     </message>
@@ -1191,7 +1436,7 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Мы не смогли распознать проекцию области обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1816"/>
+        <location filename="../mapflow.py" line="1875"/>
         <source>Up to {} sq km can be processed at a time. Try splitting your area(s) into several processings.</source>
         <translation>За раз можно обработать не более {} кв км. Попробуйте разделить область обработки на части.</translation>
     </message>
@@ -1211,39 +1456,39 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Я хотел бы стать премиум пользователем Mapflow чтобы обрабатывать по Максар.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1810"/>
+        <location filename="../mapflow.py" line="1869"/>
         <source>GeoTIFF is corrupted or has invalid projection</source>
         <translation>Geotiff файл повржден или имеет некорректную проекцию</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1863"/>
+        <location filename="../mapflow.py" line="1915"/>
         <source>Bad AOI. AOI must be inside boundaries: 
 [-180, 180] by longitude, [-90, 90] by latitude</source>
         <translation>Неверный AOI. AOI должен быть в пределах:
 [-180, 180] по долготе, [-90, 90] по широте</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1984"/>
+        <location filename="../mapflow.py" line="2046"/>
         <source>Starting the processing...</source>
         <translation>Создаем обработку...</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1782"/>
+        <location filename="../mapflow.py" line="1841"/>
         <source>Uploading image to Mapflow...</source>
         <translation>Загружаем ваш снимок на Mapflow...</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2013"/>
+        <location filename="../mapflow.py" line="2068"/>
         <source>We couldn&apos;t upload your GeoTIFF</source>
         <translation>Мы не смогли загрузить ваш снимок</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2063"/>
+        <location filename="../mapflow.py" line="2123"/>
         <source>Processing creation failed</source>
         <translation>Мы не смогли создать обработку</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2035"/>
+        <location filename="../mapflow.py" line="2090"/>
         <source>Success! We&apos;ll notify you when the processing has finished.</source>
         <translation>Обработка создана! Мы оповестим вас когда она завершится.</translation>
     </message>
@@ -1253,27 +1498,27 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Доступный лимит: {} кв.км</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2165"/>
+        <location filename="../mapflow.py" line="2227"/>
         <source>Sorry, we couldn&apos;t load the image</source>
         <translation>Ошибка предпросмотра снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2166"/>
+        <location filename="../mapflow.py" line="2228"/>
         <source>Error previewing Sentinel imagery</source>
         <translation>Ошибка предпросмотра снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2290"/>
+        <location filename="../mapflow.py" line="2352"/>
         <source>Sorry, there&apos;s no preview for this image</source>
         <translation>К сожалению, для этого снимка нет предпросмотра</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2393"/>
+        <location filename="../mapflow.py" line="2455"/>
         <source>We couldn&apos;t load a preview for this image</source>
         <translation>Мы не смогли осуществить предпросмотр этого снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2305"/>
+        <location filename="../mapflow.py" line="2367"/>
         <source>Please, select an image to preview</source>
         <translation>Пожалуйста, выберите снимок</translation>
     </message>
@@ -1300,7 +1545,7 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
 </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2726"/>
+        <location filename="../mapflow.py" line="2784"/>
         <source> finished. Double-click it in the table to download the results.</source>
         <translation> завершилась. Дважды кликните на нее в таблице чтобы загрузить результаты.</translation>
     </message>
@@ -1315,7 +1560,7 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Неверный токен</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2961"/>
+        <location filename="../mapflow.py" line="3016"/>
         <source>Proxy error. Please, check your proxy settings.</source>
         <translation>Ошибка прокси. Пожалуйста, проверьте настройки прокси в QGIS.</translation>
     </message>
@@ -1325,34 +1570,34 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Неизвестная ошибка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3113"/>
+        <location filename="../mapflow.py" line="3167"/>
         <source>A new version of Mapflow plugin {server_version} is released 
 We recommend you to upgrade to get all the latest features
 Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation>Появилась новая версия mapflow {server_version}. Реомендуем обновить версию чтобы получить доступ к новым возможностям. Выберите меню Модули -&gt; Управление модулями -&gt; Обновляемые</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="444"/>
+        <location filename="../mapflow.py" line="457"/>
         <source>Select vector file</source>
         <translation>Выберите векторный файл</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="306"/>
+        <location filename="../mapflow.py" line="321"/>
         <source>Create new AOI layer from map extent</source>
         <translation>Создать новый слой области интереса из видимой области карты</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="307"/>
+        <location filename="../mapflow.py" line="322"/>
         <source>Add AOI from vector file</source>
         <translation>Загрузить область интереса из файла</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="456"/>
+        <location filename="../mapflow.py" line="469"/>
         <source>Your file is not valid vector data source!</source>
         <translation>Ваш файл не подходит как источник векторных данных!</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2773"/>
+        <location filename="../mapflow.py" line="2831"/>
         <source>Please review or accept this processing until {}. Double click to add results to the map</source>
         <translation>Пожалуйста, оставьте отзыв или примите результаты до {}. Двойной клик для добавления результатов на карту</translation>
     </message>
@@ -1377,19 +1622,19 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation type="obsolete">Провайдеру {} требуется выбранный ID снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1995"/>
+        <location filename="../mapflow.py" line="2050"/>
         <source>Could not launch processing! Error: {}.</source>
         <translation>Не удалось запустить обработку! Ошибка: {}.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2700"/>
+        <location filename="../mapflow.py" line="2758"/>
         <source> failed with error:
 </source>
         <translation> завершилась с ошибкой:
 </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="206"/>
+        <location filename="../mapflow.py" line="221"/>
         <source>Error during loading the data providers: {e}</source>
         <translation>Ошибка при загрузке источников данных: {e}</translation>
     </message>
@@ -1399,17 +1644,17 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation type="obsolete">Нам не удалось импортировать провайдеров из настроек {errors}. Пожалуйста, добавьте их снова</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="745"/>
+        <location filename="../mapflow.py" line="748"/>
         <source>Provider name must be unique. {name} already exists, select another or delete/edit existing</source>
         <translation>Название источника данных должен быть уникальным. {name} уже существует, выберите другое название или удалите/измените существующий</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1418"/>
+        <location filename="../mapflow.py" line="1422"/>
         <source>We couldn&apos;t get metadata from Maxar, error {error}</source>
         <translation>Мы не смогли получить метаданные от Maxar, ошибка {error}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1975"/>
+        <location filename="../mapflow.py" line="2040"/>
         <source>Processing limit exceeded. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; to top up your balance</source>
         <translation>Превышен доступный лимит обработки. Посетите &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; для пополнения баланса</translation>
     </message>
@@ -1424,39 +1669,39 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation type="obsolete">Просмотр недоступен для источника данных {}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2973"/>
+        <location filename="../mapflow.py" line="3026"/>
         <source>This operation is forbidden for your account, contact us</source>
         <translation>Эта операция запрещена для вашего аккаунта, свяжитесь с нами</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2929"/>
+        <location filename="../mapflow.py" line="2984"/>
         <source>Wrong token. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/api&quot;&gt;mapflow.ai&lt;/a&gt;&quot; to get a new one</source>
         <translation>Неправильный токен. Перейдите на &quot;&lt;a href=&quot;https://app.mapflow.ai/account/api&quot;&gt;mapflow.ai&lt;/a&gt;&quot; чтообы получить новый</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1812"/>
+        <location filename="../mapflow.py" line="1871"/>
         <source>Processing area layer is corrupted or has invalid projection</source>
         <translation>Слой области обработки поврежден или имеет некорректную проекцию</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3103"/>
+        <location filename="../mapflow.py" line="3157"/>
         <source>You must upgrade your plugin version to continue work with Mapflow. 
 The server requires version {server_version}, your plugin is {local_version}
 Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation>Обновите версию плагина чтобы продолжить работать с Mapflow. Требуется версия {server_version}, установлена версия {local_version}. Выберите меню Модули -&gt; Управление модулями -&gt; Обновляемые</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="757"/>
+        <location filename="../mapflow.py" line="760"/>
         <source>Add new provider</source>
         <translation>Добавить новый источник данных</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="765"/>
+        <location filename="../mapflow.py" line="768"/>
         <source>This is a default provider, it cannot be edited</source>
         <translation>Этот источник данных встроен в mapflow, его нельзя редактировать</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2707"/>
+        <location filename="../mapflow.py" line="2765"/>
         <source>{} processings failed: 
  {} 
  See tooltip over the processings table for error details</source>
@@ -1465,14 +1710,14 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
  Наведите курсор мыши на обработку в таблице чтобы увидеть сообщение об ошибке</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2714"/>
+        <location filename="../mapflow.py" line="2772"/>
         <source>{} processings failed: 
  See tooltip over the processings table for error details</source>
         <translation>Завершено с ошибкой {} обработок
  Наведите курсор мыши на обработку в таблице чтобы увидеть сообщение об ошибке</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2734"/>
+        <location filename="../mapflow.py" line="2792"/>
         <source>{} processings finished: 
  {} 
  Double-click it in the table to download the results</source>
@@ -1481,14 +1726,14 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
  Двойной клик по строке обработки в таблице скачает результаты</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2742"/>
+        <location filename="../mapflow.py" line="2800"/>
         <source>{} processings finished. 
  Double-click it in the table to download the results</source>
         <translation>Завершено успешно {} обработок.
  Наведите курсор мыши на обработку в таблице чтобы увидеть сообщение об ошибке</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1659"/>
+        <location filename="../mapflow.py" line="1717"/>
         <source>Set AOI to start processing</source>
         <translation>Задайте область интереса, чтобы запустить обработку</translation>
     </message>
@@ -1503,7 +1748,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation type="obsolete">Лимит обработки: {:.2f} кв.км</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2524"/>
+        <location filename="../mapflow.py" line="2582"/>
         <source>Only finished processings can be rated</source>
         <translation>Только законченные обработки могут быть оценены</translation>
     </message>
@@ -1513,43 +1758,43 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation type="obsolete">Пожалуйста, оставьте отзыв для оценки. Спасибо!</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2550"/>
+        <location filename="../mapflow.py" line="2608"/>
         <source>Thank you! Your rating and feedback are submitted!</source>
         <translation>Спасибо! Ваша оценка и отзыв отправлены!</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2570"/>
+        <location filename="../mapflow.py" line="2628"/>
         <source>Only correctly finished processings (status OK) can be rated</source>
         <translation>Только правильно завершенные обработки (состояние OK) могут быть оценены</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1877"/>
+        <location filename="../mapflow.py" line="1920"/>
         <source>Providers are not initialized</source>
         <translation>Провайдеры данных не установлены</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2621"/>
+        <location filename="../mapflow.py" line="2679"/>
         <source>Only the results of correctly finished processing can be loaded</source>
         <translation>Загружать можно только результаты корректно законченной обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2978"/>
+        <location filename="../mapflow.py" line="3031"/>
         <source>Error</source>
         <translation>Ошибка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2543"/>
+        <location filename="../mapflow.py" line="2601"/>
         <source>Thank you! Your rating is submitted!
 We would appreciate if you add feedback as well.</source>
         <translation>Спасибо! Ваша оценка отправлена! Мы будем благодарны, если добавите комментарий к оценке.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="605"/>
+        <location filename="../mapflow.py" line="595"/>
         <source>Log in </source>
         <translation>Вход </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="709"/>
+        <location filename="../mapflow.py" line="712"/>
         <source>This provider is default and cannot be removed</source>
         <translation>Этот провайдер встроен в плагин, его нельзя удалить</translation>
     </message>
@@ -1559,26 +1804,26 @@ We would appreciate if you add feedback as well.</source>
         <translation type="obsolete">{} не позволяет обрабатывать отдельные изображения.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1575"/>
+        <location filename="../mapflow.py" line="1573"/>
         <source>AOI must contain not more than {} polygons</source>
         <translation>Область интереса не должна содержать более {} полигонов</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1671"/>
+        <location filename="../mapflow.py" line="1729"/>
         <source>Processing cost is not available:
 {error}</source>
         <translation>Стоимость обработки недоступна:
 {error}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1696"/>
+        <location filename="../mapflow.py" line="1755"/>
         <source>Processing cost is not available:
 {message}</source>
         <translation>Стоимость обработки недоступна:
 {message}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1703"/>
+        <location filename="../mapflow.py" line="1762"/>
         <source>Processsing cost: {cost} credits</source>
         <translation>Стоимость обработки: {cost} кредитов</translation>
     </message>
@@ -1588,37 +1833,37 @@ We would appreciate if you add feedback as well.</source>
         <translation type="obsolete">Пожалуйста выберете изображение в таблице поиска для {}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2090"/>
+        <location filename="../mapflow.py" line="2151"/>
         <source>Your balance: {} credits</source>
         <translation>Ваш баланс: {} кредитов</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2364"/>
+        <location filename="../mapflow.py" line="2426"/>
         <source>Provider {name} requires image id for preview!</source>
         <translation>Чтобы открыть предпросмотр провайдера {name}, задайте ID изображения!</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2404"/>
+        <location filename="../mapflow.py" line="2462"/>
         <source>This provider requires image ID!</source>
         <translation>Выберите ID изображения!</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2092"/>
+        <location filename="../mapflow.py" line="2153"/>
         <source>Remaining limit: {:.2f} sq.km</source>
         <translation>Доступная площадь: {:.2f} кв.км</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1934"/>
         <source>Selected AOI does not intestect the selected image</source>
-        <translation>Выбранные область и изображение не пересекаются</translation>
+        <translation type="obsolete">Выбранные область и изображение не пересекаются</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1529"/>
+        <location filename="../mapflow.py" line="1535"/>
         <source>A Maxar image ID should look like a3b154c40cc74f3b934c0ffc9b34ecd1</source>
         <translation>ID снимка Maxar должен выглядеть как a3b154c40cc74f3b934c0ffc9b34ecd1</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1662"/>
+        <location filename="../mapflow.py" line="1720"/>
         <source>Error! Models are not initialized</source>
         <translation>Ошибка! Модели не инициализирваны</translation>
     </message>
@@ -1633,17 +1878,17 @@ We would appreciate if you add feedback as well.</source>
         <translation type="obsolete">Обработка должна иметь статус &quot;Ожидается отзыв&quot;</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2527"/>
+        <location filename="../mapflow.py" line="2585"/>
         <source>Processing must be in `Review required` status</source>
         <translation>Обработка должна быть в статусе &quot;Ожидается отзыв&quot;</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2559"/>
+        <location filename="../mapflow.py" line="2617"/>
         <source>Only correctly finished processings (status OK) can be reviewed</source>
         <translation>Только на корректно завершенные обработки (статус Ок) можно оставить отзыв</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2572"/>
+        <location filename="../mapflow.py" line="2630"/>
         <source>Please select rating to submit</source>
         <translation>Пожалуйста, выберите оценку</translation>
     </message>
@@ -1653,12 +1898,12 @@ We would appreciate if you add feedback as well.</source>
         <translation type="obsolete">Пожалуйста, оставьте отзыв до {}. Двойной клик для добавления результатов на карту</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="208"/>
+        <location filename="../mapflow.py" line="223"/>
         <source>We failed to import providers from the settings. Please add them again</source>
         <translation>Не получилось загрузить провайдеров данных из настроек. Пожалуйста, добавьте их заново</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2778"/>
+        <location filename="../mapflow.py" line="2836"/>
         <source>Double click to add results to the map.</source>
         <translation>Двойной клик чтобы добавить результаты на карту.</translation>
     </message>
@@ -1708,12 +1953,12 @@ Data source link {url}</source>
 Источник данных: {url}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1020"/>
+        <location filename="../mapflow.py" line="1021"/>
         <source>We couldn&apos;t get metadata from the Mapflow Imagery Catalog, error {error}</source>
         <translation>Мы не смогли получить метаданные из каталога изображений, ошибка {error}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1416"/>
+        <location filename="../mapflow.py" line="1420"/>
         <source>Please, check your Maxar credentials</source>
         <translation>Пожалуйста проверьте реквизиты своего аккаунта Maxar</translation>
     </message>
@@ -1722,12 +1967,12 @@ Data source link {url}</source>
         <source>Data provider with id is unavailable on your plan. 
  Upgrade your subscription to get access to the data. 
 See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&lt;/a&gt;</source>
-        <translation>Провайдер недоступен для вашего тарифного плана.
+        <translation type="obsolete">Провайдер недоступен для вашего тарифного плана.
 Купите подписку чтобы получить доступ к данным.
 Тарифные планы на  &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&lt;/a&gt;</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2171"/>
+        <location filename="../mapflow.py" line="2233"/>
         <source>Preview is unavailable when metadata layer is removed</source>
         <translation>Предпросмотр недоступен когда слой с метаданными поиска удален</translation>
     </message>
@@ -1739,38 +1984,38 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
  попробуйте позже или сообщите нам об ошибке</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="308"/>
+        <location filename="../mapflow.py" line="323"/>
         <source>Draw AOI at the map</source>
         <translation>Нарисовать AOI на карте</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1814"/>
+        <location filename="../mapflow.py" line="1873"/>
         <source>Please, select a valid area of interest</source>
         <translation>Пожалуйста, выберите допустимый слой с областью обработки</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1918"/>
         <source>Raster TIFF file must be georeferenced, have size less than {size} pixels and file size less than {memory} MB</source>
-        <translation>Растровый TIFF файл должен быть с географической привязкой, иметь размер растра менее чем {size} пикселей и размер файла менее чем {memory} МБ</translation>
+        <translation type="obsolete">Растровый TIFF файл должен быть с географической привязкой, иметь размер растра менее чем {size} пикселей и размер файла менее чем {memory} МБ</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1936"/>
+        <location filename="../mapflow.py" line="2011"/>
         <source>This provider requires image ID. Use search tab to find imagery for you requirements, and select image in the table.</source>
         <translation>Этому провайдеру нужен ID снимка. Используйте вкладку &quot;Поиск&quot; чтобы найти изображения по вашим требованиям, и выберите изображение в таблице.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2842"/>
+        <location filename="../mapflow.py" line="2897"/>
         <source>We have just set the authentication config for you. 
  You may need to restart QGIS to apply it so you could log in</source>
         <translation>Авторизация настроена. Может потребоваться перезагрузить QGIS чтобы применить конфигурацию и войти в систему</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2867"/>
+        <location filename="../mapflow.py" line="2922"/>
         <source>Please restart QGIS before using OAuth2 login.</source>
         <translation>Пожалуйста перезагрузите QGIS перед использованием авторизации OAuth2.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3075"/>
+        <location filename="../mapflow.py" line="3129"/>
         <source>No projects found! Contact us to resolve the issue</source>
         <translation>Проектов не найдено! Свяжитесь с нами чтобы решить проблему</translation>
     </message>
@@ -1795,88 +2040,107 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
         <translation type="obsolete">Переименовать</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="694"/>
+        <location filename="../mapflow.py" line="697"/>
         <source>Do you really want to remove project {}? This action cannot be undone, all processings will be lost!</source>
         <translation>Вы действительно хотите удалить проект {}? Это действие нельзя отменить, все обработки будут потеряны!</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2368"/>
+        <location filename="../mapflow.py" line="2430"/>
         <source>Preview is unavailable for the provider {}. 
 OSM layer will be added instead.</source>
         <translation type="unfinished">Предпросмотр для источника {} недоступен.
 Вместо этого будет добвален слой OSM.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3131"/>
+        <location filename="../mapflow.py" line="3185"/>
         <source>&lt;b&gt;Name&lt;/b&gt;: {name}&lt;br&gt;&lt;b&gt;Status&lt;/b&gt;&lt;/br&gt;: {status}&lt;br&gt;&lt;b&gt;Model&lt;/b&gt;&lt;/br&gt;: {model}</source>
         <translation>&lt;b&gt;Название&lt;/b&gt;: {name}&lt;br&gt;&lt;b&gt;Статус&lt;/b&gt;&lt;/br&gt;: {status}&lt;br&gt;&lt;b&gt;Модель&lt;/b&gt;&lt;/br&gt;: {model}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3137"/>
+        <location filename="../mapflow.py" line="3191"/>
         <source>&lt;br&gt;&lt;b&gt;Description&lt;/b&gt;&lt;/br&gt;: {description}</source>
         <translation>&lt;br&gt;&lt;b&gt;Описание&lt;/b&gt;&lt;/br&gt;: {description}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3140"/>
+        <location filename="../mapflow.py" line="3194"/>
         <source>&lt;br&gt;&lt;b&gt;Model options:&lt;/b&gt;&lt;/br&gt; {options}</source>
         <translation>&lt;br&gt;&lt;b&gt;Опции:&lt;/b&gt;&lt;/br&gt; {options}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3145"/>
+        <location filename="../mapflow.py" line="3199"/>
         <source>&lt;br&gt;&lt;b&gt;Model options:&lt;/b&gt;&lt;/br&gt; No options selected</source>
         <translation>&lt;br&gt;&lt;b&gt;Опции:&lt;/b&gt;&lt;/br&gt; Не выбраны</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3148"/>
+        <location filename="../mapflow.py" line="3202"/>
         <source>&lt;br&gt;&lt;b&gt;Data provider&lt;/b&gt;&lt;/br&gt;: {provider}</source>
         <translation>&lt;br&gt;&lt;b&gt;Источник данных&lt;/b&gt;&lt;/br&gt;: {provider}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3152"/>
+        <location filename="../mapflow.py" line="3206"/>
         <source>&lt;br&gt;&lt;b&gt;Data source&lt;/b&gt;&lt;/br&gt;: uploaded file</source>
         <translation>&lt;br&gt;&lt;b&gt;Источник данных&lt;/b&gt;&lt;/br&gt;: загруженный файл</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3154"/>
+        <location filename="../mapflow.py" line="3208"/>
         <source>&lt;br&gt;&lt;b&gt;Data source link&lt;/b&gt;&lt;/br&gt; {url}</source>
         <translation>&lt;br&gt;&lt;b&gt;Ссылка на источник данных&lt;/b&gt;&lt;/br&gt; {url}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="673"/>
+        <location filename="../mapflow.py" line="676"/>
         <source>Not enough rights to delete or update shared project ({})</source>
         <translation>Недостаточно прав для удаления или изменения проекта ({})</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1694"/>
+        <location filename="../mapflow.py" line="1753"/>
         <source>Not enough rights to start processing in a shared project ({})</source>
         <translation>Недостаточно прав в проекте для запауска обработки ({})</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2235"/>
+        <location filename="../mapflow.py" line="2297"/>
         <source>Preview is unavailable</source>
-        <translation type="unfinished">Предпросмотр недоступен</translation>
+        <translation>Предпросмотр недоступен</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2282"/>
+        <location filename="../mapflow.py" line="2344"/>
         <source>Could not display preview</source>
-        <translation type="unfinished">Неудалось осуществить предпросмотр</translation>
+        <translation>Неудалось осуществить предпросмотр</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2565"/>
+        <location filename="../mapflow.py" line="2623"/>
         <source>Not enough rights to rate processing in a shared project ({})</source>
         <translation>Недостаточно прав в проекте для оценивания обработки ({})</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2568"/>
+        <location filename="../mapflow.py" line="2626"/>
         <source>Please select processing</source>
         <translation>Пожалуйста, выберите обработку</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2965"/>
+        <location filename="../mapflow.py" line="3020"/>
         <source>Not enough rights for this action
 in a shared project &apos;{project_name}&apos; ({user_role})</source>
         <translation>Недостаточно прав для этого действия
 в проекте &apos;{project_name}&apos; ({user_role})</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="1629"/>
+        <source>Choose mosaic or image to start processing</source>
+        <translation>Выберите мозаику или изображение для запуска обработки</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="2009"/>
+        <source>Selected AOI does not intersect the selected imagery</source>
+        <translation>Выбранная область не пересекается с выбранным изображением</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="2112"/>
+        <source>The selected data provider is unavailable on your plan. 
+ Upgrade your subscription to get access to the data. 
+See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&lt;/a&gt;</source>
+        <translation>Выбранный провайдер данных недоступен в Вышем тарифном плане 
+ Обновите подписку для получения доступа к данным. 
+Узнать цену: &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&lt;/a&gt;</translation>
     </message>
 </context>
 <context>
@@ -1900,6 +2164,14 @@ in a shared project &apos;{project_name}&apos; ({user_role})</source>
         <location filename="../dialogs/login_dialog.py" line="39"/>
         <source>Invalid credentials</source>
         <translation>Неправильные данные авторизации</translation>
+    </message>
+</context>
+<context>
+    <name>MosaicDialog</name>
+    <message>
+        <location filename="../dialogs/mosaic_dialog.py" line="20"/>
+        <source>Mosaic name must not be empty!</source>
+        <translation>Имя мозаики должно быть заполнено!</translation>
     </message>
 </context>
 <context>
@@ -2115,17 +2387,17 @@ in a shared project &apos;{project_name}&apos; ({user_role})</source>
         <translation>Ответ сервера {tile_location} не представляет собой изображение</translation>
     </message>
     <message>
-        <location filename="../errors/processing_errors.py" line="98"/>
+        <location filename="../errors/processing_errors.py" line="100"/>
         <source>Internal error in process of data preparation. We are working on the fix, our support will contact you.</source>
         <translation>Произошла ошибка в процессе предобработки данных. Мы работаем над исправлением и свяжемся с вами.</translation>
     </message>
     <message>
-        <location filename="../errors/processing_errors.py" line="100"/>
+        <location filename="../errors/processing_errors.py" line="102"/>
         <source>Internal error in process of data processing. We are working on the fix, our support will contact you.</source>
         <translation>Произошла ошибка в процессе обработки данных. Мы работаем над исправлением и свяжемся с вами.</translation>
     </message>
     <message>
-        <location filename="../errors/processing_errors.py" line="102"/>
+        <location filename="../errors/processing_errors.py" line="104"/>
         <source>Internal error in process of saving the results. We are working on the fix, our support will contact you.</source>
         <translation>Произошла ошибка в процессе сохранения результатов обработки. Мы работаем над исправлением и свяжемся с вами.</translation>
     </message>
@@ -2133,6 +2405,34 @@ in a shared project &apos;{project_name}&apos; ({user_role})</source>
         <location filename="../errors/processing_errors.py" line="8"/>
         <source>Folder `{s3_link}` selected for processing does not contain any images. </source>
         <translation>Папка `{s3_link}`, выбранная для обработки, не содержит изображений. </translation>
+    </message>
+    <message>
+        <location filename="../errors/processing_errors.py" line="98"/>
+        <source>The data provider contains no data for your area of interest (returned NoData tiles). Try other the data sources to get the results.</source>
+        <translation>Выбранный провайдер не обладает данными на выбранную территорию (возвращены NoData-тайлы). Попробуйте выбрать другой источник для получения результата</translation>
+    </message>
+</context>
+<context>
+    <name>ProjectDialog</name>
+    <message>
+        <location filename="../dialogs/static/ui/mosaic_dialog.ui" line="14"/>
+        <source>Project</source>
+        <translation>Проект</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/mosaic_dialog.ui" line="20"/>
+        <source>Name</source>
+        <translation>Имя</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/mosaic_dialog.ui" line="34"/>
+        <source>Tags</source>
+        <translation>Тэги</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/mosaic_dialog.ui" line="51"/>
+        <source>Note: separate tags with comma (&quot;, &quot;) </source>
+        <translation>Разделитель тэгов: &quot;, &quot;</translation>
     </message>
 </context>
 <context>
@@ -2206,17 +2506,17 @@ in a shared project &apos;{project_name}&apos; ({user_role})</source>
 <context>
     <name>QPlatformTheme</name>
     <message>
-        <location filename="../mapflow.py" line="138"/>
+        <location filename="../mapflow.py" line="140"/>
         <source>Cancel</source>
         <translation>Отмена</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="139"/>
+        <location filename="../mapflow.py" line="141"/>
         <source>&amp;Yes</source>
         <translation>Да</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="140"/>
+        <location filename="../mapflow.py" line="142"/>
         <source>&amp;No</source>
         <translation>Нет</translation>
     </message>
@@ -2224,7 +2524,7 @@ in a shared project &apos;{project_name}&apos; ({user_role})</source>
 <context>
     <name>ReviewDialog</name>
     <message>
-        <location filename="../dialogs/dialogs.py" line="41"/>
+        <location filename="../dialogs/dialogs.py" line="42"/>
         <source>Review {processing}</source>
         <translation>Отзыв на {processing}</translation>
     </message>
@@ -2240,6 +2540,32 @@ in a shared project &apos;{project_name}&apos; ({user_role})</source>
         <location filename="../static/ui/sentinel_auth_dialog.ui" line="43"/>
         <source>API key:</source>
         <translation type="obsolete">Ключ API:</translation>
+    </message>
+</context>
+<context>
+    <name>UpdateMosaicDialog</name>
+    <message>
+        <location filename="../dialogs/mosaic_dialog.py" line="50"/>
+        <source>UpdateMosaicDialog requires a mosaic to update</source>
+        <translation>UpdateMosaicDialog требуется мозаика для редактирования</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/mosaic_dialog.py" line="51"/>
+        <source>Edit mosaic {}</source>
+        <translation>Редактировать мозаику {}</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/mosaic_dialog.py" line="61"/>
+        <source>Mosaic name must not be empty!</source>
+        <translation>Имя мозаики должно быть заполнено!</translation>
+    </message>
+</context>
+<context>
+    <name>UploadRasterLayersDialog</name>
+    <message>
+        <location filename="../dialogs/dialogs.py" line="65"/>
+        <source>Choose raster layers to upload to mosaic</source>
+        <translation>Выберите растровый слой для загрузки в мозаику</translation>
     </message>
 </context>
 </TS>
