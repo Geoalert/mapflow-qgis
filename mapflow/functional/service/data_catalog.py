@@ -9,7 +9,7 @@ from osgeo import gdal
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
-from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog
+from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog, QAbstractItemView
 from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsRasterLayer, QgsRectangle
 
 from ...dialogs.main_dialog import MainDialog
@@ -85,10 +85,14 @@ class DataCatalogService(QObject):
 
     def get_mosaic_callback(self, response: QNetworkReply):
         mosaic = MosaicReturnSchema.from_dict(json.loads(response.readAll().data()))
+        # Temporary forbit selection to prevent weird bug
+        self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.NoSelection)
         self.mosaics.update({mosaic.id: mosaic})
         self.mosaicsUpdated.emit()
-        self.view.display_mosaics(list(self.mosaics.values())) 
-        # Go to the right cell in case sorting changed items' order
+        self.view.display_mosaics(list(self.mosaics.values()))
+        # Allow selection back
+        self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.SingleSelection) 
+        # Select the right cell
         if self.view.mosaic_table_visible:
             self.view.select_mosaic_cell(mosaic.id)
 

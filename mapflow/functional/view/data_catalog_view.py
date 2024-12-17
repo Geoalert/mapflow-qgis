@@ -273,9 +273,10 @@ class DataCatalogView(QObject):
     def show_images_table(self):
         row = self.dlg.selected_mosaic_cell.row()
         column = self.dlg.selected_mosaic_cell.column()
+        # Temporary forbit selection to prevent weird bug
+        self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.NoSelection)
         # Show images
         self.dlg.stackedLayout.setCurrentIndex(1)
-        self.dlg.mosaicTable.setCurrentCell(row, column)
         # En(dis)able buttons and change labels
         self.dlg.seeMosaicsButton.setEnabled(True)
         self.dlg.seeImagesButton.setEnabled(False)
@@ -283,6 +284,9 @@ class DataCatalogView(QObject):
         self.dlg.deleteCatalogButton.setText(self.tr("Delete image"))
         self.dlg.addCatalogButton.setText(self.tr("Add image"))
         self.dlg.addCatalogButton.setMenu(self.upload_image_menu)
+        # Allow selection back
+        self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.dlg.mosaicTable.setCurrentCell(row, column)
         # Because we open images table always with empty selection
         self.clear_image_info()
 
@@ -309,8 +313,8 @@ class DataCatalogView(QObject):
         self.mosaic_cell_layout.setSpacing(0)
         self.mosaic_cell_layout.addWidget(self.dlg.addImageButton)
         self.mosaic_cell_layout.addWidget(self.dlg.mosaicSpacers[0])
-        #self.mosaic_cell_layout.addWidget(self.dlg.showImagesButton)
-        #self.mosaic_cell_layout.addWidget(self.dlg.mosaicSpacers[1])
+        self.mosaic_cell_layout.addWidget(self.dlg.showImagesButton)
+        self.mosaic_cell_layout.addWidget(self.dlg.mosaicSpacers[1])
         self.mosaic_cell_layout.addWidget(self.dlg.previewMosaicButton)
         self.mosaic_cell_layout.addWidget(self.dlg.mosaicSpacers[2])
         self.mosaic_cell_layout.addWidget(self.dlg.editMosaicButton)
