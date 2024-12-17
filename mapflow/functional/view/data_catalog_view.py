@@ -345,6 +345,8 @@ class DataCatalogView(QObject):
                                           cellWidget)
         
     def contain_mosaic_cell_buttons(self):
+        self.mosaic_cell_layout = QHBoxLayout()
+        self.create_mosaic_cell_buttons_layout()
         self.mosaicContainerWidget.setLayout(self.mosaic_cell_layout)
 
     def contain_image_cell_buttons(self):
