@@ -1,8 +1,8 @@
 import time
 from dataclasses import dataclass
 
+from PyQt5.QtCore import QCoreApplication
 from qgis.core import QgsSettings
-
 
 @dataclass
 class Config:
@@ -46,19 +46,19 @@ class Config:
     DEFAULT_HIDDEN_COLUMNS = (PROCESSING_TABLE_COLUMNS.index(item) for item in ('id', 'reviewUntil', 'cost'))
     # MAXAR
     METADATA_TABLE_ATTRIBUTES = {
-        'Product Type': 'productType',
-        'Sensor': 'source',
-        'Band Order': 'colorBandOrder',
-        'Cloud %': 'cloudCover',
-        f'\N{DEGREE SIGN} Off Nadir': 'offNadirAngle',
-        f'Date & Time ({TIMEZONE})': 'acquisitionDate',
-        'Image ID': 'id',
-        'local_index': 'local_index'
+        QCoreApplication.translate('Config', 'Product Type'): 'productType',
+        QCoreApplication.translate('Config', 'Sensor'): 'source',
+        QCoreApplication.translate('Config', 'Band Order'): 'colorBandOrder',
+        QCoreApplication.translate('Config', 'Cloud %'): 'cloudCover',
+        QCoreApplication.translate('Config', 'Off Nadir') + f' \N{DEGREE SIGN}': 'offNadirAngle',
+        QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=TIMEZONE): 'acquisitionDate',
+        QCoreApplication.translate('Config', 'Image ID'): 'id',
+        QCoreApplication.translate('Config', 'local_index'): 'local_index'
     }
     MAXAR_ID_COLUMN_INDEX = tuple(METADATA_TABLE_ATTRIBUTES.values()).index('id')
     LOCAL_INDEX_COLUMN = tuple(METADATA_TABLE_ATTRIBUTES.values()).index('local_index')
-    MAXAR_DATETIME_COLUMN_INDEX = tuple(METADATA_TABLE_ATTRIBUTES.keys()).index(f'Date & Time ({TIMEZONE})')
-    MAXAR_CLOUD_COLUMN_INDEX = tuple(METADATA_TABLE_ATTRIBUTES.keys()).index(f'Cloud %')
+    MAXAR_DATETIME_COLUMN_INDEX = tuple(METADATA_TABLE_ATTRIBUTES.keys()).index(QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=TIMEZONE))
+    MAXAR_CLOUD_COLUMN_INDEX = tuple(METADATA_TABLE_ATTRIBUTES.keys()).index(QCoreApplication.translate('Config', 'Cloud %'))
     MAXAR_MAX_FREE_ZOOM = 12
 
     # MISC
