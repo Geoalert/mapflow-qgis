@@ -73,8 +73,10 @@ class DataCatalogService(QObject):
         self.api.get_mosaics(callback=self.get_mosaics_callback)
 
     def get_mosaics_callback(self, response: QNetworkReply):
-        for data in json.loads(response.readAll().data()):
-            mosaic = MosaicReturnSchema.from_dict(data)
+        data = json.loads(response.readAll().data())
+        self.mosaics.clear()
+        for item in data:
+            mosaic = MosaicReturnSchema.from_dict(item)
             self.mosaics[mosaic.id] = mosaic
         self.view.display_mosaics(list(self.mosaics.values()))
         self.mosaicsUpdated.emit()
