@@ -25,7 +25,6 @@ from qgis.core import (
 from qgis.gui import QgsMessageBarItem
 
 from . import constants
-from .config import Config
 from .dialogs import (MainDialog,
                       MapflowLoginDialog,
                       ErrorMessageWidget,
@@ -36,6 +35,8 @@ from .dialogs import (MainDialog,
                       UpdateProcessingDialog,
                       )
 from .dialogs.icons import plugin_icon
+from .functional.controller.data_catalog_controller import DataCatalogController
+from .config import Config
 from .entity.billing import BillingType
 from .entity.processing import parse_processings_request, Processing, ProcessingHistory, updated_processings
 from .entity.provider import (UsersProvider,
@@ -45,6 +46,7 @@ from .entity.provider import (UsersProvider,
                               create_provider,
                               DefaultProvider,
                               ImagerySearchProvider,
+                              MyImageryProvider,
                               ProviderInterface)
 from .entity.workflow_def import WorkflowDef
 from .errors import (ProcessingInputDataMissing,
@@ -58,6 +60,7 @@ from .functional.auth import get_auth_id
 from .functional.geometry import clip_aoi_to_image_extent
 from .functional.processing import ProcessingService
 from .functional.project import ProjectService
+from .functional.service.data_catalog import DataCatalogService
 from .http import (Http,
                    get_error_report_body,
                    data_catalog_message_parser,
@@ -185,6 +188,19 @@ class Mapflow(QObject):
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or self.config.DEFAULT_ZOOM))
 
         # Initialize services
+        self.result_loader = layer_utils.ResultsLoader(iface=self.iface,
+                                                       maindialog=self.dlg,
+                                                       http=self.http,
+                                                       server=self.server,
+                                                       project=self.project,
+                                                       settings=self.settings,
+                                                       plugin_name=self.plugin_name,
+                                                       temp_dir=self.temp_dir_name
+                                                       )
+
+        self.data_catalog_service = DataCatalogService(self.http, self.server, self.dlg, self.iface, self.result_loader, self.plugin_version)
+        self.data_catalog_controller = DataCatalogController(self.dlg, self.data_catalog_service)
+
         self.project_service = ProjectService(self.http, self.server)
         self.project_service.projectsUpdated.connect(self.update_projects)
 
@@ -214,7 +230,6 @@ class Mapflow(QObject):
         self.dlg.metadataFrom.setDate(self.settings.value('metadataFrom', today.addMonths(-6)))
         self.dlg.metadataTo.setDate(self.settings.value('metadataTo', today))
         # SET UP SIGNALS & SLOTS
-        self.dlg.rasterCombo.setExceptedLayerList(self.filter_bad_rasters())
         self.dlg.modelCombo.activated.connect(self.on_model_change)
         self.dlg.modelOptionsChanged.connect(self.on_options_change)
         # Memorize dialog element sizes & positioning
@@ -229,12 +244,13 @@ class Mapflow(QObject):
         # Calculate AOI size
         self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area_polygon_layer)
         self.dlg.useImageExtentAsAoi.toggled.connect(self.calculate_aoi_area_use_image_extent)
+        self.dlg.mosaicTable.itemSelectionChanged.connect(self.calculate_aoi_area_catalog)
+        self.dlg.imageTable.itemSelectionChanged.connect(self.calculate_aoi_area_catalog)
         self.monitor_polygon_layer_feature_selection([
             self.project.mapLayer(layer_id) for layer_id in self.project.mapLayers(validOnly=True)
         ])
         self.project.layersAdded.connect(self.setup_layers_context_menu)
         self.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
-        self.project.layersAdded.connect(self.set_excepted_layers)
         # Processings
         self.dlg.processingsTable.cellDoubleClicked.connect(self.load_results)
         self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
@@ -321,17 +337,6 @@ class Mapflow(QObject):
         self.dlg.useAllVectorLayers.stateChanged.connect(self.toggle_all_layers)
         self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
 
-        # Service init
-        self.result_loader = layer_utils.ResultsLoader(iface=self.iface,
-                                                       maindialog=self.dlg,
-                                                       http=self.http,
-                                                       server=self.server,
-                                                       project=self.project,
-                                                       settings=self.settings,
-                                                       plugin_name=self.plugin_name,
-                                                       temp_dir=self.temp_dir_name
-                                                       )
-
         # Zoom selection for data source
         self.zoom_selector = (self.config.ZOOM_SELECTOR.lower() == "true")
         self.zoom = None
@@ -395,6 +400,7 @@ class Mapflow(QObject):
             callback_kwargs={'app_startup_request': True},
             use_default_error_handler=False
         )
+        self.data_catalog_service.get_user_limit()
 
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.create_aoi_from_map_action)
@@ -462,28 +468,6 @@ class Mapflow(QObject):
             else:
                 self.alert(self.tr(f'Your file is not valid vector data source!'))
 
-    def set_excepted_layers(self):
-        self.dlg.rasterCombo.setExceptedLayerList(self.filter_bad_rasters())
-
-    def filter_bad_rasters(self, changed_layers: Optional[List[QgsRasterLayer]] = None) -> List[QgsMapLayer]:
-        """Leave only GeoTIFF layers in the Imagery Source combo box."""
-        # (!) Instead of going thru all project layers each time
-        # it'd be better to filter the new layers, then add them to
-        # the already filtered ones like rasterCombo.exceptedLayerList() + new_layers
-        # but calling exceptedLayerList() crashes when it contains deleted layers
-
-        # so we will need to add new function like "remove_filtered_layers" to handle this.
-        # However, current implementation takes 4 ms when 100 files are opened, which is OK
-
-        if self.config.SENTINEL_WD_NAME_PATTERN in self.dlg.modelCombo.currentText():
-            excluded_layers = [layer for layer in self.project.mapLayers().values()
-                               if layer.type() == QgsMapLayerType.RasterLayer]
-        else:
-            excluded_layers = [layer for layer in self.project.mapLayers().values()
-                               if layer.type() == QgsMapLayerType.RasterLayer
-                               and Path(layer.source()).suffix.lower() not in ['.tif', '.tiff']]
-        return excluded_layers
-
     def filter_aoi_layers(self):
         if self.dlg.useAllVectorLayers.isChecked():
             # We exclude search metadata layers from AOI layers list because they are big, crowded
@@ -525,7 +509,7 @@ class Mapflow(QObject):
     def show_wd_options(self, wd: WorkflowDef):
         self.dlg.clear_model_options()
         for block in wd.optional_blocks:
-            self.dlg.add_model_option(block.name, checked=bool(self.settings.value(f"wd/{wd.id}/{block.name}", False)))
+            self.dlg.add_model_option(block.displayName, checked=bool(self.settings.value(f"wd/{wd.id}/{block.name}", False)))
         # Other wigets are disabled before the appearence of these checkboxes, so we do it here separately after adding them
         self.dlg.enable_model_options(self.user_role.can_start_processing)
 
@@ -547,8 +531,7 @@ class Mapflow(QObject):
             return
         provider_names = [p.name for p in self.providers]
         self.dlg.set_raster_sources(provider_names=provider_names,
-                                    default_provider_names=['Mapbox', '🌎 Mapbox Satellite'],
-                                    excepted_layers=self.filter_bad_rasters())
+                                    default_provider_names=['Mapbox', '🌍 Mapbox Satellite'])
 
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
         """Filter out the metadata table and layer every time user changes a filter."""
@@ -578,7 +561,7 @@ class Mapflow(QObject):
         aoi = QgsGeometry.createGeometryEngine(aoi.constGet())
         aoi.prepareGeometry()
         # Get attributes
-        if self.dlg.rasterCombo.currentText() == constants.SENTINEL_OPTION_NAME:
+        if self.dlg.sourceCombo.currentText() == constants.SENTINEL_OPTION_NAME:
             id_column_index = self.config.SENTINEL_ID_COLUMN_INDEX
             datetime_column_index = self.config.SENTINEL_DATETIME_COLUMN_INDEX
             cloud_cover_column_index = self.config.SENTINEL_CLOUD_COLUMN_INDEX
@@ -634,18 +617,22 @@ class Mapflow(QObject):
 
         :param index: The currently selected provider index
         """
-        provider_layer = self.dlg.rasterCombo.currentLayer()
         # This is done after area calculation, because there the provider list is updated?
         provider_index = self.dlg.providerIndex()
         provider = self.providers[provider_index]
         # Changes in search tab
         self.toggle_imagery_search(provider)
         # Changes in case provider is raster layer
-        self.toggle_processing_checkboxes(provider_layer)
+        self.toggle_processing_checkboxes()
         # re-calculate AOI because it may change due to intersection of image/area
         polygon_layer = self.dlg.polygonCombo.currentLayer()
-        if provider_layer:
-            self.calculate_aoi_area_raster(provider_layer)
+        if isinstance(provider, MyImageryProvider):
+            my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
+            self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
+            self.calculate_aoi_area_catalog()
+        if provider.requires_image_id:
+            imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
+            self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
         else:
             self.calculate_aoi_area_polygon_layer(polygon_layer)
     
@@ -809,13 +796,14 @@ class Mapflow(QObject):
             layer.featureAdded.connect(self.calculate_aoi_area_layer_edited)
             layer.featuresDeleted.connect(self.calculate_aoi_area_layer_edited)
 
-    def toggle_processing_checkboxes(self, raster_source: Union[QgsRasterLayer, str, None]) -> None:
+    def toggle_processing_checkboxes(self) -> None:
         """Toggle 'Use image extent' depending on the item in the imagery combo box.
 
         :param raster_source: Provider name or None, depending on the signal, if one of the
             tile providers, otherwise the selected raster layer
         """
-        enabled = isinstance(raster_source, QgsRasterLayer)
+        provider = self.providers[self.dlg.providerIndex()]
+        enabled = isinstance(provider, MyImageryProvider)
         self.dlg.useImageExtentAsAoi.setEnabled(enabled)
         self.dlg.useImageExtentAsAoi.setChecked(enabled)
 
@@ -842,7 +830,7 @@ class Mapflow(QObject):
             geoms = None
         else:  # any non-sentinel provider: setup table as for ImagerySearch provider
             columns = self.config.METADATA_TABLE_ATTRIBUTES
-            hidden_columns = tuple()
+            hidden_columns = (len(columns) - 1,)
             sort_by = self.config.MAXAR_DATETIME_COLUMN_INDEX
             max_zoom = self.config.MAX_ZOOM
             current_zoom = int(self.settings.value('maxZoom', self.config.DEFAULT_ZOOM))
@@ -934,9 +922,6 @@ class Mapflow(QObject):
         except (NotImplementedError, AttributeError):
             provider_supports_search = False
 
-        # IF current rasterSourse is a layer, id does not support search, let's switch it to Search provider
-        if self.dlg.current_raster_layer is not None:
-            provider_supports_search = False
         if not provider_supports_search:
             self.dlg.setProviderIndex(self.imagery_search_provider_index)
 
@@ -1050,7 +1035,7 @@ class Mapflow(QObject):
         self.meta_layer_table_connection = self.metadata_layer.selectionChanged.connect(
             self.sync_layer_selection_with_table)
         self.search_footprints = {
-            feature['id']: feature
+            feature['local_index']: feature
             for feature in self.metadata_layer.getFeatures()
         }
 
@@ -1066,6 +1051,9 @@ class Mapflow(QObject):
             return
         response_data = ImageCatalogResponseSchema(**response_json)
         geoms = response_data.as_geojson()
+        # Add index to map table and layer
+        for position, feature in enumerate(geoms.get("features", ())):
+            feature['properties']['local_index'] = position
 
         # Save the current search results to load later
         provider = self.imagery_search_provider
@@ -1443,19 +1431,26 @@ class Mapflow(QObject):
         corresponding feature in the metadata layer and put the selected image's
         id into the "Image ID" field.
         """
-        id_column_index = (
-            self.config.SENTINEL_ID_COLUMN_INDEX
-            if self.dlg.rasterCombo.currentText() == constants.SENTINEL_OPTION_NAME
-            else self.config.MAXAR_ID_COLUMN_INDEX
-        )
+        if self.dlg.sourceCombo.currentText() == constants.SENTINEL_OPTION_NAME:
+            id_column_index = self.config.SENTINEL_ID_COLUMN_INDEX
+            # sentinel is indexed by the image ID
+            local_index_column = id_column_index
+            key = 'id'
+        else:
+            id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
+            local_index_column = self.config.LOCAL_INDEX_COLUMN
+            key = 'local_index'
+
         selected_cells = self.dlg.metadataTable.selectedItems()
         if not selected_cells:
-            self.dlg.imageId.setText('')
             image_id = None
+            local_index = None
+            self.dlg.imageId.setText('')
         else:
-            image_id = next(cell for cell in selected_cells if cell.column() == id_column_index).text()
+            selected_row = selected_cells[0].row()
+            image_id = self.dlg.metadataTable.item(selected_row, id_column_index).text()
+            local_index = self.dlg.metadataTable.item(selected_row, local_index_column).text()
             self.dlg.imageId.setText(image_id)
-
         try:
             self.metadata_layer.selectionChanged.disconnect(self.meta_layer_table_connection)
             # disconnect to prevent loop of signals
@@ -1465,7 +1460,7 @@ class Mapflow(QObject):
         self.replace_search_provider_index()
 
         try:
-            self.metadata_layer.selectByExpression(f"id='{image_id}'")
+            self.metadata_layer.selectByExpression(f"{key}='{local_index}'")
         except RuntimeError:  # layer has been deleted
             pass
         except Exception as e:
@@ -1486,33 +1481,28 @@ class Mapflow(QObject):
         """
         # Disconnect to avoid backwards signal and possible infinite loop;
         # connection is restored before return
+        key = 'id' if self.dlg.sourceCombo.currentText() == constants.SENTINEL_OPTION_NAME else 'local_index'
+        id_column_index = self.config.SENTINEL_ID_COLUMN_INDEX \
+            if self.dlg.sourceCombo.currentText() == constants.SENTINEL_OPTION_NAME \
+            else self.config.LOCAL_INDEX_COLUMN
+
         self.dlg.metadataTable.itemSelectionChanged.disconnect(self.meta_table_layer_connection)
-        if not selected_ids:
-            self.dlg.metadataTable.clearSelection()
-            self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
-                self.sync_table_selection_with_image_id_and_layer)
-            return
+
         try:
-            selected_id = self.metadata_layer.getFeature(selected_ids[-1])['id']
-        except RuntimeError as e:
+            if not selected_ids:
+                self.dlg.metadataTable.clearSelection()
+                return
+            selected_local_index = self.metadata_layer.getFeature(selected_ids[-1])[key]
+            found_items = [item
+                          for item in self.dlg.metadataTable.findItems(str(selected_local_index), Qt.MatchExactly)
+                          if item.column() == id_column_index]
+            if not found_items:
+                self.dlg.metadataTable.clearSelection()
+                return
+            self.dlg.metadataTable.selectRow(found_items[0].row())
+        finally:
             self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
                 self.sync_table_selection_with_image_id_and_layer)
-            return
-        id_column_index = [
-            self.config.SENTINEL_ID_COLUMN_INDEX
-            if self.dlg.rasterCombo.currentText() == constants.SENTINEL_OPTION_NAME
-            else self.config.MAXAR_ID_COLUMN_INDEX
-        ]
-        already_selected = [
-            item.text() for item in self.dlg.metadataTable.selectedItems()
-            if item.column() == id_column_index
-        ]
-        if selected_id not in already_selected:
-            self.dlg.metadataTable.selectRow(
-                self.dlg.metadataTable.findItems(selected_id, Qt.MatchExactly)[0].row()
-            )
-        self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
-            self.sync_table_selection_with_image_id_and_layer)
 
     def sync_image_id_with_table_and_layer(self, image_id: str) -> None:
         """
@@ -1551,15 +1541,7 @@ class Mapflow(QObject):
         if items[0] not in self.dlg.metadataTable.selectedItems():
             self.dlg.metadataTable.selectRow(items[0].row())
 
-    def calculate_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
-        """Get the AOI size total when polygon another layer is chosen,
-        current layer's selection is changed or the layer's features are modified.
-
-        :param layer: The current polygon layer
-        """
-        if self.dlg.useImageExtentAsAoi.isChecked():  # GeoTIFF extent used; no difference
-            return
-
+    def get_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
         if not layer or layer.featureCount() == 0:
             if not self.user_role.can_start_processing:
                 reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.user_role)
@@ -1575,8 +1557,8 @@ class Mapflow(QObject):
         elif QgsWkbTypes.flatType(layer.wkbType()) == QgsWkbTypes.MultiPolygon:
             geoms_count = layer_utils.count_polygons_in_layer(features)
         else: # type of layer is not supported
-              # (but it shouldn't be the case, because point and line layers will not appear in AOI-combo,
-              # and collections are devided by QGIS into separate layers with different types)
+            # (but it shouldn't be the case, because point and line layers will not appear in AOI-combo,
+            # and collections are devided by QGIS into separate layers with different types)
             raise ValueError("Only polygon and multipolyon layers supported for this operation")
         if self.max_aois_per_processing >= geoms_count:
             if len(features) == 1:
@@ -1592,14 +1574,31 @@ class Mapflow(QObject):
             self.dlg.disable_processing_start(reason, clear_area=True)
             self.aoi = self.aoi_size = None
 
+    def calculate_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
+        """Get the AOI size total when polygon another layer is chosen,
+        current layer's selection is changed or the layer's features are modified.
+
+        :param layer: The current polygon layer
+        """
+        if self.dlg.useImageExtentAsAoi.isChecked():  # GeoTIFF extent used; no difference
+            return
+        provider = self.providers[self.dlg.providerIndex()]
+        if isinstance(provider, MyImageryProvider):
+            self.calculate_aoi_area_catalog()
+        else:
+            self.get_aoi_area_polygon_layer(layer)
+
     def calculate_aoi_area_raster(self, layer: Optional[QgsRasterLayer]) -> None:
         """Get the AOI size when a new entry in the raster combo box is selected.
 
         :param layer: The current raster layer
         """
+        provider = self.providers[self.dlg.providerIndex()]
         if layer:
             geometry = QgsGeometry.collectGeometry([QgsGeometry.fromRect(layer.extent())])
             self.calculate_aoi_area(geometry, layer.crs())
+        elif isinstance(provider, MyImageryProvider):
+            self.calculate_aoi_area_catalog()
         else:
             self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
 
@@ -1608,10 +1607,49 @@ class Mapflow(QObject):
 
         :param use_image_extent: The current state of the checkbox
         """
-        if use_image_extent:
-            self.calculate_aoi_area_raster(self.dlg.rasterCombo.currentLayer())
+        provider = self.providers[self.dlg.providerIndex()]
+        if isinstance(provider, MyImageryProvider):
+            self.calculate_aoi_area_catalog()
         else:
             self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+    
+    def calculate_aoi_area_catalog(self) -> None:
+        """Get the AOI size when a new mosaic or image in 'My imagery' is selected.
+        """
+        provider = self.providers[self.dlg.providerIndex()]
+        if isinstance(provider, MyImageryProvider):
+            image = self.data_catalog_service.selected_image()
+            mosaic = self.data_catalog_service.selected_mosaic()
+            if self.dlg.useImageExtentAsAoi.isChecked():
+                if image:
+                    aoi = QgsGeometry().fromWkt(image.footprint)
+                elif mosaic:
+                    aoi = QgsGeometry().fromWkt(mosaic.footprint)
+                else:
+                    self.dlg.disable_processing_start(reason=self.tr('Choose mosaic or image to start processing'),
+                                                      clear_area=True)
+                    aoi = self.aoi = self.aoi_size = None
+                self.calculate_aoi_area(aoi, helpers.WGS84)
+            else:
+                # Get polygon AOI to set self.aoi for intersection check later
+                self.get_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+                if image:
+                    catalog_aoi = QgsGeometry().fromWkt(image.footprint)
+                elif mosaic:
+                    catalog_aoi = QgsGeometry().fromWkt(mosaic.footprint)
+                else:
+                    catalog_aoi = None
+                aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
+                                                  selected_aoi=self.aoi,
+                                                  use_image_extent_as_aoi=False)
+                self.calculate_aoi_area(aoi, helpers.WGS84)
+                if not aoi:
+                    self.dlg.disable_processing_start(reason=self.tr("Selected AOI does not intersect the selected imagery"),
+                                                      clear_area=True)
+        else:
+            self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+        # If different provider is chosen, set it to My imagery
+        self.data_catalog_service.set_catalog_provider(self.providers)
 
     def calculate_aoi_area_selection(self, _: List[QgsFeature]) -> None:
         """Get the AOI size when the selection changed on a polygon layer.
@@ -1641,15 +1679,18 @@ class Mapflow(QObject):
         self.aoi = aoi  # save for reuse in processing creation or metadata requests
         # fetch UI data
         provider_index = self.dlg.providerIndex()
-        imagery = self.dlg.rasterCombo.currentLayer()
         use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
         selected_image = self.dlg.metadataTable.selectedItems()
+        if selected_image:
+            row = selected_image[0].row()
+            local_image_index = int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text())
+        else:
+            local_image_index = None
         # This is AOI with respect to selected Maxar images and raster image extent
         try:
             real_aoi = self.get_aoi(provider_index=provider_index,
-                                    raster_layer=imagery,
                                     use_image_extent_as_aoi=use_image_extent_as_aoi,
-                                    selected_image=selected_image,
+                                    local_image_index=local_image_index,
                                     selected_aoi=self.aoi)
         except ImageIdRequired:
             # AOI is OK, but image ID is not selected,
@@ -1662,6 +1703,7 @@ class Mapflow(QObject):
             self.aoi_size = layer_utils.calculate_aoi_area(real_aoi, self.project.transformContext())
         except Exception as e:
             self.aoi_size = 0
+        
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.aoi_size))
         self.update_processing_cost()
 
@@ -1838,8 +1880,8 @@ class Mapflow(QObject):
 
     def crop_aoi_with_maxar_image_footprint(self,
                                             aoi: QgsFeature,
-                                            selected_image: QTableWidgetItem):
-        extent = self.search_footprints[selected_image[self.config.MAXAR_ID_COLUMN_INDEX].text()]
+                                            local_image_index: int):
+        extent = self.search_footprints[local_image_index]
         try:
             aoi = next(clip_aoi_to_image_extent(aoi, extent)).geometry()
         except StopIteration:
@@ -1848,16 +1890,9 @@ class Mapflow(QObject):
 
     def get_processing_params(self,
                               provider_index: Optional[int],
-                              raster_layer: Optional[QgsRasterLayer],
                               s3_uri: str = "",
                               image_id: Optional[str] = None,
                               provider_name: Optional[str] = None):
-        if raster_layer is not None:
-            # We cannot set URL yet if we do not know it before the image is uploaded
-            meta = {'source-app': 'qgis',
-                    'version': self.plugin_version,
-                    'source': "tif"}
-            return PostSourceSchema(source_type='tif', url=s3_uri), meta
         provider = self.providers[provider_index]
         meta = {'source-app': 'qgis',
                 'version': self.plugin_version,
@@ -1866,35 +1901,26 @@ class Mapflow(QObject):
             raise PluginError(self.tr('Providers are not initialized'))
         provider_params, provider_meta = provider.to_processing_params(image_id=image_id,
                                                                        provider_name=provider_name,
+                                                                       url=s3_uri,
                                                                        zoom=self.zoom)
         meta.update(**provider_meta)
         return provider_params, meta
 
     def get_aoi(self,
                 provider_index: Optional[int],
-                raster_layer: Optional[QgsRasterLayer],
                 use_image_extent_as_aoi: bool,
                 selected_aoi: QgsGeometry,
-                selected_image: Optional[str] = None) -> QgsGeometry:
+                local_image_index: Optional[int]) -> QgsGeometry:
         if not helpers.check_aoi(selected_aoi):
             raise BadProcessingInput(self.tr('Bad AOI. AOI must be inside boundaries:'
                                              ' \n[-180, 180] by longitude, [-90, 90] by latitude'))
-
-        if raster_layer is not None:
-            # selected raster source is a layer
-            aoi = layer_utils.get_raster_aoi(raster_layer=raster_layer,
-                                             selected_aoi=selected_aoi,
-                                             use_image_extent_as_aoi=use_image_extent_as_aoi)
-            if not aoi:
-                raise AoiNotIntersectsImage()
-            return aoi
         else:
             provider = self.providers[provider_index]
             if not provider:
                 raise PluginError(self.tr('Providers are not initialized'))
-            if selected_image:
+            if local_image_index is not None:
                 if isinstance(provider, (MaxarProvider, ImagerySearchProvider)):
-                    aoi = self.crop_aoi_with_maxar_image_footprint(selected_aoi, selected_image)
+                    aoi = self.crop_aoi_with_maxar_image_footprint(selected_aoi, local_image_index)
                 elif isinstance(provider, SentinelProvider):
                     # todo: crop sentinel aoi with image footprint?
                     aoi = selected_aoi
@@ -1905,6 +1931,22 @@ class Mapflow(QObject):
             elif provider.requires_image_id:
                 aoi = selected_aoi
                 # raise PluginError(self.tr("Please select image in Search table for {}").format(provider.name))
+            elif isinstance(provider, MyImageryProvider):
+                image = self.data_catalog_service.selected_image()
+                mosaic = self.data_catalog_service.selected_mosaic()
+                if image:
+                    catalog_aoi = QgsGeometry().fromWkt(image.footprint)
+                elif mosaic:
+                    catalog_aoi = QgsGeometry().fromWkt(mosaic.footprint)
+                if image or mosaic:
+                    aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
+                                                      selected_aoi=selected_aoi,
+                                                      use_image_extent_as_aoi=use_image_extent_as_aoi)
+                    if not aoi:
+                        raise AoiNotIntersectsImage()
+                    aoi = selected_aoi
+                else:
+                    aoi = selected_aoi
             else:
                 aoi = selected_aoi
         return aoi
@@ -1913,33 +1955,41 @@ class Mapflow(QObject):
                                   allow_empty_name: bool = False) -> Tuple[Optional[PostProcessingSchema], str]:
         processing_name = self.dlg.processingName.text()
         provider_index = self.dlg.providerIndex()
-        imagery = self.dlg.rasterCombo.currentLayer()
         use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
         image_id = self.dlg.imageId.text()
         provider_name = None
-        if image_id:
-            # for ImagerySearchProvider we must get the internal provider name from the features,
-            # it is as necessary as image_id for it
-            try:
-                provider_name = self.search_footprints[image_id].attribute("providerName")
-            except KeyError:
-                provider_name = None
         selected_image = self.dlg.metadataTable.selectedItems()
+        if selected_image:
+            try:
+                row = selected_image[0].row()
+                local_image_index = int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text())
+                provider_name = self.search_footprints[local_image_index].attribute("providerName")
+            except:
+                local_image_index = None
+                provider_name = None
+        else:
+            local_image_index = None
         wd_name = self.dlg.modelCombo.currentText()
         wd = self.workflow_defs.get(wd_name)
         try:
-            self.check_processing_ui(allow_empty_name=allow_empty_name)
-            if imagery:
-                # raster layer selected is local tiff
-                if not helpers.raster_layer_is_allowed(imagery):
-                    raise BadProcessingInput(self.tr("Raster TIFF file must be georeferenced,"
-                                                     " have size less than {size} pixels"
-                                                     " and file size less than {memory}"
-                                                     " MB").format(size=self.config.MAX_FILE_SIZE_PIXELS,
-                                                                   memory=self.config.MAX_FILE_SIZE_BYTES // (
-                                                                           1024 * 1024)))
+            self.check_processing_ui(allow_empty_name=allow_empty_name)                
+            provider = self.providers[provider_index]
+            s3_uri = None
+            if isinstance(provider, MyImageryProvider):
+                image = self.data_catalog_service.selected_image()
+                mosaic = self.data_catalog_service.selected_mosaic()
+                if image:
+                    s3_uri = image.image_url
+                elif mosaic:
+                    try:
+                        image_uri = self.data_catalog_service.images[0].image_url
+                        # to launch for the whole mosaic we need to use minio path without the filename
+                        s3_uri = image_uri.rsplit('/',1)[0]+'/'
+                    except:
+                        s3_uri = None
+
             provider_params, processing_meta = self.get_processing_params(provider_index=provider_index,
-                                                                          raster_layer=imagery,
+                                                                          s3_uri=s3_uri,
                                                                           image_id=image_id,
                                                                           provider_name=provider_name)
             
@@ -1952,12 +2002,11 @@ class Mapflow(QObject):
                         provider_params.zoom = None
 
             aoi = self.get_aoi(provider_index=provider_index,
-                               raster_layer=imagery,
                                use_image_extent_as_aoi=use_image_extent_as_aoi,
-                               selected_image=selected_image,
+                               local_image_index=local_image_index,
                                selected_aoi=self.aoi)
         except AoiNotIntersectsImage:
-            return None, self.tr("Selected AOI does not intestect the selected image")
+            return None, self.tr("Selected AOI does not intersect the selected imagery")
         except ImageIdRequired:
             return None, self.tr("This provider requires image ID. Use search tab to find imagery for you requirements, "
                                  "and select image in the table.")
@@ -1970,7 +2019,6 @@ class Mapflow(QObject):
             meta=processing_meta,
             params=provider_params,
             geometry=json.loads(aoi.asJson()))
-
         return processing_params, ""
 
     def create_processing(self) -> None:
@@ -1980,10 +2028,10 @@ class Mapflow(QObject):
         """
         # get the data from UI
         processing_params, error = self.create_processing_request()
+        print (processing_params)
         if not processing_params:
             self.alert(error, icon=QMessageBox.Warning)
             return
-
         if not helpers.check_processing_limit(billing_type=self.billing_type,
                                               remaining_limit=self.remaining_limit,
                                               remaining_credits=self.remaining_credits,
@@ -1994,23 +2042,13 @@ class Mapflow(QObject):
                                'to top up your balance'),
                        icon=QMessageBox.Warning)
             return
-
-        provider_index = self.dlg.providerIndex()
-        imagery = self.dlg.rasterCombo.currentLayer()
-
+        print (processing_params)
         self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
-        if imagery:
-            try:
-                self.upload_image(layer=imagery, processing_params=processing_params)
-            except Exception as e:
-                self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
-            return
-        else:
-            try:
-                self.post_processing(processing_params)
-            except Exception as e:
-                self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
-            return
+        try:
+            self.post_processing(processing_params)
+        except Exception as e:
+            self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
+        return
 
     def upload_tif_callback(self,
                             response: QNetworkReply,
@@ -2071,7 +2109,7 @@ class Mapflow(QObject):
         response_body = response.readAll().data().decode()
         if error == QNetworkReply.ContentAccessDenied \
                 and "data provider" in response_body.lower():
-            self.alert(self.tr('Data provider with id is unavailable on your plan. \n '
+            self.alert(self.tr('The selected data provider is unavailable on your plan. \n '
                                'Upgrade your subscription to get access to the data. \n'
                                'See pricing at <a href=\"https://mapflow.ai/pricing\">mapflow.ai</a>'),
                        QMessageBox.Information)
@@ -2130,6 +2168,7 @@ class Mapflow(QObject):
 
     def setup_providers(self, providers_data):
         self.default_providers = ProvidersList([ImagerySearchProvider(proxy=self.server)] +
+                                               [MyImageryProvider()] +
                                                [DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
                                                 for data in providers_data])
         self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
@@ -2272,9 +2311,9 @@ class Mapflow(QObject):
             # If we won't find a different and more accurate solution
             # I would suggest creating a dictionary, storing x and y coordinates as values
             # Then we can check min and max coords from bounding box
-            # And scecify that the point that has the same x as xmin is SW, xmax - NE, 
+            # And scecify that the point that has the same x as xmin is SW, xmax - NE,
             # Same y as ymin - SE, ymax - NW
-        # Assuming raster is n*m size, where n is width and m is height, we get: 
+        # Assuming raster is n*m size, where n is width and m is height, we get:
             # NW is a 1 point in a list (clockwise) and 0,0 - in our image
             # NE - 2 and n,0
             # SW - 4 and 0,m
@@ -2417,10 +2456,6 @@ class Mapflow(QObject):
 
     def preview(self) -> None:
         """Display raster tiles served over the Web."""
-        if self.dlg.rasterCombo.currentLayer() is not None:
-            self.iface.setActiveLayer(self.dlg.rasterCombo.currentLayer())
-            self.iface.zoomToActiveLayer()
-            return
         image_id = self.dlg.imageId.text()
         provider = self.providers[self.dlg.providerIndex()]
         if provider.requires_image_id and not image_id:
@@ -2826,7 +2861,6 @@ class Mapflow(QObject):
         plugin_button.triggered.connect(self.main)
         self.toolbar.addAction(plugin_button)
         self.project.readProject.connect(self.set_layer_group)
-        # list(filter(bool, [self.dlg.rasterCombo.layer(index) for index in range(self.dlg.rasterCombo.count())]))
         self.dlg.processingsTable.sortByColumn(self.config.PROCESSING_TABLE_SORT_COLUMN_INDEX, Qt.DescendingOrder)
 
     def set_layer_group(self) -> None:
@@ -3083,6 +3117,7 @@ class Mapflow(QObject):
             self.setup_processings_table()
         else:
             self.project_service.get_projects(current_project_id=self.project_id)
+            self.data_catalog_service.get_mosaics()
         self.dlg.setup_for_billing(self.billing_type)
         self.dlg.show()
         self.user_status_update_timer.start()
@@ -3188,6 +3223,12 @@ class Mapflow(QObject):
         dialog.setup(processing)
         dialog.deleteLater()
 
+    def create_project(self):
+        dialog = CreateProjectDialog(self.dlg)
+        dialog.accepted.connect(lambda: self.project_service.create_project(dialog.project()))
+        dialog.setup()
+        dialog.deleteLater()
+
     def get_project_sharing(self):
         if len(self.dlg.projectsCombo) == 0:
             return
@@ -3237,7 +3278,6 @@ class Mapflow(QObject):
         if not self.version_ok:
             self.dlg.close()
             return
-
 
         if self.logged_in:
             # with any auth method
