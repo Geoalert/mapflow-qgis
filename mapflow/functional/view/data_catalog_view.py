@@ -68,7 +68,6 @@ class DataCatalogView(QObject):
         return self.dlg.stackedLayout.currentIndex() == 0
 
     def display_mosaics(self, mosaics: list[MosaicReturnSchema]):
-        self.dlg.mosaicTable.clearSelection()
         self.contain_mosaic_cell_buttons()
         if not mosaics:
             return
