@@ -94,9 +94,7 @@ class DataCatalogService(QObject):
         self.view.display_mosaics(list(self.mosaics.values()))
         # Allow selection back
         self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.SingleSelection) 
-        # Select the right cell
-        if self.view.mosaic_table_visible:
-            self.view.select_mosaic_cell(mosaic.id)
+        self.view.select_mosaic_cell(mosaic.id)
 
     def update_mosaic(self):
         mosaic = self.selected_mosaic()
@@ -131,14 +129,13 @@ class DataCatalogService(QObject):
             self.delete_mosaic(mosaic)
 
     def on_mosaic_selection(self, mosaic: MosaicReturnSchema):
+        # Clear previous images details
+        self.dlg.imageTable.clearSelection()
+        self.dlg.imageTable.setRowCount(0)
         self.dlg.selected_mosaic_cell = self.dlg.mosaicTable.selectedIndexes()[0]
         self.view.add_mosaic_cell_buttons()
         self.get_mosaic_images(mosaic.id)
-        # Store widgets before deleting previous mosaic's image table
         self.view.show_mosaic_info(mosaic.name)
-        # Clear previous image details
-        self.dlg.imageTable.clearSelection()
-        # Assing newly selected cell
 
     def mosaic_preview(self):
         try:
@@ -189,7 +186,7 @@ class DataCatalogService(QObject):
         if len(image_paths) == 0:
             if failed:
                 self.api.upload_image_error_handler(response=response, mosaic_name=mosaic_name, image_paths=failed)
-            self.get_mosaic_images(mosaic_id)
+            self.get_mosaic(mosaic_id)
             self.mosaicsUpdated.emit()
         else:
             image_to_upload = image_paths[0]
@@ -219,7 +216,7 @@ class DataCatalogService(QObject):
                                                                 name=Path(image_to_upload).name,
                                                                 image_size=round(image_size/(1024*1024), 1)))
                 self.iface.messageBar().pushWarning("Mapflow", message)
-                self.get_mosaic_images(mosaic_id)
+                self.get_mosaic(mosaic_id)
                 self.mosaicsUpdated.emit()
                 return
             # Upload allowed raster 
@@ -268,7 +265,7 @@ class DataCatalogService(QObject):
             if failed:
                 self.api.delete_image_error_handler(image_paths=failed)
             mosaic_id = self.selected_mosaic().id
-            self.get_mosaic_images(mosaic_id)
+            self.get_mosaic(mosaic_id)
             self.dlg.imageTable.clearSelection()
         else:
             image_to_delete = images[0]
