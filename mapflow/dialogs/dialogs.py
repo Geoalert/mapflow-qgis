@@ -22,7 +22,7 @@ class ErrorMessageWidget(*uic.loadUiType(ui_path / 'error_message.ui')):
         self.mailTo.setText(
             '<html><head/><body><p><a href="mailto:help@geoalert.io?subject=Mapflow-QGIS&body=' +
             email_body +
-            '"><span style=" text-decoration: underline; color:#0057ae;">Let us know</span></a></p></body></html>'
+            self.tr('"><span style=" text-decoration: underline; color:#0057ae;">Let us know</span></a></p></body></html>')
         )
 
 
