@@ -129,14 +129,13 @@ class DataCatalogService(QObject):
             self.delete_mosaic(mosaic)
 
     def on_mosaic_selection(self, mosaic: MosaicReturnSchema):
+        # Clear previous images details
+        self.dlg.imageTable.clearSelection()
+        self.dlg.imageTable.setRowCount(0)
         self.dlg.selected_mosaic_cell = self.dlg.mosaicTable.selectedIndexes()[0]
         self.view.add_mosaic_cell_buttons()
         self.get_mosaic_images(mosaic.id)
-        # Store widgets before deleting previous mosaic's image table
         self.view.show_mosaic_info(mosaic.name)
-        # Clear previous image details
-        self.dlg.imageTable.clearSelection()
-        # Assing newly selected cell
 
     def mosaic_preview(self):
         try:

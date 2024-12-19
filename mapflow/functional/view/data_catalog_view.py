@@ -143,7 +143,6 @@ class DataCatalogView(QObject):
             return
 
     def display_images(self, images: list[ImageReturnSchema]):
-        self.dlg.imageTable.clearSelection()
         self.contain_image_cell_buttons()
         self.dlg.imageTable.setRowCount(len(images))
         self.dlg.imageTable.setColumnCount(2)
