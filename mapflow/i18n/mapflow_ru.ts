@@ -49,7 +49,7 @@
     <message>
         <location filename="../config.py" line="56"/>
         <source>local_index</source>
-        <translation>Локальный индекс</translation>
+        <translation type="obsolete">Локальный индекс</translation>
     </message>
     <message>
         <location filename="../config.py" line="60"/>
@@ -75,7 +75,7 @@
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="86"/>
         <source>Could not delete mosaic &apos;{mosaic_name}&apos;</source>
-        <translation>Не удалось удалить мозаику &apos;{mosaic_name}&apos;</translation>
+        <translation>Не удалось удалить мозаику '{mosaic_name}'</translation>
     </message>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="233"/>
@@ -85,7 +85,7 @@
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="190"/>
         <source>Mosaic &apos;{mosaic_name}&apos; does not exist</source>
-        <translation>Мозаика &apos;{mosaic_name}&apos; не существует</translation>
+        <translation>Мозаика '{mosaic_name}' не существует</translation>
     </message>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="90"/>
@@ -113,13 +113,13 @@ please try again later or report error</source>
         <location filename="../functional/api/data_catalog_api.py" line="194"/>
         <source>The image does not meet mosaic &apos;{mosaic_name}&apos; paremeters. 
 Either modify your image or upload it to a different mosaic</source>
-        <translation>Изображение не соответствует параметрам мозаики &apos;{mosaic_name}&apos;. 
+        <translation>Изображение не соответствует параметрам мозаики '{mosaic_name}'. 
 Либо измените своё изображение, либо загрузите его в другую мозаику</translation>
     </message>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="197"/>
         <source>Could not upload &apos;{image}&apos; to mosaic</source>
-        <translation>Не удалось загрузить &apos;{image}&apos; в мозаику</translation>
+        <translation>Не удалось загрузить '{image}' в мозаику</translation>
     </message>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="199"/>
@@ -131,7 +131,7 @@ Either modify your image or upload it to a different mosaic</source>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="234"/>
         <source>Could not delete &apos;{image}&apos; from mosaic</source>
-        <translation>Не удалось удалить &apos;{image}&apos; из мозаики</translation>
+        <translation>Не удалось удалить '{image}' из мозаики</translation>
     </message>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="236"/>
@@ -144,7 +144,7 @@ Either modify your image or upload it to a different mosaic</source>
     <message>
         <location filename="../functional/service/data_catalog.py" line="126"/>
         <source>Delete mosaic &apos;{name}&apos;?</source>
-        <translation>Удалить мозаику &apos;{name}&apos;?</translation>
+        <translation>Удалить мозаику '{name}'?</translation>
     </message>
     <message>
         <location filename="../functional/service/data_catalog.py" line="160"/>
@@ -159,27 +159,27 @@ Either modify your image or upload it to a different mosaic</source>
     <message>
         <location filename="../functional/service/data_catalog.py" line="211"/>
         <source>&lt;center&gt;&lt;b&gt;Error uploading &apos;{name}&apos;&lt;/b&gt;</source>
-        <translation>&lt;center&gt;&lt;b&gt;Ошибка загрузки &apos;{name}&apos;&lt;/b&gt;</translation>
+        <translation>&lt;center&gt;&lt;b&gt;Ошибка загрузки '{name}'&lt;/b&gt;</translation>
     </message>
     <message>
         <location filename="../functional/service/data_catalog.py" line="216"/>
         <source>&lt;b&gt;Not enough storage space. &lt;/b&gt;You have {free_storage} MB left, but &apos;{name}&apos; is {image_size} MB</source>
-        <translation>&lt;b&gt;Недостаточно свободного места. &lt;/b&gt;Свободно: {free_storage} Мб, а размер &apos;{name}&apos; составляет {image_size} Мб</translation>
+        <translation>&lt;b&gt;Недостаточно свободного места. &lt;/b&gt;Свободно: {free_storage} Мб, а размер '{name}' составляет {image_size} Мб</translation>
     </message>
     <message>
         <location filename="../functional/service/data_catalog.py" line="296"/>
         <source>&lt;center&gt;Delete image &lt;b&gt;&apos;{name}&apos;&lt;/b&gt; from &apos;{mosaic}&apos; mosaic?</source>
-        <translation>&lt;center&gt;Удалить изображение &lt;b&gt;&apos;{name}&apos;&lt;/b&gt; из мозаики &apos;{mosaic}&apos;?</translation>
+        <translation>&lt;center&gt;Удалить изображение &lt;b&gt;'{name}'&lt;/b&gt; из мозаики '{mosaic}'?</translation>
     </message>
     <message>
         <location filename="../functional/service/data_catalog.py" line="299"/>
         <source>&lt;center&gt;Delete following images from &apos;{mosaic}&apos; mosaic:&lt;br&gt;&lt;b&gt;&apos;{names}&apos;&lt;/b&gt;?</source>
-        <translation>&lt;center&gt;Удалить следующие изображения из мозаики &apos;{mosaic}&apos;:&lt;br&gt;&lt;b&gt;&apos;{names}&apos;&lt;/b&gt;?</translation>
+        <translation>&lt;center&gt;Удалить следующие изображения из мозаики '{mosaic}':&lt;br&gt;&lt;b&gt;'{names}'&lt;/b&gt;?</translation>
     </message>
     <message>
         <location filename="../functional/service/data_catalog.py" line="302"/>
         <source>&lt;center&gt;Delete &lt;b&gt;{len}&lt;/b&gt; images from &apos;{mosaic}&apos; mosaic?</source>
-        <translation>&lt;center&gt;Удалить &lt;b&gt;{len}&lt;/b&gt; изображений из мозаики &apos;{mosaic}&apos;?</translation>
+        <translation>&lt;center&gt;Удалить &lt;b&gt;{len}&lt;/b&gt; изображений из мозаики '{mosaic}'?</translation>
     </message>
 </context>
 <context>
@@ -303,12 +303,12 @@ bands: {count}</source>
     <message>
         <location filename="../functional/view/data_catalog_view.py" line="267"/>
         <source>&apos;Cmd&apos; + click to deselect</source>
-        <translation>Нажмите на ячейку, зажав &apos;Cmd&apos;, чтобы снять выделение</translation>
+        <translation>Нажмите на ячейку, зажав 'Cmd', чтобы снять выделение</translation>
     </message>
     <message>
         <location filename="../functional/view/data_catalog_view.py" line="267"/>
         <source>&apos;Ctrl&apos; + click to deselect</source>
-        <translation>Нажмите на ячейку, зажав &apos;Ctrl&apos;, чтобы снять выделение</translation>
+        <translation>Нажмите на ячейку, зажав 'Ctrl', чтобы снять выделение</translation>
     </message>
     <message>
         <location filename="../functional/view/data_catalog_view.py" line="283"/>
@@ -432,7 +432,7 @@ bands: {count}</source>
     <message>
         <location filename="../errors.py" line="20"/>
         <source>Key &apos;url&apos; in your request must be a string, got {url_type} instead.</source>
-        <translation type="obsolete">Ключ &apos;url&apos; в запросе должен быть строкой, не {url_type}.</translation>
+        <translation type="obsolete">Ключ 'url' в запросе должен быть строкой, не {url_type}.</translation>
     </message>
     <message>
         <location filename="../errors.py" line="25"/>
@@ -668,6 +668,14 @@ bands: {count}</source>
         <location filename="../errors.py" line="73"/>
         <source>You XYZ basemap link doesn&apos;t match the format, it must be a link containing &quot;x&quot;, &quot;y&quot;, &quot;z&quot;  placeholders.</source>
         <translation type="obsolete">Ссылка на XYZ подложку не соответствует формату. Это должна быть ссылка, содержащая поля &quot;x&quot;, &quot;y&quot;, &quot;z&quot;.</translation>
+    </message>
+</context>
+<context>
+    <name>ErrorMessageWidget</name>
+    <message>
+        <location filename="../dialogs/dialogs.py" line="22"/>
+        <source>&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Let us know&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
+        <translation>&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Свяжитесь с нами&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
 </context>
 <context>
@@ -2244,7 +2252,7 @@ OSM layer will be added instead.</source>
         <source>Not enough rights for this action
 in a shared project &apos;{project_name}&apos; ({user_role})</source>
         <translation>Недостаточно прав для этого действия
-в проекте &apos;{project_name}&apos; ({user_role})</translation>
+в проекте '{project_name}' ({user_role})</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1629"/>
@@ -2322,7 +2330,7 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
     <message>
         <location filename="../errors/processing_errors.py" line="17"/>
         <source>Key &apos;url&apos; in your request must be a string, got {url_type} instead.</source>
-        <translation>Ключ &apos;url&apos; в запросе должен быть строкой, не {url_type}.</translation>
+        <translation>Ключ 'url' в запросе должен быть строкой, не {url_type}.</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="19"/>

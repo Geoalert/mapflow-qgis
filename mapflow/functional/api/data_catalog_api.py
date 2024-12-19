@@ -74,7 +74,7 @@ class DataCatalogApi(QObject):
                       callback_kwargs: Optional[dict] = None,
                       error_handler: Optional[Callable] = None,
                       error_handler_kwargs: Optional[dict] = None):
-        self.http.delete(url=f"{self.server}/rasters/mosaic/{mosaic_id}",
+        self.http.delete(url=f"{self.server}/rasters/mosaic/{mosaic_id}_",
                          callback=callback,
                          callback_kwargs=callback_kwargs or {},
                          use_default_error_handler=error_handler is None,

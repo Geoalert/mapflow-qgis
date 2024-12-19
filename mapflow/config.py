@@ -53,7 +53,7 @@ class Config:
         QCoreApplication.translate('Config', 'Off Nadir') + f' \N{DEGREE SIGN}': 'offNadirAngle',
         QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=TIMEZONE): 'acquisitionDate',
         QCoreApplication.translate('Config', 'Image ID'): 'id',
-        QCoreApplication.translate('Config', 'local_index'): 'local_index'
+        'local_index': 'local_index'
     }
     MAXAR_ID_COLUMN_INDEX = tuple(METADATA_TABLE_ATTRIBUTES.values()).index('id')
     LOCAL_INDEX_COLUMN = tuple(METADATA_TABLE_ATTRIBUTES.values()).index('local_index')
