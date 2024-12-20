@@ -13,6 +13,11 @@ version=2.6.3
 author=Geoalert
 email=hello@geoalert.io
 changelog:
+    3.0.0
+    - New 'My imagery' tab, containing user's mosaics and images
+    - Run processing creating and using your own mosaics
+    - Running processing directly from raster layer is no longer supported.
+      To process your image, upload it to a new mosaic first
     2.6.3
     - Allow using shared Mapflow AI projects
     2.6.2

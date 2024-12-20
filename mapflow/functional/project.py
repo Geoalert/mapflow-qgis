@@ -66,7 +66,7 @@ class ProjectService(QObject):
                           callback=self.get_projects_callback,
                           callback_kwargs ={'current_project_id': current_project_id},
                           use_default_error_handler=True,
-                          timeout=5)
+                          timeout=10)
 
     def get_projects_callback(self, response: QNetworkReply, current_project_id: Optional[str] = None):
         self.projects = [MapflowProject.from_dict(data) for data in json.loads(response.readAll().data())]

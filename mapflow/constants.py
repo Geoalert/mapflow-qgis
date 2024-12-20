@@ -8,5 +8,6 @@ OSM = 'type=xyz&url=https://tile.openstreetmap.org/{z}/{x}/{y}.png&zmax=19&zmin=
 
 SENTINEL_OPTION_NAME = 'Sentinel-2'
 SEARCH_OPTION_NAME = "🔎 Imagery Search"
+CATALOG_OPTION_NAME = "🖼️ My imagery"
 
 DEFAULT_HTTP_TIMEOUT_SECONDS = 5

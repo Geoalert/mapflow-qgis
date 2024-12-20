@@ -1,3 +1,13 @@
+## 3.0.0
+    - Data catalog:
+        - My imagery tab with user's mosaics and images
+        - Mosaic's CRUD
+        - Add images from TIF files or raster layers
+        - My imagery data source that to run processing using selected imagery
+    - Change data source combo from QgsMapLayerComboBox to QComboBox and forbid starting processing directly from raster layer
+    - Fixed reloading zoom from settings on plugin start
+    - Fixed downloading results error (use .geojson if unable to save .gpkg)
+
 ## 2.6.3
     - Added schemas for shared projects
     - Disabled certain buttons depending on user role in a project
