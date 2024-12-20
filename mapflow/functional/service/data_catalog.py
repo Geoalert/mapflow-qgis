@@ -67,7 +67,7 @@ class DataCatalogService(QObject):
 
     def create_mosaic_callback(self, response: QNetworkReply):
         self.get_mosaics()
-
+        self.dlg.mosaicTable.clearSelection()
 
     def get_mosaics(self):
         self.api.get_mosaics(callback=self.get_mosaics_callback)
@@ -118,6 +118,7 @@ class DataCatalogService(QObject):
 
     def delete_mosaic_callback(self, response: QNetworkReply, mosaic_id: UUID):
         self.get_mosaics()
+        self.dlg.mosaicTable.clearSelection()
 
     def confirm_mosaic_deletion(self):
         mosaic = self.selected_mosaic()
