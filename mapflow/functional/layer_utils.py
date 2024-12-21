@@ -20,10 +20,12 @@ from qgis.core import (QgsRectangle,
                        QgsCoordinateReferenceSystem,
                        QgsDistanceArea,
                        QgsVectorFileWriter,
-                       QgsProject
+                       QgsProject,
+                       QgsMessageLog,
+                       QgsCoordinateTransform
                        )
 
-from .geometry import clip_aoi_to_image_extent
+from .geometry import clip_aoi_to_image_extent, clip_aoi_to_catalog_extent
 from .helpers import WGS84, to_wgs84, WGS84_ELLIPSOID
 from ..dialogs.dialogs import ErrorMessageWidget
 from ..schema.catalog import AoiResponseSchema
@@ -135,6 +137,24 @@ def get_raster_aoi(raster_layer: QgsRasterLayer,
     return feature.geometry()
 
 
+def get_catalog_aoi(catalog_aoi: QgsGeometry,
+                    selected_aoi: QgsGeometry,
+                    use_image_extent_as_aoi: bool) -> QgsGeometry:
+    """Return either AOI geometry if it intersects with imagery frootprint or the footprint itself.
+    :param catalog_aoi: Image or mosaic footprint.
+    :param selected_aoi: Currently selected in polygonCombo AOI layer.
+    """
+    if not use_image_extent_as_aoi:
+        clipped_aoi_features = clip_aoi_to_catalog_extent(catalog_aoi, selected_aoi)
+        clipped_aoi = QgsGeometry.fromWkt('GEOMETRYCOLLECTION()')
+        for feature in clipped_aoi_features:
+            geom = feature.geometry()
+            clipped_aoi = clipped_aoi.combine(geom)
+    else:
+        clipped_aoi = catalog_aoi
+    return clipped_aoi
+
+
 def is_polygon_layer(layer: QgsMapLayer) -> bool:
     """Determine if a layer is of vector type and has polygonal geometry.
     :param layer: A layer to test
@@ -233,6 +253,20 @@ def generate_vector_layer(layer_uri,
         name
     )
     return layer
+
+def footprint_to_extent(footprint: dict) -> QgsRectangle:
+    """Construct bounding box from response got from image footprint.
+    As tile server returns tile_json in epsg:4326, first transform it to epsg:3857.
+    :param: footprint: dict, which should be geojson-like dict (geometry).
+    :return: QgsRectangle
+    """
+    source_crs = QgsCoordinateReferenceSystem(4326)
+    dest_crs = QgsCoordinateReferenceSystem(3857)
+    tr = QgsCoordinateTransform(source_crs, dest_crs, QgsProject.instance())
+    geom = QgsGeometry.fromWkt(footprint)
+    geom.transform(tr)
+    extent = geom.boundingBox()
+    return extent
 
 
 # Layer management for results

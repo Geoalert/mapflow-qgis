@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import Optional, List, Dict
 from enum import Enum
 
 from .base import Serializable, SkipDataClass
@@ -42,7 +42,7 @@ class MapflowProject(SkipDataClass):
     isDefault: bool
     description: Optional[str]
     workflowDefs: Optional[List[dict]] = None
-    shareProject: Optional[dict[ShareProject]] = None
+    shareProject: Optional[Dict[str, ShareProject]] = None
 
     def __post_init__(self):
         if self.workflowDefs:

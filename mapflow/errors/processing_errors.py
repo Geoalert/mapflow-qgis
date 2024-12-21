@@ -95,6 +95,8 @@ class ProcessingErrors(ErrorMessageList):
                                                          "We are working on the fix, our support will contact you."),
             "dataloader.SentinelLoaderInternalError": self.tr("Internal error in process of loading data. "
                                                               "We are working on the fix, our support will contact you."),
+            "dataloader.NoDataTile": self.tr("The data provider contains no data for your area of interest "
+                                             "(returned NoData tiles). Try other the data sources to get the results."),
             "raster-processor.internalError": self.tr("Internal error in process of data preparation. "
                                                       "We are working on the fix, our support will contact you."),
             "inference.internalError": self.tr("Internal error in process of data processing. "

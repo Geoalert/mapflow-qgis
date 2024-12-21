@@ -5,8 +5,8 @@ from typing import Iterable, Optional, List
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette
-from PyQt5.QtWidgets import QWidget, QPushButton, QCheckBox, QTableWidgetItem, QAction, QMenu
-from qgis.core import QgsMapLayerProxyModel, QgsMapLayer, QgsSettings
+from PyQt5.QtWidgets import QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton, QAction, QMenu
+from qgis.core import QgsMapLayerProxyModel, QgsSettings
 
 from . import icons
 from ..config import config
@@ -35,7 +35,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.setupUi(self)
         # Restrict combos to relevant layer types; QGIS 3.10-3.20 (at least) bugs up if set in .ui
         self.polygonCombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
-        self.rasterCombo.setFilters(QgsMapLayerProxyModel.RasterLayer)
         # Set icons (can be done in .ui but brings about the resources_rc import bug)
         self.setWindowIcon(icons.plugin_icon)
         self.addProvider.setIcon(icons.plus_icon)
@@ -47,8 +46,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.modelInfo.setIcon(icons.info_icon)
         self.tabWidget.setTabIcon(0, icons.processing_icon)
         self.tabWidget.setTabIcon(1, icons.lens_icon)
-        self.tabWidget.setTabIcon(2, icons.user_gear_icon)
-        self.tabWidget.setTabIcon(3, icons.info_icon)
+        self.tabWidget.setTabIcon(2, icons.images_icon)
+        self.tabWidget.setTabIcon(3, icons.user_gear_icon)
+        self.tabWidget.setTabIcon(4, icons.info_icon)
         self.saveOptionsButton.setIcon(icons.options_icon)
         self.createProject.setIcon(icons.plus_icon)
         self.deleteProject.setIcon(icons.minus_icon)
@@ -78,10 +78,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.spin1_connection = self.maxZoom.valueChanged.connect(self.switch_maxzoom_2)
         self.spin2_connection = self.maxZoom2.valueChanged.connect(self.switch_maxzoom_1)
         # current state to compare with on change
-        self.current_raster_source = self.rasterCombo.currentText()
-        self.current_raster_layer = self.rasterCombo.currentLayer()
+        self.current_raster_source = self.sourceCombo.currentText()
         # connect raster/provider combos
-        self.raster_provider_connection = self.rasterCombo.currentTextChanged.connect(self.switch_provider_combo)
+        self.raster_provider_connection = self.sourceCombo.currentTextChanged.connect(self.switch_provider_combo)
         self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
 
         self.modelOptions = []
@@ -91,6 +90,29 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # Restored saved state
         self.set_state_from_settings()
 
+        # Store latest cell selections from data catalog tables
+        self.selected_mosaic_cell = None
+        self.selected_image_cell = None
+        # Create data catalog table wigets
+        self.stackedLayout = QStackedLayout()
+        self.stackedLayout.addWidget(self.mosaicTable)
+        self.stackedLayout.addWidget(self.imageTable)
+        self.catalogTableLayout.addLayout(self.stackedLayout)
+        # Add buttons for catalog table cells
+        self.addImageButton = QToolButton()
+        self.showImagesButton = QPushButton()
+        self.previewMosaicButton = QPushButton()
+        self.editMosaicButton = QPushButton()
+        self.previewImageButton = QPushButton()
+        self.imageInfoButton = QPushButton()
+        # Create colored spacers for tables' cell widgets (so long names won't be seen inbetween buttons)
+        self.imageSpacer = QLabel()
+        self.mosaicSpacers = [QLabel(), QLabel(), QLabel()]
+        for spacer in self.mosaicSpacers+[self.imageSpacer]:
+            spacer.setFixedSize(3,26)
+            highlight_color = self.mosaicTable.palette().highlight().color().name() 
+            spacer.setStyleSheet("background-color:" + highlight_color + ";")
+        
         # Hide zoom spinbox
         if config.ZOOM_SELECTOR.lower() == "true":
             pass
@@ -135,10 +157,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     def switch_provider_combo(self, text):
         # We want to skip the signal emission if the actual text and layer did not change
         # Separate check on layer is needed in case two layers have the same name
-        if self.current_raster_source == text and self.current_raster_layer == self.rasterCombo.currentLayer():
+        if self.current_raster_source == text:
             return
         self.current_raster_source = text
-        self.current_raster_layer = self.rasterCombo.currentLayer()
 
         self.providerCombo.currentTextChanged.disconnect(self.provider_raster_connection)
         self.providerCombo.setCurrentText(text)
@@ -150,39 +171,38 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         if self.current_raster_source == text:
             return
         self.current_raster_source = text
-        self.rasterCombo.currentTextChanged.disconnect(self.raster_provider_connection)
-        self.rasterCombo.setCurrentText(text)
+        self.sourceCombo.currentTextChanged.disconnect(self.raster_provider_connection)
+        self.sourceCombo.setCurrentText(text)
         self.rasterSourceChanged.emit()
-        self.raster_provider_connection = self.rasterCombo.currentTextChanged.connect(self.switch_provider_combo)
+        self.raster_provider_connection = self.sourceCombo.currentTextChanged.connect(self.switch_provider_combo)
 
     def set_raster_sources(self,
                            provider_names: List[str],
-                           default_provider_names: List[str],
-                           excepted_layers: List[QgsMapLayer]):
+                           default_provider_names: List[str]):
         """
         args:
             provider_names: strings to be added to providers and raster combos
             default_provider_names: will try to set the current text to this value, if available
                 The first of available names is set, so the first is preferable
-            excepted_layers: will exclude these layers from rasterCombo (for Sentinel, mainly)
         """
         # Disconnect so that rasterSourceChanged would not be emitted while changing comboBoxes
         self.providerCombo.currentTextChanged.disconnect(self.provider_raster_connection)
-        self.rasterCombo.currentTextChanged.disconnect(self.raster_provider_connection)
+        self.sourceCombo.currentTextChanged.disconnect(self.raster_provider_connection)
 
-        self.rasterCombo.setAdditionalItems(provider_names)
+        self.sourceCombo.clear()
+        self.sourceCombo.addItems(provider_names)
         self.providerCombo.clear()
         self.providerCombo.addItems(provider_names)
-        self.rasterCombo.setExceptedLayerList(excepted_layers)
+
         for name in default_provider_names:
             if name in provider_names:
-                self.rasterCombo.setCurrentText(name)
+                self.sourceCombo.setCurrentText(name)
                 self.providerCombo.setCurrentText(name)
-        self.current_raster_source = self.rasterCombo.currentText()
+        self.current_raster_source = self.sourceCombo.currentText()
 
         # Now, after all is set, we can unblock the signals and emit a new one
         self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
-        self.raster_provider_connection = self.rasterCombo.currentTextChanged.connect(self.switch_provider_combo)
+        self.raster_provider_connection = self.sourceCombo.currentTextChanged.connect(self.switch_provider_combo)
         self.rasterSourceChanged.emit()
 
     def connect_column_checkboxes(self):
@@ -505,7 +525,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     def project_controls(self):
         return [self.labelProcessingName, self.processingName,
                 self.labelAoiLayer, self.polygonCombo, self.addAoiButton,
-                self.labelImagerySource, self.rasterCombo, self.zoomCombo, self.searchImageryButton,
+                self.labelImagerySource, self.sourceCombo, self.zoomCombo, self.searchImageryButton,
                 self.labelAiModel, self.labelCoins_1, self.labelWdPrice, self.modelCombo, self.modelInfo,
                 self.modelOptionsLabel,
                 self.startProcessing]
