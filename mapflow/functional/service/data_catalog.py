@@ -187,6 +187,7 @@ class DataCatalogService(QObject):
         if len(image_paths) == 0:
             if failed:
                 self.api.upload_image_error_handler(response=response, mosaic_name=mosaic_name, image_paths=failed)
+            self.dlg.mosaicTable.clearSelection()
             self.get_mosaic(mosaic_id)
             self.mosaicsUpdated.emit()
         else:
@@ -266,6 +267,7 @@ class DataCatalogService(QObject):
             if failed:
                 self.api.delete_image_error_handler(image_paths=failed)
             mosaic_id = self.selected_mosaic().id
+            self.dlg.mosaicTable.clearSelection()
             self.get_mosaic(mosaic_id)
             self.dlg.imageTable.clearSelection()
         else:
