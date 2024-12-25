@@ -1566,6 +1566,7 @@ class Mapflow(QObject):
             else:
                 aoi = QgsGeometry.collectGeometry([feature.geometry() for feature in features])
             self.calculate_aoi_area(aoi, layer.crs())
+            return aoi
         else:  # self.max_aois_per_processing < number of polygons (as features and as parts of multipolygons):
             if not self.user_role.can_start_processing:
                 reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.user_role)
@@ -1621,10 +1622,13 @@ class Mapflow(QObject):
             image = self.data_catalog_service.selected_image()
             mosaic = self.data_catalog_service.selected_mosaic()
             if self.dlg.useImageExtentAsAoi.isChecked():
-                if image:
-                    aoi = QgsGeometry().fromWkt(image.footprint)
-                elif mosaic:
-                    aoi = QgsGeometry().fromWkt(mosaic.footprint)
+                if image or mosaic:
+                    if image:
+                        aoi = QgsGeometry().fromWkt(image.footprint)
+                    else:
+                        aoi = QgsGeometry().fromWkt(mosaic.footprint)
+                    self.dlg.startProcessing.setEnabled(True)
+                    self.dlg.processingProblemsLabel.clear()
                 else:
                     self.dlg.disable_processing_start(reason=self.tr('Choose mosaic or image to start processing'),
                                                       clear_area=True)
@@ -1632,20 +1636,24 @@ class Mapflow(QObject):
                 self.calculate_aoi_area(aoi, helpers.WGS84)
             else:
                 # Get polygon AOI to set self.aoi for intersection check later
-                self.get_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
-                if image:
-                    catalog_aoi = QgsGeometry().fromWkt(image.footprint)
-                elif mosaic:
-                    catalog_aoi = QgsGeometry().fromWkt(mosaic.footprint)
+                aoi_layer = self.get_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+                if image or mosaic:
+                    if image:
+                        catalog_aoi = QgsGeometry().fromWkt(image.footprint)
+                    else:
+                        catalog_aoi = QgsGeometry().fromWkt(mosaic.footprint)
+                    aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
+                                                      selected_aoi=self.aoi,
+                                                      use_image_extent_as_aoi=False)
                 else:
-                    catalog_aoi = None
-                aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
-                                                  selected_aoi=self.aoi,
-                                                  use_image_extent_as_aoi=False)
+                    aoi = aoi_layer
                 self.calculate_aoi_area(aoi, helpers.WGS84)
                 if not aoi:
                     self.dlg.disable_processing_start(reason=self.tr("Selected AOI does not intersect the selected imagery"),
                                                       clear_area=True)
+                else:
+                    self.dlg.startProcessing.setEnabled(True)
+                    self.dlg.processingProblemsLabel.clear()
         else:
             self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
         # If different provider is chosen, set it to My imagery
@@ -1723,12 +1731,22 @@ class Mapflow(QObject):
             self.dlg.startProcessing.setEnabled(True)
             self.dlg.processingProblemsLabel.clear()
         else:  # self.billing_type == BillingType.credits: f
+            provider = self.providers[self.dlg.providerIndex()]
             request_body, error = self.create_processing_request(allow_empty_name=True)
             if not request_body:
                 self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
                 self.dlg.processingProblemsLabel.setText(self.tr("Processing cost is not available:\n"
                                                                  "{error}").format(error=error))
-
+            elif isinstance(provider, ImagerySearchProvider):
+                if not self.dlg.metadataTable.selectionModel().hasSelection():
+                    self.dlg.disable_processing_start(self.tr("This provider requires image ID. "
+                                                              "Use search tab to find imagery for you requirements, "
+                                                              "and select image in the table."))
+                    return
+            elif isinstance(provider, MyImageryProvider):
+                if not self.dlg.mosaicTable.selectionModel().hasSelection():
+                    self.dlg.disable_processing_start(reason=self.tr('Choose mosaic or image to start processing'))
+                    return
             else:
                 if self.user_role.can_start_processing:
                     self.http.post(
@@ -1997,7 +2015,7 @@ class Mapflow(QObject):
             if self.zoom_selector:
                 self.zoom = self.settings.value('zoom')
                 provider_params.zoom = self.zoom
-                if isinstance (provider_params, PostSourceSchema): # no zoom for tifs
+                if isinstance(provider_params, PostSourceSchema): # no zoom for tifs
                     if provider_params.source_type == 'tif':
                         provider_params.zoom = None
 
@@ -2028,7 +2046,6 @@ class Mapflow(QObject):
         """
         # get the data from UI
         processing_params, error = self.create_processing_request()
-        print (processing_params)
         if not processing_params:
             self.alert(error, icon=QMessageBox.Warning)
             return
@@ -2042,7 +2059,6 @@ class Mapflow(QObject):
                                'to top up your balance'),
                        icon=QMessageBox.Warning)
             return
-        print (processing_params)
         self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
         try:
             self.post_processing(processing_params)
