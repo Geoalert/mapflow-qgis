@@ -1627,13 +1627,10 @@ class Mapflow(QObject):
                         aoi = QgsGeometry().fromWkt(image.footprint)
                     else:
                         aoi = QgsGeometry().fromWkt(mosaic.footprint)
-                    self.dlg.startProcessing.setEnabled(True)
-                    self.dlg.processingProblemsLabel.clear()
                 else:
                     self.dlg.disable_processing_start(reason=self.tr('Choose mosaic or image to start processing'),
                                                       clear_area=True)
                     aoi = self.aoi = self.aoi_size = None
-                self.calculate_aoi_area(aoi, helpers.WGS84)
             else:
                 # Get polygon AOI to set self.aoi for intersection check later
                 aoi_layer = self.get_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
@@ -1647,13 +1644,11 @@ class Mapflow(QObject):
                                                       use_image_extent_as_aoi=False)
                 else:
                     aoi = aoi_layer
-                self.calculate_aoi_area(aoi, helpers.WGS84)
                 if not aoi:
                     self.dlg.disable_processing_start(reason=self.tr("Selected AOI does not intersect the selected imagery"),
                                                       clear_area=True)
-                else:
-                    self.dlg.startProcessing.setEnabled(True)
-                    self.dlg.processingProblemsLabel.clear()
+                    return
+            self.calculate_aoi_area(aoi, helpers.WGS84)
         else:
             self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
         # If different provider is chosen, set it to My imagery
@@ -1737,16 +1732,14 @@ class Mapflow(QObject):
                 self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
                 self.dlg.processingProblemsLabel.setText(self.tr("Processing cost is not available:\n"
                                                                  "{error}").format(error=error))
-            elif isinstance(provider, ImagerySearchProvider):
-                if not self.dlg.metadataTable.selectionModel().hasSelection():
+            elif isinstance(provider, ImagerySearchProvider) and\
+                not self.dlg.metadataTable.selectionModel().hasSelection():
                     self.dlg.disable_processing_start(self.tr("This provider requires image ID. "
                                                               "Use search tab to find imagery for you requirements, "
                                                               "and select image in the table."))
-                    return
-            elif isinstance(provider, MyImageryProvider):
-                if not self.dlg.mosaicTable.selectionModel().hasSelection():
+            elif isinstance(provider, MyImageryProvider) and\
+                not self.dlg.mosaicTable.selectionModel().hasSelection():
                     self.dlg.disable_processing_start(reason=self.tr('Choose mosaic or image to start processing'))
-                    return
             else:
                 if self.user_role.can_start_processing:
                     self.http.post(
