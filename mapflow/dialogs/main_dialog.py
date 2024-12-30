@@ -127,6 +127,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.processing_update_action = QAction(self.tr("Rename"))
         self.setup_options_menu()
 
+        self.imageId.setReadOnly(True)
+
     # ===== Settings management ===== #
     def save_view_results_mode(self):
         if self.viewAsTiles.isChecked():

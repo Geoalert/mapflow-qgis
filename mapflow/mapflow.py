@@ -289,6 +289,7 @@ class Mapflow(QObject):
         # Maxar
         self.dlg.imageId.textChanged.connect(self.sync_image_id_with_table_and_layer)
         self.dlg.imageId.textChanged.connect(self.update_processing_cost)
+        self.dlg.metadataTable.itemSelectionChanged.connect(self.update_processing_cost)
         self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
             self.sync_table_selection_with_image_id_and_layer)
         self.meta_layer_table_connection = None
@@ -630,11 +631,11 @@ class Mapflow(QObject):
             my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
             self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
             self.calculate_aoi_area_catalog()
+        else:
+            self.calculate_aoi_area_polygon_layer(polygon_layer)
         if provider.requires_image_id:
             imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
             self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
-        else:
-            self.calculate_aoi_area_polygon_layer(polygon_layer)
     
     def on_zoom_change(self):
         """ Set chosen zoom and update cost (if it depends on zoom for provider).
@@ -1729,9 +1730,8 @@ class Mapflow(QObject):
             provider = self.providers[self.dlg.providerIndex()]
             request_body, error = self.create_processing_request(allow_empty_name=True)
             if not request_body:
-                self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
-                self.dlg.processingProblemsLabel.setText(self.tr("Processing cost is not available:\n"
-                                                                 "{error}").format(error=error))
+                self.dlg.disable_processing_start(self.tr("Processing cost is not available:\n"
+                                                          "{error}").format(error=error))
             elif isinstance(provider, ImagerySearchProvider) and\
                 not self.dlg.metadataTable.selectionModel().hasSelection():
                     self.dlg.disable_processing_start(self.tr("This provider requires image ID. "
