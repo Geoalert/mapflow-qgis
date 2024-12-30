@@ -2235,7 +2235,7 @@
                <item>
                 <widget class="QRadioButton" name="viewAsTiles">
                  <property name="text">
-                  <string>view results as a vector layer</string>
+                  <string>view results as a vector tiles</string>
                  </property>
                  <property name="checked">
                   <bool>true</bool>
@@ -2248,7 +2248,7 @@
                <item>
                 <widget class="QRadioButton" name="viewAsLocal">
                  <property name="text">
-                  <string>save local gpkg file to view results</string>
+                  <string>save results as a local vector file</string>
                  </property>
                  <attribute name="buttonGroup">
                   <string notr="true">buttonGroup</string>

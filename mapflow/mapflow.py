@@ -630,11 +630,11 @@ class Mapflow(QObject):
             my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
             self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
             self.calculate_aoi_area_catalog()
+        else:
+            self.calculate_aoi_area_polygon_layer(polygon_layer)
         if provider.requires_image_id:
             imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
             self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
-        else:
-            self.calculate_aoi_area_polygon_layer(polygon_layer)
     
     def on_zoom_change(self):
         """ Set chosen zoom and update cost (if it depends on zoom for provider).
@@ -737,7 +737,7 @@ class Mapflow(QObject):
                 return
             else:
                 self.user_providers.append(new_provider)
-                provider_index = len(self.providers) - 1
+                provider_index = len(self.providers)
         else:
             # we replace old provider with a new one
             # if self.dlg_provider.property('mode') == 'edit':  #
@@ -776,7 +776,6 @@ class Mapflow(QObject):
         otherwise loads providers list from settings
         """
         self.user_providers.to_settings(self.settings)
-        self.dlg.providerCombo.clear()
         self.dlg.providerCombo.addItems(provider.name for provider in self.providers)
         self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
 
