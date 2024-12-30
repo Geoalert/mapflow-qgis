@@ -2247,7 +2247,7 @@ class Mapflow(QObject):
         if preview_type == PreviewType.png:
             self.preview_png(url, footprint, image_id)
         else:
-            raise NotImplementedError("Only PNG preview type is supported")
+            self.alert(self.tr("Only PNG preview type is supported"))
 
     def preview_png(self,
                     url: str,
