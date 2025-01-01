@@ -1,3 +1,7 @@
+## 3.0.1
+    Hotfix:
+        - Forbid processing start if 'Imagery search' or 'My imagery' tables have no selection
+	    - Fix error that appears when adding a new provider (stop clearing providers combo on update function)
 ## 3.0.0
     - Data catalog:
         - My imagery tab with user's mosaics and images
