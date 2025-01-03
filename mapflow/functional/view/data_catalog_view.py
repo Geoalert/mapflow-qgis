@@ -15,7 +15,6 @@ class DataCatalogView(QObject):
     def __init__(self, dlg: MainDialog):
         super().__init__()
         self.dlg = dlg
-        self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.SingleSelection)
 
         # Setup menu for uploading images to mosaic
         self.upload_image_menu = QMenu()
