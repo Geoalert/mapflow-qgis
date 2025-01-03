@@ -108,26 +108,58 @@ class DataCatalogService(QObject):
 
     def update_mosaic_callback(self, response: QNetworkReply, mosaic: MosaicReturnSchema):
         self.get_mosaic(mosaic.id)
+    
+    def delete_mosaic(self, selected_mosaics):
+        mosaics = {}
+        for mosaic in selected_mosaics:
+            mosaics[mosaic.id] = mosaic.name
+        self.delete_mosaics(response = None, mosaics=list(mosaics.items()), deleted=[], failed=[])
 
-    def delete_mosaic(self, mosaic):
-        self.api.delete_mosaic(mosaic_id=mosaic.id,
-                               callback=self.delete_mosaic_callback,
-                               callback_kwargs={'mosaic_id': mosaic.id},
-                               error_handler=self.api.delete_mosaic_error_handler,
-                               error_handler_kwargs={'mosaic_name': mosaic.name})
-
-    def delete_mosaic_callback(self, response: QNetworkReply, mosaic_id: UUID):
-        self.get_mosaics()
-        self.dlg.mosaicTable.clearSelection()
+    def delete_mosaics(self, 
+                       response: QNetworkReply, 
+                       mosaics: List[Tuple[UUID, str]],
+                       deleted: List[str], 
+                       failed: List[str]):
+        if len(mosaics) == 0:
+            if failed:
+                self.api.delete_mosaic_error_handler(mosaics=failed)
+            self.get_mosaics()
+            self.dlg.mosaicTable.clearSelection()
+        else:
+            mosaic_to_delete = mosaics[0]
+            non_deleted = mosaics[1:]
+            self.api.delete_mosaic(mosaic_id=mosaic_to_delete[0],
+                                   callback=self.delete_mosaics,
+                                   callback_kwargs={'mosaics': non_deleted,
+                                                    'deleted': list(deleted) + [mosaic_to_delete[1]],
+                                                    'failed': failed},
+                                   error_handler=self.delete_mosaics,
+                                   error_handler_kwargs={'mosaics': non_deleted,
+                                                         'deleted': deleted,
+                                                         'failed': list(failed) + [mosaic_to_delete[1]]},
+                                  )
 
     def confirm_mosaic_deletion(self):
-        mosaic = self.selected_mosaic()
-        message = self.tr("Delete mosaic '{name}'?").format(name=mosaic.name)
+        mosaics = self.selected_mosaics()
+        mosaic_names = []
+        for mosaic in mosaics:
+            mosaic_names.append(mosaic.name)
+        if len(mosaic_names) == 0:
+            return
+        if len(mosaic_names) == 1:
+            message = self.tr("<center>Delete mosaic <b>'{name}'</b>?"
+                             ).format(name=mosaic_names[0])
+        elif len(mosaic_names) <= 3:
+            message = self.tr("<center>Delete following mosaics:<br><b>'{names}'</b>?"
+                             ).format(names="', <br>'".join(mosaic_names))
+        else:
+            message = self.tr("<center>Delete <b>{len}</b> mosaics?"
+                             ).format(len=len(mosaic_names))
         box = QMessageBox(QMessageBox.Question, "Mapflow", message, parent=QApplication.activeWindow())
         box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
         box_exec = box.exec()
         if box_exec == QMessageBox.Ok:
-            self.delete_mosaic(mosaic)
+            self.delete_mosaic(mosaics)
 
     def on_mosaic_selection(self, mosaic: MosaicReturnSchema):
         # Clear previous images details
