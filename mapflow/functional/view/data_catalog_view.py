@@ -63,6 +63,10 @@ class DataCatalogView(QObject):
         self.create_mosaic_cell_buttons_layout()
         self.create_image_cell_buttons_layout()
 
+        # Sort catalog tables (default = 1, index of name column)
+        self.sort_mosaic = 1
+        self.sort_image = 1
+
     @property
     def mosaic_table_visible(self):
         return self.dlg.stackedLayout.currentIndex() == 0
@@ -72,8 +76,9 @@ class DataCatalogView(QObject):
         if not mosaics:
             return
         # First column is ID, hidden; second is name
-        self.dlg.mosaicTable.setColumnCount(2)
+        self.dlg.mosaicTable.setColumnCount(3)
         self.dlg.mosaicTable.setColumnHidden(0, True)
+        self.dlg.mosaicTable.setColumnHidden(2, True)
         self.dlg.mosaicTable.setRowCount(len(mosaics))
         self.dlg.mosaicTable.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         for row, mosaic in enumerate(mosaics):
@@ -83,13 +88,32 @@ class DataCatalogView(QObject):
             name_item = QTableWidgetItem()
             name_item.setData(Qt.DisplayRole, mosaic.name)
             self.dlg.mosaicTable.setItem(row, 1, name_item)
-            self.dlg.mosaicTable.setHorizontalHeaderLabels(["ID", self.tr("Mosaics")])
+            size_item = QTableWidgetItem()
+            size_item.setData(Qt.DisplayRole, mosaic.sizeInBytes)
+            self.dlg.mosaicTable.setItem(row, 2, size_item)
+            self.dlg.mosaicTable.setHorizontalHeaderLabels(["ID", self.tr("Mosaics"), self.tr("Size")])
         self.dlg.mosaicTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.dlg.mosaicTable.sortItems(1, Qt.AscendingOrder)
+        self.dlg.mosaicTable.sortItems(self.sort_mosaic, Qt.AscendingOrder)
         # Set show-images tooltip for mosaics' cells
         for row in range(self.dlg.mosaicTable.rowCount()):
             item = self.dlg.mosaicTable.item(row, 1)
             item.setToolTip(self.tr("Double-click to show images"))
+
+    def sort_catalog(self):
+        if self.mosaic_table_visible:
+            if self.dlg.sortCombo.currentIndex() == 0:
+                self.sort_mosaic = 1
+                self.dlg.mosaicTable.sortItems(self.sort_mosaic, Qt.AscendingOrder)
+            else:
+                self.sort_mosaic = 2
+                self.dlg.mosaicTable.sortItems(self.sort_mosaic, Qt.DescendingOrder)
+        else:
+            if self.dlg.sortCombo.currentIndex() == 0:
+                self.sort_image = 1
+                self.dlg.imageTable.sortItems(self.sort_image, Qt.AscendingOrder)
+            else:
+                self.sort_image = 2
+                self.dlg.imageTable.sortItems(self.sort_image, Qt.DescendingOrder)
         
     def display_mosaic_info(self, mosaic: MosaicReturnSchema, images: list[ImageReturnSchema]):
         if not mosaic:
@@ -145,8 +169,9 @@ class DataCatalogView(QObject):
     def display_images(self, images: list[ImageReturnSchema]):
         self.contain_image_cell_buttons()
         self.dlg.imageTable.setRowCount(len(images))
-        self.dlg.imageTable.setColumnCount(2)
+        self.dlg.imageTable.setColumnCount(3)
         self.dlg.imageTable.setColumnHidden(0, True)
+        self.dlg.imageTable.setColumnHidden(2, True)
         self.dlg.imageTable.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         for row, image in enumerate(images):
             table_item = QTableWidgetItem()
@@ -155,9 +180,12 @@ class DataCatalogView(QObject):
             name_item = QTableWidgetItem()
             name_item.setData(Qt.DisplayRole, image.filename)
             self.dlg.imageTable.setItem(row, 1, name_item)
-        self.dlg.imageTable.setHorizontalHeaderLabels(["ID", self.tr("Images")])
+            size_item = QTableWidgetItem()
+            size_item.setData(Qt.DisplayRole, image.file_size)
+            self.dlg.imageTable.setItem(row, 2, size_item)
+        self.dlg.imageTable.setHorizontalHeaderLabels(["ID", self.tr("Images"), self.tr("Size")])
         self.dlg.imageTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.dlg.imageTable.sortItems(1, Qt.AscendingOrder)
+        self.dlg.imageTable.sortItems(self.sort_image, Qt.AscendingOrder)
         if len(images) == 0:
             self.dlg.previewMosaicButton.setEnabled(False)
             self.dlg.showImagesButton.setEnabled(False)
@@ -287,6 +315,8 @@ class DataCatalogView(QObject):
         self.dlg.mosaicTable.setCurrentCell(row, column)
         # Because we open images table always with empty selection
         self.clear_image_info()
+        # Set sorting combo text
+        self.dlg.sortCombo.setCurrentIndex(0) if self.sort_image == 1 else self.dlg.sortCombo.setCurrentIndex(1)
 
     def show_mosaics_table(self, selected_mosaic_name: Optional[str]):
         # Save buttons before deleting cells and therefore widgets
@@ -305,6 +335,8 @@ class DataCatalogView(QObject):
             self.show_mosaic_info(selected_mosaic_name)
         else:
             self.clear_mosaic_info()
+        # Set sorting combo text
+        self.dlg.sortCombo.setCurrentIndex(0) if self.sort_mosaic == 1 else self.dlg.sortCombo.setCurrentIndex(1)
 
     def create_mosaic_cell_buttons_layout(self):
         self.mosaic_cell_layout.setContentsMargins(0,0,3,0)
