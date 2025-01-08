@@ -1628,18 +1628,7 @@
                   </widget>
                  </item>
                  <item>
-                  <widget class="QComboBox" name="sortCombo">
-                   <item>
-                    <property name="text">
-                     <string>Name</string>
-                    </property>
-                   </item>
-                   <item>
-                    <property name="text">
-                     <string>Size</string>
-                    </property>
-                   </item>
-                  </widget>
+                  <widget class="QComboBox" name="sortCombo"/>
                  </item>
                 </layout>
                </item>

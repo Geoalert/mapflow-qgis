@@ -160,3 +160,10 @@ def generate_plugin_header(plugin_name: str,
             if user_role != UserRole.owner:
                 header = header + f" ({user_role}, owner: {project_owner})"
         return header
+
+def get_readable_size(bytes: int) -> str:
+    for unit in ("", "K", "M", "G", "T", "P", "E", "Z"):
+        if abs(bytes) < 1024.0:
+            return f"{bytes:3.1f} {unit}B"
+        bytes /= 1024.0
+    return f"{bytes:.1f} YB"
