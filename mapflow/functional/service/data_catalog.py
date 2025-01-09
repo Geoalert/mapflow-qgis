@@ -109,25 +109,49 @@ class DataCatalogService(QObject):
     def update_mosaic_callback(self, response: QNetworkReply, mosaic: MosaicReturnSchema):
         self.get_mosaic(mosaic.id)
 
-    def delete_mosaic(self, mosaic):
-        self.api.delete_mosaic(mosaic_id=mosaic.id,
-                               callback=self.delete_mosaic_callback,
-                               callback_kwargs={'mosaic_id': mosaic.id},
-                               error_handler=self.api.delete_mosaic_error_handler,
-                               error_handler_kwargs={'mosaic_name': mosaic.name})
-
-    def delete_mosaic_callback(self, response: QNetworkReply, mosaic_id: UUID):
-        self.get_mosaics()
-        self.dlg.mosaicTable.clearSelection()
+    def delete_mosaics(self, 
+                       response: QNetworkReply, 
+                       mosaics: List[MosaicReturnSchema],
+                       deleted: List[str], 
+                       failed: List[str]):
+        if len(mosaics) == 0:
+            if failed:
+                self.api.delete_mosaic_error_handler(mosaics=failed)
+            self.get_mosaics()
+            self.dlg.mosaicTable.clearSelection()
+        else:
+            mosaic_to_delete = mosaics[0]
+            non_deleted = mosaics[1:]
+            self.api.delete_mosaic(mosaic_id=mosaic_to_delete.id,
+                                   callback=self.delete_mosaics,
+                                   callback_kwargs={'mosaics': non_deleted,
+                                                    'deleted': list(deleted) + [mosaic_to_delete.name],
+                                                    'failed': failed},
+                                   error_handler=self.delete_mosaics,
+                                   error_handler_kwargs={'mosaics': non_deleted,
+                                                         'deleted': deleted,
+                                                         'failed': list(failed) + [mosaic_to_delete.name]},
+                                  )
 
     def confirm_mosaic_deletion(self):
-        mosaic = self.selected_mosaic()
-        message = self.tr("Delete mosaic '{name}'?").format(name=mosaic.name)
+        mosaics = self.selected_mosaics()
+        if not mosaics:
+            return
+        mosaic_names = [mosaic.name for mosaic in mosaics]
+        if len(mosaic_names) == 1:
+            message = self.tr("<center>Delete mosaic <b>'{name}'</b>?"
+                             ).format(name=mosaic_names[0])
+        elif len(mosaic_names) <= 3:
+            message = self.tr("<center>Delete following mosaics:<br><b>'{names}'</b>?"
+                             ).format(names="', <br>'".join(mosaic_names))
+        else:
+            message = self.tr("<center>Delete <b>{len}</b> mosaics?"
+                             ).format(len=len(mosaic_names))
         box = QMessageBox(QMessageBox.Question, "Mapflow", message, parent=QApplication.activeWindow())
         box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
         box_exec = box.exec()
         if box_exec == QMessageBox.Ok:
-            self.delete_mosaic(mosaic)
+            self.delete_mosaics(response = None, mosaics=mosaics, deleted=[], failed=[])
 
     def on_mosaic_selection(self, mosaic: MosaicReturnSchema):
         # Clear previous images details
@@ -251,15 +275,9 @@ class DataCatalogService(QObject):
     def get_image(self, image_id: UUID, callback: Callable):
         self.api.get_image(image_id=image_id, callback=callback)
 
-    def delete_image(self, selected_images):
-        images = {}
-        for image in selected_images:
-            images[image.id] = image.filename
-        self.delete_images(response = None, images=list(images.items()), deleted=[], failed=[])
-
     def delete_images(self, 
                       response: QNetworkReply, 
-                      images: List[Tuple[UUID, str]],
+                      images: List[ImageReturnSchema],
                       deleted: List[str], 
                       failed: List[str]):
         if len(images) == 0:
@@ -271,25 +289,23 @@ class DataCatalogService(QObject):
         else:
             image_to_delete = images[0]
             non_deleted = images[1:] 
-            self.api.delete_image(image_id=image_to_delete[0],
+            self.api.delete_image(image_id=image_to_delete.id,
                                   callback=self.delete_images,
                                   callback_kwargs={'images': non_deleted,
-                                                   'deleted': list(deleted) + [image_to_delete[1]],
+                                                   'deleted': list(deleted) + [image_to_delete.filename],
                                                    'failed': failed},
                                   error_handler=self.delete_images,
                                   error_handler_kwargs={'images': non_deleted,
                                                         'deleted': deleted,
-                                                        'failed': list(failed) + [image_to_delete[1]]},
+                                                        'failed': list(failed) + [image_to_delete.filename]},
                                  )
             
     def confirm_image_deletion(self):
         mosaic = self.selected_mosaic()
         images = self.selected_images()
-        image_names = []
-        for image in images:
-            image_names.append(image.filename)
-        if len(image_names) == 0:
+        if not images:
             return
+        image_names = [image.filename for image in images]
         if len(image_names) == 1:
             message = self.tr("<center>Delete image <b>'{name}'</b> from '{mosaic}' mosaic?"
                              ).format(name=image_names[0], mosaic=mosaic.name)
@@ -303,7 +319,7 @@ class DataCatalogService(QObject):
         box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
         box_exec = box.exec()
         if box_exec == QMessageBox.Ok:
-            self.delete_image(images)
+            self.delete_images(response = None, images=images, deleted=[], failed=[])
 
     def on_image_selection(self, image: ImageReturnSchema):
         self.view.show_image_info(image)

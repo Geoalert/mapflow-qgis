@@ -82,12 +82,13 @@ class DataCatalogApi(QObject):
                          error_handler_kwargs=error_handler_kwargs or {}
                         )
 
-    def delete_mosaic_error_handler(self, response: QNetworkReply, mosaic_name: str):
-        message = self.tr("Could not delete mosaic '{mosaic_name}'").format(mosaic_name=mosaic_name)
-        title = self.tr("Error")
-        if response.error() == 203: # ContentNotFoundError (like 404)
-            message = self.tr("Mosaic '{mosaic_name}' does not exist").format(mosaic_name=mosaic_name)
-            title = self.tr("Error: could not delete mosaic")
+    def delete_mosaic_error_handler(self, mosaics: list):
+        if len(mosaics) == 1:
+            title = self.tr("Error")
+            message = self.tr("Could not delete mosaic '{mosaic_name}'").format(mosaic_name=mosaics[0])
+        else:
+            title = self.tr("Error. Could not delete following mosaics:")
+            message = ', \n'.join(mosaics)
         ErrorMessageWidget(parent=QApplication.activeWindow(),
                            text=message,
                            title=title,
