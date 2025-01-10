@@ -187,6 +187,7 @@ class DataCatalogService(QObject):
             if failed:
                 self.api.upload_image_error_handler(response=response, mosaic_name=mosaic_name, image_paths=failed)
             self.get_mosaic(mosaic_id)
+            self.dlg.raise_()
             self.mosaicsUpdated.emit()
         else:
             image_to_upload = image_paths[0]
