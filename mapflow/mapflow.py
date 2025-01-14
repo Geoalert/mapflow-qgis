@@ -1447,9 +1447,9 @@ class Mapflow(QObject):
             local_index = None
             self.dlg.imageId.setText('')
         else:
-            selected_row = selected_cells[0].row()
-            image_id = self.dlg.metadataTable.item(selected_row, id_column_index).text()
-            local_index = self.dlg.metadataTable.item(selected_row, local_index_column).text()
+            selected_rows = [cell.row() for cell in selected_cells]
+            local_indices = [self.dlg.metadataTable.item(row, local_index_column).text() for row in selected_rows]
+            image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
             self.dlg.imageId.setText(image_id)
         try:
             self.metadata_layer.selectionChanged.disconnect(self.meta_layer_table_connection)
@@ -1460,7 +1460,7 @@ class Mapflow(QObject):
         self.replace_search_provider_index()
 
         try:
-            self.metadata_layer.selectByExpression(f"{key}='{local_index}'")
+            self.metadata_layer.selectByExpression(f"{key} in {tuple(local_indices)}")
         except RuntimeError:  # layer has been deleted
             pass
         except Exception as e:
@@ -1492,14 +1492,17 @@ class Mapflow(QObject):
             if not selected_ids:
                 self.dlg.metadataTable.clearSelection()
                 return
-            selected_local_index = self.metadata_layer.getFeature(selected_ids[-1])[key]
-            found_items = [item
-                          for item in self.dlg.metadataTable.findItems(str(selected_local_index), Qt.MatchExactly)
-                          if item.column() == id_column_index]
+            found_items = []
+            for selected_id in selected_ids:
+                selected_local_index = self.metadata_layer.getFeature(selected_id)[key]
+                for item in self.dlg.metadataTable.findItems(str(selected_local_index), Qt.MatchExactly):
+                    if item.column() == id_column_index:
+                        found_items.append(item)
+            self.dlg.metadataTable.clearSelection()
             if not found_items:
-                self.dlg.metadataTable.clearSelection()
                 return
-            self.dlg.metadataTable.selectRow(found_items[0].row())
+            for item in found_items:
+                self.dlg.metadataTable.selectRow(item.row())
         finally:
             self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
                 self.sync_table_selection_with_image_id_and_layer)

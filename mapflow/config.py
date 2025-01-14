@@ -47,6 +47,7 @@ class Config:
     # MAXAR
     METADATA_TABLE_ATTRIBUTES = {
         QCoreApplication.translate('Config', 'Product Type'): 'productType',
+        QCoreApplication.translate('Config', 'Provider Name'): 'providerName',
         QCoreApplication.translate('Config', 'Sensor'): 'source',
         QCoreApplication.translate('Config', 'Band Order'): 'colorBandOrder',
         QCoreApplication.translate('Config', 'Cloud %'): 'cloudCover',

@@ -5,7 +5,7 @@ from typing import Iterable, Optional, List
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette
-from PyQt5.QtWidgets import QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton, QAction, QMenu
+from PyQt5.QtWidgets import QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton, QAction, QMenu, QAbstractItemView
 from qgis.core import QgsMapLayerProxyModel, QgsSettings
 
 from . import icons
@@ -127,7 +127,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.processing_update_action = QAction(self.tr("Rename"))
         self.setup_options_menu()
 
+        # Imagery Search
         self.imageId.setReadOnly(True)
+        self.metadataTable.setSelectionMode(QAbstractItemView.MultiSelection)
 
     # ===== Settings management ===== #
     def save_view_results_mode(self):
