@@ -36,6 +36,12 @@ class ShareProject(SkipDataClass):
             self.users = [ShareProjectUser.from_dict(item) for item in self.users]
 
 @dataclass
+class MapflowProjectInfo(SkipDataClass):
+    id: str
+    name: str
+    ownerEmail: str
+
+@dataclass
 class MapflowProject(SkipDataClass):
     id: str
     name: str
