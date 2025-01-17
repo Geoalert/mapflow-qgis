@@ -523,6 +523,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
     def select_project(self, project_id):
         idx = self.projectsCombo.findData(project_id)
+        if idx == -1:
+            # if project is not found, just select the first one
+            idx = 0
         self.projectsCombo.setCurrentIndex(idx)
 
     @property

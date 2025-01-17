@@ -3151,18 +3151,18 @@ class Mapflow(QObject):
         self.user_status_update_timer.start()
         self.app_startup_user_update_timer.start()
 
-    def update_projects(self, current_project_id: Optional[str] = None):
+    def update_projects(self):
         self.projects = {pr.id: pr for pr in self.project_service.projects}
         if not self.projects:
             self.alert(self.tr("No projects found! Contact us to resolve the issue"))
             return
         self.filter_projects(self.dlg.filterProject.text())
 
-    def setup_projects_combo(self, projects: dict[str, MapflowProject], current_project_id: Optional[str] = None):
+    def setup_projects_combo(self, projects: dict[str, MapflowProject]):
         if self.project_connection is not None:
             self.dlg.projectsCombo.currentIndexChanged.disconnect(self.project_connection)
             self.project_connection = None
-        self.dlg.setup_project_combo(projects, current_project_id)
+        self.dlg.setup_project_combo(projects, self.project_id)
         self.on_project_change()
         self.project_connection = self.dlg.projectsCombo.currentIndexChanged.connect(self.on_project_change)
 
@@ -3176,7 +3176,7 @@ class Mapflow(QObject):
             # We maintain the current project in the combo even if it not found to prevent over-requesting
             # until it is changed explicitly
             filtered_projects.update({self.project_id: self.projects[self.project_id]})
-        self.setup_projects_combo(filtered_projects, self.project_id)
+        self.setup_projects_combo(filtered_projects)
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
         """Inspect the plugin version backend expects and show a warning if it is incompatible w/ the plugin.
