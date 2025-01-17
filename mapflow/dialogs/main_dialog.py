@@ -129,7 +129,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
         # Imagery Search
         self.imageId.setReadOnly(True)
-        self.metadataTable.setSelectionMode(QAbstractItemView.MultiSelection)
+        self.metadataTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
 
     # ===== Settings management ===== #
     def save_view_results_mode(self):

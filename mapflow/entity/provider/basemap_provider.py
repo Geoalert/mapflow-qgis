@@ -16,7 +16,8 @@ class BasemapProvider(UsersProvider, ABC):
                              image_id: Optional[str] = None,
                              provider_name: Optional[str] = None,
                              url: Optional[str] = None,
-                             zoom: Optional[str] = None):
+                             zoom: Optional[str] = None,
+                             requires_id: Optional[bool] = False):
         params = {
             'url': self.url,
             'projection': self.crs.value.lower(),
@@ -122,7 +123,8 @@ class MaxarProvider(UsersProvider):
     def to_processing_params(self,
                              image_id: Optional[str] = None,
                              provider_name: Optional[str] = None,
-                             url: Optional[str] = None):
+                             url: Optional[str] = None,
+                             requires_id: Optional[bool] = False):
         params = PostSourceSchema(url=maxar_tile_url(self.url, image_id),
                                   source_type=self.source_type,
                                   projection=self.crs.value,

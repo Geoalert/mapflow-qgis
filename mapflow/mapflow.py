@@ -1444,7 +1444,7 @@ class Mapflow(QObject):
         selected_cells = self.dlg.metadataTable.selectedItems()
         if not selected_cells:
             image_id = None
-            local_index = None
+            local_indices = []
             self.dlg.imageId.setText('')
         else:
             selected_rows = [cell.row() for cell in selected_cells]
@@ -1479,6 +1479,7 @@ class Mapflow(QObject):
         :param selected_ids: The selected feature IDs. These aren't the image IDs, but rather
             the primary keys of the features.
         """
+        self.dlg.metadataTable.setSelectionMode(QAbstractItemView.MultiSelection)
         # Disconnect to avoid backwards signal and possible infinite loop;
         # connection is restored before return
         key = 'id' if self.dlg.sourceCombo.currentText() == constants.SENTINEL_OPTION_NAME else 'local_index'
@@ -1504,6 +1505,7 @@ class Mapflow(QObject):
             for item in found_items:
                 self.dlg.metadataTable.selectRow(item.row())
         finally:
+            self.dlg.metadataTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
             self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
                 self.sync_table_selection_with_image_id_and_layer)
 
@@ -1541,8 +1543,9 @@ class Mapflow(QObject):
         if not items:
             self.dlg.metadataTable.clearSelection()
             return
-        if items[0] not in self.dlg.metadataTable.selectedItems():
-            self.dlg.metadataTable.selectRow(items[0].row())
+        # Redundant since image_id is currently not editable
+        # if items[0] not in self.dlg.metadataTable.selectedItems():
+            #self.dlg.metadataTable.selectRow(items[0].row())
 
     def get_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
         if not layer or layer.featureCount() == 0:
@@ -1686,17 +1689,18 @@ class Mapflow(QObject):
         # fetch UI data
         provider_index = self.dlg.providerIndex()
         use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
-        selected_image = self.dlg.metadataTable.selectedItems()
-        if selected_image:
-            row = selected_image[0].row()
-            local_image_index = int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text())
+        selected_images = self.dlg.metadataTable.selectedItems()
+        if selected_images:
+            rows = list(set(image.row() for image in selected_images))
+            local_image_indices = [int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text()) 
+                                   for row in rows]
         else:
-            local_image_index = None
+            local_image_indices = []
         # This is AOI with respect to selected Maxar images and raster image extent
         try:
             real_aoi = self.get_aoi(provider_index=provider_index,
                                     use_image_extent_as_aoi=use_image_extent_as_aoi,
-                                    local_image_index=local_image_index,
+                                    local_image_indices=local_image_indices,
                                     selected_aoi=self.aoi)
         except ImageIdRequired:
             # AOI is OK, but image ID is not selected,
@@ -1893,10 +1897,14 @@ class Mapflow(QObject):
 
     def crop_aoi_with_maxar_image_footprint(self,
                                             aoi: QgsFeature,
-                                            local_image_index: int):
-        extent = self.search_footprints[local_image_index]
+                                            local_image_indices: List[int]):
+        extents = [self.search_footprints[local_image_index] for local_image_index in local_image_indices]
         try:
-            aoi = next(clip_aoi_to_image_extent(aoi, extent)).geometry()
+            clipped_aoi_features = clip_aoi_to_image_extent(aoi, extents)
+            aoi = QgsGeometry.fromWkt('GEOMETRYCOLLECTION()')
+            for feature in clipped_aoi_features:
+                geom = feature.geometry()
+                aoi = aoi.combine(geom)
         except StopIteration:
             raise AoiNotIntersectsImage()
         return aoi
@@ -1905,7 +1913,8 @@ class Mapflow(QObject):
                               provider_index: Optional[int],
                               s3_uri: str = "",
                               image_id: Optional[str] = None,
-                              provider_name: Optional[str] = None):
+                              provider_name: Optional[str] = None,
+                              requires_id: Optional[bool] = False):
         provider = self.providers[provider_index]
         meta = {'source-app': 'qgis',
                 'version': self.plugin_version,
@@ -1915,7 +1924,8 @@ class Mapflow(QObject):
         provider_params, provider_meta = provider.to_processing_params(image_id=image_id,
                                                                        provider_name=provider_name,
                                                                        url=s3_uri,
-                                                                       zoom=self.zoom)
+                                                                       zoom=self.zoom,
+                                                                       requires_id=requires_id)
         meta.update(**provider_meta)
         return provider_params, meta
 
@@ -1923,7 +1933,7 @@ class Mapflow(QObject):
                 provider_index: Optional[int],
                 use_image_extent_as_aoi: bool,
                 selected_aoi: QgsGeometry,
-                local_image_index: Optional[int]) -> QgsGeometry:
+                local_image_indices: Optional[List[int]]) -> QgsGeometry:
         if not helpers.check_aoi(selected_aoi):
             raise BadProcessingInput(self.tr('Bad AOI. AOI must be inside boundaries:'
                                              ' \n[-180, 180] by longitude, [-90, 90] by latitude'))
@@ -1931,9 +1941,9 @@ class Mapflow(QObject):
             provider = self.providers[provider_index]
             if not provider:
                 raise PluginError(self.tr('Providers are not initialized'))
-            if local_image_index is not None:
+            if len(local_image_indices) != 0:
                 if isinstance(provider, (MaxarProvider, ImagerySearchProvider)):
-                    aoi = self.crop_aoi_with_maxar_image_footprint(selected_aoi, local_image_index)
+                    aoi = self.crop_aoi_with_maxar_image_footprint(selected_aoi, local_image_indices)
                 elif isinstance(provider, SentinelProvider):
                     # todo: crop sentinel aoi with image footprint?
                     aoi = selected_aoi
@@ -1971,17 +1981,38 @@ class Mapflow(QObject):
         use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
         image_id = self.dlg.imageId.text()
         provider_name = None
-        selected_image = self.dlg.metadataTable.selectedItems()
-        if selected_image:
+        requires_id = False
+        selected_images = self.dlg.metadataTable.selectedItems()
+        if selected_images:
             try:
-                row = selected_image[0].row()
-                local_image_index = int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text())
-                provider_name = self.search_footprints[local_image_index].attribute("providerName")
+                rows = list(set(image.row() for image in selected_images))
+                local_image_indices = [int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text()) 
+                                       for row in rows]
+                provider_names = [self.search_footprints[local_image_index].attribute("providerName")
+                                  for local_image_index in local_image_indices]
+                product_types = [self.search_footprints[local_image_index].attribute("productType")
+                                 for local_image_index in local_image_indices]
+                if len(rows) == 1:
+                    if product_types[0] == "Mosaic":
+                        image_id = None # remove image_id for mosaic providers
+                    else:
+                        requires_id = True # require image_id for other search product types
+                else:
+                    # When multiple images is selected, check if:
+                        # selected images have the same prodauct type
+                        # and it is mosaic
+                        # and it is the same mosaic
+                    if len(set(product_types)) == 1 and product_types[0] == "Mosaic" and len(set(provider_names)) == 1:
+                        image_id = None
+                        provider_name = provider_names[0]
+                    # Forbid multiselection for regular images and for different mosaics
+                    else:
+                        return None, self.tr("You can launch multiple image processing only if it has the same mosaic provider")
             except:
-                local_image_index = None
+                local_image_indices = []
                 provider_name = None
         else:
-            local_image_index = None
+            local_image_indices = []
         wd_name = self.dlg.modelCombo.currentText()
         wd = self.workflow_defs.get(wd_name)
         try:
@@ -2004,7 +2035,8 @@ class Mapflow(QObject):
             provider_params, processing_meta = self.get_processing_params(provider_index=provider_index,
                                                                           s3_uri=s3_uri,
                                                                           image_id=image_id,
-                                                                          provider_name=provider_name)
+                                                                          provider_name=provider_name,
+                                                                          requires_id=requires_id)
             
             # Add zoom to params if zoom_selector is true
             if self.zoom_selector:
@@ -2016,7 +2048,7 @@ class Mapflow(QObject):
 
             aoi = self.get_aoi(provider_index=provider_index,
                                use_image_extent_as_aoi=use_image_extent_as_aoi,
-                               local_image_index=local_image_index,
+                               local_image_indices=local_image_indices,
                                selected_aoi=self.aoi)
         except AoiNotIntersectsImage:
             return None, self.tr("Selected AOI does not intersect the selected imagery")
