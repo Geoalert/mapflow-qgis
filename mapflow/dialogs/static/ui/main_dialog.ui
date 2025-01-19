@@ -1555,7 +1555,10 @@
                     </size>
                    </property>
                    <property name="text">
-                    <string>Mosaic info</string>
+                    <string>Mosaic data</string>
+                   </property>
+                   <property name="alignment">
+                    <set>Qt::AlignCenter</set>
                    </property>
                   </widget>
                  </item>
@@ -1616,6 +1619,16 @@
                     </size>
                    </property>
                   </spacer>
+                 </item>
+                 <item>
+                  <widget class="QLabel" name="label_6">
+                   <property name="text">
+                    <string>Sort by</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QComboBox" name="sortCombo"/>
                  </item>
                 </layout>
                </item>
