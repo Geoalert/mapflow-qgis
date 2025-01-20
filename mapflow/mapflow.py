@@ -1833,64 +1833,6 @@ class Mapflow(QObject):
         """
         self.report_http_error(response, self.tr("Error deleting a processing"))
 
-    def upload_image(self, layer,
-                     processing_params: Optional[PostProcessingSchema] = None,
-                     mosaic=None):
-        """
-        if processing_params are None, we do not call processing after upload;
-        this is a stub for further data-catalog usage
-        Also, mosaic can be specified to upload to specific mosaic
-        """
-        body = QHttpMultiPart(QHttpMultiPart.FormDataType)
-        tif = QHttpPart()
-        tif.setHeader(QNetworkRequest.ContentTypeHeader, 'image/tiff')
-        filename = Path(layer.dataProvider().dataSourceUri()).name
-        tif.setHeader(QNetworkRequest.ContentDispositionHeader, f'form-data; name="file"; filename="{filename}"')
-        image = QFile(layer.dataProvider().dataSourceUri(), body)
-        image.open(QIODevice.ReadOnly)
-        tif.setBodyDevice(image)
-        body.append(tif)
-        if processing_params:
-            callback = self.upload_tif_callback
-            callback_kwargs = {'processing_params': processing_params}
-        else:
-            # uploading without processing creation
-            callback = None
-            callback_kwargs = None
-        if mosaic:
-            url = f'{self.server}/mosaic/{mosaic}/image'
-        else:
-            url = f'{self.server}/rasters'
-        response = self.http.post(
-            url=url,
-            callback=callback,
-            callback_kwargs=callback_kwargs,
-            use_default_error_handler=False,
-            error_handler=self.upload_tif_error_handler,
-            body=body,
-            timeout=3600  # one hour
-        )
-        body.setParent(response)
-        progress_message = QgsMessageBarItem(
-            self.plugin_name,
-            self.tr('Uploading image to Mapflow...'),
-            QProgressBar(self.message_bar),
-            parent=self.message_bar
-        )
-        self.message_bar.pushItem(progress_message)
-
-        def display_upload_progress(bytes_sent: int, bytes_total: int):
-            try:
-                progress_message.widget().setValue(round(bytes_sent / bytes_total * 100))
-            except ZeroDivisionError:  # may happen for some reason
-                return
-            if bytes_sent == bytes_total:
-                self.message_bar.popWidget(progress_message)
-
-        connection = response.uploadProgress.connect(display_upload_progress)
-        # Tear this connection if the user closes the progress message
-        progress_message.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
-
     def check_processing_ui(self, allow_empty_name=False):
         processing_name = self.dlg.processingName.text()
 
