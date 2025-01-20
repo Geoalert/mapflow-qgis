@@ -399,11 +399,18 @@ class Mapflow(QObject):
             use_default_error_handler=False
         )
         self.data_catalog_service.get_user_limit()
-        self.current_project = self.projects.get(self.dlg.selected_project_id())
+    
+    def get_project_callback(self, response: QNetworkReply):
+        self.current_project = MapflowProject.from_dict(json.loads(response.readAll().data()))
         if self.current_project:
             self.project_id = self.current_project.id
+        self.setup_processings_table()
         self.get_project_sharing(self.current_project)
         self.setup_project_change_rights()
+        self.settings.setValue("project_id", self.project_id)
+        self.setup_workflow_defs(self.current_project.workflowDefs)
+        # Manually toggle function to avoid race condition
+        self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
 
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.create_aoi_from_map_action)
@@ -672,19 +679,7 @@ class Mapflow(QObject):
             # is not initialized yet (at plugin's startup) and we still need to set it up
             # otherwise, if the WDs are set, we assume that the project hasn't changed and skip further setup
             return
-        self.current_project = self.projects.get(self.dlg.selected_project_id())
-        if not self.current_project:
-            # We should not come here, but anyway, let's leave a
-            return
-        self.project_id = self.current_project.id
-        self.settings.setValue("project_id", self.project_id)
-        self.setup_workflow_defs(self.current_project.workflowDefs)
-        # you can't delete or modify the default project
-        # Manually toggle function to avoid race condition
-        self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
-        self.setup_processings_table()
-        self.get_project_sharing(self.current_project)
-        self.setup_project_change_rights()
+        self.project_service.get_project(selected_id, self.get_project_callback)
 
     def setup_project_change_rights(self):
         project_editable = True
