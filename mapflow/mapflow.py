@@ -146,7 +146,7 @@ class Mapflow(QObject):
             self.settings.setValue('processings', {})
         # If no project id is set, use "default"
         self.project_id = self.settings.value("project_id", "default")
-        self.projects = []
+        self.projects = {}
         # Store user's current processing
         self.processing_history = ProcessingHistory.from_settings(
             self.settings.value('processings', {})
@@ -285,6 +285,7 @@ class Mapflow(QObject):
         self.dlg.createProject.clicked.connect(self.create_project)
         self.dlg.deleteProject.clicked.connect(self.delete_project)
         self.dlg.updateProject.clicked.connect(self.update_project)
+        self.dlg.filterProject.textChanged.connect(self.filter_projects)
 
         # Maxar
         self.dlg.imageId.textChanged.connect(self.sync_image_id_with_table_and_layer)
@@ -355,10 +356,6 @@ class Mapflow(QObject):
                 else:
                     self.dlg.zoomCombo.setCurrentIndex(zoom_index)
 
-        # Check if a project is shared after startup and when changing project
-        self.app_startup_user_update_timer.timeout.connect(self.get_project_sharing)
-        self.dlg.projectsCombo.currentIndexChanged.connect(self.get_project_sharing)
-
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
             self.iface.addCustomActionForLayer(self.add_layer_action, layer)
@@ -402,6 +399,11 @@ class Mapflow(QObject):
             use_default_error_handler=False
         )
         self.data_catalog_service.get_user_limit()
+        self.current_project = self.projects.get(self.dlg.selected_project_id())
+        if self.current_project:
+            self.project_id = self.current_project.id
+        self.get_project_sharing(self.current_project)
+        self.setup_project_change_rights()
 
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.create_aoi_from_map_action)
@@ -663,21 +665,40 @@ class Mapflow(QObject):
 
     # ========== Projects ========== #
 
-    def on_project_change(self, currentIndex):
-        current_project = self.projects[currentIndex]
-        self.project_id = current_project.id
+    def on_project_change(self):
+        selected_id = self.dlg.selected_project_id()
+        if selected_id == self.project_id and self.workflow_defs:
+            # we look at workflow defs because if they are NOT initialized, it means that the project
+            # is not initialized yet (at plugin's startup) and we still need to set it up
+            # otherwise, if the WDs are set, we assume that the project hasn't changed and skip further setup
+            return
+        self.current_project = self.projects.get(self.dlg.selected_project_id())
+        if not self.current_project:
+            # We should not come here, but anyway, let's leave a
+            return
+        self.project_id = self.current_project.id
         self.settings.setValue("project_id", self.project_id)
-        self.setup_workflow_defs(current_project.workflowDefs)
+        self.setup_workflow_defs(self.current_project.workflowDefs)
         # you can't delete or modify the default project
-        self.dlg.setup_default_project(current_project.isDefault)
         # Manually toggle function to avoid race condition
         self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
         self.setup_processings_table()
-        if not self.user_role.can_delete_rename_project:
+        self.get_project_sharing(self.current_project)
+        self.setup_project_change_rights()
+
+    def setup_project_change_rights(self):
+        project_editable = True
+        if not self.current_project:
+            project_editable = False
+            reason = self.tr("No project selected")
+        elif self.current_project.isDefault:
+            reason = self.tr("You can't remove or modify default project")
+            project_editable = False
+        elif not self.user_role.can_delete_rename_project:
             reason = self.tr('Not enough rights to delete or update shared project ({})').format(self.user_role)
         else:
             reason = ""
-        self.dlg.enable_project_change(reason, self.user_role.can_delete_rename_project)
+        self.dlg.enable_project_change(reason, project_editable and self.user_role.can_delete_rename_project)
 
     def create_project(self):
         dialog = CreateProjectDialog(self.dlg)
@@ -686,19 +707,21 @@ class Mapflow(QObject):
         dialog.deleteLater()
 
     def update_project(self):
-        current_project = self.projects[self.dlg.projectsCombo.currentIndex()]
         dialog = UpdateProjectDialog(self.dlg)
-        dialog.accepted.connect(lambda: self.project_service.update_project(current_project.id,
+        dialog.accepted.connect(lambda: self.project_service.update_project(self.current_project.id,
                                                                                               dialog.project()))
-        dialog.setup(current_project)
+        dialog.setup(self.current_project)
         dialog.deleteLater()
 
     def delete_project(self):
-        current_project = self.projects[self.dlg.projectsCombo.currentIndex()]
         if self.alert(self.tr('Do you really want to remove project {}? '
-                              'This action cannot be undone, all processings will be lost!').format(current_project.name),
+                              'This action cannot be undone, all processings will be lost!').format(self.current_project.name),
                         icon=QMessageBox.Question):
-            self.project_service.delete_project(current_project.id)
+            # Unload current project as we are deleting it
+            to_delete = self.project_id
+            self.project_id = None
+            self.current_project = None
+            self.project_service.delete_project(to_delete)
 
     # ========= Providers ============ #
     def remove_provider(self) -> None:
@@ -2741,12 +2764,10 @@ class Mapflow(QObject):
 
         # update processing limit of user
         self.update_processing_limit()
-
         self.alert_failed_processings(failed_processings)
         self.alert_finished_processings(finished_processings)
         self.update_processing_table(processings)
         self.processings = processings
-
         try:  # use try-except bc this will only error once
             processing_history[env][self.username][self.project_id] = self.processing_history.asdict()
         except KeyError:  # history for the current env hasn't been initialized yet
@@ -2754,7 +2775,6 @@ class Mapflow(QObject):
                 processing_history[env][self.username] = {self.project_id: self.processing_history.asdict()}
             except KeyError:
                 processing_history[env] = {self.username: {self.project_id: self.processing_history.asdict()}}
-
         self.settings.setValue('processings', processing_history)
 
     def alert_failed_processings(self, failed_processings):
@@ -3131,19 +3151,32 @@ class Mapflow(QObject):
         self.user_status_update_timer.start()
         self.app_startup_user_update_timer.start()
 
-    def update_projects(self, current_project_id: str):
-        self.projects = self.project_service.projects
+    def update_projects(self):
+        self.projects = {pr.id: pr for pr in self.project_service.projects}
         if not self.projects:
             self.alert(self.tr("No projects found! Contact us to resolve the issue"))
             return
-        current_index = self.find_project(self.projects, current_project_id)
+        self.filter_projects(self.dlg.filterProject.text())
+
+    def setup_projects_combo(self, projects: dict[str, MapflowProject]):
         if self.project_connection is not None:
             self.dlg.projectsCombo.currentIndexChanged.disconnect(self.project_connection)
             self.project_connection = None
-        self.dlg.setup_project_combo(self.projects, current_index)
-        self.on_project_change(current_index)
+        self.dlg.setup_project_combo(projects, self.project_id)
+        self.on_project_change()
         self.project_connection = self.dlg.projectsCombo.currentIndexChanged.connect(self.on_project_change)
 
+    def filter_projects(self, name_filter):
+        if not name_filter:
+            filtered_projects = self.projects
+        else:
+            filtered_projects = {pid: p for pid, p in self.projects.items() if name_filter.lower() in p.name.lower()}
+        if self.project_id in self.projects \
+                and self.project_id not in filtered_projects:
+            # We maintain the current project in the combo even if it not found to prevent over-requesting
+            # until it is changed explicitly
+            filtered_projects.update({self.project_id: self.projects[self.project_id]})
+        self.setup_projects_combo(filtered_projects)
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
         """Inspect the plugin version backend expects and show a warning if it is incompatible w/ the plugin.
@@ -3237,19 +3270,17 @@ class Mapflow(QObject):
         dialog.setup()
         dialog.deleteLater()
 
-    def get_project_sharing(self):
-        if len(self.dlg.projectsCombo) == 0:
+    def get_project_sharing(self, project):
+        if not project:
             return
-        self.current_project = self.projects[self.dlg.projectsCombo.currentIndex()]
-        project_name = self.current_project.name
-        if self.current_project.shareProject:
+        if project.shareProject:
             # Get user role, if project is shared
-            users = self.current_project.shareProject.users
+            users = project.shareProject.users
             for user in users:
                 if user.email == self.username:
                     self.user_role = UserRole(user.role)
             # Get project owner
-            owners = self.current_project.shareProject.owners
+            owners = project.shareProject.owners
             for owner in owners:
                 if owner.email == self.username:
                     self.user_role = UserRole.owner
@@ -3259,7 +3290,7 @@ class Mapflow(QObject):
         # Specify new main window header
         self.dlg.setWindowTitle(helpers.generate_plugin_header(self.plugin_name,
                                                                env=self.config.MAPFLOW_ENV,
-                                                               project_name=project_name,
+                                                               project_name=project.name,
                                                                user_role=self.user_role,
                                                                project_owner=project_owner))
 

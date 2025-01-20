@@ -148,10 +148,10 @@
            <property name="maxVisibleItems">
             <number>30</number>
            </property>
-           <property name="allowEmptyLayer">
+           <property name="allowEmptyLayer" stdset="0">
             <bool>false</bool>
            </property>
-           <property name="showCrs">
+           <property name="showCrs" stdset="0">
             <bool>true</bool>
            </property>
           </widget>
@@ -1327,7 +1327,7 @@
                 <property name="checked">
                  <bool>false</bool>
                 </property>
-                <property name="collapsed">
+                <property name="collapsed" stdset="0">
                  <bool>true</bool>
                 </property>
                 <layout class="QGridLayout" name="layoutMetadataFilters" columnstretch="0,1,0">
@@ -1927,6 +1927,16 @@
                 <widget class="QLabel" name="label_4">
                  <property name="text">
                   <string>Select Mapflow project:</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLineEdit" name="filterProject">
+                 <property name="maxLength">
+                  <number>255</number>
+                 </property>
+                 <property name="placeholderText">
+                  <string>filter project by name</string>
                  </property>
                 </widget>
                </item>

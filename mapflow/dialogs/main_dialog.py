@@ -438,18 +438,13 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.metadataTable.setSortingEnabled(True)
         self.metadataTableFilled.emit()
 
-    def setup_project_combo(self, projects: List[MapflowProject], current_position: int):
+    def setup_project_combo(self, projects: dict[str, MapflowProject], current_project_id: Optional[str] = None):
         self.projectsCombo.clear()
-        self.projectsCombo.addItems([pr.name for pr in projects])
-        self.projectsCombo.setCurrentIndex(current_position)
+        for pr in projects.values():
+            self.projectsCombo.insertItem(0, pr.name, pr.id)
+        if current_project_id:
+            self.select_project(current_project_id)
 
-    def setup_default_project(self, is_default: bool):
-        tooltip = self.tr("You can't remove or modify default project") if is_default else ""
-        self.deleteProject.setDisabled(is_default)
-        self.updateProject.setDisabled(is_default)
-        self.deleteProject.setToolTip(tooltip)
-        self.updateProject.setToolTip(tooltip)
-    
     def setup_options_menu(self):
         self.options_menu.addAction(self.save_result_action)
         self.options_menu.addAction(self.download_aoi_action)
@@ -522,7 +517,17 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.options_menu.removeAction(self.processing_update_action)
         else:
             self.options_menu.addAction(self.processing_update_action)
-    
+
+    def selected_project_id(self):
+        return str(self.projectsCombo.currentData()) or None
+
+    def select_project(self, project_id):
+        idx = self.projectsCombo.findData(project_id)
+        if idx == -1:
+            # if project is not found, just select the first one
+            idx = 0
+        self.projectsCombo.setCurrentIndex(idx)
+
     @property
     def project_controls(self):
         return [self.labelProcessingName, self.processingName,
@@ -538,3 +543,4 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                 self.processingRatingFeedbackText,
                 self.acceptButton, self.reviewButton,
                 self.ratingSubmitButton]
+
