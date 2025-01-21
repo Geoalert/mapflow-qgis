@@ -1985,29 +1985,12 @@ class Mapflow(QObject):
         selected_images = self.dlg.metadataTable.selectedItems()
         if selected_images:
             try:
-                rows = list(set(image.row() for image in selected_images))
-                local_image_indices = [int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text()) 
-                                       for row in rows]
-                provider_names = [self.search_footprints[local_image_index].attribute("providerName")
-                                  for local_image_index in local_image_indices]
-                product_types = [self.search_footprints[local_image_index].attribute("productType")
-                                 for local_image_index in local_image_indices]
-                if len(rows) == 1:
-                    if product_types[0] == "Mosaic":
-                        image_id = None # remove image_id for mosaic providers
-                    else:
-                        requires_id = True # require image_id for other search product types
-                else:
-                    # When multiple images is selected, check if:
-                        # selected images have the same prodauct type
-                        # and it is mosaic
-                        # and it is the same mosaic
-                    if len(set(product_types)) == 1 and product_types[0] == "Mosaic" and len(set(provider_names)) == 1:
-                        image_id = None
-                        provider_name = provider_names[0]
-                    # Forbid multiselection for regular images and for different mosaics
-                    else:
-                        return None, self.tr("You can launch multiple image processing only if it has the same mosaic provider")
+                # (Re)Define imagery search related processing parameters
+                local_image_indices, provider_name, image_id, requires_id, selection_error = self.get_imagery_search_selection(selected_images, 
+                                                                                                                               image_id, 
+                                                                                                                               requires_id)
+                if selection_error:
+                    return None, selection_error
             except:
                 local_image_indices = []
                 provider_name = None
@@ -3297,6 +3280,30 @@ class Mapflow(QObject):
                                                                project_name=project_name,
                                                                user_role=self.user_role,
                                                                project_owner=project_owner))
+        
+    def get_imagery_search_selection(self, selected_images, image_id, requires_id):
+        rows = list(set(image.row() for image in selected_images))
+        local_image_indices = [int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text()) 
+                               for row in rows]
+        provider_names = [self.search_footprints[local_image_index].attribute("providerName")
+                          for local_image_index in local_image_indices]
+        product_types = [self.search_footprints[local_image_index].attribute("productType")
+                         for local_image_index in local_image_indices]
+        selection_error = ""
+        if len(local_image_indices) == 1:
+            if product_types[0] == "Mosaic":
+                image_id = None # remove image_id for mosaic providers
+            else:
+                requires_id = True # require image_id for other search product types
+        else:
+            # When multiple images is selected, check if selected images have the same product type (Mosaic) and provider
+            if len(set(product_types)) == 1 and product_types[0] == "Mosaic" and len(set(provider_names)) == 1:
+                image_id = None
+            # Forbid multiselection for regular images and for different mosaics
+            else:
+                selection_error = self.tr("You can launch multiple image processing only if it has the same provider of mosaic type")
+        provider_name = provider_names[0]
+        return local_image_indices, provider_name, image_id, requires_id, selection_error
 
     @property
     def basemap_providers(self):
