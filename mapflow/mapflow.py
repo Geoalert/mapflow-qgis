@@ -631,6 +631,7 @@ class Mapflow(QObject):
             my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
             self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
             self.calculate_aoi_area_catalog()
+            self.create_processing_request()
         else:
             self.calculate_aoi_area_polygon_layer(polygon_layer)
         if provider.requires_image_id:
@@ -1912,6 +1913,7 @@ class Mapflow(QObject):
     def get_processing_params(self,
                               provider_index: Optional[int],
                               s3_uri: str = "",
+                              zoom: Optional[str] = None,
                               image_id: Optional[str] = None,
                               provider_name: Optional[str] = None,
                               requires_id: Optional[bool] = False):
@@ -1924,7 +1926,7 @@ class Mapflow(QObject):
         provider_params, provider_meta = provider.to_processing_params(image_id=image_id,
                                                                        provider_name=provider_name,
                                                                        url=s3_uri,
-                                                                       zoom=self.zoom,
+                                                                       zoom=zoom,
                                                                        requires_id=requires_id)
         meta.update(**provider_meta)
         return provider_params, meta
@@ -1977,58 +1979,44 @@ class Mapflow(QObject):
     def create_processing_request(self,
                                   allow_empty_name: bool = False) -> Tuple[Optional[PostProcessingSchema], str]:
         processing_name = self.dlg.processingName.text()
-        provider_index = self.dlg.providerIndex()
-        use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
-        image_id = self.dlg.imageId.text()
-        provider_name = None
-        requires_id = False
-        selected_images = self.dlg.metadataTable.selectedItems()
-        if selected_images:
-            try:
-                # (Re)Define imagery search related processing parameters
-                local_image_indices, provider_name, image_id, requires_id, selection_error = self.get_imagery_search_selection(selected_images, 
-                                                                                                                               image_id, 
-                                                                                                                               requires_id)
-                if selection_error:
-                    return None, selection_error
-            except:
-                local_image_indices = []
-                provider_name = None
-        else:
-            local_image_indices = []
         wd_name = self.dlg.modelCombo.currentText()
         wd = self.workflow_defs.get(wd_name)
-        try:
-            self.check_processing_ui(allow_empty_name=allow_empty_name)                
-            provider = self.providers[provider_index]
-            s3_uri = None
-            if isinstance(provider, MyImageryProvider):
-                image = self.data_catalog_service.selected_image()
-                mosaic = self.data_catalog_service.selected_mosaic()
-                if image:
-                    s3_uri = image.image_url
-                elif mosaic:
-                    try:
-                        image_uri = self.data_catalog_service.images[0].image_url
-                        # to launch for the whole mosaic we need to use minio path without the filename
-                        s3_uri = image_uri.rsplit('/',1)[0]+'/'
-                    except:
-                        s3_uri = None
+        provider_index = self.dlg.providerIndex()
+        provider = self.providers[provider_index]
+        s3_uri = self.get_s3_uri(provider)
 
+        selected_images = self.dlg.metadataTable.selectedItems()
+        if selected_images:
+            local_image_indices = self.get_local_image_indices(selected_images) 
+            provider_names, product_types = self.get_search_providers(local_image_indices)
+            image_id, requires_id, selection_error = self.get_search_images_ids(local_image_indices, provider_names, product_types)
+            if selection_error:
+                return None, selection_error
+        else:
+            local_image_indices = []
+            provider_names, product_types = [], []
+            image_id, requires_id, selection_error = None, False, ""
+        provider_name = provider_names[0] if provider_names else None # the same for all [i] if there was no 'selection_error'
+
+        zoom, zoom_error = self.get_zoom(provider, local_image_indices, product_types)
+        if zoom_error:
+            return None, zoom_error
+        
+        try:
+            self.check_processing_ui(allow_empty_name=allow_empty_name)
             provider_params, processing_meta = self.get_processing_params(provider_index=provider_index,
                                                                           s3_uri=s3_uri,
+                                                                          zoom=zoom,
                                                                           image_id=image_id,
                                                                           provider_name=provider_name,
                                                                           requires_id=requires_id)
             
-            # Add zoom to params if zoom_selector is true
             if self.zoom_selector:
-                self.zoom = self.settings.value('zoom')
-                provider_params.zoom = self.zoom
                 if isinstance(provider_params, PostSourceSchema): # no zoom for tifs
                     if provider_params.source_type == 'tif':
                         provider_params.zoom = None
 
+            use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
             aoi = self.get_aoi(provider_index=provider_index,
                                use_image_extent_as_aoi=use_image_extent_as_aoi,
                                local_image_indices=local_image_indices,
@@ -3281,29 +3269,88 @@ class Mapflow(QObject):
                                                                user_role=self.user_role,
                                                                project_owner=project_owner))
         
-    def get_imagery_search_selection(self, selected_images, image_id, requires_id):
-        rows = list(set(image.row() for image in selected_images))
-        local_image_indices = [int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text()) 
-                               for row in rows]
-        provider_names = [self.search_footprints[local_image_index].attribute("providerName")
-                          for local_image_index in local_image_indices]
-        product_types = [self.search_footprints[local_image_index].attribute("productType")
-                         for local_image_index in local_image_indices]
+    def get_local_image_indices(self, selected_images):
+        try:
+            rows = list(set(image.row() for image in selected_images))
+            local_image_indices = [int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text()) 
+                                   for row in rows]
+        except:
+            local_image_indices = []
+        return local_image_indices
+
+    def get_search_providers(self, local_image_indices):
+        try:
+            provider_names = [self.search_footprints[local_image_index].attribute("providerName")
+                              for local_image_index in local_image_indices]
+            product_types = [self.search_footprints[local_image_index].attribute("productType")
+                             for local_image_index in local_image_indices]
+        except:
+                provider_names = []
+                product_types = []
+        return provider_names, product_types
+    
+    def get_search_images_ids(self, local_image_indices, provider_names, product_types):
+        image_id = self.dlg.imageId.text()
+        requires_id = False
         selection_error = ""
-        if len(local_image_indices) == 1:
-            if product_types[0] == "Mosaic":
-                image_id = None # remove image_id for mosaic providers
+        try:
+            if len(local_image_indices) == 1:
+                if product_types[0] == "Mosaic":
+                    image_id = None # remove image_id for mosaic providers
+                else:
+                    requires_id = True # require image_id for single images
             else:
-                requires_id = True # require image_id for other search product types
-        else:
-            # When multiple images is selected, check if selected images have the same product type (Mosaic) and provider
-            if len(set(product_types)) == 1 and product_types[0] == "Mosaic" and len(set(provider_names)) == 1:
-                image_id = None
-            # Forbid multiselection for regular images and for different mosaics
+                # When multiple images is selected, check if selected images have the same product type (Mosaic) and provider
+                if len(set(product_types)) == 1 and product_types[0] == "Mosaic" and len(set(provider_names)) == 1:
+                    image_id = None
+                # Forbid multiselection for regular images and for different mosaics
+                else:
+                    selection_error = self.tr("You can launch multiple image processing only if it has the same provider of mosaic type")
+        except:
+            return image_id, requires_id, selection_error
+        return image_id, requires_id, selection_error
+    
+    def get_zoom(self, provider, local_image_indices, product_types):
+        zoom = None
+        zoom_error = ""
+        try:
+            if self.zoom_selector:
+                if not isinstance(provider, ImagerySearchProvider):
+                    self.zoom = self.settings.value('zoom')
+                    zoom = self.zoom
+            if isinstance(provider, ImagerySearchProvider):
+                if local_image_indices:
+                    zooms = [self.search_footprints[local_image_index].attribute("zoom")
+                             for local_image_index in local_image_indices] # temporary using pixelResolution instead of zoom
+                    if len(set(product_types)) == 1 and product_types[0] == "Mosaic": # allow zooms only for mosaics
+                        unique_zooms = set(filter(lambda x: x is not None, zooms))
+                        if len(unique_zooms) > 1: # forbid multiselection for results with different zooms
+                            zoom_error = self.tr("Selected search results must have the same spatial resolution")
+                        elif len(unique_zooms) == 1: # get unique zoom as a parameter
+                            zoom = str(int(list(unique_zooms)[0]))
+                self.dlg.enable_zoom_selector(False, zoom)
             else:
-                selection_error = self.tr("You can launch multiple image processing only if it has the same provider of mosaic type")
-        provider_name = provider_names[0]
-        return local_image_indices, provider_name, image_id, requires_id, selection_error
+                self.dlg.enable_zoom_selector(True, zoom)
+        except:
+            zoom = None
+            zoom_error = ""
+        return zoom, zoom_error
+    
+    def get_s3_uri(self, provider):
+        s3_uri = None
+        if isinstance(provider, MyImageryProvider):
+            image = self.data_catalog_service.selected_image()
+            mosaic = self.data_catalog_service.selected_mosaic()
+            if image:
+                s3_uri = image.image_url
+            elif mosaic:
+                try:
+                    image_uri = self.data_catalog_service.images[0].image_url
+                    # to launch for the whole mosaic we need to use minio path without the filename
+                    s3_uri = image_uri.rsplit('/',1)[0]+'/'
+                except:
+                    s3_uri = None
+        return s3_uri
 
     @property
     def basemap_providers(self):

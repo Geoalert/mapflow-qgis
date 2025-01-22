@@ -524,6 +524,17 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.options_menu.removeAction(self.processing_update_action)
         else:
             self.options_menu.addAction(self.processing_update_action)
+
+    def enable_zoom_selector(self, enable: bool = True, zoom: str = None):
+        self.zoomCombo.setEnabled(enable)
+        if enable is False:
+            if zoom:
+                self.zoomCombo.setCurrentText(zoom)
+                self.zoomCombo.setToolTip(self.tr("Zoom is derived from found imagery resolution"))
+            else:
+                self.zoomCombo.setCurrentIndex(0)
+        else:
+            self.zoomCombo.setToolTip(self.tr("Zoom"))
     
     @property
     def project_controls(self):

@@ -40,6 +40,7 @@ class ImageSchema(Serializable, SkipDataClass):
     previewType: Optional[PreviewType] = None
     previewUrl: Optional[str] = None
     providerName: Optional[str] = None
+    zoom: Optional[str] = None
 
     def __post_init__(self):
         if isinstance(self.acquisitionDate, str):
