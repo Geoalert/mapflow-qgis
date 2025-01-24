@@ -533,6 +533,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                 self.zoomCombo.setToolTip(self.tr("Zoom is derived from found imagery resolution"))
             else:
                 self.zoomCombo.setCurrentIndex(0)
+                self.zoomCombo.setToolTip(self.tr("Zoom"))
         else:
             self.zoomCombo.setToolTip(self.tr("Zoom"))
     

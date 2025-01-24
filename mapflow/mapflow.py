@@ -3274,7 +3274,7 @@ class Mapflow(QObject):
             rows = list(set(image.row() for image in selected_images))
             local_image_indices = [int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text()) 
                                    for row in rows]
-        except:
+        except (AttributeError, KeyError):
             local_image_indices = []
         return local_image_indices
 
@@ -3282,11 +3282,13 @@ class Mapflow(QObject):
         try:
             provider_names = [self.search_footprints[local_image_index].attribute("providerName")
                               for local_image_index in local_image_indices]
+        except KeyError:
+            provider_names = []
+        try:
             product_types = [self.search_footprints[local_image_index].attribute("productType")
                              for local_image_index in local_image_indices]
-        except:
-                provider_names = []
-                product_types = []
+        except KeyError:
+            product_types = []
         return provider_names, product_types
     
     def get_search_images_ids(self, local_image_indices, provider_names, product_types):
@@ -3300,8 +3302,8 @@ class Mapflow(QObject):
                 else:
                     requires_id = True # require image_id for single images
             else:
-                # When multiple images is selected, check if selected images have the same product type (Mosaic) and provider
-                if len(set(product_types)) == 1 and product_types[0] == "Mosaic" and len(set(provider_names)) == 1:
+                # When multiple images is selected, check if selected images have mosaic product type and the same provider
+                if set(product_types) == set(["Mosaic"]) and len(set(provider_names)) == 1:
                     image_id = None
                 # Forbid multiselection for regular images and for different mosaics
                 else:
@@ -3313,27 +3315,25 @@ class Mapflow(QObject):
     def get_zoom(self, provider, local_image_indices, product_types):
         zoom = None
         zoom_error = ""
-        try:
-            if self.zoom_selector:
-                if not isinstance(provider, ImagerySearchProvider):
-                    self.zoom = self.settings.value('zoom')
-                    zoom = self.zoom
-            if isinstance(provider, ImagerySearchProvider):
-                if local_image_indices:
+        if isinstance(provider, ImagerySearchProvider):
+            if local_image_indices:
+                try:
                     zooms = [self.search_footprints[local_image_index].attribute("zoom")
-                             for local_image_index in local_image_indices] # temporary using pixelResolution instead of zoom
-                    if len(set(product_types)) == 1 and product_types[0] == "Mosaic": # allow zooms only for mosaics
-                        unique_zooms = set(filter(lambda x: x is not None, zooms))
-                        if len(unique_zooms) > 1: # forbid multiselection for results with different zooms
-                            zoom_error = self.tr("Selected search results must have the same spatial resolution")
-                        elif len(unique_zooms) == 1: # get unique zoom as a parameter
-                            zoom = str(int(list(unique_zooms)[0]))
-                self.dlg.enable_zoom_selector(False, zoom)
-            else:
-                self.dlg.enable_zoom_selector(True, zoom)
-        except:
-            zoom = None
-            zoom_error = ""
+                            for local_image_index in local_image_indices]
+                except KeyError:
+                    zooms = []
+                if set(product_types) == set(["Mosaic"]): # allow zooms only for mosaics
+                    unique_zooms = set(filter(lambda x: x is not None, zooms))
+                    if len(unique_zooms) > 1: # forbid multiselection for results with different zooms
+                        zoom_error = self.tr("Selected search results must have the same spatial resolution")
+                    elif len(unique_zooms) == 1: # get unique zoom as a parameter
+                        zoom = str(int(list(unique_zooms)[0]))
+            self.dlg.enable_zoom_selector(False, zoom)
+        else:
+            if self.zoom_selector:
+                self.zoom = self.settings.value('zoom')
+                zoom = self.zoom
+            self.dlg.enable_zoom_selector(True, zoom)
         return zoom, zoom_error
     
     def get_s3_uri(self, provider):
