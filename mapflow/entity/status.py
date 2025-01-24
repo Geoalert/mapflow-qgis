@@ -58,6 +58,14 @@ class ProcessingStatus(NamedEnum):
     def is_failed(self):
         return self == ProcessingStatus.failed
 
+    @property
+    def is_refunded(self):
+        return self == ProcessingStatus.refunded
+
+    @property
+    def is_cancelled(self):
+        return self == ProcessingStatus.cancelled
+
 
 class ProcessingReviewStatus(NamedEnum):
     none = None
