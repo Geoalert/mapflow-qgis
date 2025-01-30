@@ -154,6 +154,9 @@ class Mapflow(QObject):
             .get(self.username, {})
             .get(self.project_id, {}))
         self.processings = []
+        # Imagery search pagination
+        self.search_total_pages = 1
+        self.search_page_number = 1
 
         # Clear previous temp dir, as it is not cleared automatically in exit from QGis
         previous_temp_dir = self.settings.value("temp_dir", None)
@@ -298,6 +301,8 @@ class Mapflow(QObject):
         self.dlg.rasterSourceChanged.connect(self.on_provider_change)
         self.dlg.clearSearch.clicked.connect(self.clear_metadata)
         self.dlg.metadataTableFilled.connect(self.filter_metadata)
+        self.dlg.searchRightButton.clicked.connect(self.show_search_next_page)
+        self.dlg.searchLeftButton.clicked.connect(self.show_search_previous_page)
         # Poll processings
         self.processing_fetch_timer = QTimer(self.dlg)
         self.processing_fetch_timer.setInterval(self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
@@ -926,7 +931,7 @@ class Mapflow(QObject):
         if not provider_supports_search:
             self.dlg.setProviderIndex(self.imagery_search_provider_index)
 
-    def get_metadata(self) -> None:
+    def get_metadata(self, _: Optional[bool] = False, offset: Optional[int] = 0) -> None:
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
         # If current provider does not support search, we should select ImagerySearchProvider to be able to search
         self.replace_search_provider_index()
@@ -971,7 +976,8 @@ class Mapflow(QObject):
             self.request_mapflow_metadata(aoi=aoi,
                                           provider=provider,
                                           from_=from_time,
-                                          to=to_time)
+                                          to=to_time,
+                                          offset=offset)
             # HEAD API does not work properly with intersection percent, so not sending it yet (filtering after)
             # max_cloud_cover=max_cloud_cover,
             # min_intersection=min_intersection)
@@ -997,7 +1003,8 @@ class Mapflow(QObject):
                                  max_cloud_cover: Optional[float] = None,
                                  min_off_nadir_angle: Optional[float] = None,
                                  max_off_nadir_angle: Optional[float] = None,
-                                 min_intersection: Optional[float] = None):
+                                 min_intersection: Optional[float] = None,
+                                 offset: Optional[int] = 0):
         self.metadata_aoi = aoi
         request_payload = ImageCatalogRequestSchema(aoi=json.loads(aoi.asJson()),
                                                     acquisitionDateFrom=from_,
@@ -1007,7 +1014,9 @@ class Mapflow(QObject):
                                                     maxCloudCover=max_cloud_cover,
                                                     minOffNadirAngle=min_off_nadir_angle,
                                                     maxOffNadirAngle=max_off_nadir_angle,
-                                                    minAoiIntersectionPercent=min_intersection)
+                                                    minAoiIntersectionPercent=min_intersection,
+                                                    limit=20,
+                                                    offset=offset)
         self.http.post(url=provider.meta_url,
                        body=request_payload.as_json().encode(),
                        headers={},
@@ -1051,6 +1060,7 @@ class Mapflow(QObject):
             )
             return
         response_data = ImageCatalogResponseSchema(**response_json)
+        print (response_data)
         geoms = response_data.as_geojson()
         # Add index to map table and layer
         for position, feature in enumerate(geoms.get("features", ())):
@@ -1061,6 +1071,24 @@ class Mapflow(QObject):
         filename = provider.save_search_layer(self.temp_dir_name, geoms)
         self.display_metadata_geojson_layer(filename, f"{provider.name} metadata")
         self.dlg.fill_metadata_table(geoms)
+
+        if response_data.total > response_data.limit:
+            quotient, remainder = divmod(response_data.total, response_data.limit)
+            self.search_total_pages = quotient + (remainder > 0)
+            self.search_page_number = response_data.offset + 1
+            self.dlg.enable_search_pages(True, self.search_page_number, self.search_total_pages)
+            # Disable next arrow for the last page
+            if self.search_page_number == self.search_total_pages:
+                self.dlg.searchRightButton.setEnabled(False)
+            else:
+                self.dlg.searchRightButton.setEnabled(True)
+            # Disable previous arrow for the first page
+            if self.search_page_number == 1:
+                self.dlg.searchLeftButton.setEnabled(False)
+            else:
+                self.dlg.searchLeftButton.setEnabled(True)
+        else:
+            self.dlg.enable_search_pages(False)
 
     def request_skywatch_metadata(
             self,
@@ -3351,6 +3379,12 @@ class Mapflow(QObject):
                 except:
                     s3_uri = None
         return s3_uri
+    
+    def show_search_next_page(self):
+        self.get_metadata(offset=self.search_page_number) # no +1, because page_number is already offset+1
+
+    def show_search_previous_page(self):
+        self.get_metadata(offset=self.search_page_number-2) # -1 to get current offset and -1 for previous
 
     @property
     def basemap_providers(self):

@@ -130,6 +130,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # Imagery Search
         self.imageId.setReadOnly(True)
         self.metadataTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.enable_search_pages(False)
 
     # ===== Settings management ===== #
     def save_view_results_mode(self):
@@ -536,6 +537,19 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                 self.zoomCombo.setToolTip(self.tr("Zoom"))
         else:
             self.zoomCombo.setToolTip(self.tr("Zoom"))
+
+    def enable_search_pages(self, enable: bool = False, page_number: int = 1, total_pages: int = 1):
+        self.searchLeftButton.setVisible(enable)
+        self.searchRightButton.setVisible(enable)
+        self.searchPageLabel.setVisible(enable)
+        if enable is False:
+            return
+        self.searchLeftButton.setIcon(icons.arrow_left_icon)
+        self.searchRightButton.setIcon(icons.arrow_right_icon)
+        self.searchLeftButton.setToolTip(self.tr("Previous page"))
+        self.searchRightButton.setToolTip(self.tr("Next page"))
+        self.searchPageLabel.setToolTip(self.tr("Page"))
+        self.searchPageLabel.setText(f"{page_number}/{total_pages}")
     
     @property
     def project_controls(self):

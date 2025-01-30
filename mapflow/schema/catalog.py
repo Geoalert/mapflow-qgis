@@ -24,6 +24,8 @@ class ImageCatalogRequestSchema(Serializable):
     minOffNadirAngle: Optional[float] = None
     maxOffNadirAngle: Optional[float] = None
     minAoiIntersectionPercent: Optional[float] = None
+    limit: Optional[int] = 1000
+    offset: Optional[int] = 0
 
 @dataclass
 class ImageSchema(Serializable, SkipDataClass):
@@ -61,6 +63,9 @@ class ImageSchema(Serializable, SkipDataClass):
 @dataclass
 class ImageCatalogResponseSchema(Serializable):
     images: List[ImageSchema]
+    total: int
+    limit: int = 1000
+    offset: int = 0
 
     def __post_init__(self):
         self.images = [ImageSchema.from_dict(image) for image in self.images]
