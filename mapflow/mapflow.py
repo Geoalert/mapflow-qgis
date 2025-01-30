@@ -155,8 +155,8 @@ class Mapflow(QObject):
             .get(self.project_id, {}))
         self.processings = []
         # Imagery search pagination
-        self.search_total_pages = 1
-        self.search_page_number = 1
+        self.search_page_offset = 0
+        self.search_page_limit = 1000
 
         # Clear previous temp dir, as it is not cleared automatically in exit from QGis
         previous_temp_dir = self.settings.value("temp_dir", None)
@@ -1015,7 +1015,6 @@ class Mapflow(QObject):
                                                     minOffNadirAngle=min_off_nadir_angle,
                                                     maxOffNadirAngle=max_off_nadir_angle,
                                                     minAoiIntersectionPercent=min_intersection,
-                                                    limit=20,
                                                     offset=offset)
         self.http.post(url=provider.meta_url,
                        body=request_payload.as_json().encode(),
@@ -1060,7 +1059,6 @@ class Mapflow(QObject):
             )
             return
         response_data = ImageCatalogResponseSchema(**response_json)
-        print (response_data)
         geoms = response_data.as_geojson()
         # Add index to map table and layer
         for position, feature in enumerate(geoms.get("features", ())):
@@ -1073,17 +1071,19 @@ class Mapflow(QObject):
         self.dlg.fill_metadata_table(geoms)
 
         if response_data.total > response_data.limit:
+            self.search_page_offset = response_data.offset
+            self.search_page_limit = response_data.limit
             quotient, remainder = divmod(response_data.total, response_data.limit)
-            self.search_total_pages = quotient + (remainder > 0)
-            self.search_page_number = response_data.offset + 1
-            self.dlg.enable_search_pages(True, self.search_page_number, self.search_total_pages)
+            search_total_pages = quotient + (remainder > 0)            
+            search_page_number = int(response_data.offset/response_data.limit) + 1
+            self.dlg.enable_search_pages(True, search_page_number, search_total_pages)
             # Disable next arrow for the last page
-            if self.search_page_number == self.search_total_pages:
+            if search_page_number == search_total_pages:
                 self.dlg.searchRightButton.setEnabled(False)
             else:
                 self.dlg.searchRightButton.setEnabled(True)
             # Disable previous arrow for the first page
-            if self.search_page_number == 1:
+            if search_page_number == 1:
                 self.dlg.searchLeftButton.setEnabled(False)
             else:
                 self.dlg.searchLeftButton.setEnabled(True)
@@ -3381,10 +3381,10 @@ class Mapflow(QObject):
         return s3_uri
     
     def show_search_next_page(self):
-        self.get_metadata(offset=self.search_page_number) # no +1, because page_number is already offset+1
+        self.get_metadata(offset=self.search_page_offset + self.search_page_limit)
 
     def show_search_previous_page(self):
-        self.get_metadata(offset=self.search_page_number-2) # -1 to get current offset and -1 for previous
+        self.get_metadata(offset=self.search_page_offset - self.search_page_limit)
 
     @property
     def basemap_providers(self):
