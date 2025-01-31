@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Optional, Union, Callable, Tuple
 
 from PyQt5.QtCore import (
-    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, QTextStream, QByteArray, QTemporaryDir
+    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, QTextStream, QByteArray, QTemporaryDir, QVariant
 )
 from PyQt5.QtGui import QColor
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
@@ -3355,7 +3355,10 @@ class Mapflow(QObject):
                     if len(unique_zooms) > 1: # forbid multiselection for results with different zooms
                         zoom_error = self.tr("Selected search results must have the same spatial resolution")
                     elif len(unique_zooms) == 1: # get unique zoom as a parameter
-                        zoom = str(int(list(unique_zooms)[0]))
+                        if list(unique_zooms)[0] == QVariant():
+                            zoom = None # no specified zoom if NULL is returned
+                        else:
+                            zoom = str(int(list(unique_zooms)[0]))
             self.dlg.enable_zoom_selector(False, zoom)
         else:
             if self.zoom_selector:
