@@ -19,11 +19,23 @@ def clip_aoi_to_image_extent(aoi_geometry: QgsGeometry,
     image_extent_layer = QgsVectorLayer('MultiPolygon?crs=epsg:4326', '', 'memory')
     image_extent_layer.dataProvider().addFeatures(extents)
     image_extent_layer.updateExtents()
-    # Find the intersection
-    intersection = qgis_processing.run(
-        'qgis:intersection',
-        {'INPUT': aoi_layer, 'OVERLAY': image_extent_layer, 'OUTPUT': 'memory:'}
-    )['OUTPUT']
+    try:
+        # Find the intersection
+        intersection = qgis_processing.run(
+            'qgis:intersection',
+            {'INPUT': aoi_layer, 'OVERLAY': image_extent_layer, 'OUTPUT': 'memory:'}
+        )['OUTPUT']
+    except:
+        # If intersection function fails (happens sometimes for mosaics), fix geometries beforehand
+        fixed_image_layer = qgis_processing.run(
+            'native:fixgeometries', 
+            {'INPUT':image_extent_layer, 'METHOD':1, 'OUTPUT':'memory:'}
+        )['OUTPUT']
+        # And then use fixed layer as overlay
+        intersection = qgis_processing.run(
+            'qgis:intersection',
+            {'INPUT': aoi_layer, 'OVERLAY': fixed_image_layer, 'OUTPUT': 'memory:'}
+        )['OUTPUT']
     return intersection.getFeatures()
 
 def clip_aoi_to_catalog_extent(catalog_aoi: QgsGeometry,

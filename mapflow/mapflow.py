@@ -291,8 +291,6 @@ class Mapflow(QObject):
 
         # Maxar
         self.dlg.imageId.textChanged.connect(self.sync_image_id_with_table_and_layer)
-        self.dlg.imageId.textChanged.connect(self.update_processing_cost)
-        self.dlg.metadataTable.itemSelectionChanged.connect(self.update_processing_cost)
         self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
             self.sync_table_selection_with_image_id_and_layer)
         self.meta_layer_table_connection = None
