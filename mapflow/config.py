@@ -86,6 +86,8 @@ class Config:
 
     MAX_AOIS_PER_PROCESSING = int(QgsSettings().value("variables/mapflow_max_aois", "10"))
 
+    SEARCH_RESULTS_PAGE_LIMIT = 1000 # objects per page
+
     # OAuth2
     OAUTH2_URL = "https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect"
     AUTH_CONFIG_NAME = f"mapflow_{MAPFLOW_ENV}"

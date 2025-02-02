@@ -156,7 +156,7 @@ class Mapflow(QObject):
         self.processings = []
         # Imagery search pagination
         self.search_page_offset = 0
-        self.search_page_limit = 1000
+        self.search_page_limit = self.config.SEARCH_RESULTS_PAGE_LIMIT
 
         # Clear previous temp dir, as it is not cleared automatically in exit from QGis
         previous_temp_dir = self.settings.value("temp_dir", None)

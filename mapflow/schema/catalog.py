@@ -5,6 +5,7 @@ from typing import Optional, Mapping, Any, Union, List
 
 from .base import Serializable, SkipDataClass
 
+from config import Config
 
 class PreviewType(str, Enum):
     png = "png"
@@ -24,7 +25,7 @@ class ImageCatalogRequestSchema(Serializable):
     minOffNadirAngle: Optional[float] = None
     maxOffNadirAngle: Optional[float] = None
     minAoiIntersectionPercent: Optional[float] = None
-    limit: Optional[int] = 1000
+    limit: Optional[int] = Config.SEARCH_RESULTS_PAGE_LIMIT
     offset: Optional[int] = 0
 
 @dataclass
@@ -64,7 +65,7 @@ class ImageSchema(Serializable, SkipDataClass):
 class ImageCatalogResponseSchema(Serializable):
     images: List[ImageSchema]
     total: int
-    limit: int = 1000
+    limit: int = Config.SEARCH_RESULTS_PAGE_LIMIT
     offset: int = 0
 
     def __post_init__(self):
