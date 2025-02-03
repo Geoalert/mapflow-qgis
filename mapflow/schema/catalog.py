@@ -5,7 +5,7 @@ from typing import Optional, Mapping, Any, Union, List
 
 from .base import Serializable, SkipDataClass
 
-from config import Config
+from ..config import Config
 
 class PreviewType(str, Enum):
     png = "png"

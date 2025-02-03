@@ -1013,6 +1013,7 @@ class Mapflow(QObject):
                                                     minOffNadirAngle=min_off_nadir_angle,
                                                     maxOffNadirAngle=max_off_nadir_angle,
                                                     minAoiIntersectionPercent=min_intersection,
+                                                    limit=self.search_page_limit,
                                                     offset=offset)
         self.http.post(url=provider.meta_url,
                        body=request_payload.as_json().encode(),
@@ -3348,15 +3349,15 @@ class Mapflow(QObject):
                             for local_image_index in local_image_indices]
                 except KeyError:
                     zooms = []
-                if set(product_types) == set(["Mosaic"]): # allow zooms only for mosaics
-                    unique_zooms = set(filter(lambda x: x is not None, zooms))
-                    if len(unique_zooms) > 1: # forbid multiselection for results with different zooms
+                # Allow zooms only for mosaics
+                if set(product_types) == set(["Mosaic"]):
+                    # No specified zoom if NULL is returned or it's None
+                    unique_zooms = set(filter(lambda x: (x is not None and x != QVariant()), zooms))
+                    # Forbid multiselection for results with different zooms
+                    if len(unique_zooms) > 1:
                         zoom_error = self.tr("Selected search results must have the same spatial resolution")
                     elif len(unique_zooms) == 1: # get unique zoom as a parameter
-                        if list(unique_zooms)[0] == QVariant():
-                            zoom = None # no specified zoom if NULL is returned
-                        else:
-                            zoom = str(int(list(unique_zooms)[0]))
+                        zoom = str(int(list(unique_zooms)[0]))
             self.dlg.enable_zoom_selector(False, zoom)
         else:
             if self.zoom_selector:
