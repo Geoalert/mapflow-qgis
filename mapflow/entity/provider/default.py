@@ -25,8 +25,9 @@ class SentinelProvider(ProviderInterface):
     def to_processing_params(self,
                              image_id: Optional[str] = None,
                              provider_name: Optional[str] = None,
-                             url: Optional[str] = None):
-        if not image_id:
+                             url: Optional[str] = None,
+                             requires_id: Optional[bool] = False):
+        if not image_id and requires_id is True:
             raise ImageIdRequired("Sentinel provider must have image ID to launch the processing")
         return PostSourceSchema(url=image_id,
                                 source_type=SourceType.sentinel_l2a), {}
@@ -67,8 +68,9 @@ class ImagerySearchProvider(ProviderInterface):
                              image_id: Optional[str] = None,
                              provider_name: Optional[str] = None,
                              url: Optional[str] = None,
-                             zoom: Optional[str] = None):
-        if not image_id:
+                             zoom: Optional[str] = None,
+                             requires_id: Optional[bool] = False):
+        if not image_id and requires_id is True:
             raise ImageIdRequired("Search provider must have image ID to launch the processing")
         return PostProviderSchema(data_provider=provider_name,
                                   url=image_id,
@@ -109,7 +111,8 @@ class MyImageryProvider(ProviderInterface):
                              image_id: Optional[str] = None,
                              provider_name: Optional[str] = None,
                              url: Optional[str] = None,
-                             zoom: Optional[str] = None):
+                             zoom: Optional[str] = None,
+                             requires_id: Optional[bool] = False):
         return PostSourceSchema(url=url,
                                 source_type='local',
                                 zoom=zoom), {}
@@ -177,5 +180,6 @@ class DefaultProvider(ProviderInterface):
                              zoom: Optional[str] = None,
                              image_id: Optional[str] = None,
                              provider_name: Optional[str] = None,
-                             url: Optional[str] = None):
+                             url: Optional[str] = None,
+                             requires_id: Optional[bool] = False):
         return PostProviderSchema(data_provider=self.api_name, zoom=zoom), {}

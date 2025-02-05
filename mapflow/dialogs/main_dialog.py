@@ -5,7 +5,7 @@ from typing import Iterable, Optional, List
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette
-from PyQt5.QtWidgets import QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton, QAction, QMenu
+from PyQt5.QtWidgets import QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton, QAction, QMenu, QAbstractItemView
 from qgis.core import QgsMapLayerProxyModel, QgsSettings
 
 from . import icons
@@ -127,7 +127,10 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.processing_update_action = QAction(self.tr("Rename"))
         self.setup_options_menu()
 
+        # Imagery Search
         self.imageId.setReadOnly(True)
+        self.metadataTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.enable_search_pages(False)
 
     # ===== Settings management ===== #
     def save_view_results_mode(self):
@@ -518,6 +521,31 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         else:
             self.options_menu.addAction(self.processing_update_action)
 
+    def enable_zoom_selector(self, enable: bool = True, zoom: str = None):
+        self.zoomCombo.setEnabled(enable)
+        if enable is False:
+            if zoom:
+                self.zoomCombo.setCurrentText(zoom)
+                self.zoomCombo.setToolTip(self.tr("Zoom is derived from found imagery resolution"))
+            else:
+                self.zoomCombo.setCurrentIndex(0)
+                self.zoomCombo.setToolTip(self.tr("Zoom"))
+        else:
+            self.zoomCombo.setToolTip(self.tr("Zoom"))
+
+    def enable_search_pages(self, enable: bool = False, page_number: int = 1, total_pages: int = 1):
+        self.searchLeftButton.setVisible(enable)
+        self.searchRightButton.setVisible(enable)
+        self.searchPageLabel.setVisible(enable)
+        if enable is False:
+            return
+        self.searchLeftButton.setIcon(icons.arrow_left_icon)
+        self.searchRightButton.setIcon(icons.arrow_right_icon)
+        self.searchLeftButton.setToolTip(self.tr("Previous page"))
+        self.searchRightButton.setToolTip(self.tr("Next page"))
+        self.searchPageLabel.setToolTip(self.tr("Page"))
+        self.searchPageLabel.setText(f"{page_number}/{total_pages}")
+    
     def selected_project_id(self):
         return str(self.projectsCombo.currentData()) or None
 
