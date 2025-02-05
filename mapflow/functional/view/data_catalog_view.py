@@ -9,6 +9,7 @@ from PyQt5.QtGui import QPixmap
 
 from ...schema.data_catalog import MosaicReturnSchema, ImageReturnSchema
 from ...dialogs import icons
+from ...functional.helpers import get_readable_size
 
 
 class DataCatalogView(QObject):
@@ -62,6 +63,17 @@ class DataCatalogView(QObject):
         self.create_mosaic_cell_buttons_layout()
         self.create_image_cell_buttons_layout()
 
+        # Add sorting options for catalog tables
+        self.dlg.sortCombo.addItems([self.tr("A-Z"), self.tr("Z-A"),
+                                     self.tr("Biggest first"), self.tr("Smallest first"),
+                                     self.tr("Newest first"), self.tr("Oldest first")])
+        # Default sorting column is 1 (name)
+        self.sort_mosaics_column = 1
+        self.sort_images_column = 1
+        # Default sortCombo index is 0 (A-Z)
+        self.sort_mosaics_index = 0
+        self.sort_images_index = 0
+
     @property
     def mosaic_table_visible(self):
         return self.dlg.stackedLayout.currentIndex() == 0
@@ -71,8 +83,10 @@ class DataCatalogView(QObject):
         if not mosaics:
             return
         # First column is ID, hidden; second is name
-        self.dlg.mosaicTable.setColumnCount(2)
+        self.dlg.mosaicTable.setColumnCount(4)
         self.dlg.mosaicTable.setColumnHidden(0, True)
+        self.dlg.mosaicTable.setColumnHidden(2, True)
+        self.dlg.mosaicTable.setColumnHidden(3, True)
         self.dlg.mosaicTable.setRowCount(len(mosaics))
         self.dlg.mosaicTable.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         for row, mosaic in enumerate(mosaics):
@@ -82,13 +96,46 @@ class DataCatalogView(QObject):
             name_item = QTableWidgetItem()
             name_item.setData(Qt.DisplayRole, mosaic.name)
             self.dlg.mosaicTable.setItem(row, 1, name_item)
-            self.dlg.mosaicTable.setHorizontalHeaderLabels(["ID", self.tr("Mosaics")])
+            size_item = QTableWidgetItem()
+            size_item.setData(Qt.DisplayRole, mosaic.sizeInBytes)
+            self.dlg.mosaicTable.setItem(row, 2, size_item)
+            date_item = QTableWidgetItem()
+            date_item.setData(Qt.DisplayRole, mosaic.created_at.timestamp())
+            self.dlg.mosaicTable.setItem(row, 3, date_item)
+            self.dlg.mosaicTable.setHorizontalHeaderLabels(["ID", self.tr("Mosaics"), self.tr("Size"), self.tr("Created")])
         self.dlg.mosaicTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.dlg.mosaicTable.sortItems(1, Qt.AscendingOrder)
+        self.dlg.mosaicTable.sortItems(self.sort_mosaics_column, Qt.AscendingOrder)
         # Set show-images tooltip for mosaics' cells
         for row in range(self.dlg.mosaicTable.rowCount()):
             item = self.dlg.mosaicTable.item(row, 1)
             item.setToolTip(self.tr("Double-click to show images"))
+
+    def sort_catalog(self):
+        index = self.dlg.sortCombo.currentIndex()
+        # Define sorting order based on sortCombo index
+        if index in (0, 3, 5): # A-Z, Smallest first, Oldest first
+            order = Qt.AscendingOrder
+        else: # Z-A, Biggest first, Newest first
+            order = Qt.DescendingOrder
+        # Sort mosaics
+        if self.mosaic_table_visible:
+            self.sort_mosaics_index = index
+            if index in (0, 1): # sort by name
+                self.sort_mosaics_column = 1
+            elif index in (2, 3): # sort by size
+                self.sort_mosaics_column = 2
+            else: # sort by date
+                self.sort_mosaics_column = 3
+            self.dlg.mosaicTable.sortItems(self.sort_mosaics_column, order)
+        # Sort images
+        else:
+            if index in (0, 1): # sort by name
+                self.sort_images_column = 1
+            elif index in (2, 3): # sort by size
+                self.sort_images_column = 2
+            else: # sort by date
+                self.sort_images_column = 3
+            self.dlg.imageTable.sortItems(self.sort_images_column, order)
         
     def display_mosaic_info(self, mosaic: MosaicReturnSchema, images: list[ImageReturnSchema]):
         if not mosaic:
@@ -108,8 +155,8 @@ class DataCatalogView(QObject):
                                                                   self.dlg.imagePreview.width() - 10), 
                                                              count=len(images))
         if images:
-            text += self.tr("Size: {mosaic_size} MB \nPixel size: {pixel_size} m \n"
-                           ).format(mosaic_size=round(sum(i.file_size for i in images)/1000000, 1),
+            text += self.tr("Size: {mosaic_size} \nPixel size: {pixel_size} m \n"
+                           ).format(mosaic_size=get_readable_size(mosaic.sizeInBytes),
                                     pixel_size=round(sum(list(images[0].meta_data.values())[6])/len(list(images[0].meta_data.values())[6]), 2))
         text += self.tr("Created: {date} at {time} \nTags: {tags}"
                        ).format(date=mosaic.created_at.date(), time=mosaic.created_at.strftime('%H:%M'),
@@ -121,7 +168,7 @@ class DataCatalogView(QObject):
         try:
             message = self.tr('<b>Name</b>: {filename}\
                               <br><b>Uploaded</b></br>: {date} at {time}\
-                              <br><b>Size</b></br>: {file_size} MB\
+                              <br><b>Size</b></br>: {file_size}\
                               <br><b>CRS</b></br>: {crs}\
                               <br><b>Number of bands</br></b>: {bands}\
                               <br><b>Width</br></b>: {width} pixels\
@@ -130,7 +177,7 @@ class DataCatalogView(QObject):
                              ).format(filename=image.filename, 
                                      date=image.uploaded_at.date(),
                                      time=image.uploaded_at.strftime('%H:%M'),
-                                     file_size=round(image.file_size/1048576, 1), 
+                                     file_size=get_readable_size(image.file_size), 
                                      crs=list(image.meta_data.values())[0],
                                      bands=list(image.meta_data.values())[1],
                                      width=list(image.meta_data.values())[2],
@@ -144,8 +191,10 @@ class DataCatalogView(QObject):
     def display_images(self, images: list[ImageReturnSchema]):
         self.contain_image_cell_buttons()
         self.dlg.imageTable.setRowCount(len(images))
-        self.dlg.imageTable.setColumnCount(2)
+        self.dlg.imageTable.setColumnCount(4)
         self.dlg.imageTable.setColumnHidden(0, True)
+        self.dlg.imageTable.setColumnHidden(2, True)
+        self.dlg.imageTable.setColumnHidden(3, True)
         self.dlg.imageTable.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         for row, image in enumerate(images):
             table_item = QTableWidgetItem()
@@ -154,9 +203,15 @@ class DataCatalogView(QObject):
             name_item = QTableWidgetItem()
             name_item.setData(Qt.DisplayRole, image.filename)
             self.dlg.imageTable.setItem(row, 1, name_item)
-        self.dlg.imageTable.setHorizontalHeaderLabels(["ID", self.tr("Images")])
+            size_item = QTableWidgetItem()
+            size_item.setData(Qt.DisplayRole, image.file_size)
+            self.dlg.imageTable.setItem(row, 2, size_item)
+            date_item = QTableWidgetItem()
+            date_item.setData(Qt.DisplayRole, image.uploaded_at.timestamp())
+            self.dlg.imageTable.setItem(row, 3, date_item)
+        self.dlg.imageTable.setHorizontalHeaderLabels(["ID", self.tr("Images"), self.tr("Size"), self.tr("Uploaded")])
         self.dlg.imageTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.dlg.imageTable.sortItems(1, Qt.AscendingOrder)
+        self.dlg.imageTable.sortItems(self.sort_images_column, Qt.AscendingOrder)
         if len(images) == 0:
             self.dlg.previewMosaicButton.setEnabled(False)
             self.dlg.showImagesButton.setEnabled(False)
@@ -192,8 +247,8 @@ class DataCatalogView(QObject):
     
     def show_storage(self, taken_storage, free_storage):
         if free_storage:
-            self.dlg.dataLimit.setText(self.tr("Your data: {taken} MB. Free space: {free} MB").format(taken=round(taken_storage/1048576, 1), 
-                                                                                                     free=round(free_storage/1048576, 1)))
+            self.dlg.dataLimit.setText(self.tr("Your data: {taken}. Free space: {free}").format(taken=get_readable_size(taken_storage), 
+                                                                                                free=get_readable_size(free_storage)))
         else:
             self.dlg.dataLimit.setText("")
 
@@ -232,12 +287,12 @@ class DataCatalogView(QObject):
         if not image:
             return
         self.dlg.catalogInfo.setText(self.tr("uploaded: {date} at {time} \n"
-                                             "file size: {size} MB \n"
+                                             "file size: {size} \n"
                                              "pixel size: {pixel_size} m \n"
                                              "bands: {count}"
                                             ).format(date=image.uploaded_at.date(),
                                                      time=image.uploaded_at.strftime('%H:%M'),
-                                                     size=round(image.file_size/1048576, 1),
+                                                     size=get_readable_size(image.file_size),
                                                      pixel_size=round(sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6]), 2),
                                                      count=list(image.meta_data.values())[1]))
         self.dlg.catalogSelectionLabel.setText(self.tr("Selected image: <b>{image_name}").format(
@@ -286,6 +341,8 @@ class DataCatalogView(QObject):
         self.dlg.mosaicTable.setCurrentCell(row, column)
         # Because we open images table always with empty selection
         self.clear_image_info()
+        # Set sorting combo text
+        self.dlg.sortCombo.setCurrentIndex(self.sort_images_index)
 
     def show_mosaics_table(self, selected_mosaic_name: Optional[str]):
         # Save buttons before deleting cells and therefore widgets
@@ -304,6 +361,8 @@ class DataCatalogView(QObject):
             self.show_mosaic_info(selected_mosaic_name)
         else:
             self.clear_mosaic_info()
+        # Set sorting combo text
+        self.dlg.sortCombo.setCurrentIndex(self.sort_mosaics_index)
 
     def create_mosaic_cell_buttons_layout(self):
         self.mosaic_cell_layout.setContentsMargins(0,0,3,0)

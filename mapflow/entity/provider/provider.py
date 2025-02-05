@@ -77,7 +77,8 @@ class ProviderInterface:
                              image_id: Optional[str] = None,
                              provider_name: Optional[str] = None,
                              url: Optional[str] = None,
-                             zoom: Optional[str] = None):
+                             zoom: Optional[str] = None,
+                             requires_id: Optional[bool] = False):
         """ You cannot create a processing with generic provider without implementation"""
         raise NotImplementedError
 

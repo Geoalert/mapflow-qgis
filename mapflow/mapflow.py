@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Optional, Union, Callable, Tuple
 
 from PyQt5.QtCore import (
-    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, QTextStream, QByteArray, QTemporaryDir
+    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, QTextStream, QByteArray, QTemporaryDir, QVariant
 )
 from PyQt5.QtGui import QColor
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
@@ -146,7 +146,7 @@ class Mapflow(QObject):
             self.settings.setValue('processings', {})
         # If no project id is set, use "default"
         self.project_id = self.settings.value("project_id", "default")
-        self.projects = []
+        self.projects = {}
         # Store user's current processing
         self.processing_history = ProcessingHistory.from_settings(
             self.settings.value('processings', {})
@@ -154,6 +154,9 @@ class Mapflow(QObject):
             .get(self.username, {})
             .get(self.project_id, {}))
         self.processings = []
+        # Imagery search pagination
+        self.search_page_offset = 0
+        self.search_page_limit = self.config.SEARCH_RESULTS_PAGE_LIMIT
 
         # Clear previous temp dir, as it is not cleared automatically in exit from QGis
         previous_temp_dir = self.settings.value("temp_dir", None)
@@ -285,11 +288,10 @@ class Mapflow(QObject):
         self.dlg.createProject.clicked.connect(self.create_project)
         self.dlg.deleteProject.clicked.connect(self.delete_project)
         self.dlg.updateProject.clicked.connect(self.update_project)
+        self.dlg.filterProject.textChanged.connect(self.filter_projects)
 
         # Maxar
         self.dlg.imageId.textChanged.connect(self.sync_image_id_with_table_and_layer)
-        self.dlg.imageId.textChanged.connect(self.update_processing_cost)
-        self.dlg.metadataTable.itemSelectionChanged.connect(self.update_processing_cost)
         self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
             self.sync_table_selection_with_image_id_and_layer)
         self.meta_layer_table_connection = None
@@ -298,6 +300,8 @@ class Mapflow(QObject):
         self.dlg.rasterSourceChanged.connect(self.on_provider_change)
         self.dlg.clearSearch.clicked.connect(self.clear_metadata)
         self.dlg.metadataTableFilled.connect(self.filter_metadata)
+        self.dlg.searchRightButton.clicked.connect(self.show_search_next_page)
+        self.dlg.searchLeftButton.clicked.connect(self.show_search_previous_page)
         # Poll processings
         self.processing_fetch_timer = QTimer(self.dlg)
         self.processing_fetch_timer.setInterval(self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
@@ -355,10 +359,6 @@ class Mapflow(QObject):
                 else:
                     self.dlg.zoomCombo.setCurrentIndex(zoom_index)
 
-        # Check if a project is shared after startup and when changing project
-        self.app_startup_user_update_timer.timeout.connect(self.get_project_sharing)
-        self.dlg.projectsCombo.currentIndexChanged.connect(self.get_project_sharing)
-
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
             self.iface.addCustomActionForLayer(self.add_layer_action, layer)
@@ -402,6 +402,18 @@ class Mapflow(QObject):
             use_default_error_handler=False
         )
         self.data_catalog_service.get_user_limit()
+    
+    def get_project_callback(self, response: QNetworkReply):
+        self.current_project = MapflowProject.from_dict(json.loads(response.readAll().data()))
+        if self.current_project:
+            self.project_id = self.current_project.id
+        self.setup_processings_table()
+        self.get_project_sharing(self.current_project)
+        self.setup_project_change_rights()
+        self.settings.setValue("project_id", self.project_id)
+        self.setup_workflow_defs(self.current_project.workflowDefs)
+        # Manually toggle function to avoid race condition
+        self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
 
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.create_aoi_from_map_action)
@@ -631,6 +643,7 @@ class Mapflow(QObject):
             my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
             self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
             self.calculate_aoi_area_catalog()
+            self.create_processing_request()
         else:
             self.calculate_aoi_area_polygon_layer(polygon_layer)
         if provider.requires_image_id:
@@ -663,21 +676,28 @@ class Mapflow(QObject):
 
     # ========== Projects ========== #
 
-    def on_project_change(self, currentIndex):
-        current_project = self.projects[currentIndex]
-        self.project_id = current_project.id
-        self.settings.setValue("project_id", self.project_id)
-        self.setup_workflow_defs(current_project.workflowDefs)
-        # you can't delete or modify the default project
-        self.dlg.setup_default_project(current_project.isDefault)
-        # Manually toggle function to avoid race condition
-        self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
-        self.setup_processings_table()
-        if not self.user_role.can_delete_rename_project:
+    def on_project_change(self):
+        selected_id = self.dlg.selected_project_id()
+        if selected_id == self.project_id and self.workflow_defs:
+            # we look at workflow defs because if they are NOT initialized, it means that the project
+            # is not initialized yet (at plugin's startup) and we still need to set it up
+            # otherwise, if the WDs are set, we assume that the project hasn't changed and skip further setup
+            return
+        self.project_service.get_project(selected_id, self.get_project_callback)
+
+    def setup_project_change_rights(self):
+        project_editable = True
+        if not self.current_project:
+            project_editable = False
+            reason = self.tr("No project selected")
+        elif self.current_project.isDefault:
+            reason = self.tr("You can't remove or modify default project")
+            project_editable = False
+        elif not self.user_role.can_delete_rename_project:
             reason = self.tr('Not enough rights to delete or update shared project ({})').format(self.user_role)
         else:
             reason = ""
-        self.dlg.enable_project_change(reason, self.user_role.can_delete_rename_project)
+        self.dlg.enable_project_change(reason, project_editable and self.user_role.can_delete_rename_project)
 
     def create_project(self):
         dialog = CreateProjectDialog(self.dlg)
@@ -686,19 +706,21 @@ class Mapflow(QObject):
         dialog.deleteLater()
 
     def update_project(self):
-        current_project = self.projects[self.dlg.projectsCombo.currentIndex()]
         dialog = UpdateProjectDialog(self.dlg)
-        dialog.accepted.connect(lambda: self.project_service.update_project(current_project.id,
+        dialog.accepted.connect(lambda: self.project_service.update_project(self.current_project.id,
                                                                                               dialog.project()))
-        dialog.setup(current_project)
+        dialog.setup(self.current_project)
         dialog.deleteLater()
 
     def delete_project(self):
-        current_project = self.projects[self.dlg.projectsCombo.currentIndex()]
         if self.alert(self.tr('Do you really want to remove project {}? '
-                              'This action cannot be undone, all processings will be lost!').format(current_project.name),
+                              'This action cannot be undone, all processings will be lost!').format(self.current_project.name),
                         icon=QMessageBox.Question):
-            self.project_service.delete_project(current_project.id)
+            # Unload current project as we are deleting it
+            to_delete = self.project_id
+            self.project_id = None
+            self.current_project = None
+            self.project_service.delete_project(to_delete)
 
     # ========= Providers ============ #
     def remove_provider(self) -> None:
@@ -925,7 +947,7 @@ class Mapflow(QObject):
         if not provider_supports_search:
             self.dlg.setProviderIndex(self.imagery_search_provider_index)
 
-    def get_metadata(self) -> None:
+    def get_metadata(self, _: Optional[bool] = False, offset: Optional[int] = 0) -> None:
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
         # If current provider does not support search, we should select ImagerySearchProvider to be able to search
         self.replace_search_provider_index()
@@ -970,7 +992,8 @@ class Mapflow(QObject):
             self.request_mapflow_metadata(aoi=aoi,
                                           provider=provider,
                                           from_=from_time,
-                                          to=to_time)
+                                          to=to_time,
+                                          offset=offset)
             # HEAD API does not work properly with intersection percent, so not sending it yet (filtering after)
             # max_cloud_cover=max_cloud_cover,
             # min_intersection=min_intersection)
@@ -996,7 +1019,8 @@ class Mapflow(QObject):
                                  max_cloud_cover: Optional[float] = None,
                                  min_off_nadir_angle: Optional[float] = None,
                                  max_off_nadir_angle: Optional[float] = None,
-                                 min_intersection: Optional[float] = None):
+                                 min_intersection: Optional[float] = None,
+                                 offset: Optional[int] = 0):
         self.metadata_aoi = aoi
         request_payload = ImageCatalogRequestSchema(aoi=json.loads(aoi.asJson()),
                                                     acquisitionDateFrom=from_,
@@ -1006,7 +1030,9 @@ class Mapflow(QObject):
                                                     maxCloudCover=max_cloud_cover,
                                                     minOffNadirAngle=min_off_nadir_angle,
                                                     maxOffNadirAngle=max_off_nadir_angle,
-                                                    minAoiIntersectionPercent=min_intersection)
+                                                    minAoiIntersectionPercent=min_intersection,
+                                                    limit=self.search_page_limit,
+                                                    offset=offset)
         self.http.post(url=provider.meta_url,
                        body=request_payload.as_json().encode(),
                        headers={},
@@ -1060,6 +1086,26 @@ class Mapflow(QObject):
         filename = provider.save_search_layer(self.temp_dir_name, geoms)
         self.display_metadata_geojson_layer(filename, f"{provider.name} metadata")
         self.dlg.fill_metadata_table(geoms)
+
+        if response_data.total > response_data.limit:
+            self.search_page_offset = response_data.offset
+            self.search_page_limit = response_data.limit
+            quotient, remainder = divmod(response_data.total, response_data.limit)
+            search_total_pages = quotient + (remainder > 0)            
+            search_page_number = int(response_data.offset/response_data.limit) + 1
+            self.dlg.enable_search_pages(True, search_page_number, search_total_pages)
+            # Disable next arrow for the last page
+            if search_page_number == search_total_pages:
+                self.dlg.searchRightButton.setEnabled(False)
+            else:
+                self.dlg.searchRightButton.setEnabled(True)
+            # Disable previous arrow for the first page
+            if search_page_number == 1:
+                self.dlg.searchLeftButton.setEnabled(False)
+            else:
+                self.dlg.searchLeftButton.setEnabled(True)
+        else:
+            self.dlg.enable_search_pages(False)
 
     def request_skywatch_metadata(
             self,
@@ -1444,12 +1490,12 @@ class Mapflow(QObject):
         selected_cells = self.dlg.metadataTable.selectedItems()
         if not selected_cells:
             image_id = None
-            local_index = None
+            local_indices = []
             self.dlg.imageId.setText('')
         else:
-            selected_row = selected_cells[0].row()
-            image_id = self.dlg.metadataTable.item(selected_row, id_column_index).text()
-            local_index = self.dlg.metadataTable.item(selected_row, local_index_column).text()
+            selected_rows = [cell.row() for cell in selected_cells]
+            local_indices = [self.dlg.metadataTable.item(row, local_index_column).text() for row in selected_rows]
+            image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
             self.dlg.imageId.setText(image_id)
         try:
             self.metadata_layer.selectionChanged.disconnect(self.meta_layer_table_connection)
@@ -1460,7 +1506,7 @@ class Mapflow(QObject):
         self.replace_search_provider_index()
 
         try:
-            self.metadata_layer.selectByExpression(f"{key}='{local_index}'")
+            self.metadata_layer.selectByExpression(f"{key} in {tuple(local_indices)}")
         except RuntimeError:  # layer has been deleted
             pass
         except Exception as e:
@@ -1479,6 +1525,7 @@ class Mapflow(QObject):
         :param selected_ids: The selected feature IDs. These aren't the image IDs, but rather
             the primary keys of the features.
         """
+        self.dlg.metadataTable.setSelectionMode(QAbstractItemView.MultiSelection)
         # Disconnect to avoid backwards signal and possible infinite loop;
         # connection is restored before return
         key = 'id' if self.dlg.sourceCombo.currentText() == constants.SENTINEL_OPTION_NAME else 'local_index'
@@ -1492,15 +1539,19 @@ class Mapflow(QObject):
             if not selected_ids:
                 self.dlg.metadataTable.clearSelection()
                 return
-            selected_local_index = self.metadata_layer.getFeature(selected_ids[-1])[key]
-            found_items = [item
-                          for item in self.dlg.metadataTable.findItems(str(selected_local_index), Qt.MatchExactly)
-                          if item.column() == id_column_index]
+            found_items = []
+            for selected_id in selected_ids:
+                selected_local_index = self.metadata_layer.getFeature(selected_id)[key]
+                for item in self.dlg.metadataTable.findItems(str(selected_local_index), Qt.MatchExactly):
+                    if item.column() == id_column_index:
+                        found_items.append(item)
+            self.dlg.metadataTable.clearSelection()
             if not found_items:
-                self.dlg.metadataTable.clearSelection()
                 return
-            self.dlg.metadataTable.selectRow(found_items[0].row())
+            for item in found_items:
+                self.dlg.metadataTable.selectRow(item.row())
         finally:
+            self.dlg.metadataTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
             self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
                 self.sync_table_selection_with_image_id_and_layer)
 
@@ -1538,8 +1589,9 @@ class Mapflow(QObject):
         if not items:
             self.dlg.metadataTable.clearSelection()
             return
-        if items[0] not in self.dlg.metadataTable.selectedItems():
-            self.dlg.metadataTable.selectRow(items[0].row())
+        # Redundant since image_id is currently not editable
+        # if items[0] not in self.dlg.metadataTable.selectedItems():
+            #self.dlg.metadataTable.selectRow(items[0].row())
 
     def get_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
         if not layer or layer.featureCount() == 0:
@@ -1683,17 +1735,18 @@ class Mapflow(QObject):
         # fetch UI data
         provider_index = self.dlg.providerIndex()
         use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
-        selected_image = self.dlg.metadataTable.selectedItems()
-        if selected_image:
-            row = selected_image[0].row()
-            local_image_index = int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text())
+        selected_images = self.dlg.metadataTable.selectedItems()
+        if selected_images:
+            rows = list(set(image.row() for image in selected_images))
+            local_image_indices = [int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text()) 
+                                   for row in rows]
         else:
-            local_image_index = None
+            local_image_indices = []
         # This is AOI with respect to selected Maxar images and raster image extent
         try:
             real_aoi = self.get_aoi(provider_index=provider_index,
                                     use_image_extent_as_aoi=use_image_extent_as_aoi,
-                                    local_image_index=local_image_index,
+                                    local_image_indices=local_image_indices,
                                     selected_aoi=self.aoi)
         except ImageIdRequired:
             # AOI is OK, but image ID is not selected,
@@ -1810,64 +1863,6 @@ class Mapflow(QObject):
         """
         self.report_http_error(response, self.tr("Error deleting a processing"))
 
-    def upload_image(self, layer,
-                     processing_params: Optional[PostProcessingSchema] = None,
-                     mosaic=None):
-        """
-        if processing_params are None, we do not call processing after upload;
-        this is a stub for further data-catalog usage
-        Also, mosaic can be specified to upload to specific mosaic
-        """
-        body = QHttpMultiPart(QHttpMultiPart.FormDataType)
-        tif = QHttpPart()
-        tif.setHeader(QNetworkRequest.ContentTypeHeader, 'image/tiff')
-        filename = Path(layer.dataProvider().dataSourceUri()).name
-        tif.setHeader(QNetworkRequest.ContentDispositionHeader, f'form-data; name="file"; filename="{filename}"')
-        image = QFile(layer.dataProvider().dataSourceUri(), body)
-        image.open(QIODevice.ReadOnly)
-        tif.setBodyDevice(image)
-        body.append(tif)
-        if processing_params:
-            callback = self.upload_tif_callback
-            callback_kwargs = {'processing_params': processing_params}
-        else:
-            # uploading without processing creation
-            callback = None
-            callback_kwargs = None
-        if mosaic:
-            url = f'{self.server}/mosaic/{mosaic}/image'
-        else:
-            url = f'{self.server}/rasters'
-        response = self.http.post(
-            url=url,
-            callback=callback,
-            callback_kwargs=callback_kwargs,
-            use_default_error_handler=False,
-            error_handler=self.upload_tif_error_handler,
-            body=body,
-            timeout=3600  # one hour
-        )
-        body.setParent(response)
-        progress_message = QgsMessageBarItem(
-            self.plugin_name,
-            self.tr('Uploading image to Mapflow...'),
-            QProgressBar(self.message_bar),
-            parent=self.message_bar
-        )
-        self.message_bar.pushItem(progress_message)
-
-        def display_upload_progress(bytes_sent: int, bytes_total: int):
-            try:
-                progress_message.widget().setValue(round(bytes_sent / bytes_total * 100))
-            except ZeroDivisionError:  # may happen for some reason
-                return
-            if bytes_sent == bytes_total:
-                self.message_bar.popWidget(progress_message)
-
-        connection = response.uploadProgress.connect(display_upload_progress)
-        # Tear this connection if the user closes the progress message
-        progress_message.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
-
     def check_processing_ui(self, allow_empty_name=False):
         processing_name = self.dlg.processingName.text()
 
@@ -1890,10 +1885,14 @@ class Mapflow(QObject):
 
     def crop_aoi_with_maxar_image_footprint(self,
                                             aoi: QgsFeature,
-                                            local_image_index: int):
-        extent = self.search_footprints[local_image_index]
+                                            local_image_indices: List[int]):
+        extents = [self.search_footprints[local_image_index] for local_image_index in local_image_indices]
         try:
-            aoi = next(clip_aoi_to_image_extent(aoi, extent)).geometry()
+            clipped_aoi_features = clip_aoi_to_image_extent(aoi, extents)
+            aoi = QgsGeometry.fromWkt('GEOMETRYCOLLECTION()')
+            for feature in clipped_aoi_features:
+                geom = feature.geometry()
+                aoi = aoi.combine(geom)
         except StopIteration:
             raise AoiNotIntersectsImage()
         return aoi
@@ -1901,8 +1900,10 @@ class Mapflow(QObject):
     def get_processing_params(self,
                               provider_index: Optional[int],
                               s3_uri: str = "",
+                              zoom: Optional[str] = None,
                               image_id: Optional[str] = None,
-                              provider_name: Optional[str] = None):
+                              provider_name: Optional[str] = None,
+                              requires_id: Optional[bool] = False):
         provider = self.providers[provider_index]
         meta = {'source-app': 'qgis',
                 'version': self.plugin_version,
@@ -1912,7 +1913,8 @@ class Mapflow(QObject):
         provider_params, provider_meta = provider.to_processing_params(image_id=image_id,
                                                                        provider_name=provider_name,
                                                                        url=s3_uri,
-                                                                       zoom=self.zoom)
+                                                                       zoom=zoom,
+                                                                       requires_id=requires_id)
         meta.update(**provider_meta)
         return provider_params, meta
 
@@ -1920,7 +1922,7 @@ class Mapflow(QObject):
                 provider_index: Optional[int],
                 use_image_extent_as_aoi: bool,
                 selected_aoi: QgsGeometry,
-                local_image_index: Optional[int]) -> QgsGeometry:
+                local_image_indices: Optional[List[int]]) -> QgsGeometry:
         if not helpers.check_aoi(selected_aoi):
             raise BadProcessingInput(self.tr('Bad AOI. AOI must be inside boundaries:'
                                              ' \n[-180, 180] by longitude, [-90, 90] by latitude'))
@@ -1928,9 +1930,9 @@ class Mapflow(QObject):
             provider = self.providers[provider_index]
             if not provider:
                 raise PluginError(self.tr('Providers are not initialized'))
-            if local_image_index is not None:
+            if len(local_image_indices) != 0:
                 if isinstance(provider, (MaxarProvider, ImagerySearchProvider)):
-                    aoi = self.crop_aoi_with_maxar_image_footprint(selected_aoi, local_image_index)
+                    aoi = self.crop_aoi_with_maxar_image_footprint(selected_aoi, local_image_indices)
                 elif isinstance(provider, SentinelProvider):
                     # todo: crop sentinel aoi with image footprint?
                     aoi = selected_aoi
@@ -1964,56 +1966,47 @@ class Mapflow(QObject):
     def create_processing_request(self,
                                   allow_empty_name: bool = False) -> Tuple[Optional[PostProcessingSchema], str]:
         processing_name = self.dlg.processingName.text()
-        provider_index = self.dlg.providerIndex()
-        use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
-        image_id = self.dlg.imageId.text()
-        provider_name = None
-        selected_image = self.dlg.metadataTable.selectedItems()
-        if selected_image:
-            try:
-                row = selected_image[0].row()
-                local_image_index = int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text())
-                provider_name = self.search_footprints[local_image_index].attribute("providerName")
-            except:
-                local_image_index = None
-                provider_name = None
-        else:
-            local_image_index = None
         wd_name = self.dlg.modelCombo.currentText()
         wd = self.workflow_defs.get(wd_name)
-        try:
-            self.check_processing_ui(allow_empty_name=allow_empty_name)                
-            provider = self.providers[provider_index]
-            s3_uri = None
-            if isinstance(provider, MyImageryProvider):
-                image = self.data_catalog_service.selected_image()
-                mosaic = self.data_catalog_service.selected_mosaic()
-                if image:
-                    s3_uri = image.image_url
-                elif mosaic:
-                    try:
-                        image_uri = self.data_catalog_service.images[0].image_url
-                        # to launch for the whole mosaic we need to use minio path without the filename
-                        s3_uri = image_uri.rsplit('/',1)[0]+'/'
-                    except:
-                        s3_uri = None
+        provider_index = self.dlg.providerIndex()
+        provider = self.providers[provider_index]
+        s3_uri = self.get_s3_uri(provider)
 
+        selected_images = self.dlg.metadataTable.selectedItems()
+        if selected_images:
+            local_image_indices = self.get_local_image_indices(selected_images) 
+            provider_names, product_types = self.get_search_providers(local_image_indices)
+            image_id, requires_id, selection_error = self.get_search_images_ids(local_image_indices, provider_names, product_types)
+            if selection_error:
+                return None, selection_error
+        else:
+            local_image_indices = []
+            provider_names, product_types = [], []
+            image_id, requires_id, selection_error = None, False, ""
+        provider_name = provider_names[0] if provider_names else None # the same for all [i] if there was no 'selection_error'
+
+        zoom, zoom_error = self.get_zoom(provider, local_image_indices, product_types)
+        if zoom_error:
+            return None, zoom_error
+        
+        try:
+            self.check_processing_ui(allow_empty_name=allow_empty_name)
             provider_params, processing_meta = self.get_processing_params(provider_index=provider_index,
                                                                           s3_uri=s3_uri,
+                                                                          zoom=zoom,
                                                                           image_id=image_id,
-                                                                          provider_name=provider_name)
+                                                                          provider_name=provider_name,
+                                                                          requires_id=requires_id)
             
-            # Add zoom to params if zoom_selector is true
             if self.zoom_selector:
-                self.zoom = self.settings.value('zoom')
-                provider_params.zoom = self.zoom
                 if isinstance(provider_params, PostSourceSchema): # no zoom for tifs
                     if provider_params.source_type == 'tif':
                         provider_params.zoom = None
 
+            use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
             aoi = self.get_aoi(provider_index=provider_index,
                                use_image_extent_as_aoi=use_image_extent_as_aoi,
-                               local_image_index=local_image_index,
+                               local_image_indices=local_image_indices,
                                selected_aoi=self.aoi)
         except AoiNotIntersectsImage:
             return None, self.tr("Selected AOI does not intersect the selected imagery")
@@ -2741,12 +2734,10 @@ class Mapflow(QObject):
 
         # update processing limit of user
         self.update_processing_limit()
-
         self.alert_failed_processings(failed_processings)
         self.alert_finished_processings(finished_processings)
         self.update_processing_table(processings)
         self.processings = processings
-
         try:  # use try-except bc this will only error once
             processing_history[env][self.username][self.project_id] = self.processing_history.asdict()
         except KeyError:  # history for the current env hasn't been initialized yet
@@ -2754,7 +2745,6 @@ class Mapflow(QObject):
                 processing_history[env][self.username] = {self.project_id: self.processing_history.asdict()}
             except KeyError:
                 processing_history[env] = {self.username: {self.project_id: self.processing_history.asdict()}}
-
         self.settings.setValue('processings', processing_history)
 
     def alert_failed_processings(self, failed_processings):
@@ -3131,19 +3121,32 @@ class Mapflow(QObject):
         self.user_status_update_timer.start()
         self.app_startup_user_update_timer.start()
 
-    def update_projects(self, current_project_id: str):
-        self.projects = self.project_service.projects
+    def update_projects(self):
+        self.projects = {pr.id: pr for pr in self.project_service.projects}
         if not self.projects:
             self.alert(self.tr("No projects found! Contact us to resolve the issue"))
             return
-        current_index = self.find_project(self.projects, current_project_id)
+        self.filter_projects(self.dlg.filterProject.text())
+
+    def setup_projects_combo(self, projects: dict[str, MapflowProject]):
         if self.project_connection is not None:
             self.dlg.projectsCombo.currentIndexChanged.disconnect(self.project_connection)
             self.project_connection = None
-        self.dlg.setup_project_combo(self.projects, current_index)
-        self.on_project_change(current_index)
+        self.dlg.setup_project_combo(projects, self.project_id)
+        self.on_project_change()
         self.project_connection = self.dlg.projectsCombo.currentIndexChanged.connect(self.on_project_change)
 
+    def filter_projects(self, name_filter):
+        if not name_filter:
+            filtered_projects = self.projects
+        else:
+            filtered_projects = {pid: p for pid, p in self.projects.items() if name_filter.lower() in p.name.lower()}
+        if self.project_id in self.projects \
+                and self.project_id not in filtered_projects:
+            # We maintain the current project in the combo even if it not found to prevent over-requesting
+            # until it is changed explicitly
+            filtered_projects.update({self.project_id: self.projects[self.project_id]})
+        self.setup_projects_combo(filtered_projects)
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
         """Inspect the plugin version backend expects and show a warning if it is incompatible w/ the plugin.
@@ -3237,19 +3240,17 @@ class Mapflow(QObject):
         dialog.setup()
         dialog.deleteLater()
 
-    def get_project_sharing(self):
-        if len(self.dlg.projectsCombo) == 0:
+    def get_project_sharing(self, project):
+        if not project:
             return
-        self.current_project = self.projects[self.dlg.projectsCombo.currentIndex()]
-        project_name = self.current_project.name
-        if self.current_project.shareProject:
+        if project.shareProject:
             # Get user role, if project is shared
-            users = self.current_project.shareProject.users
+            users = project.shareProject.users
             for user in users:
                 if user.email == self.username:
                     self.user_role = UserRole(user.role)
             # Get project owner
-            owners = self.current_project.shareProject.owners
+            owners = project.shareProject.owners
             for owner in owners:
                 if owner.email == self.username:
                     self.user_role = UserRole.owner
@@ -3259,9 +3260,101 @@ class Mapflow(QObject):
         # Specify new main window header
         self.dlg.setWindowTitle(helpers.generate_plugin_header(self.plugin_name,
                                                                env=self.config.MAPFLOW_ENV,
-                                                               project_name=project_name,
+                                                               project_name=project.name,
                                                                user_role=self.user_role,
                                                                project_owner=project_owner))
+        
+    def get_local_image_indices(self, selected_images):
+        try:
+            rows = list(set(image.row() for image in selected_images))
+            local_image_indices = [int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text()) 
+                                   for row in rows]
+        except (AttributeError, KeyError):
+            local_image_indices = []
+        return local_image_indices
+
+    def get_search_providers(self, local_image_indices):
+        try:
+            provider_names = [self.search_footprints[local_image_index].attribute("providerName")
+                              for local_image_index in local_image_indices]
+        except KeyError:
+            provider_names = []
+        try:
+            product_types = [self.search_footprints[local_image_index].attribute("productType")
+                             for local_image_index in local_image_indices]
+        except KeyError:
+            product_types = []
+        return provider_names, product_types
+    
+    def get_search_images_ids(self, local_image_indices, provider_names, product_types):
+        image_id = self.dlg.imageId.text()
+        requires_id = False
+        selection_error = ""
+        try:
+            if len(local_image_indices) == 1:
+                if product_types[0] == "Mosaic":
+                    image_id = None # remove image_id for mosaic providers
+                else:
+                    requires_id = True # require image_id for single images
+            else:
+                # When multiple images is selected, check if selected images have mosaic product type and the same provider
+                if set(product_types) == set(["Mosaic"]) and len(set(provider_names)) == 1:
+                    image_id = None
+                # Forbid multiselection for regular images and for different mosaics
+                else:
+                    selection_error = self.tr("You can launch multiple image processing only if it has the same provider of mosaic type")
+        except:
+            return image_id, requires_id, selection_error
+        return image_id, requires_id, selection_error
+    
+    def get_zoom(self, provider, local_image_indices, product_types):
+        zoom = None
+        zoom_error = ""
+        if isinstance(provider, ImagerySearchProvider):
+            if local_image_indices:
+                try:
+                    zooms = [self.search_footprints[local_image_index].attribute("zoom")
+                            for local_image_index in local_image_indices]
+                except KeyError:
+                    zooms = []
+                # Allow zooms only for mosaics
+                if set(product_types) == set(["Mosaic"]):
+                    # No specified zoom if NULL is returned or it's None
+                    unique_zooms = set(filter(lambda x: (x is not None and x != QVariant()), zooms))
+                    # Forbid multiselection for results with different zooms
+                    if len(unique_zooms) > 1:
+                        zoom_error = self.tr("Selected search results must have the same spatial resolution")
+                    elif len(unique_zooms) == 1: # get unique zoom as a parameter
+                        zoom = str(int(list(unique_zooms)[0]))
+            self.dlg.enable_zoom_selector(False, zoom)
+        else:
+            if self.zoom_selector:
+                self.zoom = self.settings.value('zoom')
+                zoom = self.zoom
+            self.dlg.enable_zoom_selector(True, zoom)
+        return zoom, zoom_error
+    
+    def get_s3_uri(self, provider):
+        s3_uri = None
+        if isinstance(provider, MyImageryProvider):
+            image = self.data_catalog_service.selected_image()
+            mosaic = self.data_catalog_service.selected_mosaic()
+            if image:
+                s3_uri = image.image_url
+            elif mosaic:
+                try:
+                    image_uri = self.data_catalog_service.images[0].image_url
+                    # to launch for the whole mosaic we need to use minio path without the filename
+                    s3_uri = image_uri.rsplit('/',1)[0]+'/'
+                except:
+                    s3_uri = None
+        return s3_uri
+    
+    def show_search_next_page(self):
+        self.get_metadata(offset=self.search_page_offset + self.search_page_limit)
+
+    def show_search_previous_page(self):
+        self.get_metadata(offset=self.search_page_offset - self.search_page_limit)
 
     @property
     def basemap_providers(self):

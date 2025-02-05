@@ -47,9 +47,11 @@ class Config:
     # MAXAR
     METADATA_TABLE_ATTRIBUTES = {
         QCoreApplication.translate('Config', 'Product Type'): 'productType',
+        QCoreApplication.translate('Config', 'Provider Name'): 'providerName',
         QCoreApplication.translate('Config', 'Sensor'): 'source',
         QCoreApplication.translate('Config', 'Band Order'): 'colorBandOrder',
         QCoreApplication.translate('Config', 'Cloud %'): 'cloudCover',
+        QCoreApplication.translate('Config', 'Spatial Resolution, m'): 'pixelResolution',
         QCoreApplication.translate('Config', 'Off Nadir') + f' \N{DEGREE SIGN}': 'offNadirAngle',
         QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=TIMEZONE): 'acquisitionDate',
         QCoreApplication.translate('Config', 'Image ID'): 'id',
@@ -83,6 +85,8 @@ class Config:
     MAX_FILE_SIZE_BYTES = 2*(1024**3)
 
     MAX_AOIS_PER_PROCESSING = int(QgsSettings().value("variables/mapflow_max_aois", "10"))
+
+    SEARCH_RESULTS_PAGE_LIMIT = 1000 # objects per page
 
     # OAuth2
     OAUTH2_URL = "https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect"
