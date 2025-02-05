@@ -4,7 +4,7 @@ from typing import Optional
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtNetwork import QNetworkReply
 
-from ..schema.project import CreateProjectSchema, UpdateProjectSchema, MapflowProject
+from ..schema.project import CreateProjectSchema, UpdateProjectSchema, MapflowProject, MapflowProjectInfo
 
 
 class ProjectService(QObject):
@@ -15,6 +15,7 @@ class ProjectService(QObject):
         self.http = http
         self.server = server
         self.projects = []
+        self.project = None
 
     def create_project(self, project: CreateProjectSchema):
         self.http.post(url=f"{self.server}/projects",
@@ -52,23 +53,23 @@ class ProjectService(QObject):
         new_project_id = project.id
         self.get_projects(current_project_id=new_project_id)
 
-
-    def get_project(self, project_id):
+    def get_project(self, project_id, callback):
         self.http.get(url=f"{self.server}/projects/{project_id}",
                           headers={},
-                          callback=self.get_project_callback,
+                          callback=callback,
                           use_default_error_handler=True,
                           timeout=5)
 
     def get_projects(self, current_project_id: Optional[str] = None):
-        self.http.get(url=f"{self.server}/projects",
+        self.http.post(url=f"{self.server}/projects/load",
                           headers={},
+                          body="{}".encode(),
                           callback=self.get_projects_callback,
                           callback_kwargs ={'current_project_id': current_project_id},
                           use_default_error_handler=True,
                           timeout=10)
 
     def get_projects_callback(self, response: QNetworkReply, current_project_id: Optional[str] = None):
-        self.projects = [MapflowProject.from_dict(data) for data in json.loads(response.readAll().data())]
+        self.projects = [MapflowProjectInfo.from_dict(data) for data in json.loads(response.readAll().data())]
         self.projectsUpdated.emit(current_project_id or "Default")
 

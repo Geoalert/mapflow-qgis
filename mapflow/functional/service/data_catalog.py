@@ -212,6 +212,7 @@ class DataCatalogService(QObject):
             if failed:
                 self.api.upload_image_error_handler(response=response, mosaic_name=mosaic_name, image_paths=failed)
             self.get_mosaic(mosaic_id)
+            self.dlg.raise_()
             self.mosaicsUpdated.emit()
         else:
             image_to_upload = image_paths[0]
@@ -227,19 +228,19 @@ class DataCatalogService(QObject):
             if not helpers.raster_layer_is_allowed(layer, self.image_max_size_pixels, self.image_max_size_bytes):
                 message = self.tr("Raster TIFF file must be georeferenced,"
                                   " have size less than {size} pixels"
-                                  " and file size less than {memory}"
-                                  " MB").format(size=self.image_max_size_pixels,
-                                                memory=self.image_max_size_bytes // (1024 * 1024))
+                                  " and file size less than {memory}").format(size=self.image_max_size_pixels,
+                                                                              memory=helpers.get_readable_size(self.image_max_size_bytes))
                 self.view.alert(self.tr("<center><b>Error uploading '{name}'</b>").format(name=Path(image_to_upload).name)+"<br>"+message)
                 return
             # Check if user has enough stogage
             image_size=Path(image_to_upload).stat().st_size
-            if self.free_storage and image_size > self.free_storage:
+            self.free_storage = 10
+            if image_size > self.free_storage:#self.free_storage and image_size > self.free_storage:
                 message = (self.tr("<b>Not enough storage space. </b>"
-                                   "You have {free_storage} MB left, but '{name}' is "
-                                   "{image_size} MB").format(free_storage=round(self.free_storage/(1024*1024), 1),
-                                                                name=Path(image_to_upload).name,
-                                                                image_size=round(image_size/(1024*1024), 1)))
+                                   "You have {free_storage} left, but '{name}' is "
+                                   "{image_size}").format(free_storage=helpers.get_readable_size(self.free_storage),
+                                                          name=Path(image_to_upload).name,
+                                                          image_size=helpers.get_readable_size(image_size)))
                 self.iface.messageBar().pushWarning("Mapflow", message)
                 self.get_mosaic(mosaic_id)
                 self.mosaicsUpdated.emit()
