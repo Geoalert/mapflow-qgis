@@ -64,7 +64,7 @@ class ImageSchema(Serializable, SkipDataClass):
 @dataclass
 class ImageCatalogResponseSchema(Serializable):
     images: List[ImageSchema]
-    total: int
+    total: int = Config.SEARCH_RESULTS_PAGE_LIMIT
     limit: int = Config.SEARCH_RESULTS_PAGE_LIMIT
     offset: int = 0
 
