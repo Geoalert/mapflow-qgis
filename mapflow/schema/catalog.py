@@ -13,6 +13,9 @@ class PreviewType(str, Enum):
     tms = "tms"
     wms = "wms"
 
+class ProductType(str, Enum):
+    mosaic = "Mosaic"
+    image = "Image"
 
 @dataclass
 class ImageCatalogRequestSchema(Serializable):
@@ -27,6 +30,8 @@ class ImageCatalogRequestSchema(Serializable):
     minAoiIntersectionPercent: Optional[float] = None
     limit: Optional[int] = Config.SEARCH_RESULTS_PAGE_LIMIT
     offset: Optional[int] = 0
+    hideUnavailable: Optional[bool] = False
+    productTypes: Optional[List[ProductType]] = None
 
 @dataclass
 class ImageSchema(Serializable, SkipDataClass):

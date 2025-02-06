@@ -13,8 +13,8 @@ from ..config import config
 from ..entity.billing import BillingType
 from ..entity.provider import ProviderInterface
 from ..functional import helpers
-from ..schema.project import MapflowProject
-from ..schema.project import UserRole
+from ..schema.project import MapflowProject, UserRole
+from ..schema.catalog import ProductType
 
 ui_path = Path(__file__).parent/'static'/'ui'
 
@@ -131,6 +131,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.imageId.setReadOnly(True)
         self.metadataTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.enable_search_pages(False)
+        self.productCheckableCombo.addItemWithCheckState(self.tr("Mosaic"), Qt.CheckState.Checked, ProductType.mosaic)
+        self.productCheckableCombo.addItemWithCheckState(self.tr("Image"), Qt.CheckState.Checked, ProductType.image)
+        self.connect_search_column_checkboxes()
 
     # ===== Settings management ===== #
     def save_view_results_mode(self):
@@ -312,6 +315,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
         if fill:
             self.fill_metadata_table(fill)
+
+        self.set_search_column_visibility()
 
     def show_wd_price(self,
                       wd_price: float,
@@ -555,6 +560,33 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             # if project is not found, just select the first one
             idx = 0
         self.projectsCombo.setCurrentIndex(idx)
+
+    def connect_search_column_checkboxes(self):
+        self.showProductTypeColumn.toggled.connect(self.set_search_column_visibility)
+        self.showProviderNameColumn.toggled.connect(self.set_search_column_visibility)
+        self.showSensorColumn.toggled.connect(self.set_search_column_visibility)
+        self.showBandsColumn.toggled.connect(self.set_search_column_visibility)
+        self.showCloudsColumn.toggled.connect(self.set_search_column_visibility)
+        self.showOffNadirColumn.toggled.connect(self.set_search_column_visibility)
+        self.showDateTimeColumn.toggled.connect(self.set_search_column_visibility)
+        self.showZoomColumn.toggled.connect(self.set_search_column_visibility)
+        self.showResolutionColumn.toggled.connect(self.set_search_column_visibility)
+        self.showImageIdColumn.toggled.connect(self.set_search_column_visibility)
+
+    def set_search_column_visibility(self):
+        search_column_flags = (self.showProductTypeColumn.isChecked(),
+                               self.showProviderNameColumn.isChecked(),
+                               self.showSensorColumn.isChecked(),
+                               self.showBandsColumn.isChecked(),
+                               self.showCloudsColumn.isChecked(),
+                               self.showOffNadirColumn.isChecked(),
+                               self.showDateTimeColumn.isChecked(),
+                               self.showZoomColumn.isChecked(),
+                               self.showResolutionColumn.isChecked(),
+                               self.showImageIdColumn.isChecked())
+
+        for idx, flag in enumerate(search_column_flags):
+            self.metadataTable.setColumnHidden(idx, not flag)
 
     @property
     def project_controls(self):
