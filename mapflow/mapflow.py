@@ -72,7 +72,7 @@ from .schema import (PostSourceSchema,
                      ProviderReturnSchema,
                      ImageCatalogRequestSchema,
                      ImageCatalogResponseSchema)
-from .schema.catalog import PreviewType
+from .schema.catalog import PreviewType, ProductType
 from .schema.project import MapflowProject
 from .schema.project import UserRole
 
@@ -980,6 +980,12 @@ class Mapflow(QObject):
 
         max_cloud_cover = self.dlg.maxCloudCover.value()
         min_intersection = self.dlg.minIntersection.value()
+
+        hide_unavailable = self.dlg.hideUnavailableResults.isChecked()
+        product_types = self.dlg.productCheckableCombo.checkedItems()
+        if len(product_types) == 0:
+            product_types = [ProductType.mosaic, ProductType.image]
+
         if isinstance(provider, MaxarProvider):
             self.get_maxar_metadata(aoi=aoi,
                                     provider=provider,
@@ -994,7 +1000,8 @@ class Mapflow(QObject):
                                           provider=provider,
                                           from_=from_time,
                                           to=to_time,
-                                          offset=offset)
+                                          offset=offset,
+                                          hide_unavailable=hide_unavailable)
             # HEAD API does not work properly with intersection percent, so not sending it yet (filtering after)
             # max_cloud_cover=max_cloud_cover,
             # min_intersection=min_intersection)
@@ -1021,7 +1028,9 @@ class Mapflow(QObject):
                                  min_off_nadir_angle: Optional[float] = None,
                                  max_off_nadir_angle: Optional[float] = None,
                                  min_intersection: Optional[float] = None,
-                                 offset: Optional[int] = 0):
+                                 offset: Optional[int] = 0,
+                                 hide_unavailable: Optional[bool] = False,
+                                 product_types: Optional[List[ProductType]] = None):
         self.metadata_aoi = aoi
         request_payload = ImageCatalogRequestSchema(aoi=json.loads(aoi.asJson()),
                                                     acquisitionDateFrom=from_,
@@ -1033,7 +1042,9 @@ class Mapflow(QObject):
                                                     maxOffNadirAngle=max_off_nadir_angle,
                                                     minAoiIntersectionPercent=min_intersection,
                                                     limit=self.search_page_limit,
-                                                    offset=offset)
+                                                    offset=offset,
+                                                    hideUnavailable=hide_unavailable,
+                                                    productTypes=product_types)
         self.http.post(url=provider.meta_url,
                        body=request_payload.as_json().encode(),
                        headers={},

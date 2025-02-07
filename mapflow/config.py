@@ -51,9 +51,10 @@ class Config:
         QCoreApplication.translate('Config', 'Sensor'): 'source',
         QCoreApplication.translate('Config', 'Band Order'): 'colorBandOrder',
         QCoreApplication.translate('Config', 'Cloud %'): 'cloudCover',
-        QCoreApplication.translate('Config', 'Spatial Resolution, m'): 'pixelResolution',
         QCoreApplication.translate('Config', 'Off Nadir') + f' \N{DEGREE SIGN}': 'offNadirAngle',
         QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=TIMEZONE): 'acquisitionDate',
+        QCoreApplication.translate('Config', 'Zoom level'): 'zoom',
+        QCoreApplication.translate('Config', 'Spatial Resolution, m'): 'pixelResolution',
         QCoreApplication.translate('Config', 'Image ID'): 'id',
         'local_index': 'local_index'
     }
