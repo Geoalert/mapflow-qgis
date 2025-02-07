@@ -588,6 +588,12 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         for idx, flag in enumerate(search_column_flags):
             self.metadataTable.setColumnHidden(idx, not flag)
 
+    def filter_processings_table(self, name_filter: str = None):
+        for row in range(self.processingsTable.rowCount()):
+            processing_name = self.processingsTable.item(row, 0).data(Qt.DisplayRole)
+            hide = bool(name_filter) and (name_filter.lower() not in processing_name.lower())
+            self.processingsTable.setRowHidden(row, hide)
+
     @property
     def project_controls(self):
         return [self.labelProcessingName, self.processingName,
