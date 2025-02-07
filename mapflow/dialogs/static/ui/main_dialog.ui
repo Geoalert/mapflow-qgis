@@ -148,10 +148,10 @@
            <property name="maxVisibleItems">
             <number>30</number>
            </property>
-           <property name="allowEmptyLayer" stdset="0">
+           <property name="allowEmptyLayer">
             <bool>false</bool>
            </property>
-           <property name="showCrs" stdset="0">
+           <property name="showCrs">
             <bool>true</bool>
            </property>
           </widget>
@@ -268,7 +268,7 @@
            <property name="minimumSize">
             <size>
              <width>50</width>
-             <height>0</height>
+             <height>26</height>
             </size>
            </property>
            <property name="maximumSize">
@@ -1390,7 +1390,7 @@
                 <property name="checked">
                  <bool>false</bool>
                 </property>
-                <property name="collapsed" stdset="0">
+                <property name="collapsed">
                  <bool>true</bool>
                 </property>
                 <property name="saveCollapsedState">
@@ -2520,7 +2520,7 @@
                 <property name="geometry">
                  <rect>
                   <x>0</x>
-                  <y>-45</y>
+                  <y>0</y>
                   <width>177</width>
                   <height>220</height>
                  </rect>

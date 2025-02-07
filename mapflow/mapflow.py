@@ -1712,6 +1712,13 @@ class Mapflow(QObject):
                     self.dlg.disable_processing_start(reason=self.tr("Selected AOI does not intersect the selected imagery"),
                                                       clear_area=True)
                     return
+            # Don't recalculate AOI if first selected mosaic/image didn't change
+            selected_mosaics = self.dlg.mosaicTable.selectedIndexes()
+            selected_images = self.dlg.imageTable.selectedIndexes()
+            if len(selected_mosaics) > 1 and self.dlg.selected_mosaic_cell == selected_mosaics[0]:
+                return
+            elif len(selected_images) > 1 and self.dlg.selected_image_cell == selected_images[0]:
+                return
             self.calculate_aoi_area(aoi, helpers.WGS84)
         else:
             self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
