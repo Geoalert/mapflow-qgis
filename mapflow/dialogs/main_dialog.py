@@ -559,7 +559,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     def filter_processings_table(self, name_filter: str = None):
         for row in range(self.processingsTable.rowCount()):
             processing_name = self.processingsTable.item(row, 0).data(Qt.DisplayRole)
-            hide = bool(name_filter) and (name_filter not in processing_name)
+            hide = bool(name_filter) and (name_filter.lower() not in processing_name.lower())
             self.processingsTable.setRowHidden(row, hide)
 
     @property
