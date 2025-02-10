@@ -679,12 +679,15 @@ class Mapflow(QObject):
 
     def on_project_change(self):
         selected_id = self.dlg.selected_project_id()
-        if selected_id == self.project_id and self.workflow_defs:
+        if selected_id is not None and selected_id == self.project_id and self.workflow_defs:
             # we look at workflow defs because if they are NOT initialized, it means that the project
             # is not initialized yet (at plugin's startup) and we still need to set it up
             # otherwise, if the WDs are set, we assume that the project hasn't changed and skip further setup
             return
-        self.project_service.get_project(selected_id, self.get_project_callback)
+        if selected_id is None:
+            self.project_service.get_project("default", self.get_project_callback)
+        else:
+            self.project_service.get_project(selected_id, self.get_project_callback)
 
     def setup_project_change_rights(self):
         project_editable = True
