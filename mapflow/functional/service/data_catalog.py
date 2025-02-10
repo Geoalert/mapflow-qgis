@@ -157,9 +157,14 @@ class DataCatalogService(QObject):
         # Clear previous images details
         self.dlg.imageTable.clearSelection()
         self.dlg.imageTable.setRowCount(0)
-        self.dlg.selected_mosaic_cell = self.dlg.mosaicTable.selectedIndexes()[0]
+        # Don't send GET requests if first selected mosaic didn't change
+        selected_mosaics = self.dlg.mosaicTable.selectedIndexes()
+        if len(selected_mosaics) > 1 and self.dlg.selected_mosaic_cell == selected_mosaics[0]:
+            pass
+        else:
+            self.dlg.selected_mosaic_cell = self.dlg.mosaicTable.selectedIndexes()[0]
+            self.get_mosaic_images(mosaic.id)
         self.view.add_mosaic_cell_buttons()
-        self.get_mosaic_images(mosaic.id)
         self.view.show_mosaic_info(mosaic.name)
 
     def mosaic_preview(self):
@@ -322,9 +327,14 @@ class DataCatalogService(QObject):
             self.delete_images(response = None, images=images, deleted=[], failed=[])
 
     def on_image_selection(self, image: ImageReturnSchema):
+        selected_images = self.dlg.imageTable.selectedIndexes()
+        if len(selected_images) > 1 and self.dlg.selected_image_cell == selected_images[0]:
+            pass
+        else:
+            self.dlg.selected_mosaic_cell = self.dlg.mosaicTable.selectedIndexes()[0]
+            self.get_image_preview_s(image)
         self.view.show_image_info(image)
         self.view.add_image_cell_buttons()
-        self.get_image_preview_s(image)
         return image
 
     def image_info(self):
