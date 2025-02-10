@@ -128,7 +128,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.setup_options_menu()
 
         # Imagery Search
-        self.imageId.setReadOnly(True)
         self.metadataTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.enable_search_pages(False)
         self.productCheckableCombo.addItemWithCheckState(self.tr("Mosaic"), Qt.CheckState.Checked, ProductType.mosaic)

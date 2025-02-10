@@ -1053,7 +1053,7 @@ class Mapflow(QObject):
                                         "max_cloud_cover": max_cloud_cover},
                        error_handler=self.request_mapflow_metadata_error_handler,
                        use_default_error_handler=False,
-                       timeout=30)
+                       timeout=60)
 
     def request_mapflow_metadata_error_handler(self, response: QNetworkReply):
         self.report_http_error(response,
@@ -1601,9 +1601,9 @@ class Mapflow(QObject):
         if not items:
             self.dlg.metadataTable.clearSelection()
             return
-        # Redundant since image_id is currently not editable
-        # if items[0] not in self.dlg.metadataTable.selectedItems():
-            #self.dlg.metadataTable.selectRow(items[0].row())
+        for item in items:
+            if item not in self.dlg.metadataTable.selectedItems():
+                self.dlg.metadataTable.selectRow(item.row())
 
     def get_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
         if not layer or layer.featureCount() == 0:
@@ -1988,7 +1988,8 @@ class Mapflow(QObject):
         if selected_images:
             local_image_indices = self.get_local_image_indices(selected_images) 
             provider_names, product_types = self.get_search_providers(local_image_indices)
-            image_id, requires_id, selection_error = self.get_search_images_ids(local_image_indices, provider_names, product_types)
+            image_ids, requires_id, selection_error = self.get_search_images_ids(local_image_indices, provider_names, product_types)
+            image_id = image_ids[0] # only 1 image can be selected, and for mosaics id doen't matter
             if selection_error:
                 return None, selection_error
         else:
@@ -3299,7 +3300,11 @@ class Mapflow(QObject):
         return provider_names, product_types
     
     def get_search_images_ids(self, local_image_indices, provider_names, product_types):
-        image_id = self.dlg.imageId.text()
+        try:
+            image_ids = [self.search_footprints[local_image_index].attribute("id")
+                         for local_image_index in local_image_indices]
+        except KeyError:
+            image_ids = []
         requires_id = False
         selection_error = ""
         try:
@@ -3317,7 +3322,7 @@ class Mapflow(QObject):
                     selection_error = self.tr("You can launch multiple image processing only if it has the same provider of mosaic type")
         except:
             return image_id, requires_id, selection_error
-        return image_id, requires_id, selection_error
+        return image_ids, requires_id, selection_error
     
     def get_zoom(self, provider, local_image_indices, product_types):
         zoom = None
@@ -3338,6 +3343,8 @@ class Mapflow(QObject):
                         zoom_error = self.tr("Selected search results must have the same spatial resolution")
                     elif len(unique_zooms) == 1: # get unique zoom as a parameter
                         zoom = str(int(list(unique_zooms)[0]))
+            self.dlg.enable_zoom_selector(False, zoom)
+        elif isinstance(provider, MyImageryProvider):
             self.dlg.enable_zoom_selector(False, zoom)
         else:
             if self.zoom_selector:
