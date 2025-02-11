@@ -1711,7 +1711,9 @@ class Mapflow(QObject):
                                                       use_image_extent_as_aoi=False)
                 else:
                     aoi = aoi_layer
-                if not aoi:
+                if not self.aoi: # other error message is already shown
+                    pass 
+                elif not aoi: # error after intersection
                     self.dlg.disable_processing_start(reason=self.tr("Selected AOI does not intersect the selected imagery"),
                                                       clear_area=True)
                     return
