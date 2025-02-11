@@ -2857,8 +2857,9 @@ class Mapflow(QObject):
             if proc.id_ in selected_processings:
                 self.dlg.processingsTable.selectRow(row)
         self.dlg.processingsTable.setSortingEnabled(True)
-        # Restore extended selection
+        # Restore extended selection and filtering
         self.dlg.processingsTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.dlg.filter_processings_table(self.dlg.filterProcessings.text())
 
     def initGui(self) -> None:
         """Create the menu entries and toolbar icons inside the QGIS GUI.
