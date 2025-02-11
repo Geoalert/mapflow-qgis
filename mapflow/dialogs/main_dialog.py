@@ -552,7 +552,10 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.searchPageLabel.setText(f"{page_number}/{total_pages}")
     
     def selected_project_id(self):
-        return str(self.projectsCombo.currentData()) or None
+        if self.projectsCombo.currentData():
+            return str(self.projectsCombo.currentData())
+        else:
+            return None
 
     def select_project(self, project_id):
         idx = self.projectsCombo.findData(project_id)
