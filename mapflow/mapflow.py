@@ -985,9 +985,10 @@ class Mapflow(QObject):
         min_intersection = self.dlg.minIntersection.value()
 
         hide_unavailable = self.dlg.hideUnavailableResults.isChecked()
-        product_types = self.dlg.productCheckableCombo.checkedItems()
+        product_types = self.dlg.productCheckableCombo.checkedItemsData()
         if len(product_types) == 0:
-            product_types = [ProductType.mosaic, ProductType.image]
+            product_types = [ProductType.mosaic.upper(), ProductType.image.upper()]
+        print (product_types)
 
         if isinstance(provider, MaxarProvider):
             self.get_maxar_metadata(aoi=aoi,
@@ -1004,7 +1005,8 @@ class Mapflow(QObject):
                                           from_=from_time,
                                           to=to_time,
                                           offset=offset,
-                                          hide_unavailable=hide_unavailable)
+                                          hide_unavailable=hide_unavailable,
+                                          product_types=product_types)
             # HEAD API does not work properly with intersection percent, so not sending it yet (filtering after)
             # max_cloud_cover=max_cloud_cover,
             # min_intersection=min_intersection)
