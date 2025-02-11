@@ -220,6 +220,7 @@ class DataCatalogService(QObject):
             if failed:
                 self.api.upload_image_error_handler(response=response, mosaic_name=mosaic_name, image_paths=failed)
             self.get_mosaic(mosaic_id)
+            self.dlg.mosaicTable.clearSelection()
             self.dlg.raise_()
             self.mosaicsUpdated.emit()
         else:
@@ -250,7 +251,6 @@ class DataCatalogService(QObject):
                                                           image_size=helpers.get_readable_size(image_size)))
                 self.iface.messageBar().pushWarning("Mapflow", message)
                 self.get_mosaic(mosaic_id)
-                self.get_mosaic_images(mosaic_id)
                 self.mosaicsUpdated.emit()
                 return
             # Upload allowed raster 
@@ -293,6 +293,7 @@ class DataCatalogService(QObject):
             if failed:
                 self.api.delete_image_error_handler(image_paths=failed)
             mosaic_id = self.selected_mosaic().id
+            self.dlg.mosaicTable.clearSelection()
             self.get_mosaic(mosaic_id)
             self.dlg.imageTable.clearSelection()
         else:
