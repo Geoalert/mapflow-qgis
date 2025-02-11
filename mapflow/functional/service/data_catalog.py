@@ -184,6 +184,9 @@ class DataCatalogService(QObject):
     # Images CRUD
     def upload_images_to_mosaic(self):
         mosaic = self.selected_mosaic()
+        if not mosaic:
+            self.view.alert(self.tr("Please, select existing mosaic"))
+            return
         image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), self.tr("Choose image to upload"), filter='(TIF files *.tif; *.tiff)')[0]
         if image_paths:
             self.upload_images(response=None, 
@@ -247,6 +250,7 @@ class DataCatalogService(QObject):
                                                           image_size=helpers.get_readable_size(image_size)))
                 self.iface.messageBar().pushWarning("Mapflow", message)
                 self.get_mosaic(mosaic_id)
+                self.get_mosaic_images(mosaic_id)
                 self.mosaicsUpdated.emit()
                 return
             # Upload allowed raster 
