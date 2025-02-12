@@ -1131,7 +1131,7 @@
              </property>
              <layout class="QGridLayout" name="gridLayout">
               <item row="0" column="0">
-               <layout class="QHBoxLayout" name="layoutMetadataDatetime" stretch="0,0,0,0,0,0">
+               <layout class="QHBoxLayout" name="layoutMetadataDatetime" stretch="0,0,0,0,0,0,0,0,0">
                 <item>
                  <widget class="QLabel" name="labelFrom">
                   <property name="toolTip">
@@ -1173,34 +1173,6 @@
                     <month>12</month>
                     <day>21</day>
                    </date>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QPushButton" name="getMetadata">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="minimumSize">
-                   <size>
-                    <width>150</width>
-                    <height>0</height>
-                   </size>
-                  </property>
-                  <property name="maximumSize">
-                   <size>
-                    <width>100</width>
-                    <height>16777215</height>
-                   </size>
-                  </property>
-                  <property name="toolTip">
-                   <string>Click and wait for a few seconds until the table below is filled out</string>
-                  </property>
-                  <property name="text">
-                   <string>Search </string>
                   </property>
                  </widget>
                 </item>
@@ -1249,15 +1221,79 @@
                  </widget>
                 </item>
                 <item>
-                 <widget class="QCheckBox" name="metadataUseCanvasExtent">
-                  <property name="toolTip">
-                   <string>Use your current screen area</string>
+                 <spacer name="horizontalSpacer_7">
+                  <property name="orientation">
+                   <enum>Qt::Horizontal</enum>
                   </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>5</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+                <item>
+                 <widget class="QCheckBox" name="searchMosaicCheckBox">
                   <property name="text">
-                   <string>Use canvas extent</string>
+                   <string>Mosaic</string>
                   </property>
                   <property name="checked">
-                   <bool>false</bool>
+                   <bool>true</bool>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QCheckBox" name="searchImageCheckBox">
+                  <property name="text">
+                   <string>Image</string>
+                  </property>
+                  <property name="checked">
+                   <bool>true</bool>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer name="horizontalSpacer_12">
+                  <property name="orientation">
+                   <enum>Qt::Horizontal</enum>
+                  </property>
+                  <property name="sizeType">
+                   <enum>QSizePolicy::MinimumExpanding</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>5</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="getMetadata">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>150</width>
+                    <height>0</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>100</width>
+                    <height>16777215</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>Click and wait for a few seconds until the table below is filled out</string>
+                  </property>
+                  <property name="text">
+                   <string>Search </string>
                   </property>
                  </widget>
                 </item>
@@ -1375,10 +1411,22 @@
               </item>
               <item row="1" column="0">
                <widget class="QgsCollapsibleGroupBox" name="metadataFilters">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
                 <property name="minimumSize">
                  <size>
                   <width>0</width>
                   <height>0</height>
+                 </size>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>16777215</width>
+                  <height>22</height>
                  </size>
                 </property>
                 <property name="toolTip">
@@ -1400,6 +1448,34 @@
                  <bool>false</bool>
                 </property>
                 <layout class="QGridLayout" name="layoutMetadataFilters" columnstretch="0,0,0">
+                 <item row="0" column="1">
+                  <widget class="QSlider" name="minIntersection">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="toolTip">
+                    <string>Images that cover fewer % of your area won't be shown</string>
+                   </property>
+                   <property name="maximum">
+                    <number>100</number>
+                   </property>
+                   <property name="tracking">
+                    <bool>false</bool>
+                   </property>
+                   <property name="orientation">
+                    <enum>Qt::Horizontal</enum>
+                   </property>
+                   <property name="tickPosition">
+                    <enum>QSlider::TicksBelow</enum>
+                   </property>
+                   <property name="tickInterval">
+                    <number>5</number>
+                   </property>
+                  </widget>
+                 </item>
                  <item row="3" column="2">
                   <widget class="QSpinBox" name="maxCloudCoverSpinBox">
                    <property name="suffix">
@@ -1413,6 +1489,13 @@
                    </property>
                    <property name="value">
                     <number>100</number>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="3" column="0">
+                  <widget class="QLabel" name="labelMaxCloudCover">
+                   <property name="text">
+                    <string>Cloud cover up to:</string>
                    </property>
                   </widget>
                  </item>
@@ -1457,28 +1540,6 @@
                    </property>
                   </widget>
                  </item>
-                 <item row="0" column="1">
-                  <widget class="QSlider" name="minIntersection">
-                   <property name="toolTip">
-                    <string>Images that cover fewer % of your area won't be shown</string>
-                   </property>
-                   <property name="maximum">
-                    <number>100</number>
-                   </property>
-                   <property name="tracking">
-                    <bool>false</bool>
-                   </property>
-                   <property name="orientation">
-                    <enum>Qt::Horizontal</enum>
-                   </property>
-                   <property name="tickPosition">
-                    <enum>QSlider::TicksBelow</enum>
-                   </property>
-                   <property name="tickInterval">
-                    <number>5</number>
-                   </property>
-                  </widget>
-                 </item>
                  <item row="0" column="0">
                   <widget class="QLabel" name="labelMinIntersection">
                    <property name="text">
@@ -1486,76 +1547,18 @@
                    </property>
                   </widget>
                  </item>
-                 <item row="3" column="0">
-                  <widget class="QLabel" name="labelMaxCloudCover">
+                 <item row="4" column="0" colspan="3">
+                  <widget class="QCheckBox" name="hideUnavailableResults">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
                    <property name="text">
-                    <string>Cloud cover up to:</string>
+                    <string>Search only through available providers</string>
                    </property>
                   </widget>
-                 </item>
-                 <item row="4" column="0" colspan="3">
-                  <layout class="QHBoxLayout" name="horizontalLayout_19">
-                   <property name="topMargin">
-                    <number>0</number>
-                   </property>
-                   <item>
-                    <widget class="QLabel" name="label_7">
-                     <property name="text">
-                      <string>Product type:</string>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
-                    <widget class="QgsCheckableComboBox" name="productCheckableCombo">
-                     <property name="sizePolicy">
-                      <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-                       <horstretch>0</horstretch>
-                       <verstretch>0</verstretch>
-                      </sizepolicy>
-                     </property>
-                     <property name="minimumSize">
-                      <size>
-                       <width>30</width>
-                       <height>0</height>
-                      </size>
-                     </property>
-                     <property name="font">
-                      <font>
-                       <pointsize>8</pointsize>
-                      </font>
-                     </property>
-                     <property name="separator">
-                      <string>,</string>
-                     </property>
-                     <property name="defaultText">
-                      <string/>
-                     </property>
-                     <property name="checkedItems">
-                      <stringlist/>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
-                    <spacer name="horizontalSpacer_7">
-                     <property name="orientation">
-                      <enum>Qt::Horizontal</enum>
-                     </property>
-                     <property name="sizeHint" stdset="0">
-                      <size>
-                       <width>40</width>
-                       <height>20</height>
-                      </size>
-                     </property>
-                    </spacer>
-                   </item>
-                   <item>
-                    <widget class="QCheckBox" name="hideUnavailableResults">
-                     <property name="text">
-                      <string>Search only through available providers</string>
-                     </property>
-                    </widget>
-                   </item>
-                  </layout>
                  </item>
                 </layout>
                </widget>
@@ -2521,7 +2524,7 @@
                  <rect>
                   <x>0</x>
                   <y>0</y>
-                  <width>177</width>
+                  <width>98</width>
                   <height>220</height>
                  </rect>
                 </property>
@@ -2888,11 +2891,6 @@
   </action>
  </widget>
  <customwidgets>
-  <customwidget>
-   <class>QgsCheckableComboBox</class>
-   <extends>QComboBox</extends>
-   <header>qgscheckablecombobox.h</header>
-  </customwidget>
   <customwidget>
    <class>QgsCollapsibleGroupBox</class>
    <extends>QGroupBox</extends>
