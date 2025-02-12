@@ -988,7 +988,6 @@ class Mapflow(QObject):
         product_types = self.dlg.productCheckableCombo.checkedItemsData()
         if len(product_types) == 0:
             product_types = [ProductType.mosaic.upper(), ProductType.image.upper()]
-        print (product_types)
 
         if isinstance(provider, MaxarProvider):
             self.get_maxar_metadata(aoi=aoi,
@@ -1058,7 +1057,7 @@ class Mapflow(QObject):
                                         "max_cloud_cover": max_cloud_cover},
                        error_handler=self.request_mapflow_metadata_error_handler,
                        use_default_error_handler=False,
-                       timeout=30)
+                       timeout=60)
 
     def request_mapflow_metadata_error_handler(self, response: QNetworkReply):
         self.report_http_error(response,
@@ -3352,6 +3351,8 @@ class Mapflow(QObject):
                         zoom_error = self.tr("Selected search results must have the same spatial resolution")
                     elif len(unique_zooms) == 1: # get unique zoom as a parameter
                         zoom = str(int(list(unique_zooms)[0]))
+            self.dlg.enable_zoom_selector(False, zoom)
+        elif isinstance(provider, MyImageryProvider):
             self.dlg.enable_zoom_selector(False, zoom)
         else:
             if self.zoom_selector:
