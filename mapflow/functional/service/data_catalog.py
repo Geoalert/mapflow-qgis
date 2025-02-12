@@ -107,6 +107,8 @@ class DataCatalogService(QObject):
         dialog.deleteLater()
 
     def update_mosaic_callback(self, response: QNetworkReply, mosaic: MosaicReturnSchema):
+        self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.NoSelection)
+        self.dlg.mosaicTable.clearSelection()
         self.get_mosaic(mosaic.id)
 
     def delete_mosaics(self, 
@@ -184,6 +186,9 @@ class DataCatalogService(QObject):
     # Images CRUD
     def upload_images_to_mosaic(self):
         mosaic = self.selected_mosaic()
+        if not mosaic:
+            self.view.alert(self.tr("Please, select existing mosaic"))
+            return
         image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), self.tr("Choose image to upload"), filter='(TIF files *.tif; *.tiff)')[0]
         if image_paths:
             self.upload_images(response=None, 
@@ -217,6 +222,7 @@ class DataCatalogService(QObject):
             if failed:
                 self.api.upload_image_error_handler(response=response, mosaic_name=mosaic_name, image_paths=failed)
             self.get_mosaic(mosaic_id)
+            self.dlg.mosaicTable.clearSelection()
             self.dlg.raise_()
             self.mosaicsUpdated.emit()
         else:
@@ -289,6 +295,7 @@ class DataCatalogService(QObject):
             if failed:
                 self.api.delete_image_error_handler(image_paths=failed)
             mosaic_id = self.selected_mosaic().id
+            self.dlg.mosaicTable.clearSelection()
             self.get_mosaic(mosaic_id)
             self.dlg.imageTable.clearSelection()
         else:
