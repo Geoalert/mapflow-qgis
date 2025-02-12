@@ -107,6 +107,8 @@ class DataCatalogService(QObject):
         dialog.deleteLater()
 
     def update_mosaic_callback(self, response: QNetworkReply, mosaic: MosaicReturnSchema):
+        self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.NoSelection)
+        self.dlg.mosaicTable.clearSelection()
         self.get_mosaic(mosaic.id)
 
     def delete_mosaics(self, 
