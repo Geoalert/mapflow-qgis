@@ -245,7 +245,7 @@ class DataCatalogService(QObject):
                 return
             # Check if user has enough stogage
             image_size=Path(image_to_upload).stat().st_size
-            if image_size > self.free_storage:#self.free_storage and image_size > self.free_storage:
+            if self.free_storage and image_size > self.free_storage:
                 message = (self.tr("<b>Not enough storage space. </b>"
                                    "You have {free_storage} left, but '{name}' is "
                                    "{image_size}").format(free_storage=helpers.get_readable_size(self.free_storage),

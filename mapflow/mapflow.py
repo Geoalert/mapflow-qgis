@@ -988,7 +988,6 @@ class Mapflow(QObject):
         product_types = self.dlg.productCheckableCombo.checkedItemsData()
         if len(product_types) == 0:
             product_types = [ProductType.mosaic.upper(), ProductType.image.upper()]
-        print (product_types)
 
         if isinstance(provider, MaxarProvider):
             self.get_maxar_metadata(aoi=aoi,
