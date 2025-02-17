@@ -2070,6 +2070,7 @@ class Mapflow(QObject):
             return
         self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
         try:
+            self.dlg.processingName.clear()
             self.post_processing(processing_params)
         except Exception as e:
             self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
@@ -2104,20 +2105,17 @@ class Mapflow(QObject):
         self.http.post(
             url=f'{self.server}/processings',
             callback=self.post_processing_callback,
-            callback_kwargs={'processing_name': request_body.name},
             error_handler=self.post_processing_error_handler,
             use_default_error_handler=False,
             body=request_body.as_json().encode()
         )
 
-    def post_processing_callback(self, _: QNetworkReply, processing_name: str) -> None:
+    def post_processing_callback(self, _: QNetworkReply) -> None:
         """Display a success message and clear the processing name field."""
         self.alert(
             self.tr("Success! We'll notify you when the processing has finished."),
             QMessageBox.Information
         )
-        if self.dlg.processingName.text() == processing_name:
-            self.dlg.processingName.clear()
         self.processing_fetch_timer.start()  # start monitoring
         # Do an extra fetch immediately
         self.http.get(
