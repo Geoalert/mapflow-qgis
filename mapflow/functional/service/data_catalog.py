@@ -189,7 +189,8 @@ class DataCatalogService(QObject):
         if not mosaic:
             self.view.alert(self.tr("Please, select existing mosaic"))
             return
-        image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), self.tr("Choose image to upload"), filter='(TIF files *.tif; *.tiff)')[0]
+        image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), self.tr("Choose image to upload"), 
+                                                   filter='TIF files (*.tif *.tiff)')[0]
         if image_paths:
             self.upload_images(response=None, 
                                mosaic_id=mosaic.id, mosaic_name=mosaic.name, 
