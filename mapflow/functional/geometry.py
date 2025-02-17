@@ -31,10 +31,15 @@ def clip_aoi_to_image_extent(aoi_geometry: QgsGeometry,
             'native:fixgeometries', 
             {'INPUT':image_extent_layer, 'METHOD':1, 'OUTPUT':'memory:'}
         )['OUTPUT']
-        # And then use fixed layer as overlay
+        # And aoi as well
+        fixed_aoi_layer = qgis_processing.run(
+            'native:fixgeometries', 
+            {'INPUT':aoi_layer, 'METHOD':1, 'OUTPUT':'memory:'}
+        )['OUTPUT']
+        # And then use fixed layers for intersection
         intersection = qgis_processing.run(
             'qgis:intersection',
-            {'INPUT': aoi_layer, 'OVERLAY': fixed_image_layer, 'OUTPUT': 'memory:'}
+            {'INPUT': fixed_aoi_layer, 'OVERLAY': fixed_image_layer, 'OUTPUT': 'memory:'}
         )['OUTPUT']
     return intersection.getFeatures()
 
@@ -63,7 +68,13 @@ def clip_aoi_to_catalog_extent(catalog_aoi: QgsGeometry,
             'native:fixgeometries', 
             {'INPUT':aoi_layer, 'METHOD':1, 'OUTPUT':'memory:'}
         )['OUTPUT']
+        # And catalog as well
+        fixed_catalog_layer = qgis_processing.run(
+            'native:fixgeometries', 
+            {'INPUT':catalog_layer, 'METHOD':1, 'OUTPUT':'memory:'}
+        )['OUTPUT']
+        # And then use fixed layers for intersection
         intersection = qgis_processing.run('qgis:intersection',
-                                           {'INPUT': fixed_aoi_layer, 'OVERLAY': catalog_layer, 'OUTPUT': 'memory:'}
+                                           {'INPUT': fixed_aoi_layer, 'OVERLAY': fixed_catalog_layer, 'OUTPUT': 'memory:'}
                                           )['OUTPUT']
     return intersection.getFeatures()
