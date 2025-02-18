@@ -158,7 +158,7 @@ def generate_plugin_header(plugin_name: str,
             header = header + f" | Project: {project_name}"
         if user_role and project_owner:
             if user_role != UserRole.owner:
-                header = header + f" ({user_role}, owner: {project_owner})"
+                header = header + f" ({user_role.value}, owner: {project_owner})"
         return header
 
 
