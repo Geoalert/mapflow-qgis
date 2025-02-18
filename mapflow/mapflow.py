@@ -698,7 +698,7 @@ class Mapflow(QObject):
             reason = self.tr("You can't remove or modify default project")
             project_editable = False
         elif not self.user_role.can_delete_rename_project:
-            reason = self.tr('Not enough rights to delete or update shared project ({})').format(self.user_role)
+            reason = self.tr('Not enough rights to delete or update shared project ({})').format(self.user_role.value)
         else:
             reason = ""
         self.dlg.enable_project_change(reason, project_editable and self.user_role.can_delete_rename_project)
@@ -1612,7 +1612,7 @@ class Mapflow(QObject):
     def get_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
         if not layer or layer.featureCount() == 0:
             if not self.user_role.can_start_processing:
-                reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.user_role)
+                reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.user_role.value)
             else:
                 reason = self.tr('Set AOI to start processing')
             self.dlg.disable_processing_start(reason, clear_area=True)
@@ -1637,7 +1637,7 @@ class Mapflow(QObject):
             return aoi
         else:  # self.max_aois_per_processing < number of polygons (as features and as parts of multipolygons):
             if not self.user_role.can_start_processing:
-                reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.user_role)
+                reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.user_role.value)
             else:
                 reason = self.tr('AOI must contain not more than {} polygons').format(self.max_aois_per_processing)
             self.dlg.disable_processing_start(reason, clear_area=True)
@@ -1792,7 +1792,7 @@ class Mapflow(QObject):
             # Here the button must already be disabled, and the warning text set
             if self.dlg.startProcessing.isEnabled():
                 if not self.user_role.can_start_processing:
-                    reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.user_role)
+                    reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.user_role.value)
                 else:
                     reason = self.tr("Set AOI to start processing")
                 self.dlg.disable_processing_start(reason, clear_area=False)
@@ -1837,7 +1837,7 @@ class Mapflow(QObject):
         if response_text is not None:
             message = api_message_parser(response_text)
             if not self.user_role.can_start_processing:
-                reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.user_role)
+                reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.user_role.value)
             else:
                 reason = self.tr('Processing cost is not available:\n{message}').format(message=message)
             self.dlg.disable_processing_start(reason, clear_area=False)
@@ -2645,7 +2645,7 @@ class Mapflow(QObject):
     def enable_rating_submit(self, status_ok: bool) -> None:
         rating_selected = 5 >= self.dlg.ratingComboBox.currentIndex() > 0
         if not self.user_role.can_delete_rename_review_processing:
-            reason = self.tr('Not enough rights to rate processing in a shared project ({})').format(self.user_role)
+            reason = self.tr('Not enough rights to rate processing in a shared project ({})').format(self.user_role.value)
         elif not status_ok:
             if not self.selected_processing():
                 reason = self.tr('Please select processing')
@@ -3043,7 +3043,7 @@ class Mapflow(QObject):
                 self.report_http_error(response,
                                        self.tr("Not enough rights for this action\n"+
                                                 "in a shared project '{project_name}' ({user_role})").format(project_name=self.current_project.name, 
-                                                                                                            user_role=self.user_role),
+                                                                                                            user_role=self.user_role.value),
                                        error_message_parser=parser)
             else:
                 self.report_http_error(response,
