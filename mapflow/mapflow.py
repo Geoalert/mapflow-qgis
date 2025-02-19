@@ -1053,11 +1053,11 @@ class Mapflow(QObject):
                        timeout=60)
 
     def request_mapflow_metadata_error_handler(self, response: QNetworkReply):
-        self.report_http_error(response,
-                               self.tr("We couldn't get metadata from the Mapflow Imagery Catalog, "
-                                       "error {error}").format(
-                                   error=response.attribute(QNetworkRequest.HttpStatusCodeAttribute)),
-                               error_message_parser=api_message_parser)
+        title = self.tr("We couldn't get metadata from the Mapflow Imagery Catalog")
+        error = response.attribute(QNetworkRequest.HttpStatusCodeAttribute)
+        if error is not None:
+            title += self.tr(". Error {error}").format(error=error)
+        self.report_http_error(response, title, error_message_parser=api_message_parser)
 
     def display_metadata_geojson_layer(self, filename, layer_name):
         try:
@@ -1950,6 +1950,8 @@ class Mapflow(QObject):
             if len(local_image_indices) != 0:
                 if isinstance(provider, (MaxarProvider, ImagerySearchProvider)):
                     aoi = self.crop_aoi_with_maxar_image_footprint(selected_aoi, local_image_indices)
+                    if not aoi:
+                        raise AoiNotIntersectsImage()
                 elif isinstance(provider, SentinelProvider):
                     # todo: crop sentinel aoi with image footprint?
                     aoi = selected_aoi
@@ -3341,7 +3343,7 @@ class Mapflow(QObject):
                     unique_zooms = set(filter(lambda x: (x is not None and x != QVariant()), zooms))
                     # Forbid multiselection for results with different zooms
                     if len(unique_zooms) > 1:
-                        zoom_error = self.tr("Selected search results must have the same spatial resolution")
+                        zoom_error = self.tr("Selected search results must have the same zoom level")
                     elif len(unique_zooms) == 1: # get unique zoom as a parameter
                         zoom = str(int(list(unique_zooms)[0]))
             self.dlg.enable_zoom_selector(False, zoom)
