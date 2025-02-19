@@ -21,21 +21,13 @@ def clip_aoi_to_image_extent(aoi_geometry: QgsGeometry,
     image_extent_layer.updateExtents()
     try:
         # Find the intersection
-        intersection = qgis_processing.run(
-            'qgis:intersection',
-            {'INPUT': aoi_layer, 'OVERLAY': image_extent_layer, 'OUTPUT': 'memory:'}
-        )['OUTPUT']
+        intersection = intersect_geoms(aoi_layer, image_extent_layer)
     except:
-        # If intersection function fails (happens sometimes for mosaics), fix geometries beforehand
-        fixed_image_layer = qgis_processing.run(
-            'native:fixgeometries', 
-            {'INPUT':image_extent_layer, 'METHOD':1, 'OUTPUT':'memory:'}
-        )['OUTPUT']
-        # And then use fixed layer as overlay
-        intersection = qgis_processing.run(
-            'qgis:intersection',
-            {'INPUT': aoi_layer, 'OVERLAY': fixed_image_layer, 'OUTPUT': 'memory:'}
-        )['OUTPUT']
+        # If intersection function fails, fix mosaic geometries beforehand
+        fixed_image_layer = fix_geoms(image_extent_layer)
+        fixed_aoi_layer = fix_geoms(aoi_layer)
+        # And then use fixed layers for intersection
+        intersection = intersect_geoms(fixed_aoi_layer, fixed_image_layer)
     return intersection.getFeatures()
 
 def clip_aoi_to_catalog_extent(catalog_aoi: QgsGeometry,
@@ -52,8 +44,27 @@ def clip_aoi_to_catalog_extent(catalog_aoi: QgsGeometry,
     catalog_feature.setGeometry(catalog_aoi)
     catalog_layer.dataProvider().addFeatures([catalog_feature])
     catalog_layer.updateExtents()
-    # Find the intersection
-    intersection = qgis_processing.run('qgis:intersection',
-                                      {'INPUT': aoi_layer, 'OVERLAY': catalog_layer, 'OUTPUT': 'memory:'}
-                                      )['OUTPUT']
+    try:
+        # Find the intersection
+        intersection = intersect_geoms(aoi_layer, catalog_layer)
+    except:
+        # If intersection function fails, fix geometries beforehand
+        fixed_aoi_layer = fix_geoms(aoi_layer)
+        fixed_catalog_layer = fix_geoms(catalog_layer)
+        # And then use fixed layers for intersection
+        intersection = intersect_geoms(fixed_aoi_layer, fixed_catalog_layer)
     return intersection.getFeatures()
+
+def fix_geoms(layer: QgsVectorLayer) -> QgsVectorLayer:
+    fixed_layer = qgis_processing.run(
+        'native:fixgeometries', 
+        {'INPUT':layer, 'METHOD':1, 'OUTPUT':'memory:'}
+    )['OUTPUT']
+    return fixed_layer
+
+def intersect_geoms(input_layer: QgsVectorLayer, 
+                    overlay_layer: QgsVectorLayer) -> QgsVectorLayer:
+    intersection = qgis_processing.run('qgis:intersection',
+                                       {'INPUT': input_layer, 'OVERLAY': overlay_layer, 'OUTPUT': 'memory:'}
+                                      )['OUTPUT']
+    return intersection
