@@ -5,7 +5,8 @@ from typing import Iterable, Optional, List
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette
-from PyQt5.QtWidgets import QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton, QAction, QMenu, QAbstractItemView
+from PyQt5.QtWidgets import (QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton, 
+                             QAction, QMenu, QAbstractItemView, QHeaderView)
 from qgis.core import QgsMapLayerProxyModel, QgsSettings
 
 from . import icons
@@ -74,6 +75,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # table.setHorizontalHeaderLabels(labels)
         self.set_column_visibility()
         self.connect_column_checkboxes()
+        self.connect_search_column_checkboxes()
         # connect two spinboxes
         self.spin1_connection = self.maxZoom.valueChanged.connect(self.switch_maxzoom_2)
         self.spin2_connection = self.maxZoom2.valueChanged.connect(self.switch_maxzoom_1)
@@ -441,6 +443,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                 self.metadataTable.setItem(row, col, table_item)
         # Turn sorting on again
         self.metadataTable.setSortingEnabled(True)
+        self.metadataTable.resizeColumnsToContents()
         self.metadataTableFilled.emit()
 
     def setup_project_combo(self, projects: dict[str, MapflowProject], current_project_id: Optional[str] = None):

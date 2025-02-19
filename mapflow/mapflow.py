@@ -13,8 +13,7 @@ from PyQt5.QtCore import (
 from PyQt5.QtGui import QColor
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtWidgets import (
-    QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAction,
-    QAbstractItemView, QProgressBar, QMenu, QWidget
+    QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAbstractItemView, QMenu, QAction, QWidget
 )
 from PyQt5.QtXml import QDomDocument
 from osgeo import gdal
