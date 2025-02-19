@@ -131,9 +131,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.imageId.setReadOnly(True)
         self.metadataTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.enable_search_pages(False)
-        self.productCheckableCombo.addItemWithCheckState(self.tr("Mosaic"), Qt.CheckState.Checked, ProductType.mosaic.upper())
-        self.productCheckableCombo.addItemWithCheckState(self.tr("Image"), Qt.CheckState.Checked, ProductType.image.upper())
-        self.connect_search_column_checkboxes()
 
     # ===== Settings management ===== #
     def save_view_results_mode(self):

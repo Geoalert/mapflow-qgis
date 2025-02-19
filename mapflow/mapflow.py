@@ -964,12 +964,7 @@ class Mapflow(QObject):
             more_button.deleteLater()
         provider = self.providers[self.dlg.providerIndex()]
         # Check if the AOI is defined
-        if self.dlg.metadataUseCanvasExtent.isChecked():
-            aoi = helpers.to_wgs84(
-                QgsGeometry.fromRect(self.iface.mapCanvas().extent()),
-                self.project.crs()
-            )
-        elif self.aoi:
+        if self.aoi:
             aoi = self.aoi
         else:
             self.alert(self.tr('Please, select a valid area of interest'))
@@ -985,9 +980,7 @@ class Mapflow(QObject):
         min_intersection = self.dlg.minIntersection.value()
 
         hide_unavailable = self.dlg.hideUnavailableResults.isChecked()
-        product_types = self.dlg.productCheckableCombo.checkedItemsData()
-        if len(product_types) == 0:
-            product_types = [ProductType.mosaic.upper(), ProductType.image.upper()]
+        product_types = self.selected_search_product_types()
 
         if isinstance(provider, MaxarProvider):
             self.get_maxar_metadata(aoi=aoi,
@@ -3382,6 +3375,16 @@ class Mapflow(QObject):
 
     def show_search_previous_page(self):
         self.get_metadata(offset=self.search_page_offset - self.search_page_limit)
+    
+    def selected_search_product_types(self):
+        product_types = []
+        if self.dlg.searchMosaicCheckBox.isChecked():
+            product_types.append(ProductType.mosaic.upper())
+        if self.dlg.searchImageCheckBox.isChecked():
+            product_types.append(ProductType.image.upper())
+        if len(product_types) == 0:
+            product_types = [ProductType.mosaic.upper(), ProductType.image.upper()]
+        return product_types
 
     @property
     def basemap_providers(self):
