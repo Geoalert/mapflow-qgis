@@ -2064,6 +2064,7 @@ class Mapflow(QObject):
             return
         self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
         try:
+            self.dlg.startProcessing.setEnabled(False)
             self.post_processing(processing_params)
         except Exception as e:
             self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
@@ -2118,6 +2119,7 @@ class Mapflow(QObject):
             url=f'{self.server}/projects/{self.project_id}/processings',
             callback=self.get_processings_callback
         )
+        self.dlg.startProcessing.setEnabled(True)
 
     def post_processing_error_handler(self, response: QNetworkReply) -> None:
         """Error handler for processing creation requests.
@@ -2143,6 +2145,7 @@ class Mapflow(QObject):
                                text= error_summary,
                                title=self.tr('Processing creation failed'),
                                email_body=email_body).show()
+        self.dlg.startProcessing.setEnabled(True)
 
     def update_processing_limit(self) -> None:
         """Set the user's processing limit as reported by Mapflow."""
