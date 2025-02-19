@@ -2253,6 +2253,8 @@ class Mapflow(QObject):
         footprint = self.metadata_footprint(feature=feature)
         url = feature.attribute('previewUrl')
         preview_type = feature.attribute('previewType')
+        self.iface.mapCanvas().zoomToSelected()
+        self.iface.mapCanvas().refresh()
         if preview_type == PreviewType.png:
             self.preview_png(url, footprint, image_id)
         else:
