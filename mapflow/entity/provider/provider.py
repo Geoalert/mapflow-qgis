@@ -3,6 +3,7 @@ import os
 from abc import ABC
 from enum import Enum
 from typing import Iterable, Union, Optional
+from pathlib import Path
 
 
 class staticproperty(staticmethod):
@@ -95,9 +96,9 @@ class ProviderInterface:
         """
         if not self.metadata_layer_name or not data:
             return
-        with open(os.path.join(folder, self.metadata_layer_name), 'w') as saved_results:
+        with open(Path(folder, self.metadata_layer_name), 'w') as saved_results:
             saved_results.write(json.dumps(data))
-        return os.path.join(folder, self.metadata_layer_name)
+        return str(Path(folder, self.metadata_layer_name))
 
     def load_search_layer(self, folder) -> Optional[dict]:
         """

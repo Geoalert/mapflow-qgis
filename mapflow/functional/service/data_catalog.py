@@ -189,7 +189,8 @@ class DataCatalogService(QObject):
         if not mosaic:
             self.view.alert(self.tr("Please, select existing mosaic"))
             return
-        image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), self.tr("Choose image to upload"), filter='(TIF files *.tif; *.tiff)')[0]
+        image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), self.tr("Choose image to upload"), 
+                                                   filter='TIF files (*.tif *.tiff)')[0]
         if image_paths:
             self.upload_images(response=None, 
                                mosaic_id=mosaic.id, mosaic_name=mosaic.name, 
@@ -245,7 +246,7 @@ class DataCatalogService(QObject):
                 return
             # Check if user has enough stogage
             image_size=Path(image_to_upload).stat().st_size
-            if image_size > self.free_storage:#self.free_storage and image_size > self.free_storage:
+            if self.free_storage and image_size > self.free_storage:
                 message = (self.tr("<b>Not enough storage space. </b>"
                                    "You have {free_storage} left, but '{name}' is "
                                    "{image_size}").format(free_storage=helpers.get_readable_size(self.free_storage),
