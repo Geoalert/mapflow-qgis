@@ -1092,7 +1092,9 @@ class Mapflow(QObject):
 
         # Save the current search results to load later
         provider = self.imagery_search_provider
-        filename = provider.save_search_layer(self.temp_dir_name, geoms)
+        if not self.check_if_output_directory_is_selected():
+            return
+        filename = provider.save_search_layer(self.dlg.outputDirectory.text(), geoms)
         self.display_metadata_geojson_layer(filename, f"{provider.name} metadata")
         self.dlg.fill_metadata_table(geoms)
 
@@ -2188,6 +2190,7 @@ class Mapflow(QObject):
             self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex())
             self.setup_providers(response_data.get("dataProviders") or [])
             self.on_provider_change()
+            self.setup_search_tempdir()
 
     def setup_providers(self, providers_data):
         self.default_providers = ProvidersList([ImagerySearchProvider(proxy=self.server)] +
@@ -3392,6 +3395,16 @@ class Mapflow(QObject):
         if len(product_types) == 0:
             product_types = [ProductType.mosaic.upper(), ProductType.image.upper()]
         return product_types
+    
+    def setup_search_tempdir(self):
+        if not self.dlg.outputDirectory.text():
+            return
+        Path(self.dlg.outputDirectory.text(), "Temp").mkdir(parents=True, exist_ok=True)
+        for f in Path(self.dlg.outputDirectory.text(), "Temp").iterdir():
+            try:
+                f.unlink()
+            except:
+                pass
 
     @property
     def basemap_providers(self):

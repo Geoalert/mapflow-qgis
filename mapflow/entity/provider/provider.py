@@ -96,9 +96,10 @@ class ProviderInterface:
         """
         if not self.metadata_layer_name or not data:
             return
-        with open(Path(folder, self.metadata_layer_name), 'w') as saved_results:
+        outpath = Path(folder, "Temp")
+        with open(Path(outpath, self.metadata_layer_name), 'w') as saved_results:
             saved_results.write(json.dumps(data))
-        return str(Path(folder, self.metadata_layer_name))
+        return str(Path(outpath, self.metadata_layer_name))
 
     def load_search_layer(self, folder) -> Optional[dict]:
         """
