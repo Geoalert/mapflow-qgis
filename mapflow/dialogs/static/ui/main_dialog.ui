@@ -2279,6 +2279,36 @@
              <property name="topMargin">
               <number>0</number>
              </property>
+             <item row="0" column="1">
+              <spacer name="horizontalSpacer_9">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeType">
+                <enum>QSizePolicy::Maximum</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>10</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item row="0" column="2">
+              <widget class="QLabel" name="label_8">
+               <property name="text">
+                <string>Configure search table:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="0">
+              <widget class="QLabel" name="label_3">
+               <property name="text">
+                <string>Configure processings table:</string>
+               </property>
+              </widget>
+             </item>
              <item row="1" column="0">
               <widget class="QScrollArea" name="scrollArea">
                <property name="sizePolicy">
@@ -2335,115 +2365,6 @@
                   <height>150</height>
                  </size>
                 </property>
-                <widget class="QCheckBox" name="showIdColumn">
-                 <property name="geometry">
-                  <rect>
-                   <x>10</x>
-                   <y>170</y>
-                   <width>141</width>
-                   <height>20</height>
-                  </rect>
-                 </property>
-                 <property name="text">
-                  <string>Id</string>
-                 </property>
-                </widget>
-                <widget class="QCheckBox" name="showModelColumn">
-                 <property name="geometry">
-                  <rect>
-                   <x>10</x>
-                   <y>23</y>
-                   <width>141</width>
-                   <height>20</height>
-                  </rect>
-                 </property>
-                 <property name="text">
-                  <string>Model</string>
-                 </property>
-                 <property name="checked">
-                  <bool>true</bool>
-                 </property>
-                </widget>
-                <widget class="QCheckBox" name="showStatusColumn">
-                 <property name="geometry">
-                  <rect>
-                   <x>10</x>
-                   <y>44</y>
-                   <width>141</width>
-                   <height>20</height>
-                  </rect>
-                 </property>
-                 <property name="text">
-                  <string>Status</string>
-                 </property>
-                 <property name="checked">
-                  <bool>true</bool>
-                 </property>
-                </widget>
-                <widget class="QCheckBox" name="showAreaColumn">
-                 <property name="geometry">
-                  <rect>
-                   <x>10</x>
-                   <y>86</y>
-                   <width>141</width>
-                   <height>20</height>
-                  </rect>
-                 </property>
-                 <property name="text">
-                  <string>Area</string>
-                 </property>
-                 <property name="checked">
-                  <bool>true</bool>
-                 </property>
-                </widget>
-                <widget class="QCheckBox" name="showProgressColumn">
-                 <property name="geometry">
-                  <rect>
-                   <x>10</x>
-                   <y>65</y>
-                   <width>141</width>
-                   <height>20</height>
-                  </rect>
-                 </property>
-                 <property name="text">
-                  <string>Progress</string>
-                 </property>
-                 <property name="checked">
-                  <bool>true</bool>
-                 </property>
-                </widget>
-                <widget class="QCheckBox" name="showCostColumn">
-                 <property name="geometry">
-                  <rect>
-                   <x>10</x>
-                   <y>107</y>
-                   <width>141</width>
-                   <height>20</height>
-                  </rect>
-                 </property>
-                 <property name="text">
-                  <string>Cost</string>
-                 </property>
-                 <property name="checked">
-                  <bool>false</bool>
-                 </property>
-                </widget>
-                <widget class="QCheckBox" name="showCreatedColumn">
-                 <property name="geometry">
-                  <rect>
-                   <x>10</x>
-                   <y>128</y>
-                   <width>141</width>
-                   <height>20</height>
-                  </rect>
-                 </property>
-                 <property name="text">
-                  <string>Created</string>
-                 </property>
-                 <property name="checked">
-                  <bool>true</bool>
-                 </property>
-                </widget>
                 <widget class="QCheckBox" name="showNameColumn">
                  <property name="enabled">
                   <bool>false</bool>
@@ -2452,15 +2373,96 @@
                   <rect>
                    <x>10</x>
                    <y>2</y>
-                   <width>141</width>
+                   <width>81</width>
                    <height>20</height>
                   </rect>
                  </property>
                  <property name="text">
                   <string>Name</string>
                  </property>
-                 <property name="checked">
+                 <property name="checkable">
                   <bool>true</bool>
+                 </property>
+                 <property name="checked">
+                  <bool>false</bool>
+                 </property>
+                </widget>
+                <widget class="QCheckBox" name="showModelColumn">
+                 <property name="geometry">
+                  <rect>
+                   <x>10</x>
+                   <y>23</y>
+                   <width>81</width>
+                   <height>20</height>
+                  </rect>
+                 </property>
+                 <property name="text">
+                  <string>Model</string>
+                 </property>
+                </widget>
+                <widget class="QCheckBox" name="showStatusColumn">
+                 <property name="geometry">
+                  <rect>
+                   <x>10</x>
+                   <y>44</y>
+                   <width>81</width>
+                   <height>20</height>
+                  </rect>
+                 </property>
+                 <property name="text">
+                  <string>Status</string>
+                 </property>
+                </widget>
+                <widget class="QCheckBox" name="showProgressColumn">
+                 <property name="geometry">
+                  <rect>
+                   <x>10</x>
+                   <y>65</y>
+                   <width>81</width>
+                   <height>20</height>
+                  </rect>
+                 </property>
+                 <property name="text">
+                  <string>Progress</string>
+                 </property>
+                </widget>
+                <widget class="QCheckBox" name="showAreaColumn">
+                 <property name="geometry">
+                  <rect>
+                   <x>10</x>
+                   <y>86</y>
+                   <width>81</width>
+                   <height>20</height>
+                  </rect>
+                 </property>
+                 <property name="text">
+                  <string>Area</string>
+                 </property>
+                </widget>
+                <widget class="QCheckBox" name="showCostColumn">
+                 <property name="geometry">
+                  <rect>
+                   <x>10</x>
+                   <y>107</y>
+                   <width>81</width>
+                   <height>20</height>
+                  </rect>
+                 </property>
+                 <property name="text">
+                  <string>Cost</string>
+                 </property>
+                </widget>
+                <widget class="QCheckBox" name="showCreatedColumn">
+                 <property name="geometry">
+                  <rect>
+                   <x>10</x>
+                   <y>128</y>
+                   <width>81</width>
+                   <height>20</height>
+                  </rect>
+                 </property>
+                 <property name="text">
+                  <string>Created</string>
                  </property>
                 </widget>
                 <widget class="QCheckBox" name="showReviewColumn">
@@ -2468,7 +2470,7 @@
                   <rect>
                    <x>10</x>
                    <y>149</y>
-                   <width>141</width>
+                   <width>81</width>
                    <height>20</height>
                   </rect>
                  </property>
@@ -2476,22 +2478,34 @@
                   <string>Review</string>
                  </property>
                 </widget>
+                <widget class="QCheckBox" name="showIdColumn">
+                 <property name="geometry">
+                  <rect>
+                   <x>10</x>
+                   <y>170</y>
+                   <width>81</width>
+                   <height>20</height>
+                  </rect>
+                 </property>
+                 <property name="text">
+                  <string>ID</string>
+                 </property>
+                </widget>
                </widget>
               </widget>
              </item>
-             <item row="0" column="2">
-              <widget class="QLabel" name="label_8">
-               <property name="text">
-                <string>Configure search table:</string>
+             <item row="0" column="3">
+              <spacer name="horizontalSpacer_10">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
                </property>
-              </widget>
-             </item>
-             <item row="0" column="0">
-              <widget class="QLabel" name="label_3">
-               <property name="text">
-                <string>Configure processings table:</string>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
                </property>
-              </widget>
+              </spacer>
              </item>
              <item row="1" column="2">
               <widget class="QScrollArea" name="scrollArea_2">
@@ -2553,7 +2567,7 @@
                   <string>Product Type</string>
                  </property>
                  <property name="checked">
-                  <bool>true</bool>
+                  <bool>false</bool>
                  </property>
                 </widget>
                 <widget class="QCheckBox" name="showProviderNameColumn">
@@ -2569,7 +2583,7 @@
                   <string>Provider Name</string>
                  </property>
                  <property name="checked">
-                  <bool>true</bool>
+                  <bool>false</bool>
                  </property>
                 </widget>
                 <widget class="QCheckBox" name="showSensorColumn">
@@ -2585,7 +2599,7 @@
                   <string>Sensor</string>
                  </property>
                  <property name="checked">
-                  <bool>true</bool>
+                  <bool>false</bool>
                  </property>
                 </widget>
                 <widget class="QCheckBox" name="showBandsColumn">
@@ -2601,7 +2615,7 @@
                   <string>Band Order</string>
                  </property>
                  <property name="checked">
-                  <bool>true</bool>
+                  <bool>false</bool>
                  </property>
                 </widget>
                 <widget class="QCheckBox" name="showCloudsColumn">
@@ -2617,7 +2631,7 @@
                   <string>Cloud %</string>
                  </property>
                  <property name="checked">
-                  <bool>true</bool>
+                  <bool>false</bool>
                  </property>
                 </widget>
                 <widget class="QCheckBox" name="showOffNadirColumn">
@@ -2633,7 +2647,7 @@
                   <string>° Off Nadir</string>
                  </property>
                  <property name="checked">
-                  <bool>true</bool>
+                  <bool>false</bool>
                  </property>
                 </widget>
                 <widget class="QCheckBox" name="showDateTimeColumn">
@@ -2649,7 +2663,7 @@
                   <string>Date and Time</string>
                  </property>
                  <property name="checked">
-                  <bool>true</bool>
+                  <bool>false</bool>
                  </property>
                 </widget>
                 <widget class="QCheckBox" name="showZoomColumn">
@@ -2693,35 +2707,6 @@
                 </widget>
                </widget>
               </widget>
-             </item>
-             <item row="0" column="3">
-              <spacer name="horizontalSpacer_10">
-               <property name="orientation">
-                <enum>Qt::Horizontal</enum>
-               </property>
-               <property name="sizeHint" stdset="0">
-                <size>
-                 <width>40</width>
-                 <height>20</height>
-                </size>
-               </property>
-              </spacer>
-             </item>
-             <item row="0" column="1">
-              <spacer name="horizontalSpacer_9">
-               <property name="orientation">
-                <enum>Qt::Horizontal</enum>
-               </property>
-               <property name="sizeType">
-                <enum>QSizePolicy::Maximum</enum>
-               </property>
-               <property name="sizeHint" stdset="0">
-                <size>
-                 <width>10</width>
-                 <height>20</height>
-                </size>
-               </property>
-              </spacer>
              </item>
             </layout>
            </item>
