@@ -157,14 +157,6 @@ class Mapflow(QObject):
         self.search_page_offset = 0
         self.search_page_limit = self.config.SEARCH_RESULTS_PAGE_LIMIT
 
-        # Clear previous temp dir, as it is not cleared automatically in exit from QGis
-        previous_temp_dir = self.settings.value("temp_dir", None)
-        if previous_temp_dir:
-            shutil.rmtree(previous_temp_dir, ignore_errors=True)
-        self.temp_dir = QTemporaryDir()
-        self.temp_dir_name = self.temp_dir.path()
-        self.settings.setValue("temp_dir", self.temp_dir_name)
-
         # Init dialogs
         self.use_oauth = (self.settings.value('use_oauth', 'false').lower() == 'true')
         self.plugin_icon = plugin_icon
@@ -188,6 +180,11 @@ class Mapflow(QObject):
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or self.config.DEFAULT_ZOOM))
+
+        # Setup temporary directory from setting or skip for now
+        self.temp_dir = None
+        self.temp_dir_name = None
+        self.setup_tempdir()
 
         # Initialize services
         self.result_loader = layer_utils.ResultsLoader(iface=self.iface,
@@ -900,6 +897,7 @@ class Mapflow(QObject):
         if path:
             self.dlg.outputDirectory.setText(path)
             self.settings.setValue('outputDir', path)
+            self.setup_tempdir()
             return path
 
     def check_if_output_directory_is_selected(self) -> bool:
@@ -1028,6 +1026,8 @@ class Mapflow(QObject):
                                  offset: Optional[int] = 0,
                                  hide_unavailable: Optional[bool] = False,
                                  product_types: Optional[List[ProductType]] = None):
+        if not self.check_if_output_directory_is_selected():
+            return # only when outputDirectory is empty AND user closed selection dialog
         self.metadata_aoi = aoi
         request_payload = ImageCatalogRequestSchema(aoi=json.loads(aoi.asJson()),
                                                     acquisitionDateFrom=from_,
@@ -3393,6 +3393,17 @@ class Mapflow(QObject):
         if len(product_types) == 0:
             product_types = [ProductType.mosaic.upper(), ProductType.image.upper()]
         return product_types
+
+    def setup_tempdir(self):
+        if not self.settings.value('outputDir'):
+            return # don't ask to specify tempdir at the plugin start
+        self.temp_dir = Path(self.settings.value('outputDir'), "Temp")
+        self.temp_dir_name = str(self.temp_dir)
+        try:
+            shutil.rmtree(self.temp_dir) # remove old tempdir
+        except:
+            pass
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
 
     @property
     def basemap_providers(self):

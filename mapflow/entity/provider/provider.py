@@ -105,7 +105,7 @@ class ProviderInterface:
         loads geometries as geojson dict
         Returns nothing if the provider does not support metadata search, or if the file does not exist
         """
-        if not self.metadata_layer_name:
+        if not self.metadata_layer_name or not folder:
             return None
         try:
             with open(os.path.join(folder, self.metadata_layer_name), 'r') as saved_results:
@@ -114,7 +114,7 @@ class ProviderInterface:
             return None
 
     def clear_saved_search(self, folder) -> None:
-        if not self.metadata_layer_name:
+        if not self.metadata_layer_name or not folder:
             return
         try:
             os.remove(os.path.join(folder, self.metadata_layer_name))
