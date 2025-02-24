@@ -561,7 +561,7 @@ class Mapflow(QObject):
         filter_ = (
             f"acquisitionDate >= '{from_}'"
             f" and acquisitionDate <= '{to}'"
-            f' and cloudCover is null or cloudCover <= {max_cloud_cover}'
+            f' and (cloudCover is null or cloudCover <= {max_cloud_cover})'
         )
         aoi = helpers.from_wgs84(self.metadata_aoi, crs)
         if not aoi:
