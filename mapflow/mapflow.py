@@ -1092,7 +1092,12 @@ class Mapflow(QObject):
 
         # Save the current search results to load later
         provider = self.imagery_search_provider
-        filename = provider.save_search_layer(self.temp_dir_name, geoms)
+        try:
+            filename = provider.save_search_layer(self.temp_dir_name, geoms)
+        except:
+            self.alert(self.tr("Results could not be loaded. Please, make sure you chose the right output folder in the Settings tab \
+                                and you have access rights to this folder"))
+            return
         self.display_metadata_geojson_layer(filename, f"{provider.name} metadata")
         self.dlg.fill_metadata_table(geoms)
 
