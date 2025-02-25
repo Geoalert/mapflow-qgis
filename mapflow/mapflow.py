@@ -1794,6 +1794,7 @@ class Mapflow(QObject):
         elif self.billing_type != BillingType.credits:
             self.dlg.startProcessing.setEnabled(True)
             self.dlg.processingProblemsLabel.clear()
+            request_body, error = self.create_processing_request(allow_empty_name=True)
         else:  # self.billing_type == BillingType.credits: f
             provider = self.providers[self.dlg.providerIndex()]
             request_body, error = self.create_processing_request(allow_empty_name=True)
