@@ -1095,7 +1095,7 @@ class Mapflow(QObject):
         try:
             filename = provider.save_search_layer(self.temp_dir_name, geoms)
         except:
-            self.alert(self.tr("Results could not be loaded. Please, make sure you chose the right output folder in the Settings tab \
+            self.alert(self.tr("<b>Results could not be loaded </b><br>Please, make sure you chose the right output folder in the Settings tab \
                                 and you have access rights to this folder"))
             return
         self.display_metadata_geojson_layer(filename, f"{provider.name} metadata")
