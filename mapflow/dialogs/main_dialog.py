@@ -214,42 +214,31 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.rasterSourceChanged.emit()
 
     def set_processing_visible_columns(self):
-        # Get checkboxes names
-        processing_columns = self.scrollArea.widget().findChildren(QWidget)
-        processing_columns_names = []
-        for widget in processing_columns:
-            processing_columns_names.append(widget.text())
-        # When no checked columns in settings, set default
-        if not self.settings.value("visibleProcessingColumns") or\
-            not list(set(self.settings.value("visibleProcessingColumns")) & set(processing_columns_names)):
-            self.settings.setValue("visibleProcessingColumns", processing_columns_names[:5] + [processing_columns_names[6]])
-        # Check columns from settings
-        for column in processing_columns:
-            if column.text() in self.settings.value("visibleProcessingColumns"):
+        # Set default checked columns
+        if not self.settings.value("visibleProcessingColumns"):
+            self.settings.setValue("visibleProcessingColumns", list(self.processing_columns.keys())[:5] + 
+                                                              [list(self.processing_columns.keys())[6]])
+        # Or check previous columns from settings
+        for idx, column in self.processing_columns.items():
+            if idx in self.settings.value("visibleProcessingColumns"):
                 column.setChecked(True)
         self.set_processing_column_visibility()
 
     def connect_processing_column_checkboxes(self):
-        self.showNameColumn.toggled.connect(self.set_processing_column_visibility)
-        self.showModelColumn.toggled.connect(self.set_processing_column_visibility)
-        self.showStatusColumn.toggled.connect(self.set_processing_column_visibility)
-        self.showProgressColumn.toggled.connect(self.set_processing_column_visibility)
-        self.showAreaColumn.toggled.connect(self.set_processing_column_visibility)
-        self.showCostColumn.toggled.connect(self.set_processing_column_visibility)
-        self.showCreatedColumn.toggled.connect(self.set_processing_column_visibility)
-        self.showReviewColumn.toggled.connect(self.set_processing_column_visibility)
-        self.showIdColumn.toggled.connect(self.set_processing_column_visibility)
+        for checkbox in self.processing_columns.values():
+            checkbox.toggled.connect(self.set_processing_column_visibility)
 
     def set_processing_column_visibility(self):
         """
         todo: rewrite it as a checkable comboBox or something, which will be filled from code
         """
         new_visible_columns = []
-        for idx, column in enumerate(self.scrollArea.widget().findChildren(QWidget)):
+        # Show / hide newly checked / unchecked columns
+        for idx, column in self.processing_columns.items():
             self.processingsTable.setColumnHidden(idx, not column.isChecked())
             if column.isChecked():
-                new_visible_columns.append(column.text())
-        # Save checked state in settings
+                new_visible_columns.append(idx)
+        # Save new checked state in settings
         self.settings.setValue("visibleProcessingColumns", new_visible_columns)
 
     # ========= SHOW =========== #
@@ -574,41 +563,28 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             # if project is not found, just select the first one
             idx = 0
         self.projectsCombo.setCurrentIndex(idx)
-
+    
     def set_search_visible_columns(self):
-        # Get checkboxes names
-        search_columns = self.scrollArea_2.widget().findChildren(QWidget)
-        search_columns_names = []
-        for widget in search_columns:
-            search_columns_names.append(widget.text())
-        # When no checked columns in settings, set default
-        if not self.settings.value("visibleSearchColumns") or\
-            not list(set(self.settings.value("visibleSearchColumns")) & set(search_columns_names)):
-            self.settings.setValue("visibleSearchColumns", search_columns_names[0:7])
-        # Check columns from settings
-        for column in search_columns:
-            if column.text() in self.settings.value("visibleSearchColumns"):
+        # Set default checked columns
+        if not self.settings.value("visibleSearchColumns"):
+            self.settings.setValue("visibleSearchColumns", list(self.search_columns.keys())[:7])
+        # Or check previous columns from settings
+        for idx, column in self.search_columns.items():
+            if idx in self.settings.value("visibleSearchColumns"):
                 column.setChecked(True)
-
+    
     def connect_search_column_checkboxes(self):
-        self.showProductTypeColumn.toggled.connect(self.set_search_column_visibility)
-        self.showProviderNameColumn.toggled.connect(self.set_search_column_visibility)
-        self.showSensorColumn.toggled.connect(self.set_search_column_visibility)
-        self.showBandsColumn.toggled.connect(self.set_search_column_visibility)
-        self.showCloudsColumn.toggled.connect(self.set_search_column_visibility)
-        self.showOffNadirColumn.toggled.connect(self.set_search_column_visibility)
-        self.showDateTimeColumn.toggled.connect(self.set_search_column_visibility)
-        self.showZoomColumn.toggled.connect(self.set_search_column_visibility)
-        self.showResolutionColumn.toggled.connect(self.set_search_column_visibility)
-        self.showImageIdColumn.toggled.connect(self.set_search_column_visibility)
-
+        for checkbox in self.search_columns.values():
+            checkbox.toggled.connect(self.set_search_column_visibility)
+    
     def set_search_column_visibility(self):
         new_visible_columns = []
-        for idx, column in enumerate(self.scrollArea_2.widget().findChildren(QWidget)):
+        # Show / hide newly checked / unchecked columns
+        for idx, column in self.search_columns.items():
             self.metadataTable.setColumnHidden(idx, not column.isChecked())
             if column.isChecked():
-                new_visible_columns.append(column.text())
-        # Save checked state in settings
+                new_visible_columns.append(idx)
+        # Save new checked state in settings
         self.settings.setValue("visibleSearchColumns", new_visible_columns)
 
     def filter_processings_table(self, name_filter: str = None):
@@ -632,4 +608,28 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                 self.processingRatingFeedbackText,
                 self.acceptButton, self.reviewButton,
                 self.ratingSubmitButton]
+    
+    @property
+    def processing_columns(self):
+        return {0 : self.showNameColumn,
+                1 : self.showModelColumn,
+                2 : self.showStatusColumn,
+                3 : self.showProgressColumn,
+                4 : self.showAreaColumn,
+                5 : self.showCostColumn,
+                6 : self.showCreatedColumn,
+                7 : self.showReviewColumn,
+                8 : self.showIdColumn}
 
+    @property
+    def search_columns(self):
+        return {0 : self.showProductTypeColumn,
+                1 : self.showProviderNameColumn,
+                2 : self.showSensorColumn,
+                3 : self.showBandsColumn,
+                4 : self.showCloudsColumn,
+                5 : self.showOffNadirColumn,
+                6 : self.showDateTimeColumn,
+                7 : self.showZoomColumn,
+                8 : self.showResolutionColumn,
+                9 : self.showImageIdColumn}
