@@ -214,18 +214,20 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.rasterSourceChanged.emit()
 
     def set_processing_visible_columns(self):
-        # Set default checked columns
-        if not self.settings.value("visibleProcessingColumns"):
-            self.settings.setValue("visibleProcessingColumns", list(self.processing_columns.keys())[:5] + 
-                                                              [list(self.processing_columns.keys())[6]])
+        processing_columns_numbers = list(range(len(self.processing_columns))) # 9 columns in total: 0-8
+        # When settings are empty OR filled with something except 0-8
+        if not self.settings.value("visibleProcessingColumns") or \
+        not list(set(self.settings.value("visibleProcessingColumns")) & set(processing_columns_numbers)):
+            # Set only 0-4 and 6 columns (and checkboxes) as checked by default 
+            self.settings.setValue("visibleProcessingColumns", list(range(5)) + [6])
         # Or check previous columns from settings
-        for idx, column in self.processing_columns.items():
+        for idx, column in enumerate(self.processing_columns):
             if idx in self.settings.value("visibleProcessingColumns"):
                 column.setChecked(True)
         self.set_processing_column_visibility()
 
     def connect_processing_column_checkboxes(self):
-        for checkbox in self.processing_columns.values():
+        for checkbox in self.processing_columns:
             checkbox.toggled.connect(self.set_processing_column_visibility)
 
     def set_processing_column_visibility(self):
@@ -234,7 +236,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         """
         new_visible_columns = []
         # Show / hide newly checked / unchecked columns
-        for idx, column in self.processing_columns.items():
+        for idx, column in enumerate(self.processing_columns):
             self.processingsTable.setColumnHidden(idx, not column.isChecked())
             if column.isChecked():
                 new_visible_columns.append(idx)
@@ -565,22 +567,25 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.projectsCombo.setCurrentIndex(idx)
     
     def set_search_visible_columns(self):
-        # Set default checked columns
-        if not self.settings.value("visibleSearchColumns"):
-            self.settings.setValue("visibleSearchColumns", list(self.search_columns.keys())[:7])
+        search_columns_numbers = list(range(len(self.search_columns))) # 10 columns in total: 0-9
+        # When settings are empty OR filled with something except 0-9
+        if not self.settings.value("visibleSearchColumns") or \
+        not list(set(self.settings.value("visibleSearchColumns")) & set(search_columns_numbers)):
+            # Set only 0-6 columns (and checkboxes) as checked by default 
+            self.settings.setValue("visibleSearchColumns", list(range(7)))
         # Or check previous columns from settings
-        for idx, column in self.search_columns.items():
+        for idx, column in enumerate(self.search_columns):
             if idx in self.settings.value("visibleSearchColumns"):
                 column.setChecked(True)
     
     def connect_search_column_checkboxes(self):
-        for checkbox in self.search_columns.values():
+        for checkbox in self.search_columns:
             checkbox.toggled.connect(self.set_search_column_visibility)
     
     def set_search_column_visibility(self):
         new_visible_columns = []
         # Show / hide newly checked / unchecked columns
-        for idx, column in self.search_columns.items():
+        for idx, column in enumerate(self.search_columns):
             self.metadataTable.setColumnHidden(idx, not column.isChecked())
             if column.isChecked():
                 new_visible_columns.append(idx)
@@ -611,25 +616,25 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     
     @property
     def processing_columns(self):
-        return {0 : self.showNameColumn,
-                1 : self.showModelColumn,
-                2 : self.showStatusColumn,
-                3 : self.showProgressColumn,
-                4 : self.showAreaColumn,
-                5 : self.showCostColumn,
-                6 : self.showCreatedColumn,
-                7 : self.showReviewColumn,
-                8 : self.showIdColumn}
+        return [self.showNameColumn,
+                self.showModelColumn,
+                self.showStatusColumn,
+                self.showProgressColumn,
+                self.showAreaColumn,
+                self.showCostColumn,
+                self.showCreatedColumn,
+                self.showReviewColumn,
+                self.showIdColumn]
 
     @property
     def search_columns(self):
-        return {0 : self.showProductTypeColumn,
-                1 : self.showProviderNameColumn,
-                2 : self.showSensorColumn,
-                3 : self.showBandsColumn,
-                4 : self.showCloudsColumn,
-                5 : self.showOffNadirColumn,
-                6 : self.showDateTimeColumn,
-                7 : self.showZoomColumn,
-                8 : self.showResolutionColumn,
-                9 : self.showImageIdColumn}
+        return [self.showProductTypeColumn,
+                self.showProviderNameColumn,
+                self.showSensorColumn,
+                self.showBandsColumn,
+                self.showCloudsColumn,
+                self.showOffNadirColumn,
+                self.showDateTimeColumn,
+                self.showZoomColumn,
+                self.showResolutionColumn,
+                self.showImageIdColumn]
