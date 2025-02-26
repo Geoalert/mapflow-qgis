@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (QWidget, QPushButton, QCheckBox, QTableWidgetItem, 
 from qgis.core import QgsMapLayerProxyModel, QgsSettings
 
 from . import icons
-from ..config import config
+from ..config import config, ConfigSearchColumns
 from ..entity.billing import BillingType
 from ..entity.provider import ProviderInterface
 from ..functional import helpers
@@ -435,7 +435,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         for row, feature in enumerate(metadata['features']):
             if feature.get('id'):
                 feature['properties']['id'] = feature.get('id') # for uniformity
-            for col, attr in enumerate(config.METADATA_TABLE_ATTRIBUTES.values()):
+            for col, attr in enumerate(ConfigSearchColumns().METADATA_TABLE_ATTRIBUTES.values()):
                 try:
                     value = feature['properties'][attr]
                 except KeyError:  # e.g. <colorBandOrder/> for pachromatic images

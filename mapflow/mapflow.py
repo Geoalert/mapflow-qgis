@@ -35,7 +35,7 @@ from .dialogs import (MainDialog,
                       )
 from .dialogs.icons import plugin_icon
 from .functional.controller.data_catalog_controller import DataCatalogController
-from .config import Config
+from .config import Config, ConfigSearchColumns
 from .entity.billing import BillingType
 from .entity.processing import parse_processings_request, Processing, ProcessingHistory, updated_processings
 from .entity.provider import (UsersProvider,
@@ -291,6 +291,7 @@ class Mapflow(QObject):
         self.dlg.filterProject.textChanged.connect(self.filter_projects)
 
         # Maxar
+        self.config_search_columns = ConfigSearchColumns()
         self.dlg.imageId.textChanged.connect(self.sync_image_id_with_table_and_layer)
         self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
             self.sync_table_selection_with_image_id_and_layer)
@@ -561,7 +562,7 @@ class Mapflow(QObject):
         filter_ = (
             f"acquisitionDate >= '{from_}'"
             f" and acquisitionDate <= '{to}'"
-            f' and cloudCover is null or cloudCover <= {max_cloud_cover}'
+            f' and (cloudCover is null or cloudCover <= {max_cloud_cover})'
         )
         aoi = helpers.from_wgs84(self.metadata_aoi, crs)
         if not aoi:
@@ -854,7 +855,7 @@ class Mapflow(QObject):
             image_id_placeholder = self.tr('e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00')
             geoms = None
         else:  # any non-sentinel provider: setup table as for ImagerySearch provider
-            columns = self.config.METADATA_TABLE_ATTRIBUTES
+            columns = self.config_search_columns.METADATA_TABLE_ATTRIBUTES
             hidden_columns = (len(columns) - 1,)
             sort_by = self.config.MAXAR_DATETIME_COLUMN_INDEX
             max_zoom = self.config.MAX_ZOOM
@@ -1794,6 +1795,7 @@ class Mapflow(QObject):
         elif self.billing_type != BillingType.credits:
             self.dlg.startProcessing.setEnabled(True)
             self.dlg.processingProblemsLabel.clear()
+            request_body, error = self.create_processing_request(allow_empty_name=True)
         else:  # self.billing_type == BillingType.credits: f
             provider = self.providers[self.dlg.providerIndex()]
             request_body, error = self.create_processing_request(allow_empty_name=True)
@@ -2402,7 +2404,7 @@ class Mapflow(QObject):
 
     def maxar_layer_name(self, layer_name, image_id):
         row = self.dlg.metadataTable.currentRow()
-        attrs = tuple(self.config.METADATA_TABLE_ATTRIBUTES.values())
+        attrs = tuple(self.config_search_columns.METADATA_TABLE_ATTRIBUTES.values())
         try:
             layer_name = ' '.join((
                 layer_name,

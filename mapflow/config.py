@@ -5,6 +5,23 @@ from PyQt5.QtCore import QCoreApplication
 from qgis.core import QgsSettings
 
 @dataclass
+class ConfigSearchColumns():
+    def __init__(self):
+        self.METADATA_TABLE_ATTRIBUTES = {
+            QCoreApplication.translate('Config', 'Product Type'): 'productType',
+            QCoreApplication.translate('Config', 'Provider Name'): 'providerName',
+            QCoreApplication.translate('Config', 'Sensor'): 'source',
+            QCoreApplication.translate('Config', 'Band Order'): 'colorBandOrder',
+            QCoreApplication.translate('Config', 'Cloud %'): 'cloudCover',
+            QCoreApplication.translate('Config', 'Off Nadir') + f' \N{DEGREE SIGN}': 'offNadirAngle',
+            QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=time.localtime().tm_zone): 'acquisitionDate',
+            QCoreApplication.translate('Config', 'Zoom level'): 'zoom',
+            QCoreApplication.translate('Config', 'Spatial Resolution, m'): 'pixelResolution',
+            QCoreApplication.translate('Config', 'Image ID'): 'id',
+            'local_index': 'local_index'
+        } 
+
+@dataclass
 class Config:
     TIMEZONE = time.localtime().tm_zone
     PLUGIN_NAME = 'Mapflow'
@@ -44,24 +61,12 @@ class Config:
     PROCESSING_TABLE_ID_COLUMN_INDEX = PROCESSING_TABLE_COLUMNS.index('id')
     PROCESSING_TABLE_SORT_COLUMN_INDEX = PROCESSING_TABLE_COLUMNS.index('created')
     DEFAULT_HIDDEN_COLUMNS = (PROCESSING_TABLE_COLUMNS.index(item) for item in ('id', 'reviewUntil', 'cost'))
+    
     # MAXAR
-    METADATA_TABLE_ATTRIBUTES = {
-        QCoreApplication.translate('Config', 'Product Type'): 'productType',
-        QCoreApplication.translate('Config', 'Provider Name'): 'providerName',
-        QCoreApplication.translate('Config', 'Sensor'): 'source',
-        QCoreApplication.translate('Config', 'Band Order'): 'colorBandOrder',
-        QCoreApplication.translate('Config', 'Cloud %'): 'cloudCover',
-        QCoreApplication.translate('Config', 'Off Nadir') + f' \N{DEGREE SIGN}': 'offNadirAngle',
-        QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=TIMEZONE): 'acquisitionDate',
-        QCoreApplication.translate('Config', 'Zoom level'): 'zoom',
-        QCoreApplication.translate('Config', 'Spatial Resolution, m'): 'pixelResolution',
-        QCoreApplication.translate('Config', 'Image ID'): 'id',
-        'local_index': 'local_index'
-    }
-    MAXAR_ID_COLUMN_INDEX = tuple(METADATA_TABLE_ATTRIBUTES.values()).index('id')
-    LOCAL_INDEX_COLUMN = tuple(METADATA_TABLE_ATTRIBUTES.values()).index('local_index')
-    MAXAR_DATETIME_COLUMN_INDEX = tuple(METADATA_TABLE_ATTRIBUTES.keys()).index(QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=TIMEZONE))
-    MAXAR_CLOUD_COLUMN_INDEX = tuple(METADATA_TABLE_ATTRIBUTES.keys()).index(QCoreApplication.translate('Config', 'Cloud %'))
+    MAXAR_ID_COLUMN_INDEX = tuple(ConfigSearchColumns().METADATA_TABLE_ATTRIBUTES.values()).index('id')
+    LOCAL_INDEX_COLUMN = tuple(ConfigSearchColumns().METADATA_TABLE_ATTRIBUTES.values()).index('local_index')
+    MAXAR_DATETIME_COLUMN_INDEX = tuple(ConfigSearchColumns().METADATA_TABLE_ATTRIBUTES.keys()).index(QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=TIMEZONE))
+    MAXAR_CLOUD_COLUMN_INDEX = tuple(ConfigSearchColumns().METADATA_TABLE_ATTRIBUTES.keys()).index(QCoreApplication.translate('Config', 'Cloud %'))
     MAXAR_MAX_FREE_ZOOM = 12
 
     # MISC
