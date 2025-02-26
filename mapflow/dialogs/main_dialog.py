@@ -73,8 +73,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
         # setup hidden/visible columns
         # table.setHorizontalHeaderLabels(labels)
-        self.set_column_visibility()
-        self.connect_column_checkboxes()
+        self.set_processing_visible_columns()
+        self.connect_processing_column_checkboxes()
+        self.set_search_visible_columns()
         self.connect_search_column_checkboxes()
         # connect two spinboxes
         self.spin1_connection = self.maxZoom.valueChanged.connect(self.switch_maxzoom_2)
@@ -212,34 +213,35 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.raster_provider_connection = self.sourceCombo.currentTextChanged.connect(self.switch_provider_combo)
         self.rasterSourceChanged.emit()
 
-    def connect_column_checkboxes(self):
-        self.showNameColumn.toggled.connect(self.set_column_visibility)
-        self.showModelColumn.toggled.connect(self.set_column_visibility)
-        self.showStatusColumn.toggled.connect(self.set_column_visibility)
-        self.showProgressColumn.toggled.connect(self.set_column_visibility)
-        self.showAreaColumn.toggled.connect(self.set_column_visibility)
-        self.showCostColumn.toggled.connect(self.set_column_visibility)
-        self.showCreatedColumn.toggled.connect(self.set_column_visibility)
-        self.showReviewColumn.toggled.connect(self.set_column_visibility)
-        self.showIdColumn.toggled.connect(self.set_column_visibility)
+    def set_processing_visible_columns(self):
+        processing_columns_numbers = list(range(len(self.processing_columns))) # 9 columns in total: 0-8
+        # When settings are empty OR filled with something except 0-8
+        if not self.settings.value("visibleProcessingColumns") or \
+        not list(set(self.settings.value("visibleProcessingColumns")) & set(processing_columns_numbers)):
+            # Set only 0-4 and 6 columns (and checkboxes) as checked by default 
+            self.settings.setValue("visibleProcessingColumns", list(range(5)) + [6])
+        # Or check previous columns from settings
+        for idx, column in enumerate(self.processing_columns):
+            if idx in self.settings.value("visibleProcessingColumns"):
+                column.setChecked(True)
+        self.set_processing_column_visibility()
 
-    def set_column_visibility(self):
+    def connect_processing_column_checkboxes(self):
+        for checkbox in self.processing_columns:
+            checkbox.toggled.connect(self.set_processing_column_visibility)
+
+    def set_processing_column_visibility(self):
         """
         todo: rewrite it as a checkable comboBox or something, which will be filled from code
         """
-        column_flags = (self.showNameColumn.isChecked(),
-                        self.showModelColumn.isChecked(),
-                        self.showStatusColumn.isChecked(),
-                        self.showProgressColumn.isChecked(),
-                        self.showAreaColumn.isChecked(),
-                        self.showCostColumn.isChecked(),
-                        self.showCreatedColumn.isChecked(),
-                        self.showReviewColumn.isChecked(),
-                        self.showIdColumn.isChecked())
-
-        for idx, flag in enumerate(column_flags):
-            # A VERY ugly solution, depends on correspondence between Config, main_dialog.ui and this file
-            self.processingsTable.setColumnHidden(idx, not flag)
+        new_visible_columns = []
+        # Show / hide newly checked / unchecked columns
+        for idx, column in enumerate(self.processing_columns):
+            self.processingsTable.setColumnHidden(idx, not column.isChecked())
+            if column.isChecked():
+                new_visible_columns.append(idx)
+        # Save new checked state in settings
+        self.settings.setValue("visibleProcessingColumns", new_visible_columns)
 
     # ========= SHOW =========== #
     def setup_for_billing(self, billing_type: BillingType):
@@ -563,33 +565,32 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             # if project is not found, just select the first one
             idx = 0
         self.projectsCombo.setCurrentIndex(idx)
-
+    
+    def set_search_visible_columns(self):
+        search_columns_numbers = list(range(len(self.search_columns))) # 10 columns in total: 0-9
+        # When settings are empty OR filled with something except 0-9
+        if not self.settings.value("visibleSearchColumns") or \
+        not list(set(self.settings.value("visibleSearchColumns")) & set(search_columns_numbers)):
+            # Set only 0-6 columns (and checkboxes) as checked by default 
+            self.settings.setValue("visibleSearchColumns", list(range(7)))
+        # Or check previous columns from settings
+        for idx, column in enumerate(self.search_columns):
+            if idx in self.settings.value("visibleSearchColumns"):
+                column.setChecked(True)
+    
     def connect_search_column_checkboxes(self):
-        self.showProductTypeColumn.toggled.connect(self.set_search_column_visibility)
-        self.showProviderNameColumn.toggled.connect(self.set_search_column_visibility)
-        self.showSensorColumn.toggled.connect(self.set_search_column_visibility)
-        self.showBandsColumn.toggled.connect(self.set_search_column_visibility)
-        self.showCloudsColumn.toggled.connect(self.set_search_column_visibility)
-        self.showOffNadirColumn.toggled.connect(self.set_search_column_visibility)
-        self.showDateTimeColumn.toggled.connect(self.set_search_column_visibility)
-        self.showZoomColumn.toggled.connect(self.set_search_column_visibility)
-        self.showResolutionColumn.toggled.connect(self.set_search_column_visibility)
-        self.showImageIdColumn.toggled.connect(self.set_search_column_visibility)
-
+        for checkbox in self.search_columns:
+            checkbox.toggled.connect(self.set_search_column_visibility)
+    
     def set_search_column_visibility(self):
-        search_column_flags = (self.showProductTypeColumn.isChecked(),
-                               self.showProviderNameColumn.isChecked(),
-                               self.showSensorColumn.isChecked(),
-                               self.showBandsColumn.isChecked(),
-                               self.showCloudsColumn.isChecked(),
-                               self.showOffNadirColumn.isChecked(),
-                               self.showDateTimeColumn.isChecked(),
-                               self.showZoomColumn.isChecked(),
-                               self.showResolutionColumn.isChecked(),
-                               self.showImageIdColumn.isChecked())
-
-        for idx, flag in enumerate(search_column_flags):
-            self.metadataTable.setColumnHidden(idx, not flag)
+        new_visible_columns = []
+        # Show / hide newly checked / unchecked columns
+        for idx, column in enumerate(self.search_columns):
+            self.metadataTable.setColumnHidden(idx, not column.isChecked())
+            if column.isChecked():
+                new_visible_columns.append(idx)
+        # Save new checked state in settings
+        self.settings.setValue("visibleSearchColumns", new_visible_columns)
 
     def filter_processings_table(self, name_filter: str = None):
         for row in range(self.processingsTable.rowCount()):
@@ -612,4 +613,28 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                 self.processingRatingFeedbackText,
                 self.acceptButton, self.reviewButton,
                 self.ratingSubmitButton]
+    
+    @property
+    def processing_columns(self):
+        return [self.showNameColumn,
+                self.showModelColumn,
+                self.showStatusColumn,
+                self.showProgressColumn,
+                self.showAreaColumn,
+                self.showCostColumn,
+                self.showCreatedColumn,
+                self.showReviewColumn,
+                self.showIdColumn]
 
+    @property
+    def search_columns(self):
+        return [self.showProductTypeColumn,
+                self.showProviderNameColumn,
+                self.showSensorColumn,
+                self.showBandsColumn,
+                self.showCloudsColumn,
+                self.showOffNadirColumn,
+                self.showDateTimeColumn,
+                self.showZoomColumn,
+                self.showResolutionColumn,
+                self.showImageIdColumn]
