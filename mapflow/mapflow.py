@@ -193,7 +193,7 @@ class Mapflow(QObject):
                                                        project=self.project,
                                                        settings=self.settings,
                                                        plugin_name=self.plugin_name,
-                                                       temp_dir=str(self.temp_dir)
+                                                       temp_dir=self.temp_dir
                                                        )
 
         self.data_catalog_service = DataCatalogService(self.http, self.server, self.dlg, self.iface, self.result_loader, self.plugin_version)
@@ -864,10 +864,10 @@ class Mapflow(QObject):
 
             # If we have searched with current provider previously, we want to restore the search results as it were
             # We store the results in a temp folder, separate file for each provider
-            geoms = self.search_provider.load_search_layer(str(self.temp_dir))
+            geoms = self.search_provider.load_search_layer(self.temp_dir)
             if geoms:
                 self.display_metadata_geojson_layer(
-                    os.path.join(str(self.temp_dir), self.search_provider.metadata_layer_name),
+                    os.path.join(self.temp_dir, self.search_provider.metadata_layer_name),
                     f"{self.search_provider.name} metadata")
             else:
                 self.clear_metadata()
@@ -1009,7 +1009,7 @@ class Mapflow(QObject):
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
         #provider = self.providers[self.dlg.providerIndex()]
-        self.search_provider.clear_saved_search(str(self.temp_dir))
+        self.search_provider.clear_saved_search(self.temp_dir)
 
     def request_mapflow_metadata(self,
                                  aoi: QgsGeometry,
@@ -1092,7 +1092,7 @@ class Mapflow(QObject):
         # Save the current search results to load later
         provider = self.imagery_search_provider
         try:
-            filename = provider.save_search_layer(str(self.temp_dir), geoms)
+            filename = provider.save_search_layer(self.temp_dir, geoms)
         except:
             self.alert(self.tr("<b>Results could not be loaded </b><br>Please, make sure you chose the right output folder in the Settings tab \
                                 and you have access rights to this folder"))
@@ -1319,7 +1319,7 @@ class Mapflow(QObject):
             for feature in metadata['features']
         })
         # Create a temporary layer for the current page of metadata
-        output_file_name = os.path.join(str(self.temp_dir), os.urandom(32).hex())
+        output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex())
         with open(output_file_name, 'w') as file:
             json.dump(metadata, file)
         metadata_layer = QgsVectorLayer(output_file_name, '', 'ogr')
@@ -1464,7 +1464,7 @@ class Mapflow(QObject):
             if feature['properties']['cloudCover']:
                 feature['properties']['cloudCover'] = round(feature['properties']['cloudCover'] * 100)
         # Save metadata to file to return to previous search
-        filename = provider.save_search_layer(str(self.temp_dir), metadata)
+        filename = provider.save_search_layer(self.temp_dir, metadata)
         self.display_metadata_geojson_layer(filename, f'{provider.name} metadata')
         # Memorize IDs and extents to be able to clip the user's AOI to image on processing creation
         self.dlg.fill_metadata_table(metadata)
@@ -2202,11 +2202,11 @@ class Mapflow(QObject):
         self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
         # We want to clear the data from previous lauunch to avoid confusion
         for provider in self.providers:
-            provider.clear_saved_search(str(self.temp_dir))
+            provider.clear_saved_search(self.temp_dir)
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
         """Save and open the preview image as a layer."""
-        with open(os.path.join(str(self.temp_dir), os.urandom(32).hex()), mode='wb') as f:
+        with open(self.temp_dir/os.urandom(32).hex(), mode='wb') as f:
             f.write(response.readAll().data())
         # Some previews aren't georef-ed
         preview = gdal.Open(f.name)
@@ -2292,7 +2292,7 @@ class Mapflow(QObject):
         We assume that png preview is not internally georeferenced,
         but the footprint specified in the metadata has the same extent, so we generate georef for the image
         """
-        with open(os.path.join(str(self.temp_dir), os.urandom(32).hex()), mode='wb') as f:
+        with open(self.temp_dir/os.urandom(32).hex(), mode='wb') as f:
             f.write(response.readAll().data())
         preview = gdal.Open(f.name)
         pixel_xsize = extent.width() / preview.RasterXSize
@@ -2331,7 +2331,7 @@ class Mapflow(QObject):
             coords = (pt.x(), pt.y())
             corners.append(coords)
         # Get non-referenced raster and set its projection
-        with open(os.path.join(str(self.temp_dir), os.urandom(32).hex()), mode='wb') as f:
+        with open(self.temp_dir/os.urandom(32).hex(), mode='wb') as f:
             f.write(response.readAll().data())
         preview = gdal.Open(f.name)
         preview.SetProjection(crs.toWkt())
