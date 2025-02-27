@@ -36,6 +36,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.setupUi(self)
         # Restrict combos to relevant layer types; QGIS 3.10-3.20 (at least) bugs up if set in .ui
         self.polygonCombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
+        # Don't allow to change path directly (without ... and selection in file dialog) to avoid errors
+        self.outputDirectory.setReadOnly(True)
         # Set icons (can be done in .ui but brings about the resources_rc import bug)
         self.setWindowIcon(icons.plugin_icon)
         self.addProvider.setIcon(icons.plus_icon)
@@ -214,15 +216,15 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.rasterSourceChanged.emit()
 
     def set_processing_visible_columns(self):
-        processing_columns_numbers = list(range(len(self.processing_columns))) # 9 columns in total: 0-8
+        processing_columns_numbers = [str(x) for x in range(len(self.processing_columns))] # 9 columns in total: 0-8
         # When settings are empty OR filled with something except 0-8
         if not self.settings.value("visibleProcessingColumns") or \
         not list(set(self.settings.value("visibleProcessingColumns")) & set(processing_columns_numbers)):
             # Set only 0-4 and 6 columns (and checkboxes) as checked by default 
-            self.settings.setValue("visibleProcessingColumns", list(range(5)) + [6])
+            self.settings.setValue("visibleProcessingColumns", [str(x) for x in range(5)] + ["6"])
         # Or check previous columns from settings
         for idx, column in enumerate(self.processing_columns):
-            if idx in self.settings.value("visibleProcessingColumns"):
+            if str(idx) in self.settings.value("visibleProcessingColumns"):
                 column.setChecked(True)
         self.set_processing_column_visibility()
 
@@ -239,7 +241,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         for idx, column in enumerate(self.processing_columns):
             self.processingsTable.setColumnHidden(idx, not column.isChecked())
             if column.isChecked():
-                new_visible_columns.append(idx)
+                new_visible_columns.append(str(idx))
         # Save new checked state in settings
         self.settings.setValue("visibleProcessingColumns", new_visible_columns)
 
@@ -567,15 +569,15 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.projectsCombo.setCurrentIndex(idx)
     
     def set_search_visible_columns(self):
-        search_columns_numbers = list(range(len(self.search_columns))) # 10 columns in total: 0-9
+        search_columns_numbers = [str(x) for x in range(len(self.search_columns))] # 10 columns in total: 0-9
         # When settings are empty OR filled with something except 0-9
         if not self.settings.value("visibleSearchColumns") or \
         not list(set(self.settings.value("visibleSearchColumns")) & set(search_columns_numbers)):
             # Set only 0-6 columns (and checkboxes) as checked by default 
-            self.settings.setValue("visibleSearchColumns", list(range(7)))
+            self.settings.setValue("visibleSearchColumns", [str(x) for x in range(7)])
         # Or check previous columns from settings
         for idx, column in enumerate(self.search_columns):
-            if idx in self.settings.value("visibleSearchColumns"):
+            if str(idx) in self.settings.value("visibleSearchColumns"):
                 column.setChecked(True)
     
     def connect_search_column_checkboxes(self):
@@ -588,7 +590,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         for idx, column in enumerate(self.search_columns):
             self.metadataTable.setColumnHidden(idx, not column.isChecked())
             if column.isChecked():
-                new_visible_columns.append(idx)
+                new_visible_columns.append(str(idx))
         # Save new checked state in settings
         self.settings.setValue("visibleSearchColumns", new_visible_columns)
 
