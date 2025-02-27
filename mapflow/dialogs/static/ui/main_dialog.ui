@@ -991,6 +991,12 @@
             <layout class="QHBoxLayout" name="processingFooter" stretch="0,0,0,0,0">
              <item>
               <widget class="QLineEdit" name="filterProcessings">
+               <property name="minimumSize">
+                <size>
+                 <width>300</width>
+                 <height>0</height>
+                </size>
+               </property>
                <property name="maxLength">
                 <number>255</number>
                </property>
@@ -2096,7 +2102,7 @@
                 <number>255</number>
                </property>
                <property name="placeholderText">
-                <string>filter project by name</string>
+                <string>Filter project by name</string>
                </property>
               </widget>
              </item>
@@ -2348,7 +2354,7 @@
                 <property name="geometry">
                  <rect>
                   <x>0</x>
-                  <y>-136</y>
+                  <y>0</y>
                   <width>198</width>
                   <height>220</height>
                  </rect>
@@ -2537,7 +2543,7 @@
                 <property name="geometry">
                  <rect>
                   <x>0</x>
-                  <y>-136</y>
+                  <y>0</y>
                   <width>207</width>
                   <height>220</height>
                  </rect>

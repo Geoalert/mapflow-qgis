@@ -9,7 +9,7 @@ from osgeo import gdal
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
-from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog, QAbstractItemView
+from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog, QAbstractItemView, QWidget
 from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsRasterLayer, QgsRectangle
 
 from ...dialogs.main_dialog import MainDialog
@@ -41,11 +41,12 @@ class DataCatalogService(QObject):
                  dlg: MainDialog,
                  iface,
                  result_loader,
-                 plugin_version):
+                 plugin_version,
+                 temp_dir):
         super().__init__()
         self.dlg = dlg
         self.iface = iface
-        self.temp_dir = tempfile.gettempdir()
+        self.temp_dir = temp_dir
         self.project = QgsProject.instance()
         self.result_loader = result_loader
         self.plugin_version = plugin_version
@@ -377,6 +378,11 @@ class DataCatalogService(QObject):
                               extent: QgsRectangle,
                               crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857"),
                               image_name: str = ""):
+        if not self.temp_dir:
+            self.view.alert(self.tr("Please, select existing output directory in the Settings tab"))
+            settings_tab = self.dlg.tabWidget.findChild(QWidget, "settingsTab")
+            self.dlg.tabWidget.setCurrentWidget(settings_tab) 
+            return
         with open(Path(self.temp_dir)/os.urandom(32).hex(), mode='wb') as f:
             f.write(response.readAll().data())
         preview = gdal.Open(f.name)
