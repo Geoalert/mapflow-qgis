@@ -157,14 +157,6 @@ class Mapflow(QObject):
         self.search_page_offset = 0
         self.search_page_limit = self.config.SEARCH_RESULTS_PAGE_LIMIT
 
-        # Clear previous temp dir, as it is not cleared automatically in exit from QGis
-        previous_temp_dir = self.settings.value("temp_dir", None)
-        if previous_temp_dir:
-            shutil.rmtree(previous_temp_dir, ignore_errors=True)
-        self.temp_dir = QTemporaryDir()
-        self.temp_dir_name = self.temp_dir.path()
-        self.settings.setValue("temp_dir", self.temp_dir_name)
-
         # Init dialogs
         self.use_oauth = (self.settings.value('use_oauth', 'false').lower() == 'true')
         self.plugin_icon = plugin_icon
@@ -189,6 +181,10 @@ class Mapflow(QObject):
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
         self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or self.config.DEFAULT_ZOOM))
 
+        # Setup temporary directory from setting or skip for now
+        self.temp_dir = None
+        self.setup_tempdir()
+
         # Initialize services
         self.result_loader = layer_utils.ResultsLoader(iface=self.iface,
                                                        maindialog=self.dlg,
@@ -197,7 +193,7 @@ class Mapflow(QObject):
                                                        project=self.project,
                                                        settings=self.settings,
                                                        plugin_name=self.plugin_name,
-                                                       temp_dir=self.temp_dir_name
+                                                       temp_dir=self.temp_dir
                                                        )
 
         self.data_catalog_service = DataCatalogService(self.http, self.server, self.dlg, self.iface, self.result_loader, self.plugin_version)
@@ -868,10 +864,10 @@ class Mapflow(QObject):
 
             # If we have searched with current provider previously, we want to restore the search results as it were
             # We store the results in a temp folder, separate file for each provider
-            geoms = self.search_provider.load_search_layer(self.temp_dir_name)
+            geoms = self.search_provider.load_search_layer(self.temp_dir)
             if geoms:
                 self.display_metadata_geojson_layer(
-                    os.path.join(self.temp_dir_name, self.search_provider.metadata_layer_name),
+                    os.path.join(self.temp_dir, self.search_provider.metadata_layer_name),
                     f"{self.search_provider.name} metadata")
             else:
                 self.clear_metadata()
@@ -900,6 +896,7 @@ class Mapflow(QObject):
         if path:
             self.dlg.outputDirectory.setText(path)
             self.settings.setValue('outputDir', path)
+            self.setup_tempdir()
             return path
 
     def check_if_output_directory_is_selected(self) -> bool:
@@ -1012,7 +1009,7 @@ class Mapflow(QObject):
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
         #provider = self.providers[self.dlg.providerIndex()]
-        self.search_provider.clear_saved_search(self.temp_dir_name)
+        self.search_provider.clear_saved_search(self.temp_dir)
 
     def request_mapflow_metadata(self,
                                  aoi: QgsGeometry,
@@ -1028,6 +1025,8 @@ class Mapflow(QObject):
                                  offset: Optional[int] = 0,
                                  hide_unavailable: Optional[bool] = False,
                                  product_types: Optional[List[ProductType]] = None):
+        if not self.check_if_output_directory_is_selected():
+            return # only when outputDirectory is empty AND user closed selection dialog
         self.metadata_aoi = aoi
         request_payload = ImageCatalogRequestSchema(aoi=json.loads(aoi.asJson()),
                                                     acquisitionDateFrom=from_,
@@ -1092,7 +1091,12 @@ class Mapflow(QObject):
 
         # Save the current search results to load later
         provider = self.imagery_search_provider
-        filename = provider.save_search_layer(self.temp_dir_name, geoms)
+        try:
+            filename = provider.save_search_layer(self.temp_dir, geoms)
+        except:
+            self.alert(self.tr("<b>Results could not be loaded </b><br>Please, make sure you chose the right output folder in the Settings tab \
+                                and you have access rights to this folder"))
+            return
         self.display_metadata_geojson_layer(filename, f"{provider.name} metadata")
         self.dlg.fill_metadata_table(geoms)
 
@@ -1315,7 +1319,7 @@ class Mapflow(QObject):
             for feature in metadata['features']
         })
         # Create a temporary layer for the current page of metadata
-        output_file_name = os.path.join(self.temp_dir_name, os.urandom(32).hex())
+        output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex())
         with open(output_file_name, 'w') as file:
             json.dump(metadata, file)
         metadata_layer = QgsVectorLayer(output_file_name, '', 'ogr')
@@ -1460,7 +1464,7 @@ class Mapflow(QObject):
             if feature['properties']['cloudCover']:
                 feature['properties']['cloudCover'] = round(feature['properties']['cloudCover'] * 100)
         # Save metadata to file to return to previous search
-        filename = provider.save_search_layer(self.temp_dir_name, metadata)
+        filename = provider.save_search_layer(self.temp_dir, metadata)
         self.display_metadata_geojson_layer(filename, f'{provider.name} metadata')
         # Memorize IDs and extents to be able to clip the user's AOI to image on processing creation
         self.dlg.fill_metadata_table(metadata)
@@ -2198,11 +2202,11 @@ class Mapflow(QObject):
         self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
         # We want to clear the data from previous lauunch to avoid confusion
         for provider in self.providers:
-            provider.clear_saved_search(self.temp_dir_name)
+            provider.clear_saved_search(self.temp_dir)
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
         """Save and open the preview image as a layer."""
-        with open(os.path.join(self.temp_dir_name, os.urandom(32).hex()), mode='wb') as f:
+        with open(self.temp_dir/os.urandom(32).hex(), mode='wb') as f:
             f.write(response.readAll().data())
         # Some previews aren't georef-ed
         preview = gdal.Open(f.name)
@@ -2288,7 +2292,7 @@ class Mapflow(QObject):
         We assume that png preview is not internally georeferenced,
         but the footprint specified in the metadata has the same extent, so we generate georef for the image
         """
-        with open(os.path.join(self.temp_dir_name, os.urandom(32).hex()), mode='wb') as f:
+        with open(self.temp_dir/os.urandom(32).hex(), mode='wb') as f:
             f.write(response.readAll().data())
         preview = gdal.Open(f.name)
         pixel_xsize = extent.width() / preview.RasterXSize
@@ -2327,7 +2331,7 @@ class Mapflow(QObject):
             coords = (pt.x(), pt.y())
             corners.append(coords)
         # Get non-referenced raster and set its projection
-        with open(os.path.join(self.temp_dir_name, os.urandom(32).hex()), mode='wb') as f:
+        with open(self.temp_dir/os.urandom(32).hex(), mode='wb') as f:
             f.write(response.readAll().data())
         preview = gdal.Open(f.name)
         preview.SetProjection(crs.toWkt())
@@ -3393,6 +3397,16 @@ class Mapflow(QObject):
         if len(product_types) == 0:
             product_types = [ProductType.mosaic.upper(), ProductType.image.upper()]
         return product_types
+
+    def setup_tempdir(self):
+        if not self.settings.value('outputDir'):
+            return # don't ask to specify tempdir at the plugin start
+        self.temp_dir = Path(self.settings.value('outputDir'), "Temp")
+        try:
+            shutil.rmtree(self.temp_dir) # remove old tempdir
+        except:
+            pass
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
 
     @property
     def basemap_providers(self):
