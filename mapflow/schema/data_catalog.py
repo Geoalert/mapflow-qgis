@@ -52,6 +52,7 @@ class MosaicReturnSchema(SkipDataClass):
     name: str
     created_at: datetime
     footprint: str
+    sizeInBytes: int
     tags: Union[Sequence[str], None] = ()
 
     def __post_init__(self):

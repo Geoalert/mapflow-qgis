@@ -1,4 +1,5 @@
 from PyQt5 import uic
+from PyQt5.QtCore import QCoreApplication
 from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 
 from .dialogs import ui_path, plugin_icon
@@ -52,7 +53,7 @@ class UpdateProjectDialog(ProjectDialog):
     def setup(self, project: MapflowProject):
         if not project:
             raise TypeError("UpdateProjectDialog requires a project to update")
-        self.setWindowTitle(self.tr("Edit project {}").format(project.name))
+        self.setWindowTitle(QCoreApplication.translate('ProjectDialog', "Edit project ") + project.name)
         self.projectName.setText(project.name)
         self.projectDescription.setText(project.description or "")
         self.exec()

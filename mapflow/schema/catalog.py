@@ -5,6 +5,7 @@ from typing import Optional, Mapping, Any, Union, List
 
 from .base import Serializable, SkipDataClass
 
+from ..config import Config
 
 class PreviewType(str, Enum):
     png = "png"
@@ -12,6 +13,9 @@ class PreviewType(str, Enum):
     tms = "tms"
     wms = "wms"
 
+class ProductType(str, Enum):
+    mosaic = "Mosaic"
+    image = "Image"
 
 @dataclass
 class ImageCatalogRequestSchema(Serializable):
@@ -24,6 +28,10 @@ class ImageCatalogRequestSchema(Serializable):
     minOffNadirAngle: Optional[float] = None
     maxOffNadirAngle: Optional[float] = None
     minAoiIntersectionPercent: Optional[float] = None
+    limit: Optional[int] = Config.SEARCH_RESULTS_PAGE_LIMIT
+    offset: Optional[int] = 0
+    hideUnavailable: Optional[bool] = False
+    productTypes: Optional[List[ProductType]] = None
 
 @dataclass
 class ImageSchema(Serializable, SkipDataClass):
@@ -40,6 +48,7 @@ class ImageSchema(Serializable, SkipDataClass):
     previewType: Optional[PreviewType] = None
     previewUrl: Optional[str] = None
     providerName: Optional[str] = None
+    zoom: Optional[str] = None
 
     def __post_init__(self):
         if isinstance(self.acquisitionDate, str):
@@ -60,6 +69,9 @@ class ImageSchema(Serializable, SkipDataClass):
 @dataclass
 class ImageCatalogResponseSchema(Serializable):
     images: List[ImageSchema]
+    total: int = Config.SEARCH_RESULTS_PAGE_LIMIT
+    limit: int = Config.SEARCH_RESULTS_PAGE_LIMIT
+    offset: int = 0
 
     def __post_init__(self):
         self.images = [ImageSchema.from_dict(image) for image in self.images]

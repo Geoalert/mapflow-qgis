@@ -9,7 +9,9 @@ class ProcessingStatusDict(QObject):
         self.value_map = {None: None,
                           'OK': self.tr("Ok"),
                           'IN_PROGRESS': self.tr("In progress"),
-                          'FAILED': self.tr("Failed")}
+                          'FAILED': self.tr("Failed"),
+                          'REFUNDED': self.tr("Refunded"),
+                          'CANCELLED': self.tr("Cancelled")}
 
 
 class ProcessingReviewStatusDict(QObject):
@@ -37,6 +39,8 @@ class ProcessingStatus(NamedEnum):
     ok = 'OK'
     in_progress = 'IN_PROGRESS'
     failed = 'FAILED'
+    refunded = 'REFUNDED'
+    cancelled = 'CANCELLED'
 
     def __init__(self, value):
         super().__init__(value)
@@ -53,6 +57,14 @@ class ProcessingStatus(NamedEnum):
     @property
     def is_failed(self):
         return self == ProcessingStatus.failed
+
+    @property
+    def is_refunded(self):
+        return self == ProcessingStatus.refunded
+
+    @property
+    def is_cancelled(self):
+        return self == ProcessingStatus.cancelled
 
 
 class ProcessingReviewStatus(NamedEnum):
