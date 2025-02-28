@@ -897,6 +897,7 @@ class Mapflow(QObject):
             self.dlg.outputDirectory.setText(path)
             self.settings.setValue('outputDir', path)
             self.setup_tempdir()
+            self.data_catalog_service = DataCatalogService(self.http, self.server, self.dlg, self.iface, self.result_loader, self.plugin_version, self.temp_dir)
             return path
 
     def check_if_output_directory_is_selected(self) -> bool:
