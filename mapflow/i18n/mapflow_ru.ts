@@ -1790,7 +1790,7 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
     <message>
         <location filename="../mapflow.py" line="1451"/>
         <source>No images match your criteria. Try relaxing the filters.</source>
-        <translation>Нет подходящий снимков. Попробуйте изменить параметры поиска.</translation>
+        <translation>Нет подходящих снимков. Попробуйте изменить параметры поиска.</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1361"/>
@@ -2540,7 +2540,7 @@ in a shared project &apos;{project_name}&apos; ({user_role})</source>
         <source>The selected data provider is unavailable on your plan. 
  Upgrade your subscription to get access to the data. 
 See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&lt;/a&gt;</source>
-        <translation>Выбранный провайдер данных недоступен в Вышем тарифном плане 
+        <translation>Выбранный провайдер данных недоступен в Вашем тарифном плане 
  Обновите подписку для получения доступа к данным. 
 Узнать цену: &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&lt;/a&gt;</translation>
     </message>
@@ -2889,7 +2889,7 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
     <message>
         <location filename="../dialogs/project_dialog.py" line="26"/>
         <source>Project name must not be empty!</source>
-        <translation type="unfinished"></translation>
+        <translation>Имя проекта должно быть заполнено!</translation>
     </message>
     <message>
         <location filename="../dialogs/project_dialog.py" line="57"/>
@@ -2897,7 +2897,7 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
         <translation type="obsolete">владелец: </translation>
     </message>
     <message>
-        <location filename="../dialogs/project_dialog.py" line="57"/>
+        <location filename="../dialogs/project_dialog.py" line="56"/>
         <source>Edit project </source>
         <translation>Редактировать проект </translation>
     </message>
