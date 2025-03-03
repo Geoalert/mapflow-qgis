@@ -9,7 +9,7 @@ from osgeo import gdal
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
-from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog, QAbstractItemView
+from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog, QAbstractItemView, QWidget
 from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsRasterLayer, QgsRectangle
 
 from ...dialogs.main_dialog import MainDialog
@@ -41,11 +41,12 @@ class DataCatalogService(QObject):
                  dlg: MainDialog,
                  iface,
                  result_loader,
-                 plugin_version):
+                 plugin_version,
+                 temp_dir):
         super().__init__()
         self.dlg = dlg
         self.iface = iface
-        self.temp_dir = tempfile.gettempdir()
+        self.temp_dir = temp_dir
         self.project = QgsProject.instance()
         self.result_loader = result_loader
         self.plugin_version = plugin_version
@@ -107,6 +108,8 @@ class DataCatalogService(QObject):
         dialog.deleteLater()
 
     def update_mosaic_callback(self, response: QNetworkReply, mosaic: MosaicReturnSchema):
+        self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.NoSelection)
+        self.dlg.mosaicTable.clearSelection()
         self.get_mosaic(mosaic.id)
 
     def delete_mosaics(self, 
@@ -157,9 +160,14 @@ class DataCatalogService(QObject):
         # Clear previous images details
         self.dlg.imageTable.clearSelection()
         self.dlg.imageTable.setRowCount(0)
-        self.dlg.selected_mosaic_cell = self.dlg.mosaicTable.selectedIndexes()[0]
+        # Don't send GET requests if first selected mosaic didn't change
+        selected_mosaics = self.dlg.mosaicTable.selectedIndexes()
+        if len(selected_mosaics) > 1 and self.dlg.selected_mosaic_cell == selected_mosaics[0]:
+            pass
+        else:
+            self.dlg.selected_mosaic_cell = self.dlg.mosaicTable.selectedIndexes()[0]
+            self.get_mosaic_images(mosaic.id)
         self.view.add_mosaic_cell_buttons()
-        self.get_mosaic_images(mosaic.id)
         self.view.show_mosaic_info(mosaic.name)
 
     def mosaic_preview(self):
@@ -179,7 +187,11 @@ class DataCatalogService(QObject):
     # Images CRUD
     def upload_images_to_mosaic(self):
         mosaic = self.selected_mosaic()
-        image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), self.tr("Choose image to upload"), filter='(TIF files *.tif; *.tiff)')[0]
+        if not mosaic:
+            self.view.alert(self.tr("Please, select existing mosaic"))
+            return
+        image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), self.tr("Choose image to upload"), 
+                                                   filter='TIF files (*.tif *.tiff)')[0]
         if image_paths:
             self.upload_images(response=None, 
                                mosaic_id=mosaic.id, mosaic_name=mosaic.name, 
@@ -212,6 +224,8 @@ class DataCatalogService(QObject):
             if failed:
                 self.api.upload_image_error_handler(response=response, mosaic_name=mosaic_name, image_paths=failed)
             self.get_mosaic(mosaic_id)
+            self.dlg.mosaicTable.clearSelection()
+            self.dlg.raise_()
             self.mosaicsUpdated.emit()
         else:
             image_to_upload = image_paths[0]
@@ -227,19 +241,18 @@ class DataCatalogService(QObject):
             if not helpers.raster_layer_is_allowed(layer, self.image_max_size_pixels, self.image_max_size_bytes):
                 message = self.tr("Raster TIFF file must be georeferenced,"
                                   " have size less than {size} pixels"
-                                  " and file size less than {memory}"
-                                  " MB").format(size=self.image_max_size_pixels,
-                                                memory=self.image_max_size_bytes // (1024 * 1024))
+                                  " and file size less than {memory}").format(size=self.image_max_size_pixels,
+                                                                              memory=helpers.get_readable_size(self.image_max_size_bytes))
                 self.view.alert(self.tr("<center><b>Error uploading '{name}'</b>").format(name=Path(image_to_upload).name)+"<br>"+message)
                 return
             # Check if user has enough stogage
             image_size=Path(image_to_upload).stat().st_size
             if self.free_storage and image_size > self.free_storage:
                 message = (self.tr("<b>Not enough storage space. </b>"
-                                   "You have {free_storage} MB left, but '{name}' is "
-                                   "{image_size} MB").format(free_storage=round(self.free_storage/(1024*1024), 1),
-                                                                name=Path(image_to_upload).name,
-                                                                image_size=round(image_size/(1024*1024), 1)))
+                                   "You have {free_storage} left, but '{name}' is "
+                                   "{image_size}").format(free_storage=helpers.get_readable_size(self.free_storage),
+                                                          name=Path(image_to_upload).name,
+                                                          image_size=helpers.get_readable_size(image_size)))
                 self.iface.messageBar().pushWarning("Mapflow", message)
                 self.get_mosaic(mosaic_id)
                 self.mosaicsUpdated.emit()
@@ -284,6 +297,7 @@ class DataCatalogService(QObject):
             if failed:
                 self.api.delete_image_error_handler(image_paths=failed)
             mosaic_id = self.selected_mosaic().id
+            self.dlg.mosaicTable.clearSelection()
             self.get_mosaic(mosaic_id)
             self.dlg.imageTable.clearSelection()
         else:
@@ -322,9 +336,14 @@ class DataCatalogService(QObject):
             self.delete_images(response = None, images=images, deleted=[], failed=[])
 
     def on_image_selection(self, image: ImageReturnSchema):
+        selected_images = self.dlg.imageTable.selectedIndexes()
+        if len(selected_images) > 1 and self.dlg.selected_image_cell == selected_images[0]:
+            pass
+        else:
+            self.dlg.selected_mosaic_cell = self.dlg.mosaicTable.selectedIndexes()[0]
+            self.get_image_preview_s(image)
         self.view.show_image_info(image)
         self.view.add_image_cell_buttons()
-        self.get_image_preview_s(image)
         return image
 
     def image_info(self):
@@ -359,6 +378,11 @@ class DataCatalogService(QObject):
                               extent: QgsRectangle,
                               crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857"),
                               image_name: str = ""):
+        if not self.temp_dir:
+            self.view.alert(self.tr("Please, select existing output directory in the Settings tab"))
+            settings_tab = self.dlg.tabWidget.findChild(QWidget, "settingsTab")
+            self.dlg.tabWidget.setCurrentWidget(settings_tab) 
+            return
         with open(Path(self.temp_dir)/os.urandom(32).hex(), mode='wb') as f:
             f.write(response.readAll().data())
         preview = gdal.Open(f.name)

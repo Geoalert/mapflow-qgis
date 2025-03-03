@@ -5,16 +5,17 @@ from typing import Iterable, Optional, List
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette
-from PyQt5.QtWidgets import QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton, QAction, QMenu
+from PyQt5.QtWidgets import (QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton, 
+                             QAction, QMenu, QAbstractItemView, QHeaderView)
 from qgis.core import QgsMapLayerProxyModel, QgsSettings
 
 from . import icons
-from ..config import config
+from ..config import config, ConfigSearchColumns
 from ..entity.billing import BillingType
 from ..entity.provider import ProviderInterface
 from ..functional import helpers
-from ..schema.project import MapflowProject
-from ..schema.project import UserRole
+from ..schema.project import MapflowProject, UserRole
+from ..schema.catalog import ProductType
 
 ui_path = Path(__file__).parent/'static'/'ui'
 
@@ -35,6 +36,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.setupUi(self)
         # Restrict combos to relevant layer types; QGIS 3.10-3.20 (at least) bugs up if set in .ui
         self.polygonCombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
+        # Don't allow to change path directly (without ... and selection in file dialog) to avoid errors
+        self.outputDirectory.setReadOnly(True)
         # Set icons (can be done in .ui but brings about the resources_rc import bug)
         self.setWindowIcon(icons.plugin_icon)
         self.addProvider.setIcon(icons.plus_icon)
@@ -72,8 +75,10 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
         # setup hidden/visible columns
         # table.setHorizontalHeaderLabels(labels)
-        self.set_column_visibility()
-        self.connect_column_checkboxes()
+        self.set_processing_visible_columns()
+        self.connect_processing_column_checkboxes()
+        self.set_search_visible_columns()
+        self.connect_search_column_checkboxes()
         # connect two spinboxes
         self.spin1_connection = self.maxZoom.valueChanged.connect(self.switch_maxzoom_2)
         self.spin2_connection = self.maxZoom2.valueChanged.connect(self.switch_maxzoom_1)
@@ -127,7 +132,10 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.processing_update_action = QAction(self.tr("Rename"))
         self.setup_options_menu()
 
+        # Imagery Search
         self.imageId.setReadOnly(True)
+        self.metadataTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.enable_search_pages(False)
 
     # ===== Settings management ===== #
     def save_view_results_mode(self):
@@ -207,34 +215,35 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.raster_provider_connection = self.sourceCombo.currentTextChanged.connect(self.switch_provider_combo)
         self.rasterSourceChanged.emit()
 
-    def connect_column_checkboxes(self):
-        self.showNameColumn.toggled.connect(self.set_column_visibility)
-        self.showModelColumn.toggled.connect(self.set_column_visibility)
-        self.showStatusColumn.toggled.connect(self.set_column_visibility)
-        self.showProgressColumn.toggled.connect(self.set_column_visibility)
-        self.showAreaColumn.toggled.connect(self.set_column_visibility)
-        self.showCostColumn.toggled.connect(self.set_column_visibility)
-        self.showCreatedColumn.toggled.connect(self.set_column_visibility)
-        self.showReviewColumn.toggled.connect(self.set_column_visibility)
-        self.showIdColumn.toggled.connect(self.set_column_visibility)
+    def set_processing_visible_columns(self):
+        processing_columns_numbers = [str(x) for x in range(len(self.processing_columns))] # 9 columns in total: 0-8
+        # When settings are empty OR filled with something except 0-8
+        if not self.settings.value("visibleProcessingColumns") or \
+        not list(set(self.settings.value("visibleProcessingColumns")) & set(processing_columns_numbers)):
+            # Set only 0-4 and 6 columns (and checkboxes) as checked by default 
+            self.settings.setValue("visibleProcessingColumns", [str(x) for x in range(5)] + ["6"])
+        # Or check previous columns from settings
+        for idx, column in enumerate(self.processing_columns):
+            if str(idx) in self.settings.value("visibleProcessingColumns"):
+                column.setChecked(True)
+        self.set_processing_column_visibility()
 
-    def set_column_visibility(self):
+    def connect_processing_column_checkboxes(self):
+        for checkbox in self.processing_columns:
+            checkbox.toggled.connect(self.set_processing_column_visibility)
+
+    def set_processing_column_visibility(self):
         """
         todo: rewrite it as a checkable comboBox or something, which will be filled from code
         """
-        column_flags = (self.showNameColumn.isChecked(),
-                        self.showModelColumn.isChecked(),
-                        self.showStatusColumn.isChecked(),
-                        self.showProgressColumn.isChecked(),
-                        self.showAreaColumn.isChecked(),
-                        self.showCostColumn.isChecked(),
-                        self.showCreatedColumn.isChecked(),
-                        self.showReviewColumn.isChecked(),
-                        self.showIdColumn.isChecked())
-
-        for idx, flag in enumerate(column_flags):
-            # A VERY ugly solution, depends on correspondence between Config, main_dialog.ui and this file
-            self.processingsTable.setColumnHidden(idx, not flag)
+        new_visible_columns = []
+        # Show / hide newly checked / unchecked columns
+        for idx, column in enumerate(self.processing_columns):
+            self.processingsTable.setColumnHidden(idx, not column.isChecked())
+            if column.isChecked():
+                new_visible_columns.append(str(idx))
+        # Save new checked state in settings
+        self.settings.setValue("visibleProcessingColumns", new_visible_columns)
 
     # ========= SHOW =========== #
     def setup_for_billing(self, billing_type: BillingType):
@@ -309,6 +318,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
         if fill:
             self.fill_metadata_table(fill)
+
+        self.set_search_column_visibility()
 
     def show_wd_price(self,
                       wd_price: float,
@@ -426,7 +437,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         for row, feature in enumerate(metadata['features']):
             if feature.get('id'):
                 feature['properties']['id'] = feature.get('id') # for uniformity
-            for col, attr in enumerate(config.METADATA_TABLE_ATTRIBUTES.values()):
+            for col, attr in enumerate(ConfigSearchColumns().METADATA_TABLE_ATTRIBUTES.values()):
                 try:
                     value = feature['properties'][attr]
                 except KeyError:  # e.g. <colorBandOrder/> for pachromatic images
@@ -436,20 +447,16 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                 self.metadataTable.setItem(row, col, table_item)
         # Turn sorting on again
         self.metadataTable.setSortingEnabled(True)
+        self.metadataTable.resizeColumnsToContents()
         self.metadataTableFilled.emit()
 
-    def setup_project_combo(self, projects: List[MapflowProject], current_position: int):
+    def setup_project_combo(self, projects: dict[str, MapflowProject], current_project_id: Optional[str] = None):
         self.projectsCombo.clear()
-        self.projectsCombo.addItems([pr.name for pr in projects])
-        self.projectsCombo.setCurrentIndex(current_position)
+        for pr in projects.values():
+            self.projectsCombo.insertItem(0, pr.name, pr.id)
+        if current_project_id:
+            self.select_project(current_project_id)
 
-    def setup_default_project(self, is_default: bool):
-        tooltip = self.tr("You can't remove or modify default project") if is_default else ""
-        self.deleteProject.setDisabled(is_default)
-        self.updateProject.setDisabled(is_default)
-        self.deleteProject.setToolTip(tooltip)
-        self.updateProject.setToolTip(tooltip)
-    
     def setup_options_menu(self):
         self.options_menu.addAction(self.save_result_action)
         self.options_menu.addAction(self.download_aoi_action)
@@ -522,7 +529,77 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.options_menu.removeAction(self.processing_update_action)
         else:
             self.options_menu.addAction(self.processing_update_action)
+
+    def enable_zoom_selector(self, enable: bool = True, zoom: str = None):
+        self.zoomCombo.setEnabled(enable)
+        if enable is False:
+            if zoom:
+                self.zoomCombo.setCurrentText(zoom)
+                self.zoomCombo.setToolTip(self.tr("Zoom is derived from found imagery resolution"))
+            else:
+                self.zoomCombo.setCurrentIndex(0)
+                self.zoomCombo.setToolTip(self.tr("Zoom"))
+        else:
+            self.zoomCombo.setToolTip(self.tr("Zoom"))
+
+    def enable_search_pages(self, enable: bool = False, page_number: int = 1, total_pages: int = 1):
+        self.searchLeftButton.setVisible(enable)
+        self.searchRightButton.setVisible(enable)
+        self.searchPageLabel.setVisible(enable)
+        if enable is False:
+            return
+        self.searchLeftButton.setIcon(icons.arrow_left_icon)
+        self.searchRightButton.setIcon(icons.arrow_right_icon)
+        self.searchLeftButton.setToolTip(self.tr("Previous page"))
+        self.searchRightButton.setToolTip(self.tr("Next page"))
+        self.searchPageLabel.setToolTip(self.tr("Page"))
+        self.searchPageLabel.setText(f"{page_number}/{total_pages}")
     
+    def selected_project_id(self):
+        if self.projectsCombo.currentData():
+            return str(self.projectsCombo.currentData())
+        else:
+            return None
+
+    def select_project(self, project_id):
+        idx = self.projectsCombo.findData(project_id)
+        if idx == -1:
+            # if project is not found, just select the first one
+            idx = 0
+        self.projectsCombo.setCurrentIndex(idx)
+    
+    def set_search_visible_columns(self):
+        search_columns_numbers = [str(x) for x in range(len(self.search_columns))] # 10 columns in total: 0-9
+        # When settings are empty OR filled with something except 0-9
+        if not self.settings.value("visibleSearchColumns") or \
+        not list(set(self.settings.value("visibleSearchColumns")) & set(search_columns_numbers)):
+            # Set only 0-6 columns (and checkboxes) as checked by default 
+            self.settings.setValue("visibleSearchColumns", [str(x) for x in range(7)])
+        # Or check previous columns from settings
+        for idx, column in enumerate(self.search_columns):
+            if str(idx) in self.settings.value("visibleSearchColumns"):
+                column.setChecked(True)
+    
+    def connect_search_column_checkboxes(self):
+        for checkbox in self.search_columns:
+            checkbox.toggled.connect(self.set_search_column_visibility)
+    
+    def set_search_column_visibility(self):
+        new_visible_columns = []
+        # Show / hide newly checked / unchecked columns
+        for idx, column in enumerate(self.search_columns):
+            self.metadataTable.setColumnHidden(idx, not column.isChecked())
+            if column.isChecked():
+                new_visible_columns.append(str(idx))
+        # Save new checked state in settings
+        self.settings.setValue("visibleSearchColumns", new_visible_columns)
+
+    def filter_processings_table(self, name_filter: str = None):
+        for row in range(self.processingsTable.rowCount()):
+            processing_name = self.processingsTable.item(row, 0).data(Qt.DisplayRole)
+            hide = bool(name_filter) and (name_filter.lower() not in processing_name.lower())
+            self.processingsTable.setRowHidden(row, hide)
+
     @property
     def project_controls(self):
         return [self.labelProcessingName, self.processingName,
@@ -538,3 +615,28 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                 self.processingRatingFeedbackText,
                 self.acceptButton, self.reviewButton,
                 self.ratingSubmitButton]
+    
+    @property
+    def processing_columns(self):
+        return [self.showNameColumn,
+                self.showModelColumn,
+                self.showStatusColumn,
+                self.showProgressColumn,
+                self.showAreaColumn,
+                self.showCostColumn,
+                self.showCreatedColumn,
+                self.showReviewColumn,
+                self.showIdColumn]
+
+    @property
+    def search_columns(self):
+        return [self.showProductTypeColumn,
+                self.showProviderNameColumn,
+                self.showSensorColumn,
+                self.showBandsColumn,
+                self.showCloudsColumn,
+                self.showOffNadirColumn,
+                self.showDateTimeColumn,
+                self.showZoomColumn,
+                self.showResolutionColumn,
+                self.showImageIdColumn]

@@ -1,3 +1,17 @@
+## 3.1.0
+    - Imagery Search:
+        - Allow processing with multiple search results if they have the same provider name, mosaic product type and zoom
+        - Product type and availability filters
+        - Pagination if there is more than 1000 results
+        - Zoom to feature on preview
+        - Opportunity to configure search table in Settings
+    - My imagery:
+        - Mosaic multiselect and multidelete
+        - Sorting by name, date, size
+        - Readable sizes from bytes
+    - Filter projects and processings by name
+    - Create temporary directory for image previews and search results inside user's output folder
+    - Remember tables column configurations checked state from Settings tab
 ## 3.0.1
     Hotfix:
         - Forbid processing start if 'Imagery search' or 'My imagery' tables have no selection

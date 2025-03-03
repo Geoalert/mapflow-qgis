@@ -24,7 +24,7 @@
    <item>
     <widget class="QLineEdit" name="processingName">
      <property name="maxLength">
-      <number>40</number>
+      <number>255</number>
      </property>
     </widget>
    </item>

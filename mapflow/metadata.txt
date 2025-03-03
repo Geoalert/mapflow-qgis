@@ -9,10 +9,19 @@ about=Mapflow provides AI models for automatic feature extraction from satellite
         - roads
         - construction sites
     For a step-by-step user guide, go to https://docs.mapflow.ai/api/qgis_mapflow#user-interface
-version=3.0.1
+version=3.1.0
 author=Geoalert
 email=hello@geoalert.io
 changelog:
+    3.1.0
+    - Imagery Search:
+        - Allow processing with multiple search results if they have the same provider name, mosaic product type and zoom
+        - Add product type and availability filters
+        - Zoom to feature on preview
+        - Opportunity to configure search table in Settings tab
+    - My imagery sorting by name, date, size
+    - Filter projects and processings by name
+    - Create temporary directory for image previews and search results inside user's output folder
     3.0.1
     Hotfix:
         - Forbid processing start if 'Imagery search' or 'My imagery' tables have no selection
