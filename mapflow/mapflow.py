@@ -398,6 +398,7 @@ class Mapflow(QObject):
         self.current_project = MapflowProject.from_dict(json.loads(response.readAll().data()))
         if self.current_project:
             self.project_id = self.current_project.id
+            self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(self.current_project.name))
         self.setup_processings_table()
         self.get_project_sharing(self.current_project)
         self.setup_project_change_rights()
@@ -3166,6 +3167,16 @@ class Mapflow(QObject):
             self.alert(self.tr("No projects found! Contact us to resolve the issue"))
             return
         self.filter_projects(self.dlg.filterProject.text())
+        self.dlg.setup_projects_dashboard(self.projects)
+        self.dlg.projects_buttons_group.buttonClicked.connect(self.switch_to_processings)
+
+    def switch_to_processings(self, button):
+        for k in self.dlg.projects_buttons_ids.keys():
+            if self.dlg.projects_buttons_group.id(button) == k:
+                pid = self.dlg.projects_buttons_ids[k]
+        index = self.dlg.projectsCombo.findData(pid)
+        self.dlg.projectsCombo.setCurrentIndex(index)
+        self.dlg.stackedProjectsWidget.setCurrentIndex(1)
 
     def setup_projects_combo(self, projects: dict[str, MapflowProject]):
         if self.project_connection is not None:
