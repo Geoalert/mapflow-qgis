@@ -6,7 +6,7 @@ from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette
 from PyQt5.QtWidgets import (QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton, 
-                             QAction, QMenu, QAbstractItemView, QHeaderView)
+                             QAction, QMenu, QAbstractItemView, QHeaderView, QVBoxLayout, QButtonGroup)
 from qgis.core import QgsMapLayerProxyModel, QgsSettings
 
 from . import icons
@@ -136,6 +136,16 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.imageId.setReadOnly(True)
         self.metadataTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.enable_search_pages(False)
+
+        # Projects dashboard
+        self.projects_buttons_group = QButtonGroup()
+        self.projects_buttons_ids = {}
+        self.switchProjectsButton.clicked.connect(lambda: self.stackedProjectsWidget.setCurrentIndex(0))
+        background_color = self.processingsTab.palette().base().color().name()
+        self.processingsTab.setStyleSheet("QWidget#projectsScrollAreaContents {background-color: " + background_color + " }")
+        self.switchProjectsButton.setIcon(icons.arrow_left_icon)
+        self.projectsPreviousPageButton.setIcon(icons.arrow_left_icon)
+        self.projectsNextPageButton.setIcon(icons.arrow_right_icon)
 
     # ===== Settings management ===== #
     def save_view_results_mode(self):
@@ -457,6 +467,51 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         if current_project_id:
             self.select_project(current_project_id)
 
+    def setup_projects_dashboard(self, projects: dict[str, MapflowProject]):
+        row = 0
+        column = 0
+        for pr in projects.values():
+            # Create grid with 3 columns
+            for i in range(len(projects.values())):
+                if column == 3:
+                    column = 0
+                    row += 1
+            # Create and style buttons, addin them to a group
+            max_width = 200
+            button = QPushButton()
+            button.setText(("\n\n{pid}\n"+
+                           "{email}").format(pid=button.fontMetrics().elidedText(pr.id, Qt.ElideRight, max_width),
+                                             email=button.fontMetrics().elidedText(pr.ownerEmail, Qt.ElideRight, max_width)))
+            button.adjustSize()
+            button.setMinimumHeight(button.height()*2)
+            button.setStyleSheet(
+                "QPushButton {"
+                "   border-style: solid;"
+                "   border-width: 2px;"
+                "   border-color: lightGrey;"
+                "   border-radius: 10px;}"
+                "QPushButton:hover {"
+                "   border-style: outset;"
+                "   border-width: 2px;"
+                "   border-color: rgb(87, 95, 132);}")
+            self.projects_buttons_group.addButton(button)
+            # Create bold project name label
+            label_wiget = QWidget()
+            label_layout = QVBoxLayout()
+            label = QLabel()
+            label.setText("<b>{name}<br></br><br></br>".format(name=label.fontMetrics().elidedText(pr.name, Qt.ElideRight, max_width)))
+            label.setAlignment(Qt.AlignCenter)
+            label_layout.addWidget(label)
+            label_wiget.setLayout(label_layout)
+            label_wiget.setMinimumWidth(button.width())
+            # Add two widgets on top of each other
+            self.projectsLayout.addWidget(label_wiget, row, column)
+            self.projectsLayout.addWidget(button, row, column)
+            # Add button id and project id to dictionary
+            self.projects_buttons_ids[self.projects_buttons_group.id(button)] = pr.id
+            # Move to the nex column
+            column += 1
+        
     def setup_options_menu(self):
         self.options_menu.addAction(self.save_result_action)
         self.options_menu.addAction(self.download_aoi_action)
