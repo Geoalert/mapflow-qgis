@@ -1,3 +1,6 @@
+## 3.1.1
+    Hotfix:
+        - Allow zoom selection for user's data providers
 ## 3.1.0
     - Imagery Search:
         - Allow processing with multiple search results if they have the same provider name, mosaic product type and zoom

@@ -21,7 +21,8 @@ class BasemapProvider(UsersProvider, ABC):
         params = {
             'url': self.url,
             'projection': self.crs.value.lower(),
-            'source_type': self.source_type.value
+            'source_type': self.source_type.value,
+            'zoom': zoom
         }
         if self.credentials:
             params.update(raster_login=self.credentials.login,
