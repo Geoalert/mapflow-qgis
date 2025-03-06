@@ -74,6 +74,8 @@ class DataCatalogView(QObject):
         self.sort_mosaics_index = 0
         self.sort_images_index = 0
 
+        self.dlg.refreshCatalogButton.setIcon(icons.refresh_icon)
+
     @property
     def mosaic_table_visible(self):
         return self.dlg.stackedLayout.currentIndex() == 0
