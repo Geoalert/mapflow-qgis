@@ -1,6 +1,7 @@
 ## 3.1.1
     Hotfix:
         - Allow zoom selection for user's data providers
+        - Fix style for building heights and terms of use translated link
 ## 3.1.0
     - Imagery Search:
         - Allow processing with multiple search results if they have the same provider name, mosaic product type and zoom
