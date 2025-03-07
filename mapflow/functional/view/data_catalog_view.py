@@ -5,7 +5,7 @@ from ...dialogs.main_dialog import MainDialog
 from PyQt5.QtCore import QObject, Qt
 from PyQt5.QtWidgets import (QWidget, QTableWidget, QTableWidgetItem, QHeaderView, QHBoxLayout, QAbstractItemView, QToolButton,
                              QMessageBox, QApplication, QMenu, QAction)
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QFontMetrics
 
 from ...schema.data_catalog import MosaicReturnSchema, ImageReturnSchema
 from ...dialogs import icons
@@ -55,7 +55,7 @@ class DataCatalogView(QObject):
         
         # Transfer labels' long text to a new line
         self.dlg.catalogSelectionLabel.setWordWrap(True)
-        self.dlg.imagePreview.setWordWrap(True)
+        self.dlg.catalogInfo.setWordWrap(True)
 
         # Setup layouts
         self.mosaic_cell_layout = QHBoxLayout()
@@ -73,6 +73,13 @@ class DataCatalogView(QObject):
         # Default sortCombo index is 0 (A-Z)
         self.sort_mosaics_index = 0
         self.sort_images_index = 0
+
+        # Mosaic images instant preview
+        self.dlg.nextImageButton.setVisible(False)
+        self.dlg.previousImageButton.setVisible(False)
+        self.dlg.nextImageButton.setIcon(icons.arrow_right_icon)
+        self.dlg.previousImageButton.setIcon(icons.arrow_left_icon)
+        
 
     @property
     def mosaic_table_visible(self):
@@ -143,26 +150,51 @@ class DataCatalogView(QObject):
         if mosaic.tags:
             elided_tags = []
             for tag in mosaic.tags:
-                elided_tag = self.dlg.imagePreview.fontMetrics().elidedText(tag, Qt.ElideRight, self.dlg.imagePreview.width() - 10)
+                elided_tag = self.dlg.catalogInfo.fontMetrics().elidedText(tag, Qt.ElideRight, self.dlg.catalogInfo.width() - 40)
                 elided_tags.append(elided_tag)
             tags_str = ', '.join(elided_tags)
         else:
             tags_str = ''
-        text = self.tr("Mosaic: {name} \n"
-                       "Number of images: {count} \n").format(name=self.dlg.imagePreview.fontMetrics().elidedText(
-                                                                  mosaic.name, 
-                                                                  Qt.ElideRight, 
-                                                                  self.dlg.imagePreview.width() - 10), 
-                                                             count=len(images))
+        text = self.tr("Number of images: {count} \n").format(count=len(images))
         if images:
-            text += self.tr("Size: {mosaic_size} \nPixel size: {pixel_size} m \n"
+            text += self.tr("Size: {mosaic_size} \n"
+                            "Pixel size: {pixel_size} m \n"
+                            "CRS: {crs} \n"
+                            "Number of bands: {count} \n"
                            ).format(mosaic_size=get_readable_size(mosaic.sizeInBytes),
-                                    pixel_size=round(sum(list(images[0].meta_data.values())[6])/len(list(images[0].meta_data.values())[6]), 2))
+                                    pixel_size=round(sum(list(images[0].meta_data.values())[6])/len(list(images[0].meta_data.values())[6]), 2),
+                                    crs=list(images[0].meta_data.values())[0],
+                                    count=list(images[0].meta_data.values())[1])
         text += self.tr("Created: {date} at {time} \nTags: {tags}"
                        ).format(date=mosaic.created_at.date(), time=mosaic.created_at.strftime('%H:%M'),
                                 tags=tags_str)
-        self.dlg.imagePreview.setText(text)
-        self.dlg.imagePreview.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        self.dlg.catalogInfo.setText(text)
+
+    def enable_mosaic_images_preview(self, images_count: int, preview_idx: int):
+        # Hide '<' and '>' in images table
+        if not self.mosaic_table_visible:
+            self.dlg.previousImageButton.setVisible(False)
+            self.dlg.nextImageButton.setVisible(False)
+            return
+        # Hide '<' and '>' for empty mosaics
+        if images_count == 0:
+            self.dlg.previousImageButton.setVisible(False)
+            self.dlg.nextImageButton.setVisible(False)
+            self.dlg.imagePreview.clear()
+            return
+        # Show '<' and '>'
+        self.dlg.previousImageButton.setVisible(True)
+        self.dlg.nextImageButton.setVisible(True)
+        # Disable '>' if it's the last image
+        if preview_idx + 1 >= images_count:
+            self.dlg.nextImageButton.setEnabled(False)
+        else:
+            self.dlg.nextImageButton.setEnabled(True)
+        # Disable '<' if it's the first image
+        if preview_idx <= 0:
+            self.dlg.previousImageButton.setEnabled(False)
+        else:
+            self.dlg.previousImageButton.setEnabled(True)
 
     def full_image_info(self, image: ImageReturnSchema):
         try:
@@ -221,7 +253,7 @@ class DataCatalogView(QObject):
 
     def show_preview_s(self, preview_image):
         self.dlg.imagePreview.setPixmap(QPixmap.fromImage(preview_image))
-        self.dlg.imagePreview.setAlignment(Qt.AlignVCenter | Qt.AlignHCenter)
+        self.dlg.imagePreview.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
 
     def selected_mosaic_ids(self, limit=None):
         # Add unique selected rows
@@ -261,11 +293,12 @@ class DataCatalogView(QObject):
     def show_mosaic_info(self, mosaic_name):
         self.add_mosaic_cell_buttons()
         # Show mosaic info
+        bold_font = self.dlg.catalogSelectionLabel.font()
+        bold_font.setBold(True)
         self.dlg.catalogSelectionLabel.setText(self.tr("Selected mosaic: <b>{mosaic_name}").format(
-            mosaic_name=self.dlg.imagePreview.fontMetrics().elidedText(
-                mosaic_name,
-                Qt.ElideRight,
-                self.dlg.imagePreview.width() - 10)))
+            mosaic_name=QFontMetrics(bold_font).elidedText(mosaic_name,
+                                                           Qt.ElideRight,
+                                                           self.dlg.catalogSelectionLabel.width() - 10)))
         # Enable buttons
         self.dlg.deleteCatalogButton.setEnabled(True)
         self.dlg.seeImagesButton.setEnabled(True)
@@ -286,20 +319,23 @@ class DataCatalogView(QObject):
     def show_image_info(self, image: ImageReturnSchema):
         if not image:
             return
-        self.dlg.catalogInfo.setText(self.tr("uploaded: {date} at {time} \n"
-                                             "file size: {size} \n"
-                                             "pixel size: {pixel_size} m \n"
-                                             "bands: {count}"
+        self.dlg.catalogInfo.setText(self.tr("Uploaded: {date} at {time} \n"
+                                             "File size: {size} \n"
+                                             "Pixel size: {pixel_size} m \n"
+                                             "CRS: {crs} \n"
+                                             "Bands: {count}"
                                             ).format(date=image.uploaded_at.date(),
                                                      time=image.uploaded_at.strftime('%H:%M'),
                                                      size=get_readable_size(image.file_size),
                                                      pixel_size=round(sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6]), 2),
+                                                     crs=list(image.meta_data.values())[0],
                                                      count=list(image.meta_data.values())[1]))
+        bold_font = self.dlg.catalogSelectionLabel.font()
+        bold_font.setBold(True)
         self.dlg.catalogSelectionLabel.setText(self.tr("Selected image: <b>{image_name}").format(
-            image_name=self.dlg.imagePreview.fontMetrics().elidedText(
-                image.filename,
-                Qt.ElideRight,
-                self.dlg.imagePreview.width() - 10)))
+            image_name=QFontMetrics(bold_font).elidedText(image.filename,
+                                                          Qt.ElideRight,
+                                                          self.dlg.catalogSelectionLabel.width() - 10)))
         # Show widgets
         self.dlg.deleteCatalogButton.setEnabled(True)
         self.set_table_tooltip(self.dlg.imageTable)
@@ -332,7 +368,6 @@ class DataCatalogView(QObject):
         # En(dis)able buttons and change labels
         self.dlg.seeMosaicsButton.setEnabled(True)
         self.dlg.seeImagesButton.setEnabled(False)
-        self.dlg.infoPreviewLabel.setText(self.tr("Image preview"))
         self.dlg.deleteCatalogButton.setText(self.tr("Delete image"))
         self.dlg.addCatalogButton.setText(self.tr("Add image"))
         self.dlg.addCatalogButton.setMenu(self.upload_image_menu)
@@ -343,13 +378,14 @@ class DataCatalogView(QObject):
         self.clear_image_info()
         # Set sorting combo text
         self.dlg.sortCombo.setCurrentIndex(self.sort_images_index)
+        # Disable '<' and '>' for images table
+        self.enable_mosaic_images_preview(0, 0)
 
     def show_mosaics_table(self, selected_mosaic_name: Optional[str]):
         # Save buttons before deleting cells and therefore widgets
         # En(dis)able buttons and change labels
         self.dlg.seeMosaicsButton.setEnabled(False)
         self.dlg.seeImagesButton.setEnabled(True)
-        self.dlg.infoPreviewLabel.setText(self.tr("Mosaic data"))
         self.dlg.deleteCatalogButton.setText(self.tr("Delete mosaic"))
         self.dlg.addCatalogButton.setText(self.tr("Add mosaic"))
         self.dlg.addCatalogButton.setMenu(None)

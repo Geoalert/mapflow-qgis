@@ -57,6 +57,7 @@ class DataCatalogService(QObject):
         self.image_max_size_pixels = Config.MAX_FILE_SIZE_PIXELS
         self.image_max_size_bytes = Config.MAX_FILE_SIZE_BYTES
         self.free_storage = None
+        self.preview_idx = 0
 
 
     # Mosaics CRUD
@@ -284,6 +285,25 @@ class DataCatalogService(QObject):
         self.view.display_images(self.images)
         if self.view.mosaic_table_visible:
             self.view.display_mosaic_info(self.selected_mosaic(), self.images)
+            self.preview_idx = 0
+            if len(self.images) > 0:
+                self.get_image_preview_s(self.images[self.preview_idx])
+            else:
+                self.view.enable_mosaic_images_preview(len(self.images), self.preview_idx)
+    
+    def get_next_preview(self):
+        try:
+            self.preview_idx += 1
+            self.get_image_preview_s(self.images[self.preview_idx])
+        except IndexError:
+            pass
+
+    def get_previous_preview(self):
+        try:
+            self.preview_idx += -1
+            self.get_image_preview_s(self.images[self.preview_idx])
+        except IndexError:
+            pass
 
     def get_image(self, image_id: UUID, callback: Callable):
         self.api.get_image(image_id=image_id, callback=callback)
@@ -361,6 +381,8 @@ class DataCatalogService(QObject):
     def get_image_preview_s_callback(self, response: QNetworkReply):
         image = QImage.fromData(response.readAll().data())
         self.view.show_preview_s(image)
+        if self.view.mosaic_table_visible:
+            self.view.enable_mosaic_images_preview(len(self.images), self.preview_idx)
 
     def get_image_preview_l(self):
         try:
@@ -423,6 +445,7 @@ class DataCatalogService(QObject):
         mosaic = self.selected_mosaic()
         self.view.show_mosaics_table(mosaic.name)
         self.view.display_mosaic_info(mosaic, self.images)
+        self.get_mosaic_images(mosaic.id)
 
     def check_image_selection(self):
         image = self.selected_image()
