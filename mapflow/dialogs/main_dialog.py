@@ -1,12 +1,13 @@
 import sys
 from pathlib import Path
 from typing import Iterable, Optional, List
+from datetime import datetime
 
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette
 from PyQt5.QtWidgets import (QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton, 
-                             QAction, QMenu, QAbstractItemView, QHeaderView, QVBoxLayout, QButtonGroup)
+                             QAction, QMenu, QAbstractItemView, QHeaderView, QVBoxLayout, QButtonGroup, QTableWidget)
 from qgis.core import QgsMapLayerProxyModel, QgsSettings
 
 from . import icons
@@ -133,15 +134,13 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.metadataTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.enable_search_pages(False)
 
-        # Projects dashboard
-        self.projects_buttons_group = QButtonGroup()
-        self.projects_buttons_ids = {}
+        # Projects stacked table
+        self.projectsTable.cellClicked.connect(self.switch_to_processings)
         self.switchProjectsButton.clicked.connect(lambda: self.stackedProjectsWidget.setCurrentIndex(0))
-        background_color = self.processingsTab.palette().base().color().name()
-        self.processingsTab.setStyleSheet("QWidget#projectsScrollAreaContents {background-color: " + background_color + " }")
         self.switchProjectsButton.setIcon(icons.arrow_left_icon)
         self.projectsPreviousPageButton.setIcon(icons.arrow_left_icon)
         self.projectsNextPageButton.setIcon(icons.arrow_right_icon)
+        self.filterProjects.setPlaceholderText(self.tr("Filter projects by name"))
 
     # ===== Settings management ===== #
     def save_view_results_mode(self):
@@ -446,50 +445,54 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         if current_project_id:
             self.select_project(current_project_id)
 
-    def setup_projects_dashboard(self, projects: dict[str, MapflowProject]):
-        row = 0
-        column = 0
-        for pr in projects.values():
-            # Create grid with 3 columns
-            for i in range(len(projects.values())):
-                if column == 3:
-                    column = 0
-                    row += 1
-            # Create and style buttons, addin them to a group
-            max_width = 200
-            button = QPushButton()
-            button.setText(("\n\n{pid}\n"+
-                           "{email}").format(pid=button.fontMetrics().elidedText(pr.id, Qt.ElideRight, max_width),
-                                             email=button.fontMetrics().elidedText(pr.ownerEmail, Qt.ElideRight, max_width)))
-            button.adjustSize()
-            button.setMinimumHeight(button.height()*2)
-            button.setStyleSheet(
-                "QPushButton {"
-                "   border-style: solid;"
-                "   border-width: 2px;"
-                "   border-color: lightGrey;"
-                "   border-radius: 10px;}"
-                "QPushButton:hover {"
-                "   border-style: outset;"
-                "   border-width: 2px;"
-                "   border-color: rgb(87, 95, 132);}")
-            self.projects_buttons_group.addButton(button)
-            # Create bold project name label
-            label_wiget = QWidget()
-            label_layout = QVBoxLayout()
-            label = QLabel()
-            label.setText("<b>{name}<br></br><br></br>".format(name=label.fontMetrics().elidedText(pr.name, Qt.ElideRight, max_width)))
-            label.setAlignment(Qt.AlignCenter)
-            label_layout.addWidget(label)
-            label_wiget.setLayout(label_layout)
-            label_wiget.setMinimumWidth(button.width())
-            # Add two widgets on top of each other
-            self.projectsLayout.addWidget(label_wiget, row, column)
-            self.projectsLayout.addWidget(button, row, column)
-            # Add button id and project id to dictionary
-            self.projects_buttons_ids[self.projects_buttons_group.id(button)] = pr.id
-            # Move to the nex column
-            column += 1
+    def setup_projects_table(self, projects: dict[str, MapflowProject]):
+        if not projects:
+            return
+        # First column is ID, hidden; second is name
+        self.projectsTable.setColumnCount(7)
+        self.projectsTable.setColumnHidden(0, True)
+        self.projectsTable.setRowCount(len(projects))
+        self.projectsTable.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.projectsTable.setSelectionBehavior(QAbstractItemView.SelectRows)
+        for row, project in enumerate(projects):
+            id_item = QTableWidgetItem()
+            id_item.setData(Qt.DisplayRole, project.id)
+            self.projectsTable.setItem(row, 0, id_item)
+            name_item = QTableWidgetItem()
+            name_item.setData(Qt.DisplayRole, project.name)
+            self.projectsTable.setItem(row, 1, name_item)
+            ok_item = QTableWidgetItem()
+            ok_item.setData(Qt.DisplayRole, project.processingCounts['succeeded'])
+            self.projectsTable.setItem(row, 2, ok_item)
+            failed_item = QTableWidgetItem()
+            failed_item.setData(Qt.DisplayRole, project.processingCounts['failed'])
+            self.projectsTable.setItem(row, 3, failed_item)
+            owner_item = QTableWidgetItem()
+            owner_item.setData(Qt.DisplayRole, project.shareProject.owners[0].email)
+            self.projectsTable.setItem(row, 4, owner_item)
+            updated_item = QTableWidgetItem()
+            updated_item.setData(Qt.DisplayRole, project.updated.astimezone().strftime('%Y-%m-%d %H:%M'))
+            self.projectsTable.setItem(row, 5, updated_item)
+            created_item = QTableWidgetItem()
+            created_item.setData(Qt.DisplayRole, project.created.astimezone().strftime('%Y-%m-%d %H:%M'))
+            self.projectsTable.setItem(row, 6, created_item)
+            self.projectsTable.setHorizontalHeaderLabels(["ID", 
+                                                          self.tr("Project"), 
+                                                          self.tr("Succeeded"), 
+                                                          self.tr("Failed"), 
+                                                          self.tr("Author"), 
+                                                          self.tr("Updated at"), 
+                                                          self.tr("Created at")])
+        self.projectsTable.resizeColumnsToContents()
+        self.projectsTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+        self.projectsTable.horizontalHeader().setStretchLastSection(True)
+        self.projectsTable.setSelectionMode(QAbstractItemView.SingleSelection)
+    
+    def switch_to_processings(self):
+        pid = self.projectsTable.selectionModel().selectedIndexes()[0].data()
+        index = self.projectsCombo.findData(pid)
+        self.projectsCombo.setCurrentIndex(index)
+        self.stackedProjectsWidget.setCurrentIndex(1)
         
     def setup_options_menu(self):
         self.options_menu.addAction(self.save_result_action)
@@ -596,6 +599,13 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         else:
             self.searchProvidersCombo.setVisible(True)
             self.searchProvidersLabel.setVisible(True)
+
+    def enable_projects_pages(self, enable: bool = False, page_number: int = 1, total_pages: int = 1):
+        self.projectsPreviousPageButton.setVisible(enable)
+        self.projectsNextPageButton.setVisible(enable)
+        self.projectsPageLabel.setVisible(enable)
+        if enable is True:
+            self.projectsPageLabel.setText(f"{page_number}/{total_pages}")
     
     def selected_project_id(self):
         if self.projectsCombo.currentData():

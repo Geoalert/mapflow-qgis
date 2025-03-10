@@ -1,9 +1,11 @@
 from dataclasses import dataclass
-from typing import Optional, List, Dict
+from datetime import datetime
 from enum import Enum
+from typing import Optional, List, Dict
 
 from .base import Serializable, SkipDataClass
 from ..entity.workflow_def import WorkflowDef
+from ..config import Config
 
 
 @dataclass
@@ -49,6 +51,10 @@ class MapflowProject(SkipDataClass):
     description: Optional[str]
     workflowDefs: Optional[List[dict]] = None
     shareProject: Optional[Dict[str, ShareProject]] = None
+    updated: Optional[datetime] = None
+    created: Optional[datetime] = None
+    processingCounts: Optional[Dict[str, int]] = None
+    total: Optional[int] = Config.PROJECTS_PAGE_LIMIT
 
     def __post_init__(self):
         if self.workflowDefs:
@@ -60,6 +66,9 @@ class MapflowProject(SkipDataClass):
             self.shareProject = ShareProject.from_dict(self.shareProject)
         else:
             self.shareProject = []
+        if self.created and self.updated:
+            self.created = datetime.fromisoformat(self.created.replace("Z", "+00:00"))
+            self.updated = datetime.fromisoformat(self.updated.replace("Z", "+00:00"))
     
 class UserRole(str, Enum):
     readonly = "readonly"
@@ -78,3 +87,17 @@ class UserRole(str, Enum):
     @property
     def can_delete_rename_project(self):
         return self.value == UserRole.owner
+
+@dataclass
+class ProjectsRequest(Serializable):
+    limit: int = Config.PROJECTS_PAGE_LIMIT
+    offset: int = 0
+    filter: Optional[str] = None
+    sortBy: Optional[str] = "UPDATED"
+    sortOrder: Optional[str] = "DESC"
+
+@dataclass
+class ProjectsResult(SkipDataClass):
+    results: Optional[List[MapflowProject]] = None
+    total: int = 0
+    count: int = None

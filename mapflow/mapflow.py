@@ -73,8 +73,7 @@ from .schema import (PostSourceSchema,
                      ImageCatalogRequestSchema,
                      ImageCatalogResponseSchema)
 from .schema.catalog import PreviewType, ProductType
-from .schema.project import MapflowProject
-from .schema.project import UserRole
+from .schema.project import MapflowProject, UserRole, ProjectsRequest
 
 
 class Mapflow(QObject):
@@ -199,7 +198,7 @@ class Mapflow(QObject):
         self.data_catalog_service = DataCatalogService(self.http, self.server, self.dlg, self.iface, self.result_loader, self.plugin_version, self.temp_dir)
         self.data_catalog_controller = DataCatalogController(self.dlg, self.data_catalog_service)
 
-        self.project_service = ProjectService(self.http, self.server)
+        self.project_service = ProjectService(self.http, self.server, self.dlg)
         self.project_service.projectsUpdated.connect(self.update_projects)
 
         self.processing_service = ProcessingService(self.http, self.server)
@@ -3154,7 +3153,7 @@ class Mapflow(QObject):
             self.setup_workflow_defs(default_project.workflowDefs)
             self.setup_processings_table()
         else:
-            self.project_service.get_projects(current_project_id=self.project_id)
+            self.project_service.get_projects(self.project_id)
             self.data_catalog_service.get_mosaics()
         self.dlg.setup_for_billing(self.billing_type)
         self.dlg.show()
@@ -3167,16 +3166,6 @@ class Mapflow(QObject):
             self.alert(self.tr("No projects found! Contact us to resolve the issue"))
             return
         self.filter_projects(self.dlg.filterProject.text())
-        self.dlg.setup_projects_dashboard(self.projects)
-        self.dlg.projects_buttons_group.buttonClicked.connect(self.switch_to_processings)
-
-    def switch_to_processings(self, button):
-        for k in self.dlg.projects_buttons_ids.keys():
-            if self.dlg.projects_buttons_group.id(button) == k:
-                pid = self.dlg.projects_buttons_ids[k]
-        index = self.dlg.projectsCombo.findData(pid)
-        self.dlg.projectsCombo.setCurrentIndex(index)
-        self.dlg.stackedProjectsWidget.setCurrentIndex(1)
 
     def setup_projects_combo(self, projects: dict[str, MapflowProject]):
         if self.project_connection is not None:
