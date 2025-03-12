@@ -3310,9 +3310,14 @@ class Mapflow(QObject):
         except KeyError:
             product_types = []
         return provider_names, product_types
-    
+
     def get_search_images_ids(self, local_image_indices, provider_names, product_types):
-        image_id = self.dlg.imageId.text()
+        selected_cells = self.dlg.metadataTable.selectedItems()
+        if not selected_cells:
+            image_id = None
+        else:
+            id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
+            image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
         requires_id = False
         selection_error = ""
         try:
