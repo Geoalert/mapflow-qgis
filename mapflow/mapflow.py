@@ -72,8 +72,7 @@ from .schema import (PostSourceSchema,
                      ImageCatalogRequestSchema,
                      ImageCatalogResponseSchema)
 from .schema.catalog import PreviewType, ProductType
-from .schema.project import MapflowProject
-from .schema.project import UserRole
+from .schema.project import MapflowProject, UserRole, ProjectsRequest
 
 
 class Mapflow(QObject):
@@ -198,7 +197,7 @@ class Mapflow(QObject):
         self.data_catalog_service = DataCatalogService(self.http, self.server, self.dlg, self.iface, self.result_loader, self.plugin_version, self.temp_dir)
         self.data_catalog_controller = DataCatalogController(self.dlg, self.data_catalog_service)
 
-        self.project_service = ProjectService(self.http, self.server)
+        self.project_service = ProjectService(self.http, self.server, self.dlg)
         self.project_service.projectsUpdated.connect(self.update_projects)
 
         self.processing_service = ProcessingService(self.http, self.server)
@@ -399,6 +398,7 @@ class Mapflow(QObject):
         self.current_project = MapflowProject.from_dict(json.loads(response.readAll().data()))
         if self.current_project:
             self.project_id = self.current_project.id
+            self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(self.current_project.name))
         self.setup_processings_table()
         self.get_project_sharing(self.current_project)
         self.setup_project_change_rights()
@@ -3139,7 +3139,7 @@ class Mapflow(QObject):
             self.setup_workflow_defs(default_project.workflowDefs)
             self.setup_processings_table()
         else:
-            self.project_service.get_projects(current_project_id=self.project_id)
+            self.project_service.get_projects(self.project_id)
             self.data_catalog_service.get_mosaics()
         self.dlg.setup_for_billing(self.billing_type)
         self.dlg.show()
