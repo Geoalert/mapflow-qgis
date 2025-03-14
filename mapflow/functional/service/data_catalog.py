@@ -295,6 +295,7 @@ class DataCatalogService(QObject):
         try:
             self.preview_idx += 1
             self.get_image_preview_s(self.images[self.preview_idx])
+            self.view.display_image_number(self.preview_idx, len(self.images))
         except IndexError:
             pass
 
@@ -302,6 +303,7 @@ class DataCatalogService(QObject):
         try:
             self.preview_idx += -1
             self.get_image_preview_s(self.images[self.preview_idx])
+            self.view.display_image_number(self.preview_idx, len(self.images))
         except IndexError:
             pass
 

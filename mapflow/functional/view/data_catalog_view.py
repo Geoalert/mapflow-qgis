@@ -169,12 +169,20 @@ class DataCatalogView(QObject):
                        ).format(date=mosaic.created_at.date(), time=mosaic.created_at.strftime('%H:%M'),
                                 tags=tags_str)
         self.dlg.catalogInfo.setText(text)
+        self.display_image_number(0, len(images))
+    
+    def display_image_number(self, number: int, count: int):
+        if count > 0:
+            self.dlg.imageNumberLabel.setText(f"{number+1}/{count}")
+        else:
+            self.dlg.imageNumberLabel.setVisible(False)
 
     def enable_mosaic_images_preview(self, images_count: int, preview_idx: int):
-        # Hide '<' and '>' in images table
+        # Hide '<','>' and image number in images table
         if not self.mosaic_table_visible:
             self.dlg.previousImageButton.setVisible(False)
             self.dlg.nextImageButton.setVisible(False)
+            self.dlg.imageNumberLabel.setVisible(False)
             return
         # Hide '<' and '>' for empty mosaics
         if images_count == 0:
@@ -182,9 +190,10 @@ class DataCatalogView(QObject):
             self.dlg.nextImageButton.setVisible(False)
             self.dlg.imagePreview.clear()
             return
-        # Show '<' and '>'
+        # Show '<','>' and image number
         self.dlg.previousImageButton.setVisible(True)
         self.dlg.nextImageButton.setVisible(True)
+        self.dlg.imageNumberLabel.setVisible(True)
         # Disable '>' if it's the last image
         if preview_idx + 1 >= images_count:
             self.dlg.nextImageButton.setEnabled(False)
