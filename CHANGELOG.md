@@ -1,3 +1,5 @@
+## 3.1.2
+    - New vector layer styles for trees and crowns
 ## 3.1.1
     Hotfix:
         - Allow zoom selection for user's data providers
