@@ -5,7 +5,7 @@ from PyQt5.QtCore import QCoreApplication
 from qgis.core import QgsSettings
 
 @dataclass
-class ConfigSearchColumns():
+class ConfigColumns():
     def __init__(self):
         self.METADATA_TABLE_ATTRIBUTES = {
             QCoreApplication.translate('Config', 'Product Type'): 'productType',
@@ -20,6 +20,15 @@ class ConfigSearchColumns():
             QCoreApplication.translate('Config', 'Image ID'): 'id',
             'local_index': 'local_index'
         } 
+        self.PROJECTS_TABLE_COLUMNS = [
+            "ID", 
+            QCoreApplication.translate('Config', "Project"), 
+            QCoreApplication.translate('Config', "Succeeded"), 
+            QCoreApplication.translate('Config', "Failed"), 
+            QCoreApplication.translate('Config', "Author"), 
+            QCoreApplication.translate('Config', "Updated at"), 
+            QCoreApplication.translate('Config', "Created at")
+        ]
 
 @dataclass
 class Config:
@@ -63,10 +72,10 @@ class Config:
     DEFAULT_HIDDEN_COLUMNS = (PROCESSING_TABLE_COLUMNS.index(item) for item in ('id', 'reviewUntil', 'cost'))
     
     # MAXAR
-    MAXAR_ID_COLUMN_INDEX = tuple(ConfigSearchColumns().METADATA_TABLE_ATTRIBUTES.values()).index('id')
-    LOCAL_INDEX_COLUMN = tuple(ConfigSearchColumns().METADATA_TABLE_ATTRIBUTES.values()).index('local_index')
-    MAXAR_DATETIME_COLUMN_INDEX = tuple(ConfigSearchColumns().METADATA_TABLE_ATTRIBUTES.keys()).index(QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=TIMEZONE))
-    MAXAR_CLOUD_COLUMN_INDEX = tuple(ConfigSearchColumns().METADATA_TABLE_ATTRIBUTES.keys()).index(QCoreApplication.translate('Config', 'Cloud %'))
+    MAXAR_ID_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()).index('id')
+    LOCAL_INDEX_COLUMN = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()).index('local_index')
+    MAXAR_DATETIME_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.keys()).index(QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=TIMEZONE))
+    MAXAR_CLOUD_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.keys()).index(QCoreApplication.translate('Config', 'Cloud %'))
     MAXAR_MAX_FREE_ZOOM = 12
 
     # MISC
