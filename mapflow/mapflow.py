@@ -36,7 +36,7 @@ from .dialogs import (MainDialog,
 from .dialogs.dialogs import ConfirmProcessingStart
 from .dialogs.icons import plugin_icon
 from .functional.controller.data_catalog_controller import DataCatalogController
-from .config import Config, ConfigSearchColumns
+from .config import Config, ConfigColumns
 from .entity.billing import BillingType
 from .entity.processing import parse_processings_request, Processing, ProcessingHistory, updated_processings
 from .entity.provider import (UsersProvider,
@@ -59,7 +59,7 @@ from .functional import layer_utils, helpers
 from .functional.auth import get_auth_id
 from .functional.geometry import clip_aoi_to_image_extent
 from .functional.processing import ProcessingService
-from .functional.project import ProjectService
+from .functional.service.project import ProjectService
 from .functional.service.data_catalog import DataCatalogService
 from .http import (Http,
                    get_error_report_body,
@@ -143,8 +143,8 @@ class Mapflow(QObject):
         self.settings.beginGroup(self.plugin_name.lower())
         if self.settings.value('processings') is None:
             self.settings.setValue('processings', {})
-        # If no project id is set, use "default"
-        self.project_id = self.settings.value("project_id", "default")
+        # Set projectsfrom settings if it was opened before
+        self.project_id = self.settings.value("project_id")
         self.projects = {}
         # Store user's current processing
         self.processing_history = ProcessingHistory.from_settings(
@@ -200,13 +200,14 @@ class Mapflow(QObject):
 
         self.project_service = ProjectService(self.http, self.server, self.dlg)
         self.project_service.projectsUpdated.connect(self.update_projects)
+        if not self.project_id:
+            self.project_service.switch_to_projects()
+            self.setup_project_change_rights()
 
         self.processing_service = ProcessingService(self.http, self.server)
-        self.processing_service.processingUpdated.connect(lambda: self.http.get(
-                url=f'{self.server}/projects/{self.project_id}/processings',
-                callback=self.get_processings_callback,
-                use_default_error_handler=False  # ignore errors to prevent repetitive alerts
-            ))
+        self.processing_service.processingUpdated.connect(
+            lambda: self.processing_service.get_processings(project_id=self.project_id,
+                                                            callback=self.get_processings_callback))
         # load providers from settings
         errors = []
         try:
@@ -277,10 +278,10 @@ class Mapflow(QObject):
         self.dlg.createProject.clicked.connect(self.create_project)
         self.dlg.deleteProject.clicked.connect(self.delete_project)
         self.dlg.updateProject.clicked.connect(self.update_project)
-        self.dlg.filterProject.textChanged.connect(self.filter_projects)
 
         # Maxar
-        self.config_search_columns = ConfigSearchColumns()
+        self.config_search_columns = ConfigColumns()
+        self.dlg.imageId.textChanged.connect(self.sync_image_id_with_table_and_layer)
         self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
             self.sync_table_selection_with_image_id_and_layer)
         self.meta_layer_table_connection = None
@@ -295,12 +296,8 @@ class Mapflow(QObject):
         self.processing_fetch_timer = QTimer(self.dlg)
         self.processing_fetch_timer.setInterval(self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
         self.processing_fetch_timer.timeout.connect(
-            lambda: self.http.get(
-                url=f'{self.server}/projects/{self.project_id}/processings',
-                callback=self.get_processings_callback,
-                use_default_error_handler=False  # ignore errors to prevent repetitive alerts
-            )
-        )
+            lambda: self.processing_service.get_processings(project_id=self.project_id,
+                                                            callback=self.get_processings_callback))
         # Poll user status to get limits
         self.user_status_update_timer = QTimer(self.dlg)
         self.user_status_update_timer.setInterval(self.config.USER_STATUS_UPDATE_INTERVAL * 1000)
@@ -673,7 +670,11 @@ class Mapflow(QObject):
             # otherwise, if the WDs are set, we assume that the project hasn't changed and skip further setup
             return
         if selected_id is None:
-            self.project_service.get_project("default", self.get_project_callback)
+            self.current_project = self.project_id = None
+            self.settings.setValue("project_id", None)
+            self.setup_project_change_rights()
+            self.dlg.setWindowTitle(helpers.generate_plugin_header(self.plugin_name,
+                                                                   env=self.config.MAPFLOW_ENV))
         else:
             self.project_service.get_project(selected_id, self.get_project_callback)
 
@@ -2107,10 +2108,8 @@ class Mapflow(QObject):
             self.dlg.processingName.clear()
         self.processing_fetch_timer.start()  # start monitoring
         # Do an extra fetch immediately
-        self.http.get(
-            url=f'{self.server}/projects/{self.project_id}/processings',
-            callback=self.get_processings_callback
-        )
+        self.processing_service.get_processings(project_id=self.project_id,
+                                                callback=self.get_processings_callback)
         self.dlg.startProcessing.setEnabled(True)
 
     def post_processing_error_handler(self, response: QNetworkReply) -> None:
@@ -2609,9 +2608,8 @@ class Mapflow(QObject):
         # Clear successfully uploaded review
         self.review_dialog.reviewComment.setText("")
         self.processing_fetch_timer.start()
-        self.http.get(url=f'{self.server}/projects/{self.project_id}/processings',
-                      callback=self.get_processings_callback,
-                      use_default_error_handler=False)
+        self.processing_service.get_processings(project_id=self.project_id,
+                                                callback=self.get_processings_callback)
 
     def show_review_dialog(self):
         processing = self.selected_processing()
@@ -2784,6 +2782,8 @@ class Mapflow(QObject):
             except KeyError:
                 processing_history[env] = {self.username: {self.project_id: self.processing_history.asdict()}}
         self.settings.setValue('processings', processing_history)
+
+        self.dlg.projectsTable.cellDoubleClicked.connect(self.project_service.switch_to_processings)
 
     def alert_failed_processings(self, failed_processings):
         if not failed_processings:
@@ -3163,17 +3163,16 @@ class Mapflow(QObject):
     def update_projects(self):
         self.projects = {pr.id: pr for pr in self.project_service.projects}
         if not self.projects:
+            self.dlg.projectsTable.setRowCount(0)
             self.alert(self.tr("No projects found! Contact us to resolve the issue"))
             return
-        self.filter_projects(self.dlg.filterProject.text())
+        self.filter_projects(self.dlg.filterProjects.text())
 
-    def setup_projects_combo(self, projects: dict[str, MapflowProject]):
+    def connect_projects(self):
         if self.project_connection is not None:
-            self.dlg.projectsCombo.currentIndexChanged.disconnect(self.project_connection)
+            self.dlg.projectsTable.itemSelectionChanged.disconnect(self.project_connection)
             self.project_connection = None
-        self.dlg.setup_project_combo(projects, self.project_id)
-        self.on_project_change()
-        self.project_connection = self.dlg.projectsCombo.currentIndexChanged.connect(self.on_project_change)
+        self.project_connection = self.dlg.projectsTable.itemSelectionChanged.connect(self.on_project_change)
 
     def filter_projects(self, name_filter):
         if not name_filter:
@@ -3185,7 +3184,7 @@ class Mapflow(QObject):
             # We maintain the current project in the combo even if it not found to prevent over-requesting
             # until it is changed explicitly
             filtered_projects.update({self.project_id: self.projects[self.project_id]})
-        self.setup_projects_combo(filtered_projects)
+        self.connect_projects()
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
         """Inspect the plugin version backend expects and show a warning if it is incompatible w/ the plugin.

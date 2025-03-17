@@ -87,14 +87,23 @@ class UserRole(str, Enum):
     @property
     def can_delete_rename_project(self):
         return self.value == UserRole.owner
+    
+class ProjectSortBy(str, Enum):
+    name = "NAME"
+    created = "CREATED"
+    updated = "UPDATED"
+
+class ProjectSortOrder(str, Enum):
+    ascending = "ASC"
+    descending = "DESC"
 
 @dataclass
 class ProjectsRequest(Serializable):
     limit: int = Config.PROJECTS_PAGE_LIMIT
     offset: int = 0
     filter: Optional[str] = None
-    sortBy: Optional[str] = "UPDATED"
-    sortOrder: Optional[str] = "DESC"
+    sortBy: Optional[ProjectSortBy] = ProjectSortBy.updated
+    sortOrder: Optional[ProjectSortOrder] = ProjectSortOrder.descending
 
 @dataclass
 class ProjectsResult(SkipDataClass):

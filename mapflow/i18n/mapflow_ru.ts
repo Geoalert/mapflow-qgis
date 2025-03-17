@@ -73,7 +73,7 @@
     </message>
 </context>
 <context>
-    <name>ConfigSearchColumns</name>
+    <name>ConfigColumns</name>
     <message>
         <location filename="../config.py" line="11"/>
         <source>Product Type</source>

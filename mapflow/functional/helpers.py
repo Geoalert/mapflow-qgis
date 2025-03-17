@@ -152,9 +152,9 @@ def check_processing_limit(billing_type: BillingType,
 
 def generate_plugin_header(plugin_name: str, 
                            env: Optional[str], 
-                           project_name: Optional[str], 
-                           user_role: Optional[str],
-                           project_owner: Optional[str]) -> str:
+                           project_name: Optional[str] = None, 
+                           user_role: Optional[str] = None,
+                           project_owner: Optional[str] = None) -> str:
         header = plugin_name
         if env and env != "production":
             header = header + f" {env}"

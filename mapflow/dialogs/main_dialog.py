@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (QWidget, QPushButton, QCheckBox, QTableWidgetItem, 
 from qgis.core import QgsMapLayerProxyModel, QgsSettings
 
 from . import icons
-from ..config import config, ConfigSearchColumns
+from ..config import config, ConfigColumns
 from ..entity.billing import BillingType
 from ..entity.provider import ProviderInterface
 from ..functional import helpers
@@ -133,14 +133,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # Imagery Search
         self.metadataTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.enable_search_pages(False)
-
-        # Projects stacked table
-        self.projectsTable.cellClicked.connect(self.switch_to_processings)
-        self.switchProjectsButton.clicked.connect(lambda: self.stackedProjectsWidget.setCurrentIndex(0))
-        self.switchProjectsButton.setIcon(icons.arrow_left_icon)
-        self.projectsPreviousPageButton.setIcon(icons.arrow_left_icon)
-        self.projectsNextPageButton.setIcon(icons.arrow_right_icon)
-        self.filterProjects.setPlaceholderText(self.tr("Filter projects by name"))
 
     # ===== Settings management ===== #
     def save_view_results_mode(self):
@@ -424,7 +416,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         for row, feature in enumerate(metadata['features']):
             if feature.get('id'):
                 feature['properties']['id'] = feature.get('id') # for uniformity
-            for col, attr in enumerate(ConfigSearchColumns().METADATA_TABLE_ATTRIBUTES.values()):
+            for col, attr in enumerate(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()):
                 try:
                     value = feature['properties'][attr]
                 except KeyError:  # e.g. <colorBandOrder/> for pachromatic images
@@ -437,62 +429,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.metadataTable.resizeColumnsToContents()
         self.add_preview_cell()
         self.metadataTableFilled.emit()
-
-    def setup_project_combo(self, projects: dict[str, MapflowProject], current_project_id: Optional[str] = None):
-        self.projectsCombo.clear()
-        for pr in projects.values():
-            self.projectsCombo.insertItem(0, pr.name, pr.id)
-        if current_project_id:
-            self.select_project(current_project_id)
-
-    def setup_projects_table(self, projects: dict[str, MapflowProject]):
-        if not projects:
-            return
-        # First column is ID, hidden; second is name
-        self.projectsTable.setColumnCount(7)
-        self.projectsTable.setColumnHidden(0, True)
-        self.projectsTable.setRowCount(len(projects))
-        self.projectsTable.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.projectsTable.setSelectionBehavior(QAbstractItemView.SelectRows)
-        for row, project in enumerate(projects):
-            id_item = QTableWidgetItem()
-            id_item.setData(Qt.DisplayRole, project.id)
-            self.projectsTable.setItem(row, 0, id_item)
-            name_item = QTableWidgetItem()
-            name_item.setData(Qt.DisplayRole, project.name)
-            self.projectsTable.setItem(row, 1, name_item)
-            ok_item = QTableWidgetItem()
-            ok_item.setData(Qt.DisplayRole, project.processingCounts['succeeded'])
-            self.projectsTable.setItem(row, 2, ok_item)
-            failed_item = QTableWidgetItem()
-            failed_item.setData(Qt.DisplayRole, project.processingCounts['failed'])
-            self.projectsTable.setItem(row, 3, failed_item)
-            owner_item = QTableWidgetItem()
-            owner_item.setData(Qt.DisplayRole, project.shareProject.owners[0].email)
-            self.projectsTable.setItem(row, 4, owner_item)
-            updated_item = QTableWidgetItem()
-            updated_item.setData(Qt.DisplayRole, project.updated.astimezone().strftime('%Y-%m-%d %H:%M'))
-            self.projectsTable.setItem(row, 5, updated_item)
-            created_item = QTableWidgetItem()
-            created_item.setData(Qt.DisplayRole, project.created.astimezone().strftime('%Y-%m-%d %H:%M'))
-            self.projectsTable.setItem(row, 6, created_item)
-            self.projectsTable.setHorizontalHeaderLabels(["ID", 
-                                                          self.tr("Project"), 
-                                                          self.tr("Succeeded"), 
-                                                          self.tr("Failed"), 
-                                                          self.tr("Author"), 
-                                                          self.tr("Updated at"), 
-                                                          self.tr("Created at")])
-        self.projectsTable.resizeColumnsToContents()
-        self.projectsTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
-        self.projectsTable.horizontalHeader().setStretchLastSection(True)
-        self.projectsTable.setSelectionMode(QAbstractItemView.SingleSelection)
-    
-    def switch_to_processings(self):
-        pid = self.projectsTable.selectionModel().selectedIndexes()[0].data()
-        index = self.projectsCombo.findData(pid)
-        self.projectsCombo.setCurrentIndex(index)
-        self.stackedProjectsWidget.setCurrentIndex(1)
         
     def setup_options_menu(self):
         self.options_menu.addAction(self.save_result_action)
@@ -554,10 +490,14 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         if can_delete_rename_project is None:
             can_delete_rename_project = True
         self.deleteProject.setEnabled(can_delete_rename_project)
-        self.updateProject.setEnabled(can_delete_rename_project) 
-        self.deleteProject.setToolTip(reason)
-        self.updateProject.setToolTip(reason)
-    
+        self.updateProject.setEnabled(can_delete_rename_project)
+        if can_delete_rename_project is False:
+            self.deleteProject.setToolTip(reason)
+            self.updateProject.setToolTip(reason)
+        else:
+            self.deleteProject.setToolTip(self.tr("Delete project"))
+            self.updateProject.setToolTip(self.tr("Edit project"))
+
     def enable_rename_processing(self, can_delete_rename_review_processing: bool = True):
         """
         Remove processing's renaming option from '...' menu near 'View results' button depending on user role property.
@@ -608,17 +548,12 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.projectsPageLabel.setText(f"{page_number}/{total_pages}")
     
     def selected_project_id(self):
-        if self.projectsCombo.currentData():
-            return str(self.projectsCombo.currentData())
+        selected_idx = self.projectsTable.selectionModel().selectedIndexes()
+        if selected_idx:
+            pid = selected_idx[0].data()
         else:
-            return None
-
-    def select_project(self, project_id):
-        idx = self.projectsCombo.findData(project_id)
-        if idx == -1:
-            # if project is not found, just select the first one
-            idx = 0
-        self.projectsCombo.setCurrentIndex(idx)
+            pid = None
+        return (pid)
     
     def set_search_visible_columns(self):
         search_columns_numbers = [str(x) for x in range(len(self.search_columns))] # 11 columns in total: 0-10
