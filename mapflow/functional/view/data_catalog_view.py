@@ -76,7 +76,7 @@ class DataCatalogView(QObject):
 
         self.dlg.refreshCatalogButton.setIcon(icons.refresh_icon)
 
-        self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter mosaics by name"))
+        self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter mosaics by name or id"))
 
     @property
     def mosaic_table_visible(self):
@@ -353,7 +353,7 @@ class DataCatalogView(QObject):
         self.dlg.sortCombo.setCurrentIndex(self.sort_images_index)
         # Set filter and its placeholder text
         self.filter_catalog_table(self.dlg.filterCatalog.text())
-        self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter images by name"))
+        self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter images by name or id"))
 
     def show_mosaics_table(self, selected_mosaic_name: Optional[str]):
         # Save buttons before deleting cells and therefore widgets
@@ -376,7 +376,7 @@ class DataCatalogView(QObject):
         self.dlg.sortCombo.setCurrentIndex(self.sort_mosaics_index)
         # Set filter and its placeholder text
         self.filter_catalog_table(self.dlg.filterCatalog.text())
-        self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter mosaics by name"))
+        self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter mosaics by name or id"))
 
     def create_mosaic_cell_buttons_layout(self):
         self.mosaic_cell_layout.setContentsMargins(0,0,3,0)
@@ -430,8 +430,9 @@ class DataCatalogView(QObject):
         else:
             table = self.dlg.imageTable
         for row in range(table.rowCount()):
-            name = table.item(row, 1).data(Qt.DisplayRole)
-            hide = bool(name_filter) and (name_filter.lower() not in name.lower())
+            item_id = table.item(row, 0).data(Qt.DisplayRole)
+            item_name = table.item(row, 1).data(Qt.DisplayRole)
+            hide = bool(name_filter) and ((name_filter.lower() not in item_id.lower() and name_filter.lower() not in item_name.lower()))
             table.setRowHidden(row, hide)
         
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
