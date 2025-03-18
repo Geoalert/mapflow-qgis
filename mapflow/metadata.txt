@@ -15,6 +15,7 @@ email=hello@geoalert.io
 changelog:
     3.1.2
     - New vector layer styles for trees and crowns
+    - Fix Imagery search cloud cover
     3.1.1
     - Allow zoom selection for user's data providers
     - Fix style for building heights and terms of use translated link
