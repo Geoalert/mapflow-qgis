@@ -2258,7 +2258,8 @@ class Mapflow(QObject):
         if preview_type == PreviewType.png:
             self.preview_png(url, footprint, image_id)
         else:
-            self.alert(self.tr("Only PNG preview type is supported"))
+            self.alert(self.tr("Only PNG preview type is supported."
+                               '<br>See <a href="https://docs.mapflow.ai/api/qgis_mapflow.html#how-to-preview-the-search-results"><span style=" text-decoration: underline; color:#094fd1;">documentation</span></a> for help'))
 
     def preview_png(self,
                     url: str,
