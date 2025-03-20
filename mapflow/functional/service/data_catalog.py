@@ -462,6 +462,15 @@ class DataCatalogService(QObject):
             self.on_mosaic_selection(mosaic)
         else:
             self.view.clear_mosaic_info()
+    
+    def refresh_catalog(self):
+        if self.view.mosaic_table_visible:
+            self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.NoSelection) 
+            self.get_mosaics()
+            self.dlg.mosaicTable.clearSelection()
+            self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.SingleSelection)
+        else:
+            self.get_mosaic_images(self.selected_mosaic().id)
 
     # Status
     def get_user_limit(self):
@@ -478,7 +487,6 @@ class DataCatalogService(QObject):
         if data_limit.memoryLimit:
             self.free_storage = free
         self.view.show_storage(taken, free)
-
 
     # Selection
     def selected_mosaics(self, limit=None) -> List[MosaicReturnSchema]:

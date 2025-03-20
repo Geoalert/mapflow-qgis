@@ -179,7 +179,6 @@ class Mapflow(QObject):
         self.calculator = QgsDistanceArea()
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
-        self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or self.config.DEFAULT_ZOOM))
 
         # Setup temporary directory from setting or skip for now
         self.temp_dir = None
@@ -271,14 +270,11 @@ class Mapflow(QObject):
         self.dlg.maxCloudCoverSpinBox.valueChanged.connect(self.filter_metadata)
         self.dlg.metadataFrom.dateChanged.connect(self.filter_metadata)
         self.dlg.metadataTo.dateChanged.connect(self.filter_metadata)
-        self.dlg.preview.clicked.connect(self.preview)
-        self.dlg.preview2.clicked.connect(self.preview)
         self.dlg.searchImageryButton.clicked.connect(self.preview_or_search)
 
         self.dlg.addProvider.clicked.connect(self.add_provider)
         self.dlg.editProvider.clicked.connect(self.edit_provider)
         self.dlg.removeProvider.clicked.connect(self.remove_provider)
-        self.dlg.maxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
 
         # Projects
         self.dlg.createProject.clicked.connect(self.create_project)
@@ -288,7 +284,6 @@ class Mapflow(QObject):
 
         # Maxar
         self.config_search_columns = ConfigSearchColumns()
-        self.dlg.imageId.textChanged.connect(self.sync_image_id_with_table_and_layer)
         self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
             self.sync_table_selection_with_image_id_and_layer)
         self.meta_layer_table_connection = None
@@ -1503,14 +1498,10 @@ class Mapflow(QObject):
 
         selected_cells = self.dlg.metadataTable.selectedItems()
         if not selected_cells:
-            image_id = None
             local_indices = []
-            self.dlg.imageId.setText('')
         else:
             selected_rows = [cell.row() for cell in selected_cells]
             local_indices = [self.dlg.metadataTable.item(row, local_index_column).text() for row in selected_rows]
-            image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
-            self.dlg.imageId.setText(image_id)
         try:
             self.metadata_layer.selectionChanged.disconnect(self.meta_layer_table_connection)
             # disconnect to prevent loop of signals
@@ -1592,20 +1583,18 @@ class Mapflow(QObject):
                     'S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 '
                     'or /36/S/XA/2022/02/09/0/'
                 ))
-                self.dlg.imageId.clear()
                 return
         elif isinstance(provider, MaxarProvider):
             if not helpers.UUID_REGEX.match(image_id):
-                self.dlg.imageId.clear()
                 self.alert(self.tr('A Maxar image ID should look like a3b154c40cc74f3b934c0ffc9b34ecd1'))
                 return
         items = self.dlg.metadataTable.findItems(image_id, Qt.MatchExactly)
         if not items:
             self.dlg.metadataTable.clearSelection()
             return
-        # Redundant since image_id is currently not editable
-        # if items[0] not in self.dlg.metadataTable.selectedItems():
+        #if items[0] not in self.dlg.metadataTable.selectedItems():
             #self.dlg.metadataTable.selectRow(items[0].row())
+        # Redundant since imageId is temorary removed
 
     def get_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
         if not layer or layer.featureCount() == 0:
@@ -2269,7 +2258,8 @@ class Mapflow(QObject):
         if preview_type == PreviewType.png:
             self.preview_png(url, footprint, image_id)
         else:
-            self.alert(self.tr("Only PNG preview type is supported"))
+            self.alert(self.tr("Only PNG preview type is supported."
+                               '<br>See <a href="https://docs.mapflow.ai/api/qgis_mapflow.html#how-to-preview-the-search-results"><span style=" text-decoration: underline; color:#094fd1;">documentation</span></a> for help'))
 
     def preview_png(self,
                     url: str,
@@ -2449,7 +2439,7 @@ class Mapflow(QObject):
             return None
 
     def preview_xyz(self, provider, image_id):
-        max_zoom = self.dlg.maxZoom.value()
+        max_zoom = self.config.MAX_ZOOM
         layer_name = provider.name
         try:
             url = provider.preview_url(image_id=image_id)
@@ -2487,7 +2477,12 @@ class Mapflow(QObject):
 
     def preview(self) -> None:
         """Display raster tiles served over the Web."""
-        image_id = self.dlg.imageId.text()
+        selected_cells = self.dlg.metadataTable.selectedItems()
+        if not selected_cells:
+            image_id = None
+        else:
+            id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
+            image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
         provider = self.providers[self.dlg.providerIndex()]
         if provider.requires_image_id and not image_id:
             self.alert(self.tr("This provider requires image ID!"), QMessageBox.Warning)
@@ -3316,9 +3311,14 @@ class Mapflow(QObject):
         except KeyError:
             product_types = []
         return provider_names, product_types
-    
+
     def get_search_images_ids(self, local_image_indices, provider_names, product_types):
-        image_id = self.dlg.imageId.text()
+        selected_cells = self.dlg.metadataTable.selectedItems()
+        if not selected_cells:
+            image_id = None
+        else:
+            id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
+            image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
         requires_id = False
         selection_error = ""
         try:

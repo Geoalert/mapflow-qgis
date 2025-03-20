@@ -37,6 +37,8 @@ class DataCatalogController(QObject):
         self.dlg.addCatalogButton.clicked.connect(self.service.add_mosaic_or_image)
         self.dlg.deleteCatalogButton.clicked.connect(self.service.delete_mosaic_or_image)
         self.dlg.sortCombo.activated.connect(self.view.sort_catalog)
+        self.dlg.refreshCatalogButton.clicked.connect(self.service.refresh_catalog)
+        self.dlg.filterCatalog.textChanged.connect(self.view.filter_catalog_table)
 
         # Show free and taken space if limit is not None
         self.service.mosaicsUpdated.connect(self.service.get_user_limit)

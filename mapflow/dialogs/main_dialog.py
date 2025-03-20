@@ -79,9 +79,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.connect_processing_column_checkboxes()
         self.set_search_visible_columns()
         self.connect_search_column_checkboxes()
-        # connect two spinboxes
-        self.spin1_connection = self.maxZoom.valueChanged.connect(self.switch_maxzoom_2)
-        self.spin2_connection = self.maxZoom2.valueChanged.connect(self.switch_maxzoom_1)
         # current state to compare with on change
         self.current_raster_source = self.sourceCombo.currentText()
         # connect raster/provider combos
@@ -133,7 +130,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.setup_options_menu()
 
         # Imagery Search
-        self.imageId.setReadOnly(True)
         self.metadataTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.enable_search_pages(False)
 
@@ -151,17 +147,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         elif viewResultsMode == "file":
             self.viewAsLocal.setChecked(True)
         self.useAllVectorLayers.setChecked(str(self.settings.value('useAllVectorLayers', "true")).lower() == "true")
-
-    # connect two spinboxes funcs
-    def switch_maxzoom_1(self, value):
-        self.maxZoom.valueChanged.disconnect(self.spin1_connection)
-        self.maxZoom.setValue(value)
-        self.spin1_connection = self.maxZoom.valueChanged.connect(self.switch_maxzoom_2)
-
-    def switch_maxzoom_2(self, value):
-        self.maxZoom2.valueChanged.disconnect(self.spin2_connection)
-        self.maxZoom2.setValue(value)
-        self.spin2_connection = self.maxZoom2.valueChanged.connect(self.switch_maxzoom_1)
 
     # connect raster/provider combos funcs
     def switch_provider_combo(self, text):
@@ -285,7 +270,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                              fill: Optional[dict] = None
                              ):
         self.metadataTable.clear()
-        self.imageId.clear()
 
         more_button = self.findChild(QPushButton, more_button_name)
         if more_button:
@@ -294,13 +278,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
         # If the provider does not support search,
         # we substitute it with default search provider (which is ImagerySearchProvider)
-
-        preview_zoom_enabled = max_preview_zoom is not None and preview_zoom is not None
-        self.maxZoom.setEnabled(preview_zoom_enabled)
-        if preview_zoom_enabled:
-            self.maxZoom.setMaximum(max_preview_zoom)
-            self.maxZoom2.setMaximum(max_preview_zoom)
-            self.maxZoom.setValue(preview_zoom)
 
         self.metadataFilters.setEnabled(True)
         self.metadataTable.setRowCount(0)
@@ -313,8 +290,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         if sort_by is not None:
             self.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
         self.metadata.setTitle(self.tr("Search ") + provider.name)
-        self.imageId.setPlaceholderText(image_id_placeholder)
-        self.labelImageId.setToolTip(image_id_tooltip)
 
         if fill:
             self.fill_metadata_table(fill)

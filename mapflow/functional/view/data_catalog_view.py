@@ -80,6 +80,9 @@ class DataCatalogView(QObject):
         self.dlg.nextImageButton.setIcon(icons.arrow_right_icon)
         self.dlg.previousImageButton.setIcon(icons.arrow_left_icon)
         
+        self.dlg.refreshCatalogButton.setIcon(icons.refresh_icon)
+
+        self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter mosaics by name or id"))
 
     @property
     def mosaic_table_visible(self):
@@ -116,6 +119,8 @@ class DataCatalogView(QObject):
         for row in range(self.dlg.mosaicTable.rowCount()):
             item = self.dlg.mosaicTable.item(row, 1)
             item.setToolTip(self.tr("Double-click to show images"))
+        self.sort_catalog()
+        self.filter_catalog_table(self.dlg.filterCatalog.text())
 
     def sort_catalog(self):
         index = self.dlg.sortCombo.currentIndex()
@@ -259,6 +264,8 @@ class DataCatalogView(QObject):
         else:
             self.dlg.previewMosaicButton.setEnabled(True)
             self.dlg.showImagesButton.setEnabled(True)
+        self.sort_catalog()
+        self.filter_catalog_table(self.dlg.filterCatalog.text())
 
     def show_preview_s(self, preview_image):
         self.dlg.imagePreview.setPixmap(QPixmap.fromImage(preview_image))
@@ -389,6 +396,9 @@ class DataCatalogView(QObject):
         self.dlg.sortCombo.setCurrentIndex(self.sort_images_index)
         # Disable '<' and '>' for images table
         self.enable_mosaic_images_preview(0, 0)
+        # Set filter and its placeholder text
+        self.filter_catalog_table(self.dlg.filterCatalog.text())
+        self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter images by name or id"))
 
     def show_mosaics_table(self, selected_mosaic_name: Optional[str]):
         # Save buttons before deleting cells and therefore widgets
@@ -408,6 +418,9 @@ class DataCatalogView(QObject):
             self.clear_mosaic_info()
         # Set sorting combo text
         self.dlg.sortCombo.setCurrentIndex(self.sort_mosaics_index)
+        # Set filter and its placeholder text
+        self.filter_catalog_table(self.dlg.filterCatalog.text())
+        self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter mosaics by name or id"))
 
     def create_mosaic_cell_buttons_layout(self):
         self.mosaic_cell_layout.setContentsMargins(0,0,3,0)
@@ -454,6 +467,17 @@ class DataCatalogView(QObject):
 
     def contain_image_cell_buttons(self):
         self.imageContainerWidget.setLayout(self.image_cell_layout)
+
+    def filter_catalog_table(self, name_filter: str = None):
+        if self.mosaic_table_visible:
+            table = self.dlg.mosaicTable
+        else:
+            table = self.dlg.imageTable
+        for row in range(table.rowCount()):
+            item_id = table.item(row, 0).data(Qt.DisplayRole)
+            item_name = table.item(row, 1).data(Qt.DisplayRole)
+            hide = bool(name_filter) and ((name_filter.lower() not in item_id.lower() and name_filter.lower() not in item_name.lower()))
+            table.setRowHidden(row, hide)
         
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """A duplicate of alert function from mapflow.py to avoid circular import.
