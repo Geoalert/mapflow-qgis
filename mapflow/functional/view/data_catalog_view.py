@@ -162,12 +162,17 @@ class DataCatalogView(QObject):
             tags_str = ''
         text = self.tr("Number of images: {count} \n").format(count=len(images))
         if images:
+            pixel_size = sum(list(images[0].meta_data.values())[6])/len(list(images[0].meta_data.values())[6])
+            if pixel_size < 0.01:
+                pixel_size = round(pixel_size, 6)
+            else:
+                pixel_size = round(pixel_size, 2)
             text += self.tr("Size: {mosaic_size} \n"
-                            "Pixel size: {pixel_size} m \n"
+                            "Pixel size: {pixel_size} \n"
                             "CRS: {crs} \n"
                             "Number of bands: {count} \n"
                            ).format(mosaic_size=get_readable_size(mosaic.sizeInBytes),
-                                    pixel_size=round(sum(list(images[0].meta_data.values())[6])/len(list(images[0].meta_data.values())[6]), 2),
+                                    pixel_size=pixel_size,
                                     crs=list(images[0].meta_data.values())[0],
                                     count=list(images[0].meta_data.values())[1])
         text += self.tr("Created: {date} at {time} \nTags: {tags}"
@@ -212,6 +217,11 @@ class DataCatalogView(QObject):
 
     def full_image_info(self, image: ImageReturnSchema):
         try:
+            pixel_size = sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6])
+            if pixel_size < 0.01:
+                pixel_size = round(pixel_size, 6)
+            else:
+                pixel_size = round(pixel_size, 2)
             message = self.tr('<b>Name</b>: {filename}\
                               <br><b>Uploaded</b></br>: {date} at {time}\
                               <br><b>Size</b></br>: {file_size}\
@@ -219,7 +229,7 @@ class DataCatalogView(QObject):
                               <br><b>Number of bands</br></b>: {bands}\
                               <br><b>Width</br></b>: {width} pixels\
                               <br><b>Height</br></b>: {height} pixels\
-                              <br><b>Pixel size</br></b>: {pixel_size} m'\
+                              <br><b>Pixel size</br></b>: {pixel_size}'\
                              ).format(filename=image.filename, 
                                      date=image.uploaded_at.date(),
                                      time=image.uploaded_at.strftime('%H:%M'),
@@ -228,7 +238,7 @@ class DataCatalogView(QObject):
                                      bands=list(image.meta_data.values())[1],
                                      width=list(image.meta_data.values())[2],
                                      height=list(image.meta_data.values())[4],
-                                     pixel_size=round(sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6]), 2))
+                                     pixel_size=pixel_size)
             info_box = QMessageBox(QMessageBox.Information, "Mapflow", message, parent=QApplication.activeWindow())
             return info_box.exec()
         except IndexError:
@@ -335,15 +345,20 @@ class DataCatalogView(QObject):
     def show_image_info(self, image: ImageReturnSchema):
         if not image:
             return
+        pixel_size = sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6])
+        if pixel_size < 0.01:
+            pixel_size = round(pixel_size, 6)
+        else:
+            pixel_size = round(pixel_size, 2)
         self.dlg.catalogInfo.setText(self.tr("Uploaded: {date} at {time} \n"
                                              "File size: {size} \n"
-                                             "Pixel size: {pixel_size} m \n"
+                                             "Pixel size: {pixel_size} \n"
                                              "CRS: {crs} \n"
                                              "Bands: {count}"
                                             ).format(date=image.uploaded_at.date(),
                                                      time=image.uploaded_at.strftime('%H:%M'),
                                                      size=get_readable_size(image.file_size),
-                                                     pixel_size=round(sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6]), 2),
+                                                     pixel_size=pixel_size,
                                                      crs=list(image.meta_data.values())[0],
                                                      count=list(image.meta_data.values())[1]))
         bold_font = self.dlg.catalogSelectionLabel.font()
