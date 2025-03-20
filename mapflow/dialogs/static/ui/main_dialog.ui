@@ -1551,12 +1551,84 @@
             <layout class="QHBoxLayout" name="horizontalLayout_11">
              <item>
               <layout class="QGridLayout" name="gridLayout_6">
+               <item row="5" column="0">
+                <layout class="QHBoxLayout" name="horizontalLayout_18">
+                 <item>
+                  <widget class="QLineEdit" name="filterCatalog">
+                   <property name="placeholderText">
+                    <string/>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="addCatalogButton">
+                   <property name="maximumSize">
+                    <size>
+                     <width>16777215</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string>Add mosaic</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="deleteCatalogButton">
+                   <property name="maximumSize">
+                    <size>
+                     <width>16777215</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string>Delete mosaic</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item row="7" column="0">
+                <widget class="QLabel" name="dataLimit">
+                 <property name="text">
+                  <string/>
+                 </property>
+                </widget>
+               </item>
                <item row="4" column="0">
                 <layout class="QVBoxLayout" name="catalogTableLayout">
                  <property name="rightMargin">
                   <number>0</number>
                  </property>
                 </layout>
+               </item>
+               <item row="7" column="2">
+                <widget class="QLabel" name="catalogInfo">
+                 <property name="minimumSize">
+                  <size>
+                   <width>0</width>
+                   <height>64</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>16777215</width>
+                   <height>16777215</height>
+                  </size>
+                 </property>
+                 <property name="text">
+                  <string/>
+                 </property>
+                 <property name="alignment">
+                  <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+                 </property>
+                 <property name="margin">
+                  <number>0</number>
+                 </property>
+                 <property name="indent">
+                  <number>-1</number>
+                 </property>
+                </widget>
                </item>
                <item row="4" column="2">
                 <widget class="QFrame" name="verticalFrame">
@@ -1640,35 +1712,6 @@
                    </property>
                    <property name="alignment">
                     <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-                   </property>
-                  </widget>
-                 </item>
-                </layout>
-               </item>
-               <item row="0" column="2">
-                <layout class="QHBoxLayout" name="horizontalLayout_17">
-                 <property name="topMargin">
-                  <number>0</number>
-                 </property>
-                 <item>
-                  <widget class="QLabel" name="infoPreviewLabel">
-                   <property name="sizePolicy">
-                    <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                     <horstretch>0</horstretch>
-                     <verstretch>0</verstretch>
-                    </sizepolicy>
-                   </property>
-                   <property name="maximumSize">
-                    <size>
-                     <width>278</width>
-                     <height>16777215</height>
-                    </size>
-                   </property>
-                   <property name="text">
-                    <string>Mosaic data</string>
-                   </property>
-                   <property name="alignment">
-                    <set>Qt::AlignCenter</set>
                    </property>
                   </widget>
                  </item>
@@ -1784,70 +1827,34 @@
                  </item>
                 </layout>
                </item>
-               <item row="7" column="2">
-                <widget class="QLabel" name="catalogInfo">
-                 <property name="minimumSize">
-                  <size>
-                   <width>0</width>
-                   <height>64</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize">
-                  <size>
-                   <width>16777215</width>
-                   <height>16777215</height>
-                  </size>
-                 </property>
-                 <property name="text">
-                  <string/>
-                 </property>
-                 <property name="alignment">
-                  <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-                 </property>
-                 <property name="margin">
+               <item row="0" column="2">
+                <layout class="QHBoxLayout" name="horizontalLayout_17">
+                 <property name="topMargin">
                   <number>0</number>
                  </property>
-                 <property name="indent">
-                  <number>-1</number>
-                 </property>
-                </widget>
-               </item>
-               <item row="5" column="0">
-                <layout class="QHBoxLayout" name="horizontalLayout_18">
                  <item>
-                  <widget class="QPushButton" name="addCatalogButton">
+                  <widget class="QLabel" name="infoPreviewLabel">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
                    <property name="maximumSize">
                     <size>
-                     <width>16777215</width>
+                     <width>278</width>
                      <height>16777215</height>
                     </size>
                    </property>
                    <property name="text">
-                    <string>Add mosaic</string>
+                    <string>Mosaic data</string>
                    </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QPushButton" name="deleteCatalogButton">
-                   <property name="maximumSize">
-                    <size>
-                     <width>16777215</width>
-                     <height>16777215</height>
-                    </size>
-                   </property>
-                   <property name="text">
-                    <string>Delete mosaic</string>
+                   <property name="alignment">
+                    <set>Qt::AlignCenter</set>
                    </property>
                   </widget>
                  </item>
                 </layout>
-               </item>
-               <item row="7" column="0">
-                <widget class="QLabel" name="dataLimit">
-                 <property name="text">
-                  <string/>
-                 </property>
-                </widget>
                </item>
               </layout>
              </item>
