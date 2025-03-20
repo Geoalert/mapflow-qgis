@@ -21,6 +21,8 @@ class DataCatalogController(QObject):
         self.dlg.showImagesButton.clicked.connect(self.view.show_images_table)
         self.dlg.seeImagesButton.clicked.connect(self.view.show_images_table)
         self.dlg.mosaicTable.cellDoubleClicked.connect(self.view.show_images_table)
+        self.dlg.nextImageButton.clicked.connect(self.service.get_next_preview)
+        self.dlg.previousImageButton.clicked.connect(self.service.get_previous_preview)
 
         # Image
         self.dlg.addImageButton.setMenu(self.view.upload_image_menu)
