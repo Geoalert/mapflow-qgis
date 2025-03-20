@@ -12,7 +12,7 @@ from ..api.project_api import ProjectApi
 from ..view.project_view import ProjectView
 
 class ProjectService(QObject):
-    projectsUpdated = pyqtSignal(str)
+    projectsUpdated = pyqtSignal()
 
     def __init__(self, http, server, dlg: MainDialog):
         super().__init__()
@@ -28,36 +28,31 @@ class ProjectService(QObject):
         # Connections
         self.dlg.projectsNextPageButton.clicked.connect(self.show_projects_next_page)
         self.dlg.projectsPreviousPageButton.clicked.connect(self.show_projects_previous_page)
-        self.dlg.filterProjects.textChanged.connect(self.get_projects)
-        self.dlg.sortProjectsCombo.activated.connect(self.sort_projects)
+        self.dlg.filterProjects.textChanged.connect(self.get_sorted_projects)
+        self.dlg.sortProjectsCombo.activated.connect(self.get_sorted_projects)
     
     def create_project(self, project: CreateProjectSchema):
         self.api.create_project(project, self.create_project_callback)
 
     def create_project_callback(self, response: QNetworkReply):
-        project = MapflowProject.from_dict(json.loads(response.readAll().data()))
-        new_project_id = project.id
-        self.get_projects(current_project_id = new_project_id)
+        self.get_sorted_projects()
     
     def delete_project(self, project_id):
         self.api.delete_project(project_id, self.delete_project_callback)
     
     def delete_project_callback(self, response: QNetworkReply):
-        self.get_projects()
+        self.get_sorted_projects()
     
     def update_project(self, project_id, project: UpdateProjectSchema):
         self.api.update_project(project_id, project, self.update_project_callback)
     
     def update_project_callback(self, response: QNetworkReply):
-        project = MapflowProject.from_dict(json.loads(response.readAll().data()))
-        new_project_id = project.id
-        self.get_projects(current_project_id=new_project_id)
+        self.get_sorted_projects()
     
     def get_project(self, project_id, callback: Callable):
         self.api.get_project(project_id, callback)
     
-    def get_projects(self, 
-                     current_project_id: Optional[str] = None,
+    def get_projects(self,
                      sort_by: Optional[ProjectSortBy] = ProjectSortBy.updated,
                      sort_order: Optional[ProjectSortOrder] = ProjectSortOrder.descending):
         projects_filter = self.dlg.filterProjects.text()
@@ -65,14 +60,13 @@ class ProjectService(QObject):
                                        self.projects_page_offset, 
                                        projects_filter, 
                                        sort_by, sort_order)
-        self.api.get_projects(request_body, self.get_projects_callback, current_project_id)
+        self.api.get_projects(request_body, self.get_projects_callback)
         self.view.enable_projects_pages(False)
         self.dlg.projectsTable.clearSelection()
     
-    def get_projects_callback(self, response: QNetworkReply, current_project_id: Optional[str] = None):
+    def get_projects_callback(self, response: QNetworkReply):
         self.projects_data = ProjectsResult.from_dict(json.loads(response.readAll().data()))
         self.projects = [MapflowProject.from_dict(project) for project in self.projects_data.results]
-        self.projectsUpdated.emit(current_project_id or "default")
         self.view.setup_projects_table(self.projects)
         # En(dis)able page controls based on total, limit and offset
         if self.projects_data.total > self.projects_page_limit:
@@ -82,15 +76,18 @@ class ProjectService(QObject):
             self.view.show_projects_pages(True, projects_page_number, projects_total_pages)
         else:
             self.view.show_projects_pages(False)
-        self.view.select_project(current_project_id)
+        self.projectsUpdated.emit()
+    
+    def select_project(self, project_id):
+        self.view.select_project(project_id)
     
     def show_projects_next_page(self):
         self.projects_page_offset += self.projects_page_limit
-        self.get_projects()
+        self.get_sorted_projects()
 
     def show_projects_previous_page(self):
         self.projects_page_offset += -self.projects_page_limit
-        self.get_projects()
+        self.get_sorted_projects()
     
     def switch_to_projects(self):
         self.view.switch_to_projects()
@@ -98,6 +95,6 @@ class ProjectService(QObject):
     def switch_to_processings(self):
         self.view.switch_to_processings()
     
-    def sort_projects(self):
+    def get_sorted_projects(self):
         sort_by, sort_order = self.view.sort_projects()
         self.get_projects(sort_by=sort_by, sort_order=sort_order)
