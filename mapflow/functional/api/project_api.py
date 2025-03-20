@@ -47,12 +47,10 @@ class ProjectApi(QObject):
     
     def get_projects(self, 
                      request_body: ProjectsRequest, 
-                     callback: Callable,
-                     current_project_id: Optional[str] = None):
+                     callback: Callable):
         self.http.post(url=f"{self.server}/projects/page",
                        headers={},
                        body=request_body.as_json().encode(),
                        callback=callback,
-                       callback_kwargs ={'current_project_id': current_project_id},
                        use_default_error_handler=True,
                        timeout=10)

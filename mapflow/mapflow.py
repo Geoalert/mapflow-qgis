@@ -701,7 +701,7 @@ class Mapflow(QObject):
     def update_project(self):
         dialog = UpdateProjectDialog(self.dlg)
         dialog.accepted.connect(lambda: self.project_service.update_project(self.current_project.id,
-                                                                                              dialog.project()))
+                                                                            dialog.project()))
         dialog.setup(self.current_project)
         dialog.deleteLater()
 
@@ -3153,7 +3153,7 @@ class Mapflow(QObject):
             self.setup_workflow_defs(default_project.workflowDefs)
             self.setup_processings_table()
         else:
-            self.project_service.get_projects(self.project_id)
+            self.project_service.get_projects()
             self.data_catalog_service.get_mosaics()
         self.dlg.setup_for_billing(self.billing_type)
         self.dlg.show()
@@ -3167,6 +3167,8 @@ class Mapflow(QObject):
             self.alert(self.tr("No projects found! Contact us to resolve the issue"))
             return
         self.filter_projects(self.dlg.filterProjects.text())
+        if self.project_id:
+            self.project_service.select_project(self.project_id)
 
     def connect_projects(self):
         if self.project_connection is not None:
