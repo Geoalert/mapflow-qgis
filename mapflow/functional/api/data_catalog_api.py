@@ -37,18 +37,20 @@ class DataCatalogApi(QObject):
         self.plugin_version = plugin_version
 
     # Mosaics CRUD
-    def create_mosaic(self, mosaic: MosaicCreateSchema, callback: Callable = lambda *args: None):
+    def create_mosaic(self, mosaic: MosaicCreateSchema, callback: Callable = lambda *args: None, callback_kwargs: Optional[dict] = None):
         self.http.post(url=f"{self.server}/rasters/mosaic",
                        body=mosaic.as_json().encode(),
                        headers={},
                        callback=callback,
+                       callback_kwargs=callback_kwargs,
                        use_default_error_handler=True,
                        timeout=5
                       )
 
-    def get_mosaics(self, callback: Callable):
+    def get_mosaics(self, callback: Callable, callback_kwargs: Optional[dict] = None):
         self.http.get(url=f"{self.server}/rasters/mosaic",
                       callback=callback,
+                      callback_kwargs=callback_kwargs,
                       use_default_error_handler=True
                      )
 

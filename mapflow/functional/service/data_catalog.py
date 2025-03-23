@@ -63,24 +63,37 @@ class DataCatalogService(QObject):
     # Mosaics CRUD
     def create_mosaic(self):
         dialog = CreateMosaicDialog(self.dlg)
-        dialog.accepted.connect(lambda: self.api.create_mosaic(dialog.mosaic(), callback=self.create_mosaic_callback))
+        dialog.accepted.connect(lambda: self.api.create_mosaic(dialog.mosaic(), 
+                                                               callback=self.create_mosaic_callback, 
+                                                               callback_kwargs={'create_option': dialog.createMosaicCombo.currentIndex()}))
         dialog.setup()
         dialog.deleteLater()
 
-    def create_mosaic_callback(self, response: QNetworkReply):
-        self.get_mosaics()
+    def create_mosaic_callback(self, response: QNetworkReply, create_option: int):
+        self.get_mosaics(create_option)
         self.dlg.mosaicTable.clearSelection()
 
-    def get_mosaics(self):
-        self.api.get_mosaics(callback=self.get_mosaics_callback)
+    def get_mosaics(self, create_option: Optional[int] = None):
+        self.api.get_mosaics(callback=self.get_mosaics_callback,
+                             callback_kwargs={'create_option': create_option})
 
-    def get_mosaics_callback(self, response: QNetworkReply):
+    def get_mosaics_callback(self, response: QNetworkReply, create_option: Optional[int] = None):
+        old_mosaic_ids = list(self.mosaics.keys())
         data = json.loads(response.readAll().data())
         self.mosaics.clear()
         for item in data:
             mosaic = MosaicReturnSchema.from_dict(item)
             self.mosaics[mosaic.id] = mosaic
         self.view.display_mosaics(list(self.mosaics.values()))
+        # Select new mosaic if it was created
+        if len(self.mosaics.keys()) - len(old_mosaic_ids) == 1:
+            new_nomaic_id = list(set(self.mosaics.keys()) - set(old_mosaic_ids))[0]
+            self.view.select_mosaic_cell(new_nomaic_id)
+            # Check creation option
+            if create_option == 1: # upload from files
+                self.upload_images_to_mosaic() 
+            elif create_option == 2: # upload from layers
+                self.choose_raster_layers()
         self.mosaicsUpdated.emit()
 
     def get_mosaic(self, mosaic_id: UUID):
