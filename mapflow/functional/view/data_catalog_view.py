@@ -182,7 +182,7 @@ class DataCatalogView(QObject):
         else:
             self.dlg.imageNumberLabel.setVisible(False)
 
-    def enable_mosaic_images_preview(self, images_count: int, preview_idx: int):
+    def enable_mosaic_images_preview(self, images_count: int = 0, preview_idx: int = 0):
         # Hide '<','>' and image number in images table
         if not self.mosaic_table_visible:
             self.dlg.previousImageButton.setVisible(False)
@@ -193,6 +193,7 @@ class DataCatalogView(QObject):
         if images_count == 0:
             self.dlg.previousImageButton.setVisible(False)
             self.dlg.nextImageButton.setVisible(False)
+            self.dlg.imageNumberLabel.setVisible(False)
             self.dlg.imagePreview.clear()
             return
         # Show '<','>' and image number

@@ -37,20 +37,57 @@ class DataCatalogApi(QObject):
         self.plugin_version = plugin_version
 
     # Mosaics CRUD
-    def create_mosaic(self, mosaic: MosaicCreateSchema, callback: Callable = lambda *args: None, callback_kwargs: Optional[dict] = None):
+    def create_mosaic(self, mosaic: MosaicCreateSchema, callback: Callable = lambda *args: None):
         self.http.post(url=f"{self.server}/rasters/mosaic",
                        body=mosaic.as_json().encode(),
                        headers={},
                        callback=callback,
-                       callback_kwargs=callback_kwargs,
                        use_default_error_handler=True,
                        timeout=5
                       )
+    
+    def create_mosaic_from_images(self, 
+                                  mosaic: MosaicCreateSchema, 
+                                  callback: Callable = lambda *args: None, 
+                                  callback_kwargs: Optional[dict] = None,
+                                  error_handler: Optional[Callable] = None,
+                                  error_handler_kwargs: Optional[dict] = None,
+                                  image_paths = None):
+        if mosaic.tags:
+            tags_str = '%2C%20'.join(mosaic.tags) # separation with ', '
+        else:
+            tags_str = ''
+        body = self.create_upload_image_body(image_path = image_paths[0])
+        url = f"{self.server}/rasters/mosaic/image?name={mosaic.name}&tags={tags_str}"
+        response = self.http.post(url=url,
+                                  body=body,
+                                  callback=callback,
+                                  callback_kwargs=callback_kwargs,
+                                  use_default_error_handler=error_handler is None,
+                                  error_handler=error_handler,
+                                  error_handler_kwargs=error_handler_kwargs or {},
+                                  timeout=3600
+                                 )
+        body.setParent(response)
+        # Disolay progress for first image
+        progressMessageBar = self.iface.messageBar().createMessage(f"Uploading image 1/{len(image_paths)}:")
+        progress = QProgressBar()
+        progressMessageBar.layout().addWidget(progress)
+        self.iface.messageBar().pushWidget(progressMessageBar)
+        def display_upload_progress(bytes_sent: int, bytes_total: int):
+            try:
+                progress.setValue(round(bytes_sent / bytes_total * 100))
+            except ZeroDivisionError:
+                return
+            if bytes_total > 0:
+                if bytes_sent == bytes_total:
+                    self.iface.messageBar().popWidget(progressMessageBar)
+        connection = response.uploadProgress.connect(display_upload_progress)
+        progressMessageBar.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
 
-    def get_mosaics(self, callback: Callable, callback_kwargs: Optional[dict] = None):
+    def get_mosaics(self, callback: Callable):
         self.http.get(url=f"{self.server}/rasters/mosaic",
                       callback=callback,
-                      callback_kwargs=callback_kwargs,
                       use_default_error_handler=True
                      )
 

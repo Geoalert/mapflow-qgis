@@ -6,7 +6,7 @@ import tempfile
 import os.path
 from osgeo import gdal
 
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtCore import QObject, pyqtSignal, Qt
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
 from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog, QAbstractItemView, QWidget
@@ -63,38 +63,76 @@ class DataCatalogService(QObject):
     # Mosaics CRUD
     def create_mosaic(self):
         dialog = CreateMosaicDialog(self.dlg)
-        dialog.accepted.connect(lambda: self.api.create_mosaic(dialog.mosaic(), 
-                                                               callback=self.create_mosaic_callback, 
-                                                               callback_kwargs={'create_option': dialog.createMosaicCombo.currentIndex()}))
+        dialog.accepted.connect(lambda: self.create_mosaic_from_options(dialog))
         dialog.setup()
         dialog.deleteLater()
-
-    def create_mosaic_callback(self, response: QNetworkReply, create_option: int):
-        self.get_mosaics(create_option)
+    
+    def create_mosaic_from_options(self, mosaic_dialog: CreateMosaicDialog):
+        mosaic = mosaic_dialog.mosaic()
+        if mosaic_dialog.createMosaicCombo.currentIndex() == 0: # empty mosaic
+            self.api.create_mosaic(mosaic,callback=self.create_mosaic_callback)
+        else:
+            if mosaic_dialog.createMosaicCombo.currentIndex() == 1: # mosaic from files
+                image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), self.tr("Choose image to upload"), 
+                                                           filter='TIF files (*.tif *.tiff)')[0]
+            else: # mosaic from layers
+                dialog = UploadRasterLayersDialog(self.dlg)
+                # Get layers paths on accepting layers dialog
+                image_paths = []
+                def get_paths():
+                    for item in dialog.listWidget.selectedItems():
+                        image_paths.append(item.data(Qt.UserRole))
+                dialog.accepted.connect(get_paths)
+                # Show all acceptable raster layers in dialog
+                layers = []
+                for layer in self.project.mapLayers().values():
+                    if Path(layer.source()).suffix.lower() in ['.tif', '.tiff']:
+                        layers.append(layer)
+                dialog.setup(layers)
+                dialog.deleteLater()
+            if image_paths:
+                self.api.create_mosaic_from_images(mosaic, 
+                                                   callback=self.create_mosaic_from_images_callback,
+                                                   callback_kwargs={'image_paths' : image_paths,
+                                                                    'mosaic_name' : mosaic.name},
+                                                   error_handler=self.create_mosaic_from_images_error_handler,
+                                                   error_handler_kwargs={'image_paths' : image_paths,
+                                                                         'mosaic_name' : mosaic.name},
+                                                   image_paths=image_paths)            
+    
+    def create_mosaic_callback(self, response: QNetworkReply):
+        self.get_mosaics()
+        self.view.enable_mosaic_images_preview()
+        self.dlg.mosaicTable.clearSelection()
+    
+    def create_mosaic_from_images_callback(self, response: QNetworkReply, image_paths: List, mosaic_name: str):
+        mosaic_id = json.loads(response.readAll().data())['mosaic_id']
+        if image_paths:
+            self.upload_images(response=None, 
+                               mosaic_id=mosaic_id, mosaic_name=mosaic_name,
+                               image_paths=image_paths[1:], uploaded=[image_paths[0]], failed=[])
+    
+    def create_mosaic_from_images_error_handler(self, 
+                                                response: QNetworkReply, 
+                                                image_paths: List, 
+                                                mosaic_name: str):
+        self.view.alert(self.tr("<center>Creation of mosaic '{mosaic_name}' failed"
+                                "<br>while trying to upload '{image}'").format(mosaic_name=mosaic_name,
+                                                                           image=Path(image_paths[0]).name))
         self.dlg.mosaicTable.clearSelection()
 
-    def get_mosaics(self, create_option: Optional[int] = None):
-        self.api.get_mosaics(callback=self.get_mosaics_callback,
-                             callback_kwargs={'create_option': create_option})
+    def get_mosaics(self):
+        self.api.get_mosaics(callback=self.get_mosaics_callback)
 
-    def get_mosaics_callback(self, response: QNetworkReply, create_option: Optional[int] = None):
-        old_mosaic_ids = list(self.mosaics.keys())
+    def get_mosaics_callback(self, response: QNetworkReply):
         data = json.loads(response.readAll().data())
         self.mosaics.clear()
         for item in data:
             mosaic = MosaicReturnSchema.from_dict(item)
             self.mosaics[mosaic.id] = mosaic
         self.view.display_mosaics(list(self.mosaics.values()))
-        # Select new mosaic if it was created
-        if len(self.mosaics.keys()) - len(old_mosaic_ids) == 1:
-            new_nomaic_id = list(set(self.mosaics.keys()) - set(old_mosaic_ids))[0]
-            self.view.select_mosaic_cell(new_nomaic_id)
-            # Check creation option
-            if create_option == 1: # upload from files
-                self.upload_images_to_mosaic() 
-            elif create_option == 2: # upload from layers
-                self.choose_raster_layers()
         self.mosaicsUpdated.emit()
+        self.dlg.mosaicTable.clearSelection()
 
     def get_mosaic(self, mosaic_id: UUID):
         self.api.get_mosaic(mosaic_id=mosaic_id,
@@ -131,10 +169,12 @@ class DataCatalogService(QObject):
                        mosaics: List[MosaicReturnSchema],
                        deleted: List[str], 
                        failed: List[str]):
+        self.dlg.mosaicTable.clearSelection()
         if len(mosaics) == 0:
             if failed:
                 self.api.delete_mosaic_error_handler(mosaics=failed)
             self.get_mosaics()
+            self.view.enable_mosaic_images_preview()
             self.dlg.mosaicTable.clearSelection()
         else:
             mosaic_to_delete = mosaics[0]
