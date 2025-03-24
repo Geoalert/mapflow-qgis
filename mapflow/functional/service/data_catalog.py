@@ -169,7 +169,6 @@ class DataCatalogService(QObject):
                        mosaics: List[MosaicReturnSchema],
                        deleted: List[str], 
                        failed: List[str]):
-        self.dlg.mosaicTable.clearSelection()
         if len(mosaics) == 0:
             if failed:
                 self.api.delete_mosaic_error_handler(mosaics=failed)
