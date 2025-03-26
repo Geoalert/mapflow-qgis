@@ -162,19 +162,22 @@ class DataCatalogView(QObject):
             tags_str = ''
         text = self.tr("Number of images: {count} \n").format(count=len(images))
         if images:
-            pixel_size = sum(list(images[0].meta_data.values())[6])/len(list(images[0].meta_data.values())[6])
+            # Find spatial resolution as the arithmetic mean between resolutions along X and Y axes
+            pixel_size = sum(images[0].meta_data.pixel_size)/2
+            # If it is less then 1 cm, we assume that CRS is geographic
             if pixel_size < 0.01:
-                pixel_size = round(pixel_size, 6)
+                pixel_size = round(pixel_size, 6) # decimal degrees
+            # Otherwise - CRS is most likely projected
             else:
-                pixel_size = round(pixel_size, 2)
+                pixel_size = round(pixel_size, 2) # meters or other units
             text += self.tr("Size: {mosaic_size} \n"
                             "Pixel size: {pixel_size} \n"
                             "CRS: {crs} \n"
                             "Number of bands: {count} \n"
                            ).format(mosaic_size=get_readable_size(mosaic.sizeInBytes),
                                     pixel_size=pixel_size,
-                                    crs=list(images[0].meta_data.values())[0],
-                                    count=list(images[0].meta_data.values())[1])
+                                    crs=images[0].meta_data.crs,
+                                    count=images[0].meta_data.count)
         text += self.tr("Created: {date} at {time} \nTags: {tags}"
                        ).format(date=mosaic.created_at.date(), time=mosaic.created_at.strftime('%H:%M'),
                                 tags=tags_str)
@@ -217,11 +220,14 @@ class DataCatalogView(QObject):
 
     def full_image_info(self, image: ImageReturnSchema):
         try:
-            pixel_size = sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6])
+            # Find spatial resolution as the arithmetic mean between resolutions along X and Y axes
+            pixel_size = sum(image.meta_data.pixel_size)/2
+            # If it is less then 1 cm, we assume that CRS is geographic
             if pixel_size < 0.01:
-                pixel_size = round(pixel_size, 6)
+                pixel_size = round(pixel_size, 6) # decimal degrees
+            # Otherwise - CRS is most likely projected
             else:
-                pixel_size = round(pixel_size, 2)
+                pixel_size = round(pixel_size, 2) # meters or other units
             message = self.tr('<b>Name</b>: {filename}\
                               <br><b>Uploaded</b></br>: {date} at {time}\
                               <br><b>Size</b></br>: {file_size}\
@@ -234,10 +240,10 @@ class DataCatalogView(QObject):
                                      date=image.uploaded_at.date(),
                                      time=image.uploaded_at.strftime('%H:%M'),
                                      file_size=get_readable_size(image.file_size), 
-                                     crs=list(image.meta_data.values())[0],
-                                     bands=list(image.meta_data.values())[1],
-                                     width=list(image.meta_data.values())[2],
-                                     height=list(image.meta_data.values())[4],
+                                     crs=image.meta_data.crs,
+                                     bands=image.meta_data.count,
+                                     width=image.meta_data.width,
+                                     height=image.meta_data.height,
                                      pixel_size=pixel_size)
             info_box = QMessageBox(QMessageBox.Information, "Mapflow", message, parent=QApplication.activeWindow())
             return info_box.exec()
@@ -345,11 +351,14 @@ class DataCatalogView(QObject):
     def show_image_info(self, image: ImageReturnSchema):
         if not image:
             return
-        pixel_size = sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6])
+        # Find spatial resolution as the arithmetic mean between resolutions along X and Y axes
+        pixel_size = sum(image.meta_data.pixel_size)/2
+        # If it is less then 1 cm, we assume that CRS is geographic
         if pixel_size < 0.01:
-            pixel_size = round(pixel_size, 6)
+            pixel_size = round(pixel_size, 6) # decimal degrees
+        # Otherwise - CRS is most likely projected
         else:
-            pixel_size = round(pixel_size, 2)
+            pixel_size = round(pixel_size, 2) # meters or other units
         self.dlg.catalogInfo.setText(self.tr("Uploaded: {date} at {time} \n"
                                              "File size: {size} \n"
                                              "Pixel size: {pixel_size} \n"
@@ -359,8 +368,8 @@ class DataCatalogView(QObject):
                                                      time=image.uploaded_at.strftime('%H:%M'),
                                                      size=get_readable_size(image.file_size),
                                                      pixel_size=pixel_size,
-                                                     crs=list(image.meta_data.values())[0],
-                                                     count=list(image.meta_data.values())[1]))
+                                                     crs=image.meta_data.crs,
+                                                     count=image.meta_data.count))
         bold_font = self.dlg.catalogSelectionLabel.font()
         bold_font.setBold(True)
         self.dlg.catalogSelectionLabel.setText(self.tr("Selected image: <b>{image_name}").format(
