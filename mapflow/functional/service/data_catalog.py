@@ -107,10 +107,9 @@ class DataCatalogService(QObject):
     
     def create_mosaic_from_images_callback(self, response: QNetworkReply, image_paths: List, mosaic_name: str):
         mosaic_id = json.loads(response.readAll().data())['mosaic_id']
-        if image_paths:
-            self.upload_images(response=None, 
-                               mosaic_id=mosaic_id, mosaic_name=mosaic_name,
-                               image_paths=image_paths[1:], uploaded=[image_paths[0]], failed=[])
+        self.upload_images(response=None, 
+                           mosaic_id=mosaic_id, mosaic_name=mosaic_name,
+                           image_paths=image_paths[1:], uploaded=[image_paths[0]], failed=[])
     
     def create_mosaic_from_images_error_handler(self, 
                                                 response: QNetworkReply, 
@@ -272,7 +271,7 @@ class DataCatalogService(QObject):
                       mosaic_name: str,
                       image_paths: Sequence[Union[Path, str]],
                       uploaded: Sequence[Union[Path, str]],
-                      failed: Sequence[Union[Path, str]]):        
+                      failed: Sequence[Union[Path, str]]):
         if len(image_paths) == 0:
             if failed:
                 self.api.upload_image_error_handler(response=response, mosaic_name=mosaic_name, image_paths=failed)
