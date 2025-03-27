@@ -314,6 +314,7 @@ class Mapflow(QObject):
         self.add_layer_menu = QMenu()
         self.draw_aoi = QAction(self.tr("Draw AOI at the map"))
         self.use_imagery_extent = QAction(self.tr("Use imagery extent"))
+        self.use_imagery_extent.setEnabled(False)
         self.create_aoi_from_map_action = QAction(self.tr("Create AOI from map extent"))
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
@@ -1668,6 +1669,8 @@ class Mapflow(QObject):
                                               selected_aoi=self.aoi)
         else:
             aoi = self.get_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+            self.use_imagery_extent.setText(self.tr("Use imagery extent"))
+            self.use_imagery_extent.setEnabled(False)
         if not self.aoi: # other error message is already shown
             pass
         elif not aoi: # error after intersection
