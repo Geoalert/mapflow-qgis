@@ -883,7 +883,7 @@
           </size>
          </property>
          <property name="currentIndex">
-          <number>2</number>
+          <number>0</number>
          </property>
          <property name="movable">
           <bool>false</bool>
@@ -2596,7 +2596,7 @@
                  <rect>
                   <x>0</x>
                   <y>0</y>
-                  <width>207</width>
+                  <width>98</width>
                   <height>220</height>
                  </rect>
                 </property>
