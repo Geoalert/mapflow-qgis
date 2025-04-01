@@ -200,9 +200,6 @@ class Mapflow(QObject):
 
         self.project_service = ProjectService(self.http, self.server, self.dlg)
         self.project_service.projectsUpdated.connect(self.update_projects)
-        if not self.project_id:
-            self.project_service.switch_to_projects()
-            self.setup_project_change_rights()
 
         self.processing_service = ProcessingService(self.http, self.server)
         self.processing_service.processingUpdated.connect(
@@ -278,6 +275,9 @@ class Mapflow(QObject):
         self.dlg.createProject.clicked.connect(self.create_project)
         self.dlg.deleteProject.clicked.connect(self.delete_project)
         self.dlg.updateProject.clicked.connect(self.update_project)
+        self.dlg.projectsTable.cellDoubleClicked.connect(self.show_processings)
+        self.dlg.switchProcessingsButton.clicked.connect(self.show_processings)
+        self.dlg.switchProjectsButton.clicked.connect(self.show_projects)
 
         # Maxar
         self.config_search_columns = ConfigColumns()
@@ -395,7 +395,6 @@ class Mapflow(QObject):
         if self.current_project:
             self.project_id = self.current_project.id
             self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(self.current_project.name))
-        self.setup_processings_table()
         self.get_project_sharing(self.current_project)
         self.setup_project_change_rights()
         self.settings.setValue("project_id", self.project_id)
@@ -675,8 +674,21 @@ class Mapflow(QObject):
             self.setup_project_change_rights()
             self.dlg.setWindowTitle(helpers.generate_plugin_header(self.plugin_name,
                                                                    env=self.config.MAPFLOW_ENV))
+            self.dlg.switchProcessingsButton.setEnabled(False)
         else:
-            self.project_service.get_project(selected_id, self.get_project_callback)
+            self.dlg.switchProcessingsButton.setEnabled(True)
+            # Find project in projects/page and set as current
+            self.project_id = selected_id
+            for pid, project in self.projects.items():
+                if selected_id == pid:
+                    self.current_project = project
+                    self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(self.current_project.name))
+            self.get_project_sharing(self.current_project)
+            self.setup_project_change_rights()
+            self.settings.setValue("project_id", self.project_id)
+            self.setup_workflow_defs(self.current_project.workflowDefs)
+            # Manually toggle function to avoid race condition
+            self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
 
     def setup_project_change_rights(self):
         project_editable = True
@@ -2179,6 +2191,12 @@ class Mapflow(QObject):
             self.setup_providers(response_data.get("dataProviders") or [])
             self.setup_search_providers(response_data.get("searchDataProviders") or [])
             self.on_provider_change()
+            # Open processings or projects (if no saved id) table
+            if self.project_id:
+                self.show_processings()
+            else:
+                self.show_projects()
+                self.setup_project_change_rights()
 
     def setup_providers(self, providers_data):
         self.default_providers = ProvidersList([ImagerySearchProvider(proxy=self.server)] +
@@ -2746,10 +2764,6 @@ class Mapflow(QObject):
         """
         response_data = json.loads(response.readAll().data())
         processings = parse_processings_request(response_data)
-        if response_data:
-            current_project_id = response_data[0]['projectId']
-        else:
-            current_project_id = None
         if all(not (p.status.is_in_progress or p.status.is_awaiting)
                and p.review_status.is_not_accepted
                for p in processings):
@@ -2783,7 +2797,15 @@ class Mapflow(QObject):
                 processing_history[env] = {self.username: {self.project_id: self.processing_history.asdict()}}
         self.settings.setValue('processings', processing_history)
 
-        self.dlg.projectsTable.cellDoubleClicked.connect(self.project_service.switch_to_processings)
+    def show_processings(self):
+        if not self.project_id:
+            return
+        self.setup_processings_table()
+        self.project_service.switch_to_processings()
+    
+    def show_projects(self):
+        self.processing_fetch_timer.stop()
+        self.project_service.switch_to_projects()
 
     def alert_failed_processings(self, failed_processings):
         if not failed_processings:
@@ -3090,6 +3112,8 @@ class Mapflow(QObject):
                            email_body=email_body).show()
 
     def setup_processings_table(self):
+        if not self.project_id:
+            return
         table_item = QTableWidgetItem("Loading...")
         table_item.setToolTip('Fetching your processings from server, please wait')
         self.dlg.processingsTable.setRowCount(1)
@@ -3153,7 +3177,8 @@ class Mapflow(QObject):
             self.setup_workflow_defs(default_project.workflowDefs)
             self.setup_processings_table()
         else:
-            self.project_service.get_projects()
+            if self.project_id:
+                self.project_service.get_project(self.project_id, self.get_project_callback)
             self.data_catalog_service.get_mosaics()
         self.dlg.setup_for_billing(self.billing_type)
         self.dlg.show()
@@ -3163,8 +3188,11 @@ class Mapflow(QObject):
     def update_projects(self):
         self.projects = {pr.id: pr for pr in self.project_service.projects}
         if not self.projects:
-            self.dlg.projectsTable.setRowCount(0)
-            self.alert(self.tr("No projects found! Contact us to resolve the issue"))
+            # Add a row with an error message to projects table
+            table_item = QTableWidgetItem("No project that meets specified criteria was found")
+            self.dlg.projectsTable.setRowCount(1)
+            self.dlg.projectsTable.setColumnCount(2)
+            self.dlg.projectsTable.setItem(0, 1, table_item)
             return
         self.filter_projects(self.dlg.filterProjects.text())
         if self.project_id:

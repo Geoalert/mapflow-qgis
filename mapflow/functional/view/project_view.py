@@ -7,15 +7,23 @@ from ...config import ConfigColumns
 from ...schema.project import MapflowProject, ProjectSortBy, ProjectSortOrder
 
 
-
 class ProjectView(QObject):
     def __init__(self, dlg: MainDialog):
         super().__init__()
         self.dlg = dlg
-        self.dlg.switchProjectsButton.clicked.connect(self.switch_to_projects)
-        self.dlg.switchProjectsButton.setIcon(icons.arrow_left_icon)
         self.dlg.projectsPreviousPageButton.setIcon(icons.arrow_left_icon)
         self.dlg.projectsNextPageButton.setIcon(icons.arrow_right_icon)
+        # Buttons < and > in projects and processings are different because of stacked widget
+        # So we specify to always disabled buttons just for looks
+        self.dlg.switchProjectsButton.setIcon(icons.arrow_left_icon)
+        self.dlg.switchProcessingsButton.setIcon(icons.arrow_right_icon)
+        self.dlg.switchProjectsFakeButton.setIcon(icons.arrow_left_icon)
+        self.dlg.switchProcessingsFakeButton.setIcon(icons.arrow_right_icon)
+        self.dlg.switchProjectsButton.setToolTip(self.tr("See projects"))
+        self.dlg.switchProjectsFakeButton.setToolTip(self.tr("See projects"))
+        self.dlg.switchProcessingsButton.setToolTip(self.tr("See processings"))
+        self.dlg.switchProcessingsFakeButton.setToolTip(self.tr("See processings"))
+        self.dlg.switchProcessingsButton.setEnabled(False)
         self.dlg.filterProjects.setPlaceholderText(self.tr("Filter projects by name"))
         self.dlg.createProject.setToolTip(self.tr("Create project"))
         # Add sorting options for projects and set updated recently as default

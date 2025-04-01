@@ -14,6 +14,8 @@ class ProcessingService(QObject):
         self.projects = []
 
     def get_processings(self, project_id, callback):
+        if not project_id:
+            return
         self.http.get(
                 url=f'{self.server}/projects/{project_id}/processings',
                 callback=callback,

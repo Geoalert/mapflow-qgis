@@ -11,6 +11,7 @@ from ...schema.project import CreateProjectSchema, UpdateProjectSchema, MapflowP
 from ..api.project_api import ProjectApi
 from ..view.project_view import ProjectView
 
+
 class ProjectService(QObject):
     projectsUpdated = pyqtSignal()
 
@@ -38,6 +39,9 @@ class ProjectService(QObject):
         self.get_sorted_projects()
     
     def delete_project(self, project_id):
+        # Remove and temporary forbid selection (until get_projects_callback)
+        self.dlg.projectsTable.setSelectionMode(QAbstractItemView.NoSelection)
+        self.dlg.projectsTable.clearSelection()
         self.api.delete_project(project_id, self.delete_project_callback)
     
     def delete_project_callback(self, response: QNetworkReply):
@@ -77,6 +81,8 @@ class ProjectService(QObject):
         else:
             self.view.show_projects_pages(False)
         self.projectsUpdated.emit()
+        self.dlg.projectsTable.clearSelection()
+        self.dlg.projectsTable.setSelectionMode(QAbstractItemView.SingleSelection)
     
     def select_project(self, project_id):
         self.view.select_project(project_id)
@@ -90,6 +96,12 @@ class ProjectService(QObject):
         self.get_sorted_projects()
     
     def switch_to_projects(self):
+        try: # if something changed and offset is now bigger than projects count
+            if self.projects_page_offset > self.projects_data.total:
+                self.projects_page_offset = 0 # show first page
+        except AttributeError:
+            pass # if projects is an empty dict
+        self.get_sorted_projects()
         self.view.switch_to_projects()
 
     def switch_to_processings(self):
