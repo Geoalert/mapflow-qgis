@@ -2290,7 +2290,27 @@
                </property>
               </widget>
              </item>
-             <item row="3" column="2">
+             <item row="4" column="0">
+              <widget class="QLineEdit" name="filterProject">
+               <property name="maxLength">
+                <number>255</number>
+               </property>
+               <property name="placeholderText">
+                <string>Filter project by name</string>
+               </property>
+              </widget>
+             </item>
+             <item row="5" column="2">
+              <widget class="QRadioButton" name="viewAsLocal">
+               <property name="text">
+                <string>save results as a local vector file</string>
+               </property>
+               <attribute name="buttonGroup">
+                <string notr="true">buttonGroup</string>
+               </attribute>
+              </widget>
+             </item>
+             <item row="4" column="2">
               <widget class="QRadioButton" name="viewAsTiles">
                <property name="text">
                 <string>view results as a vector tiles</string>
@@ -2303,23 +2323,13 @@
                </attribute>
               </widget>
              </item>
-             <item row="4" column="2">
-              <widget class="QRadioButton" name="viewAsLocal">
+             <item row="3" column="2">
+              <widget class="QCheckBox" name="cornfirmProcessingStart">
                <property name="text">
-                <string>save results as a local vector file</string>
+                <string>Corfirm processing start</string>
                </property>
-               <attribute name="buttonGroup">
-                <string notr="true">buttonGroup</string>
-               </attribute>
-              </widget>
-             </item>
-             <item row="4" column="0">
-              <widget class="QLineEdit" name="filterProject">
-               <property name="maxLength">
-                <number>255</number>
-               </property>
-               <property name="placeholderText">
-                <string>Filter project by name</string>
+               <property name="checked">
+                <bool>true</bool>
                </property>
               </widget>
              </item>

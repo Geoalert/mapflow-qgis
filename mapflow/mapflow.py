@@ -33,6 +33,7 @@ from .dialogs import (MainDialog,
                       UpdateProjectDialog,
                       UpdateProcessingDialog,
                       )
+from .dialogs.dialogs import ConfirmProcessingStart
 from .dialogs.icons import plugin_icon
 from .functional.controller.data_catalog_controller import DataCatalogController
 from .config import Config, ConfigSearchColumns
@@ -2017,6 +2018,27 @@ class Mapflow(QObject):
                                'to top up your balance'),
                        icon=QMessageBox.Warning)
             return
+        # Show processing start confirmation dialog if checkbox is checked
+        if self.dlg.cornfirmProcessingStart.isChecked():
+            dialog = ConfirmProcessingStart(self.dlg)
+            # Set "Confirm" opposite to "Don't show again", if they are not already the same
+            def toggle_confirmation_checkbox():
+                if not dialog.checkBox.isChecked() == self.dlg.cornfirmProcessingStart.isChecked():
+                    return
+                else:
+                    self.dlg.cornfirmProcessingStart.setChecked(not dialog.checkBox.isChecked())
+                    self.settings.setValue("confirmProcessingStart", str(not dialog.checkBox.isChecked()))
+            dialog.accepted.connect(toggle_confirmation_checkbox)
+            # Fill dialog with parameters
+            dialog.setup(name=processing_params.name,
+                         price=str(self.processing_cost)+self.tr(" credits"),
+                         provider=self.dlg.providerCombo.currentText(),
+                         zoom=processing_params.params.zoom,
+                         area=str(round(self.aoi_size, 2))+self.tr(" sq.km"),
+                         model=self.dlg.modelCombo.currentText(),
+                         blocks=[self.dlg.modelOptionsLayout.itemAt(i).widget().text()
+                                 for i in range(self.dlg.modelOptionsLayout.count())])
+            dialog.deleteLater()
         self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
         try:
             self.dlg.startProcessing.setEnabled(False)
