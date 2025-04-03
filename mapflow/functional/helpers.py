@@ -132,6 +132,10 @@ def open_model_info(model_name: str):
     open_url(f"{config.MODEL_DOCS_URL}#{section}")
 
 
+def open_imagery_docs():
+    open_url(config.IMAGERY_DOCS_URL)
+
+
 def check_processing_limit(billing_type: BillingType,
                            remaining_limit: Optional[float],
                            remaining_credits: Optional[int],

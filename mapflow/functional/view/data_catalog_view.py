@@ -80,8 +80,12 @@ class DataCatalogView(QObject):
         self.dlg.nextImageButton.setIcon(icons.arrow_right_icon)
         self.dlg.previousImageButton.setIcon(icons.arrow_left_icon)
         
+        # Other icons
         self.dlg.refreshCatalogButton.setIcon(icons.refresh_icon)
-
+        self.dlg.myImageryDocsButton.setIcon(icons.info_icon)
+        
+        # Other text
+        self.dlg.myImageryDocsButton.setToolTip(self.tr("More about My imagery"))
         self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter mosaics by name or id"))
 
     @property

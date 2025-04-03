@@ -579,3 +579,7 @@ class DataCatalogService(QObject):
             # Set My imagery data source
             if my_imagery_index:
                 self.dlg.sourceCombo.setCurrentIndex(my_imagery_index)
+    
+    # Other
+    def open_imagery_docs(self):
+        helpers.open_imagery_docs()
