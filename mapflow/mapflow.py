@@ -2018,17 +2018,26 @@ class Mapflow(QObject):
                                'to top up your balance'),
                        icon=QMessageBox.Warning)
             return
+        # Define starting to use later after confirmation or without it
+        def start_processing():
+            self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
+            try:
+                self.dlg.startProcessing.setEnabled(False)
+                self.post_processing(processing_params)
+            except Exception as e:
+                self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
         # Show processing start confirmation dialog if checkbox is checked
         if self.dlg.cornfirmProcessingStart.isChecked():
             dialog = ConfirmProcessingStart(self.dlg)
-            # Set "Confirm" opposite to "Don't show again", if they are not already the same
-            def toggle_confirmation_checkbox():
-                if not dialog.checkBox.isChecked() == self.dlg.cornfirmProcessingStart.isChecked():
-                    return
-                else:
+            # Define actions in case of dialog acceptance
+            def on_start_confirmation():
+                # Set "Confirm" checkbox opposite to "Don't show again" if they are not already the same
+                if not dialog.checkBox.isChecked() != self.dlg.cornfirmProcessingStart.isChecked():
                     self.dlg.cornfirmProcessingStart.setChecked(not dialog.checkBox.isChecked())
                     self.settings.setValue("confirmProcessingStart", str(not dialog.checkBox.isChecked()))
-            dialog.accepted.connect(toggle_confirmation_checkbox)
+                # And then post processing
+                start_processing()
+            dialog.accepted.connect(on_start_confirmation)
             # Fill dialog with parameters
             dialog.setup(name=processing_params.name,
                          price=str(self.processing_cost)+self.tr(" credits"),
@@ -2039,12 +2048,9 @@ class Mapflow(QObject):
                          blocks=[self.dlg.modelOptionsLayout.itemAt(i).widget().text()
                                  for i in range(self.dlg.modelOptionsLayout.count())])
             dialog.deleteLater()
-        self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
-        try:
-            self.dlg.startProcessing.setEnabled(False)
-            self.post_processing(processing_params)
-        except Exception as e:
-            self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
+        # Or just post the processing
+        else:
+            start_processing()
         return
 
     def upload_tif_callback(self,
