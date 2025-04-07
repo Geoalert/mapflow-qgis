@@ -2393,7 +2393,7 @@
                <property name="maximumSize">
                 <size>
                  <width>200</width>
-                 <height>222</height>
+                 <height>244</height>
                 </size>
                </property>
                <property name="verticalScrollBarPolicy">
@@ -2415,9 +2415,9 @@
                 <property name="geometry">
                  <rect>
                   <x>0</x>
-                  <y>0</y>
+                  <y>-36</y>
                   <width>198</width>
-                  <height>220</height>
+                  <height>240</height>
                  </rect>
                 </property>
                 <property name="sizePolicy">
@@ -2591,7 +2591,7 @@
                <property name="maximumSize">
                 <size>
                  <width>222</width>
-                 <height>222</height>
+                 <height>244</height>
                 </size>
                </property>
                <property name="widgetResizable">
@@ -2604,9 +2604,9 @@
                 <property name="geometry">
                  <rect>
                   <x>0</x>
-                  <y>0</y>
+                  <y>-126</y>
                   <width>207</width>
-                  <height>220</height>
+                  <height>240</height>
                  </rect>
                 </property>
                 <property name="sizePolicy">
@@ -2618,7 +2618,7 @@
                 <property name="minimumSize">
                  <size>
                   <width>0</width>
-                  <height>220</height>
+                  <height>240</height>
                  </size>
                 </property>
                 <widget class="QCheckBox" name="showProductTypeColumn">
@@ -2657,7 +2657,7 @@
                  <property name="geometry">
                   <rect>
                    <x>10</x>
-                   <y>44</y>
+                   <y>65</y>
                    <width>161</width>
                    <height>20</height>
                   </rect>
@@ -2673,7 +2673,7 @@
                  <property name="geometry">
                   <rect>
                    <x>10</x>
-                   <y>65</y>
+                   <y>86</y>
                    <width>161</width>
                    <height>20</height>
                   </rect>
@@ -2689,7 +2689,7 @@
                  <property name="geometry">
                   <rect>
                    <x>10</x>
-                   <y>86</y>
+                   <y>107</y>
                    <width>161</width>
                    <height>20</height>
                   </rect>
@@ -2705,7 +2705,7 @@
                  <property name="geometry">
                   <rect>
                    <x>10</x>
-                   <y>107</y>
+                   <y>128</y>
                    <width>161</width>
                    <height>20</height>
                   </rect>
@@ -2721,7 +2721,7 @@
                  <property name="geometry">
                   <rect>
                    <x>10</x>
-                   <y>128</y>
+                   <y>149</y>
                    <width>161</width>
                    <height>20</height>
                   </rect>
@@ -2737,7 +2737,7 @@
                  <property name="geometry">
                   <rect>
                    <x>10</x>
-                   <y>149</y>
+                   <y>170</y>
                    <width>220</width>
                    <height>20</height>
                   </rect>
@@ -2750,7 +2750,7 @@
                  <property name="geometry">
                   <rect>
                    <x>10</x>
-                   <y>170</y>
+                   <y>191</y>
                    <width>220</width>
                    <height>20</height>
                   </rect>
@@ -2763,13 +2763,26 @@
                  <property name="geometry">
                   <rect>
                    <x>10</x>
-                   <y>191</y>
+                   <y>212</y>
                    <width>161</width>
                    <height>20</height>
                   </rect>
                  </property>
                  <property name="text">
                   <string>Image ID</string>
+                 </property>
+                </widget>
+                <widget class="QCheckBox" name="showPreviewColumn">
+                 <property name="geometry">
+                  <rect>
+                   <x>10</x>
+                   <y>44</y>
+                   <width>81</width>
+                   <height>20</height>
+                  </rect>
+                 </property>
+                 <property name="text">
+                  <string>Preview</string>
                  </property>
                 </widget>
                </widget>

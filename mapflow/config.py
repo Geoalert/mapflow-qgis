@@ -10,6 +10,7 @@ class ConfigSearchColumns():
         self.METADATA_TABLE_ATTRIBUTES = {
             QCoreApplication.translate('Config', 'Product Type'): 'productType',
             QCoreApplication.translate('Config', 'Provider Name'): 'providerName',
+            QCoreApplication.translate('Config', 'Preview'): 'preview',
             QCoreApplication.translate('Config', 'Sensor'): 'source',
             QCoreApplication.translate('Config', 'Band Order'): 'colorBandOrder',
             QCoreApplication.translate('Config', 'Cloud %'): 'cloudCover',
@@ -65,6 +66,7 @@ class Config:
     # MAXAR
     MAXAR_ID_COLUMN_INDEX = tuple(ConfigSearchColumns().METADATA_TABLE_ATTRIBUTES.values()).index('id')
     LOCAL_INDEX_COLUMN = tuple(ConfigSearchColumns().METADATA_TABLE_ATTRIBUTES.values()).index('local_index')
+    PPRVIEW_INDEX_COLUMN = tuple(ConfigSearchColumns().METADATA_TABLE_ATTRIBUTES.values()).index('preview')
     MAXAR_DATETIME_COLUMN_INDEX = tuple(ConfigSearchColumns().METADATA_TABLE_ATTRIBUTES.keys()).index(QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=TIMEZONE))
     MAXAR_CLOUD_COLUMN_INDEX = tuple(ConfigSearchColumns().METADATA_TABLE_ATTRIBUTES.keys()).index(QCoreApplication.translate('Config', 'Cloud %'))
     MAXAR_MAX_FREE_ZOOM = 12
