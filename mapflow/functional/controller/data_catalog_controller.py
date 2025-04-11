@@ -42,3 +42,5 @@ class DataCatalogController(QObject):
 
         # Show free and taken space if limit is not None
         self.service.mosaicsUpdated.connect(self.service.get_user_limit)
+
+        self.dlg.myImageryDocsButton.clicked.connect(self.service.open_imagery_docs)
