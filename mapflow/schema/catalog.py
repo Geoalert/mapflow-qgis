@@ -32,6 +32,7 @@ class ImageCatalogRequestSchema(Serializable):
     offset: Optional[int] = 0
     hideUnavailable: Optional[bool] = False
     productTypes: Optional[List[ProductType]] = None
+    dataProviders: Optional[List[str]] = None
 
 @dataclass
 class ImageSchema(Serializable, SkipDataClass):

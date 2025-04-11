@@ -1418,6 +1418,12 @@
                 <property name="title">
                  <string>Additional filters</string>
                 </property>
+                <property name="flat">
+                 <bool>true</bool>
+                </property>
+                <property name="checkable">
+                 <bool>false</bool>
+                </property>
                 <property name="checked">
                  <bool>false</bool>
                 </property>
@@ -1431,6 +1437,52 @@
                  <bool>false</bool>
                 </property>
                 <layout class="QGridLayout" name="layoutMetadataFilters" columnstretch="0,0,0">
+                 <item row="0" column="2">
+                  <widget class="QSpinBox" name="minIntersectionSpinBox">
+                   <property name="suffix">
+                    <string>%</string>
+                   </property>
+                   <property name="minimum">
+                    <number>0</number>
+                   </property>
+                   <property name="maximum">
+                    <number>100</number>
+                   </property>
+                   <property name="value">
+                    <number>0</number>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="0" column="0">
+                  <widget class="QLabel" name="labelMinIntersection">
+                   <property name="text">
+                    <string>Min intersection:</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="3" column="0">
+                  <widget class="QLabel" name="labelMaxCloudCover">
+                   <property name="text">
+                    <string>Cloud cover up to:</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="3" column="2">
+                  <widget class="QSpinBox" name="maxCloudCoverSpinBox">
+                   <property name="suffix">
+                    <string>%</string>
+                   </property>
+                   <property name="minimum">
+                    <number>1</number>
+                   </property>
+                   <property name="maximum">
+                    <number>100</number>
+                   </property>
+                   <property name="value">
+                    <number>100</number>
+                   </property>
+                  </widget>
+                 </item>
                  <item row="0" column="1">
                   <widget class="QSlider" name="minIntersection">
                    <property name="sizePolicy">
@@ -1459,45 +1511,6 @@
                    </property>
                   </widget>
                  </item>
-                 <item row="3" column="2">
-                  <widget class="QSpinBox" name="maxCloudCoverSpinBox">
-                   <property name="suffix">
-                    <string>%</string>
-                   </property>
-                   <property name="minimum">
-                    <number>1</number>
-                   </property>
-                   <property name="maximum">
-                    <number>100</number>
-                   </property>
-                   <property name="value">
-                    <number>100</number>
-                   </property>
-                  </widget>
-                 </item>
-                 <item row="3" column="0">
-                  <widget class="QLabel" name="labelMaxCloudCover">
-                   <property name="text">
-                    <string>Cloud cover up to:</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item row="0" column="2">
-                  <widget class="QSpinBox" name="minIntersectionSpinBox">
-                   <property name="suffix">
-                    <string>%</string>
-                   </property>
-                   <property name="minimum">
-                    <number>0</number>
-                   </property>
-                   <property name="maximum">
-                    <number>100</number>
-                   </property>
-                   <property name="value">
-                    <number>0</number>
-                   </property>
-                  </widget>
-                 </item>
                  <item row="3" column="1">
                   <widget class="QSlider" name="maxCloudCover">
                    <property name="minimum">
@@ -1523,25 +1536,64 @@
                    </property>
                   </widget>
                  </item>
-                 <item row="0" column="0">
-                  <widget class="QLabel" name="labelMinIntersection">
-                   <property name="text">
-                    <string>Min intersection:</string>
+                 <item row="5" column="0" colspan="3">
+                  <layout class="QHBoxLayout" name="horizontalLayout_9">
+                   <property name="topMargin">
+                    <number>0</number>
                    </property>
-                  </widget>
-                 </item>
-                 <item row="4" column="0" colspan="3">
-                  <widget class="QCheckBox" name="hideUnavailableResults">
-                   <property name="sizePolicy">
-                    <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-                     <horstretch>0</horstretch>
-                     <verstretch>0</verstretch>
-                    </sizepolicy>
-                   </property>
-                   <property name="text">
-                    <string>Search only through available providers</string>
-                   </property>
-                  </widget>
+                   <item>
+                    <widget class="QLabel" name="searchProvidersLabel">
+                     <property name="text">
+                      <string>Providers: </string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QgsCheckableComboBox" name="searchProvidersCombo">
+                     <property name="minimumSize">
+                      <size>
+                       <width>200</width>
+                       <height>0</height>
+                      </size>
+                     </property>
+                     <property name="currentText">
+                      <string/>
+                     </property>
+                     <property name="currentIndex">
+                      <number>-1</number>
+                     </property>
+                     <property name="placeholderText">
+                      <string/>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <spacer name="horizontalSpacer_4">
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                     <property name="sizeHint" stdset="0">
+                      <size>
+                       <width>40</width>
+                       <height>20</height>
+                      </size>
+                     </property>
+                    </spacer>
+                   </item>
+                   <item>
+                    <widget class="QCheckBox" name="hideUnavailableResults">
+                     <property name="sizePolicy">
+                      <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                       <horstretch>0</horstretch>
+                       <verstretch>0</verstretch>
+                      </sizepolicy>
+                     </property>
+                     <property name="text">
+                      <string>Search only through available providers</string>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
                  </item>
                 </layout>
                </widget>
@@ -2943,6 +2995,11 @@
   </action>
  </widget>
  <customwidgets>
+  <customwidget>
+   <class>QgsCheckableComboBox</class>
+   <extends>QComboBox</extends>
+   <header>qgscheckablecombobox.h</header>
+  </customwidget>
   <customwidget>
    <class>QgsCollapsibleGroupBox</class>
    <extends>QGroupBox</extends>
