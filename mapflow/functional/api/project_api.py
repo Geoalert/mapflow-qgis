@@ -38,11 +38,12 @@ class ProjectApi(QObject):
                       use_default_error_handler=True,
                       timeout=5)
 
-    def get_project(self, project_id, callback):
+    def get_project(self, project_id, callback: Callable, error_handler: Callable):
         self.http.get(url=f"{self.server}/projects/{project_id}",
                       headers={},
                       callback=callback,
-                      use_default_error_handler=True,
+                      use_default_error_handler= False,
+                      error_handler=error_handler,
                       timeout=5)
     
     def get_projects(self, 

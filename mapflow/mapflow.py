@@ -198,7 +198,7 @@ class Mapflow(QObject):
         self.data_catalog_service = DataCatalogService(self.http, self.server, self.dlg, self.iface, self.result_loader, self.plugin_version, self.temp_dir)
         self.data_catalog_controller = DataCatalogController(self.dlg, self.data_catalog_service)
 
-        self.project_service = ProjectService(self.http, self.server, self.dlg)
+        self.project_service = ProjectService(self.http, self.server, self.settings, self.dlg)
         self.project_service.projectsUpdated.connect(self.update_projects)
 
         self.processing_service = ProcessingService(self.http, self.server)
@@ -275,9 +275,9 @@ class Mapflow(QObject):
         self.dlg.createProject.clicked.connect(self.create_project)
         self.dlg.deleteProject.clicked.connect(self.delete_project)
         self.dlg.updateProject.clicked.connect(self.update_project)
-        self.dlg.projectsTable.cellDoubleClicked.connect(self.show_processings)
-        self.dlg.switchProcessingsButton.clicked.connect(self.show_processings)
-        self.dlg.switchProjectsButton.clicked.connect(self.show_projects)
+        self.dlg.projectsTable.cellDoubleClicked.connect(lambda: self.show_processings(save_page=True))
+        self.dlg.switchProcessingsButton.clicked.connect(lambda: self.show_processings(save_page=True))
+        self.dlg.switchProjectsButton.clicked.connect(lambda: self.show_projects(open_saved_page=True))
 
         # Maxar
         self.config_search_columns = ConfigColumns()
@@ -401,6 +401,11 @@ class Mapflow(QObject):
         self.setup_workflow_defs(self.current_project.workflowDefs)
         # Manually toggle function to avoid race condition
         self.calculate_aoi_area_use_image_extent()
+    
+    def get_project_error_handler(self, response: QNetworkReply):
+        self.default_error_handler(response)
+        # Switch to projects table if couldn't get current project
+        self.project_service.switch_to_projects()
 
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.draw_aoi)
@@ -2191,8 +2196,8 @@ class Mapflow(QObject):
             self.setup_providers(response_data.get("dataProviders") or [])
             self.setup_search_providers(response_data.get("searchDataProviders") or [])
             self.on_provider_change()
-            # Open processings or projects (if no saved id) table
-            if self.project_id:
+            # Open processings or projects table
+            if self.current_project:
                 self.show_processings()
             else:
                 self.show_projects()
@@ -2797,15 +2802,28 @@ class Mapflow(QObject):
                 processing_history[env] = {self.username: {self.project_id: self.processing_history.asdict()}}
         self.settings.setValue('processings', processing_history)
 
-    def show_processings(self):
+    def show_processings(self, save_page: Optional[bool] = False):
+        """Get processings and switch to processings table in stacked widget.
+
+        :param save_page: A boolean that determines if we should save projects page parameters to settings (if 
+        user chose a project) or not (switching if no id was saved).
+        """
         if not self.project_id:
             return
         self.setup_processings_table()
-        self.project_service.switch_to_processings()
+        self.project_service.switch_to_processings(save_page)
     
-    def show_projects(self):
+    def show_projects(self, open_saved_page: Optional[bool] = False):
+        """Get projects and switch from processings to projects table in stacked widget.
+
+        Allows to open saved projects page even after reload.
+        But we don't need to do that when e.g. we are switching to a different projects page.
+
+        :param open_saved_page: A boolean that determines if we should get projects page from the settings (e.g. when
+        switching from processings table) or not (e.g. when showing next projects page).
+        """
         self.processing_fetch_timer.stop()
-        self.project_service.switch_to_projects()
+        self.project_service.switch_to_projects(open_saved_page)
 
     def alert_failed_processings(self, failed_processings):
         if not failed_processings:
@@ -3178,7 +3196,7 @@ class Mapflow(QObject):
             self.setup_processings_table()
         else:
             if self.project_id:
-                self.project_service.get_project(self.project_id, self.get_project_callback)
+                self.project_service.get_project(self.project_id, self.get_project_callback, self.get_project_error_handler)
             self.data_catalog_service.get_mosaics()
         self.dlg.setup_for_billing(self.billing_type)
         self.dlg.show()
