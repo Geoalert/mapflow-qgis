@@ -2744,11 +2744,11 @@ class Mapflow(QObject):
             current_project_id = response_data[0]['projectId']
         else:
             current_project_id = None
-        if all(not p.status.is_in_progress
+        if all(not (p.status.is_in_progress or p.status.is_awaiting)
                and p.review_status.is_not_accepted
                for p in processings):
             # We do not re-fetch the processings, if nothing is going to change.
-            # What can change from server-side: processing can finish if IN_PROGRESS
+            # What can change from server-side: processing can finish if IN_PROGRESS or AWAITING
             # or review can be accepted if NOT_ACCEPTED.
             # Any other processings can change only from client-side
             self.processing_fetch_timer.stop()
