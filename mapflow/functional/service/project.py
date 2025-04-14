@@ -68,11 +68,15 @@ class ProjectService(QObject):
         """
         # Open the page containing current project
         if open_saved_page is True:
-            # Get each page parameter from dict in settings (if no dict - create one with a particular default value)
-            self.projects_page_offset = int(self.settings.value('projectsPage', {'offset':self.projects_page_offset})['offset'])
-            sort_by = self.settings.value('projectsPage', {'sort_by':ProjectSortBy.updated})['sort_by']
-            sort_order = self.settings.value('projectsPage', {'sort_order':ProjectSortOrder.descending})['sort_order']
-            projects_filter = self.settings.value('projectsPage', {'filter':""})['filter']
+            # Get each page parameter from dict in settings (if no dict - create one with default values)
+            projects_page = self.settings.value('projectsPage', {'offset' : self.projects_page_offset,
+                                                                 'sort_by' : ProjectSortBy.updated,
+                                                                 'sort_order' : ProjectSortOrder.descending,
+                                                                 'filter': ""})
+            self.projects_page_offset = int(projects_page['offset'])
+            sort_by = projects_page['sort_by']
+            sort_order = projects_page['sort_order']
+            projects_filter = projects_page['filter']
             if projects_filter:
                 self.dlg.filterProjects.setText(projects_filter)
         # Load page getting params from UI and don't change self.projects_page_offset
