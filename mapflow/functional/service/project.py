@@ -77,8 +77,24 @@ class ProjectService(QObject):
             sort_by = projects_page['sort_by']
             sort_order = projects_page['sort_order']
             projects_filter = projects_page['filter']
+            # Set saved filtering and sorting in UI
             if projects_filter:
                 self.dlg.filterProjects.setText(projects_filter)
+            # Find pairs of sorting combo indecies from sort_by (not knowing sort_order)
+            if sort_by == ProjectSortBy.name:
+                by = (0, 1)
+            elif sort_by == ProjectSortBy.created:
+                by = (2, 3)
+            else: # sort_by == ProjectSortBy.updated
+                by = (4, 5)
+            # Find triples of sorting combo indecies from sort_order (not knowing sort_by)
+            if sort_order == ProjectSortOrder.ascending: # A-Z, Oldest first, Updated long ago
+                order = (0, 3, 5)
+            else: # ProjectSortOrder.descending: Z-A, Newest first, Updated recently
+                order = (1, 2, 4)
+            # Get and set the only element of the intersection of sort_by and sort_order indecies
+            index = set(by).intersection(set(order)).pop()
+            self.dlg.sortProjectsCombo.setCurrentIndex(index)
         # Load page getting params from UI and don't change self.projects_page_offset
         else:
             sort_by, sort_order = self.view.sort_projects()
