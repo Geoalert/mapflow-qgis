@@ -26,8 +26,7 @@ class ProjectService(QObject):
         self.projects_data = {}
         self.projects = []
         self.projects_page_limit = Config.PROJECTS_PAGE_LIMIT
-        self.projects_page_offset = 0 # filtering and regular offsets are different, 
-        self.projects_filtered_offset = 0 # so if we removed filter, we'll return to the page we were on
+        self.projects_page_offset = 0
         # Connections
         self.dlg.projectsNextPageButton.clicked.connect(self.show_projects_next_page)
         self.dlg.projectsPreviousPageButton.clicked.connect(self.show_projects_previous_page)
@@ -69,30 +68,20 @@ class ProjectService(QObject):
         """
         # Open the page containing current project
         if open_saved_page is True:
-            # Get values from settings
-            projects_offset = self.settings.value('projectsOffset', self.projects_page_offset)
-            sort_by = self.settings.value('projectsSortBy', ProjectSortBy.updated)
-            sort_order = self.settings.value('projectsSortOrder', ProjectSortOrder.descending)
-            projects_filter = self.settings.value('projectsFilter')
-            # Set right (filtered or general) offset from settings to use later in callback
+            # Get each page parameter from dict in settings (if no dict - create one with a particular default value)
+            self.projects_page_offset = int(self.settings.value('projectsPage', {'offset':self.projects_page_offset})['offset'])
+            sort_by = self.settings.value('projectsPage', {'sort_by':ProjectSortBy.updated})['sort_by']
+            sort_order = self.settings.value('projectsPage', {'sort_order':ProjectSortOrder.descending})['sort_order']
+            projects_filter = self.settings.value('projectsPage', {'filter':""})['filter']
             if projects_filter:
-                self.projects_filtered_offset = projects_offset
                 self.dlg.filterProjects.setText(projects_filter)
-            else:
-                self.projects_page_offset = projects_offset
-        # Load page getting params from offset and UI
+        # Load page getting params from UI and don't change self.projects_page_offset
         else:
             sort_by, sort_order = self.view.sort_projects()
             projects_filter = self.dlg.filterProjects.text()
-            # Define right (filtered or general) offset from attributes
-            if projects_filter:
-                projects_offset = self.projects_filtered_offset
-                self.dlg.filterProjects.setText(projects_filter)
-            else:
-                projects_offset = self.projects_page_offset
         # Send request with defined parameters
         request_body = ProjectsRequest(self.projects_page_limit, 
-                                       projects_offset,
+                                       self.projects_page_offset,
                                        projects_filter,
                                        sort_by, sort_order)
         self.api.get_projects(request_body, self.get_projects_callback)
@@ -108,11 +97,7 @@ class ProjectService(QObject):
         if self.projects_data.total > self.projects_page_limit:
             quotient, remainder = divmod(self.projects_data.total, self.projects_page_limit)
             projects_total_pages = quotient + (remainder > 0)
-            if self.dlg.filterProjects.text():
-                projects_offset = self.projects_filtered_offset
-            else:
-                projects_offset = self.projects_page_offset
-            projects_page_number = int(projects_offset/self.projects_page_limit) + 1
+            projects_page_number = int(self.projects_page_offset/self.projects_page_limit) + 1
             self.view.show_projects_pages(True, projects_page_number, projects_total_pages)
         else:
             self.view.show_projects_pages(False)
@@ -124,17 +109,11 @@ class ProjectService(QObject):
         self.view.select_project(project_id)
     
     def show_projects_next_page(self):
-        if self.dlg.filterProjects.text():
-            self.projects_filtered_offset += self.projects_page_limit
-        else:
-            self.projects_page_offset += self.projects_page_limit
+        self.projects_page_offset += self.projects_page_limit
         self.get_projects()
 
     def show_projects_previous_page(self):
-        if self.dlg.filterProjects.text():
-            self.projects_filtered_offset += -self.projects_page_limit
-        else:
-            self.projects_page_offset += -self.projects_page_limit
+        self.projects_page_offset += -self.projects_page_limit
         self.get_projects()
     
     def switch_to_projects(self, open_saved_page: Optional[bool] = False):
@@ -162,18 +141,14 @@ class ProjectService(QObject):
         :param save_page: A boolean that determines if we should save projects page parameters to settings or not.
         """
         if save_page:
-            # Save current sorting
+            # Save current offset, sorting and filter
             sort_by, sort_order = self.view.sort_projects()
-            self.settings.setValue('projectsSortBy', sort_by)
-            self.settings.setValue('projectsSortOrder', sort_order)
-            # Save current filter
             projects_filter = self.dlg.filterProjects.text()
-            self.settings.setValue('projectsFilter', projects_filter)
-            # Save current offset
-            if projects_filter:
-                self.settings.setValue('projectsOffset', self.projects_filtered_offset)
-            else:
-                self.settings.setValue('projectsOffset', self.projects_page_offset)            
+            projects_page = {'offset' : self.projects_page_offset,
+                             'sort_by' : sort_by,
+                             'sort_order' : sort_order,
+                             'filter': projects_filter}
+            self.settings.setValue('projectsPage', projects_page)
         self.view.switch_to_processings()
 
     def get_filtered_projects(self):
@@ -182,5 +157,5 @@ class ProjectService(QObject):
         Is called when texted is edited by user (not just changed programmatically).
         So each time offset resets to 0 to show 1st page of newly filtered response.
         """
-        self.projects_filtered_offset = 0
+        self.projects_page_offset = 0
         self.get_projects()
