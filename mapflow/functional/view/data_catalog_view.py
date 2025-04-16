@@ -422,16 +422,12 @@ class DataCatalogView(QObject):
         # Because we open images table always with empty selection
         self.clear_image_info()
         # Set sorting combo text
-<<<<<<< HEAD
-        self.dlg.sortCombo.setCurrentIndex(self.sort_images_index)
+        self.dlg.sortCatalogCombo.setCurrentIndex(self.sort_images_index)
         # Disable '<' and '>' for images table
         self.enable_mosaic_images_preview(0, 0)
         # Set filter and its placeholder text
         self.filter_catalog_table(self.dlg.filterCatalog.text())
         self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter images by name or id"))
-=======
-        self.dlg.sortCatalogCombo.setCurrentIndex(self.sort_images_index)
->>>>>>> 0979741 (Projects: Refactor, move controls, add sorting)
 
     def show_mosaics_table(self, selected_mosaic_name: Optional[str]):
         # Save buttons before deleting cells and therefore widgets
@@ -450,14 +446,10 @@ class DataCatalogView(QObject):
         else:
             self.clear_mosaic_info()
         # Set sorting combo text
-<<<<<<< HEAD
-        self.dlg.sortCombo.setCurrentIndex(self.sort_mosaics_index)
+        self.dlg.sortCatalogCombo.setCurrentIndex(self.sort_mosaics_index)
         # Set filter and its placeholder text
         self.filter_catalog_table(self.dlg.filterCatalog.text())
         self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter mosaics by name or id"))
-=======
-        self.dlg.sortCatalogCombo.setCurrentIndex(self.sort_mosaics_index)
->>>>>>> 0979741 (Projects: Refactor, move controls, add sorting)
 
     def create_mosaic_cell_buttons_layout(self):
         self.mosaic_cell_layout.setContentsMargins(0,0,3,0)
