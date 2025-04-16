@@ -964,6 +964,7 @@ class Mapflow(QObject):
 
         hide_unavailable = self.dlg.hideUnavailableResults.isChecked()
         product_types = self.selected_search_product_types()
+        search_providers = self.dlg.searchProvidersCombo.checkedItemsData() or None
 
         if isinstance(provider, MaxarProvider):
             self.get_maxar_metadata(aoi=aoi,
@@ -981,7 +982,8 @@ class Mapflow(QObject):
                                           to=to_time,
                                           offset=offset,
                                           hide_unavailable=hide_unavailable,
-                                          product_types=product_types)
+                                          product_types=product_types,
+                                          search_providers=search_providers)
             # HEAD API does not work properly with intersection percent, so not sending it yet (filtering after)
             # max_cloud_cover=max_cloud_cover,
             # min_intersection=min_intersection)
@@ -1010,7 +1012,8 @@ class Mapflow(QObject):
                                  min_intersection: Optional[float] = None,
                                  offset: Optional[int] = 0,
                                  hide_unavailable: Optional[bool] = False,
-                                 product_types: Optional[List[ProductType]] = None):
+                                 product_types: Optional[List[ProductType]] = None,
+                                 search_providers: Optional[List[str]] = None):
         if not self.check_if_output_directory_is_selected():
             return # only when outputDirectory is empty AND user closed selection dialog
         self.metadata_aoi = aoi
@@ -1026,7 +1029,8 @@ class Mapflow(QObject):
                                                     limit=self.search_page_limit,
                                                     offset=offset,
                                                     hideUnavailable=hide_unavailable,
-                                                    productTypes=product_types)
+                                                    productTypes=product_types,
+                                                    dataProviders=search_providers)
         self.http.post(url=provider.meta_url,
                        body=request_payload.as_json().encode(),
                        headers={},
@@ -2174,6 +2178,7 @@ class Mapflow(QObject):
             self.dlg.setup_for_review(self.review_workflow_enabled)
             self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex())
             self.setup_providers(response_data.get("dataProviders") or [])
+            self.setup_search_providers(response_data.get("searchDataProviders") or [])
             self.on_provider_change()
 
     def setup_providers(self, providers_data):
@@ -2185,6 +2190,16 @@ class Mapflow(QObject):
         # We want to clear the data from previous lauunch to avoid confusion
         for provider in self.providers:
             provider.clear_saved_search(self.temp_dir)
+    
+    def setup_search_providers(self, providers_data):
+        search_providers = ProvidersList([DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
+                                          for data in providers_data])
+        self.dlg.enable_search_providers_filter(len(search_providers))
+        if len(search_providers) == 0:
+            return
+        for pr in search_providers:
+            self.dlg.searchProvidersCombo.addItemWithCheckState(pr.name, Qt.Unchecked, pr.api_name)
+        self.dlg.searchProvidersCombo.setDefaultText(self.tr("Show all"))
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
         """Save and open the preview image as a layer."""

@@ -534,6 +534,14 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.searchPageLabel.setToolTip(self.tr("Page"))
         self.searchPageLabel.setText(f"{page_number}/{total_pages}")
     
+    def enable_search_providers_filter(self, search_provides_count: int):
+        if search_provides_count == 0:
+            self.searchProvidersCombo.setVisible(False)
+            self.searchProvidersLabel.setVisible(False)
+        else:
+            self.searchProvidersCombo.setVisible(True)
+            self.searchProvidersLabel.setVisible(True)
+    
     def selected_project_id(self):
         if self.projectsCombo.currentData():
             return str(self.projectsCombo.currentData())
