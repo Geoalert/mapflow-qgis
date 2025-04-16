@@ -597,7 +597,7 @@ class Mapflow(QObject):
             if cloud_cover is not None:  # may be undefined
                 is_unfit = is_unfit or cloud_cover > max_cloud_cover
             self.dlg.metadataTable.setRowHidden(row, is_unfit)
-        self.dlg.metadataTable.cellClicked.connect(self.preview_search_from_cell)
+        self.cell_preview_connection = self.dlg.metadataTable.cellClicked.connect(self.preview_search_from_cell)
 
     def set_up_login_dialog(self) -> MapflowLoginDialog:
         """Create a login dialog, set its title and signal-slot connections."""
@@ -931,6 +931,10 @@ class Mapflow(QObject):
 
     def get_metadata(self, _: Optional[bool] = False, offset: Optional[int] = 0) -> None:
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
+        try: # disconnect to prevent adding mutliple previews if table was refilled (multiple searches)
+            self.dlg.metadataTable.disconnect(self.cell_preview_connection)
+        except AttributeError: # if no previous connection (first search after start)
+            pass
         # If current provider does not support search, we should select ImagerySearchProvider to be able to search
         self.replace_search_provider_index()
 
