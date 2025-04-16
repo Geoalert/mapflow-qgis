@@ -1,16 +1,17 @@
 import sys
 from pathlib import Path
 from typing import Iterable, Optional, List
+from datetime import datetime
 
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette
 from PyQt5.QtWidgets import (QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton, 
-                             QAction, QMenu, QAbstractItemView)
+                             QAction, QMenu, QAbstractItemView, QHeaderView, QVBoxLayout, QButtonGroup, QTableWidget)
 from qgis.core import QgsMapLayerProxyModel, QgsSettings
 
 from . import icons
-from ..config import config, ConfigSearchColumns
+from ..config import config, ConfigColumns
 from ..entity.billing import BillingType
 from ..entity.provider import ProviderInterface
 from ..functional import helpers
@@ -415,7 +416,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         for row, feature in enumerate(metadata['features']):
             if feature.get('id'):
                 feature['properties']['id'] = feature.get('id') # for uniformity
-            for col, attr in enumerate(ConfigSearchColumns().METADATA_TABLE_ATTRIBUTES.values()):
+            for col, attr in enumerate(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()):
                 try:
                     value = feature['properties'][attr]
                 except KeyError:  # e.g. <colorBandOrder/> for pachromatic images
@@ -428,14 +429,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.metadataTable.resizeColumnsToContents()
         self.add_preview_cell()
         self.metadataTableFilled.emit()
-
-    def setup_project_combo(self, projects: dict[str, MapflowProject], current_project_id: Optional[str] = None):
-        self.projectsCombo.clear()
-        for pr in projects.values():
-            self.projectsCombo.insertItem(0, pr.name, pr.id)
-        if current_project_id:
-            self.select_project(current_project_id)
-
+        
     def setup_options_menu(self):
         self.options_menu.addAction(self.save_result_action)
         self.options_menu.addAction(self.download_aoi_action)
@@ -496,10 +490,14 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         if can_delete_rename_project is None:
             can_delete_rename_project = True
         self.deleteProject.setEnabled(can_delete_rename_project)
-        self.updateProject.setEnabled(can_delete_rename_project) 
-        self.deleteProject.setToolTip(reason)
-        self.updateProject.setToolTip(reason)
-    
+        self.updateProject.setEnabled(can_delete_rename_project)
+        if can_delete_rename_project is False:
+            self.deleteProject.setToolTip(reason)
+            self.updateProject.setToolTip(reason)
+        else:
+            self.deleteProject.setToolTip(self.tr("Delete project"))
+            self.updateProject.setToolTip(self.tr("Edit project"))
+
     def enable_rename_processing(self, can_delete_rename_review_processing: bool = True):
         """
         Remove processing's renaming option from '...' menu near 'View results' button depending on user role property.
@@ -541,19 +539,21 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         else:
             self.searchProvidersCombo.setVisible(True)
             self.searchProvidersLabel.setVisible(True)
+
+    def enable_projects_pages(self, enable: bool = False, page_number: int = 1, total_pages: int = 1):
+        self.projectsPreviousPageButton.setVisible(enable)
+        self.projectsNextPageButton.setVisible(enable)
+        self.projectsPageLabel.setVisible(enable)
+        if enable is True:
+            self.projectsPageLabel.setText(f"{page_number}/{total_pages}")
     
     def selected_project_id(self):
-        if self.projectsCombo.currentData():
-            return str(self.projectsCombo.currentData())
+        selected_idx = self.projectsTable.selectionModel().selectedIndexes()
+        if selected_idx:
+            pid = selected_idx[0].data()
         else:
-            return None
-
-    def select_project(self, project_id):
-        idx = self.projectsCombo.findData(project_id)
-        if idx == -1:
-            # if project is not found, just select the first one
-            idx = 0
-        self.projectsCombo.setCurrentIndex(idx)
+            pid = None
+        return (pid)
     
     def set_search_visible_columns(self):
         search_columns_numbers = [str(x) for x in range(len(self.search_columns))] # 11 columns in total: 0-10

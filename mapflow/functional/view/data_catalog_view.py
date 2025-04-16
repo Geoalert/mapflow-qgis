@@ -64,13 +64,13 @@ class DataCatalogView(QObject):
         self.create_image_cell_buttons_layout()
 
         # Add sorting options for catalog tables
-        self.dlg.sortCombo.addItems([self.tr("A-Z"), self.tr("Z-A"),
+        self.dlg.sortCatalogCombo.addItems([self.tr("A-Z"), self.tr("Z-A"),
                                      self.tr("Biggest first"), self.tr("Smallest first"),
                                      self.tr("Newest first"), self.tr("Oldest first")])
         # Default sorting column is 1 (name)
         self.sort_mosaics_column = 1
         self.sort_images_column = 1
-        # Default sortCombo index is 0 (A-Z)
+        # Default sortCatalogCombo index is 0 (A-Z)
         self.sort_mosaics_index = 0
         self.sort_images_index = 0
 
@@ -127,8 +127,8 @@ class DataCatalogView(QObject):
         self.filter_catalog_table(self.dlg.filterCatalog.text())
 
     def sort_catalog(self):
-        index = self.dlg.sortCombo.currentIndex()
-        # Define sorting order based on sortCombo index
+        index = self.dlg.sortCatalogCombo.currentIndex()
+        # Define sorting order based on sortCatalogCombo index
         if index in (0, 3, 5): # A-Z, Smallest first, Oldest first
             order = Qt.AscendingOrder
         else: # Z-A, Biggest first, Newest first
@@ -422,7 +422,7 @@ class DataCatalogView(QObject):
         # Because we open images table always with empty selection
         self.clear_image_info()
         # Set sorting combo text
-        self.dlg.sortCombo.setCurrentIndex(self.sort_images_index)
+        self.dlg.sortCatalogCombo.setCurrentIndex(self.sort_images_index)
         # Disable '<' and '>' for images table
         self.enable_mosaic_images_preview(0, 0)
         # Set filter and its placeholder text
@@ -446,7 +446,7 @@ class DataCatalogView(QObject):
         else:
             self.clear_mosaic_info()
         # Set sorting combo text
-        self.dlg.sortCombo.setCurrentIndex(self.sort_mosaics_index)
+        self.dlg.sortCatalogCombo.setCurrentIndex(self.sort_mosaics_index)
         # Set filter and its placeholder text
         self.filter_catalog_table(self.dlg.filterCatalog.text())
         self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter mosaics by name or id"))

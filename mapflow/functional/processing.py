@@ -13,6 +13,15 @@ class ProcessingService(QObject):
         self.server = server
         self.projects = []
 
+    def get_processings(self, project_id, callback):
+        if not project_id:
+            return
+        self.http.get(
+                url=f'{self.server}/projects/{project_id}/processings',
+                callback=callback,
+                use_default_error_handler=False # ignore errors to prevent repetitive alerts
+                )
+
     def update_processing(self, processing_id, processing: UpdateProcessingSchema):
         self.http.put(url=f"{self.server}/processings/{processing_id}",
                        body=processing.as_json().encode(),
