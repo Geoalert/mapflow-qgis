@@ -958,9 +958,7 @@ class Mapflow(QObject):
 
         hide_unavailable = self.dlg.hideUnavailableResults.isChecked()
         product_types = self.selected_search_product_types()
-        search_providers = self.dlg.searchProvidersCombo.checkedItemsData()
-        if len(search_providers) == 0:
-            search_providers = None # don't pass empty list, pass None
+        search_providers = self.dlg.searchProvidersCombo.checkedItemsData() or None
 
         if isinstance(provider, MaxarProvider):
             self.get_maxar_metadata(aoi=aoi,
