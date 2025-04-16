@@ -1,16 +1,17 @@
 import sys
 from pathlib import Path
 from typing import Iterable, Optional, List
+from datetime import datetime
 
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette
 from PyQt5.QtWidgets import (QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton, 
-                             QAction, QMenu, QAbstractItemView)
+                             QAction, QMenu, QAbstractItemView, QHeaderView, QVBoxLayout, QButtonGroup, QTableWidget)
 from qgis.core import QgsMapLayerProxyModel, QgsSettings
 
 from . import icons
-from ..config import config, ConfigSearchColumns
+from ..config import config, ConfigColumns
 from ..entity.billing import BillingType
 from ..entity.provider import ProviderInterface
 from ..functional import helpers
@@ -79,6 +80,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.connect_processing_column_checkboxes()
         self.set_search_visible_columns()
         self.connect_search_column_checkboxes()
+        # connect two spinboxes
+        self.spin1_connection = self.maxZoom.valueChanged.connect(self.switch_maxzoom_2)
+        self.spin2_connection = self.maxZoom2.valueChanged.connect(self.switch_maxzoom_1)
         # current state to compare with on change
         self.current_raster_source = self.sourceCombo.currentText()
         # connect raster/provider combos
@@ -130,6 +134,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.setup_options_menu()
 
         # Imagery Search
+        self.imageId.setReadOnly(True)
         self.metadataTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.enable_search_pages(False)
 
@@ -147,9 +152,17 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         elif viewResultsMode == "file":
             self.viewAsLocal.setChecked(True)
         self.useAllVectorLayers.setChecked(str(self.settings.value('useAllVectorLayers', "true")).lower() == "true")
-        self.cornfirmProcessingStart.setChecked(str(self.settings.value('confirmProcessingStart', "true")).lower() == "true")
-        self.cornfirmProcessingStart.toggled.connect(lambda: self.settings.setValue("confirmProcessingStart", 
-                                                                                    self.cornfirmProcessingStart.isChecked()))
+
+    # connect two spinboxes funcs
+    def switch_maxzoom_1(self, value):
+        self.maxZoom.valueChanged.disconnect(self.spin1_connection)
+        self.maxZoom.setValue(value)
+        self.spin1_connection = self.maxZoom.valueChanged.connect(self.switch_maxzoom_2)
+
+    def switch_maxzoom_2(self, value):
+        self.maxZoom2.valueChanged.disconnect(self.spin2_connection)
+        self.maxZoom2.setValue(value)
+        self.spin2_connection = self.maxZoom2.valueChanged.connect(self.switch_maxzoom_1)
 
     # connect raster/provider combos funcs
     def switch_provider_combo(self, text):
@@ -273,6 +286,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                              fill: Optional[dict] = None
                              ):
         self.metadataTable.clear()
+        self.imageId.clear()
 
         more_button = self.findChild(QPushButton, more_button_name)
         if more_button:
@@ -281,6 +295,13 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
         # If the provider does not support search,
         # we substitute it with default search provider (which is ImagerySearchProvider)
+
+        preview_zoom_enabled = max_preview_zoom is not None and preview_zoom is not None
+        self.maxZoom.setEnabled(preview_zoom_enabled)
+        if preview_zoom_enabled:
+            self.maxZoom.setMaximum(max_preview_zoom)
+            self.maxZoom2.setMaximum(max_preview_zoom)
+            self.maxZoom.setValue(preview_zoom)
 
         self.metadataFilters.setEnabled(True)
         self.metadataTable.setRowCount(0)
@@ -293,6 +314,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         if sort_by is not None:
             self.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
         self.metadata.setTitle(self.tr("Search ") + provider.name)
+        self.imageId.setPlaceholderText(image_id_placeholder)
+        self.labelImageId.setToolTip(image_id_tooltip)
 
         if fill:
             self.fill_metadata_table(fill)
@@ -415,7 +438,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         for row, feature in enumerate(metadata['features']):
             if feature.get('id'):
                 feature['properties']['id'] = feature.get('id') # for uniformity
-            for col, attr in enumerate(ConfigSearchColumns().METADATA_TABLE_ATTRIBUTES.values()):
+            for col, attr in enumerate(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()):
                 try:
                     value = feature['properties'][attr]
                 except KeyError:  # e.g. <colorBandOrder/> for pachromatic images
@@ -426,16 +449,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # Turn sorting on again
         self.metadataTable.setSortingEnabled(True)
         self.metadataTable.resizeColumnsToContents()
-        self.add_preview_cell()
         self.metadataTableFilled.emit()
-
-    def setup_project_combo(self, projects: dict[str, MapflowProject], current_project_id: Optional[str] = None):
-        self.projectsCombo.clear()
-        for pr in projects.values():
-            self.projectsCombo.insertItem(0, pr.name, pr.id)
-        if current_project_id:
-            self.select_project(current_project_id)
-
+        
     def setup_options_menu(self):
         self.options_menu.addAction(self.save_result_action)
         self.options_menu.addAction(self.download_aoi_action)
@@ -496,10 +511,14 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         if can_delete_rename_project is None:
             can_delete_rename_project = True
         self.deleteProject.setEnabled(can_delete_rename_project)
-        self.updateProject.setEnabled(can_delete_rename_project) 
-        self.deleteProject.setToolTip(reason)
-        self.updateProject.setToolTip(reason)
-    
+        self.updateProject.setEnabled(can_delete_rename_project)
+        if can_delete_rename_project is False:
+            self.deleteProject.setToolTip(reason)
+            self.updateProject.setToolTip(reason)
+        else:
+            self.deleteProject.setToolTip(self.tr("Delete project"))
+            self.updateProject.setToolTip(self.tr("Edit project"))
+
     def enable_rename_processing(self, can_delete_rename_review_processing: bool = True):
         """
         Remove processing's renaming option from '...' menu near 'View results' button depending on user role property.
@@ -534,34 +553,21 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.searchPageLabel.setToolTip(self.tr("Page"))
         self.searchPageLabel.setText(f"{page_number}/{total_pages}")
     
-    def enable_search_providers_filter(self, search_provides_count: int):
-        if search_provides_count == 0:
-            self.searchProvidersCombo.setVisible(False)
-            self.searchProvidersLabel.setVisible(False)
-        else:
-            self.searchProvidersCombo.setVisible(True)
-            self.searchProvidersLabel.setVisible(True)
-    
     def selected_project_id(self):
-        if self.projectsCombo.currentData():
-            return str(self.projectsCombo.currentData())
+        selected_idx = self.projectsTable.selectionModel().selectedIndexes()
+        if selected_idx:
+            pid = selected_idx[0].data()
         else:
-            return None
-
-    def select_project(self, project_id):
-        idx = self.projectsCombo.findData(project_id)
-        if idx == -1:
-            # if project is not found, just select the first one
-            idx = 0
-        self.projectsCombo.setCurrentIndex(idx)
+            pid = None
+        return (pid)
     
     def set_search_visible_columns(self):
-        search_columns_numbers = [str(x) for x in range(len(self.search_columns))] # 11 columns in total: 0-10
-        # When settings are empty OR filled with something except 0-10
+        search_columns_numbers = [str(x) for x in range(len(self.search_columns))] # 10 columns in total: 0-9
+        # When settings are empty OR filled with something except 0-9
         if not self.settings.value("visibleSearchColumns") or \
         not list(set(self.settings.value("visibleSearchColumns")) & set(search_columns_numbers)):
             # Set only 0-6 columns (and checkboxes) as checked by default 
-            self.settings.setValue("visibleSearchColumns", [str(x) for x in range(8)])
+            self.settings.setValue("visibleSearchColumns", [str(x) for x in range(7)])
         # Or check previous columns from settings
         for idx, column in enumerate(self.search_columns):
             if str(idx) in self.settings.value("visibleSearchColumns"):
@@ -586,14 +592,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             processing_name = self.processingsTable.item(row, 0).data(Qt.DisplayRole)
             hide = bool(name_filter) and (name_filter.lower() not in processing_name.lower())
             self.processingsTable.setRowHidden(row, hide)
-    
-    def add_preview_cell(self):
-        preview_column_index = config.PPRVIEW_INDEX_COLUMN
-        for row in range(self.metadataTable.rowCount()):
-            preview_label = QLabel()
-            preview_label.setPixmap(icons.lens_icon.pixmap(16, 16))
-            preview_label.setAlignment(Qt.AlignVCenter | Qt.AlignHCenter)
-            self.metadataTable.setCellWidget(row, preview_column_index, preview_label)
 
     @property
     def project_controls(self):
@@ -627,7 +625,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     def search_columns(self):
         return [self.showProductTypeColumn,
                 self.showProviderNameColumn,
-                self.showPreviewColumn,
                 self.showSensorColumn,
                 self.showBandsColumn,
                 self.showCloudsColumn,

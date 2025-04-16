@@ -1,7 +1,7 @@
 from uuid import UUID
 from enum import Enum
 from datetime import datetime
-from typing import Sequence, Union, Optional, List, Dict
+from typing import Sequence, Union, Optional
 from dataclasses import dataclass
 
 from .base import Serializable,  SkipDataClass
@@ -63,16 +63,6 @@ class MosaicReturnSchema(SkipDataClass):
 # ============ IMAGE  =============== #
 
 @dataclass
-class ImageMetadataSchema(SkipDataClass):
-    crs: str
-    count: int
-    width: int
-    height: int
-    dtypes: List[str]
-    nodata: float
-    pixel_size: List[float]
-
-@dataclass
 class ImageReturnSchema(SkipDataClass):
     id: UUID
     image_url: str
@@ -83,9 +73,8 @@ class ImageReturnSchema(SkipDataClass):
     footprint: dict
     filename: str
     checksum: str
-    meta_data: ImageMetadataSchema
+    meta_data: dict
     cog_link: Optional[str]
 
     def __post_init__(self):
         self.uploaded_at = datetime.fromisoformat(self.uploaded_at.replace("Z", "+00:00"))
-        self.meta_data = ImageMetadataSchema.from_dict(self.meta_data)

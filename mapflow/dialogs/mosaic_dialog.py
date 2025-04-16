@@ -54,8 +54,6 @@ class UpdateMosaicDialog(MosaicDialog):
             self.mosaicTags.setText(", ".join(mosaic.tags))
         else:
             self.mosaicTags.setText("")
-        self.createMosaicCombo.setVisible(False)
-        self.setFixedHeight(self.sizeHint().height())
         self.exec()
 
     def mosaic(self):

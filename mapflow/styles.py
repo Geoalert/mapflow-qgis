@@ -6,7 +6,6 @@ STYLES = {
     '🏠 Buildings': 'buildings',
     'Buildings Detection With Heights': 'buildings',
     '🌲 Forest': 'forest',
-    '🌲 Forest and trees': 'forest',
     '🌲↕️ Forest with heights': 'forest_with_heights',
     '🚗 Roads': 'roads',
     '🏗️ Construction sites': 'construction'

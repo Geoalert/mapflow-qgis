@@ -78,26 +78,3 @@ class UploadRasterLayersDialog(*uic.loadUiType(ui_path / 'raster_layers_dialog.u
             layers_paths.append(item.data(Qt.UserRole))
         # Run service.upload_raster_layers_to_mosaic
         callback(layers_paths)
-
-
-class ConfirmProcessingStart(*uic.loadUiType(ui_path / 'processing_start_confirmation.ui')):
-    def __init__(self, parent: QWidget) -> None:
-        """A confirmation dialog for processing start with 'don't show again' checkbox, connected to Settings tab."""
-        super().__init__(parent)
-        self.setupUi(self)
-        self.setWindowIcon(plugin_icon)
-        self.setWindowTitle(self.tr("Confirm processing start"))
-    
-    def setup(self, name, price, provider, zoom, area, model, blocks) -> None:
-        self.nameLabel.setText(name)
-        self.priceLabel.setText(price)
-        self.dataSourceLabel.setText(provider)
-        if not zoom:
-            zoom = "No zoom selected"
-        self.zoomLabel.setText(zoom)
-        self.areaLabel.setText(area)
-        self.modelLabel.setText(model)
-        if len(blocks) == 0:
-            blocks = ["No options selected"]
-        self.modelOptionsLabel.setText(', \n'.join(blocks))
-        self.exec() 

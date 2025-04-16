@@ -33,10 +33,9 @@ from .dialogs import (MainDialog,
                       UpdateProjectDialog,
                       UpdateProcessingDialog,
                       )
-from .dialogs.dialogs import ConfirmProcessingStart
 from .dialogs.icons import plugin_icon
 from .functional.controller.data_catalog_controller import DataCatalogController
-from .config import Config, ConfigSearchColumns
+from .config import Config, ConfigColumns
 from .entity.billing import BillingType
 from .entity.processing import parse_processings_request, Processing, ProcessingHistory, updated_processings
 from .entity.provider import (UsersProvider,
@@ -59,7 +58,7 @@ from .functional import layer_utils, helpers
 from .functional.auth import get_auth_id
 from .functional.geometry import clip_aoi_to_image_extent
 from .functional.processing import ProcessingService
-from .functional.project import ProjectService
+from .functional.service.project import ProjectService
 from .functional.service.data_catalog import DataCatalogService
 from .http import (Http,
                    get_error_report_body,
@@ -73,8 +72,7 @@ from .schema import (PostSourceSchema,
                      ImageCatalogRequestSchema,
                      ImageCatalogResponseSchema)
 from .schema.catalog import PreviewType, ProductType
-from .schema.project import MapflowProject
-from .schema.project import UserRole
+from .schema.project import MapflowProject, UserRole, ProjectsRequest
 
 
 class Mapflow(QObject):
@@ -144,8 +142,8 @@ class Mapflow(QObject):
         self.settings.beginGroup(self.plugin_name.lower())
         if self.settings.value('processings') is None:
             self.settings.setValue('processings', {})
-        # If no project id is set, use "default"
-        self.project_id = self.settings.value("project_id", "default")
+        # Set projectsfrom settings if it was opened before
+        self.project_id = self.settings.value("project_id")
         self.projects = {}
         # Store user's current processing
         self.processing_history = ProcessingHistory.from_settings(
@@ -180,6 +178,7 @@ class Mapflow(QObject):
         self.calculator = QgsDistanceArea()
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
         self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
+        self.dlg.maxZoom.setValue(int(self.settings.value('maxZoom') or self.config.DEFAULT_ZOOM))
 
         # Setup temporary directory from setting or skip for now
         self.temp_dir = None
@@ -199,15 +198,13 @@ class Mapflow(QObject):
         self.data_catalog_service = DataCatalogService(self.http, self.server, self.dlg, self.iface, self.result_loader, self.plugin_version, self.temp_dir)
         self.data_catalog_controller = DataCatalogController(self.dlg, self.data_catalog_service)
 
-        self.project_service = ProjectService(self.http, self.server)
+        self.project_service = ProjectService(self.http, self.server, self.settings, self.dlg)
         self.project_service.projectsUpdated.connect(self.update_projects)
 
         self.processing_service = ProcessingService(self.http, self.server)
-        self.processing_service.processingUpdated.connect(lambda: self.http.get(
-                url=f'{self.server}/projects/{self.project_id}/processings',
-                callback=self.get_processings_callback,
-                use_default_error_handler=False  # ignore errors to prevent repetitive alerts
-            ))
+        self.processing_service.processingUpdated.connect(
+            lambda: self.processing_service.get_processings(project_id=self.project_id,
+                                                            callback=self.get_processings_callback))
         # load providers from settings
         errors = []
         try:
@@ -236,9 +233,12 @@ class Mapflow(QObject):
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         self.dlg.downloadResultsButton.clicked.connect(self.load_results)
+        # (Dis)allow the user to use raster extent as AOI
+        self.dlg.useImageExtentAsAoi.toggled.connect(self.toggle_polygon_combos)
         self.dlg.startProcessing.clicked.connect(self.create_processing)
         # Calculate AOI size
         self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area_polygon_layer)
+        self.dlg.useImageExtentAsAoi.toggled.connect(self.calculate_aoi_area_use_image_extent)
         self.dlg.mosaicTable.itemSelectionChanged.connect(self.calculate_aoi_area_catalog)
         self.dlg.imageTable.itemSelectionChanged.connect(self.calculate_aoi_area_catalog)
         self.monitor_polygon_layer_feature_selection([
@@ -268,20 +268,26 @@ class Mapflow(QObject):
         self.dlg.maxCloudCoverSpinBox.valueChanged.connect(self.filter_metadata)
         self.dlg.metadataFrom.dateChanged.connect(self.filter_metadata)
         self.dlg.metadataTo.dateChanged.connect(self.filter_metadata)
+        self.dlg.preview.clicked.connect(self.preview)
+        self.dlg.preview2.clicked.connect(self.preview)
         self.dlg.searchImageryButton.clicked.connect(self.preview_or_search)
 
         self.dlg.addProvider.clicked.connect(self.add_provider)
         self.dlg.editProvider.clicked.connect(self.edit_provider)
         self.dlg.removeProvider.clicked.connect(self.remove_provider)
+        self.dlg.maxZoom.valueChanged.connect(lambda value: self.settings.setValue('maxZoom', value))
 
         # Projects
         self.dlg.createProject.clicked.connect(self.create_project)
         self.dlg.deleteProject.clicked.connect(self.delete_project)
         self.dlg.updateProject.clicked.connect(self.update_project)
-        self.dlg.filterProject.textChanged.connect(self.filter_projects)
+        self.dlg.projectsTable.cellDoubleClicked.connect(lambda: self.show_processings(save_page=True))
+        self.dlg.switchProcessingsButton.clicked.connect(lambda: self.show_processings(save_page=True))
+        self.dlg.switchProjectsButton.clicked.connect(lambda: self.show_projects(open_saved_page=True))
 
         # Maxar
-        self.config_search_columns = ConfigSearchColumns()
+        self.config_search_columns = ConfigColumns()
+        self.dlg.imageId.textChanged.connect(self.sync_image_id_with_table_and_layer)
         self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
             self.sync_table_selection_with_image_id_and_layer)
         self.meta_layer_table_connection = None
@@ -296,12 +302,8 @@ class Mapflow(QObject):
         self.processing_fetch_timer = QTimer(self.dlg)
         self.processing_fetch_timer.setInterval(self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
         self.processing_fetch_timer.timeout.connect(
-            lambda: self.http.get(
-                url=f'{self.server}/projects/{self.project_id}/processings',
-                callback=self.get_processings_callback,
-                use_default_error_handler=False  # ignore errors to prevent repetitive alerts
-            )
-        )
+            lambda: self.processing_service.get_processings(project_id=self.project_id,
+                                                            callback=self.get_processings_callback))
         # Poll user status to get limits
         self.user_status_update_timer = QTimer(self.dlg)
         self.user_status_update_timer.setInterval(self.config.USER_STATUS_UPDATE_INTERVAL * 1000)
@@ -313,10 +315,9 @@ class Mapflow(QObject):
         self.app_startup_user_update_timer.timeout.connect(self.first_status_request)
         # Add layer menu
         self.add_layer_menu = QMenu()
+        self.create_aoi_from_map_action = QAction(self.tr("Create new AOI layer from map extent"))
+        self.add_aoi_from_file_action = QAction(self.tr("Add AOI from vector file"))
         self.draw_aoi = QAction(self.tr("Draw AOI at the map"))
-        self.use_imagery_extent = QAction(self.tr("Use imagery extent"))
-        self.use_imagery_extent.setEnabled(False)
-        self.create_aoi_from_map_action = QAction(self.tr("Create AOI from map extent"))
         self.aoi_layer_counter = 0
         self.setup_add_layer_menu()
         # Add options menu functionality
@@ -398,22 +399,27 @@ class Mapflow(QObject):
         self.current_project = MapflowProject.from_dict(json.loads(response.readAll().data()))
         if self.current_project:
             self.project_id = self.current_project.id
-        self.setup_processings_table()
+            self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(self.current_project.name))
         self.get_project_sharing(self.current_project)
         self.setup_project_change_rights()
         self.settings.setValue("project_id", self.project_id)
         self.setup_workflow_defs(self.current_project.workflowDefs)
         # Manually toggle function to avoid race condition
-        self.calculate_aoi_area_use_image_extent()
+        self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
+    
+    def get_project_error_handler(self, response: QNetworkReply):
+        self.default_error_handler(response)
+        # Switch to projects table if couldn't get current project
+        self.project_service.switch_to_projects()
 
     def setup_add_layer_menu(self):
-        self.add_layer_menu.addAction(self.draw_aoi)
-        self.add_layer_menu.addAction(self.use_imagery_extent)
         self.add_layer_menu.addAction(self.create_aoi_from_map_action)
-        
-        self.draw_aoi.triggered.connect(self.create_editable_aoi_layer)
-        self.use_imagery_extent.triggered.connect(self.create_aoi_layer_from_imagery)
+        self.add_layer_menu.addAction(self.add_aoi_from_file_action)
+        self.add_layer_menu.addAction(self.draw_aoi)
+
         self.create_aoi_from_map_action.triggered.connect(self.create_aoi_layer_from_map)
+        self.add_aoi_from_file_action.triggered.connect(self.open_vector_file)
+        self.draw_aoi.triggered.connect(self.create_editable_aoi_layer)
         self.dlg.addAoiButton.setMenu(self.add_layer_menu)
 
     def setup_options_menu_connections(self):
@@ -440,31 +446,6 @@ class Mapflow(QObject):
         self.result_loader.add_layer(aoi_layer)
         self.add_to_layers(aoi_layer)
         self.iface.setActiveLayer(aoi_layer)
-    
-    def create_aoi_layer_from_imagery(self, action: QAction):
-        image = self.data_catalog_service.selected_image()
-        mosaic = self.data_catalog_service.selected_mosaic()
-        if image:
-            aoi_geometry = QgsGeometry().fromWkt(image.footprint)
-        elif mosaic:
-            aoi_geometry = QgsGeometry().fromWkt(mosaic.footprint)
-        else:
-            self.dlg.disable_processing_start(reason=self.tr('Choose mosaic or image to start processing'),
-                                              clear_area=True)
-            aoi_geometry = None
-            return
-        aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326',
-                                   f'AOI_{self.aoi_layer_counter}',
-                                   'memory')
-        aoi = QgsFeature()
-        aoi.setGeometry(aoi_geometry)
-        aoi_layer.dataProvider().addFeatures([aoi])
-        aoi_layer.updateExtents()
-        aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
-        self.aoi_layer_counter += 1
-        self.result_loader.add_layer(aoi_layer)
-        self.add_to_layers(aoi_layer)
-        self.iface.setActiveLayer(aoi_layer)
 
     def create_editable_aoi_layer(self, action: QAction):
         aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326',
@@ -474,9 +455,28 @@ class Mapflow(QObject):
         aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
         self.aoi_layer_counter += 1
         self.result_loader.add_layer(aoi_layer)
+
         self.add_to_layers(aoi_layer)
         self.iface.setActiveLayer(aoi_layer)
         self.iface.actionAddFeature().trigger()
+
+    def open_vector_file(self):
+        """Open a file selection dialog for the user to select a vector file as AOI
+        Is called by clicking the 'Open vector file menu' button in the main dialog.
+        """
+        dlg = QFileDialog(QApplication.activeWindow(), self.tr('Select vector file'))
+        dlg.setFileMode(QFileDialog.ExistingFile)
+        if dlg.exec():
+            path = dlg.selectedFiles()[0]
+            aoi_layer = QgsVectorLayer(path, os.path.splitext(os.path.basename(path))[0])
+            aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
+            if aoi_layer.isValid():
+                self.result_loader.add_layer(aoi_layer)
+                self.add_to_layers(aoi_layer)
+                self.iface.setActiveLayer(aoi_layer)
+                self.iface.zoomToActiveLayer()
+            else:
+                self.alert(self.tr(f'Your file is not valid vector data source!'))
 
     def filter_aoi_layers(self):
         if self.dlg.useAllVectorLayers.isChecked():
@@ -598,7 +598,6 @@ class Mapflow(QObject):
             if cloud_cover is not None:  # may be undefined
                 is_unfit = is_unfit or cloud_cover > max_cloud_cover
             self.dlg.metadataTable.setRowHidden(row, is_unfit)
-        self.cell_preview_connection = self.dlg.metadataTable.cellClicked.connect(self.preview_search_from_cell)
 
     def set_up_login_dialog(self) -> MapflowLoginDialog:
         """Create a login dialog, set its title and signal-slot connections."""
@@ -615,6 +614,13 @@ class Mapflow(QObject):
         self.settings.setValue("use_oauth", str(use_oauth).lower())
         self.dlg_login.set_auth_type(use_oauth=use_oauth, token = self.settings.value('token', ""))
 
+    def toggle_polygon_combos(self, use_image_extent: bool) -> None:
+        """Disable polygon combos when Use image extent is checked.
+
+        :param use_image_extent: Whether the corresponding checkbox is checked
+        """
+        self.dlg.polygonCombo.setEnabled(not use_image_extent)
+
     def on_provider_change(self) -> None:
         """Adjust max and current zoom, and update the metadata table when user selects another
         provider.
@@ -626,6 +632,8 @@ class Mapflow(QObject):
         provider = self.providers[provider_index]
         # Changes in search tab
         self.toggle_imagery_search(provider)
+        # Changes in case provider is raster layer
+        self.toggle_processing_checkboxes()
         # re-calculate AOI because it may change due to intersection of image/area
         polygon_layer = self.dlg.polygonCombo.currentLayer()
         if isinstance(provider, MyImageryProvider):
@@ -673,9 +681,26 @@ class Mapflow(QObject):
             # otherwise, if the WDs are set, we assume that the project hasn't changed and skip further setup
             return
         if selected_id is None:
-            self.project_service.get_project("default", self.get_project_callback)
+            self.current_project = self.project_id = None
+            self.settings.setValue("project_id", None)
+            self.setup_project_change_rights()
+            self.dlg.setWindowTitle(helpers.generate_plugin_header(self.plugin_name,
+                                                                   env=self.config.MAPFLOW_ENV))
+            self.dlg.switchProcessingsButton.setEnabled(False)
         else:
-            self.project_service.get_project(selected_id, self.get_project_callback)
+            self.dlg.switchProcessingsButton.setEnabled(True)
+            # Find project in projects/page and set as current
+            self.project_id = selected_id
+            for pid, project in self.projects.items():
+                if selected_id == pid:
+                    self.current_project = project
+                    self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(self.current_project.name))
+            self.get_project_sharing(self.current_project)
+            self.setup_project_change_rights()
+            self.settings.setValue("project_id", self.project_id)
+            self.setup_workflow_defs(self.current_project.workflowDefs)
+            # Manually toggle function to avoid race condition
+            self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
 
     def setup_project_change_rights(self):
         project_editable = True
@@ -700,7 +725,7 @@ class Mapflow(QObject):
     def update_project(self):
         dialog = UpdateProjectDialog(self.dlg)
         dialog.accepted.connect(lambda: self.project_service.update_project(self.current_project.id,
-                                                                                              dialog.project()))
+                                                                            dialog.project()))
         dialog.setup(self.current_project)
         dialog.deleteLater()
 
@@ -809,6 +834,17 @@ class Mapflow(QObject):
             layer.geometryChanged.connect(self.calculate_aoi_area_layer_edited)
             layer.featureAdded.connect(self.calculate_aoi_area_layer_edited)
             layer.featuresDeleted.connect(self.calculate_aoi_area_layer_edited)
+
+    def toggle_processing_checkboxes(self) -> None:
+        """Toggle 'Use image extent' depending on the item in the imagery combo box.
+
+        :param raster_source: Provider name or None, depending on the signal, if one of the
+            tile providers, otherwise the selected raster layer
+        """
+        provider = self.providers[self.dlg.providerIndex()]
+        enabled = isinstance(provider, MyImageryProvider)
+        self.dlg.useImageExtentAsAoi.setEnabled(enabled)
+        self.dlg.useImageExtentAsAoi.setChecked(enabled)
 
     def toggle_imagery_search(self,
                               provider):
@@ -932,10 +968,6 @@ class Mapflow(QObject):
 
     def get_metadata(self, _: Optional[bool] = False, offset: Optional[int] = 0) -> None:
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
-        try: # disconnect to prevent adding mutliple previews if table was refilled (multiple searches)
-            self.dlg.metadataTable.disconnect(self.cell_preview_connection)
-        except AttributeError: # if no previous connection (first search after start)
-            pass
         # If current provider does not support search, we should select ImagerySearchProvider to be able to search
         self.replace_search_provider_index()
 
@@ -964,7 +996,6 @@ class Mapflow(QObject):
 
         hide_unavailable = self.dlg.hideUnavailableResults.isChecked()
         product_types = self.selected_search_product_types()
-        search_providers = self.dlg.searchProvidersCombo.checkedItemsData() or None
 
         if isinstance(provider, MaxarProvider):
             self.get_maxar_metadata(aoi=aoi,
@@ -982,8 +1013,7 @@ class Mapflow(QObject):
                                           to=to_time,
                                           offset=offset,
                                           hide_unavailable=hide_unavailable,
-                                          product_types=product_types,
-                                          search_providers=search_providers)
+                                          product_types=product_types)
             # HEAD API does not work properly with intersection percent, so not sending it yet (filtering after)
             # max_cloud_cover=max_cloud_cover,
             # min_intersection=min_intersection)
@@ -1012,8 +1042,7 @@ class Mapflow(QObject):
                                  min_intersection: Optional[float] = None,
                                  offset: Optional[int] = 0,
                                  hide_unavailable: Optional[bool] = False,
-                                 product_types: Optional[List[ProductType]] = None,
-                                 search_providers: Optional[List[str]] = None):
+                                 product_types: Optional[List[ProductType]] = None):
         if not self.check_if_output_directory_is_selected():
             return # only when outputDirectory is empty AND user closed selection dialog
         self.metadata_aoi = aoi
@@ -1029,8 +1058,7 @@ class Mapflow(QObject):
                                                     limit=self.search_page_limit,
                                                     offset=offset,
                                                     hideUnavailable=hide_unavailable,
-                                                    productTypes=product_types,
-                                                    dataProviders=search_providers)
+                                                    productTypes=product_types)
         self.http.post(url=provider.meta_url,
                        body=request_payload.as_json().encode(),
                        headers={},
@@ -1492,10 +1520,14 @@ class Mapflow(QObject):
 
         selected_cells = self.dlg.metadataTable.selectedItems()
         if not selected_cells:
+            image_id = None
             local_indices = []
+            self.dlg.imageId.setText('')
         else:
             selected_rows = [cell.row() for cell in selected_cells]
             local_indices = [self.dlg.metadataTable.item(row, local_index_column).text() for row in selected_rows]
+            image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
+            self.dlg.imageId.setText(image_id)
         try:
             self.metadata_layer.selectionChanged.disconnect(self.meta_layer_table_connection)
             # disconnect to prevent loop of signals
@@ -1577,18 +1609,20 @@ class Mapflow(QObject):
                     'S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 '
                     'or /36/S/XA/2022/02/09/0/'
                 ))
+                self.dlg.imageId.clear()
                 return
         elif isinstance(provider, MaxarProvider):
             if not helpers.UUID_REGEX.match(image_id):
+                self.dlg.imageId.clear()
                 self.alert(self.tr('A Maxar image ID should look like a3b154c40cc74f3b934c0ffc9b34ecd1'))
                 return
         items = self.dlg.metadataTable.findItems(image_id, Qt.MatchExactly)
         if not items:
             self.dlg.metadataTable.clearSelection()
             return
-        #if items[0] not in self.dlg.metadataTable.selectedItems():
+        # Redundant since image_id is currently not editable
+        # if items[0] not in self.dlg.metadataTable.selectedItems():
             #self.dlg.metadataTable.selectRow(items[0].row())
-        # Redundant since imageId is temorary removed
 
     def get_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
         if not layer or layer.featureCount() == 0:
@@ -1630,10 +1664,13 @@ class Mapflow(QObject):
 
         :param layer: The current polygon layer
         """
-        self.get_aoi_area_polygon_layer(layer)
+        if self.dlg.useImageExtentAsAoi.isChecked():  # GeoTIFF extent used; no difference
+            return
         provider = self.providers[self.dlg.providerIndex()]
         if isinstance(provider, MyImageryProvider):
             self.calculate_aoi_area_catalog()
+        else:
+            self.get_aoi_area_polygon_layer(layer)
 
     def calculate_aoi_area_raster(self, layer: Optional[QgsRasterLayer]) -> None:
         """Get the AOI size when a new entry in the raster combo box is selected.
@@ -1649,7 +1686,7 @@ class Mapflow(QObject):
         else:
             self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
 
-    def calculate_aoi_area_use_image_extent(self) -> None:
+    def calculate_aoi_area_use_image_extent(self, use_image_extent: bool) -> None:
         """Get the AOI size when the Use image extent checkbox is toggled.
 
         :param use_image_extent: The current state of the checkbox
@@ -1658,42 +1695,55 @@ class Mapflow(QObject):
         if isinstance(provider, MyImageryProvider):
             self.calculate_aoi_area_catalog()
         else:
-            self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())   
+            self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
     
     def calculate_aoi_area_catalog(self) -> None:
         """Get the AOI size when a new mosaic or image in 'My imagery' is selected.
         """
+        provider = self.providers[self.dlg.providerIndex()]
+        if isinstance(provider, MyImageryProvider):
+            image = self.data_catalog_service.selected_image()
+            mosaic = self.data_catalog_service.selected_mosaic()
+            if self.dlg.useImageExtentAsAoi.isChecked():
+                if image or mosaic:
+                    if image:
+                        aoi = QgsGeometry().fromWkt(image.footprint)
+                    else:
+                        aoi = QgsGeometry().fromWkt(mosaic.footprint)
+                else:
+                    self.dlg.disable_processing_start(reason=self.tr('Choose mosaic or image to start processing'),
+                                                      clear_area=True)
+                    aoi = self.aoi = self.aoi_size = None
+            else:
+                # Get polygon AOI to set self.aoi for intersection check later
+                aoi_layer = self.get_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+                if image or mosaic:
+                    if image:
+                        catalog_aoi = QgsGeometry().fromWkt(image.footprint)
+                    else:
+                        catalog_aoi = QgsGeometry().fromWkt(mosaic.footprint)
+                    aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
+                                                      selected_aoi=self.aoi,
+                                                      use_image_extent_as_aoi=False)
+                else:
+                    aoi = aoi_layer
+                if not self.aoi: # other error message is already shown
+                    pass 
+                elif not aoi: # error after intersection
+                    self.dlg.disable_processing_start(reason=self.tr("Selected AOI does not intersect the selected imagery"),
+                                                      clear_area=True)
+                    return
+            # Don't recalculate AOI if first selected mosaic/image didn't change
+            selected_mosaics = self.dlg.mosaicTable.selectedIndexes()
+            selected_images = self.dlg.imageTable.selectedIndexes()
+            if len(selected_mosaics) > 1 and self.dlg.selected_mosaic_cell == selected_mosaics[0] \
+            or len(selected_images) > 1 and self.dlg.selected_image_cell == selected_images[0]:
+                return
+            self.calculate_aoi_area(aoi, helpers.WGS84)
+        else:
+            self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
         # If different provider is chosen, set it to My imagery
         self.data_catalog_service.set_catalog_provider(self.providers)
-        image = self.data_catalog_service.selected_image()
-        mosaic = self.data_catalog_service.selected_mosaic()
-        if image or mosaic:
-            self.use_imagery_extent.setEnabled(True)
-            if image:
-                catalog_aoi = QgsGeometry().fromWkt(image.footprint)
-                self.use_imagery_extent.setText(self.tr("Use extent of '{name}'").format(name=image.filename))
-            else:
-                catalog_aoi = QgsGeometry().fromWkt(mosaic.footprint)
-                self.use_imagery_extent.setText(self.tr("Use extent of '{name}'").format(name=mosaic.name))
-            aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
-                                              selected_aoi=self.aoi)
-        else:
-            aoi = self.get_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
-            self.use_imagery_extent.setText(self.tr("Use imagery extent"))
-            self.use_imagery_extent.setEnabled(False)
-        if not self.aoi: # other error message is already shown
-            pass
-        elif not aoi: # error after intersection
-            self.dlg.disable_processing_start(reason=self.tr("Selected AOI does not intersect the selected imagery"),
-                                                clear_area=True)
-            return
-        # Don't recalculate AOI if first selected mosaic/image didn't change
-        selected_mosaics = self.dlg.mosaicTable.selectedIndexes()
-        selected_images = self.dlg.imageTable.selectedIndexes()
-        if len(selected_mosaics) > 1 and self.dlg.selected_mosaic_cell == selected_mosaics[0] \
-        or len(selected_images) > 1 and self.dlg.selected_image_cell == selected_images[0]:
-            return
-        self.calculate_aoi_area(aoi, helpers.WGS84)
 
     def calculate_aoi_area_selection(self, _: List[QgsFeature]) -> None:
         """Get the AOI size when the selection changed on a polygon layer.
@@ -1723,6 +1773,7 @@ class Mapflow(QObject):
         self.aoi = aoi  # save for reuse in processing creation or metadata requests
         # fetch UI data
         provider_index = self.dlg.providerIndex()
+        use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
         selected_images = self.dlg.metadataTable.selectedItems()
         if selected_images:
             rows = list(set(image.row() for image in selected_images))
@@ -1733,6 +1784,7 @@ class Mapflow(QObject):
         # This is AOI with respect to selected Maxar images and raster image extent
         try:
             real_aoi = self.get_aoi(provider_index=provider_index,
+                                    use_image_extent_as_aoi=use_image_extent_as_aoi,
                                     local_image_indices=local_image_indices,
                                     selected_aoi=self.aoi)
         except ImageIdRequired:
@@ -1856,8 +1908,11 @@ class Mapflow(QObject):
 
         if not processing_name and not allow_empty_name:
             raise ProcessingInputDataMissing(self.tr('Please, specify a name for your processing'))
+        use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
         if not self.aoi:
-            if self.dlg.polygonCombo.currentLayer():
+            if use_image_extent_as_aoi:
+                raise BadProcessingInput(self.tr('GeoTIFF is corrupted or has invalid projection'))
+            elif self.dlg.polygonCombo.currentLayer():
                 raise BadProcessingInput(self.tr('Processing area layer is corrupted or has invalid projection'))
             else:
                 raise BadProcessingInput(self.tr('Please, select a valid area of interest'))
@@ -1905,6 +1960,7 @@ class Mapflow(QObject):
 
     def get_aoi(self,
                 provider_index: Optional[int],
+                use_image_extent_as_aoi: bool,
                 selected_aoi: QgsGeometry,
                 local_image_indices: Optional[List[int]]) -> QgsGeometry:
         if not helpers.check_aoi(selected_aoi):
@@ -1938,7 +1994,8 @@ class Mapflow(QObject):
                     catalog_aoi = QgsGeometry().fromWkt(mosaic.footprint)
                 if image or mosaic:
                     aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
-                                                      selected_aoi=selected_aoi)
+                                                      selected_aoi=selected_aoi,
+                                                      use_image_extent_as_aoi=use_image_extent_as_aoi)
                     if not aoi:
                         raise AoiNotIntersectsImage()
                     aoi = selected_aoi
@@ -1988,7 +2045,9 @@ class Mapflow(QObject):
                     if provider_params.source_type == 'tif':
                         provider_params.zoom = None
 
+            use_image_extent_as_aoi = self.dlg.useImageExtentAsAoi.isChecked()
             aoi = self.get_aoi(provider_index=provider_index,
+                               use_image_extent_as_aoi=use_image_extent_as_aoi,
                                local_image_indices=local_image_indices,
                                selected_aoi=self.aoi)
         except AoiNotIntersectsImage:
@@ -2027,39 +2086,12 @@ class Mapflow(QObject):
                                'to top up your balance'),
                        icon=QMessageBox.Warning)
             return
-        # Define starting to use later after confirmation or without it
-        def start_processing():
-            self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
-            try:
-                self.dlg.startProcessing.setEnabled(False)
-                self.post_processing(processing_params)
-            except Exception as e:
-                self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
-        # Show processing start confirmation dialog if checkbox is checked
-        if self.dlg.cornfirmProcessingStart.isChecked():
-            dialog = ConfirmProcessingStart(self.dlg)
-            # Define actions in case of dialog acceptance
-            def on_start_confirmation():
-                # Set "Confirm" checkbox opposite to "Don't show again" if they are not already the same
-                if not dialog.checkBox.isChecked() != self.dlg.cornfirmProcessingStart.isChecked():
-                    self.dlg.cornfirmProcessingStart.setChecked(not dialog.checkBox.isChecked())
-                    self.settings.setValue("confirmProcessingStart", str(not dialog.checkBox.isChecked()))
-                # And then post processing
-                start_processing()
-            dialog.accepted.connect(on_start_confirmation)
-            # Fill dialog with parameters
-            dialog.setup(name=processing_params.name,
-                         price=str(self.processing_cost)+self.tr(" credits"),
-                         provider=self.dlg.providerCombo.currentText(),
-                         zoom=processing_params.params.zoom,
-                         area=str(round(self.aoi_size, 2))+self.tr(" sq.km"),
-                         model=self.dlg.modelCombo.currentText(),
-                         blocks=[self.dlg.modelOptionsLayout.itemAt(i).widget().text()
-                                 for i in range(self.dlg.modelOptionsLayout.count())])
-            dialog.deleteLater()
-        # Or just post the processing
-        else:
-            start_processing()
+        self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
+        try:
+            self.dlg.startProcessing.setEnabled(False)
+            self.post_processing(processing_params)
+        except Exception as e:
+            self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
         return
 
     def upload_tif_callback(self,
@@ -2107,10 +2139,8 @@ class Mapflow(QObject):
             self.dlg.processingName.clear()
         self.processing_fetch_timer.start()  # start monitoring
         # Do an extra fetch immediately
-        self.http.get(
-            url=f'{self.server}/projects/{self.project_id}/processings',
-            callback=self.get_processings_callback
-        )
+        self.processing_service.get_processings(project_id=self.project_id,
+                                                callback=self.get_processings_callback)
         self.dlg.startProcessing.setEnabled(True)
 
     def post_processing_error_handler(self, response: QNetworkReply) -> None:
@@ -2178,8 +2208,13 @@ class Mapflow(QObject):
             self.dlg.setup_for_review(self.review_workflow_enabled)
             self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex())
             self.setup_providers(response_data.get("dataProviders") or [])
-            self.setup_search_providers(response_data.get("searchDataProviders") or [])
             self.on_provider_change()
+            # Open processings or projects table
+            if self.current_project:
+                self.show_processings()
+            else:
+                self.show_projects()
+                self.setup_project_change_rights()
 
     def setup_providers(self, providers_data):
         self.default_providers = ProvidersList([ImagerySearchProvider(proxy=self.server)] +
@@ -2190,16 +2225,6 @@ class Mapflow(QObject):
         # We want to clear the data from previous lauunch to avoid confusion
         for provider in self.providers:
             provider.clear_saved_search(self.temp_dir)
-    
-    def setup_search_providers(self, providers_data):
-        search_providers = ProvidersList([DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
-                                          for data in providers_data])
-        self.dlg.enable_search_providers_filter(len(search_providers))
-        if len(search_providers) == 0:
-            return
-        for pr in search_providers:
-            self.dlg.searchProvidersCombo.addItemWithCheckState(pr.name, Qt.Unchecked, pr.api_name)
-        self.dlg.searchProvidersCombo.setDefaultText(self.tr("Show all"))
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
         """Save and open the preview image as a layer."""
@@ -2260,13 +2285,12 @@ class Mapflow(QObject):
         footprint = self.metadata_footprint(feature=feature)
         url = feature.attribute('previewUrl')
         preview_type = feature.attribute('previewType')
-        self.iface.mapCanvas().zoomToSelected(self.metadata_layer)
+        self.iface.mapCanvas().zoomToSelected()
         self.iface.mapCanvas().refresh()
         if preview_type == PreviewType.png:
             self.preview_png(url, footprint, image_id)
         else:
-            self.alert(self.tr("Only PNG preview type is supported."
-                               '<br>See <a href="https://docs.mapflow.ai/api/qgis_mapflow.html#how-to-preview-the-search-results"><span style=" text-decoration: underline; color:#094fd1;">documentation</span></a> for help'))
+            self.alert(self.tr("Only PNG preview type is supported"))
 
     def preview_png(self,
                     url: str,
@@ -2446,7 +2470,7 @@ class Mapflow(QObject):
             return None
 
     def preview_xyz(self, provider, image_id):
-        max_zoom = self.config.MAX_ZOOM
+        max_zoom = self.dlg.maxZoom.value()
         layer_name = provider.name
         try:
             url = provider.preview_url(image_id=image_id)
@@ -2484,12 +2508,7 @@ class Mapflow(QObject):
 
     def preview(self) -> None:
         """Display raster tiles served over the Web."""
-        selected_cells = self.dlg.metadataTable.selectedItems()
-        if not selected_cells:
-            image_id = None
-        else:
-            id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
-            image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
+        image_id = self.dlg.imageId.text()
         provider = self.providers[self.dlg.providerIndex()]
         if provider.requires_image_id and not image_id:
             self.alert(self.tr("This provider requires image ID!"), QMessageBox.Warning)
@@ -2500,12 +2519,6 @@ class Mapflow(QObject):
             self.preview_catalog(image_id=image_id)
         else:  # XYZ providers
             self.preview_xyz(provider=provider, image_id=image_id)
-    
-    def preview_search_from_cell (self, row, column):
-        if column == self.config.PPRVIEW_INDEX_COLUMN:
-            id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
-            image_id = self.dlg.metadataTable.item(row, id_column_index).text()
-            self.preview_catalog(image_id)
 
     def preview_or_search(self, provider) -> None:
         provider_index = self.dlg.providerIndex()
@@ -2609,9 +2622,8 @@ class Mapflow(QObject):
         # Clear successfully uploaded review
         self.review_dialog.reviewComment.setText("")
         self.processing_fetch_timer.start()
-        self.http.get(url=f'{self.server}/projects/{self.project_id}/processings',
-                      callback=self.get_processings_callback,
-                      use_default_error_handler=False)
+        self.processing_service.get_processings(project_id=self.project_id,
+                                                callback=self.get_processings_callback)
 
     def show_review_dialog(self):
         processing = self.selected_processing()
@@ -2748,15 +2760,11 @@ class Mapflow(QObject):
         """
         response_data = json.loads(response.readAll().data())
         processings = parse_processings_request(response_data)
-        if response_data:
-            current_project_id = response_data[0]['projectId']
-        else:
-            current_project_id = None
-        if all(not (p.status.is_in_progress or p.status.is_awaiting)
+        if all(not p.status.is_in_progress
                and p.review_status.is_not_accepted
                for p in processings):
             # We do not re-fetch the processings, if nothing is going to change.
-            # What can change from server-side: processing can finish if IN_PROGRESS or AWAITING
+            # What can change from server-side: processing can finish if IN_PROGRESS
             # or review can be accepted if NOT_ACCEPTED.
             # Any other processings can change only from client-side
             self.processing_fetch_timer.stop()
@@ -2784,6 +2792,29 @@ class Mapflow(QObject):
             except KeyError:
                 processing_history[env] = {self.username: {self.project_id: self.processing_history.asdict()}}
         self.settings.setValue('processings', processing_history)
+
+    def show_processings(self, save_page: Optional[bool] = False):
+        """Get processings and switch to processings table in stacked widget.
+
+        :param save_page: A boolean that determines if we should save projects page parameters to settings (if 
+        user chose a project) or not (switching if no id was saved).
+        """
+        if not self.project_id:
+            return
+        self.setup_processings_table()
+        self.project_service.switch_to_processings(save_page)
+    
+    def show_projects(self, open_saved_page: Optional[bool] = False):
+        """Get projects and switch from processings to projects table in stacked widget.
+
+        Allows to open saved projects page even after reload.
+        But we don't need to do that when e.g. we are switching to a different projects page.
+
+        :param open_saved_page: A boolean that determines if we should get projects page from the settings (e.g. when
+        switching from processings table) or not (e.g. when showing next projects page).
+        """
+        self.processing_fetch_timer.stop()
+        self.project_service.switch_to_projects(open_saved_page)
 
     def alert_failed_processings(self, failed_processings):
         if not failed_processings:
@@ -3090,6 +3121,8 @@ class Mapflow(QObject):
                            email_body=email_body).show()
 
     def setup_processings_table(self):
+        if not self.project_id:
+            return
         table_item = QTableWidgetItem("Loading...")
         table_item.setToolTip('Fetching your processings from server, please wait')
         self.dlg.processingsTable.setRowCount(1)
@@ -3153,7 +3186,8 @@ class Mapflow(QObject):
             self.setup_workflow_defs(default_project.workflowDefs)
             self.setup_processings_table()
         else:
-            self.project_service.get_projects(current_project_id=self.project_id)
+            if self.project_id:
+                self.project_service.get_project(self.project_id, self.get_project_callback, self.get_project_error_handler)
             self.data_catalog_service.get_mosaics()
         self.dlg.setup_for_billing(self.billing_type)
         self.dlg.show()
@@ -3163,17 +3197,21 @@ class Mapflow(QObject):
     def update_projects(self):
         self.projects = {pr.id: pr for pr in self.project_service.projects}
         if not self.projects:
-            self.alert(self.tr("No projects found! Contact us to resolve the issue"))
+            # Add a row with an error message to projects table
+            table_item = QTableWidgetItem("No project that meets specified criteria was found")
+            self.dlg.projectsTable.setRowCount(1)
+            self.dlg.projectsTable.setColumnCount(2)
+            self.dlg.projectsTable.setItem(0, 1, table_item)
             return
-        self.filter_projects(self.dlg.filterProject.text())
+        self.filter_projects(self.dlg.filterProjects.text())
+        if self.project_id:
+            self.project_service.select_project(self.project_id)
 
-    def setup_projects_combo(self, projects: dict[str, MapflowProject]):
+    def connect_projects(self):
         if self.project_connection is not None:
-            self.dlg.projectsCombo.currentIndexChanged.disconnect(self.project_connection)
+            self.dlg.projectsTable.itemSelectionChanged.disconnect(self.project_connection)
             self.project_connection = None
-        self.dlg.setup_project_combo(projects, self.project_id)
-        self.on_project_change()
-        self.project_connection = self.dlg.projectsCombo.currentIndexChanged.connect(self.on_project_change)
+        self.project_connection = self.dlg.projectsTable.itemSelectionChanged.connect(self.on_project_change)
 
     def filter_projects(self, name_filter):
         if not name_filter:
@@ -3185,7 +3223,7 @@ class Mapflow(QObject):
             # We maintain the current project in the combo even if it not found to prevent over-requesting
             # until it is changed explicitly
             filtered_projects.update({self.project_id: self.projects[self.project_id]})
-        self.setup_projects_combo(filtered_projects)
+        self.connect_projects()
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
         """Inspect the plugin version backend expects and show a warning if it is incompatible w/ the plugin.
@@ -3324,14 +3362,9 @@ class Mapflow(QObject):
         except KeyError:
             product_types = []
         return provider_names, product_types
-
+    
     def get_search_images_ids(self, local_image_indices, provider_names, product_types):
-        selected_cells = self.dlg.metadataTable.selectedItems()
-        if not selected_cells:
-            image_id = None
-        else:
-            id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
-            image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
+        image_id = self.dlg.imageId.text()
         requires_id = False
         selection_error = ""
         try:
