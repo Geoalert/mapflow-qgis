@@ -468,7 +468,7 @@
            <property name="minimumSize">
             <size>
              <width>120</width>
-             <height>0</height>
+             <height>26</height>
             </size>
            </property>
            <property name="maximumSize">
@@ -880,14 +880,14 @@
        <item>
         <widget class="QTabWidget" name="tabWidget">
          <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+          <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
          </property>
          <property name="minimumSize">
           <size>
-           <width>714</width>
+           <width>0</width>
            <height>400</height>
           </size>
          </property>
@@ -911,14 +911,99 @@
               <layout class="QGridLayout" name="gridLayout_7">
                <item row="0" column="0">
                 <layout class="QGridLayout" name="projectsPageLayout">
-                 <item row="3" column="0">
-                  <widget class="QTableWidget" name="projectsTable"/>
-                 </item>
                  <item row="2" column="0">
                   <layout class="QHBoxLayout" name="horizontalLayout_12">
                    <property name="topMargin">
                     <number>0</number>
                    </property>
+                   <item>
+                    <widget class="QPushButton" name="switchProjectsFakeButton">
+                     <property name="enabled">
+                      <bool>false</bool>
+                     </property>
+                     <property name="sizePolicy">
+                      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                       <horstretch>0</horstretch>
+                       <verstretch>0</verstretch>
+                      </sizepolicy>
+                     </property>
+                     <property name="minimumSize">
+                      <size>
+                       <width>35</width>
+                       <height>0</height>
+                      </size>
+                     </property>
+                     <property name="text">
+                      <string/>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QPushButton" name="switchProcessingsButton">
+                     <property name="sizePolicy">
+                      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                       <horstretch>0</horstretch>
+                       <verstretch>0</verstretch>
+                      </sizepolicy>
+                     </property>
+                     <property name="minimumSize">
+                      <size>
+                       <width>35</width>
+                       <height>0</height>
+                      </size>
+                     </property>
+                     <property name="text">
+                      <string/>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <spacer name="horizontalSpacer_4">
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                     <property name="sizeHint" stdset="0">
+                      <size>
+                       <width>40</width>
+                       <height>20</height>
+                      </size>
+                     </property>
+                    </spacer>
+                   </item>
+                   <item>
+                    <widget class="QLabel" name="label_4">
+                     <property name="text">
+                      <string>Sort by:</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QComboBox" name="sortProjectsCombo">
+                     <property name="minimumSize">
+                      <size>
+                       <width>0</width>
+                       <height>28</height>
+                      </size>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QLineEdit" name="filterProjects">
+                     <property name="minimumSize">
+                      <size>
+                       <width>0</width>
+                       <height>28</height>
+                      </size>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                 <item row="3" column="0">
+                  <widget class="QTableWidget" name="projectsTable"/>
+                 </item>
+                 <item row="6" column="0">
+                  <layout class="QHBoxLayout" name="horizontalLayout_19">
                    <item>
                     <layout class="QHBoxLayout" name="horizontalLayout_3">
                      <property name="topMargin">
@@ -966,50 +1051,6 @@
                     </layout>
                    </item>
                    <item>
-                    <spacer name="horizontalSpacer_4">
-                     <property name="orientation">
-                      <enum>Qt::Horizontal</enum>
-                     </property>
-                     <property name="sizeHint" stdset="0">
-                      <size>
-                       <width>40</width>
-                       <height>20</height>
-                      </size>
-                     </property>
-                    </spacer>
-                   </item>
-                   <item>
-                    <widget class="QLabel" name="label_4">
-                     <property name="text">
-                      <string>Sort by:</string>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
-                    <widget class="QComboBox" name="sortProjectsCombo">
-                     <property name="minimumSize">
-                      <size>
-                       <width>0</width>
-                       <height>28</height>
-                      </size>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
-                    <widget class="QLineEdit" name="filterProjects">
-                     <property name="minimumSize">
-                      <size>
-                       <width>0</width>
-                       <height>28</height>
-                      </size>
-                     </property>
-                    </widget>
-                   </item>
-                  </layout>
-                 </item>
-                 <item row="6" column="0">
-                  <layout class="QHBoxLayout" name="horizontalLayout_19">
-                   <item>
                     <spacer name="horizontalSpacer_11">
                      <property name="orientation">
                       <enum>Qt::Horizontal</enum>
@@ -1026,7 +1067,7 @@
                     <widget class="QPushButton" name="projectsPreviousPageButton">
                      <property name="minimumSize">
                       <size>
-                       <width>50</width>
+                       <width>35</width>
                        <height>0</height>
                       </size>
                      </property>
@@ -1052,7 +1093,7 @@
                     <widget class="QPushButton" name="projectsNextPageButton">
                      <property name="minimumSize">
                       <size>
-                       <width>50</width>
+                       <width>35</width>
                        <height>0</height>
                       </size>
                      </property>
@@ -1060,6 +1101,19 @@
                       <string/>
                      </property>
                     </widget>
+                   </item>
+                   <item>
+                    <spacer name="horizontalSpacer_13">
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                     <property name="sizeHint" stdset="0">
+                      <size>
+                       <width>40</width>
+                       <height>20</height>
+                      </size>
+                     </property>
+                    </spacer>
                    </item>
                    <item>
                     <spacer name="horizontalSpacer_16">
@@ -1177,9 +1231,15 @@
                 </widget>
                </item>
                <item row="2" column="0">
-                <layout class="QHBoxLayout" name="processingFooter" stretch="0,0,0,0,0">
+                <layout class="QHBoxLayout" name="processingFooter" stretch="0,0,0,0">
                  <item>
                   <widget class="QPushButton" name="downloadResultsButton">
+                   <property name="minimumSize">
+                    <size>
+                     <width>0</width>
+                     <height>28</height>
+                    </size>
+                   </property>
                    <property name="text">
                     <string>View results</string>
                    </property>
@@ -1187,6 +1247,12 @@
                  </item>
                  <item>
                   <widget class="QToolButton" name="saveOptionsButton">
+                   <property name="minimumSize">
+                    <size>
+                     <width>0</width>
+                     <height>28</height>
+                    </size>
+                   </property>
                    <property name="contextMenuPolicy">
                     <enum>Qt::ActionsContextMenu</enum>
                    </property>
@@ -1230,20 +1296,13 @@
                   </spacer>
                  </item>
                  <item>
-                  <spacer name="horizontalSpacer_13">
-                   <property name="orientation">
-                    <enum>Qt::Horizontal</enum>
-                   </property>
-                   <property name="sizeHint" stdset="0">
+                  <widget class="QPushButton" name="deleteProcessings">
+                   <property name="minimumSize">
                     <size>
-                     <width>40</width>
-                     <height>20</height>
+                     <width>0</width>
+                     <height>28</height>
                     </size>
                    </property>
-                  </spacer>
-                 </item>
-                 <item>
-                  <widget class="QPushButton" name="deleteProcessings">
                    <property name="styleSheet">
                     <string notr="true"/>
                    </property>
@@ -1262,59 +1321,7 @@
                  <property name="rightMargin">
                   <number>0</number>
                  </property>
-                 <item row="0" column="2">
-                  <widget class="QLabel" name="currentProjectLabel">
-                   <property name="font">
-                    <font>
-                     <weight>50</weight>
-                     <bold>false</bold>
-                    </font>
-                   </property>
-                   <property name="text">
-                    <string>Project:</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item row="0" column="3">
-                  <spacer name="horizontalSpacer_14">
-                   <property name="orientation">
-                    <enum>Qt::Horizontal</enum>
-                   </property>
-                   <property name="sizeHint" stdset="0">
-                    <size>
-                     <width>40</width>
-                     <height>20</height>
-                    </size>
-                   </property>
-                  </spacer>
-                 </item>
-                 <item row="0" column="0">
-                  <widget class="QPushButton" name="switchProjectsButton">
-                   <property name="minimumSize">
-                    <size>
-                     <width>50</width>
-                     <height>0</height>
-                    </size>
-                   </property>
-                   <property name="text">
-                    <string/>
-                   </property>
-                  </widget>
-                 </item>
-                 <item row="0" column="1">
-                  <spacer name="horizontalSpacer_17">
-                   <property name="orientation">
-                    <enum>Qt::Horizontal</enum>
-                   </property>
-                   <property name="sizeHint" stdset="0">
-                    <size>
-                     <width>40</width>
-                     <height>20</height>
-                    </size>
-                   </property>
-                  </spacer>
-                 </item>
-                 <item row="0" column="4">
+                 <item row="0" column="5">
                   <widget class="QLineEdit" name="filterProcessings">
                    <property name="minimumSize">
                     <size>
@@ -1327,6 +1334,86 @@
                    </property>
                    <property name="placeholderText">
                     <string>Filter processings by name</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="0" column="0">
+                  <widget class="QPushButton" name="switchProjectsButton">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="minimumSize">
+                    <size>
+                     <width>35</width>
+                     <height>0</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string/>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="0" column="2">
+                  <spacer name="horizontalSpacer_17">
+                   <property name="orientation">
+                    <enum>Qt::Horizontal</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>40</width>
+                     <height>20</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                 <item row="0" column="3">
+                  <widget class="QLabel" name="currentProjectLabel">
+                   <property name="font">
+                    <font>
+                     <weight>50</weight>
+                     <bold>false</bold>
+                    </font>
+                   </property>
+                   <property name="text">
+                    <string>Project:</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="0" column="4">
+                  <spacer name="horizontalSpacer_14">
+                   <property name="orientation">
+                    <enum>Qt::Horizontal</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>40</width>
+                     <height>20</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                 <item row="0" column="1">
+                  <widget class="QPushButton" name="switchProcessingsFakeButton">
+                   <property name="enabled">
+                    <bool>false</bool>
+                   </property>
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="minimumSize">
+                    <size>
+                     <width>35</width>
+                     <height>0</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string/>
                    </property>
                   </widget>
                  </item>
@@ -2062,7 +2149,14 @@
                   </widget>
                  </item>
                  <item>
-                  <widget class="QComboBox" name="sortCatalogCombo"/>
+                  <widget class="QComboBox" name="sortCatalogCombo">
+                   <property name="minimumSize">
+                    <size>
+                     <width>0</width>
+                     <height>0</height>
+                    </size>
+                   </property>
+                  </widget>
                  </item>
                 </layout>
                </item>
@@ -2403,7 +2497,7 @@
               </widget>
              </item>
              <item>
-              <layout class="QHBoxLayout" name="horizontalLayout_9" stretch="0,0,0,0,0,0">
+              <layout class="QHBoxLayout" name="horizontalLayout_9" stretch="0,0,0">
                <item>
                 <widget class="QComboBox" name="providerCombo">
                  <property name="minimumSize">
@@ -2524,33 +2618,6 @@
                  </property>
                 </spacer>
                </item>
-               <item>
-                <widget class="QLabel" name="labelZoomLimit2">
-                 <property name="text">
-                  <string>Max zoom:</string>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QSpinBox" name="maxZoom2">
-                 <property name="buttonSymbols">
-                  <enum>QAbstractSpinBox::PlusMinus</enum>
-                 </property>
-                 <property name="maximum">
-                  <number>21</number>
-                 </property>
-                 <property name="value">
-                  <number>12</number>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QPushButton" name="preview2">
-                 <property name="text">
-                  <string>Preview</string>
-                 </property>
-                </widget>
-               </item>
               </layout>
              </item>
             </layout>
@@ -2561,7 +2628,7 @@
               <enum>Qt::Vertical</enum>
              </property>
              <property name="sizeType">
-              <enum>QSizePolicy::Fixed</enum>
+              <enum>QSizePolicy::MinimumExpanding</enum>
              </property>
              <property name="sizeHint" stdset="0">
               <size>
@@ -2589,29 +2656,39 @@
                 </widget>
                </item>
                <item>
-                <widget class="QRadioButton" name="viewAsTiles">
+                <widget class="QCheckBox" name="cornfirmProcessingStart">
                  <property name="text">
-                  <string>view results as a vector tiles</string>
+                  <string>Confirm processing start</string>
                  </property>
                  <property name="checked">
                   <bool>true</bool>
                  </property>
-                 <attribute name="buttonGroup">
-                  <string notr="true">buttonGroup</string>
-                 </attribute>
-                </widget>
-               </item>
-               <item>
-                <widget class="QRadioButton" name="viewAsLocal">
-                 <property name="text">
-                  <string>save results as a local vector file</string>
-                 </property>
-                 <attribute name="buttonGroup">
-                  <string notr="true">buttonGroup</string>
-                 </attribute>
                 </widget>
                </item>
               </layout>
+             </item>
+             <item row="0" column="1">
+              <widget class="QRadioButton" name="viewAsTiles">
+               <property name="text">
+                <string>view results as a vector tiles</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+               <attribute name="buttonGroup">
+                <string notr="true">buttonGroup</string>
+               </attribute>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QRadioButton" name="viewAsLocal">
+               <property name="text">
+                <string>save results as a local vector file</string>
+               </property>
+               <attribute name="buttonGroup">
+                <string notr="true">buttonGroup</string>
+               </attribute>
+              </widget>
              </item>
             </layout>
            </item>
@@ -2683,7 +2760,7 @@
                <property name="maximumSize">
                 <size>
                  <width>200</width>
-                 <height>244</height>
+                 <height>222</height>
                 </size>
                </property>
                <property name="verticalScrollBarPolicy">
@@ -2705,9 +2782,9 @@
                 <property name="geometry">
                  <rect>
                   <x>0</x>
-                  <y>-36</y>
+                  <y>0</y>
                   <width>198</width>
-                  <height>240</height>
+                  <height>220</height>
                  </rect>
                 </property>
                 <property name="sizePolicy">
@@ -2894,7 +2971,7 @@
                 <property name="geometry">
                  <rect>
                   <x>0</x>
-                  <y>-126</y>
+                  <y>0</y>
                   <width>207</width>
                   <height>240</height>
                  </rect>

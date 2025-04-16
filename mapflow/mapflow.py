@@ -281,7 +281,6 @@ class Mapflow(QObject):
 
         # Maxar
         self.config_search_columns = ConfigColumns()
-        self.dlg.imageId.textChanged.connect(self.sync_image_id_with_table_and_layer)
         self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
             self.sync_table_selection_with_image_id_and_layer)
         self.meta_layer_table_connection = None
@@ -651,6 +650,7 @@ class Mapflow(QObject):
 
     def setup_workflow_defs(self, workflow_defs: List[WorkflowDef]):
         self.workflow_defs = {wd.name: wd for wd in workflow_defs}
+        print (self.workflow_defs)
         self.dlg.modelCombo.clear()
         # We skip SENTINEL WDs if sentinel is not enabled (normally, it should be not)
         # wds along with ids in the format: {'model_name': 'workflow_def_id'}
@@ -693,7 +693,7 @@ class Mapflow(QObject):
             self.settings.setValue("project_id", self.project_id)
             self.setup_workflow_defs(self.current_project.workflowDefs)
             # Manually toggle function to avoid race condition
-            self.calculate_aoi_area_use_image_extent(self.dlg.useImageExtentAsAoi.isChecked())
+            self.calculate_aoi_area_use_image_extent()
 
     def setup_project_change_rights(self):
         project_editable = True
@@ -1778,7 +1778,8 @@ class Mapflow(QObject):
                     reason = self.tr("Set AOI to start processing")
                 self.dlg.disable_processing_start(reason, clear_area=False)
         elif not self.workflow_defs:
-            self.dlg.disable_processing_start(reason=self.tr("Error! Models are not initialized"),
+            self.dlg.disable_processing_start(reason=self.tr("Error! Models are not initialized.\n"
+                                                             "Please, make sure you have selected a project"),
                                               clear_area=True)
         elif self.billing_type != BillingType.credits:
             self.dlg.startProcessing.setEnabled(True)
