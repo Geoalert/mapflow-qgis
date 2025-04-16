@@ -597,6 +597,7 @@ class Mapflow(QObject):
             if cloud_cover is not None:  # may be undefined
                 is_unfit = is_unfit or cloud_cover > max_cloud_cover
             self.dlg.metadataTable.setRowHidden(row, is_unfit)
+        self.cell_preview_connection = self.dlg.metadataTable.cellClicked.connect(self.preview_search_from_cell)
 
     def set_up_login_dialog(self) -> MapflowLoginDialog:
         """Create a login dialog, set its title and signal-slot connections."""
@@ -930,6 +931,10 @@ class Mapflow(QObject):
 
     def get_metadata(self, _: Optional[bool] = False, offset: Optional[int] = 0) -> None:
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
+        try: # disconnect to prevent adding mutliple previews if table was refilled (multiple searches)
+            self.dlg.metadataTable.disconnect(self.cell_preview_connection)
+        except AttributeError: # if no previous connection (first search after start)
+            pass
         # If current provider does not support search, we should select ImagerySearchProvider to be able to search
         self.replace_search_provider_index()
 
@@ -2212,7 +2217,7 @@ class Mapflow(QObject):
         footprint = self.metadata_footprint(feature=feature)
         url = feature.attribute('previewUrl')
         preview_type = feature.attribute('previewType')
-        self.iface.mapCanvas().zoomToSelected()
+        self.iface.mapCanvas().zoomToSelected(self.metadata_layer)
         self.iface.mapCanvas().refresh()
         if preview_type == PreviewType.png:
             self.preview_png(url, footprint, image_id)
@@ -2452,6 +2457,12 @@ class Mapflow(QObject):
             self.preview_catalog(image_id=image_id)
         else:  # XYZ providers
             self.preview_xyz(provider=provider, image_id=image_id)
+    
+    def preview_search_from_cell (self, row, column):
+        if column == self.config.PPRVIEW_INDEX_COLUMN:
+            id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
+            image_id = self.dlg.metadataTable.item(row, id_column_index).text()
+            self.preview_catalog(image_id)
 
     def preview_or_search(self, provider) -> None:
         provider_index = self.dlg.providerIndex()

@@ -6,7 +6,7 @@ from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette
 from PyQt5.QtWidgets import (QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton, 
-                             QAction, QMenu, QAbstractItemView, QHeaderView)
+                             QAction, QMenu, QAbstractItemView)
 from qgis.core import QgsMapLayerProxyModel, QgsSettings
 
 from . import icons
@@ -423,6 +423,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # Turn sorting on again
         self.metadataTable.setSortingEnabled(True)
         self.metadataTable.resizeColumnsToContents()
+        self.add_preview_cell()
         self.metadataTableFilled.emit()
 
     def setup_project_combo(self, projects: dict[str, MapflowProject], current_project_id: Optional[str] = None):
@@ -544,12 +545,12 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.projectsCombo.setCurrentIndex(idx)
     
     def set_search_visible_columns(self):
-        search_columns_numbers = [str(x) for x in range(len(self.search_columns))] # 10 columns in total: 0-9
-        # When settings are empty OR filled with something except 0-9
+        search_columns_numbers = [str(x) for x in range(len(self.search_columns))] # 11 columns in total: 0-10
+        # When settings are empty OR filled with something except 0-10
         if not self.settings.value("visibleSearchColumns") or \
         not list(set(self.settings.value("visibleSearchColumns")) & set(search_columns_numbers)):
             # Set only 0-6 columns (and checkboxes) as checked by default 
-            self.settings.setValue("visibleSearchColumns", [str(x) for x in range(7)])
+            self.settings.setValue("visibleSearchColumns", [str(x) for x in range(8)])
         # Or check previous columns from settings
         for idx, column in enumerate(self.search_columns):
             if str(idx) in self.settings.value("visibleSearchColumns"):
@@ -574,6 +575,14 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             processing_name = self.processingsTable.item(row, 0).data(Qt.DisplayRole)
             hide = bool(name_filter) and (name_filter.lower() not in processing_name.lower())
             self.processingsTable.setRowHidden(row, hide)
+    
+    def add_preview_cell(self):
+        preview_column_index = config.PPRVIEW_INDEX_COLUMN
+        for row in range(self.metadataTable.rowCount()):
+            preview_label = QLabel()
+            preview_label.setPixmap(icons.lens_icon.pixmap(16, 16))
+            preview_label.setAlignment(Qt.AlignVCenter | Qt.AlignHCenter)
+            self.metadataTable.setCellWidget(row, preview_column_index, preview_label)
 
     @property
     def project_controls(self):
@@ -607,6 +616,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     def search_columns(self):
         return [self.showProductTypeColumn,
                 self.showProviderNameColumn,
+                self.showPreviewColumn,
                 self.showSensorColumn,
                 self.showBandsColumn,
                 self.showCloudsColumn,
