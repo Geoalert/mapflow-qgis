@@ -33,6 +33,7 @@ from .dialogs import (MainDialog,
                       UpdateProjectDialog,
                       UpdateProcessingDialog,
                       )
+from .dialogs.dialogs import ConfirmProcessingStart
 from .dialogs.icons import plugin_icon
 from .functional.controller.data_catalog_controller import DataCatalogController
 from .config import Config, ConfigSearchColumns
@@ -2022,12 +2023,39 @@ class Mapflow(QObject):
                                'to top up your balance'),
                        icon=QMessageBox.Warning)
             return
-        self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
-        try:
-            self.dlg.startProcessing.setEnabled(False)
-            self.post_processing(processing_params)
-        except Exception as e:
-            self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
+        # Define starting to use later after confirmation or without it
+        def start_processing():
+            self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
+            try:
+                self.dlg.startProcessing.setEnabled(False)
+                self.post_processing(processing_params)
+            except Exception as e:
+                self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
+        # Show processing start confirmation dialog if checkbox is checked
+        if self.dlg.cornfirmProcessingStart.isChecked():
+            dialog = ConfirmProcessingStart(self.dlg)
+            # Define actions in case of dialog acceptance
+            def on_start_confirmation():
+                # Set "Confirm" checkbox opposite to "Don't show again" if they are not already the same
+                if not dialog.checkBox.isChecked() != self.dlg.cornfirmProcessingStart.isChecked():
+                    self.dlg.cornfirmProcessingStart.setChecked(not dialog.checkBox.isChecked())
+                    self.settings.setValue("confirmProcessingStart", str(not dialog.checkBox.isChecked()))
+                # And then post processing
+                start_processing()
+            dialog.accepted.connect(on_start_confirmation)
+            # Fill dialog with parameters
+            dialog.setup(name=processing_params.name,
+                         price=str(self.processing_cost)+self.tr(" credits"),
+                         provider=self.dlg.providerCombo.currentText(),
+                         zoom=processing_params.params.zoom,
+                         area=str(round(self.aoi_size, 2))+self.tr(" sq.km"),
+                         model=self.dlg.modelCombo.currentText(),
+                         blocks=[self.dlg.modelOptionsLayout.itemAt(i).widget().text()
+                                 for i in range(self.dlg.modelOptionsLayout.count())])
+            dialog.deleteLater()
+        # Or just post the processing
+        else:
+            start_processing()
         return
 
     def upload_tif_callback(self,

@@ -147,6 +147,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         elif viewResultsMode == "file":
             self.viewAsLocal.setChecked(True)
         self.useAllVectorLayers.setChecked(str(self.settings.value('useAllVectorLayers', "true")).lower() == "true")
+        self.cornfirmProcessingStart.setChecked(str(self.settings.value('confirmProcessingStart', "true")).lower() == "true")
+        self.cornfirmProcessingStart.toggled.connect(lambda: self.settings.setValue("confirmProcessingStart", 
+                                                                                    self.cornfirmProcessingStart.isChecked()))
 
     # connect raster/provider combos funcs
     def switch_provider_combo(self, text):
