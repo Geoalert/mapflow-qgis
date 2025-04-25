@@ -57,15 +57,17 @@ class ImageSchema(Serializable, SkipDataClass):
         elif not isinstance(self.acquisitionDate, datetime):
             raise TypeError("Acquisition date must be either datetime or ISO-formatted str")
         # To percent
-        self.cloudCover = self.cloudCover*100
+        if self.cloudCover is not None:
+            self.cloudCover = self.cloudCover*100
         self.source = self.sensor
         self.previewType = PreviewType(self.previewType)
 
     def as_geojson(self):
         properties = {k: v for k, v in self.as_dict().items() if k != "footprint"}
-        return {"type": "Feature",
+        res = {"type": "Feature",
                 "geometry": self.footprint,
                 "properties": properties}
+        return res
 
 @dataclass
 class ImageCatalogResponseSchema(Serializable):

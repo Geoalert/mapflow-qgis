@@ -553,13 +553,8 @@ class Mapflow(QObject):
             max_cloud_cover = self.dlg.maxCloudCover.value()
         if min_intersection is None:
             min_intersection = self.dlg.minIntersection.value()
-        from_ = self.dlg.metadataFrom.date().toString(Qt.ISODate)
-        to = self.dlg.metadataTo.date().toString(Qt.ISODate)
-        filter_ = (
-            f"acquisitionDate >= '{from_}'"
-            f" and acquisitionDate <= '{to}'"
-            f' and (cloudCover is null or cloudCover <= {max_cloud_cover})'
-        )
+        from_ = self.dlg.metadataFrom.date()
+        to = self.dlg.metadataTo.date()
         aoi = helpers.from_wgs84(self.metadata_aoi, crs)
         if not aoi:
             if self.dlg.polygonCombo.currentLayer():
@@ -583,20 +578,32 @@ class Mapflow(QObject):
         filtered_ids = []
         for feature in self.metadata_layer.getFeatures():
             area = self.calculator.measureArea(QgsGeometry(aoi.intersection(feature.geometry().constGet())))
-            if area < min_intersection_size:
-                filtered_ids.append(feature['id'])
+            try:
+                acquisition_date = feature.attribute("acquisitionDate").date()
+            except KeyError:
+                acquisition_date = None
+            try:
+                cloud_cover = feature.attribute("cloudCover")
+            except KeyError:
+                cloud_cover = None
+
+            date_ok = (acquisition_date is not None
+                       and from_ <= acquisition_date <= to)
+            # if cloud cover is 100 we don't check it at all, but otherwise we filter non-specified values (none)
+            cloud_cover_ok = max_cloud_cover == 100 or (
+                cloud_cover is not None and cloud_cover < max_cloud_cover
+            )
+            if area < min_intersection_size or not date_ok or not cloud_cover_ok :
+                    filtered_ids.append(feature['id'])
         if filtered_ids:
-            filter_ += f' and id not in (' + ', '.join((f"'{id_}'" for id_ in filtered_ids)) + ')'
+            filter_ = f'id not in (' + ', '.join((f"'{id_}'" for id_ in filtered_ids)) + ')'
+        else:
+            filter_ = ''
         self.metadata_layer.setSubsetString(filter_)
-        to = QDate.fromString(to, Qt.ISODate).addDays(1).toString(Qt.ISODate)
         # Show/hide table rows
         for row in range(self.dlg.metadataTable.rowCount()):
             id_ = self.dlg.metadataTable.item(row, id_column_index).data(Qt.DisplayRole)
-            datetime_ = self.dlg.metadataTable.item(row, datetime_column_index).data(Qt.DisplayRole)
-            cloud_cover = self.dlg.metadataTable.item(row, cloud_cover_column_index).data(Qt.DisplayRole)
-            is_unfit = from_ > datetime_ or to < datetime_ or id_ in filtered_ids
-            if cloud_cover is not None:  # may be undefined
-                is_unfit = is_unfit or cloud_cover > max_cloud_cover
+            is_unfit = id_ in filtered_ids
             self.dlg.metadataTable.setRowHidden(row, is_unfit)
         self.cell_preview_connection = self.dlg.metadataTable.cellClicked.connect(self.preview_search_from_cell)
 
