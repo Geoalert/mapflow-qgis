@@ -353,6 +353,9 @@ class DataCatalogView(QObject):
         self.dlg.seeImagesButton.setEnabled(False)
         # Hide widgets
         self.set_table_tooltip(self.dlg.mosaicTable)
+        self.dlg.previousImageButton.setVisible(False)
+        self.dlg.nextImageButton.setVisible(False)
+        self.dlg.imageNumberLabel.setVisible(False)
 
     def show_image_info(self, image: ImageReturnSchema):
         if not image:
