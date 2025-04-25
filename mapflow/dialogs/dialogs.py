@@ -90,7 +90,13 @@ class ConfirmProcessingStart(*uic.loadUiType(ui_path / 'processing_start_confirm
     
     def setup(self, name, price, provider, zoom, area, model, blocks) -> None:
         self.nameLabel.setText(name)
-        self.priceLabel.setText(price)
+        if price is not None:
+            self.priceHeader.setVisible(True)
+            self.priceLabel.setVisible(True)
+            self.priceLabel.setText(price)
+        else:
+            self.priceHeader.setVisible(False)
+            self.priceLabel.setVisible(False)
         self.dataSourceLabel.setText(provider)
         if not zoom:
             zoom = "No zoom selected"
