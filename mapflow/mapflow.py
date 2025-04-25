@@ -657,7 +657,6 @@ class Mapflow(QObject):
 
     def setup_workflow_defs(self, workflow_defs: List[WorkflowDef]):
         self.workflow_defs = {wd.name: wd for wd in workflow_defs}
-        print (self.workflow_defs)
         self.dlg.modelCombo.clear()
         # We skip SENTINEL WDs if sentinel is not enabled (normally, it should be not)
         # wds along with ids in the format: {'model_name': 'workflow_def_id'}
