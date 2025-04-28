@@ -131,7 +131,11 @@ class ProjectService(QObject):
             projects_page_number = int(self.projects_page_offset/self.projects_page_limit) + 1
             self.view.show_projects_pages(True, projects_page_number, projects_total_pages)
         else:
-            self.view.show_projects_pages(False)
+            # When no projects found, but no filter specified (should be at lest 'Default')
+            if not self.projects_data.total and len(self.dlg.filterProjects.text()) <= 1:
+                self.get_projects() # request first page without any parameters
+            else: # when total is just less than the limit
+                self.view.show_projects_pages(False) # show first page and no controls
         self.projectsUpdated.emit()
         self.dlg.projectsTable.clearSelection()
         self.dlg.projectsTable.setSelectionMode(QAbstractItemView.SingleSelection)
