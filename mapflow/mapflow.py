@@ -2814,7 +2814,7 @@ class Mapflow(QObject):
         if not self.project_id:
             return
         self.setup_processings_table()
-        self.project_service.switch_to_processings(save_page)
+        self.project_service.switch_to_processings(save_page, self.project_id)
     
     def show_projects(self, open_saved_page: Optional[bool] = False):
         """Get projects and switch from processings to projects table in stacked widget.

@@ -158,7 +158,9 @@ class ProjectService(QObject):
         self.get_projects(open_saved_page)
         self.view.switch_to_projects()
 
-    def switch_to_processings(self, save_page: Optional[bool] = False):
+    def switch_to_processings(self, 
+                              save_page: Optional[bool] = False,
+                              project_id: Optional[int]  = None):
         """Switch from projects to processings table in stacked widget.
 
         Allows to remember current projects page before switching (to later reopen it even after reload).
@@ -176,6 +178,7 @@ class ProjectService(QObject):
                              'filter': projects_filter}
             self.settings.setValue('projectsPage', projects_page)
         self.view.switch_to_processings()
+        self.project_id = project_id
 
     def get_filtered_projects(self):
         """Get projects, resetting filtered offset value.
