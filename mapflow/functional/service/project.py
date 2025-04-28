@@ -25,6 +25,7 @@ class ProjectService(QObject):
         self.view = ProjectView(self.dlg)
         self.projects_data = {}
         self.projects = []
+        self.project_id = None
         self.projects_page_limit = Config.PROJECTS_PAGE_LIMIT
         self.projects_page_offset = 0
         # Connections
@@ -37,6 +38,8 @@ class ProjectService(QObject):
         self.api.create_project(project, self.create_project_callback)
 
     def create_project_callback(self, response: QNetworkReply):
+        project = MapflowProject.from_dict(json.loads(response.readAll().data()))
+        self.project_id = project.id
         self.get_projects()
     
     def delete_project(self, project_id):
@@ -52,6 +55,8 @@ class ProjectService(QObject):
         self.api.update_project(project_id, project, self.update_project_callback)
     
     def update_project_callback(self, response: QNetworkReply):
+        project = MapflowProject.from_dict(json.loads(response.readAll().data()))
+        self.project_id = project.id
         self.get_projects()
     
     def get_project(self, project_id, callback: Callable, error_handler: Callable):
@@ -124,6 +129,7 @@ class ProjectService(QObject):
         self.projectsUpdated.emit()
         self.dlg.projectsTable.clearSelection()
         self.dlg.projectsTable.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.select_project(self.project_id)
     
     def select_project(self, project_id):
         self.view.select_project(project_id)
