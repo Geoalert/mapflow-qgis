@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1033</width>
+    <width>1083</width>
     <height>550</height>
    </rect>
   </property>
@@ -148,10 +148,10 @@
            <property name="maxVisibleItems">
             <number>30</number>
            </property>
-           <property name="allowEmptyLayer">
+           <property name="allowEmptyLayer" stdset="0">
             <bool>false</bool>
            </property>
-           <property name="showCrs">
+           <property name="showCrs" stdset="0">
             <bool>true</bool>
            </property>
           </widget>
@@ -1080,7 +1080,6 @@
                     <widget class="QLabel" name="projectsPageLabel">
                      <property name="font">
                       <font>
-                       <weight>50</weight>
                        <bold>false</bold>
                       </font>
                      </property>
@@ -1138,6 +1137,12 @@
               <layout class="QGridLayout" name="gridLayout_5">
                <item row="1" column="0">
                 <widget class="QTableWidget" name="processingsTable">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                   <horstretch>1</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
                  <property name="minimumSize">
                   <size>
                    <width>0</width>
@@ -1371,14 +1376,40 @@
                  </item>
                  <item row="0" column="3">
                   <widget class="QLabel" name="currentProjectLabel">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                     <horstretch>1</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="minimumSize">
+                    <size>
+                     <width>100</width>
+                     <height>0</height>
+                    </size>
+                   </property>
+                   <property name="maximumSize">
+                    <size>
+                     <width>1500</width>
+                     <height>28</height>
+                    </size>
+                   </property>
+                   <property name="baseSize">
+                    <size>
+                     <width>0</width>
+                     <height>150</height>
+                    </size>
+                   </property>
                    <property name="font">
                     <font>
-                     <weight>50</weight>
                      <bold>false</bold>
                     </font>
                    </property>
                    <property name="text">
                     <string>Project:</string>
+                   </property>
+                   <property name="wordWrap">
+                    <bool>false</bool>
                    </property>
                   </widget>
                  </item>
@@ -1760,13 +1791,13 @@
                 <property name="checked">
                  <bool>false</bool>
                 </property>
-                <property name="collapsed">
+                <property name="collapsed" stdset="0">
                  <bool>true</bool>
                 </property>
-                <property name="saveCollapsedState">
+                <property name="saveCollapsedState" stdset="0">
                  <bool>true</bool>
                 </property>
-                <property name="saveCheckedState">
+                <property name="saveCheckedState" stdset="0">
                  <bool>false</bool>
                 </property>
                 <layout class="QGridLayout" name="layoutMetadataFilters" columnstretch="0,0,0">
@@ -2972,7 +3003,7 @@
                  <rect>
                   <x>0</x>
                   <y>0</y>
-                  <width>207</width>
+                  <width>213</width>
                   <height>240</height>
                  </rect>
                 </property>

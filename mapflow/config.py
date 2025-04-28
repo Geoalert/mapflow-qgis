@@ -30,6 +30,7 @@ class ConfigColumns():
             QCoreApplication.translate('Config', "Updated at"), 
             QCoreApplication.translate('Config', "Created at")
         ]
+        self.MAX_WIDTH = 200
 
 @dataclass
 class Config:

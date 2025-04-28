@@ -31,6 +31,7 @@ class ProjectView(QObject):
                                              self.tr("Newest first"), self.tr("Oldest first"),
                                              self.tr("Updated recently"), self.tr("Updated long ago")])
         self.dlg.sortProjectsCombo.setCurrentIndex(4)
+        self.columns_config = ConfigColumns()
 
     def show_projects_pages(self, enable: bool = False, page_number: int = 1, total_pages: int = 1):
         self.dlg.projectsPreviousPageButton.setVisible(enable)
@@ -57,7 +58,7 @@ class ProjectView(QObject):
         if not projects:
             return
         # First column is ID, hidden; second is name
-        self.dlg.projectsTable.setColumnCount(len(ConfigColumns().PROJECTS_TABLE_COLUMNS))
+        self.dlg.projectsTable.setColumnCount(len(self.columns_config.PROJECTS_TABLE_COLUMNS))
         self.dlg.projectsTable.setColumnHidden(0, True)
         self.dlg.projectsTable.setRowCount(len(projects))
         self.dlg.projectsTable.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -84,8 +85,13 @@ class ProjectView(QObject):
             created_item = QTableWidgetItem()
             created_item.setData(Qt.DisplayRole, project.created.astimezone().strftime('%Y-%m-%d %H:%M'))
             self.dlg.projectsTable.setItem(row, 6, created_item)
-            self.dlg.projectsTable.setHorizontalHeaderLabels(ConfigColumns().PROJECTS_TABLE_COLUMNS)
+            self.dlg.projectsTable.setHorizontalHeaderLabels(self.columns_config.PROJECTS_TABLE_COLUMNS)
+
         self.dlg.projectsTable.resizeColumnsToContents()
+        for column_idx in (1, 4):
+            # these columns are user-defined and can expand too wide, so we bound them
+            if self.dlg.projectsTable.columnWidth(column_idx) > self.columns_config.MAX_WIDTH:
+                self.dlg.projectsTable.setColumnWidth(column_idx, self.columns_config.MAX_WIDTH)
         self.dlg.projectsTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
         self.dlg.projectsTable.horizontalHeader().setStretchLastSection(True)
         self.dlg.projectsTable.setSelectionMode(QAbstractItemView.SingleSelection)

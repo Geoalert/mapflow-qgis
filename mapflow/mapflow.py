@@ -657,7 +657,6 @@ class Mapflow(QObject):
 
     def setup_workflow_defs(self, workflow_defs: List[WorkflowDef]):
         self.workflow_defs = {wd.name: wd for wd in workflow_defs}
-        print (self.workflow_defs)
         self.dlg.modelCombo.clear()
         # We skip SENTINEL WDs if sentinel is not enabled (normally, it should be not)
         # wds along with ids in the format: {'model_name': 'workflow_def_id'}
@@ -2074,8 +2073,12 @@ class Mapflow(QObject):
                 start_processing()
             dialog.accepted.connect(on_start_confirmation)
             # Fill dialog with parameters
+            if self.billing_type==BillingType.credits:
+                price = self.tr("{cost} credits").format(cost=self.processing_cost)
+            else:
+                price = None
             dialog.setup(name=processing_params.name,
-                         price=str(self.processing_cost)+self.tr(" credits"),
+                         price=price,
                          provider=self.dlg.providerCombo.currentText(),
                          zoom=processing_params.params.zoom,
                          area=str(round(self.aoi_size, 2))+self.tr(" sq.km"),
