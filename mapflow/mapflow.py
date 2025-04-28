@@ -393,7 +393,10 @@ class Mapflow(QObject):
         self.current_project = MapflowProject.from_dict(json.loads(response.readAll().data()))
         if self.current_project:
             self.project_id = self.current_project.id
-            self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(self.current_project.name))
+            elided_name = self.dlg.currentProjectLabel.fontMetrics().elidedText(self.current_project.name, 
+                                                                                Qt.ElideRight, 
+                                                                                self.dlg.currentProjectLabel.width() - 50)
+            self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(elided_name))
         self.get_project_sharing(self.current_project)
         self.setup_project_change_rights()
         self.settings.setValue("project_id", self.project_id)
@@ -693,7 +696,10 @@ class Mapflow(QObject):
             for pid, project in self.projects.items():
                 if selected_id == pid:
                     self.current_project = project
-                    self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(self.current_project.name))
+                    elided_name = self.dlg.currentProjectLabel.fontMetrics().elidedText(self.current_project.name, 
+                                                                                        Qt.ElideRight, 
+                                                                                        self.dlg.currentProjectLabel.width() - 50)
+                    self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(elided_name))
             self.get_project_sharing(self.current_project)
             self.setup_project_change_rights()
             self.settings.setValue("project_id", self.project_id)
