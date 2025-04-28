@@ -56,9 +56,7 @@ class ImageSchema(Serializable, SkipDataClass):
             self.acquisitionDate = datetime.fromisoformat(self.acquisitionDate.replace("Z", "+00:00"))
         elif not isinstance(self.acquisitionDate, datetime):
             raise TypeError("Acquisition date must be either datetime or ISO-formatted str")
-        # To percent
-        if self.cloudCover is not None:
-            self.cloudCover = self.cloudCover*100
+        self.cloudCover = self.cloudCover
         self.source = self.sensor
         self.previewType = PreviewType(self.previewType)
 

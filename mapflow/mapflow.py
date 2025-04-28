@@ -506,7 +506,9 @@ class Mapflow(QObject):
         if self.billing_type == BillingType.credits:
             self.update_processing_cost()
 
-    def on_model_change(self, index: Optional[int] = None) -> None:
+    def on_model_change(self, 
+                        index: Optional[int] = None, 
+                        update_cost: Optional[bool] = True) -> None:
         wd_name = self.dlg.modelCombo.currentText()
         wd = self.workflow_defs.get(wd_name)
         self.set_available_imagery_sources(wd_name)
@@ -516,7 +518,8 @@ class Mapflow(QObject):
         self.dlg.show_wd_price(wd_price=wd.get_price(enable_blocks=self.dlg.enabled_blocks()),
                                wd_description=wd.description,
                                display_price=self.billing_type == BillingType.credits)
-        if self.billing_type == BillingType.credits:
+        if self.billing_type == BillingType.credits and \
+           update_cost == True: # is False only when sent from setup_workflow_defs (to avoid same requests)
             self.update_processing_cost()
 
     def show_wd_options(self, wd: WorkflowDef):
@@ -666,7 +669,7 @@ class Mapflow(QObject):
         self.dlg.modelCombo.addItems(name for name in self.workflow_defs
                                      if self.config.ENABLE_SENTINEL or self.config.SENTINEL_WD_NAME_PATTERN not in name)
         self.dlg.modelCombo.setCurrentText(self.config.DEFAULT_MODEL)
-        self.on_model_change()
+        self.on_model_change(update_cost=False) # is already updated when calculating aoi
 
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
@@ -700,10 +703,12 @@ class Mapflow(QObject):
                                                                                         Qt.ElideRight, 
                                                                                         self.dlg.currentProjectLabel.width() - 50)
                     self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(elided_name))
-            self.get_project_sharing(self.current_project)
+            if self.current_project:
+                self.get_project_sharing(self.current_project)
+                self.setup_workflow_defs(self.current_project.workflowDefs)
             self.setup_project_change_rights()
             self.settings.setValue("project_id", self.project_id)
-            self.setup_workflow_defs(self.current_project.workflowDefs)
+            
             # Manually toggle function to avoid race condition
             self.calculate_aoi_area_use_image_extent()
 
@@ -1688,8 +1693,8 @@ class Mapflow(QObject):
         if isinstance(provider, MyImageryProvider):
             self.calculate_aoi_area_catalog()
         else:
-            self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())   
-    
+            self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+
     def calculate_aoi_area_catalog(self) -> None:
         """Get the AOI size when a new mosaic or image in 'My imagery' is selected.
         """
@@ -2069,27 +2074,44 @@ class Mapflow(QObject):
         # Show processing start confirmation dialog if checkbox is checked
         if self.dlg.cornfirmProcessingStart.isChecked():
             dialog = ConfirmProcessingStart(self.dlg)
-            # Define actions in case of dialog acceptance
-            def on_start_confirmation():
+            # Define actions on checkbox toggling
+            def set_start_confirmation():
                 # Set "Confirm" checkbox opposite to "Don't show again" if they are not already the same
                 if not dialog.checkBox.isChecked() != self.dlg.cornfirmProcessingStart.isChecked():
                     self.dlg.cornfirmProcessingStart.setChecked(not dialog.checkBox.isChecked())
                     self.settings.setValue("confirmProcessingStart", str(not dialog.checkBox.isChecked()))
-                # And then post processing
-                start_processing()
-            dialog.accepted.connect(on_start_confirmation)
+            dialog.checkBox.toggled.connect(set_start_confirmation)
+            dialog.accepted.connect(start_processing)
             # Fill dialog with parameters
             if self.billing_type==BillingType.credits:
                 price = self.tr("{cost} credits").format(cost=self.processing_cost)
             else:
                 price = None
+            provider = self.providers[self.dlg.providerIndex()]
+            provider_text = provider.name
+            if isinstance(provider, MyImageryProvider):
+                image = self.data_catalog_service.selected_image()
+                mosaic = self.data_catalog_service.selected_mosaic()
+                if image:
+                    provider_text += " ({name})". format(name=image.filename)
+                elif mosaic:
+                    provider_text += " ({name})". format(name=mosaic.name)
+            elif isinstance(provider, ImagerySearchProvider):
+                selected_cells = self.dlg.metadataTable.selectedItems()
+                if not selected_cells:
+                    image_id = None
+                else:
+                    id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
+                    image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
+                if image_id:
+                    provider_text += " ({iid})". format(iid=image_id)
             dialog.setup(name=processing_params.name,
                          price=price,
-                         provider=self.dlg.providerCombo.currentText(),
+                         provider=provider_text,
                          zoom=processing_params.params.zoom,
                          area=str(round(self.aoi_size, 2))+self.tr(" sq.km"),
                          model=self.dlg.modelCombo.currentText(),
-                         blocks=[self.dlg.modelOptionsLayout.itemAt(i).widget().text()
+                         blocks=[self.dlg.modelOptionsLayout.itemAt(i).widget()
                                  for i in range(self.dlg.modelOptionsLayout.count())])
             dialog.deleteLater()
         # Or just post the processing
@@ -2828,7 +2850,7 @@ class Mapflow(QObject):
         if not self.project_id:
             return
         self.setup_processings_table()
-        self.project_service.switch_to_processings(save_page)
+        self.project_service.switch_to_processings(save_page, self.project_id)
     
     def show_projects(self, open_saved_page: Optional[bool] = False):
         """Get projects and switch from processings to projects table in stacked widget.
@@ -3223,6 +3245,7 @@ class Mapflow(QObject):
     def update_projects(self):
         self.projects = {pr.id: pr for pr in self.project_service.projects}
         if not self.projects:
+            self.dlg.projectsTable.clear()
             # Add a row with an error message to projects table
             table_item = QTableWidgetItem("No project that meets specified criteria was found")
             self.dlg.projectsTable.setRowCount(1)

@@ -25,6 +25,7 @@ class ProjectService(QObject):
         self.view = ProjectView(self.dlg)
         self.projects_data = {}
         self.projects = []
+        self.project_id = None
         self.projects_page_limit = Config.PROJECTS_PAGE_LIMIT
         self.projects_page_offset = 0
         # Connections
@@ -37,6 +38,8 @@ class ProjectService(QObject):
         self.api.create_project(project, self.create_project_callback)
 
     def create_project_callback(self, response: QNetworkReply):
+        project = MapflowProject.from_dict(json.loads(response.readAll().data()))
+        self.project_id = project.id
         self.get_projects()
     
     def delete_project(self, project_id):
@@ -46,12 +49,15 @@ class ProjectService(QObject):
         self.api.delete_project(project_id, self.delete_project_callback)
     
     def delete_project_callback(self, response: QNetworkReply):
+        self.projects_data.total += -1
         self.get_projects()
     
     def update_project(self, project_id, project: UpdateProjectSchema):
         self.api.update_project(project_id, project, self.update_project_callback)
     
     def update_project_callback(self, response: QNetworkReply):
+        project = MapflowProject.from_dict(json.loads(response.readAll().data()))
+        self.project_id = project.id
         self.get_projects()
     
     def get_project(self, project_id, callback: Callable, error_handler: Callable):
@@ -66,6 +72,11 @@ class ProjectService(QObject):
 
         :param open_saved_page: A boolean that determines if we should get projects page from the settings or not.
         """
+        try: # if something changed and offset is now >= projects count
+            if self.projects_page_offset >= self.projects_data.total:
+                self.projects_page_offset = 0 # show first page
+        except AttributeError:
+            pass # if projects is an empty dict
         # Open the page containing current project
         if open_saved_page is True:
             # Get each page parameter from dict in settings (if no dict - create one with default values)
@@ -120,10 +131,15 @@ class ProjectService(QObject):
             projects_page_number = int(self.projects_page_offset/self.projects_page_limit) + 1
             self.view.show_projects_pages(True, projects_page_number, projects_total_pages)
         else:
-            self.view.show_projects_pages(False)
+            # When no projects found, but no filter specified (should be at lest 'Default')
+            if not self.projects_data.total and len(self.dlg.filterProjects.text()) <= 1:
+                self.get_projects() # request first page without any parameters
+            else: # when total is just less than the limit
+                self.view.show_projects_pages(False) # show first page and no controls
         self.projectsUpdated.emit()
         self.dlg.projectsTable.clearSelection()
         self.dlg.projectsTable.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.select_project(self.project_id)
     
     def select_project(self, project_id):
         self.view.select_project(project_id)
@@ -144,15 +160,12 @@ class ProjectService(QObject):
 
         :param open_saved_page: A boolean that determines if we should get projects page from the settings or not.
         """
-        try: # if something changed and offset is now bigger than projects count
-            if self.projects_page_offset > self.projects_data.total:
-                self.projects_page_offset = 0 # show first page
-        except AttributeError:
-            pass # if projects is an empty dict
         self.get_projects(open_saved_page)
         self.view.switch_to_projects()
 
-    def switch_to_processings(self, save_page: Optional[bool] = False):
+    def switch_to_processings(self, 
+                              save_page: Optional[bool] = False,
+                              project_id: Optional[int]  = None):
         """Switch from projects to processings table in stacked widget.
 
         Allows to remember current projects page before switching (to later reopen it even after reload).
@@ -170,6 +183,7 @@ class ProjectService(QObject):
                              'filter': projects_filter}
             self.settings.setValue('projectsPage', projects_page)
         self.view.switch_to_processings()
+        self.project_id = project_id
 
     def get_filtered_projects(self):
         """Get projects, resetting filtered offset value.
@@ -178,4 +192,5 @@ class ProjectService(QObject):
         So each time offset resets to 0 to show 1st page of newly filtered response.
         """
         self.projects_page_offset = 0
+        self.project_id = None
         self.get_projects()
