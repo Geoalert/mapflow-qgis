@@ -49,6 +49,7 @@ class ProjectService(QObject):
         self.api.delete_project(project_id, self.delete_project_callback)
     
     def delete_project_callback(self, response: QNetworkReply):
+        self.projects_data.total += -1
         self.get_projects()
     
     def update_project(self, project_id, project: UpdateProjectSchema):
@@ -71,6 +72,11 @@ class ProjectService(QObject):
 
         :param open_saved_page: A boolean that determines if we should get projects page from the settings or not.
         """
+        try: # if something changed and offset is now >= projects count
+            if self.projects_page_offset >= self.projects_data.total:
+                self.projects_page_offset = 0 # show first page
+        except AttributeError:
+            pass # if projects is an empty dict
         # Open the page containing current project
         if open_saved_page is True:
             # Get each page parameter from dict in settings (if no dict - create one with default values)
@@ -150,11 +156,6 @@ class ProjectService(QObject):
 
         :param open_saved_page: A boolean that determines if we should get projects page from the settings or not.
         """
-        try: # if something changed and offset is now bigger than projects count
-            if self.projects_page_offset > self.projects_data.total:
-                self.projects_page_offset = 0 # show first page
-        except AttributeError:
-            pass # if projects is an empty dict
         self.get_projects(open_saved_page)
         self.view.switch_to_projects()
 
