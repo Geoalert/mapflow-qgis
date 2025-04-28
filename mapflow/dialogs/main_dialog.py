@@ -417,10 +417,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             if feature.get('id'):
                 feature['properties']['id'] = feature.get('id') # for uniformity
             for col, attr in enumerate(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()):
-                try:
-                    value = feature['properties'][attr]
-                except KeyError:  # e.g. <colorBandOrder/> for pachromatic images
-                    value = ''
+                value = feature['properties'].get(attr)  # None in case of empty/non-existent field
                 table_item = QTableWidgetItem()
                 table_item.setData(Qt.DisplayRole, value)
                 self.metadataTable.setItem(row, col, table_item)

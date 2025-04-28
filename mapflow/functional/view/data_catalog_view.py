@@ -257,6 +257,7 @@ class DataCatalogView(QObject):
 
     def display_images(self, images: list[ImageReturnSchema]):
         self.contain_image_cell_buttons()
+        self.dlg.imageTable.selectionModel().clearSelection()
         self.dlg.imageTable.setRowCount(len(images))
         self.dlg.imageTable.setColumnCount(4)
         self.dlg.imageTable.setColumnHidden(0, True)
@@ -352,6 +353,9 @@ class DataCatalogView(QObject):
         self.dlg.seeImagesButton.setEnabled(False)
         # Hide widgets
         self.set_table_tooltip(self.dlg.mosaicTable)
+        self.dlg.previousImageButton.setVisible(False)
+        self.dlg.nextImageButton.setVisible(False)
+        self.dlg.imageNumberLabel.setVisible(False)
 
     def show_image_info(self, image: ImageReturnSchema):
         if not image:

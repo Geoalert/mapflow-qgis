@@ -89,15 +89,23 @@ class ConfirmProcessingStart(*uic.loadUiType(ui_path / 'processing_start_confirm
         self.setWindowTitle(self.tr("Confirm processing start"))
     
     def setup(self, name, price, provider, zoom, area, model, blocks) -> None:
-        self.nameLabel.setText(name)
-        self.priceLabel.setText(price)
+        elided_name = self.modelLabel.fontMetrics().elidedText(name, Qt.ElideRight, self.nameLabel.width() + 100)
+        self.nameLabel.setText(elided_name)
+        if price is not None:
+            self.priceHeader.setVisible(True)
+            self.priceLabel.setVisible(True)
+            self.priceLabel.setText(price)
+        else:
+            self.priceHeader.setVisible(False)
+            self.priceLabel.setVisible(False)
         elided_provider = self.dataSourceLabel.fontMetrics().elidedText(provider, Qt.ElideRight, self.modelLabel.width() + 200)
         self.dataSourceLabel.setText(elided_provider)
         if not zoom:
             zoom = "No zoom selected"
         self.zoomLabel.setText(zoom)
         self.areaLabel.setText(area)
-        self.modelLabel.setText(model)
+        elided_model = self.modelLabel.fontMetrics().elidedText(model, Qt.ElideRight, self.modelLabel.width() + 100)
+        self.modelLabel.setText(elided_model)
         if len(blocks) == 0:
             blocks = ["No options selected"]
         else:

@@ -393,7 +393,10 @@ class Mapflow(QObject):
         self.current_project = MapflowProject.from_dict(json.loads(response.readAll().data()))
         if self.current_project:
             self.project_id = self.current_project.id
-            self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(self.current_project.name))
+            elided_name = self.dlg.currentProjectLabel.fontMetrics().elidedText(self.current_project.name, 
+                                                                                Qt.ElideRight, 
+                                                                                self.dlg.currentProjectLabel.width() - 50)
+            self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(elided_name))
         self.get_project_sharing(self.current_project)
         self.setup_project_change_rights()
         self.settings.setValue("project_id", self.project_id)
@@ -556,13 +559,8 @@ class Mapflow(QObject):
             max_cloud_cover = self.dlg.maxCloudCover.value()
         if min_intersection is None:
             min_intersection = self.dlg.minIntersection.value()
-        from_ = self.dlg.metadataFrom.date().toString(Qt.ISODate)
-        to = self.dlg.metadataTo.date().toString(Qt.ISODate)
-        filter_ = (
-            f"acquisitionDate >= '{from_}'"
-            f" and acquisitionDate <= '{to}'"
-            f' and (cloudCover is null or cloudCover <= {max_cloud_cover})'
-        )
+        from_ = self.dlg.metadataFrom.date()
+        to = self.dlg.metadataTo.date()
         aoi = helpers.from_wgs84(self.metadata_aoi, crs)
         if not aoi:
             if self.dlg.polygonCombo.currentLayer():
@@ -586,20 +584,32 @@ class Mapflow(QObject):
         filtered_ids = []
         for feature in self.metadata_layer.getFeatures():
             area = self.calculator.measureArea(QgsGeometry(aoi.intersection(feature.geometry().constGet())))
-            if area < min_intersection_size:
-                filtered_ids.append(feature['id'])
+            try:
+                acquisition_date = feature.attribute("acquisitionDate").date()
+            except KeyError:
+                acquisition_date = None
+            try:
+                cloud_cover = feature.attribute("cloudCover")
+            except KeyError:
+                cloud_cover = None
+
+            date_ok = (acquisition_date is not None
+                       and from_ <= acquisition_date <= to)
+            # if cloud cover is 100 we don't check it at all, but otherwise we filter non-specified values (none)
+            cloud_cover_ok = max_cloud_cover == 100 or (
+                cloud_cover is not None and cloud_cover < max_cloud_cover
+            )
+            if area < min_intersection_size or not date_ok or not cloud_cover_ok :
+                    filtered_ids.append(feature['id'])
         if filtered_ids:
-            filter_ += f' and id not in (' + ', '.join((f"'{id_}'" for id_ in filtered_ids)) + ')'
+            filter_ = f'id not in (' + ', '.join((f"'{id_}'" for id_ in filtered_ids)) + ')'
+        else:
+            filter_ = ''
         self.metadata_layer.setSubsetString(filter_)
-        to = QDate.fromString(to, Qt.ISODate).addDays(1).toString(Qt.ISODate)
         # Show/hide table rows
         for row in range(self.dlg.metadataTable.rowCount()):
             id_ = self.dlg.metadataTable.item(row, id_column_index).data(Qt.DisplayRole)
-            datetime_ = self.dlg.metadataTable.item(row, datetime_column_index).data(Qt.DisplayRole)
-            cloud_cover = self.dlg.metadataTable.item(row, cloud_cover_column_index).data(Qt.DisplayRole)
-            is_unfit = from_ > datetime_ or to < datetime_ or id_ in filtered_ids
-            if cloud_cover is not None:  # may be undefined
-                is_unfit = is_unfit or cloud_cover > max_cloud_cover
+            is_unfit = id_ in filtered_ids
             self.dlg.metadataTable.setRowHidden(row, is_unfit)
         self.cell_preview_connection = self.dlg.metadataTable.cellClicked.connect(self.preview_search_from_cell)
 
@@ -689,7 +699,10 @@ class Mapflow(QObject):
             for pid, project in self.projects.items():
                 if selected_id == pid:
                     self.current_project = project
-                    self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(self.current_project.name))
+                    elided_name = self.dlg.currentProjectLabel.fontMetrics().elidedText(self.current_project.name, 
+                                                                                        Qt.ElideRight, 
+                                                                                        self.dlg.currentProjectLabel.width() - 50)
+                    self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(elided_name))
             if self.current_project:
                 self.get_project_sharing(self.current_project)
                 self.setup_workflow_defs(self.current_project.workflowDefs)
@@ -2070,6 +2083,10 @@ class Mapflow(QObject):
             dialog.checkBox.toggled.connect(set_start_confirmation)
             dialog.accepted.connect(start_processing)
             # Fill dialog with parameters
+            if self.billing_type==BillingType.credits:
+                price = self.tr("{cost} credits").format(cost=self.processing_cost)
+            else:
+                price = None
             provider = self.providers[self.dlg.providerIndex()]
             provider_text = provider.name
             if isinstance(provider, MyImageryProvider):
@@ -2089,8 +2106,8 @@ class Mapflow(QObject):
                 if image_id:
                     provider_text += " ({iid})". format(iid=image_id)
             dialog.setup(name=processing_params.name,
-                         price=str(self.processing_cost)+self.tr(" credits"),
-                         provider=provider_text,#!self.dlg.providerCombo.currentText(),
+                         price=price,
+                         provider=provider_text,
                          zoom=processing_params.params.zoom,
                          area=str(round(self.aoi_size, 2))+self.tr(" sq.km"),
                          model=self.dlg.modelCombo.currentText(),
