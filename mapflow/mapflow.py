@@ -2061,15 +2061,14 @@ class Mapflow(QObject):
         # Show processing start confirmation dialog if checkbox is checked
         if self.dlg.cornfirmProcessingStart.isChecked():
             dialog = ConfirmProcessingStart(self.dlg)
-            # Define actions in case of dialog acceptance
-            def on_start_confirmation():
+            #! Define actions in case of dialog acceptance
+            def set_start_confirmation():
                 # Set "Confirm" checkbox opposite to "Don't show again" if they are not already the same
                 if not dialog.checkBox.isChecked() != self.dlg.cornfirmProcessingStart.isChecked():
                     self.dlg.cornfirmProcessingStart.setChecked(not dialog.checkBox.isChecked())
                     self.settings.setValue("confirmProcessingStart", str(not dialog.checkBox.isChecked()))
-                # And then post processing
-                start_processing()
-            dialog.accepted.connect(on_start_confirmation)
+            dialog.checkBox.toggled.connect(set_start_confirmation)
+            dialog.accepted.connect(start_processing)
             # Fill dialog with parameters
             dialog.setup(name=processing_params.name,
                          price=str(self.processing_cost)+self.tr(" credits"),
