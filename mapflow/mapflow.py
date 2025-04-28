@@ -503,7 +503,9 @@ class Mapflow(QObject):
         if self.billing_type == BillingType.credits:
             self.update_processing_cost()
 
-    def on_model_change(self, index: Optional[int] = None) -> None:
+    def on_model_change(self, 
+                        index: Optional[int] = None, 
+                        update_cost: Optional[bool] = True) -> None:
         wd_name = self.dlg.modelCombo.currentText()
         wd = self.workflow_defs.get(wd_name)
         self.set_available_imagery_sources(wd_name)
@@ -513,7 +515,8 @@ class Mapflow(QObject):
         self.dlg.show_wd_price(wd_price=wd.get_price(enable_blocks=self.dlg.enabled_blocks()),
                                wd_description=wd.description,
                                display_price=self.billing_type == BillingType.credits)
-        if self.billing_type == BillingType.credits:
+        if self.billing_type == BillingType.credits and \
+           update_cost == True: # is False only when sent from setup_workflow_defs (to avoid same requests)
             self.update_processing_cost()
 
     def show_wd_options(self, wd: WorkflowDef):
@@ -650,14 +653,13 @@ class Mapflow(QObject):
 
     def setup_workflow_defs(self, workflow_defs: List[WorkflowDef]):
         self.workflow_defs = {wd.name: wd for wd in workflow_defs}
-        print (self.workflow_defs)
         self.dlg.modelCombo.clear()
         # We skip SENTINEL WDs if sentinel is not enabled (normally, it should be not)
         # wds along with ids in the format: {'model_name': 'workflow_def_id'}
         self.dlg.modelCombo.addItems(name for name in self.workflow_defs
                                      if self.config.ENABLE_SENTINEL or self.config.SENTINEL_WD_NAME_PATTERN not in name)
         self.dlg.modelCombo.setCurrentText(self.config.DEFAULT_MODEL)
-        self.on_model_change()
+        self.on_model_change(update_cost=False) # is already updated when calculating aoi
 
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
@@ -1676,8 +1678,8 @@ class Mapflow(QObject):
         if isinstance(provider, MyImageryProvider):
             self.calculate_aoi_area_catalog()
         else:
-            self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())   
-    
+            self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+
     def calculate_aoi_area_catalog(self) -> None:
         """Get the AOI size when a new mosaic or image in 'My imagery' is selected.
         """
