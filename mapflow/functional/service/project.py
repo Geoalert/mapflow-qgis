@@ -187,4 +187,5 @@ class ProjectService(QObject):
         So each time offset resets to 0 to show 1st page of newly filtered response.
         """
         self.projects_page_offset = 0
+        self.project_id = None
         self.get_projects()

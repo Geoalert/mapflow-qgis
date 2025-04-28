@@ -690,10 +690,12 @@ class Mapflow(QObject):
                 if selected_id == pid:
                     self.current_project = project
                     self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(self.current_project.name))
-            self.get_project_sharing(self.current_project)
+            if self.current_project:
+                self.get_project_sharing(self.current_project)
+                self.setup_workflow_defs(self.current_project.workflowDefs)
             self.setup_project_change_rights()
             self.settings.setValue("project_id", self.project_id)
-            self.setup_workflow_defs(self.current_project.workflowDefs)
+            
             # Manually toggle function to avoid race condition
             self.calculate_aoi_area_use_image_extent()
 
@@ -3209,6 +3211,7 @@ class Mapflow(QObject):
     def update_projects(self):
         self.projects = {pr.id: pr for pr in self.project_service.projects}
         if not self.projects:
+            self.dlg.projectsTable.clear()
             # Add a row with an error message to projects table
             table_item = QTableWidgetItem("No project that meets specified criteria was found")
             self.dlg.projectsTable.setRowCount(1)
