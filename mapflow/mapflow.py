@@ -2061,7 +2061,7 @@ class Mapflow(QObject):
         # Show processing start confirmation dialog if checkbox is checked
         if self.dlg.cornfirmProcessingStart.isChecked():
             dialog = ConfirmProcessingStart(self.dlg)
-            #! Define actions in case of dialog acceptance
+            # Define actions on checkbox toggling
             def set_start_confirmation():
                 # Set "Confirm" checkbox opposite to "Don't show again" if they are not already the same
                 if not dialog.checkBox.isChecked() != self.dlg.cornfirmProcessingStart.isChecked():
@@ -2070,13 +2070,31 @@ class Mapflow(QObject):
             dialog.checkBox.toggled.connect(set_start_confirmation)
             dialog.accepted.connect(start_processing)
             # Fill dialog with parameters
+            provider = self.providers[self.dlg.providerIndex()]
+            provider_text = provider.name
+            if isinstance(provider, MyImageryProvider):
+                image = self.data_catalog_service.selected_image()
+                mosaic = self.data_catalog_service.selected_mosaic()
+                if image:
+                    provider_text += " ({name})". format(name=image.filename)
+                elif mosaic:
+                    provider_text += " ({name})". format(name=mosaic.name)
+            elif isinstance(provider, ImagerySearchProvider):
+                selected_cells = self.dlg.metadataTable.selectedItems()
+                if not selected_cells:
+                    image_id = None
+                else:
+                    id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
+                    image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
+                if image_id:
+                    provider_text += " ({iid})". format(iid=image_id)
             dialog.setup(name=processing_params.name,
                          price=str(self.processing_cost)+self.tr(" credits"),
-                         provider=self.dlg.providerCombo.currentText(),
+                         provider=provider_text,#!self.dlg.providerCombo.currentText(),
                          zoom=processing_params.params.zoom,
                          area=str(round(self.aoi_size, 2))+self.tr(" sq.km"),
                          model=self.dlg.modelCombo.currentText(),
-                         blocks=[self.dlg.modelOptionsLayout.itemAt(i).widget().text()
+                         blocks=[self.dlg.modelOptionsLayout.itemAt(i).widget()
                                  for i in range(self.dlg.modelOptionsLayout.count())])
             dialog.deleteLater()
         # Or just post the processing
