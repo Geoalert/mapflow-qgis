@@ -1367,9 +1367,12 @@
                    <property name="orientation">
                     <enum>Qt::Horizontal</enum>
                    </property>
+                   <property name="sizeType">
+                    <enum>QSizePolicy::Minimum</enum>
+                   </property>
                    <property name="sizeHint" stdset="0">
                     <size>
-                     <width>40</width>
+                     <width>10</width>
                      <height>20</height>
                     </size>
                    </property>
@@ -1385,7 +1388,7 @@
                    </property>
                    <property name="minimumSize">
                     <size>
-                     <width>100</width>
+                     <width>0</width>
                      <height>0</height>
                     </size>
                    </property>
@@ -1410,6 +1413,9 @@
                    <property name="text">
                     <string>Project:</string>
                    </property>
+                   <property name="alignment">
+                    <set>Qt::AlignCenter</set>
+                   </property>
                    <property name="wordWrap">
                     <bool>false</bool>
                    </property>
@@ -1420,9 +1426,12 @@
                    <property name="orientation">
                     <enum>Qt::Horizontal</enum>
                    </property>
+                   <property name="sizeType">
+                    <enum>QSizePolicy::Minimum</enum>
+                   </property>
                    <property name="sizeHint" stdset="0">
                     <size>
-                     <width>40</width>
+                     <width>10</width>
                      <height>20</height>
                     </size>
                    </property>

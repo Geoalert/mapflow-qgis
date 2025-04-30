@@ -397,6 +397,7 @@ class Mapflow(QObject):
                                                                                 Qt.ElideRight, 
                                                                                 self.dlg.currentProjectLabel.width() - 50)
             self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(elided_name))
+            self.dlg.currentProjectLabel.adjustSize()
         self.get_project_sharing(self.current_project)
         self.setup_project_change_rights()
         self.settings.setValue("project_id", self.project_id)
@@ -3247,10 +3248,11 @@ class Mapflow(QObject):
         if not self.projects:
             self.dlg.projectsTable.clear()
             # Add a row with an error message to projects table
-            table_item = QTableWidgetItem("No project that meets specified criteria was found")
+            table_item = QTableWidgetItem(self.tr("No project that meets specified criteria was found"))
             self.dlg.projectsTable.setRowCount(1)
             self.dlg.projectsTable.setColumnCount(2)
             self.dlg.projectsTable.setItem(0, 1, table_item)
+            self.dlg.projectsTable.setHorizontalHeaderLabels(["ID", self.tr("Project")])
             return
         self.filter_projects(self.dlg.filterProjects.text())
         if self.project_id:

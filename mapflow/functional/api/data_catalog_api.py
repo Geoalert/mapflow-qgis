@@ -231,7 +231,7 @@ class DataCatalogApi(QObject):
         if response.error() == 204: # AuthenticationRequiredError (like 401)
             error_summary = self.tr("Authentication error. Please log in to your account")
         if response.error() == 299: # UnknownContentError
-            error_summary = self.tr("The image does not meet this imagery collection '{mosaic_name}' paremeters. \n"
+            error_summary = self.tr("The image does not meet this imagery collection '{mosaic_name}' parameters. \n"
                                     "Either modify your image or upload it to a different collection").format(mosaic_name=mosaic_name)
         if len(image_paths) == 1:
             message = self.tr("Could not upload '{image}' to imagery collection").format(image=image_paths[0])
