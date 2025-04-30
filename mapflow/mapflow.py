@@ -452,7 +452,7 @@ class Mapflow(QObject):
         elif mosaic:
             aoi_geometry = QgsGeometry().fromWkt(mosaic.footprint)
         else:
-            self.dlg.disable_processing_start(reason=self.tr('Choose mosaic or image to start processing'),
+            self.dlg.disable_processing_start(reason=self.tr('Choose imagery collection or image to start processing'),
                                               clear_area=True)
             aoi_geometry = None
             return
@@ -1815,7 +1815,7 @@ class Mapflow(QObject):
                                                               "and select image in the table."))
             elif isinstance(provider, MyImageryProvider) and\
                 not self.dlg.mosaicTable.selectionModel().hasSelection():
-                    self.dlg.disable_processing_start(reason=self.tr('Choose mosaic or image to start processing'))
+                    self.dlg.disable_processing_start(reason=self.tr('Choose imagery to start processing'))
             else:
                 if self.user_role.can_start_processing:
                     self.http.post(

@@ -17,7 +17,7 @@ class MosaicDialog(*uic.loadUiType(ui_path/'mosaic_dialog.ui')):
     def on_name_change(self):
         if not self.mosaicName.text():
             self.ok.setEnabled(False)
-            self.ok.setToolTip(self.tr("Mosaic name must not be empty!"))
+            self.ok.setToolTip(self.tr("Imagery collection name must not be empty!"))
         else:
             self.ok.setEnabled(True)
             self.ok.setToolTip("")
@@ -35,7 +35,7 @@ class CreateMosaicDialog(MosaicDialog):
 
     def mosaic(self):
         if not self.mosaicName:
-            raise AssertionError(self.tr("Mosaic name must not be empty!"))
+            raise AssertionError(self.tr("Imagery collection name must not be empty!"))
         tags_list = self.mosaicTags.text().split(", ") if self.mosaicTags.text() else None
         return MosaicUpdateSchema(name = self.mosaicName.text(),
                                   tags = tags_list if self.mosaicTags.text() else [])
@@ -47,8 +47,8 @@ class UpdateMosaicDialog(MosaicDialog):
 
     def setup(self, mosaic: MosaicReturnSchema):
         if not mosaic:
-            raise TypeError(self.tr("UpdateMosaicDialog requires a mosaic to update"))
-        self.setWindowTitle(self.tr("Edit mosaic {}").format(mosaic.name))
+            raise TypeError(self.tr("UpdateMosaicDialog requires a imagery collection to update"))
+        self.setWindowTitle(self.tr("Edit imagery collection {}").format(mosaic.name))
         self.mosaicName.setText(mosaic.name)
         if mosaic.tags:
             self.mosaicTags.setText(", ".join(mosaic.tags))
@@ -60,7 +60,7 @@ class UpdateMosaicDialog(MosaicDialog):
 
     def mosaic(self):
         if not self.mosaicName:
-            raise AssertionError(self.tr("Mosaic name must not be empty!"))
+            raise AssertionError(self.tr("Imagery collection name must not be empty!"))
         tags_list = self.mosaicTags.text().split(", ") if self.mosaicTags.text() else None
         return MosaicUpdateSchema(name = self.mosaicName.text(),
                                   tags = tags_list if self.mosaicTags.text() else [])

@@ -62,7 +62,7 @@ class UploadRasterLayersDialog(*uic.loadUiType(ui_path / 'raster_layers_dialog.u
         self.setWindowIcon(plugin_icon)
         
     def setup(self, layers):
-        self.setWindowTitle(self.tr("Choose raster layers to upload to mosaic"))
+        self.setWindowTitle(self.tr("Choose raster layers to upload to imagery collection"))
         for layer in layers:
             item_to_add = QListWidgetItem()
             item_to_add.setText(layer.name())
@@ -98,7 +98,7 @@ class ConfirmProcessingStart(*uic.loadUiType(ui_path / 'processing_start_confirm
         else:
             self.priceHeader.setVisible(False)
             self.priceLabel.setVisible(False)
-        elided_provider = self.dataSourceLabel.fontMetrics().elidedText(provider, Qt.ElideRight, self.modelLabel.width() + 200)
+        elided_provider = self.dataSourceLabel.fontMetrics().elidedText(provider, Qt.ElideRight, self.modelLabel.width() + 150)
         self.dataSourceLabel.setText(elided_provider)
         if not zoom:
             zoom = "No zoom selected"

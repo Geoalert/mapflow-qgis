@@ -115,7 +115,7 @@ class DataCatalogService(QObject):
                                                 response: QNetworkReply, 
                                                 image_paths: List, 
                                                 mosaic_name: str):
-        self.view.alert(self.tr("<center>Creation of mosaic '{mosaic_name}' failed"
+        self.view.alert(self.tr("<center>Creation of imagery collection '{mosaic_name}' failed"
                                 "<br>while trying to upload '{image}'").format(mosaic_name=mosaic_name,
                                                                            image=Path(image_paths[0]).name))
         self.dlg.mosaicTable.clearSelection()
@@ -194,13 +194,13 @@ class DataCatalogService(QObject):
             return
         mosaic_names = [mosaic.name for mosaic in mosaics]
         if len(mosaic_names) == 1:
-            message = self.tr("<center>Delete mosaic <b>'{name}'</b>?"
+            message = self.tr("<center>Delete imagery collection <b>'{name}'</b>?"
                              ).format(name=mosaic_names[0])
         elif len(mosaic_names) <= 3:
-            message = self.tr("<center>Delete following mosaics:<br><b>'{names}'</b>?"
+            message = self.tr("<center>Delete following imagery collections:<br><b>'{names}'</b>?"
                              ).format(names="', <br>'".join(mosaic_names))
         else:
-            message = self.tr("<center>Delete <b>{len}</b> mosaics?"
+            message = self.tr("<center>Delete <b>{len}</b> imagery collections?"
                              ).format(len=len(mosaic_names))
         box = QMessageBox(QMessageBox.Question, "Mapflow", message, parent=QApplication.activeWindow())
         box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
@@ -231,7 +231,7 @@ class DataCatalogService(QObject):
             layer = layer_utils.generate_raster_layer(url, name)
             self.api.request_mosaic_extent(url_json, layer)
         except AttributeError:
-            message = 'Please, select mosaic'
+            message = 'Please, select imagery collection'
             info_box = QMessageBox(QMessageBox.Information, "Mapflow", message, parent=QApplication.activeWindow())
             return info_box.exec()
 
@@ -240,9 +240,9 @@ class DataCatalogService(QObject):
     def upload_images_to_mosaic(self):
         mosaic = self.selected_mosaic()
         if not mosaic:
-            self.view.alert(self.tr("Please, select existing mosaic"))
+            self.view.alert(self.tr("Please, select existing imagery collection"))
             return
-        image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), self.tr("Choose image to upload"), 
+        image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), self.tr("Choose images to upload"), 
                                                    filter='TIF files (*.tif *.tiff)')[0]
         if image_paths:
             self.upload_images(response=None, 
@@ -394,13 +394,13 @@ class DataCatalogService(QObject):
             return
         image_names = [image.filename for image in images]
         if len(image_names) == 1:
-            message = self.tr("<center>Delete image <b>'{name}'</b> from '{mosaic}' mosaic?"
+            message = self.tr("<center>Delete image <b>'{name}'</b> from '{mosaic}' imagery collection?"
                              ).format(name=image_names[0], mosaic=mosaic.name)
         elif len(image_names) <= 3:
-            message = self.tr("<center>Delete following images from '{mosaic}' mosaic:<br><b>'{names}'</b>?"
+            message = self.tr("<center>Delete following images from '{mosaic}' imagery collection:<br><b>'{names}'</b>?"
                              ).format(names="', <br>'".join(image_names), mosaic=mosaic.name)
         else:
-            message = self.tr("<center>Delete <b>{len}</b> images from '{mosaic}' mosaic?"
+            message = self.tr("<center>Delete <b>{len}</b> images from '{mosaic}' imagery collection?"
                              ).format(len=len(image_names), mosaic=mosaic.name)
         box = QMessageBox(QMessageBox.Question, "Mapflow", message, parent=QApplication.activeWindow())
         box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)

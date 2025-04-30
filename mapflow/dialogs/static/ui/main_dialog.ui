@@ -148,10 +148,10 @@
            <property name="maxVisibleItems">
             <number>30</number>
            </property>
-           <property name="allowEmptyLayer" stdset="0">
+           <property name="allowEmptyLayer">
             <bool>false</bool>
            </property>
-           <property name="showCrs" stdset="0">
+           <property name="showCrs">
             <bool>true</bool>
            </property>
           </widget>
@@ -1080,6 +1080,7 @@
                     <widget class="QLabel" name="projectsPageLabel">
                      <property name="font">
                       <font>
+                       <weight>50</weight>
                        <bold>false</bold>
                       </font>
                      </property>
@@ -1402,6 +1403,7 @@
                    </property>
                    <property name="font">
                     <font>
+                     <weight>50</weight>
                      <bold>false</bold>
                     </font>
                    </property>
@@ -1791,13 +1793,13 @@
                 <property name="checked">
                  <bool>false</bool>
                 </property>
-                <property name="collapsed" stdset="0">
+                <property name="collapsed">
                  <bool>true</bool>
                 </property>
-                <property name="saveCollapsedState" stdset="0">
+                <property name="saveCollapsedState">
                  <bool>true</bool>
                 </property>
-                <property name="saveCheckedState" stdset="0">
+                <property name="saveCheckedState">
                  <bool>false</bool>
                 </property>
                 <layout class="QGridLayout" name="layoutMetadataFilters" columnstretch="0,0,0">
@@ -1994,7 +1996,7 @@
                     </size>
                    </property>
                    <property name="text">
-                    <string>Add mosaic</string>
+                    <string>Add collection</string>
                    </property>
                   </widget>
                  </item>
@@ -2007,7 +2009,7 @@
                     </size>
                    </property>
                    <property name="text">
-                    <string>Delete mosaic</string>
+                    <string>Delete collection</string>
                    </property>
                   </widget>
                  </item>
@@ -2227,7 +2229,7 @@
                     </size>
                    </property>
                    <property name="text">
-                    <string>Mosaic data</string>
+                    <string>Imagery data</string>
                    </property>
                    <property name="alignment">
                     <set>Qt::AlignCenter</set>
@@ -3003,7 +3005,7 @@
                  <rect>
                   <x>0</x>
                   <y>0</y>
-                  <width>213</width>
+                  <width>207</width>
                   <height>240</height>
                  </rect>
                 </property>

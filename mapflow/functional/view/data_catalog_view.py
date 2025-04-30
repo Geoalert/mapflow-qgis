@@ -86,7 +86,7 @@ class DataCatalogView(QObject):
         
         # Other text
         self.dlg.myImageryDocsButton.setToolTip(self.tr("More about My imagery"))
-        self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter mosaics by name or id"))
+        self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter imagery collections by name or id"))
 
     @property
     def mosaic_table_visible(self):
@@ -116,7 +116,7 @@ class DataCatalogView(QObject):
             date_item = QTableWidgetItem()
             date_item.setData(Qt.DisplayRole, mosaic.created_at.timestamp())
             self.dlg.mosaicTable.setItem(row, 3, date_item)
-            self.dlg.mosaicTable.setHorizontalHeaderLabels(["ID", self.tr("Mosaics"), self.tr("Size"), self.tr("Created")])
+            self.dlg.mosaicTable.setHorizontalHeaderLabels(["ID", self.tr("Imagery collections"), self.tr("Size"), self.tr("Created")])
         self.dlg.mosaicTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.dlg.mosaicTable.sortItems(self.sort_mosaics_column, Qt.AscendingOrder)
         # Set show-images tooltip for mosaics' cells
@@ -333,7 +333,7 @@ class DataCatalogView(QObject):
         # Show mosaic info
         bold_font = self.dlg.catalogSelectionLabel.font()
         bold_font.setBold(True)
-        self.dlg.catalogSelectionLabel.setText(self.tr("Selected mosaic: <b>{mosaic_name}").format(
+        self.dlg.catalogSelectionLabel.setText(self.tr("Selected imagery collection: <b>{mosaic_name}").format(
             mosaic_name=QFontMetrics(bold_font).elidedText(mosaic_name,
                                                            Qt.ElideRight,
                                                            self.dlg.catalogSelectionLabel.width() - 10)))
@@ -347,7 +347,7 @@ class DataCatalogView(QObject):
         self.contain_mosaic_cell_buttons()
         self.dlg.catalogInfo.clear()
         self.dlg.imagePreview.clear()
-        self.dlg.catalogSelectionLabel.setText(self.tr("No mosaic selected"))
+        self.dlg.catalogSelectionLabel.setText(self.tr("No imagery collection selected"))
         # Disable buttons
         self.dlg.deleteCatalogButton.setEnabled(False)
         self.dlg.seeImagesButton.setEnabled(False)
@@ -438,8 +438,8 @@ class DataCatalogView(QObject):
         # En(dis)able buttons and change labels
         self.dlg.seeMosaicsButton.setEnabled(False)
         self.dlg.seeImagesButton.setEnabled(True)
-        self.dlg.deleteCatalogButton.setText(self.tr("Delete mosaic"))
-        self.dlg.addCatalogButton.setText(self.tr("Add mosaic"))
+        self.dlg.deleteCatalogButton.setText(self.tr("Delete collection"))
+        self.dlg.addCatalogButton.setText(self.tr("Add collection"))
         self.dlg.addCatalogButton.setMenu(None)
         # Clear image table
         self.dlg.imageTable.clearSelection()
@@ -453,7 +453,7 @@ class DataCatalogView(QObject):
         self.dlg.sortCatalogCombo.setCurrentIndex(self.sort_mosaics_index)
         # Set filter and its placeholder text
         self.filter_catalog_table(self.dlg.filterCatalog.text())
-        self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter mosaics by name or id"))
+        self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter imagery collections by name or id"))
 
     def create_mosaic_cell_buttons_layout(self):
         self.mosaic_cell_layout.setContentsMargins(0,0,3,0)
