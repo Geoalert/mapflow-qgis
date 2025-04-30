@@ -101,13 +101,13 @@ class ConfirmProcessingStart(*uic.loadUiType(ui_path / 'processing_start_confirm
         elided_provider = self.dataSourceLabel.fontMetrics().elidedText(provider, Qt.ElideRight, self.modelLabel.width() + 150)
         self.dataSourceLabel.setText(elided_provider)
         if not zoom:
-            zoom = "No zoom selected"
+            zoom = self.tr("No zoom selected")
         self.zoomLabel.setText(zoom)
         self.areaLabel.setText(area)
         elided_model = self.modelLabel.fontMetrics().elidedText(model, Qt.ElideRight, self.modelLabel.width() + 100)
         self.modelLabel.setText(elided_model)
         if len(blocks) == 0:
-            blocks = ["No options selected"]
+            blocks = [self.tr("No options selected")]
         else:
             blocks = [block.text() for block in blocks if block.isChecked()]
         self.modelOptionsLabel.setText(', \n'.join(blocks))

@@ -122,6 +122,16 @@
         <source>Confirm processing start</source>
         <translation>Подтвердите запуск обработки</translation>
     </message>
+    <message>
+        <location filename="../dialogs/dialogs.py" line="104"/>
+        <source>No zoom selected</source>
+        <translation>Не выбран</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/dialogs.py" line="110"/>
+        <source>No options selected</source>
+        <translation>Не выбраны</translation>
+    </message>
 </context>
 <context>
     <name>CreateMosaicDialog</name>
@@ -3307,6 +3317,69 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
         <location filename="../dialogs/static/ui/processing_start_confirmation.ui" line="407"/>
         <source>Don&apos;t show this message again</source>
         <translation>Не показывать снова</translation>
+    </message>
+</context>
+<context>
+    <name>ProjectView</name>
+    <message>
+        <location filename="../functional/view/project_view.py" line="23"/>
+        <source>See projects</source>
+        <translation>Открыть проекты</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/project_view.py" line="25"/>
+        <source>See processings</source>
+        <translation>Открыть обработки</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/project_view.py" line="27"/>
+        <source>Filter projects by name</source>
+        <translation>Отфильтровать проекты по имени</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/project_view.py" line="28"/>
+        <source>Create project</source>
+        <translation>Создать проект</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/project_view.py" line="30"/>
+        <source>A-Z</source>
+        <translation>А-Я</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/project_view.py" line="30"/>
+        <source>Z-A</source>
+        <translation>Я-А</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/project_view.py" line="30"/>
+        <source>Newest first</source>
+        <translation>Сначала новые</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/project_view.py" line="30"/>
+        <source>Oldest first</source>
+        <translation>Сначала старые</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/project_view.py" line="30"/>
+        <source>Updated recently</source>
+        <translation>Обновлены недавно</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/project_view.py" line="30"/>
+        <source>Updated long ago</source>
+        <translation>Обновлены давно</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/project_view.py" line="111"/>
+        <source>Project</source>
+        <translation>Проекты</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/project_view.py" line="117"/>
+        <source>Processing</source>
+        <translation>Обработки</translation>
     </message>
 </context>
 <context>

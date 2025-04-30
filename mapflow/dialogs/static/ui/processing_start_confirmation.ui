@@ -115,6 +115,9 @@
        <property name="text">
         <string/>
        </property>
+       <property name="alignment">
+        <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+       </property>
       </widget>
      </item>
      <item row="2" column="1">
@@ -162,6 +165,9 @@
        <property name="text">
         <string/>
        </property>
+       <property name="alignment">
+        <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+       </property>
       </widget>
      </item>
      <item row="6" column="2">
@@ -192,6 +198,9 @@
        </property>
        <property name="text">
         <string/>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
        </property>
       </widget>
      </item>
@@ -272,6 +281,9 @@
        <property name="text">
         <string/>
        </property>
+       <property name="alignment">
+        <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+       </property>
       </widget>
      </item>
      <item row="3" column="2">
@@ -302,6 +314,9 @@
        </property>
        <property name="text">
         <string/>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
        </property>
       </widget>
      </item>
@@ -350,6 +365,9 @@
        <property name="text">
         <string/>
        </property>
+       <property name="alignment">
+        <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+       </property>
       </widget>
      </item>
      <item row="1" column="2">
@@ -380,6 +398,9 @@
        </property>
        <property name="text">
         <string/>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
        </property>
       </widget>
      </item>
