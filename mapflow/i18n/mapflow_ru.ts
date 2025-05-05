@@ -2752,36 +2752,36 @@ OSM layer will be added instead.</source>
     </message>
     <message>
         <location filename="../mapflow.py" line="3324"/>
-        <source>&lt;b&gt;Name&lt;/b&gt;: {name}&lt;br&gt;&lt;b&gt;Status&lt;/b&gt;&lt;/br&gt;: {status}&lt;br&gt;&lt;b&gt;Model&lt;/b&gt;&lt;/br&gt;: {model}</source>
-        <translation>&lt;b&gt;Название&lt;/b&gt;: {name}&lt;br&gt;&lt;b&gt;Статус&lt;/b&gt;&lt;/br&gt;: {status}&lt;br&gt;&lt;b&gt;Модель&lt;/b&gt;&lt;/br&gt;: {model}</translation>
+        <source>&lt;b&gt;Name&lt;/b&gt;: {name}&lt;br&gt;&lt;b&gt;ID&lt;/b&gt;&lt;/br&gt;: {pid}&lt;br&gt;&lt;b&gt;Status&lt;/b&gt;&lt;/br&gt;: {status}&lt;br&gt;&lt;b&gt;Model&lt;/b&gt;&lt;/br&gt;: {model}</source>
+        <translation>&lt;b&gt;Название&lt;/b&gt;: {name}&lt;br&gt;&lt;b&gt;ID&lt;/b&gt;&lt;/br&gt;: {pid}&lt;br&gt;&lt;b&gt;Статус&lt;/b&gt;&lt;/br&gt;: {status}&lt;br&gt;&lt;b&gt;Модель&lt;/b&gt;&lt;/br&gt;: {model}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3330"/>
+        <location filename="../mapflow.py" line="3332"/>
         <source>&lt;br&gt;&lt;b&gt;Description&lt;/b&gt;&lt;/br&gt;: {description}</source>
         <translation>&lt;br&gt;&lt;b&gt;Описание&lt;/b&gt;&lt;/br&gt;: {description}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3333"/>
+        <location filename="../mapflow.py" line="3335"/>
         <source>&lt;br&gt;&lt;b&gt;Model options:&lt;/b&gt;&lt;/br&gt; {options}</source>
         <translation>&lt;br&gt;&lt;b&gt;Опции:&lt;/b&gt;&lt;/br&gt; {options}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3338"/>
+        <location filename="../mapflow.py" line="3340"/>
         <source>&lt;br&gt;&lt;b&gt;Model options:&lt;/b&gt;&lt;/br&gt; No options selected</source>
         <translation>&lt;br&gt;&lt;b&gt;Опции:&lt;/b&gt;&lt;/br&gt; Не выбраны</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3341"/>
+        <location filename="../mapflow.py" line="3343"/>
         <source>&lt;br&gt;&lt;b&gt;Data provider&lt;/b&gt;&lt;/br&gt;: {provider}</source>
         <translation>&lt;br&gt;&lt;b&gt;Источник данных&lt;/b&gt;&lt;/br&gt;: {provider}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3345"/>
+        <location filename="../mapflow.py" line="3347"/>
         <source>&lt;br&gt;&lt;b&gt;Data source&lt;/b&gt;&lt;/br&gt;: uploaded file</source>
         <translation>&lt;br&gt;&lt;b&gt;Источник данных&lt;/b&gt;&lt;/br&gt;: загруженный файл</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3347"/>
+        <location filename="../mapflow.py" line="3349"/>
         <source>&lt;br&gt;&lt;b&gt;Data source link&lt;/b&gt;&lt;/br&gt; {url}</source>
         <translation>&lt;br&gt;&lt;b&gt;Ссылка на источник данных&lt;/b&gt;&lt;/br&gt; {url}</translation>
     </message>
@@ -2867,12 +2867,12 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
         <translation>. Ошибка {error}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3438"/>
+        <location filename="../mapflow.py" line="3440"/>
         <source>You can launch multiple image processing only if it has the same provider of mosaic type</source>
         <translation>Запуск по нескольким изображениям доступен только если у них один источник мозаичного типа</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3459"/>
+        <location filename="../mapflow.py" line="3461"/>
         <source>Selected search results must have the same zoom level</source>
         <translation>Выбранные результаты поиска должны иметь один уровень масштабирования</translation>
     </message>
@@ -3284,12 +3284,12 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
         <translation>Площадь:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/processing_start_confirmation.ui" line="223"/>
+        <location filename="../dialogs/static/ui/processing_start_confirmation.ui" line="232"/>
         <source>Model options:</source>
         <translation>Опции:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/processing_start_confirmation.ui" line="207"/>
+        <location filename="../dialogs/static/ui/processing_start_confirmation.ui" line="216"/>
         <source>Zoom:</source>
         <translation>Масштабный уровень:</translation>
     </message>
@@ -3299,22 +3299,22 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
         <translation>Название:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/processing_start_confirmation.ui" line="129"/>
+        <location filename="../dialogs/static/ui/processing_start_confirmation.ui" line="132"/>
         <source>Data source:</source>
         <translation>Источник данных:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/processing_start_confirmation.ui" line="317"/>
+        <location filename="../dialogs/static/ui/processing_start_confirmation.ui" line="332"/>
         <source>Model:</source>
         <translation>Модель:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/processing_start_confirmation.ui" line="239"/>
+        <location filename="../dialogs/static/ui/processing_start_confirmation.ui" line="248"/>
         <source>Price:</source>
         <translation>Стоимость:</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/processing_start_confirmation.ui" line="407"/>
+        <location filename="../dialogs/static/ui/processing_start_confirmation.ui" line="428"/>
         <source>Don&apos;t show this message again</source>
         <translation>Не показывать снова</translation>
     </message>
@@ -3374,12 +3374,12 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
     <message>
         <location filename="../functional/view/project_view.py" line="111"/>
         <source>Project</source>
-        <translation>Проекты</translation>
+        <translation>Проект</translation>
     </message>
     <message>
         <location filename="../functional/view/project_view.py" line="117"/>
         <source>Processing</source>
-        <translation>Обработки</translation>
+        <translation>Обработка</translation>
     </message>
 </context>
 <context>
