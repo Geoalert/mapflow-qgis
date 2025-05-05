@@ -139,6 +139,8 @@ class Mapflow(QObject):
         QCoreApplication.translate('QPlatformTheme', 'Cancel')
         QCoreApplication.translate('QPlatformTheme', '&Yes')
         QCoreApplication.translate('QPlatformTheme', '&No')
+        # Get QGIS UI theme
+        qgis_theme = self.settings.value('UI/UITheme')
         # Create a namespace for the plugin settings
         self.settings.beginGroup(self.plugin_name.lower())
         if self.settings.value('processings') is None:
@@ -164,7 +166,6 @@ class Mapflow(QObject):
         self.dlg_login = self.set_up_login_dialog()
         self.review_dialog = ReviewDialog(self.dlg)
         self.dlg_provider = ProviderDialog(self.dlg)
-
         self.dlg_provider.accepted.connect(self.edit_provider_callback)
         # Display the plugin's version
         # todo: Move to Maindialog
@@ -344,6 +345,9 @@ class Mapflow(QObject):
                     self.settings.setValue('zoom', None)
                 else:
                     self.dlg.zoomCombo.setCurrentIndex(zoom_index)
+        
+        # Check QGIS UI theme
+        self.dlg.check_ui_theme(qgis_theme)
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
