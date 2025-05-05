@@ -1,3 +1,18 @@
+## 3.2.0
+    - Projects:
+        - Projects and their controls are moved to the first tab and shown as a table
+        - Processing table moved 'inside' of Project table
+    - My imagery:
+	    - Simultaneous mosaic creation and file upload
+    	- Mosaic images preview from mosaics table
+        - Refreshing for My imagery tables
+    	- Mosaics renamed to imagery collections
+    - Imagery search:
+	    - New preview column 
+	    - Data provider filter (for available search providers)
+    - Option in AOI-menu to create AOI layer from mosaic/image extent (instead of checkbox)
+    - Confirmation of processing start (can be turned off/on)
+    - Awaiting status added
 ## 3.1.2
     - New vector layer styles for trees and crowns
     - Fix Imagery search cloud cover

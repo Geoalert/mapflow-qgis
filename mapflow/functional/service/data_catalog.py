@@ -6,7 +6,7 @@ import tempfile
 import os.path
 from osgeo import gdal
 
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtCore import QObject, pyqtSignal, Qt
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
 from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog, QAbstractItemView, QWidget
@@ -57,17 +57,67 @@ class DataCatalogService(QObject):
         self.image_max_size_pixels = Config.MAX_FILE_SIZE_PIXELS
         self.image_max_size_bytes = Config.MAX_FILE_SIZE_BYTES
         self.free_storage = None
+        self.preview_idx = 0
 
 
     # Mosaics CRUD
     def create_mosaic(self):
         dialog = CreateMosaicDialog(self.dlg)
-        dialog.accepted.connect(lambda: self.api.create_mosaic(dialog.mosaic(), callback=self.create_mosaic_callback))
+        dialog.accepted.connect(lambda: self.create_mosaic_from_options(dialog))
         dialog.setup()
         dialog.deleteLater()
-
+    
+    def create_mosaic_from_options(self, mosaic_dialog: CreateMosaicDialog):
+        mosaic = mosaic_dialog.mosaic()
+        if mosaic_dialog.createMosaicCombo.currentIndex() == 0: # empty mosaic
+            self.api.create_mosaic(mosaic,callback=self.create_mosaic_callback)
+        else:
+            if mosaic_dialog.createMosaicCombo.currentIndex() == 1: # mosaic from files
+                image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), self.tr("Choose image to upload"), 
+                                                           filter='TIF files (*.tif *.tiff)')[0]
+            else: # mosaic from layers
+                dialog = UploadRasterLayersDialog(self.dlg)
+                # Get layers paths on accepting layers dialog
+                image_paths = []
+                def get_paths():
+                    for item in dialog.listWidget.selectedItems():
+                        image_paths.append(item.data(Qt.UserRole))
+                dialog.accepted.connect(get_paths)
+                # Show all acceptable raster layers in dialog
+                layers = []
+                for layer in self.project.mapLayers().values():
+                    if Path(layer.source()).suffix.lower() in ['.tif', '.tiff']:
+                        layers.append(layer)
+                dialog.setup(layers)
+                dialog.deleteLater()
+            if image_paths:
+                self.api.create_mosaic_from_images(mosaic, 
+                                                   callback=self.create_mosaic_from_images_callback,
+                                                   callback_kwargs={'image_paths' : image_paths,
+                                                                    'mosaic_name' : mosaic.name},
+                                                   error_handler=self.create_mosaic_from_images_error_handler,
+                                                   error_handler_kwargs={'image_paths' : image_paths,
+                                                                         'mosaic_name' : mosaic.name},
+                                                   image_paths=image_paths)            
+    
     def create_mosaic_callback(self, response: QNetworkReply):
         self.get_mosaics()
+        self.view.enable_mosaic_images_preview()
+        self.dlg.mosaicTable.clearSelection()
+    
+    def create_mosaic_from_images_callback(self, response: QNetworkReply, image_paths: List, mosaic_name: str):
+        mosaic_id = json.loads(response.readAll().data())['mosaic_id']
+        self.upload_images(response=None, 
+                           mosaic_id=mosaic_id, mosaic_name=mosaic_name,
+                           image_paths=image_paths[1:], uploaded=[image_paths[0]], failed=[])
+    
+    def create_mosaic_from_images_error_handler(self, 
+                                                response: QNetworkReply, 
+                                                image_paths: List, 
+                                                mosaic_name: str):
+        self.view.alert(self.tr("<center>Creation of imagery collection '{mosaic_name}' failed"
+                                "<br>while trying to upload '{image}'").format(mosaic_name=mosaic_name,
+                                                                           image=Path(image_paths[0]).name))
         self.dlg.mosaicTable.clearSelection()
 
     def get_mosaics(self):
@@ -81,6 +131,7 @@ class DataCatalogService(QObject):
             self.mosaics[mosaic.id] = mosaic
         self.view.display_mosaics(list(self.mosaics.values()))
         self.mosaicsUpdated.emit()
+        self.dlg.mosaicTable.clearSelection()
 
     def get_mosaic(self, mosaic_id: UUID):
         self.api.get_mosaic(mosaic_id=mosaic_id,
@@ -121,6 +172,7 @@ class DataCatalogService(QObject):
             if failed:
                 self.api.delete_mosaic_error_handler(mosaics=failed)
             self.get_mosaics()
+            self.view.enable_mosaic_images_preview()
             self.dlg.mosaicTable.clearSelection()
         else:
             mosaic_to_delete = mosaics[0]
@@ -142,13 +194,13 @@ class DataCatalogService(QObject):
             return
         mosaic_names = [mosaic.name for mosaic in mosaics]
         if len(mosaic_names) == 1:
-            message = self.tr("<center>Delete mosaic <b>'{name}'</b>?"
+            message = self.tr("<center>Delete imagery collection <b>'{name}'</b>?"
                              ).format(name=mosaic_names[0])
         elif len(mosaic_names) <= 3:
-            message = self.tr("<center>Delete following mosaics:<br><b>'{names}'</b>?"
+            message = self.tr("<center>Delete following imagery collections:<br><b>'{names}'</b>?"
                              ).format(names="', <br>'".join(mosaic_names))
         else:
-            message = self.tr("<center>Delete <b>{len}</b> mosaics?"
+            message = self.tr("<center>Delete <b>{len}</b> imagery collections?"
                              ).format(len=len(mosaic_names))
         box = QMessageBox(QMessageBox.Question, "Mapflow", message, parent=QApplication.activeWindow())
         box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
@@ -179,7 +231,7 @@ class DataCatalogService(QObject):
             layer = layer_utils.generate_raster_layer(url, name)
             self.api.request_mosaic_extent(url_json, layer)
         except AttributeError:
-            message = 'Please, select mosaic'
+            message = 'Please, select imagery collection'
             info_box = QMessageBox(QMessageBox.Information, "Mapflow", message, parent=QApplication.activeWindow())
             return info_box.exec()
 
@@ -188,9 +240,9 @@ class DataCatalogService(QObject):
     def upload_images_to_mosaic(self):
         mosaic = self.selected_mosaic()
         if not mosaic:
-            self.view.alert(self.tr("Please, select existing mosaic"))
+            self.view.alert(self.tr("Please, select existing imagery collection"))
             return
-        image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), self.tr("Choose image to upload"), 
+        image_paths = QFileDialog.getOpenFileNames(QApplication.activeWindow(), self.tr("Choose images to upload"), 
                                                    filter='TIF files (*.tif *.tiff)')[0]
         if image_paths:
             self.upload_images(response=None, 
@@ -219,7 +271,7 @@ class DataCatalogService(QObject):
                       mosaic_name: str,
                       image_paths: Sequence[Union[Path, str]],
                       uploaded: Sequence[Union[Path, str]],
-                      failed: Sequence[Union[Path, str]]):        
+                      failed: Sequence[Union[Path, str]]):
         if len(image_paths) == 0:
             if failed:
                 self.api.upload_image_error_handler(response=response, mosaic_name=mosaic_name, image_paths=failed)
@@ -284,6 +336,27 @@ class DataCatalogService(QObject):
         self.view.display_images(self.images)
         if self.view.mosaic_table_visible:
             self.view.display_mosaic_info(self.selected_mosaic(), self.images)
+            self.preview_idx = 0
+            if len(self.images) > 0:
+                self.get_image_preview_s(self.images[self.preview_idx])
+            else:
+                self.view.enable_mosaic_images_preview(len(self.images), self.preview_idx)
+    
+    def get_next_preview(self):
+        try:
+            self.preview_idx += 1
+            self.get_image_preview_s(self.images[self.preview_idx])
+            self.view.display_image_number(self.preview_idx, len(self.images))
+        except IndexError:
+            pass
+
+    def get_previous_preview(self):
+        try:
+            self.preview_idx += -1
+            self.get_image_preview_s(self.images[self.preview_idx])
+            self.view.display_image_number(self.preview_idx, len(self.images))
+        except IndexError:
+            pass
 
     def get_image(self, image_id: UUID, callback: Callable):
         self.api.get_image(image_id=image_id, callback=callback)
@@ -321,13 +394,13 @@ class DataCatalogService(QObject):
             return
         image_names = [image.filename for image in images]
         if len(image_names) == 1:
-            message = self.tr("<center>Delete image <b>'{name}'</b> from '{mosaic}' mosaic?"
+            message = self.tr("<center>Delete image <b>'{name}'</b> from '{mosaic}' imagery collection?"
                              ).format(name=image_names[0], mosaic=mosaic.name)
         elif len(image_names) <= 3:
-            message = self.tr("<center>Delete following images from '{mosaic}' mosaic:<br><b>'{names}'</b>?"
+            message = self.tr("<center>Delete following images from '{mosaic}' imagery collection:<br><b>'{names}'</b>?"
                              ).format(names="', <br>'".join(image_names), mosaic=mosaic.name)
         else:
-            message = self.tr("<center>Delete <b>{len}</b> images from '{mosaic}' mosaic?"
+            message = self.tr("<center>Delete <b>{len}</b> images from '{mosaic}' imagery collection?"
                              ).format(len=len(image_names), mosaic=mosaic.name)
         box = QMessageBox(QMessageBox.Question, "Mapflow", message, parent=QApplication.activeWindow())
         box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
@@ -361,6 +434,8 @@ class DataCatalogService(QObject):
     def get_image_preview_s_callback(self, response: QNetworkReply):
         image = QImage.fromData(response.readAll().data())
         self.view.show_preview_s(image)
+        if self.view.mosaic_table_visible:
+            self.view.enable_mosaic_images_preview(len(self.images), self.preview_idx)
 
     def get_image_preview_l(self):
         try:
@@ -423,6 +498,7 @@ class DataCatalogService(QObject):
         mosaic = self.selected_mosaic()
         self.view.show_mosaics_table(mosaic.name)
         self.view.display_mosaic_info(mosaic, self.images)
+        self.get_mosaic_images(mosaic.id)
 
     def check_image_selection(self):
         image = self.selected_image()
@@ -437,6 +513,15 @@ class DataCatalogService(QObject):
             self.on_mosaic_selection(mosaic)
         else:
             self.view.clear_mosaic_info()
+    
+    def refresh_catalog(self):
+        if self.view.mosaic_table_visible:
+            self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.NoSelection) 
+            self.get_mosaics()
+            self.dlg.mosaicTable.clearSelection()
+            self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.SingleSelection)
+        else:
+            self.get_mosaic_images(self.selected_mosaic().id)
 
     # Status
     def get_user_limit(self):
@@ -453,7 +538,6 @@ class DataCatalogService(QObject):
         if data_limit.memoryLimit:
             self.free_storage = free
         self.view.show_storage(taken, free)
-
 
     # Selection
     def selected_mosaics(self, limit=None) -> List[MosaicReturnSchema]:
@@ -495,3 +579,7 @@ class DataCatalogService(QObject):
             # Set My imagery data source
             if my_imagery_index:
                 self.dlg.sourceCombo.setCurrentIndex(my_imagery_index)
+    
+    # Other
+    def open_imagery_docs(self):
+        helpers.open_imagery_docs()

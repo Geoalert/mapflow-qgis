@@ -32,6 +32,7 @@ class ImageCatalogRequestSchema(Serializable):
     offset: Optional[int] = 0
     hideUnavailable: Optional[bool] = False
     productTypes: Optional[List[ProductType]] = None
+    dataProviders: Optional[List[str]] = None
 
 @dataclass
 class ImageSchema(Serializable, SkipDataClass):
@@ -55,16 +56,16 @@ class ImageSchema(Serializable, SkipDataClass):
             self.acquisitionDate = datetime.fromisoformat(self.acquisitionDate.replace("Z", "+00:00"))
         elif not isinstance(self.acquisitionDate, datetime):
             raise TypeError("Acquisition date must be either datetime or ISO-formatted str")
-        # To percent
         self.cloudCover = self.cloudCover
         self.source = self.sensor
         self.previewType = PreviewType(self.previewType)
 
     def as_geojson(self):
         properties = {k: v for k, v in self.as_dict().items() if k != "footprint"}
-        return {"type": "Feature",
+        res = {"type": "Feature",
                 "geometry": self.footprint,
                 "properties": properties}
+        return res
 
 @dataclass
 class ImageCatalogResponseSchema(Serializable):

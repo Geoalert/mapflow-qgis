@@ -5,7 +5,7 @@ from ...dialogs.main_dialog import MainDialog
 from PyQt5.QtCore import QObject, Qt
 from PyQt5.QtWidgets import (QWidget, QTableWidget, QTableWidgetItem, QHeaderView, QHBoxLayout, QAbstractItemView, QToolButton,
                              QMessageBox, QApplication, QMenu, QAction)
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QFontMetrics
 
 from ...schema.data_catalog import MosaicReturnSchema, ImageReturnSchema
 from ...dialogs import icons
@@ -55,7 +55,7 @@ class DataCatalogView(QObject):
         
         # Transfer labels' long text to a new line
         self.dlg.catalogSelectionLabel.setWordWrap(True)
-        self.dlg.imagePreview.setWordWrap(True)
+        self.dlg.catalogInfo.setWordWrap(True)
 
         # Setup layouts
         self.mosaic_cell_layout = QHBoxLayout()
@@ -64,15 +64,29 @@ class DataCatalogView(QObject):
         self.create_image_cell_buttons_layout()
 
         # Add sorting options for catalog tables
-        self.dlg.sortCombo.addItems([self.tr("A-Z"), self.tr("Z-A"),
+        self.dlg.sortCatalogCombo.addItems([self.tr("A-Z"), self.tr("Z-A"),
                                      self.tr("Biggest first"), self.tr("Smallest first"),
                                      self.tr("Newest first"), self.tr("Oldest first")])
         # Default sorting column is 1 (name)
         self.sort_mosaics_column = 1
         self.sort_images_column = 1
-        # Default sortCombo index is 0 (A-Z)
+        # Default sortCatalogCombo index is 0 (A-Z)
         self.sort_mosaics_index = 0
         self.sort_images_index = 0
+
+        # Mosaic images instant preview
+        self.dlg.nextImageButton.setVisible(False)
+        self.dlg.previousImageButton.setVisible(False)
+        self.dlg.nextImageButton.setIcon(icons.arrow_right_icon)
+        self.dlg.previousImageButton.setIcon(icons.arrow_left_icon)
+        
+        # Other icons
+        self.dlg.refreshCatalogButton.setIcon(icons.refresh_icon)
+        self.dlg.myImageryDocsButton.setIcon(icons.info_icon)
+        
+        # Other text
+        self.dlg.myImageryDocsButton.setToolTip(self.tr("More about My imagery"))
+        self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter imagery collections by name or id"))
 
     @property
     def mosaic_table_visible(self):
@@ -102,17 +116,19 @@ class DataCatalogView(QObject):
             date_item = QTableWidgetItem()
             date_item.setData(Qt.DisplayRole, mosaic.created_at.timestamp())
             self.dlg.mosaicTable.setItem(row, 3, date_item)
-            self.dlg.mosaicTable.setHorizontalHeaderLabels(["ID", self.tr("Mosaics"), self.tr("Size"), self.tr("Created")])
+            self.dlg.mosaicTable.setHorizontalHeaderLabels(["ID", self.tr("Imagery collections"), self.tr("Size"), self.tr("Created")])
         self.dlg.mosaicTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.dlg.mosaicTable.sortItems(self.sort_mosaics_column, Qt.AscendingOrder)
         # Set show-images tooltip for mosaics' cells
         for row in range(self.dlg.mosaicTable.rowCount()):
             item = self.dlg.mosaicTable.item(row, 1)
             item.setToolTip(self.tr("Double-click to show images"))
+        self.sort_catalog()
+        self.filter_catalog_table(self.dlg.filterCatalog.text())
 
     def sort_catalog(self):
-        index = self.dlg.sortCombo.currentIndex()
-        # Define sorting order based on sortCombo index
+        index = self.dlg.sortCatalogCombo.currentIndex()
+        # Define sorting order based on sortCatalogCombo index
         if index in (0, 3, 5): # A-Z, Smallest first, Oldest first
             order = Qt.AscendingOrder
         else: # Z-A, Biggest first, Newest first
@@ -143,29 +159,80 @@ class DataCatalogView(QObject):
         if mosaic.tags:
             elided_tags = []
             for tag in mosaic.tags:
-                elided_tag = self.dlg.imagePreview.fontMetrics().elidedText(tag, Qt.ElideRight, self.dlg.imagePreview.width() - 10)
+                elided_tag = self.dlg.catalogInfo.fontMetrics().elidedText(tag, Qt.ElideRight, self.dlg.catalogInfo.width() - 40)
                 elided_tags.append(elided_tag)
             tags_str = ', '.join(elided_tags)
         else:
             tags_str = ''
-        text = self.tr("Mosaic: {name} \n"
-                       "Number of images: {count} \n").format(name=self.dlg.imagePreview.fontMetrics().elidedText(
-                                                                  mosaic.name, 
-                                                                  Qt.ElideRight, 
-                                                                  self.dlg.imagePreview.width() - 10), 
-                                                             count=len(images))
+        text = self.tr("Number of images: {count} \n").format(count=len(images))
         if images:
-            text += self.tr("Size: {mosaic_size} \nPixel size: {pixel_size} m \n"
+            # Find spatial resolution as the arithmetic mean between resolutions along X and Y axes
+            pixel_size = sum(images[0].meta_data.pixel_size)/2
+            # If it is less then 1 cm, we assume that CRS is geographic
+            if pixel_size < 0.01:
+                pixel_size = round(pixel_size, 6) # decimal degrees
+            # Otherwise - CRS is most likely projected
+            else:
+                pixel_size = round(pixel_size, 2) # meters or other units
+            text += self.tr("Size: {mosaic_size} \n"
+                            "Pixel size: {pixel_size} \n"
+                            "CRS: {crs} \n"
+                            "Number of bands: {count} \n"
                            ).format(mosaic_size=get_readable_size(mosaic.sizeInBytes),
-                                    pixel_size=round(sum(list(images[0].meta_data.values())[6])/len(list(images[0].meta_data.values())[6]), 2))
+                                    pixel_size=pixel_size,
+                                    crs=images[0].meta_data.crs,
+                                    count=images[0].meta_data.count)
         text += self.tr("Created: {date} at {time} \nTags: {tags}"
                        ).format(date=mosaic.created_at.date(), time=mosaic.created_at.strftime('%H:%M'),
                                 tags=tags_str)
-        self.dlg.imagePreview.setText(text)
-        self.dlg.imagePreview.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        self.dlg.catalogInfo.setText(text)
+        self.display_image_number(0, len(images))
+    
+    def display_image_number(self, number: int, count: int):
+        if count > 0:
+            self.dlg.imageNumberLabel.setText(f"{number+1}/{count}")
+        else:
+            self.dlg.imageNumberLabel.setVisible(False)
+
+    def enable_mosaic_images_preview(self, images_count: int = 0, preview_idx: int = 0):
+        # Hide '<','>' and image number in images table
+        if not self.mosaic_table_visible:
+            self.dlg.previousImageButton.setVisible(False)
+            self.dlg.nextImageButton.setVisible(False)
+            self.dlg.imageNumberLabel.setVisible(False)
+            return
+        # Hide '<' and '>' for empty mosaics
+        if images_count == 0:
+            self.dlg.previousImageButton.setVisible(False)
+            self.dlg.nextImageButton.setVisible(False)
+            self.dlg.imageNumberLabel.setVisible(False)
+            self.dlg.imagePreview.clear()
+            return
+        # Show '<','>' and image number
+        self.dlg.previousImageButton.setVisible(True)
+        self.dlg.nextImageButton.setVisible(True)
+        self.dlg.imageNumberLabel.setVisible(True)
+        # Disable '>' if it's the last image
+        if preview_idx + 1 >= images_count:
+            self.dlg.nextImageButton.setEnabled(False)
+        else:
+            self.dlg.nextImageButton.setEnabled(True)
+        # Disable '<' if it's the first image
+        if preview_idx <= 0:
+            self.dlg.previousImageButton.setEnabled(False)
+        else:
+            self.dlg.previousImageButton.setEnabled(True)
 
     def full_image_info(self, image: ImageReturnSchema):
         try:
+            # Find spatial resolution as the arithmetic mean between resolutions along X and Y axes
+            pixel_size = sum(image.meta_data.pixel_size)/2
+            # If it is less then 1 cm, we assume that CRS is geographic
+            if pixel_size < 0.01:
+                pixel_size = round(pixel_size, 6) # decimal degrees
+            # Otherwise - CRS is most likely projected
+            else:
+                pixel_size = round(pixel_size, 2) # meters or other units
             message = self.tr('<b>Name</b>: {filename}\
                               <br><b>Uploaded</b></br>: {date} at {time}\
                               <br><b>Size</b></br>: {file_size}\
@@ -173,16 +240,16 @@ class DataCatalogView(QObject):
                               <br><b>Number of bands</br></b>: {bands}\
                               <br><b>Width</br></b>: {width} pixels\
                               <br><b>Height</br></b>: {height} pixels\
-                              <br><b>Pixel size</br></b>: {pixel_size} m'\
+                              <br><b>Pixel size</br></b>: {pixel_size}'\
                              ).format(filename=image.filename, 
                                      date=image.uploaded_at.date(),
                                      time=image.uploaded_at.strftime('%H:%M'),
                                      file_size=get_readable_size(image.file_size), 
-                                     crs=list(image.meta_data.values())[0],
-                                     bands=list(image.meta_data.values())[1],
-                                     width=list(image.meta_data.values())[2],
-                                     height=list(image.meta_data.values())[4],
-                                     pixel_size=round(sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6]), 2))
+                                     crs=image.meta_data.crs,
+                                     bands=image.meta_data.count,
+                                     width=image.meta_data.width,
+                                     height=image.meta_data.height,
+                                     pixel_size=pixel_size)
             info_box = QMessageBox(QMessageBox.Information, "Mapflow", message, parent=QApplication.activeWindow())
             return info_box.exec()
         except IndexError:
@@ -190,6 +257,7 @@ class DataCatalogView(QObject):
 
     def display_images(self, images: list[ImageReturnSchema]):
         self.contain_image_cell_buttons()
+        self.dlg.imageTable.selectionModel().clearSelection()
         self.dlg.imageTable.setRowCount(len(images))
         self.dlg.imageTable.setColumnCount(4)
         self.dlg.imageTable.setColumnHidden(0, True)
@@ -218,10 +286,12 @@ class DataCatalogView(QObject):
         else:
             self.dlg.previewMosaicButton.setEnabled(True)
             self.dlg.showImagesButton.setEnabled(True)
+        self.sort_catalog()
+        self.filter_catalog_table(self.dlg.filterCatalog.text())
 
     def show_preview_s(self, preview_image):
         self.dlg.imagePreview.setPixmap(QPixmap.fromImage(preview_image))
-        self.dlg.imagePreview.setAlignment(Qt.AlignVCenter | Qt.AlignHCenter)
+        self.dlg.imagePreview.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
 
     def selected_mosaic_ids(self, limit=None):
         # Add unique selected rows
@@ -261,11 +331,12 @@ class DataCatalogView(QObject):
     def show_mosaic_info(self, mosaic_name):
         self.add_mosaic_cell_buttons()
         # Show mosaic info
-        self.dlg.catalogSelectionLabel.setText(self.tr("Selected mosaic: <b>{mosaic_name}").format(
-            mosaic_name=self.dlg.imagePreview.fontMetrics().elidedText(
-                mosaic_name,
-                Qt.ElideRight,
-                self.dlg.imagePreview.width() - 10)))
+        bold_font = self.dlg.catalogSelectionLabel.font()
+        bold_font.setBold(True)
+        self.dlg.catalogSelectionLabel.setText(self.tr("Selected imagery collection: <b>{mosaic_name}").format(
+            mosaic_name=QFontMetrics(bold_font).elidedText(mosaic_name,
+                                                           Qt.ElideRight,
+                                                           self.dlg.catalogSelectionLabel.width() - 10)))
         # Enable buttons
         self.dlg.deleteCatalogButton.setEnabled(True)
         self.dlg.seeImagesButton.setEnabled(True)
@@ -276,30 +347,44 @@ class DataCatalogView(QObject):
         self.contain_mosaic_cell_buttons()
         self.dlg.catalogInfo.clear()
         self.dlg.imagePreview.clear()
-        self.dlg.catalogSelectionLabel.setText(self.tr("No mosaic selected"))
+        self.dlg.catalogSelectionLabel.setText(self.tr("No imagery collection selected"))
         # Disable buttons
         self.dlg.deleteCatalogButton.setEnabled(False)
         self.dlg.seeImagesButton.setEnabled(False)
         # Hide widgets
         self.set_table_tooltip(self.dlg.mosaicTable)
+        self.dlg.previousImageButton.setVisible(False)
+        self.dlg.nextImageButton.setVisible(False)
+        self.dlg.imageNumberLabel.setVisible(False)
 
     def show_image_info(self, image: ImageReturnSchema):
         if not image:
             return
-        self.dlg.catalogInfo.setText(self.tr("uploaded: {date} at {time} \n"
-                                             "file size: {size} \n"
-                                             "pixel size: {pixel_size} m \n"
-                                             "bands: {count}"
+        # Find spatial resolution as the arithmetic mean between resolutions along X and Y axes
+        pixel_size = sum(image.meta_data.pixel_size)/2
+        # If it is less then 1 cm, we assume that CRS is geographic
+        if pixel_size < 0.01:
+            pixel_size = round(pixel_size, 6) # decimal degrees
+        # Otherwise - CRS is most likely projected
+        else:
+            pixel_size = round(pixel_size, 2) # meters or other units
+        self.dlg.catalogInfo.setText(self.tr("Uploaded: {date} at {time} \n"
+                                             "File size: {size} \n"
+                                             "Pixel size: {pixel_size} \n"
+                                             "CRS: {crs} \n"
+                                             "Bands: {count}"
                                             ).format(date=image.uploaded_at.date(),
                                                      time=image.uploaded_at.strftime('%H:%M'),
                                                      size=get_readable_size(image.file_size),
-                                                     pixel_size=round(sum(list(image.meta_data.values())[6])/len(list(image.meta_data.values())[6]), 2),
-                                                     count=list(image.meta_data.values())[1]))
+                                                     pixel_size=pixel_size,
+                                                     crs=image.meta_data.crs,
+                                                     count=image.meta_data.count))
+        bold_font = self.dlg.catalogSelectionLabel.font()
+        bold_font.setBold(True)
         self.dlg.catalogSelectionLabel.setText(self.tr("Selected image: <b>{image_name}").format(
-            image_name=self.dlg.imagePreview.fontMetrics().elidedText(
-                image.filename,
-                Qt.ElideRight,
-                self.dlg.imagePreview.width() - 10)))
+            image_name=QFontMetrics(bold_font).elidedText(image.filename,
+                                                          Qt.ElideRight,
+                                                          self.dlg.catalogSelectionLabel.width() - 10)))
         # Show widgets
         self.dlg.deleteCatalogButton.setEnabled(True)
         self.set_table_tooltip(self.dlg.imageTable)
@@ -332,7 +417,6 @@ class DataCatalogView(QObject):
         # En(dis)able buttons and change labels
         self.dlg.seeMosaicsButton.setEnabled(True)
         self.dlg.seeImagesButton.setEnabled(False)
-        self.dlg.infoPreviewLabel.setText(self.tr("Image preview"))
         self.dlg.deleteCatalogButton.setText(self.tr("Delete image"))
         self.dlg.addCatalogButton.setText(self.tr("Add image"))
         self.dlg.addCatalogButton.setMenu(self.upload_image_menu)
@@ -342,16 +426,20 @@ class DataCatalogView(QObject):
         # Because we open images table always with empty selection
         self.clear_image_info()
         # Set sorting combo text
-        self.dlg.sortCombo.setCurrentIndex(self.sort_images_index)
+        self.dlg.sortCatalogCombo.setCurrentIndex(self.sort_images_index)
+        # Disable '<' and '>' for images table
+        self.enable_mosaic_images_preview(0, 0)
+        # Set filter and its placeholder text
+        self.filter_catalog_table(self.dlg.filterCatalog.text())
+        self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter images by name or id"))
 
     def show_mosaics_table(self, selected_mosaic_name: Optional[str]):
         # Save buttons before deleting cells and therefore widgets
         # En(dis)able buttons and change labels
         self.dlg.seeMosaicsButton.setEnabled(False)
         self.dlg.seeImagesButton.setEnabled(True)
-        self.dlg.infoPreviewLabel.setText(self.tr("Mosaic data"))
-        self.dlg.deleteCatalogButton.setText(self.tr("Delete mosaic"))
-        self.dlg.addCatalogButton.setText(self.tr("Add mosaic"))
+        self.dlg.deleteCatalogButton.setText(self.tr("Delete collection"))
+        self.dlg.addCatalogButton.setText(self.tr("Add collection"))
         self.dlg.addCatalogButton.setMenu(None)
         # Clear image table
         self.dlg.imageTable.clearSelection()
@@ -362,7 +450,10 @@ class DataCatalogView(QObject):
         else:
             self.clear_mosaic_info()
         # Set sorting combo text
-        self.dlg.sortCombo.setCurrentIndex(self.sort_mosaics_index)
+        self.dlg.sortCatalogCombo.setCurrentIndex(self.sort_mosaics_index)
+        # Set filter and its placeholder text
+        self.filter_catalog_table(self.dlg.filterCatalog.text())
+        self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter imagery collections by name or id"))
 
     def create_mosaic_cell_buttons_layout(self):
         self.mosaic_cell_layout.setContentsMargins(0,0,3,0)
@@ -409,6 +500,17 @@ class DataCatalogView(QObject):
 
     def contain_image_cell_buttons(self):
         self.imageContainerWidget.setLayout(self.image_cell_layout)
+
+    def filter_catalog_table(self, name_filter: str = None):
+        if self.mosaic_table_visible:
+            table = self.dlg.mosaicTable
+        else:
+            table = self.dlg.imageTable
+        for row in range(table.rowCount()):
+            item_id = table.item(row, 0).data(Qt.DisplayRole)
+            item_name = table.item(row, 1).data(Qt.DisplayRole)
+            hide = bool(name_filter) and ((name_filter.lower() not in item_id.lower() and name_filter.lower() not in item_name.lower()))
+            table.setRowHidden(row, hide)
         
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """A duplicate of alert function from mapflow.py to avoid circular import.

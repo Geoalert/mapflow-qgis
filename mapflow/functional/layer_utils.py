@@ -120,38 +120,17 @@ def get_bounding_box_from_tile_json(response: QNetworkReply) -> QgsRectangle:
     return QgsRectangle(xmin, ymin, xmax, ymax)
 
 
-def get_raster_aoi(raster_layer: QgsRasterLayer,
-                   selected_aoi: QgsFeature,
-                   use_image_extent_as_aoi: bool) -> QgsGeometry:
-    layer_extent = QgsFeature()
-    layer_extent.setGeometry(get_layer_extent(raster_layer))
-    if not use_image_extent_as_aoi:
-        # If we do not use the layer extent as aoi, we still create it and use it to crop the selected AOI
-        try:
-            feature = next(clip_aoi_to_image_extent(aoi_geometry=selected_aoi,
-                                                    extent=layer_extent))
-        except StopIteration:
-            return None
-    else:
-        feature = layer_extent
-    return feature.geometry()
-
-
 def get_catalog_aoi(catalog_aoi: QgsGeometry,
-                    selected_aoi: QgsGeometry,
-                    use_image_extent_as_aoi: bool) -> QgsGeometry:
+                    selected_aoi: QgsGeometry) -> QgsGeometry:
     """Return either AOI geometry if it intersects with imagery frootprint or the footprint itself.
     :param catalog_aoi: Image or mosaic footprint.
     :param selected_aoi: Currently selected in polygonCombo AOI layer.
     """
-    if not use_image_extent_as_aoi:
-        clipped_aoi_features = clip_aoi_to_catalog_extent(catalog_aoi, selected_aoi)
-        clipped_aoi = QgsGeometry.fromWkt('GEOMETRYCOLLECTION()')
-        for feature in clipped_aoi_features:
-            geom = feature.geometry()
-            clipped_aoi = clipped_aoi.combine(geom)
-    else:
-        clipped_aoi = catalog_aoi
+    clipped_aoi_features = clip_aoi_to_catalog_extent(catalog_aoi, selected_aoi)
+    clipped_aoi = QgsGeometry.fromWkt('GEOMETRYCOLLECTION()')
+    for feature in clipped_aoi_features:
+        geom = feature.geometry()
+        clipped_aoi = clipped_aoi.combine(geom)
     return clipped_aoi
 
 

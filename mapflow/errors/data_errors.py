@@ -16,10 +16,10 @@ class DataErrors(ErrorMessageList):
                                   "Compress your file or cut it into smaller parts"),
             "ItemNotFound": self.tr("{instance_type} with id: {uid} can't be found"),
             "AccessDenied": self.tr("You do not have access to {instance_type} with id {uid}"),
-            "FileValidationFailed": self.tr("File {filename} cannot be uploaded to mosaic: {mosaic_id}. "
+            "FileValidationFailed": self.tr("File {filename} cannot be uploaded to imagery collection: {mosaic_id}. "
                                             "{param_name} of the file is {got_param}, "
-                                            "it should be {expected_param} to fit the mosaic. "
-                                            "Fix your file, or upload it to another mosaic"),
+                                            "it should be {expected_param} to fit the collection. "
+                                            "Fix your file, or upload it to another imagery collection"),
             "ImageOutOfBounds": self.tr("File can't be uploaded, because its extent is out of coordinate range."
                                         "Check please CRS and transform of the image, they may be invalid"),
             "FileOpenError": self.tr("File cannot be opened as a GeoTIFF file. "
