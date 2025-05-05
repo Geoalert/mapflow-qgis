@@ -26,8 +26,12 @@ changelog:
     - Option in AOI-menu to create AOI layer from mosaic/image extent (instead of checkbox)
     - Confirmation of processing start (can be turned off/on)
     - Awaiting status added
+    3.1.2
+    - New vector layer styles for trees and crowns
+    - Fix Imagery search cloud cover
     3.1.1
     - Allow zoom selection for user's data providers
+    - Fix style for building heights and terms of use translated link
     3.1.0
     - Imagery Search:
         - Allow processing with multiple search results if they have the same provider name, mosaic product type and zoom

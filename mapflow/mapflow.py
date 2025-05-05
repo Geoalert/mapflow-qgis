@@ -3322,8 +3322,10 @@ class Mapflow(QObject):
         if not processing:
             return
         message = self.tr("<b>Name</b>: {name}"
+                          "<br><b>ID</b></br>: {pid}"
                           "<br><b>Status</b></br>: {status}"
                           "<br><b>Model</b></br>: {model}").format(name=processing.name,
+                                                                   pid=processing.id_,
                                                                    model=processing.workflow_def,
                                                                    status=processing.status.value)
         if processing.description:
