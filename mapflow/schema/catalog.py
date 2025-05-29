@@ -9,6 +9,7 @@ from ..config import Config
 
 class PreviewType(str, Enum):
     png = "png"
+    jpg = "jpg"
     xyz = "xyz"
     tms = "tms"
     wms = "wms"

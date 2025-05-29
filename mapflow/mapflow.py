@@ -2324,10 +2324,16 @@ class Mapflow(QObject):
         preview_type = feature.attribute('previewType')
         self.iface.mapCanvas().zoomToSelected(self.metadata_layer)
         self.iface.mapCanvas().refresh()
-        if preview_type == PreviewType.png:
+        if not preview_type:
+            self.alert(self.tr("Selected imagery has no preview"))
+            return
+        if preview_type in (PreviewType.png, PreviewType.jpg):
+            if not url:
+                self.alert(self.tr("Preview with such URL is unavailable"))
+                return
             self.preview_png(url, footprint, image_id)
         else:
-            self.alert(self.tr("Only PNG preview type is supported."
+            self.alert(self.tr("Only PNG and JPG preview types are supported."
                                '<br>See <a href="https://docs.mapflow.ai/api/qgis_mapflow.html#how-to-preview-the-search-results"><span style=" text-decoration: underline; color:#094fd1;">documentation</span></a> for help'))
 
     def preview_png(self,
