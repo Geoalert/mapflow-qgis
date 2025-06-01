@@ -9,6 +9,7 @@ from ..config import Config
 
 class PreviewType(str, Enum):
     png = "png"
+    jpg = "jpg"
     xyz = "xyz"
     tms = "tms"
     wms = "wms"
@@ -58,7 +59,10 @@ class ImageSchema(Serializable, SkipDataClass):
             raise TypeError("Acquisition date must be either datetime or ISO-formatted str")
         self.cloudCover = self.cloudCover
         self.source = self.sensor
-        self.previewType = PreviewType(self.previewType)
+        try:
+            self.previewType = PreviewType(self.previewType)
+        except:
+            self.previewType = None
 
     def as_geojson(self):
         properties = {k: v for k, v in self.as_dict().items() if k != "footprint"}
