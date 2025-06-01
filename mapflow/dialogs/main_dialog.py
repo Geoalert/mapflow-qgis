@@ -592,6 +592,20 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             preview_label.setAlignment(Qt.AlignVCenter | Qt.AlignHCenter)
             self.metadataTable.setCellWidget(row, preview_column_index, preview_label)
 
+    def check_ui_theme(self, theme_name: str):
+        """ Set style to change unreadable dark theme text. """
+        if not theme_name == 'Night Mapping':
+            return
+        text_color = self.palette().midlight().color().name()
+        light_text = "QPushButton {color:" + "{}".format(text_color) + "}"
+        light_text += "QComboBox {color:" + "{}".format(text_color) + "}"
+        light_text += "QComboBox::item:selected {color:" + "{}".format(text_color) + "}"
+        light_text += "QTableView QHeaderView::section {color:" + "{}".format(text_color) + "}"
+        self.setStyleSheet(light_text)
+        self.stackedProjectsWidget.setStyleSheet(light_text)
+        self.mosaicTable.setStyleSheet(light_text)
+        self.imageTable.setStyleSheet(light_text)
+
     @property
     def project_controls(self):
         return [self.labelProcessingName, self.processingName,
