@@ -71,7 +71,8 @@ from .schema import (PostSourceSchema,
                      PostProcessingSchema,
                      ProviderReturnSchema,
                      ImageCatalogRequestSchema,
-                     ImageCatalogResponseSchema)
+                     ImageCatalogResponseSchema,
+                     PostProcessingSchemaV2)
 from .schema.catalog import PreviewType, ProductType
 from .schema.project import MapflowProject, UserRole, ProjectsRequest
 
@@ -1923,7 +1924,8 @@ class Mapflow(QObject):
                               provider_index: Optional[int],
                               s3_uri: str = "",
                               zoom: Optional[str] = None,
-                              image_id: Optional[str] = None,
+                              image_ids: Optional[List[str]] = None,
+                              mosaic_id: Optional[str] = None,
                               provider_name: Optional[str] = None,
                               requires_id: Optional[bool] = False):
         provider = self.providers[provider_index]
@@ -1932,7 +1934,8 @@ class Mapflow(QObject):
                 'source': provider.name.lower()}
         if not provider:
             raise PluginError(self.tr('Providers are not initialized'))
-        provider_params, provider_meta = provider.to_processing_params(image_id=image_id,
+        provider_params, provider_meta = provider.to_processing_params(image_ids=image_ids,
+                                                                       mosaic_id=mosaic_id,
                                                                        provider_name=provider_name,
                                                                        url=s3_uri,
                                                                        zoom=zoom,
@@ -1994,18 +1997,37 @@ class Mapflow(QObject):
         provider = self.providers[provider_index]
         s3_uri = self.get_s3_uri(provider)
 
-        selected_images = self.dlg.metadataTable.selectedItems()
-        if selected_images:
-            local_image_indices = self.get_local_image_indices(selected_images) 
-            provider_names, product_types = self.get_search_providers(local_image_indices)
-            image_id, requires_id, selection_error = self.get_search_images_ids(local_image_indices, provider_names, product_types)
-            if selection_error:
-                return None, selection_error
-        else:
-            local_image_indices = []
-            provider_names, product_types = [], []
-            image_id, requires_id, selection_error = None, False, ""
-        provider_name = provider_names[0] if provider_names else None # the same for all [i] if there was no 'selection_error'
+        local_image_indices = []
+        provider_names, product_types = [], []
+        image_ids, requires_id, selection_error = None, False, ""
+        mosaic_id = None
+        if isinstance(provider, ImagerySearchProvider):
+            selected_images = self.dlg.metadataTable.selectedItems()
+            if selected_images:
+                local_image_indices = self.get_local_image_indices(selected_images) 
+                provider_names, product_types = self.get_search_providers(local_image_indices)
+                image_ids, requires_id, selection_error = self.get_search_images_ids(local_image_indices, provider_names, product_types)
+                if selection_error:
+                    return None, selection_error
+                provider_name = provider_names[0] if provider_names else None # the same for all [i] if there was no 'selection_error'
+        elif isinstance(provider, MyImageryProvider):
+            selected_mosaics = self.data_catalog_service.selected_mosaics()
+            selected_images = self.data_catalog_service.selected_images()
+            if not selected_mosaics:
+                mosaic_id = None
+                image_ids = None
+            else:
+                mosaic_id = selected_mosaics[0].id
+                if not selected_images:
+                    image_ids = None
+                else:
+                    image_ids = [image.id for image in selected_images]
+                    mosaic_id = None
+        if not provider_names:
+            try:
+                provider_name = provider.api_name
+            except:
+                provider_name = None
 
         zoom, zoom_error = self.get_zoom(provider, local_image_indices, product_types)
         if zoom_error:
@@ -2016,7 +2038,8 @@ class Mapflow(QObject):
             provider_params, processing_meta = self.get_processing_params(provider_index=provider_index,
                                                                           s3_uri=s3_uri,
                                                                           zoom=zoom,
-                                                                          image_id=image_id,
+                                                                          image_ids=image_ids,
+                                                                          mosaic_id=mosaic_id,
                                                                           provider_name=provider_name,
                                                                           requires_id=requires_id)
             
@@ -2035,13 +2058,17 @@ class Mapflow(QObject):
                                  "and select image in the table.")
         except PluginError as e:
             return None, str(e)
-        processing_params = PostProcessingSchema(
+        project_id = self.current_project.id
+        processing_params = PostProcessingSchemaV2(
             name=processing_name,
+            description=None,
+            projectId=project_id,
             wdId=wd.id,
-            blocks=wd.get_enabled_blocks(self.dlg.enabled_blocks()),
-            meta=processing_meta,
+            geometry=json.loads(aoi.asJson()),
             params=provider_params,
-            geometry=json.loads(aoi.asJson()))
+            meta=processing_meta,
+            blocks=wd.get_enabled_blocks(self.dlg.enabled_blocks())
+        )
         return processing_params, ""
 
     def create_processing(self) -> None:
@@ -2106,10 +2133,14 @@ class Mapflow(QObject):
                     image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
                 if image_id:
                     provider_text += " ({iid})". format(iid=image_id)
+            try:
+                zoom = processing_params.params.zoom
+            except AttributeError:
+                zoom = None
             dialog.setup(name=processing_params.name,
                          price=price,
                          provider=provider_text,
-                         zoom=processing_params.params.zoom,
+                         zoom=zoom,
                          area=str(round(self.aoi_size, 2))+self.tr(" sq.km"),
                          model=self.dlg.modelCombo.currentText(),
                          blocks=[self.dlg.modelOptionsLayout.itemAt(i).widget()
@@ -2147,7 +2178,7 @@ class Mapflow(QObject):
         if self.project_id != 'default':
             request_body.projectId = self.project_id
         self.http.post(
-            url=f'{self.server}/processings',
+            url=f'{self.server}/processings/v2',
             callback=self.post_processing_callback,
             callback_kwargs={'processing_name': request_body.name},
             error_handler=self.post_processing_error_handler,
@@ -3422,7 +3453,7 @@ class Mapflow(QObject):
             image_id = None
         else:
             id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
-            image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
+            image_id = [self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()]
         requires_id = False
         selection_error = ""
         try:

@@ -1,8 +1,8 @@
 from dataclasses import dataclass
-from typing import Optional, Mapping, Any, Union, Iterable
+from typing import Optional, Mapping, Any, Union, Iterable, List
 
 from .base import SkipDataClass, Serializable
-
+from ..entity.provider.provider import SourceType
 
 @dataclass
 class PostSourceSchema(Serializable, SkipDataClass):
@@ -58,3 +58,56 @@ class UpdateProcessingSchema(Serializable):
     name: str
     description: str
 
+
+@dataclass
+class MyImageryParams(Serializable, SkipDataClass):
+    imageIds: List[str]
+    mosaicId: str
+
+
+@dataclass
+class ImagerySearchParams(Serializable, SkipDataClass):
+    dataProvider: str
+    imageIds: List[str]
+    zoom: int
+
+
+@dataclass
+class DataProviderParams(Serializable, SkipDataClass):
+    providerName: str
+    zoom: str
+
+
+@dataclass
+class UserDefinedParams(Serializable, SkipDataClass):
+    sourceType: SourceType
+    url: str
+    zoom: Optional[int]
+    crs: str
+    rasterLogin: Optional[str]
+    rasterPassword: Optional[str]
+
+
+@dataclass
+class SourceParams(Serializable, SkipDataClass):
+    dataProvider: Optional[DataProviderParams]
+    myImagery: Optional[MyImageryParams]
+    imagerySearch: Optional[ImagerySearchParams]
+    userDefined: Optional[UserDefinedParams]
+
+
+@dataclass
+class PostProcessingParams(Serializable, SkipDataClass):
+    sourceParams: SourceParams
+
+
+@dataclass
+class PostProcessingSchemaV2(Serializable):
+    name: str
+    description: Optional[str]
+    projectId: str
+    wdId: Optional[str]
+    geometry: Mapping[str, Any]
+    params: PostProcessingParams
+    meta: Optional[Mapping[str, Any]]
+    blocks: Optional[Iterable[BlockOption]]
