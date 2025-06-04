@@ -172,7 +172,7 @@ class ProcessingHistory:
                failed: Optional[List[Processing]] = None,
                finished: Optional[List[Processing]] = None):
         self.failed = [processing.id_ for processing in failed]
-        self.failed = [processing.id_ for processing in finished]
+        self.finished = [processing.id_ for processing in finished]
 
     @classmethod
     def from_settings(cls, settings: Dict[str, List[str]]):
