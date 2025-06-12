@@ -11,7 +11,7 @@ class ConfigColumns():
             QCoreApplication.translate('Config', 'Product Type'): 'productType',
             QCoreApplication.translate('Config', 'Provider Name'): 'providerName',
             QCoreApplication.translate('Config', 'Preview'): 'preview',
-            QCoreApplication.translate('Config', 'Sensor'): 'source',
+            QCoreApplication.translate('Config', 'Sensor'): 'satId',
             QCoreApplication.translate('Config', 'Band Order'): 'colorBandOrder',
             QCoreApplication.translate('Config', 'Cloud %'): 'cloudCover',
             QCoreApplication.translate('Config', 'Off Nadir') + f' \N{DEGREE SIGN}': 'offNadirAngle',
