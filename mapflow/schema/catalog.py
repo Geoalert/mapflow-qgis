@@ -45,7 +45,7 @@ class ImageSchema(Serializable, SkipDataClass):
     colorBandOrder: Optional[str]
     cloudCover: Optional[float]
     offNadirAngle: Optional[float]
-    source: Optional[str] = None  # Duplicate of sensor for the table (like in Maxar)
+    satId: Optional[str] = None
     previewType: Optional[PreviewType] = None
     previewUrl: Optional[str] = None
     providerName: Optional[str] = None
@@ -57,7 +57,6 @@ class ImageSchema(Serializable, SkipDataClass):
         elif not isinstance(self.acquisitionDate, datetime):
             raise TypeError("Acquisition date must be either datetime or ISO-formatted str")
         self.cloudCover = self.cloudCover
-        self.source = self.sensor
         self.previewType = PreviewType(self.previewType)
 
     def as_geojson(self):
