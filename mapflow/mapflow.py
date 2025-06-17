@@ -157,6 +157,9 @@ class Mapflow(QObject):
         # Imagery search pagination
         self.search_page_offset = 0
         self.search_page_limit = self.config.SEARCH_RESULTS_PAGE_LIMIT
+        # Imagery provider instances
+        self.imagery_search_provider_instance = None
+        self.my_imagery_provider_instance = None
 
         # Init dialogs
         self.use_oauth = (self.settings.value('use_oauth', 'false').lower() == 'true')
@@ -1924,22 +1927,16 @@ class Mapflow(QObject):
                               provider_index: Optional[int],
                               s3_uri: str = "",
                               zoom: Optional[str] = None,
-                              image_ids: Optional[List[str]] = None,
-                              mosaic_id: Optional[str] = None,
-                              provider_name: Optional[str] = None,
-                              requires_id: Optional[bool] = False):
+                              provider_name: Optional[str] = None):
         provider = self.providers[provider_index]
         meta = {'source-app': 'qgis',
                 'version': self.plugin_version,
                 'source': provider.name.lower()}
         if not provider:
             raise PluginError(self.tr('Providers are not initialized'))
-        provider_params, provider_meta = provider.to_processing_params(image_ids=image_ids,
-                                                                       mosaic_id=mosaic_id,
-                                                                       provider_name=provider_name,
+        provider_params, provider_meta = provider.to_processing_params(provider_name=provider_name,
                                                                        url=s3_uri,
-                                                                       zoom=zoom,
-                                                                       requires_id=requires_id)
+                                                                       zoom=zoom)
         meta.update(**provider_meta)
         return provider_params, meta
 
@@ -1999,14 +1996,14 @@ class Mapflow(QObject):
 
         local_image_indices = []
         provider_names, product_types = [], []
-        image_ids, requires_id, selection_error = None, False, ""
+        image_ids, selection_error = None, ""
         mosaic_id = None
         if isinstance(provider, ImagerySearchProvider):
             selected_images = self.dlg.metadataTable.selectedItems()
             if selected_images:
                 local_image_indices = self.get_local_image_indices(selected_images) 
                 provider_names, product_types = self.get_search_providers(local_image_indices)
-                image_ids, requires_id, selection_error = self.get_search_images_ids(local_image_indices, provider_names, product_types)
+                image_ids, selection_error = self.get_search_images_ids(local_image_indices, provider_names, product_types)
                 if selection_error:
                     return None, selection_error
                 provider_name = provider_names[0] if provider_names else None # the same for all [i] if there was no 'selection_error'
@@ -2023,6 +2020,8 @@ class Mapflow(QObject):
                 else:
                     image_ids = [image.id for image in selected_images]
                     mosaic_id = None
+            setattr(self.my_imagery_provider_instance, 'mosaic_id', mosaic_id)
+            setattr(self.my_imagery_provider_instance, 'image_ids', image_ids)
         if not provider_names:
             try:
                 provider_name = provider.api_name
@@ -2038,10 +2037,7 @@ class Mapflow(QObject):
             provider_params, processing_meta = self.get_processing_params(provider_index=provider_index,
                                                                           s3_uri=s3_uri,
                                                                           zoom=zoom,
-                                                                          image_ids=image_ids,
-                                                                          mosaic_id=mosaic_id,
-                                                                          provider_name=provider_name,
-                                                                          requires_id=requires_id)
+                                                                          provider_name=provider_name)
             
             if self.zoom_selector:
                 if isinstance(provider_params, PostSourceSchema): # no zoom for tifs
@@ -2275,8 +2271,10 @@ class Mapflow(QObject):
                 self.setup_project_change_rights()
 
     def setup_providers(self, providers_data):
-        self.default_providers = ProvidersList([ImagerySearchProvider(proxy=self.server)] +
-                                               [MyImageryProvider()] +
+        self.imagery_search_provider_instance = ImagerySearchProvider(proxy=self.server)
+        self.my_imagery_provider_instance = MyImageryProvider()
+        self.default_providers = ProvidersList([self.imagery_search_provider_instance] +
+                                               [self.my_imagery_provider_instance] +
                                                [DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
                                                 for data in providers_data])
         self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
@@ -3454,14 +3452,11 @@ class Mapflow(QObject):
         else:
             id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
             image_id = [self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()]
-        requires_id = False
         selection_error = ""
         try:
             if len(local_image_indices) == 1:
                 if product_types[0] == "Mosaic":
                     image_id = None # remove image_id for mosaic providers
-                else:
-                    requires_id = True # require image_id for single images
             else:
                 # When multiple images is selected, check if selected images have mosaic product type and the same provider
                 if set(product_types) == set(["Mosaic"]) and len(set(provider_names)) == 1:
@@ -3470,8 +3465,15 @@ class Mapflow(QObject):
                 else:
                     selection_error = self.tr("You can launch multiple image processing only if it has the same provider of mosaic type")
         except:
-            return image_id, requires_id, selection_error
-        return image_id, requires_id, selection_error
+            return image_id, selection_error
+        # Require image id only for single images and not mosaics
+        if image_id:
+            setattr(self.imagery_search_provider_instance, 'requires_id', True)
+            setattr(self.imagery_search_provider_instance, 'image_id', image_id)
+        else:
+            setattr(self.imagery_search_provider_instance, 'requires_id', False)
+            setattr(self.imagery_search_provider_instance, 'image_id', [])
+        return image_id, selection_error
     
     def get_zoom(self, provider, local_image_indices, product_types):
         zoom = None

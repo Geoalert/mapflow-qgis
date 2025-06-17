@@ -8,17 +8,14 @@ from urllib.parse import urlparse, parse_qs
 from .provider import SourceType, CRS, UsersProvider, staticproperty
 from ...functional.layer_utils import maxar_tile_url, add_connect_id
 from ...requests.maxar_metadata_request import MAXAR_REQUEST_BODY, MAXAR_META_URL
-from ...schema.processing import PostSourceSchema,UserDefinedParams, SourceParams, PostProcessingParams
+from ...schema.processing import PostSourceSchema,UserDefinedParams, PostProcessingParams
 
 
 class BasemapProvider(UsersProvider, ABC):
     def to_processing_params(self,
-                             image_ids: Optional[List[str]] = None,
-                             mosaic_id: Optional[str] = None,
                              provider_name: Optional[str] = None,
                              url: Optional[str] = None,
-                             zoom: Optional[str] = None,
-                             requires_id: Optional[bool] = False):
+                             zoom: Optional[str] = None):
         params = {
             'sourceType': self.source_type.value.upper(),
             'url': self.url,
@@ -30,10 +27,7 @@ class BasemapProvider(UsersProvider, ABC):
         if self.credentials:
             params.update(rasterLogin=self.credentials.login,
                           rasterPassword=self.credentials.password)
-        return PostProcessingParams(sourceParams=SourceParams(dataProvider=None,
-                                                              myImagery=None,
-                                                              imagerySearch=None,
-                                                              userDefined=UserDefinedParams(**params))), {}
+        return PostProcessingParams(sourceParams=UserDefinedParams(**params)), {}
 
     @property
     def requires_image_id(self):
@@ -128,12 +122,9 @@ class MaxarProvider(UsersProvider):
                                          geometry=geometry).encode()
 
     def to_processing_params(self,
-                             image_ids: Optional[List[str]] = None,
-                             mosaic_id: Optional[str] = None,
                              provider_name: Optional[str] = None,
                              url: Optional[str] = None,
-                             zoom: Optional[str] = None,
-                             requires_id: Optional[bool] = False):
+                             zoom: Optional[str] = None):
         params = PostSourceSchema(url=maxar_tile_url(self.url, image_ids[0]),
                                   source_type=self.source_type,
                                   projection=self.crs.value,

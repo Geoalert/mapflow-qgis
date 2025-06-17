@@ -8,6 +8,5 @@ from .processing import (PostSourceSchema,
                          DataProviderParams,
                          MyImageryParams,
                          ImagerySearchParams,
-                         UserDefinedParams,
-                         SourceParams)
+                         UserDefinedParams)
 from .provider import ProviderReturnSchema

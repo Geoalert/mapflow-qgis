@@ -9,7 +9,6 @@ from ...schema import (PostSourceSchema,
                        DataProviderParams,
                        MyImageryParams,
                        ImagerySearchParams,
-                       SourceParams,
                        PostProcessingParams,)
 from ...schema.provider import ProviderReturnSchema
 
@@ -29,12 +28,9 @@ class SentinelProvider(ProviderInterface):
         return True
 
     def to_processing_params(self,
-                             image_ids: Optional[List[str]] = None,
-                             mosaic_id: Optional[str] = None,
                              provider_name: Optional[str] = None,
                              url: Optional[str] = None,
-                             zoom: Optional[str] = None,
-                             requires_id: Optional[bool] = False):
+                             zoom: Optional[str] = None):
         if not image_id and requires_id is True:
             raise ImageIdRequired("Sentinel provider must have image ID to launch the processing")
         return PostSourceSchema(url=image_id,
@@ -64,29 +60,25 @@ class ImagerySearchProvider(ProviderInterface):
                  **kwargs):
         super().__init__(name=SEARCH_OPTION_NAME)
         self.proxy = proxy
+        self.requires_id: Optional[bool] = None
+        self.image_id: Optional[List[str]] = None
 
     def preview_url(self, image_id=None):
         return None
 
     @property
     def requires_image_id(self):
-        return True
+        return self.requires_id
 
     def to_processing_params(self,
-                             image_ids: Optional[List[str]] = None,
-                             mosaic_id: Optional[str] = None,
                              provider_name: Optional[str] = None,
                              url: Optional[str] = None,
-                             zoom: Optional[str] = None,
-                             requires_id: Optional[bool] = False):
-        if not image_ids and requires_id is True:
+                             zoom: Optional[str] = None):
+        if not self.image_id and self.requires_id is True:
             raise ImageIdRequired("Search provider must have image ID to launch the processing")
-        return PostProcessingParams(sourceParams=SourceParams(dataProvider=None,
-                                                              myImagery=None,
-                                                              imagerySearch=ImagerySearchParams(dataProvider=provider_name,
-                                                                                                imageIds=image_ids,
-                                                                                                zoom=zoom),
-                                                              userDefined=None)), {}
+        return PostProcessingParams(sourceParams=ImagerySearchParams(dataProvider=provider_name,
+                                                                     imageIds=self.image_id,
+                                                                     zoom=zoom)), {}
 
     @property
     def meta_url(self):
@@ -105,6 +97,8 @@ class MyImageryProvider(ProviderInterface):
 
     def __init__(self):
         super().__init__(name=CATALOG_OPTION_NAME)
+        self.mosaic_id: Optional[str] = None
+        self.image_ids: Optional[List[str]] = None
 
     @property
     def meta_url(self):
@@ -118,19 +112,12 @@ class MyImageryProvider(ProviderInterface):
     def requires_image_id(self):
         return False
     
-    @classmethod
     def to_processing_params(self,
-                             image_ids: Optional[List[str]] = None,
-                             mosaic_id: Optional[str] = None,
                              provider_name: Optional[str] = None,
                              url: Optional[str] = None,
-                             zoom: Optional[str] = None,
-                             requires_id: Optional[bool] = False):
-        return PostProcessingParams(sourceParams=SourceParams(dataProvider=None,
-                                                              myImagery=MyImageryParams(imageIds=image_ids, 
-                                                                                        mosaicId=mosaic_id),
-                                                              imagerySearch=None,
-                                                              userDefined=None)), {}
+                             zoom: Optional[str] = None):
+        return PostProcessingParams(sourceParams=MyImageryParams(imageIds=self.image_ids, 
+                                                                 mosaicId=self.mosaic_id)), {}
 
 class DefaultProvider(ProviderInterface):
     """
@@ -192,14 +179,8 @@ class DefaultProvider(ProviderInterface):
                    preview_url=response.previewUrl)
 
     def to_processing_params(self,
-                             image_ids: Optional[List[str]] = None,
-                             mosaic_id: Optional[str] = None,
                              provider_name: Optional[str] = None,
                              url: Optional[str] = None,
-                             zoom: Optional[str] = None,
-                             requires_id: Optional[bool] = False):
-        return PostProcessingParams(sourceParams=SourceParams(dataProvider=DataProviderParams(providerName=provider_name, 
-                                                                                              zoom=zoom),
-                                                              myImagery=None,
-                                                              imagerySearch=None,
-                                                              userDefined=None)), {}
+                             zoom: Optional[str] = None):
+        return PostProcessingParams(sourceParams=DataProviderParams(providerName=provider_name, 
+                                                                    zoom=zoom)), {}

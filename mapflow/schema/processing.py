@@ -60,26 +60,26 @@ class UpdateProcessingSchema(Serializable):
 
 
 @dataclass
-class MyImageryParams(Serializable, SkipDataClass):
+class MyImageryParams(Serializable):
     imageIds: List[str]
     mosaicId: str
 
 
 @dataclass
-class ImagerySearchParams(Serializable, SkipDataClass):
+class ImagerySearchParams(Serializable):
     dataProvider: str
     imageIds: List[str]
     zoom: int
 
 
 @dataclass
-class DataProviderParams(Serializable, SkipDataClass):
+class DataProviderParams(Serializable):
     providerName: str
     zoom: str
 
 
 @dataclass
-class UserDefinedParams(Serializable, SkipDataClass):
+class UserDefinedParams(Serializable):
     sourceType: SourceType
     url: str
     zoom: Optional[int]
@@ -89,16 +89,11 @@ class UserDefinedParams(Serializable, SkipDataClass):
 
 
 @dataclass
-class SourceParams(Serializable, SkipDataClass):
-    dataProvider: Optional[DataProviderParams]
-    myImagery: Optional[MyImageryParams]
-    imagerySearch: Optional[ImagerySearchParams]
-    userDefined: Optional[UserDefinedParams]
-
-
-@dataclass
-class PostProcessingParams(Serializable, SkipDataClass):
-    sourceParams: SourceParams
+class PostProcessingParams(Serializable):
+    sourceParams: Union[DataProviderParams,
+                        MyImageryParams,
+                        ImagerySearchParams,
+                        UserDefinedParams]
 
 
 @dataclass
