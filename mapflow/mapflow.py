@@ -1935,7 +1935,6 @@ class Mapflow(QObject):
         if not provider:
             raise PluginError(self.tr('Providers are not initialized'))
         provider_params, provider_meta = provider.to_processing_params(provider_name=provider_name,
-                                                                       url=s3_uri,
                                                                        zoom=zoom)
         meta.update(**provider_meta)
         return provider_params, meta

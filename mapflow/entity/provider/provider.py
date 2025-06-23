@@ -77,7 +77,6 @@ class ProviderInterface:
 
     def to_processing_params(self,
                              provider_name: Optional[str] = None,
-                             url: Optional[str] = None,
                              zoom: Optional[str] = None):
         """ You cannot create a processing with generic provider without implementation"""
         raise NotImplementedError

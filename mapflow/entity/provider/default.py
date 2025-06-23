@@ -29,7 +29,6 @@ class SentinelProvider(ProviderInterface):
 
     def to_processing_params(self,
                              provider_name: Optional[str] = None,
-                             url: Optional[str] = None,
                              zoom: Optional[str] = None):
         if not image_id and requires_id is True:
             raise ImageIdRequired("Sentinel provider must have image ID to launch the processing")
@@ -72,7 +71,6 @@ class ImagerySearchProvider(ProviderInterface):
 
     def to_processing_params(self,
                              provider_name: Optional[str] = None,
-                             url: Optional[str] = None,
                              zoom: Optional[str] = None):
         if not self.image_id and self.requires_id is True:
             raise ImageIdRequired("Search provider must have image ID to launch the processing")
@@ -114,7 +112,6 @@ class MyImageryProvider(ProviderInterface):
     
     def to_processing_params(self,
                              provider_name: Optional[str] = None,
-                             url: Optional[str] = None,
                              zoom: Optional[str] = None):
         return PostProcessingParams(sourceParams=MyImageryParams(imageIds=self.image_ids, 
                                                                  mosaicId=self.mosaic_id)), {}
@@ -180,7 +177,6 @@ class DefaultProvider(ProviderInterface):
 
     def to_processing_params(self,
                              provider_name: Optional[str] = None,
-                             url: Optional[str] = None,
                              zoom: Optional[str] = None):
         return PostProcessingParams(sourceParams=DataProviderParams(providerName=provider_name, 
                                                                     zoom=zoom)), {}
