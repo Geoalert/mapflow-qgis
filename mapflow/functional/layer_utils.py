@@ -326,8 +326,28 @@ class ResultsLoader(QObject):
         preview_dict[url] = preview_layer.id()
 
     # ======= Load as tile layers ====== #
-
     def load_result_tiles(self, processing):
+        if processing.result_raster_layer:
+            self.load_result_raster_tiles(processing)
+        else:
+            self.load_result_vector_tiles(processing)
+    
+    def load_result_raster_tiles(self, processing):
+        raster_tilejson = processing.raster_layer.get("tileJsonUrl", None)
+        result_tilejson = processing.result_raster_layer.get("tileJsonUrl", None)
+        raster_layer = generate_raster_layer(processing.raster_layer.get("tileUrl", None),
+                                             name=f"{processing.name} raster")
+        result_layer = generate_raster_layer(processing.result_raster_layer.get("tileUrl", None),
+                                             name=processing.name)
+        self.request_layer_extent(tilejson_uri=raster_tilejson,
+                                  layer=raster_layer,
+                                  next_layers = [result_layer],
+                                  next_tilejson_uris = [result_tilejson],
+                                  processing_id = processing.id_
+                                  )
+
+
+    def load_result_vector_tiles(self, processing):
         raster_tilejson = processing.raster_layer.get("tileJsonUrl", None)
         vector_tilejson = processing.vector_layer.get("tileJsonUrl", None)
         raster_layer = generate_raster_layer(processing.raster_layer.get("tileUrl", None),
