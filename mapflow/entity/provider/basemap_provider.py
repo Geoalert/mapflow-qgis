@@ -8,7 +8,7 @@ from urllib.parse import urlparse, parse_qs
 from .provider import SourceType, CRS, UsersProvider, staticproperty
 from ...functional.layer_utils import maxar_tile_url, add_connect_id
 from ...requests.maxar_metadata_request import MAXAR_REQUEST_BODY, MAXAR_META_URL
-from ...schema.processing import PostSourceSchema,UserDefinedParams, PostProcessingParams
+from ...schema.processing import PostSourceSchema,UserDefinedParams, ProcessingParams
 
 
 class BasemapProvider(UsersProvider, ABC):
@@ -26,7 +26,7 @@ class BasemapProvider(UsersProvider, ABC):
         if self.credentials:
             params.update(rasterLogin=self.credentials.login,
                           rasterPassword=self.credentials.password)
-        return PostProcessingParams(sourceParams=UserDefinedParams(**params)), {}
+        return ProcessingParams(sourceParams=UserDefinedParams(**params)), {}
 
     @property
     def requires_image_id(self):

@@ -1824,7 +1824,7 @@ class Mapflow(QObject):
             else:
                 if self.user_role.can_start_processing:
                     self.http.post(
-                        url=f"{self.server}/processing/cost",
+                        url=f"{self.server}/processing/cost/v2",
                         callback=self.calculate_processing_cost_callback,
                         body=request_body.as_json().encode(),
                         use_default_error_handler=False,
@@ -3208,7 +3208,7 @@ class Mapflow(QObject):
             empty_item = QTableWidgetItem("")
             self.dlg.processingsTable.setItem(0, column, empty_item)
         # Fetch processings at startup and start the timer to keep fetching them afterwards
-        self.http.get(url=f'{self.server}/projects/{self.project_id}/processings',
+        self.http.get(url=f'{self.server}/projects/{self.project_id}/processings/v2',
                       callback=self.get_processings_callback,
                       callback_kwargs={"caller": f"setup_table_{self.project_id}"},
                       use_default_error_handler=False)

@@ -29,14 +29,6 @@ class PostProviderSchema(Serializable, SkipDataClass):
 
 
 @dataclass
-class ProcessingParamsSchema(SkipDataClass):
-    data_provider: Optional[str] = None
-    url: Optional[str] = None
-    projection: Optional[str] = None
-    source_type: Optional[str] = None
-
-
-@dataclass
 class PostProcessingSchema(Serializable):
     name: str
     wdId: Optional[str]
@@ -89,7 +81,7 @@ class UserDefinedParams(Serializable):
 
 
 @dataclass
-class PostProcessingParams(Serializable):
+class ProcessingParams(Serializable, SkipDataClass):
     sourceParams: Union[DataProviderParams,
                         MyImageryParams,
                         ImagerySearchParams,
@@ -103,6 +95,6 @@ class PostProcessingSchemaV2(Serializable):
     projectId: str
     wdId: Optional[str]
     geometry: Mapping[str, Any]
-    params: PostProcessingParams
+    params: ProcessingParams
     meta: Optional[Mapping[str, Any]]
     blocks: Optional[Iterable[BlockOption]]
