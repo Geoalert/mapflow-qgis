@@ -33,7 +33,7 @@ from .dialogs import (MainDialog,
                       UpdateProjectDialog,
                       UpdateProcessingDialog,
                       )
-from .dialogs.dialogs import ConfirmProcessingStart
+from .dialogs.dialogs import ConfirmProcessingStart, ProcessingDetails
 from .dialogs.icons import plugin_icon
 from .functional.controller.data_catalog_controller import DataCatalogController
 from .config import Config, ConfigColumns
@@ -2616,7 +2616,7 @@ class Mapflow(QObject):
 
         self.dlg.set_processing_rating_labels(processing_name=p_name)
         self.http.get(
-            url=f'{self.server}/processings/{pid}',
+            url=f'{self.server}/processings/{pid}/v2',
             callback=self.update_processing_current_rating_callback
         )
 
@@ -3349,38 +3349,13 @@ class Mapflow(QObject):
         processing = self.selected_processing()
         if not processing:
             return
-        message = self.tr("<b>Name</b>: {name}"
-                          "<br><b>ID</b></br>: {pid}"
-                          "<br><b>Status</b></br>: {status}"
-                          "<br><b>Model</b></br>: {model}").format(name=processing.name,
-                                                                   pid=processing.id_,
-                                                                   model=processing.workflow_def,
-                                                                   status=processing.status.value)
-        if processing.description:
-            message += self.tr("<br><b>Description</b></br>: {description}").format(description=processing.description)
-        if processing.blocks: 
-            if any([block.enabled for block in processing.blocks]):
-                message += self.tr("<br><b>Model options:</b></br>"
-                                    " {options}").format(options=", ".join(block.name
-                                                                      for block in processing.blocks
-                                                                           if block.enabled))
-            else:
-                message += self.tr("<br><b>Model options:</b></br>" " No options selected")
-                
-        if processing.params.data_provider:
-            message += self.tr("<br><b>Data provider</b></br>: {provider}").format(provider=processing.params.data_provider)
-        elif (processing.params.source_type and processing.params.source_type.lower() in ("local", "tif", "tiff")) \
-                or (processing.params.url and processing.params.url.startswith("s3://")):
-            # case of user's raster file; we do not want to display internal file address
-            message += self.tr("<br><b>Data source</b></br>: uploaded file")
-        elif processing.params.url:
-            message += self.tr("<br><b>Data source link</b></br> {url}").format(url=processing.params.url)
-
+        error = None
         if processing.errors:
-            message += "<br><b>Errors</b>:</br>" + "<br></br>" + processing.error_message(raw=self.config.SHOW_RAW_ERROR)
-        self.alert(message=message,
-                   icon=QMessageBox.Information,
-                   blocking=False)
+            error = processing.error_message(raw=self.config.SHOW_RAW_ERROR)
+        dialog = ProcessingDetails(self.dlg)
+        dialog.toSourceButton.clicked.connect(lambda: self.data_catalog_service.show_processing_source(provider=processing.params.sourceParams))
+        dialog.setup(processing, error or None)
+        dialog.deleteLater()
 
     def update_processing(self):
         processing = self.selected_processing()

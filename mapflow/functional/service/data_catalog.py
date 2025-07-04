@@ -580,6 +580,9 @@ class DataCatalogService(QObject):
             if my_imagery_index:
                 self.dlg.sourceCombo.setCurrentIndex(my_imagery_index)
     
+    def show_processing_source(self, provider):
+        self.view.show_processing_source(provider)
+    
     # Other
     def open_imagery_docs(self):
         helpers.open_imagery_docs()

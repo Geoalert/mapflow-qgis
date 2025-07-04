@@ -5,7 +5,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QDialogButtonBox, QAbstractItemView, QListWidgetItem
 from qgis.core import QgsMapLayerProxyModel
 
-from .icons import plugin_icon
+from .icons import plugin_icon, options_icon
+from ..schema import MyImageryParams, UserDefinedParams, ProcessingParams
 
 ui_path = Path(__file__).parent/'static'/'ui'
 
@@ -112,3 +113,69 @@ class ConfirmProcessingStart(*uic.loadUiType(ui_path / 'processing_start_confirm
             blocks = [block.text() for block in blocks if block.isChecked()]
         self.modelOptionsLabel.setText(', \n'.join(blocks))
         self.exec() 
+
+class ProcessingDetails(*uic.loadUiType(ui_path / 'processing_details.ui')):
+    def __init__(self, parent: QWidget) -> None:
+        """A dialog with processing infromation and the ability to switch to provider or my imagery."""
+        super().__init__(parent)
+        self.setupUi(self)
+        self.setWindowIcon(plugin_icon)
+        self.setWindowTitle(self.tr("Processing details"))
+    
+    def setup(self, processing, error) -> None:
+        self.toSourceButton.setIcon(options_icon)
+        # Set name
+        self.nameInfo.setText(processing.name)
+        # Set id
+        self.idInfo.setText(processing.id_)
+        # Set description 
+        if processing.description:
+            self.descriptionLabel.setVisible(True)
+            self.descriptionInfo.setVisible(True)
+            self.descriptionInfo.setText(processing.description)
+        else:
+            self.descriptionLabel.setVisible(False)
+            self.descriptionInfo.setVisible(False)
+        # Set status
+        self.statusInfo.setText(processing.status.value)
+        # Set data provider
+        provider = processing.params.sourceParams
+        if provider.get("dataProvider"):
+            provider = provider.get("dataProvider").get("providerName")
+            self.toSourceButton.setVisible(False)
+        elif provider.get("imagerySearch"):
+            provider = provider.get("imagerySearch").get("dataProvider")
+            self.toSourceButton.setVisible(False)
+        elif provider.get("myImagery"):
+            provider = self.tr("My imagery")
+            self.toSourceButton.setVisible(True)
+        elif provider.get("userDefined"):
+            provider = provider.get("userDefined").get("url")
+            self.toSourceButton.setVisible(True)
+        self.providerInfo.setText(str(provider))
+        self.providerInfo.setFixedWidth(self.providerInfo.sizeHint().width())
+        # Set model
+        self.modelInfo.setText(processing.workflow_def)
+        # Set model options
+        if processing.blocks: 
+            blocks = ", \n".join(block.name for block in processing.blocks if block.enabled)
+            if blocks:
+                self.optionsLabel.setVisible(True)
+                self.optionsInfo.setVisible(True)
+                self.optionsInfo.setText(blocks)
+            else:
+                self.optionsLabel.setVisible(False)
+                self.optionsInfo.setVisible(False)
+        else:
+            self.optionsLabel.setVisible(False)
+            self.optionsInfo.setVisible(False)
+        # Set error
+        if error:
+            self.errorLabel.setVisible(True)
+            self.errorInfo.setVisible(True)
+            self.errorInfo.setText(error)
+        else:
+            self.errorLabel.setVisible(False)
+            self.errorInfo.setVisible(False)
+        self.adjustSize()
+        self.exec()

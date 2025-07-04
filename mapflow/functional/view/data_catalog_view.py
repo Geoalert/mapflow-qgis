@@ -10,7 +10,7 @@ from PyQt5.QtGui import QPixmap, QFontMetrics
 from ...schema.data_catalog import MosaicReturnSchema, ImageReturnSchema
 from ...dialogs import icons
 from ...functional.helpers import get_readable_size
-
+from ...schema.processing import ProcessingParams
 
 class DataCatalogView(QObject):
     def __init__(self, dlg: MainDialog):
@@ -303,9 +303,12 @@ class DataCatalogView(QObject):
         return pids
     
     def select_mosaic_cell(self, mosaic_id):
-        # Store widgets before deleting a row
         item = self.dlg.mosaicTable.findItems(mosaic_id, Qt.MatchExactly)[0]
         self.dlg.mosaicTable.setCurrentCell(item.row(), 1)
+
+    def select_image_cell(self, image_id):    
+        item = self.imageTable.findItems(image_id, Qt.MatchExactly)[0]
+        self.imageTable.setCurrentCell(item.row(), 1)
 
     def selected_images_indecies(self, limit=None):
         selected_rows = list(set(index.row() for index in self.dlg.imageTable.selectionModel().selectedIndexes()))
@@ -511,6 +514,46 @@ class DataCatalogView(QObject):
             item_name = table.item(row, 1).data(Qt.DisplayRole)
             hide = bool(name_filter) and ((name_filter.lower() not in item_id.lower() and name_filter.lower() not in item_name.lower()))
             table.setRowHidden(row, hide)
+    
+    def show_processing_source(self, 
+                               provider: ProcessingParams):
+        """Switch to My imagery or user provider dialog when ckicking on toSourceButton in ProcessingDetails dialog."""
+        if provider.get("myImagery"):
+            my_imagery_provider = provider.get("myImagery")
+            my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
+            if my_imagery_provider.get("mosaicId"):
+                self.dlg.mosaicTable.clearSelection()
+                mosaic_id = my_imagery_provider.get("mosaicId")
+                self.select_mosaic_cell(mosaic_id)
+                self.dlg.stackedLayout.setCurrentIndex(0)
+                self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
+            elif my_imagery_provider.get("imageIds"):
+                self.dlg.imageTable.clearSelection()
+                try:
+                    image_id = my_imagery_provider.get("imageIds")[0]
+                    self.select_image_cell(image_id)
+                    self.dlg.stackedLayout.setCurrentIndex(1)
+                    self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
+                except:
+                    pass
+        elif provider.get("userDefined"):
+            user_provider = provider.get("userDefined")
+            settings_tab = self.dlg.tabWidget.findChild(QWidget, "settingsTab")
+            self.dlg.tabWidget.setCurrentWidget(settings_tab)
+            text = self.tr("<center>User defined provider:</center>"
+                           "<br><b>URL:</b> {url},"
+                           "<br><b>Source type:</b> {type},"
+                           "<br><b>CRS:</b> {crs}").format(type=user_provider.get("sourceType"),
+                                                           url=user_provider.get("url"),
+                                                           crs=user_provider.get("crs").upper())
+            if user_provider.get("zoom"):
+                text += self.tr(", <br><b>Zoom:</b> {zoom}").format(zoom=user_provider.get("zoom"))
+            if user_provider.get("rasterPassword"):
+                text += self.tr(", <br><b>Raster login:</b> {login}" +
+                                ", <br><b>Raster password:</b> {password}").format(login=user_provider.get("rasterLogin"),
+                                                                                   password=user_provider.get("rasterPassword"))
+            box = QMessageBox(QMessageBox.Information, "Mapflow", text, parent=QApplication.activeWindow())
+            box.exec()
         
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """A duplicate of alert function from mapflow.py to avoid circular import.
