@@ -123,6 +123,7 @@ class ProjectService(QObject):
     def get_projects_callback(self, response: QNetworkReply):
         self.projects_data = ProjectsResult.from_dict(json.loads(response.readAll().data()))
         self.projects = [MapflowProject.from_dict(project) for project in self.projects_data.results]
+        self.dlg.projectsTable.setSortingEnabled(False) # temporary disable sorting by clicking the header
         self.view.setup_projects_table(self.projects)
         # En(dis)able page controls based on total, limit and offset
         if self.projects_data.total > self.projects_page_limit:

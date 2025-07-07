@@ -86,7 +86,6 @@ class ProjectView(QObject):
             created_item.setData(Qt.DisplayRole, project.created.astimezone().strftime('%Y-%m-%d %H:%M'))
             self.dlg.projectsTable.setItem(row, 6, created_item)
             self.dlg.projectsTable.setHorizontalHeaderLabels(self.columns_config.PROJECTS_TABLE_COLUMNS)
-
         self.dlg.projectsTable.resizeColumnsToContents()
         for column_idx in (1, 4):
             # these columns are user-defined and can expand too wide, so we bound them
@@ -95,6 +94,7 @@ class ProjectView(QObject):
         self.dlg.projectsTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
         self.dlg.projectsTable.horizontalHeader().setStretchLastSection(True)
         self.dlg.projectsTable.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.dlg.projectsTable.setSortingEnabled(True) # enable sorting by header click
 
     def select_project(self, project_id):
         try:
