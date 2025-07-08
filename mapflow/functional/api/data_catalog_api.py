@@ -238,7 +238,7 @@ class DataCatalogApi(QObject):
         else:
             message = self.tr("Could not upload following images:\n{images}").format(images= ', \n'.join(image_paths))
         ErrorMessageWidget(parent=QApplication.activeWindow(),
-                           text= error_summary,
+                           text=error_summary,
                            title=message,
                            email_body=email_body).show()
 

@@ -273,12 +273,12 @@ class DataCatalogService(QObject):
                       uploaded: Sequence[Union[Path, str]],
                       failed: Sequence[Union[Path, str]]):
         if len(image_paths) == 0:
-            if failed:
-                self.api.upload_image_error_handler(response=response, mosaic_name=mosaic_name, image_paths=failed)
             self.get_mosaic(mosaic_id)
             self.dlg.mosaicTable.clearSelection()
             self.dlg.raise_()
             self.mosaicsUpdated.emit()
+            if failed:
+                self.api.upload_image_error_handler(response=response, mosaic_name=mosaic_name, image_paths=failed)
         else:
             image_to_upload = image_paths[0]
             non_uploaded = image_paths[1:]
