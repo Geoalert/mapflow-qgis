@@ -75,6 +75,7 @@ class ImageMetadataSchema(SkipDataClass):
 @dataclass
 class ImageReturnSchema(SkipDataClass):
     id: UUID
+    mosaic_id: UUID
     image_url: str
     preview_url_l: str
     preview_url_s: str

@@ -29,6 +29,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     modelOptionsChanged = pyqtSignal()
     rasterSourceChanged = pyqtSignal()
     metadataTableFilled = pyqtSignal()
+    imageTableFilled = pyqtSignal()
 
     def __init__(self, parent: QWidget, settings: QgsSettings) -> None:
         """Plugin's main dialog."""

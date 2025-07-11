@@ -580,8 +580,19 @@ class DataCatalogService(QObject):
             if my_imagery_index:
                 self.dlg.sourceCombo.setCurrentIndex(my_imagery_index)
     
-    def show_processing_source(self, provider):
+    def show_processing_source(self, provider, window):
         self.view.show_processing_source(provider)
+        if provider.get("myImagery"):
+            my_imagery_provider = provider.get("myImagery")
+            if my_imagery_provider.get("imageIds"):
+                image_id = my_imagery_provider.get("imageIds")[0]
+                self.get_image(image_id, self.get_image_callback)
+        window.close()
+                
+    def get_image_callback(self, response: QNetworkReply):
+        image = ImageReturnSchema.from_dict(json.loads(response.readAll().data()))
+        self.view.select_mosaic_cell(image.mosaic_id)
+        self.dlg.imageTableFilled.connect(lambda: self.view.select_image_cell(image.id))
     
     # Other
     def open_imagery_docs(self):

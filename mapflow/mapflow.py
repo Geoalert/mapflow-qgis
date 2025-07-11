@@ -3359,7 +3359,7 @@ class Mapflow(QObject):
         if processing.errors:
             error = processing.error_message(raw=self.config.SHOW_RAW_ERROR)
         dialog = ProcessingDetails(self.dlg)
-        dialog.toSourceButton.clicked.connect(lambda: self.data_catalog_service.show_processing_source(provider=processing.params.sourceParams))
+        dialog.toSourceButton.clicked.connect(lambda: self.data_catalog_service.show_processing_source(provider=processing.params.sourceParams, window=dialog))
         dialog.setup(processing, error or None)
         dialog.deleteLater()
 

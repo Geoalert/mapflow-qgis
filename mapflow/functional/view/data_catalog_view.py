@@ -286,8 +286,13 @@ class DataCatalogView(QObject):
         else:
             self.dlg.previewMosaicButton.setEnabled(True)
             self.dlg.showImagesButton.setEnabled(True)
+            if self.dlg.stackedLayout.currentIndex() == 1:
+                # If image table is currenltly opened
+                self.dlg.seeImagesButton.setEnabled(False)
+                self.dlg.seeMosaicsButton.setEnabled(True)
         self.sort_catalog()
         self.filter_catalog_table(self.dlg.filterCatalog.text())
+        self.dlg.imageTableFilled.emit()
 
     def show_preview_s(self, preview_image):
         self.dlg.imagePreview.setPixmap(QPixmap.fromImage(preview_image))
@@ -306,9 +311,12 @@ class DataCatalogView(QObject):
         item = self.dlg.mosaicTable.findItems(mosaic_id, Qt.MatchExactly)[0]
         self.dlg.mosaicTable.setCurrentCell(item.row(), 1)
 
-    def select_image_cell(self, image_id):    
-        item = self.imageTable.findItems(image_id, Qt.MatchExactly)[0]
-        self.imageTable.setCurrentCell(item.row(), 1)
+    def select_image_cell(self, image_id):
+        try:
+            item = self.dlg.imageTable.findItems(image_id, Qt.MatchExactly)[0]
+            self.dlg.imageTable.setCurrentCell(item.row(), 1)
+        except:
+            pass
 
     def selected_images_indecies(self, limit=None):
         selected_rows = list(set(index.row() for index in self.dlg.imageTable.selectionModel().selectedIndexes()))
@@ -523,15 +531,12 @@ class DataCatalogView(QObject):
             my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
             if my_imagery_provider.get("mosaicId"):
                 self.dlg.mosaicTable.clearSelection()
-                mosaic_id = my_imagery_provider.get("mosaicId")
-                self.select_mosaic_cell(mosaic_id)
                 self.dlg.stackedLayout.setCurrentIndex(0)
                 self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
             elif my_imagery_provider.get("imageIds"):
                 self.dlg.imageTable.clearSelection()
                 try:
-                    image_id = my_imagery_provider.get("imageIds")[0]
-                    self.select_image_cell(image_id)
+                    self.dlg.imageTable.clearSelection()
                     self.dlg.stackedLayout.setCurrentIndex(1)
                     self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
                 except:
