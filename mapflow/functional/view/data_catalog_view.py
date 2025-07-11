@@ -286,10 +286,9 @@ class DataCatalogView(QObject):
         else:
             self.dlg.previewMosaicButton.setEnabled(True)
             self.dlg.showImagesButton.setEnabled(True)
-            if self.dlg.stackedLayout.currentIndex() == 1:
-                # If image table is currenltly opened
-                self.dlg.seeImagesButton.setEnabled(False)
-                self.dlg.seeMosaicsButton.setEnabled(True)
+        if self.dlg.stackedLayout.currentIndex() == 1: # if image table is currenltly opened
+            self.dlg.seeImagesButton.setEnabled(False)
+            self.dlg.seeMosaicsButton.setEnabled(True)
         self.sort_catalog()
         self.filter_catalog_table(self.dlg.filterCatalog.text())
         self.dlg.imageTableFilled.emit()
@@ -419,6 +418,7 @@ class DataCatalogView(QObject):
                 item.setToolTip(text)
 
     def show_images_table(self):
+        self.dlg.imageTable.clearSelection()
         row = self.dlg.selected_mosaic_cell.row()
         column = self.dlg.selected_mosaic_cell.column()
         # Temporary forbit selection to prevent weird bug
