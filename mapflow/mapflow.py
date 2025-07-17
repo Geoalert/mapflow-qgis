@@ -2518,6 +2518,7 @@ class Mapflow(QObject):
         layer_name = provider.name
         try:
             url = provider.preview_url(image_id=image_id)
+            preview_max_zoom = provider.preview_max_zoom
         except ImageIdRequired as e:
             self.alert(self.tr("Provider {name} requires image id for preview!").format(name=provider.name),
                        QMessageBox.Warning)
@@ -2535,7 +2536,7 @@ class Mapflow(QObject):
         uri = layer_utils.generate_xyz_layer_definition(url,
                                                         provider.credentials.login,
                                                         provider.credentials.password,
-                                                        max_zoom,
+                                                        preview_max_zoom or max_zoom,
                                                         provider.source_type)
         layer = QgsRasterLayer(uri, layer_name, 'wms')
         layer.setCrs(QgsCoordinateReferenceSystem(provider.crs))

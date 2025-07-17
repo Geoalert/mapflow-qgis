@@ -11,6 +11,7 @@ class ProviderReturnSchema(SkipDataClass):
     displayName: str
     price: List[Dict]
     previewUrl: Optional[str] = None
+    previewUrlMaxZoom: Optional[int] = None
 
     def __post_init__(self):
         self.price_dict = {price["zoom"]: price["priceSqKm"] for price in self.price}

@@ -56,6 +56,10 @@ class ProviderInterface:
         self.name = name
 
     @property
+    def preview_max_zoom(self):
+        return None
+
+    @property
     def is_default(self):
         raise NotImplementedError
 
