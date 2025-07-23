@@ -347,6 +347,11 @@ class DataCatalogApi(QObject):
                       callback=callback,
                       use_default_error_handler=True)
 
+    def update_image_name(self, image_id: UUID, name: str, callback: Callable):
+        self.http.put(url=f"{self.server}/rasters/image/{image_id}?name={name}",
+                      callback=callback,
+                      use_default_error_handler=True)
+
     @staticmethod
     def create_upload_image_body(image_path):
         body = QHttpMultiPart(QHttpMultiPart.FormDataType)
