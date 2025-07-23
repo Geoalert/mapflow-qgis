@@ -305,6 +305,20 @@ class DataCatalogView(QObject):
         except: # if there was no connection
             pass
 
+    def rename_image_in_table(self, image: ImageReturnSchema):
+        if self.mosaic_table_visible:
+            # if the images table is not displayed, nothing to change
+            return
+        items = self.dlg.imageTable.findItems(image.id, Qt.MatchExactly)
+        if not items:
+            # if the image is not present in the table, do nothing.
+            # It may be if image is deleted, or other mosaic is opened
+            return
+        item = items[0]
+        name_item = QTableWidgetItem()
+        name_item.setData(Qt.DisplayRole, image.filename)
+        self.dlg.imageTable.setItem(item.row(), 1, name_item)
+
     def show_preview_s(self, preview_image):
         self.dlg.imagePreview.setPixmap(QPixmap.fromImage(preview_image))
         self.dlg.imagePreview.setAlignment(Qt.AlignTop | Qt.AlignHCenter)

@@ -486,10 +486,12 @@ class DataCatalogService(QObject):
         self.iface.zoomToActiveLayer()
 
     def rename_image_callback(self, response: QNetworkReply):
-        image = ImageReturnSchema.from_dict(json.loads(response.readAll().data()))
-        mosaic_id = image.mosaic_id
-        self.dlg.mosaicTable.clearSelection()
-        self.get_mosaic(mosaic_id)
+        new_image = ImageReturnSchema.from_dict(json.loads(response.readAll().data()))
+        for image in self.images:
+            if image.id == new_image.id:
+                image.filename = new_image.filename
+                break
+        self.view.rename_image_in_table(new_image)
         self.iface.messageBar().pushMessage("Mapflow", "Image renamed")
 
     def show_rename_image_dialog(self):
