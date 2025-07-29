@@ -14,14 +14,16 @@ from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsRasterLayer, 
 
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs.mosaic_dialog import CreateMosaicDialog, UpdateMosaicDialog
-from ...dialogs.dialogs import UploadRasterLayersDialog
+from ...dialogs.upload_raster_layer_dialog import UploadRasterLayersDialog
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema, MosaicCreateReturnSchema, UserLimitSchema
+from ...schema import DataProviderParams, MyImageryParams, ImagerySearchParams, UserDefinedParams
 from ..api.data_catalog_api import DataCatalogApi
 from ..view.data_catalog_view import DataCatalogView
 from ...http import Http
 from ...functional import layer_utils, helpers
 from ...config import Config
 from ...entity.provider import MyImageryProvider
+
 
 
 class DataCatalogService(QObject):
@@ -579,20 +581,23 @@ class DataCatalogService(QObject):
             # Set My imagery data source
             if my_imagery_index:
                 self.dlg.sourceCombo.setCurrentIndex(my_imagery_index)
-    
-    def show_processing_source(self, provider, window):
-        self.view.show_processing_source(provider)
-        if provider.get("myImagery"):
-            my_imagery_provider = provider.get("myImagery")
-            if my_imagery_provider.get("imageIds"):
-                image_id = my_imagery_provider.get("imageIds")[0]
+                                    
+    def show_processing_source(self, 
+                               source_params: Union[DataProviderParams, MyImageryParams, ImagerySearchParams, UserDefinedParams], 
+                               window):
+        self.view.show_processing_source(source_params)
+        if isinstance(source_params, MyImageryParams):
+            if source_params.imageIds:
+                # Get full image info to obtain mosaic_id
+                image_id = source_params.imageIds[0]
                 self.get_image(image_id, self.get_image_callback)
         window.close()
-                
+
     def get_image_callback(self, response: QNetworkReply):
         image = ImageReturnSchema.from_dict(json.loads(response.readAll().data()))
         self.view.select_mosaic_cell(image.mosaic_id)
-        self.dlg.imageTableFilled.connect(lambda: self.view.select_image_cell(image.id))
+        self.view.show_source_image_connection = self.dlg.imageTableFilled.connect(lambda: self.view.select_image_cell(image.id))
+
     
     # Other
     def open_imagery_docs(self):

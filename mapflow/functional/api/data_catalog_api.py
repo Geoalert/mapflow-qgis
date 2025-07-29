@@ -11,7 +11,7 @@ from qgis.core import QgsMapLayer, QgsRectangle
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, ImageReturnSchema, MosaicUpdateSchema
 from ...http import Http, get_error_report_body, data_catalog_message_parser
 from ...functional import layer_utils
-from ...dialogs.dialogs import ErrorMessageWidget
+from ...dialogs.error_message_widget import ErrorMessageWidget
 from ...dialogs.main_dialog import MainDialog
 
 

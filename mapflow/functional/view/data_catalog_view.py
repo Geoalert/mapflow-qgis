@@ -1,16 +1,17 @@
 from typing import List, Optional
 import sys
 
-from ...dialogs.main_dialog import MainDialog
 from PyQt5.QtCore import QObject, Qt
 from PyQt5.QtWidgets import (QWidget, QTableWidget, QTableWidgetItem, QHeaderView, QHBoxLayout, QAbstractItemView, QToolButton,
                              QMessageBox, QApplication, QMenu, QAction)
 from PyQt5.QtGui import QPixmap, QFontMetrics
 
-from ...schema.data_catalog import MosaicReturnSchema, ImageReturnSchema
 from ...dialogs import icons
+from ...dialogs.error_message_widget import ErrorMessageWidget
+from ...dialogs.main_dialog import MainDialog
 from ...functional.helpers import get_readable_size
-from ...schema.processing import ProcessingParams
+from ...schema import MyImageryParams, UserDefinedParams
+from ...schema.data_catalog import MosaicReturnSchema, ImageReturnSchema
 
 class DataCatalogView(QObject):
     def __init__(self, dlg: MainDialog):
@@ -87,6 +88,9 @@ class DataCatalogView(QObject):
         # Other text
         self.dlg.myImageryDocsButton.setToolTip(self.tr("More about My imagery"))
         self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter imagery collections by name or id"))
+
+        # Connection on toSourceButton click in a ProcessingDetailsDialog
+        self.show_source_image_connection = None
 
     @property
     def mosaic_table_visible(self):
@@ -286,12 +290,16 @@ class DataCatalogView(QObject):
         else:
             self.dlg.previewMosaicButton.setEnabled(True)
             self.dlg.showImagesButton.setEnabled(True)
-        if self.dlg.stackedLayout.currentIndex() == 1: # if image table is currenltly opened
+        if not self.mosaic_table_visible: # if image table is currenltly opened, enable <
             self.dlg.seeImagesButton.setEnabled(False)
             self.dlg.seeMosaicsButton.setEnabled(True)
         self.sort_catalog()
         self.filter_catalog_table(self.dlg.filterCatalog.text())
         self.dlg.imageTableFilled.emit()
+        try: # disconnect signal for selecting image in a table on toSourceButton click
+            self.dlg.imageTableFilled.disconnect(self.show_source_image_connection)
+        except: # if there was no connection
+            pass
 
     def show_preview_s(self, preview_image):
         self.dlg.imagePreview.setPixmap(QPixmap.fromImage(preview_image))
@@ -307,15 +315,18 @@ class DataCatalogView(QObject):
         return pids
     
     def select_mosaic_cell(self, mosaic_id):
-        item = self.dlg.mosaicTable.findItems(mosaic_id, Qt.MatchExactly)[0]
-        self.dlg.mosaicTable.setCurrentCell(item.row(), 1)
+        try:
+            item = self.dlg.mosaicTable.findItems(mosaic_id, Qt.MatchExactly)[0]
+            self.dlg.mosaicTable.setCurrentCell(item.row(), 1)
+        except IndexError:
+            self.alert(self.tr("No imagery collection with id '{mosaic_id}' was found").format(mosaic_id=mosaic_id))
 
     def select_image_cell(self, image_id):
         try:
             item = self.dlg.imageTable.findItems(image_id, Qt.MatchExactly)[0]
             self.dlg.imageTable.setCurrentCell(item.row(), 1)
-        except:
-            pass
+        except IndexError:
+            self.alert(self.tr("No image with id '{image_id}' was found").format(image_id=image_id))
 
     def selected_images_indecies(self, limit=None):
         selected_rows = list(set(index.row() for index in self.dlg.imageTable.selectionModel().selectedIndexes()))
@@ -523,17 +534,16 @@ class DataCatalogView(QObject):
             hide = bool(name_filter) and ((name_filter.lower() not in item_id.lower() and name_filter.lower() not in item_name.lower()))
             table.setRowHidden(row, hide)
     
-    def show_processing_source(self, 
-                               provider: ProcessingParams):
-        """Switch to My imagery or user provider dialog when ckicking on toSourceButton in ProcessingDetails dialog."""
-        if provider.get("myImagery"):
-            my_imagery_provider = provider.get("myImagery")
+    def show_processing_source(self, source_params):
+        """Switch to My imagery or user provider dialog when ckicking on toSourceButton in ProcessingDetailsDialog."""
+        if isinstance(source_params, MyImageryParams):
             my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
-            if my_imagery_provider.get("mosaicId"):
+            if source_params.mosaicId:
                 self.dlg.mosaicTable.clearSelection()
                 self.dlg.stackedLayout.setCurrentIndex(0)
                 self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
-            elif my_imagery_provider.get("imageIds"):
+                self.select_mosaic_cell(source_params.mosaicId)
+            elif source_params.imageIds:
                 self.dlg.imageTable.clearSelection()
                 try:
                     self.dlg.imageTable.clearSelection()
@@ -541,24 +551,21 @@ class DataCatalogView(QObject):
                     self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
                 except:
                     pass
-        elif provider.get("userDefined"):
-            user_provider = provider.get("userDefined")
+        elif isinstance(source_params, UserDefinedParams):
             settings_tab = self.dlg.tabWidget.findChild(QWidget, "settingsTab")
             self.dlg.tabWidget.setCurrentWidget(settings_tab)
-            text = self.tr("<center>User defined provider:</center>"
-                           "<br><b>URL:</b> {url},"
+            text = self.tr("<b>URL:</b> {url},"
                            "<br><b>Source type:</b> {type},"
-                           "<br><b>CRS:</b> {crs}").format(type=user_provider.get("sourceType"),
-                                                           url=user_provider.get("url"),
-                                                           crs=user_provider.get("crs").upper())
-            if user_provider.get("zoom"):
-                text += self.tr(", <br><b>Zoom:</b> {zoom}").format(zoom=user_provider.get("zoom"))
-            if user_provider.get("rasterPassword"):
+                           "<br><b>CRS:</b> {crs}").format(type=source_params.sourceType,
+                                                           url=source_params.url,
+                                                           crs=source_params.crs.upper())
+            if source_params.zoom:
+                text += self.tr(", <br><b>Zoom:</b> {zoom}").format(zoom=source_params.zoom)
+            if source_params.rasterPassword:
                 text += self.tr(", <br><b>Raster login:</b> {login}" +
-                                ", <br><b>Raster password:</b> {password}").format(login=user_provider.get("rasterLogin"),
-                                                                                   password=user_provider.get("rasterPassword"))
-            box = QMessageBox(QMessageBox.Information, "Mapflow", text, parent=QApplication.activeWindow())
-            box.exec()
+                                ", <br><b>Raster password:</b> {password}").format(login=source_params.rasterLogin,
+                                                                                   password=source_params.rasterPassword)
+            self.alert(message=text, icon=QMessageBox.Information)
         
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """A duplicate of alert function from mapflow.py to avoid circular import.

@@ -9,7 +9,7 @@ from ...schema import (PostSourceSchema,
                        DataProviderParams,
                        MyImageryParams,
                        ImagerySearchParams,
-                       ProcessingParams,)
+                       ProcessingParams)
 from ...schema.provider import ProviderReturnSchema
 
 

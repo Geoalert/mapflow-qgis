@@ -33,7 +33,8 @@ from .dialogs import (MainDialog,
                       UpdateProjectDialog,
                       UpdateProcessingDialog,
                       )
-from .dialogs.dialogs import ConfirmProcessingStart, ProcessingDetails
+from .dialogs.confirm_processing_start_dialog import ConfirmProcessingStartDialog
+from .dialogs.processing_details_dialog import ProcessingDetailsDialog
 from .dialogs.icons import plugin_icon
 from .functional.controller.data_catalog_controller import DataCatalogController
 from .config import Config, ConfigColumns
@@ -2037,7 +2038,6 @@ class Mapflow(QObject):
                                                                           s3_uri=s3_uri,
                                                                           zoom=zoom,
                                                                           provider_name=provider_name)
-            
             if self.zoom_selector:
                 if isinstance(provider_params, PostSourceSchema): # no zoom for tifs
                     if provider_params.source_type == 'tif':
@@ -2096,7 +2096,7 @@ class Mapflow(QObject):
                 self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
         # Show processing start confirmation dialog if checkbox is checked
         if self.dlg.cornfirmProcessingStart.isChecked():
-            dialog = ConfirmProcessingStart(self.dlg)
+            dialog = ConfirmProcessingStartDialog(self.dlg)
             # Define actions on checkbox toggling
             def set_start_confirmation():
                 # Set "Confirm" checkbox opposite to "Don't show again" if they are not already the same
@@ -3358,9 +3358,11 @@ class Mapflow(QObject):
         error = None
         if processing.errors:
             error = processing.error_message(raw=self.config.SHOW_RAW_ERROR)
-        dialog = ProcessingDetails(self.dlg)
-        dialog.toSourceButton.clicked.connect(lambda: self.data_catalog_service.show_processing_source(provider=processing.params.sourceParams, window=dialog))
-        dialog.setup(processing, error or None)
+        dialog = ProcessingDetailsDialog(self.dlg)
+        source_params = dialog.get_source_params(processing.params.sourceParams)
+        dialog.toSourceButton.clicked.connect(lambda: self.data_catalog_service.show_processing_source(source_params=source_params, 
+                                                                                                       window=dialog))
+        dialog.setup(processing, source_params, error or None)
         dialog.deleteLater()
 
     def update_processing(self):
