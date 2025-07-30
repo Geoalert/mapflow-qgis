@@ -4,7 +4,7 @@ from typing import List, Dict, Optional, Tuple
 
 from .status import ProcessingStatus, ProcessingReviewStatus
 from ..errors import ErrorMessage
-from ..schema.processing import ProcessingParamsSchema, BlockOption
+from ..schema.processing import BlockOption, ProcessingParams
 
 
 class Processing:
@@ -22,7 +22,7 @@ class Processing:
                  errors=None,
                  review_status=None,
                  in_review_until=None,
-                 params: Optional[ProcessingParamsSchema] = None,
+                 params: Optional[ProcessingParams] = None,
                  blocks: Optional[List[BlockOption]] = None,
                  description: Optional[str] = None,
                  **kwargs):
@@ -72,7 +72,7 @@ class Processing:
         else:
             review_status = in_review_until = None
         cost = processing.get('cost', 0)
-        params = ProcessingParamsSchema.from_dict(processing.get("params"))
+        params = ProcessingParams.from_dict(processing.get("params"))
         blocks = [BlockOption.from_dict(block) for block in processing.get("blocks", [])]
         return cls(id_,
                    name,

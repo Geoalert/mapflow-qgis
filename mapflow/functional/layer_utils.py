@@ -27,7 +27,7 @@ from qgis.core import (QgsRectangle,
 
 from .geometry import clip_aoi_to_image_extent, clip_aoi_to_catalog_extent
 from .helpers import WGS84, to_wgs84, WGS84_ELLIPSOID
-from ..dialogs.dialogs import ErrorMessageWidget
+from ..dialogs.error_message_widget import ErrorMessageWidget
 from ..schema.catalog import AoiResponseSchema
 from ..styles import get_style_name
 

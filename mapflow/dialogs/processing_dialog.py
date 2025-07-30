@@ -1,10 +1,13 @@
+from pathlib import Path
+
 from PyQt5 import uic
 from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 
-from .dialogs import ui_path, plugin_icon
 from ..entity.processing import Processing
+from .icons import plugin_icon
 from ..schema.processing import UpdateProcessingSchema
 
+ui_path = Path(__file__).parent/'static'/'ui'
 
 class UpdateProcessingDialog(*uic.loadUiType(ui_path/'processing_dialog.ui')):
     def __init__(self, parent: QWidget) -> None:

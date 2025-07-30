@@ -33,7 +33,8 @@ from .dialogs import (MainDialog,
                       UpdateProjectDialog,
                       UpdateProcessingDialog,
                       )
-from .dialogs.dialogs import ConfirmProcessingStart
+from .dialogs.confirm_processing_start_dialog import ConfirmProcessingStartDialog
+from .dialogs.processing_details_dialog import ProcessingDetailsDialog
 from .dialogs.icons import plugin_icon
 from .functional.controller.data_catalog_controller import DataCatalogController
 from .config import Config, ConfigColumns
@@ -1824,7 +1825,7 @@ class Mapflow(QObject):
             else:
                 if self.user_role.can_start_processing:
                     self.http.post(
-                        url=f"{self.server}/processing/cost",
+                        url=f"{self.server}/processing/cost/v2",
                         callback=self.calculate_processing_cost_callback,
                         body=request_body.as_json().encode(),
                         use_default_error_handler=False,
@@ -2037,7 +2038,6 @@ class Mapflow(QObject):
                                                                           s3_uri=s3_uri,
                                                                           zoom=zoom,
                                                                           provider_name=provider_name)
-            
             if self.zoom_selector:
                 if isinstance(provider_params, PostSourceSchema): # no zoom for tifs
                     if provider_params.source_type == 'tif':
@@ -2096,7 +2096,7 @@ class Mapflow(QObject):
                 self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
         # Show processing start confirmation dialog if checkbox is checked
         if self.dlg.cornfirmProcessingStart.isChecked():
-            dialog = ConfirmProcessingStart(self.dlg)
+            dialog = ConfirmProcessingStartDialog(self.dlg)
             # Define actions on checkbox toggling
             def set_start_confirmation():
                 # Set "Confirm" checkbox opposite to "Don't show again" if they are not already the same
@@ -2352,10 +2352,16 @@ class Mapflow(QObject):
         preview_type = feature.attribute('previewType')
         self.iface.mapCanvas().zoomToSelected(self.metadata_layer)
         self.iface.mapCanvas().refresh()
-        if preview_type == PreviewType.png:
+        if not preview_type:
+            self.alert(self.tr("Selected imagery has no preview"))
+            return
+        if preview_type in (PreviewType.png, PreviewType.jpg):
+            if not url:
+                self.alert(self.tr("Preview with such URL is unavailable"))
+                return
             self.preview_png(url, footprint, image_id)
         else:
-            self.alert(self.tr("Only PNG preview type is supported."
+            self.alert(self.tr("Only PNG and JPG preview types are supported."
                                '<br>See <a href="https://docs.mapflow.ai/api/qgis_mapflow.html#how-to-preview-the-search-results"><span style=" text-decoration: underline; color:#094fd1;">documentation</span></a> for help'))
 
     def preview_png(self,
@@ -2616,7 +2622,7 @@ class Mapflow(QObject):
 
         self.dlg.set_processing_rating_labels(processing_name=p_name)
         self.http.get(
-            url=f'{self.server}/processings/{pid}',
+            url=f'{self.server}/processings/{pid}/v2',
             callback=self.update_processing_current_rating_callback
         )
 
@@ -3208,7 +3214,7 @@ class Mapflow(QObject):
             empty_item = QTableWidgetItem("")
             self.dlg.processingsTable.setItem(0, column, empty_item)
         # Fetch processings at startup and start the timer to keep fetching them afterwards
-        self.http.get(url=f'{self.server}/projects/{self.project_id}/processings',
+        self.http.get(url=f'{self.server}/projects/{self.project_id}/processings/v2',
                       callback=self.get_processings_callback,
                       callback_kwargs={"caller": f"setup_table_{self.project_id}"},
                       use_default_error_handler=False)
@@ -3349,38 +3355,15 @@ class Mapflow(QObject):
         processing = self.selected_processing()
         if not processing:
             return
-        message = self.tr("<b>Name</b>: {name}"
-                          "<br><b>ID</b></br>: {pid}"
-                          "<br><b>Status</b></br>: {status}"
-                          "<br><b>Model</b></br>: {model}").format(name=processing.name,
-                                                                   pid=processing.id_,
-                                                                   model=processing.workflow_def,
-                                                                   status=processing.status.value)
-        if processing.description:
-            message += self.tr("<br><b>Description</b></br>: {description}").format(description=processing.description)
-        if processing.blocks: 
-            if any([block.enabled for block in processing.blocks]):
-                message += self.tr("<br><b>Model options:</b></br>"
-                                    " {options}").format(options=", ".join(block.name
-                                                                      for block in processing.blocks
-                                                                           if block.enabled))
-            else:
-                message += self.tr("<br><b>Model options:</b></br>" " No options selected")
-                
-        if processing.params.data_provider:
-            message += self.tr("<br><b>Data provider</b></br>: {provider}").format(provider=processing.params.data_provider)
-        elif (processing.params.source_type and processing.params.source_type.lower() in ("local", "tif", "tiff")) \
-                or (processing.params.url and processing.params.url.startswith("s3://")):
-            # case of user's raster file; we do not want to display internal file address
-            message += self.tr("<br><b>Data source</b></br>: uploaded file")
-        elif processing.params.url:
-            message += self.tr("<br><b>Data source link</b></br> {url}").format(url=processing.params.url)
-
+        error = None
         if processing.errors:
-            message += "<br><b>Errors</b>:</br>" + "<br></br>" + processing.error_message(raw=self.config.SHOW_RAW_ERROR)
-        self.alert(message=message,
-                   icon=QMessageBox.Information,
-                   blocking=False)
+            error = processing.error_message(raw=self.config.SHOW_RAW_ERROR)
+        dialog = ProcessingDetailsDialog(self.dlg)
+        dialog.toSourceButton.clicked.connect(lambda: self.data_catalog_service.show_processing_source(
+                                                           source_params=processing.params.sourceParams,
+                                                           window=dialog))
+        dialog.setup(processing, error or None)
+        dialog.deleteLater()
 
     def update_processing(self):
         processing = self.selected_processing()

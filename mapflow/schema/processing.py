@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import Optional, Mapping, Any, Union, Iterable, List
 
 from .base import SkipDataClass, Serializable
@@ -26,14 +26,6 @@ class PostProviderSchema(Serializable, SkipDataClass):
     data_provider: str
     url: Optional[str] = None
     zoom: Optional[str] = None
-
-
-@dataclass
-class ProcessingParamsSchema(SkipDataClass):
-    data_provider: Optional[str] = None
-    url: Optional[str] = None
-    projection: Optional[str] = None
-    source_type: Optional[str] = None
 
 
 @dataclass
@@ -89,11 +81,28 @@ class UserDefinedParams(Serializable):
 
 
 @dataclass
-class PostProcessingParams(Serializable):
+class ProcessingParams(Serializable, SkipDataClass):
     sourceParams: Union[DataProviderParams,
                         MyImageryParams,
                         ImagerySearchParams,
                         UserDefinedParams]
+    
+    @classmethod
+    def from_dict(cls, params_dict: dict):
+        clsf = [f.name for f in fields(cls)]
+        processing_params = cls(**{k: v for k, v in params_dict.items() if k in clsf})
+        source_params = processing_params.sourceParams
+        if source_params.get("dataProvider"):
+            source_params = DataProviderParams(**source_params.get("dataProvider"))
+        elif source_params.get("myImagery"):
+            source_params = MyImageryParams(**source_params.get("myImagery"))
+        elif source_params.get("imagerySearch"):
+            source_params = ImagerySearchParams(**source_params.get("imagerySearch"))
+        elif source_params.get("userDefined"):
+            source_params = UserDefinedParams(**source_params.get("userDefined"))
+        else:
+            source_params = "Unidentified"
+        return ProcessingParams(sourceParams=source_params)
 
 
 @dataclass
@@ -103,6 +112,6 @@ class PostProcessingSchemaV2(Serializable):
     projectId: str
     wdId: Optional[str]
     geometry: Mapping[str, Any]
-    params: PostProcessingParams
+    params: ProcessingParams
     meta: Optional[Mapping[str, Any]]
     blocks: Optional[Iterable[BlockOption]]

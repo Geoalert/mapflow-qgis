@@ -9,7 +9,7 @@ from ...schema import (PostSourceSchema,
                        DataProviderParams,
                        MyImageryParams,
                        ImagerySearchParams,
-                       PostProcessingParams,)
+                       ProcessingParams)
 from ...schema.provider import ProviderReturnSchema
 
 
@@ -74,9 +74,9 @@ class ImagerySearchProvider(ProviderInterface):
                              zoom: Optional[str] = None):
         if not self.image_id and self.requires_id is True:
             raise ImageIdRequired("Search provider must have image ID to launch the processing")
-        return PostProcessingParams(sourceParams=ImagerySearchParams(dataProvider=provider_name,
-                                                                     imageIds=self.image_id,
-                                                                     zoom=zoom)), {}
+        return ProcessingParams(sourceParams=ImagerySearchParams(dataProvider=provider_name,
+                                                                 imageIds=self.image_id,
+                                                                 zoom=zoom)), {}
 
     @property
     def meta_url(self):
@@ -113,8 +113,8 @@ class MyImageryProvider(ProviderInterface):
     def to_processing_params(self,
                              provider_name: Optional[str] = None,
                              zoom: Optional[str] = None):
-        return PostProcessingParams(sourceParams=MyImageryParams(imageIds=self.image_ids, 
-                                                                 mosaicId=self.mosaic_id)), {}
+        return ProcessingParams(sourceParams=MyImageryParams(imageIds=self.image_ids, 
+                                                             mosaicId=self.mosaic_id)), {}
 
 class DefaultProvider(ProviderInterface):
     """
@@ -178,5 +178,5 @@ class DefaultProvider(ProviderInterface):
     def to_processing_params(self,
                              provider_name: Optional[str] = None,
                              zoom: Optional[str] = None):
-        return PostProcessingParams(sourceParams=DataProviderParams(providerName=provider_name, 
-                                                                    zoom=zoom)), {}
+        return ProcessingParams(sourceParams=DataProviderParams(providerName=provider_name, 
+                                                                zoom=zoom)), {}

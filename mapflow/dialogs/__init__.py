@@ -1,4 +1,5 @@
-from .dialogs import ErrorMessageWidget, ReviewDialog
+from .error_message_widget import ErrorMessageWidget
+from .review_dialog import ReviewDialog
 from .login_dialog import MapflowLoginDialog
 from .main_dialog import MainDialog
 from .processing_dialog import UpdateProcessingDialog
