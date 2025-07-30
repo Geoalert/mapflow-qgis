@@ -13,21 +13,7 @@ class ProcessingDetailsDialog(*uic.loadUiType(ui_path / 'processing_details.ui')
         self.setWindowIcon(plugin_icon)
         self.setWindowTitle(self.tr("Processing details"))
     
-    def get_source_params(self, source_params: dict):
-        """Apply the right class to the source parameters."""
-        if source_params.get("dataProvider"):
-            source_params = DataProviderParams(**source_params.get("dataProvider"))
-        elif source_params.get("myImagery"):
-            source_params = MyImageryParams(**source_params.get("myImagery"))
-        elif source_params.get("imagerySearch"):
-            source_params = ImagerySearchParams(**source_params.get("imagerySearch"))
-        elif source_params.get("userDefined"):
-            source_params = UserDefinedParams(**source_params.get("userDefined"))
-        else:
-            source_params = self.tr("Unidentified")
-        return source_params
-    
-    def setup(self, processing, source_params, error) -> None:
+    def setup(self, processing, error) -> None:
         self.toSourceButton.setIcon(options_icon)
         # Set name
         self.nameInfo.setText(processing.name)
@@ -44,6 +30,7 @@ class ProcessingDetailsDialog(*uic.loadUiType(ui_path / 'processing_details.ui')
         # Set status
         self.statusInfo.setText(processing.status.value)
         # Set data provider
+        source_params = processing.params.sourceParams
         if isinstance(source_params, DataProviderParams):
             provider = source_params.providerName # display name
             self.toSourceButton.setVisible(False)

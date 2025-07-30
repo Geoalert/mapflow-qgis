@@ -3359,10 +3359,10 @@ class Mapflow(QObject):
         if processing.errors:
             error = processing.error_message(raw=self.config.SHOW_RAW_ERROR)
         dialog = ProcessingDetailsDialog(self.dlg)
-        source_params = dialog.get_source_params(processing.params.sourceParams)
-        dialog.toSourceButton.clicked.connect(lambda: self.data_catalog_service.show_processing_source(source_params=source_params, 
-                                                                                                       window=dialog))
-        dialog.setup(processing, source_params, error or None)
+        dialog.toSourceButton.clicked.connect(lambda: self.data_catalog_service.show_processing_source(
+                                                           source_params=processing.params.sourceParams,
+                                                           window=dialog))
+        dialog.setup(processing, error or None)
         dialog.deleteLater()
 
     def update_processing(self):

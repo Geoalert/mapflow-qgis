@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import Optional, Mapping, Any, Union, Iterable, List
 
 from .base import SkipDataClass, Serializable
@@ -86,6 +86,23 @@ class ProcessingParams(Serializable, SkipDataClass):
                         MyImageryParams,
                         ImagerySearchParams,
                         UserDefinedParams]
+    
+    @classmethod
+    def from_dict(cls, params_dict: dict):
+        clsf = [f.name for f in fields(cls)]
+        processing_params = cls(**{k: v for k, v in params_dict.items() if k in clsf})
+        source_params = processing_params.sourceParams
+        if source_params.get("dataProvider"):
+            source_params = DataProviderParams(**source_params.get("dataProvider"))
+        elif source_params.get("myImagery"):
+            source_params = MyImageryParams(**source_params.get("myImagery"))
+        elif source_params.get("imagerySearch"):
+            source_params = ImagerySearchParams(**source_params.get("imagerySearch"))
+        elif source_params.get("userDefined"):
+            source_params = UserDefinedParams(**source_params.get("userDefined"))
+        else:
+            source_params = "Unidentified"
+        return ProcessingParams(sourceParams=source_params)
 
 
 @dataclass
