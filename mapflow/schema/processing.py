@@ -52,32 +52,52 @@ class UpdateProcessingSchema(Serializable):
 
 
 @dataclass
-class MyImageryParams(Serializable):
+class DataProviderSchema(Serializable):
+    providerName: str
+    zoom: str
+
+
+@dataclass
+class DataProviderParams(Serializable):
+    datapPovider: DataProviderSchema
+
+
+@dataclass
+class MyImagerySchema(Serializable):
     imageIds: List[str]
     mosaicId: str
 
 
 @dataclass
-class ImagerySearchParams(Serializable):
+class MyImageryParams(Serializable):
+    myImagery: MyImagerySchema
+
+
+@dataclass
+class ImagerySearchSchema(Serializable):
     dataProvider: str
     imageIds: List[str]
     zoom: int
 
 
 @dataclass
-class DataProviderParams(Serializable):
-    providerName: str
-    zoom: str
+class ImagerySearchParams(Serializable):
+    imagerySearch: ImagerySearchSchema
 
 
 @dataclass
-class UserDefinedParams(Serializable):
+class UserDefinedSchema(Serializable):
     sourceType: SourceType
     url: str
     zoom: Optional[int]
     crs: str
     rasterLogin: Optional[str]
     rasterPassword: Optional[str]
+
+
+@dataclass
+class UserDefinedParams(Serializable):
+    userDefined: UserDefinedSchema
 
 
 @dataclass
@@ -93,13 +113,13 @@ class ProcessingParams(Serializable, SkipDataClass):
         processing_params = cls(**{k: v for k, v in params_dict.items() if k in clsf})
         source_params = processing_params.sourceParams
         if source_params.get("dataProvider"):
-            source_params = DataProviderParams(**source_params.get("dataProvider"))
+            source_params = DataProviderParams(DataProviderSchema(**source_params.get("dataProvider")))
         elif source_params.get("myImagery"):
-            source_params = MyImageryParams(**source_params.get("myImagery"))
+            source_params = MyImageryParams(MyImagerySchema(**source_params.get("myImagery")))
         elif source_params.get("imagerySearch"):
-            source_params = ImagerySearchParams(**source_params.get("imagerySearch"))
+            source_params = ImagerySearchParams(ImagerySearchSchema(**source_params.get("imagerySearch")))
         elif source_params.get("userDefined"):
-            source_params = UserDefinedParams(**source_params.get("userDefined"))
+            source_params = UserDefinedParams(UserDefinedSchema(**source_params.get("userDefined")))
         else:
             source_params = "Unidentified"
         return ProcessingParams(sourceParams=source_params)

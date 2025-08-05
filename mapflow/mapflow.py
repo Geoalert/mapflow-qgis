@@ -2020,8 +2020,8 @@ class Mapflow(QObject):
                 else:
                     image_ids = [image.id for image in selected_images]
                     mosaic_id = None
-            setattr(self.my_imagery_provider_instance, 'mosaic_id', mosaic_id)
-            setattr(self.my_imagery_provider_instance, 'image_ids', image_ids)
+            self.my_imagery_provider_instance.mosaic_id = mosaic_id
+            self.my_imagery_provider_instance.image_id = image_ids
         if not provider_names:
             try:
                 provider_name = provider.api_name
@@ -3436,25 +3436,18 @@ class Mapflow(QObject):
             image_id = [self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()]
         selection_error = ""
         try:
-            if len(local_image_indices) == 1:
-                if product_types[0] == "Mosaic":
-                    image_id = None # remove image_id for mosaic providers
-            else:
-                # When multiple images is selected, check if selected images have mosaic product type and the same provider
-                if set(product_types) == set(["Mosaic"]) and len(set(provider_names)) == 1:
-                    image_id = None
-                # Forbid multiselection for regular images and for different mosaics
-                else:
+            if len(set(provider_names)) > 1:
+                if set(product_types) != set(["Mosaic"]):
                     selection_error = self.tr("You can launch multiple image processing only if it has the same provider of mosaic type")
         except:
             return image_id, selection_error
         # Require image id only for single images and not mosaics
         if image_id:
-            setattr(self.imagery_search_provider_instance, 'requires_id', True)
-            setattr(self.imagery_search_provider_instance, 'image_id', image_id)
+            self.imagery_search_provider_instance.requires_id = True
+            self.imagery_search_provider_instance.image_id = image_id
         else:
-            setattr(self.imagery_search_provider_instance, 'requires_id', False)
-            setattr(self.imagery_search_provider_instance, 'image_id', [])
+            self.imagery_search_provider_instance.requires_id = False
+            self.imagery_search_provider_instance.image_id = []
         return image_id, selection_error
     
     def get_zoom(self, provider, local_image_indices, product_types):

@@ -7,8 +7,11 @@ from ...errors.plugin_errors import ImageIdRequired
 from ...schema import (PostSourceSchema, 
                        PostProviderSchema, 
                        DataProviderParams,
+                       DataProviderSchema,
                        MyImageryParams,
-                       ImagerySearchParams,
+                       MyImagerySchema,
+                       ImagerySearchParams, 
+                       ImagerySearchSchema,
                        ProcessingParams)
 from ...schema.provider import ProviderReturnSchema
 
@@ -74,9 +77,13 @@ class ImagerySearchProvider(ProviderInterface):
                              zoom: Optional[str] = None):
         if not self.image_id and self.requires_id is True:
             raise ImageIdRequired("Search provider must have image ID to launch the processing")
-        return ProcessingParams(sourceParams=ImagerySearchParams(dataProvider=provider_name,
-                                                                 imageIds=self.image_id,
-                                                                 zoom=zoom)), {}
+        if provider_name:
+            data_provider = provider_name.lower()
+        else:
+            data_provider = None
+        return ProcessingParams(sourceParams=ImagerySearchParams(ImagerySearchSchema(dataProvider=data_provider,
+                                                                                     imageIds=self.image_id,
+                                                                                     zoom=zoom))), {}
 
     @property
     def meta_url(self):
@@ -113,8 +120,8 @@ class MyImageryProvider(ProviderInterface):
     def to_processing_params(self,
                              provider_name: Optional[str] = None,
                              zoom: Optional[str] = None):
-        return ProcessingParams(sourceParams=MyImageryParams(imageIds=self.image_ids, 
-                                                             mosaicId=self.mosaic_id)), {}
+        return ProcessingParams(sourceParams=MyImageryParams(MyImagerySchema(imageIds=self.image_ids, 
+                                                                             mosaicId=self.mosaic_id))), {}
 
 class DefaultProvider(ProviderInterface):
     """
@@ -178,5 +185,5 @@ class DefaultProvider(ProviderInterface):
     def to_processing_params(self,
                              provider_name: Optional[str] = None,
                              zoom: Optional[str] = None):
-        return ProcessingParams(sourceParams=DataProviderParams(providerName=provider_name, 
-                                                                zoom=zoom)), {}
+        return ProcessingParams(sourceParams=DataProviderParams(DataProviderSchema(providerName=provider_name, 
+                                                                                   zoom=zoom))), {}

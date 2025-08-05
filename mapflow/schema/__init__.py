@@ -6,7 +6,10 @@ from .processing import (PostSourceSchema,
                          PostProcessingSchemaV2, 
                          ProcessingParams,
                          DataProviderParams,
+                         DataProviderSchema,
                          MyImageryParams,
+                         MyImagerySchema,
                          ImagerySearchParams,
+                         ImagerySearchSchema,
                          UserDefinedParams)
 from .provider import ProviderReturnSchema

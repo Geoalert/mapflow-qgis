@@ -538,12 +538,12 @@ class DataCatalogView(QObject):
         """Switch to My imagery or user provider dialog when ckicking on toSourceButton in ProcessingDetailsDialog."""
         if isinstance(source_params, MyImageryParams):
             my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
-            if source_params.mosaicId:
+            if source_params.myImagery.mosaicId:
                 self.dlg.mosaicTable.clearSelection()
                 self.dlg.stackedLayout.setCurrentIndex(0)
                 self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
-                self.select_mosaic_cell(source_params.mosaicId)
-            elif source_params.imageIds:
+                self.select_mosaic_cell(source_params.myImagery.mosaicId)
+            elif source_params.myImagery.imageIds:
                 self.dlg.imageTable.clearSelection()
                 try:
                     self.dlg.imageTable.clearSelection()
@@ -556,15 +556,15 @@ class DataCatalogView(QObject):
             self.dlg.tabWidget.setCurrentWidget(settings_tab)
             text = self.tr("<b>URL:</b> {url},"
                            "<br><b>Source type:</b> {type},"
-                           "<br><b>CRS:</b> {crs}").format(type=source_params.sourceType,
-                                                           url=source_params.url,
-                                                           crs=source_params.crs.upper())
-            if source_params.zoom:
+                           "<br><b>CRS:</b> {crs}").format(type=source_params.userDefined.sourceType,
+                                                           url=source_params.userDefined.url,
+                                                           crs=source_params.userDefined.crs.upper())
+            if source_params.userDefined.zoom:
                 text += self.tr(", <br><b>Zoom:</b> {zoom}").format(zoom=source_params.zoom)
-            if source_params.rasterPassword:
+            if source_params.userDefined.rasterPassword:
                 text += self.tr(", <br><b>Raster login:</b> {login}" +
-                                ", <br><b>Raster password:</b> {password}").format(login=source_params.rasterLogin,
-                                                                                   password=source_params.rasterPassword)
+                                ", <br><b>Raster password:</b> {password}").format(login=source_params.userDefined.rasterLogin,
+                                                                                   password=source_params.userDefined.rasterPassword)
             self.alert(message=text, icon=QMessageBox.Information)
         
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:

@@ -32,16 +32,16 @@ class ProcessingDetailsDialog(*uic.loadUiType(ui_path / 'processing_details.ui')
         # Set data provider
         source_params = processing.params.sourceParams
         if isinstance(source_params, DataProviderParams):
-            provider = source_params.providerName # display name
+            provider = source_params.datapPovider.providerName # display name
             self.toSourceButton.setVisible(False)
         elif isinstance(source_params, ImagerySearchParams):
-            provider = source_params.dataProvider # display name
+            provider = source_params.imagerySearch.dataProvider # display name
             self.toSourceButton.setVisible(False)
         elif isinstance(source_params, MyImageryParams):
             provider = self.tr("My imagery") # display 'My imagery' + button
             self.toSourceButton.setVisible(True)
         elif isinstance(source_params, UserDefinedParams):
-            provider = source_params.url # display url + button
+            provider = source_params.userDefined.url # display url + button
             self.toSourceButton.setVisible(True)
         else:
             provider = source_params # display "Unidentified"

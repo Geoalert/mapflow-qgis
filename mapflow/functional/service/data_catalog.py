@@ -585,12 +585,12 @@ class DataCatalogService(QObject):
     def show_processing_source(self, 
                                source_params: Union[DataProviderParams, MyImageryParams, ImagerySearchParams, UserDefinedParams], 
                                window):
-        self.view.show_processing_source(source_params)
         if isinstance(source_params, MyImageryParams):
-            if source_params.imageIds:
-                # Get full image info to obtain mosaic_id
-                image_id = source_params.imageIds[0]
+            self.dlg.mosaicTable.clearSelection()
+            if source_params.myImagery.imageIds: # if the source was an image:
+                image_id = source_params.myImagery.imageIds[0] # get full image info to obtain mosaic_id
                 self.get_image(image_id, self.get_image_callback)
+        self.view.show_processing_source(source_params)
         window.close()
 
     def get_image_callback(self, response: QNetworkReply):
