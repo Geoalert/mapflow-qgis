@@ -109,6 +109,8 @@ class ProcessingParams(Serializable, SkipDataClass):
     
     @classmethod
     def from_dict(cls, params_dict: dict):
+        if not params_dict:
+            return None
         clsf = [f.name for f in fields(cls)]
         processing_params = cls(**{k: v for k, v in params_dict.items() if k in clsf})
         source_params = processing_params.sourceParams

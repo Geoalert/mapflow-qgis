@@ -129,6 +129,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.download_aoi_action = QAction(self.tr("Download AOI"))
         self.see_details_action = QAction(self.tr("See details"))
         self.processing_update_action = QAction(self.tr("Rename"))
+        self.processing_restart_action = QAction(self.tr("Restart"))
         self.setup_options_menu()
 
         # Imagery Search
@@ -433,6 +434,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.options_menu.addAction(self.download_aoi_action)
         self.options_menu.addAction(self.see_details_action)
         self.options_menu.addAction(self.processing_update_action)
+        self.options_menu.addAction(self.processing_restart_action)
 
     def enable_shared_project(self, user_role: UserRole):
         """Disable buttons depending on user role in a shared project.
@@ -465,8 +467,10 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.deleteProcessings.setToolTip(self.tr('Not enough rights to delete processing in a shared project ({})').format(user_role))
         else:
             self.deleteProcessings.setToolTip('')
-        # And remove/add back renaming option from save options menu
+        # Remove/add back renaming option from save options menu
         self.enable_rename_processing(user_role.can_delete_rename_review_processing)
+        # Remove/add back restarting option
+        self.enable_restart_processing(user_role.can_start_processing)
 
     def enable_model_options(self, can_start_processing: bool = True):
         """
@@ -544,6 +548,15 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.projectsPageLabel.setVisible(enable)
         if enable is True:
             self.projectsPageLabel.setText(f"{page_number}/{total_pages}")
+
+    def enable_restart_processing(self, can_start_processing: bool = True):
+        """
+        Remove processing's restarting option from '...' menu near 'View results' button depending on user role property.
+        """
+        if can_start_processing is True:
+            self.options_menu.addAction(self.processing_restart_action)
+        else:
+            self.options_menu.removeAction(self.processing_restart_action)
     
     def selected_project_id(self):
         selected_idx = self.projectsTable.selectionModel().selectedIndexes()

@@ -430,6 +430,7 @@ class Mapflow(QObject):
         self.dlg.download_aoi_action.triggered.connect(self.download_aoi_file)
         self.dlg.see_details_action.triggered.connect(self.show_details)
         self.dlg.processing_update_action.triggered.connect(self.update_processing)
+        self.dlg.processing_restart_action.triggered.connect(self.restart_processing)
         self.dlg.saveOptionsButton.setMenu(self.dlg.options_menu)
 
     def create_aoi_layer_from_map(self, action: QAction):
@@ -2784,6 +2785,11 @@ class Mapflow(QObject):
             self.enable_review_submit(processing.status.is_ok and processing.review_status.is_in_review)
         else:
             self.enable_rating_submit(processing.status.is_ok)
+        if processing.status.is_failed and self.user_role.can_start_processing:
+            self.dlg.options_menu.addAction(self.dlg.processing_restart_action)
+        else:
+            self.dlg.options_menu.removeAction(self.dlg.processing_restart_action)
+            
 
     # =================== Results management ==================== #
     def load_results(self):
@@ -3520,6 +3526,20 @@ class Mapflow(QObject):
         except:
             pass
         self.temp_dir.mkdir(parents=True, exist_ok=True)
+
+    def restart_processing(self):
+        processing = self.selected_processing()
+        if not processing:
+            return
+        pid = processing.id_
+        if self.user_role.can_start_processing:
+            self.http.post(
+                url=f"{self.server}/processings/{pid}/restart",
+                callback=self.post_processing_callback,
+                callback_kwargs={'processing_name': processing.name},
+                error_handler=self.post_processing_error_handler,
+                use_default_error_handler=False
+            )
 
     @property
     def basemap_providers(self):
