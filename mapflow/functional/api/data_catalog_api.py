@@ -251,8 +251,14 @@ class DataCatalogApi(QObject):
     def get_image(self, image_id: UUID, callback: Callable):
         self.http.get(url=f"{self.server}/rasters/image/{image_id}",
                       callback=callback,
-                      use_default_error_handler=True
+                      use_default_error_handler=False,
+                      error_handler=self.get_image_error_handler
                      )
+    
+    def get_image_error_handler(self, response: QNetworkReply) -> None:
+        error_summary = self.tr("Source imagery was not found in any of your collections")
+        ErrorMessageWidget(parent=QApplication.activeWindow(),
+                           text=error_summary).show()
         
     def delete_image(self,
                      image_id: UUID,

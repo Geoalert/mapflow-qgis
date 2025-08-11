@@ -48,7 +48,8 @@ from .entity.provider import (UsersProvider,
                               DefaultProvider,
                               ImagerySearchProvider,
                               MyImageryProvider,
-                              ProviderInterface)
+                              ProviderInterface,
+                              BasicAuth)
 from .entity.workflow_def import WorkflowDef
 from .errors import (ProcessingInputDataMissing,
                      BadProcessingInput,
@@ -73,8 +74,12 @@ from .schema import (PostSourceSchema,
                      ProviderReturnSchema,
                      ImageCatalogRequestSchema,
                      ImageCatalogResponseSchema,
-                     PostProcessingSchemaV2)
-from .schema.catalog import PreviewType, ProductType
+                     PostProcessingSchemaV2,
+                     DataProviderParams, 
+                     MyImageryParams, 
+                     ImagerySearchParams, 
+                     UserDefinedParams)
+from .schema.catalog import PreviewType, ProductType, AoiResponseSchema
 from .schema.project import MapflowProject, UserRole, ProjectsRequest
 
 
@@ -230,7 +235,7 @@ class Mapflow(QObject):
         self.dlg.metadataFrom.setDate(self.settings.value('metadataFrom', today.addMonths(-6)))
         self.dlg.metadataTo.setDate(self.settings.value('metadataTo', today))
         # SET UP SIGNALS & SLOTS
-        self.dlg.modelCombo.activated.connect(self.on_model_change)
+        self.dlg.modelCombo.currentIndexChanged.connect(self.on_model_change)
         self.dlg.modelOptionsChanged.connect(self.on_options_change)
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
@@ -431,6 +436,7 @@ class Mapflow(QObject):
         self.dlg.see_details_action.triggered.connect(self.show_details)
         self.dlg.processing_update_action.triggered.connect(self.update_processing)
         self.dlg.processing_restart_action.triggered.connect(self.restart_processing)
+        self.dlg.processing_duplicate_action.triggered.connect(self.duplicate_processing)
         self.dlg.saveOptionsButton.setMenu(self.dlg.options_menu)
 
     def create_aoi_layer_from_map(self, action: QAction):
@@ -2827,7 +2833,7 @@ class Mapflow(QObject):
         processing = self.selected_processing()
         if not processing:
             return
-        self.result_loader.download_aoi_file(pid=processing.id_)
+        self.result_loader.download_aoi_file(pid=processing.id_, callback=self.result_loader.download_aoi_file_callback)
 
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """Display a minimalistic modal dialog with some info or a question.
@@ -3540,6 +3546,105 @@ class Mapflow(QObject):
                 error_handler=self.post_processing_error_handler,
                 use_default_error_handler=False
             )
+    
+    def duplicate_processing(self):
+        processing = self.selected_processing()
+        if not processing:
+            return
+        # Set Name
+        self.dlg.processingName.setText(processing.name)
+        # Set AOI
+        self.result_loader.download_aoi_file(pid=processing.id_, callback=self.duplicate_aoi_callback)
+        # Set Data Provider
+        provider = processing.params.sourceParams
+        if isinstance(provider, DataProviderParams):
+            provider_name = provider.datapPovider.providerName
+            if self.dlg.sourceCombo.findText(provider_name) == -1: # index is -1, the item is not found
+                self.alert(self.tr("Provider '{provider}' is not enabled for your account").format(provider=provider_name))
+            else: # item is found
+                self.dlg.sourceCombo.setCurrentText(provider_name)
+                if self.zoom_selector:
+                    self.dlg.zoomCombo.setCurrentText(provider.datapPovider.zoom)
+        elif isinstance(provider, MyImageryParams):
+            if provider.myImagery.mosaicId:
+                self.dlg.mosaicTable.clearSelection()
+                self.data_catalog_service.view.select_mosaic_cell(provider.myImagery.mosaicId)
+            elif provider.myImagery.imageIds:
+                image_id = provider.myImagery.imageIds[0]
+                self.data_catalog_service.get_image(image_id, self.data_catalog_service.get_image_callback)
+        elif isinstance(provider, ImagerySearchParams):
+            self.dlg.sourceCombo.setCurrentIndex(self.imagery_search_provider_index)
+            found_id_items = []
+            found_zoom_items = []
+            for item in self.dlg.metadataTable.findItems(provider.imagerySearch.imageIds[0], Qt.MatchExactly): # only one element
+                found_id_items.append(item.row())
+            if not provider.imagerySearch.zoom: # for single images - highlight row by unique id
+                self.dlg.metadataTable.selectRow(item.row())
+            else: # for mosaics there could be many rows with the same id, but different zooms
+                for item in self.dlg.metadataTable.findItems(provider.imagerySearch.zoom, Qt.MatchExactly):
+                    found_zoom_items.append(item.row())
+                found_items = [item for item in found_id_items if item in found_zoom_items] # find intersection with right id and zoom
+                self.dlg.metadataTable.selectRow(found_items[0])
+        elif isinstance(provider, UserDefinedParams):
+            duplicated_provider = None
+            for p in self.providers:
+                if isinstance(p, UsersProvider) and p.url == provider.userDefined.url:
+                    duplicated_provider = p
+                    self.dlg.sourceCombo.setCurrentText(duplicated_provider.name)
+            if not duplicated_provider:
+                provider_dict = dict(option_name=provider.userDefined.sourceType.lower(),
+                                     name=provider.userDefined.url,
+                                     url=provider.userDefined.url,
+                                     crs=provider.userDefined.crs.upper(),
+                                     credentials=BasicAuth(str(provider.userDefined.rasterLogin), 
+                                                           str(provider.userDefined.rasterPassword))
+                                                           if provider.userDefined.rasterLogin
+                                                           else BasicAuth(),
+                                     save_credentials=True)
+                duplicated_provider = create_provider(**provider_dict)
+                self.user_providers.append(duplicated_provider)
+                provider_index = len(self.providers)
+                self.update_providers()
+                self.dlg.setProviderIndex(provider_index)
+            if self.zoom_selector:
+                self.dlg.zoomCombo.setCurrentText(provider.userDefined.zoom)
+        # Set Model
+        if self.dlg.modelCombo.findText(processing.workflow_def) == -1: # index is -1, the item is not found
+            self.alert(self.tr("Model '{wd}' is not enabled for your account").format(wd=processing.workflow_def))
+        else: # item is found
+            self.dlg.modelCombo.setCurrentText(processing.workflow_def)
+        # Set Model Options
+        model_options = []
+        enabled_options = []
+        for checkbox in self.dlg.modelOptions:
+            model_options.append(checkbox.text())
+        for block in processing.blocks:
+            if block.enabled:
+                enabled_options.append(block.name)
+        options_to_enable = [option for option in enabled_options if option in model_options]
+        for checkbox in self.dlg.modelOptions:
+            if checkbox.text() in options_to_enable:
+                checkbox.setChecked(True)
+            else:
+                checkbox.setChecked(False) # but what if a name for an option was changed?
+
+    def duplicate_aoi_callback(self, response: QNetworkReply, path: str) -> None:
+        data = json.loads(response.readAll().data())
+        geojson = AoiResponseSchema(data).aoi_as_geojson()
+        with open(path, "w") as f:
+            json.dump(geojson, f)
+        id = Path(path).stem[:-4]
+        aoi_layer_name = "AOI: {id}".format(id=id)
+        aoi_layer = QgsVectorLayer(str(path), aoi_layer_name)
+        self.result_loader.add_layer(aoi_layer)
+        aoi_layer.loadNamedStyle(str(Path(__file__).parents[1]/'static'/'styles'/'aoi.qml'))
+        # Layers come as "Layer_name [EPSG:4326]", so we have to look for layer name in each element of a list
+        aoi_list = [self.dlg.polygonCombo.itemText(i) for i in range(self.dlg.polygonCombo.count())]
+        matching_aois = [layer for layer in aoi_list if aoi_layer_name in layer]
+        if matching_aois:
+            self.dlg.polygonCombo.setCurrentText(matching_aois[0])
+        else:
+            self.alert(self.tr("Layer '{aoi}' was not found").format(aoi=aoi_layer_name))            
 
     @property
     def basemap_providers(self):
