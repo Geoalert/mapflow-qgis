@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Optional, List, Dict
 
 from .base import Serializable, SkipDataClass
-from ..entity.workflow_def import WorkflowDef
+from mapflow.schema.workflow_def import WorkflowDef
 from ..config import Config
 
 
