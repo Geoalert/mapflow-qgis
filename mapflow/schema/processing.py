@@ -1,8 +1,14 @@
+from qgis.core import QgsVectorLayer
 from dataclasses import dataclass, fields
+from datetime import datetime, timedelta
 from typing import Optional, Mapping, Any, Union, Iterable, List
-
+from uuid import UUID
 from .base import SkipDataClass, Serializable
 from ..entity.provider.provider import SourceType
+from ..entity.status import ProcessingStatus, ProcessingReviewStatus
+from ..errors import ErrorMessage
+from ..schema.layer import RasterLayer, VectorLayer
+from .workflow_def import WorkflowDef
 
 @dataclass
 class PostSourceSchema(Serializable, SkipDataClass):
@@ -135,3 +141,58 @@ class PostProcessingSchemaV2(Serializable):
     params: ProcessingParams
     meta: Optional[Mapping[str, Any]]
     blocks: Optional[Iterable[BlockOption]]
+
+
+@dataclass
+class ProcessingUIParams(Serializable, SkipDataClass):
+    name: Optional[str]
+    area: Optional[QgsVectorLayer]
+    data_source_index: int
+    zoom: Optional[int]
+    wd_name: str
+    model_options: list[BlockOption]
+
+
+@dataclass
+class ProcessingDTO(Serializable, SkipDataClass):
+    id: UUID
+    name: str
+    projectId: UUID
+    status: ProcessingStatus
+    description: Optional[str]
+    workflowDef: WorkflowDef
+    aoiArea: int
+    cost: int
+    created: datetime
+    rasterLayer: RasterLayer
+    vectorLayer: VectorLayer
+    messages: list[ErrorMessage]
+
+    percent_completed: int
+    review_status: ProcessingReviewStatus
+    in_review_until: datetime
+    params: ProcessingParams
+    blocks: List[BlockOption]
+
+    def __post_init__(self):
+        self.review_status = ProcessingReviewStatus(self.review_status)
+        self.status = ProcessingStatus(self.status)
+        self.created = datetime.strptime(self.created, '%Y-%m-%dT%H:%M:%S.%f%z').astimezone()
+        self.params = ProcessingParams.from_dict(self.params)
+        self.blocks = [BlockOption.from_dict(block) for block in self.blocks]
+        self.workflowDef = WorkflowDef.from_dict(self.workflowDef)
+        self.messages = [ErrorMessage.from_response(message) for message in self.messages]
+
+    @property
+    def review_expires(self):
+        if not isinstance(self.in_review_until, datetime)\
+                or not self.review_status.is_in_review:
+            return False
+        now = datetime.now().astimezone()
+        one_day = timedelta(1)
+        return self.in_review_until - now < one_day
+
+    def error_message(self, raw=False):
+        if not self.errors:
+            return ""
+        return "\n".join([error.to_str(raw=raw) for error in self.errors])

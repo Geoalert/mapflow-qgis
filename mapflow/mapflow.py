@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import List, Optional, Union, Callable, Tuple
 
 from PyQt5.QtCore import (
-    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, QTextStream, QByteArray, QTemporaryDir, QVariant
+    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QTextStream, QByteArray, QVariant
 )
 from PyQt5.QtGui import QColor
-from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
+from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAbstractItemView, QMenu, QAction, QWidget
 )
@@ -21,7 +21,6 @@ from qgis.core import (
     QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
     QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsWkbTypes, QgsPoint, QgsMapLayerType, QgsRectangle
 )
-from qgis.gui import QgsMessageBarItem
 
 from . import constants
 from .dialogs import (MainDialog,
@@ -49,7 +48,7 @@ from .entity.provider import (UsersProvider,
                               ImagerySearchProvider,
                               MyImageryProvider,
                               ProviderInterface)
-from .entity.workflow_def import WorkflowDef
+from mapflow.schema.workflow_def import WorkflowDef
 from .errors import (ProcessingInputDataMissing,
                      BadProcessingInput,
                      PluginError,
@@ -59,9 +58,7 @@ from .errors import (ProcessingInputDataMissing,
 from .functional import layer_utils, helpers
 from .functional.auth import get_auth_id
 from .functional.geometry import clip_aoi_to_image_extent
-from .functional.processing import ProcessingService
-from .functional.service.project import ProjectService
-from .functional.service.data_catalog import DataCatalogService
+from .functional.service import ProcessingService, ProjectService, DataCatalogService
 from .http import (Http,
                    get_error_report_body,
                    data_catalog_message_parser,
@@ -75,7 +72,7 @@ from .schema import (PostSourceSchema,
                      ImageCatalogResponseSchema,
                      PostProcessingSchemaV2)
 from .schema.catalog import PreviewType, ProductType
-from .schema.project import MapflowProject, UserRole, ProjectsRequest
+from .schema.project import MapflowProject, UserRole
 
 
 class Mapflow(QObject):
@@ -207,9 +204,6 @@ class Mapflow(QObject):
         self.project_service.projectsUpdated.connect(self.update_projects)
 
         self.processing_service = ProcessingService(self.http, self.server)
-        self.processing_service.processingUpdated.connect(
-            lambda: self.processing_service.get_processings(project_id=self.project_id,
-                                                            callback=self.get_processings_callback))
         # load providers from settings
         errors = []
         try:
@@ -1676,20 +1670,6 @@ class Mapflow(QObject):
         if isinstance(provider, MyImageryProvider):
             self.calculate_aoi_area_catalog()
 
-    def calculate_aoi_area_raster(self, layer: Optional[QgsRasterLayer]) -> None:
-        """Get the AOI size when a new entry in the raster combo box is selected.
-
-        :param layer: The current raster layer
-        """
-        provider = self.providers[self.dlg.providerIndex()]
-        if layer:
-            geometry = QgsGeometry.collectGeometry([QgsGeometry.fromRect(layer.extent())])
-            self.calculate_aoi_area(geometry, layer.crs())
-        elif isinstance(provider, MyImageryProvider):
-            self.calculate_aoi_area_catalog()
-        else:
-            self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
-
     def calculate_aoi_area_use_image_extent(self) -> None:
         """Get the AOI size when the Use image extent checkbox is toggled.
 
@@ -1831,22 +1811,6 @@ class Mapflow(QObject):
                         use_default_error_handler=False,
                         error_handler=self.clear_processing_cost
                     )
-
-    def clear_processing_cost(self, response: QNetworkReply):
-        """
-        We do not display the result in case of error,
-        the errors are also not displayed to not confuse the user.
-
-        If the user tries to start the processing, he will see the errors
-        """
-        response_text = response.readAll().data().decode()
-        if response_text is not None:
-            message = api_message_parser(response_text)
-            if not self.user_role.can_start_processing:
-                reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.user_role.value)
-            else:
-                reason = self.tr('Processing cost is not available:\n{message}').format(message=message)
-            self.dlg.disable_processing_start(reason, clear_area=False)
 
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         response_data = response.readAll().data().decode()

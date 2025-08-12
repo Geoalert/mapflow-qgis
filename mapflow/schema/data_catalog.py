@@ -1,19 +1,17 @@
 from uuid import UUID
 from enum import Enum
 from datetime import datetime
-from typing import Sequence, Union, Optional, List, Dict
+from typing import Sequence, Union, Optional, List
 from dataclasses import dataclass
 
 from .base import Serializable,  SkipDataClass
+from .layer import RasterLayer
+
 
 class PreviewSize(str, Enum):
     large = 'l'
     small = 's'
 
-@dataclass
-class RasterLayer(SkipDataClass):
-    tileUrl: str
-    tileJsonUrl: str
 
 @dataclass
 class UserLimitSchema(SkipDataClass):

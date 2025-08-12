@@ -2,7 +2,7 @@ from typing import Callable
 from PyQt5.QtCore import QObject, pyqtSignal, QFile, QIODevice
 from ...http import Http
 from ...dialogs.main_dialog import MainDialog
-from ...schema.processing import PostProcessingSchema
+from ...schema.processing import PostProcessingSchema, UpdateProcessingSchema
 
 class ProcessingApi(QObject):
     """
@@ -26,7 +26,28 @@ class ProcessingApi(QObject):
 
     # project CRUD
     def create_processing(self, data: PostProcessingSchema, callback: Callable, error_handler: Callable):
-        self.http.post(url=f"{self.server}/processing",
-                       body=data.as_json().encode(),
+        self.http.post(
+            url=f'{self.server}/processings/v2',
+            callback=callback,
+            error_handler=error_handler,
+            use_default_error_handler=False,
+            body=data.as_json().encode()
+        )
+
+    def update_processing(self, processing_id, processing: UpdateProcessingSchema, callback: Callable, error_handler: Callable):
+        self.http.put(url=f"{self.server}/processings/{processing_id}",
+                       body=processing.as_json().encode(),
+                       headers={},
                        callback=callback,
-                       error_handler=error_handler)
+                       use_default_error_handler=True,
+                       timeout=5)
+
+
+    def get_cost(self, data: PostProcessingSchema, callback: Callable, error_handler: Callable):
+        self.http.post(
+            url=f"{self.server}/processing/cost/v2",
+            callback=callback,
+            body=data.as_json().encode(),
+            use_default_error_handler=False,
+            error_handler=callback
+        )
