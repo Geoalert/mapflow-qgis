@@ -14,6 +14,7 @@ from ..view.project_view import ProjectView
 
 class ProjectService(QObject):
     projectsUpdated = pyqtSignal()
+    projectChanged = pyqtSignal(str)  # Emits project_id when project selection changes
 
     def __init__(self, http, server, settings, dlg: MainDialog):
         super().__init__()
@@ -40,6 +41,7 @@ class ProjectService(QObject):
     def create_project_callback(self, response: QNetworkReply):
         project = MapflowProject.from_dict(json.loads(response.readAll().data()))
         self.project_id = project.id
+        self.projectChanged.emit(str(project.id))
         self.get_projects()
     
     def delete_project(self, project_id):
@@ -58,6 +60,7 @@ class ProjectService(QObject):
     def update_project_callback(self, response: QNetworkReply):
         project = MapflowProject.from_dict(json.loads(response.readAll().data()))
         self.project_id = project.id
+        self.projectChanged.emit(str(project.id))
         self.get_projects()
     
     def get_project(self, project_id, callback: Callable, error_handler: Callable):
@@ -185,6 +188,8 @@ class ProjectService(QObject):
             self.settings.setValue('projectsPage', projects_page)
         self.view.switch_to_processings()
         self.project_id = project_id
+        if project_id:
+            self.projectChanged.emit(str(project_id))
 
     def get_filtered_projects(self):
         """Get projects, resetting filtered offset value.

@@ -140,14 +140,6 @@ class Processing:
             return self.status.display_value
 
 
-def parse_processings_request_dict(response: list) -> Dict[str, Processing]:
-    res = {}
-    for processing in response:
-        new_processing = Processing.from_response(processing)
-        res[new_processing.id_] = new_processing
-    return res
-
-
 def parse_processings_request(response: list) -> List[Processing]:
     return [Processing.from_response(resp) for resp in response]
 
