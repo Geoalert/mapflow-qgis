@@ -2785,10 +2785,12 @@ class Mapflow(QObject):
             self.enable_review_submit(processing.status.is_ok and processing.review_status.is_in_review)
         else:
             self.enable_rating_submit(processing.status.is_ok)
-        if processing.status.is_failed and self.user_role.can_start_processing:
-            self.dlg.options_menu.addAction(self.dlg.processing_restart_action)
-        else:
-            self.dlg.options_menu.removeAction(self.dlg.processing_restart_action)
+        self.enable_restart_action(self.user_role.can_start_processing 
+                                   and (processing.status.is_failed 
+                                        or processing.status.is_cancelled))
+    
+    def enable_restart_action(self, enabled: bool):
+        self.dlg.enable_restart_action(enabled)
             
 
     # =================== Results management ==================== #

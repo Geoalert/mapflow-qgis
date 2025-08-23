@@ -372,6 +372,12 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.reviewButton.setToolTip(reason)
             self.acceptButton.setToolTip(reason)
 
+    def enable_restart_action(self, enabled: bool):
+        if enabled:
+            self.options_menu.addAction(self.processing_restart_action)
+        else:
+            self.options_menu.removeAction(self.processing_restart_action)
+
     def disable_processing_start(self,
                                  reason: str,
                                  clear_area: bool = False):
