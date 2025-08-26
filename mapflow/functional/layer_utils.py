@@ -528,6 +528,16 @@ class ResultsLoader(QObject):
         write_options.layerOptions = ['fid=id']
         with open(Path(self.temp_dir, os.urandom(32).hex()), mode='wb+') as f:
             response_data = response.readAll().data()
+            # Check if there is more then 1 geometry type
+            data = json.loads(response_data)
+            geom_types = []
+            for feature in data['features']:
+                geom_type = feature['geometry']['type']
+                if geom_type not in geom_types:
+                    geom_types.append(geom_type)
+                if len(geom_types) > 1:
+                    break
+            # Create layer
             f.write(response_data)
             layer = QgsVectorLayer(f.name, '', 'ogr')
             # V3 returns two additional str values but they're not documented, so just discard them
@@ -559,8 +569,24 @@ class ResultsLoader(QObject):
                 self.message_bar.pushWarning(self.tr("Error"), self.tr('Failed to save results to file.'))
                 return
         # Load the results into QGIS
-        results_layer = QgsVectorLayer(str(output_path), processing.name, 'ogr')
-        results_layer.loadNamedStyle(get_style_name(processing.workflow_def, layer))
+        results_layers = []
+        if len(geom_types) == 1:
+            results_layer = QgsVectorLayer(str(output_path), processing.name, 'ogr')
+            results_layer.loadNamedStyle(get_style_name(processing.workflow_def, layer))
+            results_layers.append(results_layer)
+        else: # e.g. loading roads and buildings from open data
+            # Load Polygons
+            polygon_uri = f"{output_path}|geometrytype=Polygon"
+            polygon_layer = QgsVectorLayer(polygon_uri, processing.name, "ogr")
+            polygon_layer.loadNamedStyle(get_style_name(processing.workflow_def+"_polygon", polygon_layer))
+            if polygon_layer.isValid():
+                results_layers.append(polygon_layer)
+            # Load lineStrings
+            linestring_uri = f"{output_path}|geometrytype=LineString"
+            linestring_layer = QgsVectorLayer(linestring_uri, processing.name, "ogr")
+            linestring_layer.loadNamedStyle(get_style_name(processing.workflow_def+"_line", linestring_layer))
+            if linestring_layer.isValid():
+                results_layers.append(linestring_layer)
         # Add the source raster (COG) if it has been created
         raster_url = processing.raster_layer.get('tileUrl')
         tile_json_url = processing.raster_layer.get("tileJsonUrl")
@@ -582,17 +608,17 @@ class ResultsLoader(QObject):
                 url=tile_json_url,
                 callback=self.set_raster_extent,
                 callback_kwargs={
-                    'vector': results_layer,
+                    'vectors': results_layers,
                     'raster': raster
                 },
                 use_default_error_handler=False,
                 error_handler=self.set_raster_extent_error_handler,
                 error_handler_kwargs={
-                    'vector': results_layer,
+                    'vectors': results_layers,
                 }
             )
         else:
-            self.set_raster_extent_error_handler(response=None, vector=results_layer)
+            self.set_raster_extent_error_handler(response=None, vectors=results_layers)
 
     def download_results_error_handler(self, response: QNetworkReply) -> None:
         """Error handler for downloading processing results.
@@ -606,7 +632,7 @@ class ResultsLoader(QObject):
     def set_raster_extent(
             self,
             response: QNetworkReply,
-            vector: QgsVectorLayer,
+            vectors: List[QgsVectorLayer],
             raster: QgsRasterLayer
     ) -> None:
         """Set processing raster extent upon successfully requesting the processing's AOI.
@@ -622,22 +648,24 @@ class ResultsLoader(QObject):
             # otherwise there is some error in raster tile server, and we should not add the layer
             self.message_bar.pushWarning(self.tr("Results loaded"),
                                          self.tr("Extent failed to load, zoom to the layers manually"))
-            self.set_raster_extent_error_handler(response, vector)
+            self.set_raster_extent_error_handler(response, vectors)
             return
         raster.setExtent(rect=bounding_box)
         self.add_layer(raster)
-        self.add_layer(vector)
+        for vector in vectors:
+            self.add_layer(vector)
         # If raster is available, we zoom to the raster to fit the whole processing, not only the detected objects
         self.iface.setActiveLayer(raster)
         self.iface.zoomToActiveLayer()
-        self.iface.setActiveLayer(vector)
+        self.iface.setActiveLayer(vectors[0])
 
     def set_raster_extent_error_handler(self,
                                         response: QNetworkReply,
-                                        vector: Optional[QgsVectorLayer] = None):
+                                        vectors: Optional[List[QgsVectorLayer]] = None):
 
         """Error handler for processing AOI requests. If tilejson can't be loaded, we do not add raster layer, and
         """
-        self.add_layer(vector)
-        self.iface.setActiveLayer(vector)
+        for vector in vectors:
+            self.add_layer(vector)
+        self.iface.setActiveLayer(vectors[0])
         self.iface.zoomToActiveLayer()
