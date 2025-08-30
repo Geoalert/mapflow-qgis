@@ -533,10 +533,10 @@ class ResultsLoader(QObject):
             geom_types = []
             for feature in data['features']:
                 geom_type = feature['geometry']['type']
-                if geom_type not in geom_types:
+                if geom_type not in geom_types: # check if we have different geometry types
                     geom_types.append(geom_type)
-                if len(geom_types) > 1:
-                    break
+                if any("Polygon" in geom for geom in geom_types) and any("LineString" in geom for geom in geom_types):
+                    break # stop iterating if (multi)lines and (multi)polygons are already found
             # Create layer
             f.write(response_data)
             layer = QgsVectorLayer(f.name, '', 'ogr')
@@ -570,11 +570,8 @@ class ResultsLoader(QObject):
                 return
         # Load the results into QGIS
         results_layers = []
-        if len(geom_types) == 1:
-            results_layer = QgsVectorLayer(str(output_path), processing.name, 'ogr')
-            results_layer.loadNamedStyle(get_style_name(processing.workflow_def, layer))
-            results_layers.append(results_layer)
-        else: # e.g. loading roads and buildings from open data
+        if any("Polygon" in geom for geom in geom_types) and\
+           any("LineString" in geom for geom in geom_types): # e.g. loading roads and buildings from open data
             # Load Polygons
             polygon_uri = f"{output_path}|geometrytype=Polygon"
             polygon_layer = QgsVectorLayer(polygon_uri, processing.name, "ogr")
@@ -587,6 +584,10 @@ class ResultsLoader(QObject):
             linestring_layer.loadNamedStyle(get_style_name(processing.workflow_def+"_line", linestring_layer))
             if linestring_layer.isValid():
                 results_layers.append(linestring_layer)
+        else: # regular processing with one geometry type
+            results_layer = QgsVectorLayer(str(output_path), processing.name, 'ogr')
+            results_layer.loadNamedStyle(get_style_name(processing.workflow_def, layer))
+            results_layers.append(results_layer)
         # Add the source raster (COG) if it has been created
         raster_url = processing.raster_layer.get('tileUrl')
         tile_json_url = processing.raster_layer.get("tileJsonUrl")
