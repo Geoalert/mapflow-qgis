@@ -475,6 +475,7 @@ class ResultsLoader(QObject):
         aoi_layer = QgsVectorLayer(str(path), "AOI: {id}".format(id=id))
         self.add_layer(aoi_layer)
         aoi_layer.loadNamedStyle(str(Path(__file__).parents[1]/'static'/'styles'/'aoi.qml'))
+        self.dlg.polygonCombo.setLayer(aoi_layer)
         
     def download_results_file_error_handler(self,
                                             response: QNetworkReply,

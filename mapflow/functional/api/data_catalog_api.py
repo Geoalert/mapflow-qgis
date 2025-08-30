@@ -256,7 +256,12 @@ class DataCatalogApi(QObject):
                      )
     
     def get_image_error_handler(self, response: QNetworkReply) -> None:
-        error_summary = self.tr("Source imagery was not found in any of your collections")
+        response_data = json.loads(response.readAll().data())
+        error_params = response_data['detail']['parameters']
+        if error_params['instance_type'] == "mosaic":
+            error_summary = self.tr("Source imagery collection with id '{}' was not found ").format(error_params['uid'])
+        else:
+            error_summary = self.tr("Source image with id '{}' was not found in any of your imagery collections").format(error_params['uid'])
         ErrorMessageWidget(parent=QApplication.activeWindow(),
                            text=error_summary).show()
         
