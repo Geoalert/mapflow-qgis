@@ -194,6 +194,9 @@ class Mapflow(QObject):
         self.temp_dir = None
         self.setup_tempdir()
 
+        # Permisssions for startProcessing button to be enabled back after disabling
+        self.allow_enable_processing = {'aoi_loaded': True, 'my_mosaic_loaded': True, 'my_image_loaded': True}
+
         # Initialize services
         self.result_loader = layer_utils.ResultsLoader(iface=self.iface,
                                                        maindialog=self.dlg,
@@ -205,7 +208,7 @@ class Mapflow(QObject):
                                                        temp_dir=self.temp_dir
                                                        )
 
-        self.data_catalog_service = DataCatalogService(self.http, self.server, self.dlg, self.iface, self.result_loader, self.plugin_version, self.temp_dir)
+        self.data_catalog_service = DataCatalogService(self.http, self.server, self.dlg, self.iface, self.result_loader, self.plugin_version, self.temp_dir, self.allow_enable_processing)
         self.data_catalog_controller = DataCatalogController(self.dlg, self.data_catalog_service)
 
         self.project_service = ProjectService(self.http, self.server, self.settings, self.dlg)
@@ -354,9 +357,6 @@ class Mapflow(QObject):
                     self.settings.setValue('zoom', None)
                 else:
                     self.dlg.zoomCombo.setCurrentIndex(zoom_index)
-        
-        # Start processing button permission to be enabled back after disabling
-        self.allow_enable_processing = True
 
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
@@ -672,7 +672,7 @@ class Mapflow(QObject):
         """ Set chosen zoom and update cost (if it depends on zoom for provider).
         """
         if self.dlg.zoomCombo.currentIndex() != 0:
-            self.settings.setValue('zoom', str(self.dlg.zoomCombo.currentText())) 
+            self.settings.setValue('zoom', str(self.dlg.zoomCombo.currentText()))
         else:
             self.settings.setValue('zoom', None)
         self.update_processing_cost()
@@ -1815,7 +1815,7 @@ class Mapflow(QObject):
                                                              "Please, make sure you have selected a project"),
                                               clear_area=True)
         elif self.billing_type != BillingType.credits:
-            if self.allow_enable_processing is True:
+            if not False in self.allow_enable_processing.values():
                 self.dlg.startProcessing.setEnabled(True)
                 self.dlg.processingProblemsLabel.clear()
             request_body, error = self.create_processing_request(allow_empty_name=True)
@@ -1864,7 +1864,7 @@ class Mapflow(QObject):
         self.processing_cost = int(response_data)
         self.dlg.processingProblemsLabel.setPalette(self.dlg.default_palette)
         self.dlg.processingProblemsLabel.setText(self.tr("Processsing cost: {cost} credits").format(cost=response_data))
-        if self.allow_enable_processing is True:
+        if not False in self.allow_enable_processing.values():
             self.dlg.startProcessing.setEnabled(True)
 
     def delete_processings(self) -> None:
@@ -1925,8 +1925,8 @@ class Mapflow(QObject):
     def crop_aoi_with_maxar_image_footprint(self,
                                             aoi: QgsFeature,
                                             local_image_indices: List[int]):
-        extents = [self.search_footprints[local_image_index] for local_image_index in local_image_indices]
         try:
+            extents = [self.search_footprints[local_image_index] for local_image_index in local_image_indices]
             clipped_aoi_features = clip_aoi_to_image_extent(aoi, extents)
             aoi = QgsGeometry.fromWkt('GEOMETRYCOLLECTION()')
             for feature in clipped_aoi_features:
@@ -2033,7 +2033,7 @@ class Mapflow(QObject):
                     image_ids = [image.id for image in selected_images]
                     mosaic_id = None
             self.my_imagery_provider_instance.mosaic_id = mosaic_id
-            self.my_imagery_provider_instance.image_id = image_ids
+            self.my_imagery_provider_instance.image_ids = image_ids
         if not provider_names:
             try:
                 provider_name = provider.api_name
@@ -2207,7 +2207,7 @@ class Mapflow(QObject):
         # Do an extra fetch immediately
         self.processing_service.get_processings(project_id=self.project_id,
                                                 callback=self.get_processings_callback)
-        if self.allow_enable_processing is True:
+        if not False in self.allow_enable_processing.values():
             self.dlg.startProcessing.setEnabled(True)
 
     def post_processing_error_handler(self, response: QNetworkReply) -> None:
@@ -2234,7 +2234,7 @@ class Mapflow(QObject):
                                text= error_summary,
                                title=self.tr('Processing creation failed'),
                                email_body=email_body).show()
-        if self.allow_enable_processing is True:
+        if not False in self.allow_enable_processing.values():
             self.dlg.startProcessing.setEnabled(True)
 
     def update_processing_limit(self) -> None:
@@ -3490,6 +3490,8 @@ class Mapflow(QObject):
                         zoom_error = self.tr("Selected search results must have the same zoom level")
                     elif len(unique_zooms) == 1: # get unique zoom as a parameter
                         zoom = str(int(list(unique_zooms)[0]))
+                else:
+                    zoom = zooms[0]
             self.dlg.enable_zoom_selector(False, zoom)
         elif isinstance(provider, MyImageryProvider):
             self.dlg.enable_zoom_selector(False, zoom)
@@ -3557,75 +3559,124 @@ class Mapflow(QObject):
             )
     
     def duplicate_processing(self):
-        self.allow_enable_processing = False
         processing = self.selected_processing()
         if not processing:
             return
-        # Set Name
-        self.dlg.processingName.setText(processing.name)
-        # Set Data Provider
-        provider = processing.params.sourceParams
-        if isinstance(provider, DataProviderParams):
-            self.duplicate_data_provider(provider)
-        elif isinstance(provider, MyImageryParams):
-            self.duplicate_my_imagery(provider)
-        elif isinstance(provider, ImagerySearchParams):
-            # Duplicate imagery search after aoi is downloaded
-            self.dlg.sourceCombo.setCurrentIndex(self.imagery_search_provider_index)
-        elif isinstance(provider, UserDefinedParams):
-            self.duplicate_user_provider(provider)
-        # Set Model
-        if self.dlg.modelCombo.findText(processing.workflow_def) == -1: # index is -1, the item is not found
-            self.alert(self.tr("Model '{wd}' is not enabled for your account").format(wd=processing.workflow_def))
-        else: # item is found
-            self.dlg.modelCombo.setCurrentText(processing.workflow_def)
-        # Set Model Options
-        model_options = []
-        enabled_options = []
-        for checkbox in self.dlg.modelOptions:
-            model_options.append(checkbox.text())
-        for block in processing.blocks:
-            if block.enabled:
-                enabled_options.append(block.name)
-        options_to_enable = [option for option in enabled_options if option in model_options]
-        for checkbox in self.dlg.modelOptions:
-            if checkbox.text() in options_to_enable:
-                checkbox.setChecked(True)
-            else:
-                checkbox.setChecked(False) # but what if a name for an option was changed?
         self.dlg.disable_processing_start("")
-        # Set AOI
+        self.dlg.processingName.setText(processing.name)
+        self.duplicate_provider(processing)
+        self.duplicate_model(processing)
+        self.duplicate_model_options(processing)
         self.result_loader.download_aoi_file(pid=processing.id_, callback=self.duplicate_aoi_callback)
         
+    def duplicate_provider(self, processing):
+        try:
+            provider = processing.params.sourceParams
+            if isinstance(provider, DataProviderParams):
+                self.duplicate_data_provider(provider)
+            elif isinstance(provider, MyImageryParams):
+                self.allow_enable_processing['my_mosaic_loaded'] = False
+                self.duplicate_my_imagery(provider)
+            elif isinstance(provider, ImagerySearchParams):
+                pass # duplicate imagery search after aoi is downloaded
+            elif isinstance(provider, UserDefinedParams):
+                self.duplicate_user_provider(provider)
+        except:
+            self.alert(self.tr("Duplication failed on copying data source"))
+    
+    def duplicate_model(self, processing):
+        try:
+            if self.dlg.modelCombo.findText(processing.workflow_def) == -1: # index is -1, the item is not found
+                self.alert(self.tr("Model '{wd}' is not enabled for your account").format(wd=processing.workflow_def))
+            else: # item is found
+                self.dlg.modelCombo.setCurrentText(processing.workflow_def)
+        except:
+            self.alert(self.tr("Duplication failed on copying model"))
+    
+    def duplicate_model_options(self, processing):
+        try:
+            model_options = []
+            enabled_options = []
+            for checkbox in self.dlg.modelOptions:
+                model_options.append(checkbox.text())
+            for block in processing.blocks:
+                if block.enabled:
+                    enabled_options.append(block.name)
+            options_to_enable = [option for option in enabled_options if option in model_options]
+            for checkbox in self.dlg.modelOptions:
+                if checkbox.text() in options_to_enable:
+                    checkbox.setChecked(True)
+                else:
+                    checkbox.setChecked(False) 
+            deleted_options = [enabled_option for enabled_option in enabled_options if enabled_option not in model_options]
+            if deleted_options:
+                self.alert(self.tr("The following options no longer exist, so they have not been duplicated: {}").format(', '.join(deleted_options)))
+        except:
+            self.alert(self.tr("Duplication failed on copying model options"))
+
     def duplicate_data_provider(self, provider: DataProviderParams):
-        provider_name = provider.datapPovider.providerName
+        provider_name = provider.dataPovider.providerName
         index = self.dlg.sourceCombo.findText(provider_name, Qt.MatchContains)
         if index == -1:
             self.alert(self.tr("Provider '{provider}' is not enabled for your account").format(provider=provider_name))
         else:
             self.dlg.sourceCombo.setCurrentIndex(index)
             if self.zoom_selector:
-                self.dlg.zoomCombo.setCurrentText(provider.datapPovider.zoom)
+                self.dlg.zoomCombo.setCurrentText(provider.dataPovider.zoom)
     
     def duplicate_my_imagery(self, provider: MyImageryParams):
-        if provider.myImagery.mosaicId:
-            self.dlg.mosaicTable.clearSelection()
-            self.data_catalog_service.view.select_mosaic_cell(provider.myImagery.mosaicId)
-        elif provider.myImagery.imageIds:
+        self.dlg.mosaicTable.clearSelection()
+        if provider.myImagery.imageIds:
+            self.allow_enable_processing['my_image_loaded'] = False
             image_id = provider.myImagery.imageIds[0]
             self.data_catalog_service.get_image(image_id, self.data_catalog_service.get_image_callback)
+        elif provider.myImagery.mosaicId:
+            self.data_catalog_service.view.select_mosaic_cell(provider.myImagery.mosaicId)
+        my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
+        self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
 
     def duplicate_imagery_search(self, provider: ImagerySearchParams):
-        self.dlg.disable_processing_start(self.tr("This provider requires image ID. "
-                                                  "Use search tab to find imagery for you requirements, "
-                                                  "and select image in the table."))
-        self.alert(self.tr("On the Imagery search tab, search for image with id"
-                           "<br><b>'{iid}'</b>"
-                           "<br>using <b>'AOI: {pid}'</b> layer."
-                           "<br>Select this image in the table and run the processing: "
-                           "other parameters are already duplicated").format(iid=provider.imagerySearch.imageIds[0],
-                                                                             pid=self.selected_processing().id_),
-                   icon=QMessageBox.Information)
+        self.dlg.sourceCombo.setCurrentIndex(self.imagery_search_provider_index)
+        # Setup table to have one row
+        self.dlg.metadataTable.clearContents()
+        self.dlg.metadataTable.setRowCount(1)
+        imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
+        self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
+        # Only name, zoom and id are returned, so we create dict with them as values and indecies as keys
+        columns = {self.config.NAME_COLUMN_INDEX: provider.imagerySearch.dataProvider, 
+                   self.config.MAXAR_ID_COLUMN_INDEX: provider.imagerySearch.imageIds[0], 
+                   self.config.ZOOM_COLUMN_INDEX: provider.imagerySearch.zoom,
+                   self.config.LOCAL_INDEX_COLUMN: 0}
+        # And with column indecies we get corresponding field names
+        column_names = []
+        for index in columns.keys():
+            column_names.append(list(self.config_search_columns.METADATA_TABLE_ATTRIBUTES.values())[index])
+        # Create pseudo search metadata vector layer
+        self.metadata_layer = QgsVectorLayer('polygon?crs=epsg:4326&index=yes&' +
+                                             '&'.join(f'field={name}' for name in column_names),
+                                            'Duplicated Imagery Search',
+                                            'memory')
+        data_provider = self.metadata_layer.dataProvider()
+        # Fill this layer with AOI (since we don't have accsess to footprint)
+        for f in self.dlg.polygonCombo.currentLayer().getFeatures():
+            feature = QgsFeature(self.metadata_layer.fields())
+            feature.setGeometry(f.geometry())
+            self.metadata_layer.startEditing()
+            for column, value in columns.items():
+                field_name = list(self.config_search_columns.METADATA_TABLE_ATTRIBUTES.values())[column]
+                feature.setAttribute(field_name, value)
+            data_provider.addFeatures([feature])
+            self.metadata_layer.commitChanges()
+        self.metadata_layer.updateExtents()
+        self.meta_layer_table_connection = self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
+        # Fill metadata table with the returned values
+        for column, value in columns.items():
+            table_item = QTableWidgetItem()
+            table_item.setData(Qt.DisplayRole, value)
+            self.dlg.metadataTable.setItem(0, column, table_item)
+        # Create pseudo footprints dict for one created feature
+        self.search_footprints = {0: feature for feature in self.metadata_layer.getFeatures()}
+        self.dlg.metadataTable.selectRow(0)        
     
     def duplicate_user_provider(self, provider: UserDefinedParams):
         duplicated_provider = None
@@ -3655,12 +3706,12 @@ class Mapflow(QObject):
 
     def duplicate_aoi_callback(self, response: QNetworkReply, path: str) -> None:
         self.result_loader.download_aoi_file_callback(response, path)
-        provider = self.selected_processing().params.sourceParams # there is always some processing selected when duplicating
+        provider = self.selected_processing().params.sourceParams
+        self.allow_enable_processing['aoi_loaded'] = True
         if isinstance(provider, ImagerySearchParams):
             self.duplicate_imagery_search(provider)
-        else: # enable start processing for other provider types
+        if not False in self.allow_enable_processing.values():
             self.dlg.startProcessing.setEnabled(True)
-            self.allow_enable_processing = True
             
     @property
     def basemap_providers(self):

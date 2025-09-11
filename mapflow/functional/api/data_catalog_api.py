@@ -320,6 +320,7 @@ class DataCatalogApi(QObject):
 
     def image_preview_l_error_handler(self, response: QNetworkReply):
         error_summary, email_body = get_error_report_body(response=response,
+                                                          response_body=response.readAll().data().decode(),
                                                           plugin_version=self.plugin_version)
         ErrorMessageWidget(parent=QApplication.activeWindow(),
                            text=error_summary,
