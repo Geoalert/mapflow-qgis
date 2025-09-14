@@ -2,7 +2,7 @@ import json
 import os
 from abc import ABC
 from enum import Enum
-from typing import Iterable, Union, Optional
+from typing import Iterable, Union, Optional, List
 from pathlib import Path
 
 
@@ -20,6 +20,7 @@ class SourceType(StrEnum):
     tms = 'tms'
     quadkey = 'quadkey'
     sentinel_l2a = 'sentinel_l2a'
+    local = 'local'
 
     @property
     def requires_crs(self):
@@ -75,11 +76,8 @@ class ProviderInterface:
         raise NotImplementedError
 
     def to_processing_params(self,
-                             image_id: Optional[str] = None,
                              provider_name: Optional[str] = None,
-                             url: Optional[str] = None,
-                             zoom: Optional[str] = None,
-                             requires_id: Optional[bool] = False):
+                             zoom: Optional[str] = None):
         """ You cannot create a processing with generic provider without implementation"""
         raise NotImplementedError
 

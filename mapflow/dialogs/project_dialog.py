@@ -2,7 +2,7 @@ from PyQt5 import uic
 from PyQt5.QtCore import QCoreApplication
 from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 
-from .dialogs import ui_path, plugin_icon
+from .processing_dialog import plugin_icon, ui_path
 from ..schema.project import MapflowProject, CreateProjectSchema, UpdateProjectSchema
 
 

@@ -17,7 +17,7 @@ class ProcessingService(QObject):
         if not project_id:
             return
         self.http.get(
-                url=f'{self.server}/projects/{project_id}/processings',
+                url=f'{self.server}/projects/{project_id}/processings/v2',
                 callback=callback,
                 use_default_error_handler=False # ignore errors to prevent repetitive alerts
                 )
