@@ -14,9 +14,10 @@ from ...schema import MyImageryParams, UserDefinedParams
 from ...schema.data_catalog import MosaicReturnSchema, ImageReturnSchema
 
 class DataCatalogView(QObject):
-    def __init__(self, dlg: MainDialog):
+    def __init__(self, dlg: MainDialog, allow_enable_processing: dict):
         super().__init__()
         self.dlg = dlg
+        self.allow_enable_processing = allow_enable_processing
 
         # Setup menu for uploading images to mosaic
         self.upload_image_menu = QMenu()
@@ -316,15 +317,19 @@ class DataCatalogView(QObject):
     
     def select_mosaic_cell(self, mosaic_id):
         try:
+            self.show_mosaics_table(None)
             item = self.dlg.mosaicTable.findItems(mosaic_id, Qt.MatchExactly)[0]
             self.dlg.mosaicTable.setCurrentCell(item.row(), 1)
+            self.allow_enable_processing['my_mosaic_loaded'] = True
         except IndexError:
             self.alert(self.tr("No imagery collection with id '{mosaic_id}' was found").format(mosaic_id=mosaic_id))
 
     def select_image_cell(self, image_id):
         try:
+            self.show_images_table()
             item = self.dlg.imageTable.findItems(image_id, Qt.MatchExactly)[0]
             self.dlg.imageTable.setCurrentCell(item.row(), 1)
+            self.allow_enable_processing['my_image_loaded'] = True
         except IndexError:
             self.alert(self.tr("No image with id '{image_id}' was found").format(image_id=image_id))
 

@@ -438,7 +438,7 @@ class ResultsLoader(QObject):
             timeout=300
         )
 
-    def download_aoi_file(self, pid) -> None:
+    def download_aoi_file(self, pid, callback) -> None:
         """
         Download area of interest and save to a geojson file
         """ 
@@ -446,7 +446,7 @@ class ResultsLoader(QObject):
         self.dlg.saveOptionsButton.setEnabled(False)
         self.http.get(
             url=f'{self.server}/processings/{pid}/aois',
-            callback=self.download_aoi_file_callback,
+            callback=callback,
             callback_kwargs={'path': path},
             use_default_error_handler=True,
             timeout=30
@@ -475,6 +475,7 @@ class ResultsLoader(QObject):
         aoi_layer = QgsVectorLayer(str(path), "AOI: {id}".format(id=id))
         self.add_layer(aoi_layer)
         aoi_layer.loadNamedStyle(str(Path(__file__).parents[1]/'static'/'styles'/'aoi.qml'))
+        self.dlg.polygonCombo.setLayer(aoi_layer)
         
     def download_results_file_error_handler(self,
                                             response: QNetworkReply,
