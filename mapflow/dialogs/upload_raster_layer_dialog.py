@@ -13,7 +13,6 @@ class UploadRasterLayersDialog(*uic.loadUiType(ui_path / 'raster_layers_dialog.u
         """Dialog for choosing raster layer(s) when uploading image to mosaic."""
         super().__init__(parent)
         self.setupUi(self)
-        self.setWindowIcon(plugin_icon)
         
     def setup(self, layers):
         self.setWindowTitle(self.tr("Choose raster layers to upload to imagery collection"))

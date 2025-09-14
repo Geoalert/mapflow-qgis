@@ -9,7 +9,6 @@ class MosaicDialog(*uic.loadUiType(ui_path/'mosaic_dialog.ui')):
         """A dialog for adding or editing mosaics"""
         super().__init__(parent)
         self.setupUi(self)
-        self.setWindowIcon(plugin_icon)
         self.ok = self.buttonBox.button(QDialogButtonBox.Ok)
 
         self.mosaicName.textChanged.connect(self.on_name_change)
@@ -28,7 +27,7 @@ class CreateMosaicDialog(MosaicDialog):
         self.ok.setEnabled(False)
 
     def setup(self):
-        self.setWindowTitle("")
+        self.setWindowTitle(self.tr("Imagery collection"))
         self.mosaicName.setText("")
         self.mosaicTags.setText("")
         self.exec()

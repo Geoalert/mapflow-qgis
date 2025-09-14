@@ -14,7 +14,6 @@ class UpdateProcessingDialog(*uic.loadUiType(ui_path/'processing_dialog.ui')):
         """A dialog for adding or editing an imagery provider."""
         super().__init__(parent)
         self.setupUi(self)
-        self.setWindowIcon(plugin_icon)
         self.ok = self.buttonBox.button(QDialogButtonBox.Ok)
 
         self.processingName.textChanged.connect(self.on_name_change)
