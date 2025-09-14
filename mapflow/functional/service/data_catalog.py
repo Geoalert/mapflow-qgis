@@ -44,7 +44,8 @@ class DataCatalogService(QObject):
                  iface,
                  result_loader,
                  plugin_version,
-                 temp_dir):
+                 temp_dir,
+                 allow_enable_processing):
         super().__init__()
         self.dlg = dlg
         self.iface = iface
@@ -53,7 +54,7 @@ class DataCatalogService(QObject):
         self.result_loader = result_loader
         self.plugin_version = plugin_version
         self.api = DataCatalogApi(http=http, server=server, dlg=dlg, iface=iface, result_loader=self.result_loader, plugin_version=self.plugin_version)
-        self.view = DataCatalogView(dlg=dlg)
+        self.view = DataCatalogView(dlg=dlg, allow_enable_processing=allow_enable_processing)
         self.mosaics = {}
         self.images = []
         self.image_max_size_pixels = Config.MAX_FILE_SIZE_PIXELS

@@ -130,6 +130,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.see_details_action = QAction(self.tr("See details"))
         self.processing_update_action = QAction(self.tr("Rename"))
         self.processing_restart_action = QAction(self.tr("Restart"))
+        self.processing_duplicate_action = QAction(self.tr("Duplicate"))
         self.setup_options_menu()
 
         # Imagery Search
@@ -441,6 +442,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.options_menu.addAction(self.see_details_action)
         self.options_menu.addAction(self.processing_update_action)
         self.options_menu.addAction(self.processing_restart_action)
+        self.options_menu.addAction(self.processing_duplicate_action)
 
     def enable_shared_project(self, user_role: UserRole):
         """Disable buttons depending on user role in a shared project.
@@ -476,7 +478,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # Remove/add back renaming option from save options menu
         self.enable_rename_processing(user_role.can_delete_rename_review_processing)
         # Remove/add back restarting option
-        self.enable_restart_processing(user_role.can_start_processing)
+        self.enable_restart_duplicate_processing(user_role.can_start_processing)
 
     def enable_model_options(self, can_start_processing: bool = True):
         """
@@ -555,14 +557,16 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         if enable is True:
             self.projectsPageLabel.setText(f"{page_number}/{total_pages}")
 
-    def enable_restart_processing(self, can_start_processing: bool = True):
+    def enable_restart_duplicate_processing(self, can_start_processing: bool = True):
         """
         Remove processing's restarting option from '...' menu near 'View results' button depending on user role property.
         """
         if can_start_processing is True:
             self.options_menu.addAction(self.processing_restart_action)
+            self.options_menu.addAction(self.processing_duplicate_action)
         else:
             self.options_menu.removeAction(self.processing_restart_action)
+            self.options_menu.removeAction(self.processing_duplicate_action)
     
     def selected_project_id(self):
         selected_idx = self.projectsTable.selectionModel().selectedIndexes()
