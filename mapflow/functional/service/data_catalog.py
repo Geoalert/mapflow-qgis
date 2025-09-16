@@ -2,7 +2,6 @@ from typing import Sequence, Union, Optional, Callable, List, Tuple
 from pathlib import Path
 from uuid import UUID
 import json
-import tempfile
 import os.path
 from osgeo import gdal
 
@@ -15,10 +14,8 @@ from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsRasterLayer, 
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs.mosaic_dialog import CreateMosaicDialog, UpdateMosaicDialog
 from ...dialogs.image_dialog import RenameImageDialog
-from ...dialogs.dialogs import UploadRasterLayersDialog
-from ...schema.data_catalog import PreviewSize, MosaicReturnSchema, ImageReturnSchema, UserLimitSchema
 from ...dialogs.upload_raster_layer_dialog import UploadRasterLayersDialog
-from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema, MosaicCreateReturnSchema, UserLimitSchema
+from ...schema.data_catalog import PreviewSize, MosaicReturnSchema, ImageReturnSchema, UserLimitSchema
 from ...schema import DataProviderParams, MyImageryParams, ImagerySearchParams, UserDefinedParams
 from ..api.data_catalog_api import DataCatalogApi
 from ..view.data_catalog_view import DataCatalogView
@@ -495,7 +492,7 @@ class DataCatalogService(QObject):
         self.iface.messageBar().pushMessage("Mapflow", "Image renamed")
 
     def show_rename_image_dialog(self):
-        image=self.selected_image()
+        image = self.selected_image()
         dialog = RenameImageDialog(self.dlg)
         dialog.accepted.connect(lambda:self.rename_image(image.id, dialog.image()))
         dialog.setup(image)

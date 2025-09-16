@@ -2,7 +2,7 @@ from PyQt5 import uic
 from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 
 from ..schema.data_catalog import ImageReturnSchema
-from .dialogs import ui_path, plugin_icon
+from .processing_dialog import ui_path, plugin_icon
 
 class RenameImageDialog(*uic.loadUiType(ui_path/'image_dialog.ui')):
     def __init__(self, parent: QWidget) -> None:
@@ -30,6 +30,6 @@ class RenameImageDialog(*uic.loadUiType(ui_path/'image_dialog.ui')):
             self.ok.setToolTip("")
 
     def image(self):
-        if not self.imageName:
+        if not self.imageName.text():
             raise AssertionError(self.tr("Image name must not be empty!"))
         return self.imageName.text()

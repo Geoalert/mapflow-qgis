@@ -309,7 +309,7 @@ class DataCatalogView(QObject):
         if self.mosaic_table_visible:
             # if the images table is not displayed, nothing to change
             return
-        items = self.dlg.imageTable.findItems(image.id, Qt.MatchExactly)
+        items = self.dlg.imageTable.findItems(str(image.id), Qt.MatchExactly)
         if not items:
             # if the image is not present in the table, do nothing.
             # It may be if image is deleted, or other mosaic is opened

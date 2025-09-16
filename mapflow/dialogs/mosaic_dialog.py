@@ -34,7 +34,7 @@ class CreateMosaicDialog(MosaicDialog):
         self.exec()
 
     def mosaic(self):
-        if not self.mosaicName:
+        if not self.mosaicName.text():
             raise AssertionError(self.tr("Imagery collection name must not be empty!"))
         tags_list = self.mosaicTags.text().split(", ") if self.mosaicTags.text() else None
         return MosaicUpdateSchema(name = self.mosaicName.text(),
