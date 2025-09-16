@@ -109,10 +109,11 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.editMosaicButton = QPushButton()
         self.previewImageButton = QPushButton()
         self.imageInfoButton = QPushButton()
+        self.renameImageButton = QPushButton()
         # Create colored spacers for tables' cell widgets (so long names won't be seen inbetween buttons)
-        self.imageSpacer = QLabel()
+        self.imageSpacers = [QLabel(), QLabel()]
         self.mosaicSpacers = [QLabel(), QLabel(), QLabel()]
-        for spacer in self.mosaicSpacers+[self.imageSpacer]:
+        for spacer in self.mosaicSpacers+self.imageSpacers:
             spacer.setFixedSize(3,26)
             highlight_color = self.mosaicTable.palette().highlight().color().name() 
             spacer.setStyleSheet("background-color:" + highlight_color + ";")

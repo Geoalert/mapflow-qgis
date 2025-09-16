@@ -29,6 +29,7 @@ class DataCatalogController(QObject):
         self.view.upload_from_file.triggered.connect(self.service.upload_images_to_mosaic)
         self.view.choose_raster_layer.triggered.connect(self.service.choose_raster_layers)
         self.dlg.imageInfoButton.clicked.connect(self.service.image_info)
+        self.dlg.renameImageButton.clicked.connect(self.service.show_rename_image_dialog)
         self.dlg.previewImageButton.clicked.connect(self.service.get_image_preview_l)
         self.dlg.imageTable.selectionModel().selectionChanged.connect(self.service.check_image_selection)
         self.dlg.seeMosaicsButton.clicked.connect(self.service.switch_to_mosaics_table)
