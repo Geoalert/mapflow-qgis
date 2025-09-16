@@ -19,7 +19,6 @@ class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
         """A dialog for adding or editing an imagery provider."""
         super().__init__(parent)
         self.setupUi(self)
-        self.setWindowIcon(plugin_icon)
         ok = self.buttonBox.button(QDialogButtonBox.Ok)
         ok.setEnabled(False)
 
