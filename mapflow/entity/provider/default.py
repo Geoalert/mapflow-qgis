@@ -137,6 +137,7 @@ class DefaultProvider(ProviderInterface):
                  api_name: str,
                  price: dict,
                  preview_url: Optional[str] = None,
+                 preview_max_zoom: Optional[int] = None,
                  source_type: SourceType = SourceType.xyz,
                  credentials: BasicAuth = BasicAuth()):
         super().__init__(name=name)
@@ -144,6 +145,7 @@ class DefaultProvider(ProviderInterface):
         self.api_name = api_name
         self.price = price
         self._preview_url = preview_url
+        self._preview_max_zoom = preview_max_zoom
 
         # In the default (server-side) providers these params are for preview only
         # By now, this is the only option for the server-side providers.
@@ -157,6 +159,10 @@ class DefaultProvider(ProviderInterface):
         if not self._preview_url:
             raise NotImplementedError
         return self._preview_url
+
+    @property
+    def preview_max_zoom(self):
+        return self._preview_max_zoom
 
     @property
     def is_default(self):
@@ -180,7 +186,8 @@ class DefaultProvider(ProviderInterface):
                    name=response.displayName,
                    api_name=response.name,
                    price=response.price_dict,
-                   preview_url=response.previewUrl)
+                   preview_url=response.previewUrl,
+                   preview_max_zoom=response.previewUrlMaxZoom)
 
     def to_processing_params(self,
                              provider_name: Optional[str] = None,
