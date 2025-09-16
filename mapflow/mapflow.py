@@ -1715,7 +1715,7 @@ class Mapflow(QObject):
                 self.dlg.disable_processing_start(reason=self.tr("Select AOI to start processing"), clear_area=True)
                 return
             aoi_geom = layer_utils.collect_geometry_from_layer(self.dlg.polygonCombo.currentLayer())
-            selected_aoi = helpers.from_wgs84(aoi_geom, self.dlg.polygonCombo.currentLayer().crs())
+            selected_aoi = helpers.to_wgs84(aoi_geom, self.dlg.polygonCombo.currentLayer().crs())
             aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
                                               selected_aoi=selected_aoi)
         else:
