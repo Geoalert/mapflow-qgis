@@ -131,6 +131,9 @@ def get_catalog_aoi(catalog_aoi: QgsGeometry,
     for feature in clipped_aoi_features:
         geom = feature.geometry()
         clipped_aoi = clipped_aoi.combine(geom)
+    """ print ("CA ", catalog_aoi)
+    print ("SA ", selected_aoi)
+    print ("CLIPPED ", clipped_aoi) """
     return clipped_aoi
 
 

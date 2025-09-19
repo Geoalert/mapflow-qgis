@@ -1726,8 +1726,13 @@ class Mapflow(QObject):
             else:
                 catalog_aoi = QgsGeometry().fromWkt(mosaic.footprint)
                 self.use_imagery_extent.setText(self.tr("Use extent of '{name}'").format(name=mosaic.name))
+            if not self.dlg.polygonCombo.currentLayer():
+                self.dlg.disable_processing_start(reason=self.tr("Select AOI to start processing"), clear_area=True)
+                return
+            aoi_geom = layer_utils.collect_geometry_from_layer(self.dlg.polygonCombo.currentLayer())
+            selected_aoi = helpers.to_wgs84(aoi_geom, self.dlg.polygonCombo.currentLayer().crs())
             aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
-                                              selected_aoi=self.aoi)
+                                              selected_aoi=selected_aoi)
         else:
             aoi = self.get_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
             self.use_imagery_extent.setText(self.tr("Use imagery extent"))
