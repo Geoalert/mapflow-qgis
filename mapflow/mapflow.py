@@ -2826,6 +2826,8 @@ class Mapflow(QObject):
         if self.dlg.viewAsTiles.isChecked():
             self.result_loader.load_result_tiles(processing=processing)
         elif self.dlg.viewAsLocal.isChecked():
+            if not self.temp_dir.exists():
+                self.alert(self.tr("Change the output directory to an existing one to download the results"), QMessageBox.Warning)
             if not self.check_if_output_directory_is_selected():
                 return
             self.result_loader.download_results(processing=processing)
@@ -3548,9 +3550,9 @@ class Mapflow(QObject):
         self.temp_dir = Path(self.settings.value('outputDir'), "Temp")
         try:
             shutil.rmtree(self.temp_dir) # remove old tempdir
+            self.temp_dir.mkdir(parents=True, exist_ok=True)
         except:
             pass
-        self.temp_dir.mkdir(parents=True, exist_ok=True)
 
     def restart_processing(self):
         processing = self.selected_processing()
