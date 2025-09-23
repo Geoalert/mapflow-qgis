@@ -3625,14 +3625,14 @@ class Mapflow(QObject):
             self.alert(self.tr("Duplication failed on copying model options"))
 
     def duplicate_data_provider(self, provider: DataProviderParams):
-        provider_name = provider.dataPovider.providerName
+        provider_name = provider.dataProvider.providerName
         index = self.dlg.sourceCombo.findText(provider_name, Qt.MatchContains)
         if index == -1:
             self.alert(self.tr("Provider '{provider}' is not enabled for your account").format(provider=provider_name))
         else:
             self.dlg.sourceCombo.setCurrentIndex(index)
             if self.zoom_selector:
-                self.dlg.zoomCombo.setCurrentText(provider.dataPovider.zoom)
+                self.dlg.zoomCombo.setCurrentText(provider.dataProvider.zoom)
     
     def duplicate_my_imagery(self, provider: MyImageryParams):
         self.dlg.mosaicTable.clearSelection()

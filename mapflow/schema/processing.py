@@ -59,7 +59,7 @@ class DataProviderSchema(Serializable):
 
 @dataclass
 class DataProviderParams(Serializable):
-    dataPovider: DataProviderSchema
+    dataProvider: DataProviderSchema
 
 
 @dataclass
