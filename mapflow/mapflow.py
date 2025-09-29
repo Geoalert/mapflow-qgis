@@ -561,7 +561,7 @@ class Mapflow(QObject):
         else:
             # Providers did not change
             return
-        provider_names = [p.name for p in self.providers]
+        provider_names = {p.name: getattr(p, 'api_name', p.name) for p in self.providers}
         self.dlg.set_raster_sources(provider_names=provider_names,
                                     default_provider_names=['Mapbox', '🌍 Mapbox Satellite'])
 
@@ -842,7 +842,9 @@ class Mapflow(QObject):
         otherwise loads providers list from settings
         """
         self.user_providers.to_settings(self.settings)
-        self.dlg.providerCombo.addItems(provider.name for provider in self.providers)
+        provider_names = {p.name: getattr(p, 'api_name', p.name) for p in self.providers}
+        for name, api_name in provider_names.items():
+            self.providerCombo.addItem(name, api_name)
         self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
 
     def monitor_polygon_layer_feature_selection(self, layers: List[QgsMapLayer]) -> None:
@@ -3393,7 +3395,7 @@ class Mapflow(QObject):
         dialog.toSourceButton.clicked.connect(lambda: self.data_catalog_service.show_processing_source(
                                                            source_params=processing.params.sourceParams,
                                                            window=dialog))
-        dialog.setup(processing, error or None)
+        dialog.setup(processing, self.zoom_selector, error or None)
         dialog.deleteLater()
 
     def update_processing(self):
@@ -3611,7 +3613,7 @@ class Mapflow(QObject):
                 model_options.append(checkbox.text())
             for block in processing.blocks:
                 if block.enabled:
-                    enabled_options.append(block.name)
+                    enabled_options.append(block.displayName)
             options_to_enable = [option for option in enabled_options if option in model_options]
             for checkbox in self.dlg.modelOptions:
                 if checkbox.text() in options_to_enable:
@@ -3626,13 +3628,16 @@ class Mapflow(QObject):
 
     def duplicate_data_provider(self, provider: DataProviderParams):
         provider_name = provider.dataProvider.providerName
-        index = self.dlg.sourceCombo.findText(provider_name, Qt.MatchContains)
+        index = self.dlg.sourceCombo.findData(provider_name)
         if index == -1:
             self.alert(self.tr("Provider '{provider}' is not enabled for your account").format(provider=provider_name))
         else:
             self.dlg.sourceCombo.setCurrentIndex(index)
             if self.zoom_selector:
-                self.dlg.zoomCombo.setCurrentText(provider.dataProvider.zoom)
+                if provider.dataProvider.zoom:
+                    self.dlg.zoomCombo.setCurrentText(str(provider.dataProvider.zoom))
+                else:
+                    self.dlg.zoomCombo.setCurrentIndex(0)
     
     def duplicate_my_imagery(self, provider: MyImageryParams):
         self.dlg.mosaicTable.clearSelection()

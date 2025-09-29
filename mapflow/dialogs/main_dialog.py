@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-from typing import Iterable, Optional, List
+from typing import Iterable, Optional, List, Dict
 from datetime import datetime
 
 from PyQt5 import uic
@@ -180,7 +180,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.raster_provider_connection = self.sourceCombo.currentTextChanged.connect(self.switch_provider_combo)
 
     def set_raster_sources(self,
-                           provider_names: List[str],
+                           provider_names: Dict[str, str],
                            default_provider_names: List[str]):
         """
         args:
@@ -193,9 +193,11 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.sourceCombo.currentTextChanged.disconnect(self.raster_provider_connection)
 
         self.sourceCombo.clear()
-        self.sourceCombo.addItems(provider_names)
+        for name, api_name in provider_names.items():
+            self.sourceCombo.addItem(name, api_name)
         self.providerCombo.clear()
-        self.providerCombo.addItems(provider_names)
+        for name, api_name in provider_names.items():
+            self.providerCombo.addItem(name, api_name)
 
         for name in default_provider_names:
             if name in provider_names:
