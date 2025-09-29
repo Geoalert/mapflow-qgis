@@ -3595,15 +3595,21 @@ class Mapflow(QObject):
                 self.duplicate_user_provider(provider)
         except:
             self.alert(self.tr("Duplication failed on copying data source"))
+            self.allow_enable_processing = {k: True for k in self.allow_enable_processing}
+            self.dlg.startProcessing.setEnabled(True)
     
     def duplicate_model(self, processing):
         try:
             if self.dlg.modelCombo.findText(processing.workflow_def) == -1: # index is -1, the item is not found
                 self.alert(self.tr("Model '{wd}' is not enabled for your account").format(wd=processing.workflow_def))
+                self.allow_enable_processing = {k: True for k in self.allow_enable_processing}
+                self.dlg.startProcessing.setEnabled(True)
             else: # item is found
                 self.dlg.modelCombo.setCurrentText(processing.workflow_def)
         except:
             self.alert(self.tr("Duplication failed on copying model"))
+            self.allow_enable_processing = {k: True for k in self.allow_enable_processing}
+            self.dlg.startProcessing.setEnabled(True)
     
     def duplicate_model_options(self, processing):
         try:
@@ -3623,14 +3629,20 @@ class Mapflow(QObject):
             deleted_options = [enabled_option for enabled_option in enabled_options if enabled_option not in model_options]
             if deleted_options:
                 self.alert(self.tr("The following options no longer exist, so they have not been duplicated: {}").format(', '.join(deleted_options)))
+                self.allow_enable_processing = {k: True for k in self.allow_enable_processing}
+                self.dlg.startProcessing.setEnabled(True)
         except:
             self.alert(self.tr("Duplication failed on copying model options"))
+            self.allow_enable_processing = {k: True for k in self.allow_enable_processing}
+            self.dlg.startProcessing.setEnabled(True)
 
     def duplicate_data_provider(self, provider: DataProviderParams):
         provider_name = provider.dataProvider.providerName
         index = self.dlg.sourceCombo.findData(provider_name)
         if index == -1:
             self.alert(self.tr("Provider '{provider}' is not enabled for your account").format(provider=provider_name))
+            self.allow_enable_processing = {k: True for k in self.allow_enable_processing}
+            self.dlg.startProcessing.setEnabled(True)
         else:
             self.dlg.sourceCombo.setCurrentIndex(index)
             if self.zoom_selector:
