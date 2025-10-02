@@ -41,9 +41,12 @@ def get_tile_style_name(wd_name):
 
 def get_local_style_name(wd_name, layer):
     name = STYLES.get(wd_name, DEFAULT_STYLE)
-
-    # Buildings with heights model
-    if "building" in wd_name.lower() and "height" in wd_name.lower():
+    
+    # Land use
+    if "building" in wd_name.lower() and "road" in wd_name.lower():
+        name = 'landuse'
+    # Buildings with heights
+    elif "building" in wd_name.lower() and "height" in wd_name.lower():
         name = 'building_heights'
     # Classification and heights enabled
     elif "building" in wd_name.lower() and "building_height" in layer.fields().names() and "class_id" in layer.fields().names():
