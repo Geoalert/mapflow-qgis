@@ -1550,7 +1550,7 @@ class Mapflow(QObject):
         try:
             self.metadata_layer.selectionChanged.disconnect(self.meta_layer_table_connection)
             # disconnect to prevent loop of signals
-        except (RuntimeError, AttributeError):
+        except (RuntimeError, AttributeError, TypeError):
             # metadata layer was removed or not initialized
             return
         self.replace_search_provider_index()
@@ -1839,6 +1839,7 @@ class Mapflow(QObject):
                 not self.dlg.mosaicTable.selectionModel().hasSelection():
                     self.dlg.disable_processing_start(reason=self.tr('Choose imagery to start processing'))
             else:
+
                 if self.user_role.can_start_processing:
                     self.http.post(
                         url=f"{self.server}/processing/cost/v2",
@@ -3500,7 +3501,7 @@ class Mapflow(QObject):
                         zoom_error = self.tr("Selected search results must have the same zoom level")
                     elif len(unique_zooms) == 1: # get unique zoom as a parameter
                         zoom = str(int(list(unique_zooms)[0]))
-                else:
+                elif len(product_types) == 0: # when duplicating processing with search, type field is empty
                     zoom = zooms[0]
             self.dlg.enable_zoom_selector(False, zoom)
         elif isinstance(provider, MyImageryProvider):
