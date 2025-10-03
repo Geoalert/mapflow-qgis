@@ -17,6 +17,7 @@ class PostSourceSchema(Serializable, SkipDataClass):
 @dataclass
 class BlockOption(Serializable, SkipDataClass):
     name: str
+    displayName: str
     enabled: bool
 
 
