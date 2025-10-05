@@ -14,8 +14,11 @@ class ProcessingDetailsDialog(*uic.loadUiType(ui_path / 'processing_details.ui')
         self.setWindowIcon(plugin_icon)
         self.setWindowTitle(self.tr("Processing details"))
     
-    def setup(self, processing, error) -> None:
+    def setup(self, processing, zoom_selector, error) -> None:
         self.toSourceButton.setIcon(options_icon)
+        # Hide zoom
+        self.zoomLabel.setVisible(False)
+        self.zoomInfo.setVisible(False)
         # Set name
         self.nameInfo.setText(processing.name)
         # Set id
@@ -34,15 +37,23 @@ class ProcessingDetailsDialog(*uic.loadUiType(ui_path / 'processing_details.ui')
         source_params = processing.params.sourceParams
         if isinstance(source_params, DataProviderParams):
             provider = source_params.dataProvider.providerName # display name
+            if zoom_selector:
+                self.show_zoom(source_params.dataProvider.zoom)
             self.toSourceButton.setVisible(False)
         elif isinstance(source_params, ImagerySearchParams):
             provider = source_params.imagerySearch.dataProvider # display name
             self.toSourceButton.setVisible(False)
+            if zoom_selector:
+                self.show_zoom(source_params.imagerySearch.zoom)
         elif isinstance(source_params, MyImageryParams):
             provider = self.tr("My imagery") # display 'My imagery' + button
+            if zoom_selector:
+                self.show_zoom(0)
             self.toSourceButton.setVisible(True)
         elif isinstance(source_params, UserDefinedParams):
             provider = source_params.userDefined.url # display url + button
+            if zoom_selector:
+                self.show_zoom(source_params.userDefined.zoom)
             self.toSourceButton.setVisible(True)
         else:
             provider = source_params # display "Unidentified"
@@ -77,3 +88,9 @@ class ProcessingDetailsDialog(*uic.loadUiType(ui_path / 'processing_details.ui')
                 widget.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.adjustSize()
         self.exec()
+
+    def show_zoom(self, zoom):
+        if zoom:
+            self.zoomLabel.setVisible(True)
+            self.zoomInfo.setVisible(True)
+            self.zoomInfo.setText(str(zoom))
