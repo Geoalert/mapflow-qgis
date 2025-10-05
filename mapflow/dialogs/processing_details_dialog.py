@@ -1,5 +1,6 @@
 from PyQt5 import uic
-from PyQt5.QtWidgets import QWidget
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QLabel, QWidget
 
 from .processing_dialog import plugin_icon, ui_path
 from .icons import options_icon
@@ -70,5 +71,9 @@ class ProcessingDetailsDialog(*uic.loadUiType(ui_path / 'processing_details.ui')
         else:
             self.errorLabel.setVisible(False)
             self.errorInfo.setVisible(False)
+        widgets = [self.gridLayout.itemAt(i).widget() for i in range(self.gridLayout.count())]
+        for widget in widgets:
+            if isinstance(widget, QLabel):
+                widget.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.adjustSize()
         self.exec()
