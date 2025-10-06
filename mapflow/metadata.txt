@@ -9,10 +9,20 @@ about=Mapflow provides AI models for automatic feature extraction from satellite
         - roads
         - construction sites
     For a step-by-step user guide, go to https://docs.mapflow.ai/api/qgis_mapflow#user-interface
-version=3.2.0
+version=3.3.0
 author=Geoalert
 email=hello@geoalert.io
 changelog:
+    3.3.0
+    - Restart processing
+    - Duplicate processing
+    - See details changes:
+        - Show image or mosaic id if source is from My imagery
+        - Button to see mosaic or image in My imagery tab if source is from My imagery
+        - Add button to open Settings tab and provider info if source is user added
+	- Text in processing details dialog is selectable
+    - Rename image in My imagery
+    - New styles for open data downloading
     3.2.0
     - Projects are moved from Settings to Processing/Project tab and shown as a table
     - My imagery:
