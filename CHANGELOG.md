@@ -1,3 +1,19 @@
+## 3.3.0
+    - Processing API v2:
+        - Start processing for DataProvider, MyImageryProvider, ImagerySearchProvider, UserDefinedProvider
+        - Calculate costs for these providers
+    - See details changes:
+        - Show name if provider is DataProvider
+        - Show image or mosaic id if provider is myImageryProvider
+        - Add button to see mosaic or image in My imagery tab if provider is myImageryProvider
+        - Add button to open Settings tab and provider info if provider is UserDefinedProvider
+        - Text in ProcessingDetailsDialog is selectable
+    - Restart processing
+    - Duplicate processing
+    - Rename image in My imagery
+    - Styles:
+        - Styles for open data downloading
+        - Add styles to multiple result layers with different geometries
 ## 3.2.0
     - Projects:
         - Projects and their controls are moved to the first tab and shown as a table

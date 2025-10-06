@@ -4,7 +4,7 @@ from typing import List, Dict, Optional, Tuple
 
 from .status import ProcessingStatus, ProcessingReviewStatus
 from ..errors import ErrorMessage
-from ..schema.processing import ProcessingParamsSchema, BlockOption
+from ..schema.processing import BlockOption, ProcessingParams
 
 
 class Processing:
@@ -22,9 +22,10 @@ class Processing:
                  errors=None,
                  review_status=None,
                  in_review_until=None,
-                 params: Optional[ProcessingParamsSchema] = None,
+                 params: Optional[ProcessingParams] = None,
                  blocks: Optional[List[BlockOption]] = None,
                  description: Optional[str] = None,
+                 meta: Optional[Dict] = None,
                  **kwargs):
         self.id_ = id_
         self.name = name
@@ -42,6 +43,7 @@ class Processing:
         self.params = params
         self.blocks = blocks
         self.description = description
+        self.meta = meta
 
     @classmethod
     def from_response(cls, processing):
@@ -51,6 +53,7 @@ class Processing:
         description = processing.get("description") or None
         workflow_def = processing['workflowDef']['name']
         aoi_area = round(processing['aoiArea'] / 10 ** 6, 2)
+        meta = processing.get("meta") or None
 
         if sys.version_info.minor < 7:  # python 3.6 doesn't understand 'Z' as UTC
             created = processing['created'].replace('Z', '+0000')
@@ -72,7 +75,7 @@ class Processing:
         else:
             review_status = in_review_until = None
         cost = processing.get('cost', 0)
-        params = ProcessingParamsSchema.from_dict(processing.get("params"))
+        params = ProcessingParams.from_dict(processing.get("params"))
         blocks = [BlockOption.from_dict(block) for block in processing.get("blocks", [])]
         return cls(id_,
                    name,
@@ -89,7 +92,8 @@ class Processing:
                    in_review_until,
                    params,
                    blocks,
-                   description)
+                   description,
+                   meta)
 
     @property
     def is_new(self):
@@ -125,7 +129,8 @@ class Processing:
             'created': self.created.strftime('%Y-%m-%d %H:%M'),
             'rasterLayer': self.raster_layer,
             'reviewUntil':  self.in_review_until.strftime('%Y-%m-%d %H:%M') if self.in_review_until else "",
-            "description": self.description
+            'description': self.description,
+            'meta': self.meta
         }
 
     @property

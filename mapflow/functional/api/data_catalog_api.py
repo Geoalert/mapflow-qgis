@@ -11,7 +11,7 @@ from qgis.core import QgsMapLayer, QgsRectangle
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, ImageReturnSchema, MosaicUpdateSchema
 from ...http import Http, get_error_report_body, data_catalog_message_parser
 from ...functional import layer_utils
-from ...dialogs.dialogs import ErrorMessageWidget
+from ...dialogs.error_message_widget import ErrorMessageWidget
 from ...dialogs.main_dialog import MainDialog
 
 
@@ -238,7 +238,7 @@ class DataCatalogApi(QObject):
         else:
             message = self.tr("Could not upload following images:\n{images}").format(images= ', \n'.join(image_paths))
         ErrorMessageWidget(parent=QApplication.activeWindow(),
-                           text= error_summary,
+                           text=error_summary,
                            title=message,
                            email_body=email_body).show()
 
@@ -251,8 +251,19 @@ class DataCatalogApi(QObject):
     def get_image(self, image_id: UUID, callback: Callable):
         self.http.get(url=f"{self.server}/rasters/image/{image_id}",
                       callback=callback,
-                      use_default_error_handler=True
+                      use_default_error_handler=False,
+                      error_handler=self.get_image_error_handler
                      )
+    
+    def get_image_error_handler(self, response: QNetworkReply) -> None:
+        response_data = json.loads(response.readAll().data())
+        error_params = response_data['detail']['parameters']
+        if error_params['instance_type'] == "mosaic":
+            error_summary = self.tr("Source imagery collection with id '{}' was not found ").format(error_params['uid'])
+        else:
+            error_summary = self.tr("Source image with id '{}' was not found in any of your imagery collections").format(error_params['uid'])
+        ErrorMessageWidget(parent=QApplication.activeWindow(),
+                           text=error_summary).show()
         
     def delete_image(self,
                      image_id: UUID,
@@ -309,6 +320,7 @@ class DataCatalogApi(QObject):
 
     def image_preview_l_error_handler(self, response: QNetworkReply):
         error_summary, email_body = get_error_report_body(response=response,
+                                                          response_body=response.readAll().data().decode(),
                                                           plugin_version=self.plugin_version)
         ErrorMessageWidget(parent=QApplication.activeWindow(),
                            text=error_summary,
@@ -332,6 +344,11 @@ class DataCatalogApi(QObject):
     # Status
     def get_user_limit(self, callback):
         self.http.get(url=f"{self.server}/rasters/memory",
+                      callback=callback,
+                      use_default_error_handler=True)
+
+    def update_image_name(self, image_id: UUID, name: str, callback: Callable):
+        self.http.put(url=f"{self.server}/rasters/image/{image_id}?name={name}",
                       callback=callback,
                       use_default_error_handler=True)
 

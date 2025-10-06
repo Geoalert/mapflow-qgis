@@ -1,10 +1,10 @@
 from pathlib import Path
 
-from qgis.core import QgsVectorLayer, QgsVectorTileLayer
+from qgis.core import QgsVectorLayer, QgsVectorTileLayer, QgsWkbTypes
 
 STYLES = {
     '🏠 Buildings': 'buildings',
-    'Buildings Detection With Heights': 'buildings',
+    'Buildings Detection With Heights': 'building_heights_class',
     '🌲 Forest': 'forest',
     '🌲 Forest and trees': 'forest',
     '🌲↕️ Forest with heights': 'forest_with_heights',
@@ -41,14 +41,35 @@ def get_tile_style_name(wd_name):
 
 def get_local_style_name(wd_name, layer):
     name = STYLES.get(wd_name, DEFAULT_STYLE)
-    # Buildings classes look bad in legend if there are no classes in layer, so we discard the style in this case
-    if "building" in wd_name.lower() and "height" in wd_name.lower():
+    
+    # Land use
+    if "building" in wd_name.lower() and "road" in wd_name.lower():
+        name = 'landuse'
+    # Buildings with heights
+    elif "building" in wd_name.lower() and "height" in wd_name.lower():
         name = 'building_heights'
+    # Classification and heights enabled
+    elif "building" in wd_name.lower() and "building_height" in layer.fields().names() and "class_id" in layer.fields().names():
+        name = "building_heights_class"
+    # Only heights
+    elif "building" in wd_name.lower() and "class_id" not in layer.fields().names() and "building_height" in layer.fields().names():
+        name = "building_heights"
+    # No options
     elif "building" in wd_name.lower() and "class_id" not in layer.fields().names():
         name = "buildings_noclass"
+    # Other cases (only classification) 
     elif "building" in wd_name.lower():
         name = 'buildings'
+
     # Show forest heights for new (updated) forest with block config
     elif name == "forest" and "class_id" in layer.fields().names():
         name = "forest_with_heights"
+
+    # Apply different styles for polygon and line layers
+    elif "download" in wd_name.lower():
+        if layer.geometryType() == QgsWkbTypes.PolygonGeometry:
+            name = "open_data_polygon"
+        else:
+            name = "open_data_line"
+    
     return str(Path(__file__).parent / 'static' / 'styles' / 'file' / (name + '.qml'))

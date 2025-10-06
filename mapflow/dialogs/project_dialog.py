@@ -2,16 +2,15 @@ from PyQt5 import uic
 from PyQt5.QtCore import QCoreApplication
 from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 
-from .dialogs import ui_path, plugin_icon
+from .processing_dialog import plugin_icon, ui_path
 from ..schema.project import MapflowProject, CreateProjectSchema, UpdateProjectSchema
 
 
 class ProjectDialog(*uic.loadUiType(ui_path/'project_dialog.ui')):
     def __init__(self, parent: QWidget) -> None:
-        """A dialog for adding or editing an imagery provider."""
+        """A dialog for creating or editing projects."""
         super().__init__(parent)
         self.setupUi(self)
-        self.setWindowIcon(plugin_icon)
         self.ok = self.buttonBox.button(QDialogButtonBox.Ok)
 
         # we store here the provider that we are editing right now
@@ -34,7 +33,7 @@ class CreateProjectDialog(ProjectDialog):
         self.ok.setEnabled(False)
 
     def setup(self):
-        self.setWindowTitle("")
+        self.setWindowTitle(self.tr("Create project"))
         self.projectName.setText("")
         self.projectDescription.setText("")
         self.exec()

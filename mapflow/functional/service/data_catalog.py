@@ -2,7 +2,6 @@ from typing import Sequence, Union, Optional, Callable, List, Tuple
 from pathlib import Path
 from uuid import UUID
 import json
-import tempfile
 import os.path
 from osgeo import gdal
 
@@ -14,14 +13,17 @@ from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsRasterLayer, 
 
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs.mosaic_dialog import CreateMosaicDialog, UpdateMosaicDialog
-from ...dialogs.dialogs import UploadRasterLayersDialog
-from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, MosaicReturnSchema, ImageReturnSchema, MosaicCreateReturnSchema, UserLimitSchema
+from ...dialogs.image_dialog import RenameImageDialog
+from ...dialogs.upload_raster_layer_dialog import UploadRasterLayersDialog
+from ...schema.data_catalog import PreviewSize, MosaicReturnSchema, ImageReturnSchema, UserLimitSchema
+from ...schema import DataProviderParams, MyImageryParams, ImagerySearchParams, UserDefinedParams
 from ..api.data_catalog_api import DataCatalogApi
 from ..view.data_catalog_view import DataCatalogView
 from ...http import Http
 from ...functional import layer_utils, helpers
 from ...config import Config
 from ...entity.provider import MyImageryProvider
+
 
 
 class DataCatalogService(QObject):
@@ -42,7 +44,8 @@ class DataCatalogService(QObject):
                  iface,
                  result_loader,
                  plugin_version,
-                 temp_dir):
+                 temp_dir,
+                 allow_enable_processing):
         super().__init__()
         self.dlg = dlg
         self.iface = iface
@@ -51,7 +54,7 @@ class DataCatalogService(QObject):
         self.result_loader = result_loader
         self.plugin_version = plugin_version
         self.api = DataCatalogApi(http=http, server=server, dlg=dlg, iface=iface, result_loader=self.result_loader, plugin_version=self.plugin_version)
-        self.view = DataCatalogView(dlg=dlg)
+        self.view = DataCatalogView(dlg=dlg, allow_enable_processing=allow_enable_processing)
         self.mosaics = {}
         self.images = []
         self.image_max_size_pixels = Config.MAX_FILE_SIZE_PIXELS
@@ -273,12 +276,12 @@ class DataCatalogService(QObject):
                       uploaded: Sequence[Union[Path, str]],
                       failed: Sequence[Union[Path, str]]):
         if len(image_paths) == 0:
-            if failed:
-                self.api.upload_image_error_handler(response=response, mosaic_name=mosaic_name, image_paths=failed)
             self.get_mosaic(mosaic_id)
             self.dlg.mosaicTable.clearSelection()
             self.dlg.raise_()
             self.mosaicsUpdated.emit()
+            if failed:
+                self.api.upload_image_error_handler(response=response, mosaic_name=mosaic_name, image_paths=failed)
         else:
             image_to_upload = image_paths[0]
             non_uploaded = image_paths[1:]
@@ -479,6 +482,31 @@ class DataCatalogService(QObject):
         self.iface.setActiveLayer(layer)
         self.iface.zoomToActiveLayer()
 
+    def rename_image_callback(self, response: QNetworkReply):
+        new_image = ImageReturnSchema.from_dict(json.loads(response.readAll().data()))
+        for image in self.images:
+            if image.id == new_image.id:
+                image.filename = new_image.filename
+                break
+        self.view.rename_image_in_table(new_image)
+        self.iface.messageBar().pushMessage("Mapflow", "Image renamed")
+
+    def show_rename_image_dialog(self):
+        image = self.selected_image()
+        dialog = RenameImageDialog(self.dlg)
+        dialog.accepted.connect(lambda:self.rename_image(image.id, dialog.image()))
+        dialog.setup(image)
+        dialog.deleteLater()
+
+    def rename_image(self, image_id, new_name: str):
+        if not new_name or len(new_name) > 255:
+            self.iface.messageBar().pushWarning("Mapflow",
+                                                self.tr("Image name should be 1-255 characters long"))
+            return
+        self.api.update_image_name(image_id=image_id,
+                                   name=new_name,
+                                   callback=self.rename_image_callback)
+
     # Functions that depend on mosaic or image selection
     def add_mosaic_or_image(self):
         if self.view.mosaic_table_visible:
@@ -579,7 +607,24 @@ class DataCatalogService(QObject):
             # Set My imagery data source
             if my_imagery_index:
                 self.dlg.sourceCombo.setCurrentIndex(my_imagery_index)
-    
+
+    def show_processing_source(self,
+                               source_params: Union[DataProviderParams, MyImageryParams, ImagerySearchParams, UserDefinedParams],
+                               window):
+        if isinstance(source_params, MyImageryParams):
+            self.dlg.mosaicTable.clearSelection()
+            if source_params.myImagery.imageIds: # if the source was an image:
+                image_id = source_params.myImagery.imageIds[0] # get full image info to obtain mosaic_id
+                self.get_image(image_id, self.get_image_callback)
+        self.view.show_processing_source(source_params)
+        window.close()
+
+    def get_image_callback(self, response: QNetworkReply):
+        image = ImageReturnSchema.from_dict(json.loads(response.readAll().data()))
+        self.view.select_mosaic_cell(image.mosaic_id)
+        self.view.show_source_image_connection = self.dlg.imageTableFilled.connect(lambda: self.view.select_image_cell(image.id))
+
+
     # Other
     def open_imagery_docs(self):
         helpers.open_imagery_docs()

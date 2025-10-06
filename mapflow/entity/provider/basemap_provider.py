@@ -2,32 +2,31 @@
 Basic, non-authentification XYZ provider
 """
 from abc import ABC
-from typing import Optional
+from typing import Optional,List
 from urllib.parse import urlparse, parse_qs
 
 from .provider import SourceType, CRS, UsersProvider, staticproperty
 from ...functional.layer_utils import maxar_tile_url, add_connect_id
 from ...requests.maxar_metadata_request import MAXAR_REQUEST_BODY, MAXAR_META_URL
-from ...schema.processing import PostSourceSchema
+from ...schema.processing import PostSourceSchema, UserDefinedParams, UserDefinedSchema, ProcessingParams
 
 
 class BasemapProvider(UsersProvider, ABC):
     def to_processing_params(self,
-                             image_id: Optional[str] = None,
                              provider_name: Optional[str] = None,
-                             url: Optional[str] = None,
-                             zoom: Optional[str] = None,
-                             requires_id: Optional[bool] = False):
+                             zoom: Optional[str] = None):
         params = {
+            'sourceType': self.source_type.value.upper(),
             'url': self.url,
-            'projection': self.crs.value.lower(),
-            'source_type': self.source_type.value,
-            'zoom': zoom
+            'zoom': zoom,
+            'crs': self.crs.value.lower(),
+            'rasterLogin': None,
+            'rasterPassword': None
         }
         if self.credentials:
-            params.update(raster_login=self.credentials.login,
-                          raster_password=self.credentials.password)
-        return PostSourceSchema(**params), {}
+            params.update(rasterLogin=self.credentials.login,
+                          rasterPassword=self.credentials.password)
+        return ProcessingParams(sourceParams=UserDefinedParams(UserDefinedSchema(**params))), {}
 
     @property
     def requires_image_id(self):
@@ -122,11 +121,9 @@ class MaxarProvider(UsersProvider):
                                          geometry=geometry).encode()
 
     def to_processing_params(self,
-                             image_id: Optional[str] = None,
                              provider_name: Optional[str] = None,
-                             url: Optional[str] = None,
-                             requires_id: Optional[bool] = False):
-        params = PostSourceSchema(url=maxar_tile_url(self.url, image_id),
+                             zoom: Optional[str] = None):
+        params = PostSourceSchema(url=maxar_tile_url(self.url, image_ids[0]),
                                   source_type=self.source_type,
                                   projection=self.crs.value,
                                   raster_login=self.credentials.login,

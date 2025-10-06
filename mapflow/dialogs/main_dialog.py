@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-from typing import Iterable, Optional, List
+from typing import Iterable, Optional, List, Dict
 from datetime import datetime
 
 from PyQt5 import uic
@@ -29,6 +29,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     modelOptionsChanged = pyqtSignal()
     rasterSourceChanged = pyqtSignal()
     metadataTableFilled = pyqtSignal()
+    imageTableFilled = pyqtSignal()
 
     def __init__(self, parent: QWidget, settings: QgsSettings) -> None:
         """Plugin's main dialog."""
@@ -108,10 +109,11 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.editMosaicButton = QPushButton()
         self.previewImageButton = QPushButton()
         self.imageInfoButton = QPushButton()
+        self.renameImageButton = QPushButton()
         # Create colored spacers for tables' cell widgets (so long names won't be seen inbetween buttons)
-        self.imageSpacer = QLabel()
+        self.imageSpacers = [QLabel(), QLabel()]
         self.mosaicSpacers = [QLabel(), QLabel(), QLabel()]
-        for spacer in self.mosaicSpacers+[self.imageSpacer]:
+        for spacer in self.mosaicSpacers+self.imageSpacers:
             spacer.setFixedSize(3,26)
             highlight_color = self.mosaicTable.palette().highlight().color().name() 
             spacer.setStyleSheet("background-color:" + highlight_color + ";")
@@ -128,6 +130,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.download_aoi_action = QAction(self.tr("Download AOI"))
         self.see_details_action = QAction(self.tr("See details"))
         self.processing_update_action = QAction(self.tr("Rename"))
+        self.processing_restart_action = QAction(self.tr("Restart"))
+        self.processing_duplicate_action = QAction(self.tr("Duplicate"))
         self.setup_options_menu()
 
         # Imagery Search
@@ -176,7 +180,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.raster_provider_connection = self.sourceCombo.currentTextChanged.connect(self.switch_provider_combo)
 
     def set_raster_sources(self,
-                           provider_names: List[str],
+                           provider_names: Dict[str, str],
                            default_provider_names: List[str]):
         """
         args:
@@ -189,9 +193,11 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.sourceCombo.currentTextChanged.disconnect(self.raster_provider_connection)
 
         self.sourceCombo.clear()
-        self.sourceCombo.addItems(provider_names)
+        for name, api_name in provider_names.items():
+            self.sourceCombo.addItem(name, api_name)
         self.providerCombo.clear()
-        self.providerCombo.addItems(provider_names)
+        for name, api_name in provider_names.items():
+            self.providerCombo.addItem(name, api_name)
 
         for name in default_provider_names:
             if name in provider_names:
@@ -370,6 +376,12 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.reviewButton.setToolTip(reason)
             self.acceptButton.setToolTip(reason)
 
+    def enable_restart_action(self, enabled: bool):
+        if enabled:
+            self.options_menu.addAction(self.processing_restart_action)
+        else:
+            self.options_menu.removeAction(self.processing_restart_action)
+
     def disable_processing_start(self,
                                  reason: str,
                                  clear_area: bool = False):
@@ -432,6 +444,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.options_menu.addAction(self.download_aoi_action)
         self.options_menu.addAction(self.see_details_action)
         self.options_menu.addAction(self.processing_update_action)
+        self.options_menu.addAction(self.processing_restart_action)
+        self.options_menu.addAction(self.processing_duplicate_action)
 
     def enable_shared_project(self, user_role: UserRole):
         """Disable buttons depending on user role in a shared project.
@@ -464,8 +478,10 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.deleteProcessings.setToolTip(self.tr('Not enough rights to delete processing in a shared project ({})').format(user_role))
         else:
             self.deleteProcessings.setToolTip('')
-        # And remove/add back renaming option from save options menu
+        # Remove/add back renaming option from save options menu
         self.enable_rename_processing(user_role.can_delete_rename_review_processing)
+        # Remove/add back restarting option
+        self.enable_restart_duplicate_processing(user_role.can_start_processing)
 
     def enable_model_options(self, can_start_processing: bool = True):
         """
@@ -543,6 +559,17 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.projectsPageLabel.setVisible(enable)
         if enable is True:
             self.projectsPageLabel.setText(f"{page_number}/{total_pages}")
+
+    def enable_restart_duplicate_processing(self, can_start_processing: bool = True):
+        """
+        Remove processing's restarting option from '...' menu near 'View results' button depending on user role property.
+        """
+        if can_start_processing is True:
+            self.options_menu.addAction(self.processing_restart_action)
+            self.options_menu.addAction(self.processing_duplicate_action)
+        else:
+            self.options_menu.removeAction(self.processing_restart_action)
+            self.options_menu.removeAction(self.processing_duplicate_action)
     
     def selected_project_id(self):
         selected_idx = self.projectsTable.selectionModel().selectedIndexes()

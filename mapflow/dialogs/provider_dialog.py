@@ -3,7 +3,7 @@ from typing import Optional
 from PyQt5 import uic
 from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 
-from .dialogs import ui_path, plugin_icon
+from .processing_dialog import plugin_icon, ui_path
 from ..entity.provider import (CRS,
                                BasicAuth,
                                UsersProvider,
@@ -19,7 +19,6 @@ class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
         """A dialog for adding or editing an imagery provider."""
         super().__init__(parent)
         self.setupUi(self)
-        self.setWindowIcon(plugin_icon)
         ok = self.buttonBox.button(QDialogButtonBox.Ok)
         ok.setEnabled(False)
 
