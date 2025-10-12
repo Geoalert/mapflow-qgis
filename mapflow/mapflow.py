@@ -79,7 +79,7 @@ from .schema import (PostSourceSchema,
                      MyImageryParams, 
                      ImagerySearchParams, 
                      UserDefinedParams)
-from .schema.catalog import PreviewType, ProductType, AoiResponseSchema
+from .schema.catalog import PreviewType, ProductType, AoiResponseSchema, MultiPreview
 from .schema.project import MapflowProject, UserRole, ProjectsRequest
 
 
@@ -2371,11 +2371,31 @@ class Mapflow(QObject):
         if not feature:
             self.alert(self.tr("Preview is unavailable when metadata layer is removed"))
             return
+        self.iface.mapCanvas().zoomToSelected(self.metadata_layer)
+        self.iface.mapCanvas().refresh()
+        # Get multi-image preview (e.g. Roscosmos)
+        if len(feature['previews']) != 0:
+            previews = [MultiPreview.from_dict(preview) for preview in feature['previews']]
+            previews_geojson = { "type": "FeatureCollection",
+                                "features": [p.preview_as_feature() for p in previews]}
+            preview_file_name = os.path.join(self.temp_dir, os.urandom(32).hex())
+            with open(preview_file_name, 'w') as file:
+                json.dump(previews_geojson, file)
+            previews_layer = QgsVectorLayer(preview_file_name, 'preview_geoms', 'ogr')
+            previews_dict = {}
+            for f in previews_layer.getFeatures():
+                previews_dict[f['url']] = f.geometry()
+            self.preview_multiple_png(response=None,
+                                      previews_dict=previews_dict,
+                                      url=next(iter(previews_dict.items()))[0],
+                                      footprint=next(iter(previews_dict.items()))[1],
+                                      image_id=image_id,
+                                      png_previews_list=[])
+            return
+        # Get image preview
         footprint = self.metadata_footprint(feature=feature)
         url = feature.attribute('previewUrl')
         preview_type = feature.attribute('previewType')
-        self.iface.mapCanvas().zoomToSelected(self.metadata_layer)
-        self.iface.mapCanvas().refresh()
         if not preview_type:
             self.alert(self.tr("Selected imagery has no preview"))
             return
@@ -2400,6 +2420,48 @@ class Mapflow(QObject):
                       error_handler=self.preview_png_error_handler,
                       callback_kwargs={"footprint": footprint,
                                        "image_id": image_id})
+    
+    def preview_multiple_png(self,
+                             response: QNetworkReply,
+                             previews_dict: dict[str, QgsGeometry],
+                             url: str,
+                             footprint: QgsGeometry,
+                             image_id: str = "",
+                             png_previews_list: List[str] = []):
+        " Add preview for multi-part images (e.g. Roscosmos). "
+        # Callback part: collect response images into a list
+        if response:
+            preview_layer = self.create_png_preview_layer_gcp(response=response,
+                                                              footprint=footprint,
+                                                              crs=helpers.WGS84,
+                                                              image_id=image_id)
+            png_previews_list.append(preview_layer.source())
+        # Final part: merge all coolected images into one layer
+        if len(previews_dict) == 0:
+            merged_path = os.path.join(self.temp_dir, os.urandom(32).hex())
+            merged_raster = gdal.Warp(merged_path, png_previews_list, format='GTiff')
+            merged_raster = None
+            merged_layer = QgsRasterLayer(merged_path, "{image_id} preview".format(image_id=image_id), 'gdal')
+            self.project.addMapLayer(merged_layer)
+            return
+        # Requset part: remove first image from dict and request next one
+        image_to_preview = next(iter(previews_dict.items()))
+        previews_dict.pop(next(iter(previews_dict)))
+        if len(previews_dict) == 0:
+            next_image = (None, None)
+        else:
+            next_image = next(iter(previews_dict.items()))
+        self.http.get(url=url,
+                      timeout=30,
+                      auth='null'.encode(),
+                      callback=self.preview_multiple_png,
+                      use_default_error_handler=False,
+                      error_handler=self.preview_png_error_handler,
+                      callback_kwargs={"previews_dict": previews_dict,
+                                       "url": next_image[0], # new image url for request
+                                       "footprint": image_to_preview[1], # current image footprint for callback
+                                       "image_id": image_id,
+                                       "png_previews_list":png_previews_list})
 
     def display_png_preview(self,
                             response: QNetworkReply,
@@ -2429,18 +2491,18 @@ class Mapflow(QObject):
         layer.setExtent(extent)
         self.project.addMapLayer(layer)
 
-    def display_png_preview_gcp(self,
-                                response: QNetworkReply,
-                                footprint: QgsGeometry,
-                                crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857"),
-                                image_id: str = ""):
+    def create_png_preview_layer_gcp(self,
+                                     response: QNetworkReply,
+                                     footprint: QgsGeometry,
+                                     crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857"),
+                                     image_id: str = ""):
         """
         We take corner points of a polygon that represents image footprint
         and put their coordinates as GCPs (ground control points)
         """
         # Return a list of coordinate pairs
         corners = []
-        footprint = footprint.asPolygon()
+        footprint = footprint.asGeometryCollection()[0].asPolygon() # in case it's a MultiPolygon with only one polygon
         if len(footprint[0]) != 5:
             self.message_bar.pushInfo(self.plugin_name, self.tr('Preview is unavailable'))
             return
@@ -2486,7 +2548,16 @@ class Mapflow(QObject):
         else:
             for band in range(layer.bandCount()):
                 layer.dataProvider().setNoDataValue(band, 0)
-        self.project.addMapLayer(layer)
+        return layer
+
+    def display_png_preview_gcp(self,
+                                response: QNetworkReply,
+                                footprint: QgsGeometry,
+                                crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857"),
+                                image_id: str = ""):
+        """ Add preview if it's a single image. """
+        preview_layer = self.create_png_preview_layer_gcp(response, footprint, crs, image_id)
+        self.project.addMapLayer(preview_layer)
 
     def preview_png_error_handler(self, response: QNetworkReply):
         self.report_http_error(response, self.tr("Could not display preview"))

@@ -19,6 +19,18 @@ class ProductType(str, Enum):
     image = "Image"
 
 @dataclass
+class MultiPreview(Serializable, SkipDataClass):
+    url: str
+    geometry: dict
+
+    def preview_as_feature(self):
+        properties = {k: v for k, v in self.as_dict().items() if k != "geometry"}
+        f = {"type": "Feature",
+                "geometry": self.geometry,
+                "properties": properties}
+        return f
+
+@dataclass
 class ImageCatalogRequestSchema(Serializable):
     aoi: Mapping[str, Any]
     acquisitionDateFrom: Union[datetime, str, None] = None
@@ -49,6 +61,7 @@ class ImageSchema(Serializable, SkipDataClass):
     satId: Optional[str] = None
     previewType: Optional[PreviewType] = None
     previewUrl: Optional[str] = None
+    previews: Optional[List[MultiPreview]] = None
     providerName: Optional[str] = None
     zoom: Optional[str] = None
 
@@ -62,6 +75,7 @@ class ImageSchema(Serializable, SkipDataClass):
             self.previewType = PreviewType(self.previewType)
         except:
             self.previewType = None
+        self.previews = [MultiPreview.from_dict(preview) for preview in self.previews]
 
     def as_geojson(self):
         properties = {k: v for k, v in self.as_dict().items() if k != "footprint"}
