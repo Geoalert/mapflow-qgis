@@ -29,3 +29,9 @@ class ReviewDialog(*uic.loadUiType(ui_path/'review_dialog.ui')):
         # Enabled only if the text is entered
         self.reviewComment.textChanged.connect(lambda: ok.setEnabled(self.review_submit_allowed()))
         self.reviewLayerCombo.layerChanged.connect(lambda: ok.setEnabled(self.review_submit_allowed()))
+
+    def review_submit_allowed(self):
+        text_ok = self.reviewComment.toPlainText() != ""
+        # Not check geometry yet
+        geometry_ok = True
+        return text_ok and geometry_ok
