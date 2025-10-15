@@ -23,13 +23,6 @@ class MultiPreview(Serializable, SkipDataClass):
     url: str
     geometry: dict
 
-    def preview_as_feature(self):
-        properties = {k: v for k, v in self.as_dict().items() if k != "geometry"}
-        f = {"type": "Feature",
-                "geometry": self.geometry,
-                "properties": properties}
-        return f
-
 @dataclass
 class ImageCatalogRequestSchema(Serializable):
     aoi: Mapping[str, Any]
