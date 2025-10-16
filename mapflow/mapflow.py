@@ -844,7 +844,7 @@ class Mapflow(QObject):
         self.user_providers.to_settings(self.settings)
         provider_names = {p.name: getattr(p, 'api_name', p.name) for p in self.providers}
         for name, api_name in provider_names.items():
-            self.providerCombo.addItem(name, api_name)
+            self.dlg.providerCombo.addItem(name, api_name)
         self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
 
     def monitor_polygon_layer_feature_selection(self, layers: List[QgsMapLayer]) -> None:
@@ -2134,13 +2134,16 @@ class Mapflow(QObject):
                 price = None
             provider = self.providers[self.dlg.providerIndex()]
             provider_text = provider.name
-            if isinstance(provider, MyImageryProvider):
+            if isinstance(provider, DefaultProvider):
+                zoom = processing_params.params.sourceParams.dataProvider.zoom
+            elif isinstance(provider, MyImageryProvider):
                 image = self.data_catalog_service.selected_image()
                 mosaic = self.data_catalog_service.selected_mosaic()
                 if image:
                     provider_text += " ({name})". format(name=image.filename)
                 elif mosaic:
                     provider_text += " ({name})". format(name=mosaic.name)
+                zoom = None
             elif isinstance(provider, ImagerySearchProvider):
                 selected_cells = self.dlg.metadataTable.selectedItems()
                 if not selected_cells:
@@ -2148,12 +2151,17 @@ class Mapflow(QObject):
                 else:
                     id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
                     image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
+                    # Add image date to processing meta, if source is Imagery search
+                    date_column = tuple(self.config_search_columns.METADATA_TABLE_ATTRIBUTES.values()).index('acquisitionDate')
+                    image_date_text = self.dlg.metadataTable.item(selected_cells[0].row(), date_column).text()
+                    image_date = datetime.fromisoformat(image_date_text.replace("Z", "+00:00"))
+                    processing_params.name += " " + str(image_date.date())
+                    processing_params.meta["image-date"] = image_date_text
                 if image_id:
-                    provider_text += " ({iid})". format(iid=image_id)
-            try:
-                zoom = processing_params.params.zoom
-            except AttributeError:
-                zoom = None
+                    provider_text += " ({iid})".format(iid=image_id)
+                zoom = processing_params.params.sourceParams.imagerySearch.zoom
+            elif isinstance(provider, UsersProvider):
+                zoom = processing_params.params.sourceParams.userDefined.zoom
             dialog.setup(name=processing_params.name,
                          price=price,
                          provider=provider_text,
@@ -2830,7 +2838,9 @@ class Mapflow(QObject):
             self.result_loader.load_result_tiles(processing=processing)
         elif self.dlg.viewAsLocal.isChecked():
             if not self.temp_dir.exists():
-                self.alert(self.tr("Change the output directory to an existing one to download the results"), QMessageBox.Warning)
+                self.alert(self.tr("Directory '{}' does not exist").format(self.temp_dir) +
+                           self.tr("<br>Using Settings tab, change the output directory to an existing one to download the results"), QMessageBox.Warning)
+                return
             if not self.check_if_output_directory_is_selected():
                 return
             self.result_loader.download_results(processing=processing)

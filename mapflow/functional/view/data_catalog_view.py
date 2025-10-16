@@ -576,18 +576,16 @@ class DataCatalogView(QObject):
                 except:
                     pass
         elif isinstance(source_params, UserDefinedParams):
-            settings_tab = self.dlg.tabWidget.findChild(QWidget, "settingsTab")
-            self.dlg.tabWidget.setCurrentWidget(settings_tab)
-            text = self.tr("<b>URL:</b> {url},"
-                           "<br><b>Source type:</b> {type},"
-                           "<br><b>CRS:</b> {crs}").format(type=source_params.userDefined.sourceType,
-                                                           url=source_params.userDefined.url,
-                                                           crs=source_params.userDefined.crs.upper())
+            text = self.tr("<b>URL:</b> {url}"
+                           "<br><b>Source type:</b> {type}").format(type=source_params.userDefined.sourceType,
+                                                                    url=source_params.userDefined.url)
+            if source_params.userDefined.crs:
+                text += self.tr("<br><b>CRS:</b> {crs}").format(crs=source_params.userDefined.crs.upper())
             if source_params.userDefined.zoom:
-                text += self.tr(", <br><b>Zoom:</b> {zoom}").format(zoom=source_params.zoom)
+                text += self.tr("<br><b>Zoom:</b> {zoom}").format(zoom=source_params.userDefined.zoom)
             if source_params.userDefined.rasterPassword:
-                text += self.tr(", <br><b>Raster login:</b> {login}" +
-                                ", <br><b>Raster password:</b> {password}").format(login=source_params.userDefined.rasterLogin,
+                text += self.tr("<br><b>Raster login:</b> {login}" +
+                                "<br><b>Raster password:</b> {password}").format(login=source_params.userDefined.rasterLogin,
                                                                                    password=source_params.userDefined.rasterPassword)
             self.alert(message=text, icon=QMessageBox.Information)
         
