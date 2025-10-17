@@ -413,7 +413,8 @@ class DataCatalogService(QObject):
 
     def on_image_selection(self, image: ImageReturnSchema):
         selected_images = self.dlg.imageTable.selectedIndexes()
-        if len(selected_images) > 1 and self.dlg.selected_image_cell == selected_images[0]:
+        selected_mosaics = self.dlg.mosaicTable.selectedIndexes()
+        if not selected_mosaics or (len(selected_images) > 1 and self.dlg.selected_image_cell == selected_images[0]):
             pass
         else:
             self.dlg.selected_mosaic_cell = self.dlg.mosaicTable.selectedIndexes()[0]
@@ -549,7 +550,8 @@ class DataCatalogService(QObject):
             self.dlg.mosaicTable.clearSelection()
             self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.SingleSelection)
         else:
-            self.get_mosaic_images(self.selected_mosaic().id)
+            if self.selected_mosaic():
+                self.get_mosaic_images(self.selected_mosaic().id)
 
     # Status
     def get_user_limit(self):
@@ -608,16 +610,13 @@ class DataCatalogService(QObject):
             if my_imagery_index:
                 self.dlg.sourceCombo.setCurrentIndex(my_imagery_index)
 
-    def show_processing_source(self,
-                               source_params: Union[DataProviderParams, MyImageryParams, ImagerySearchParams, UserDefinedParams],
-                               window):
-        if isinstance(source_params, MyImageryParams):
-            self.dlg.mosaicTable.clearSelection()
-            if source_params.myImagery.imageIds: # if the source was an image:
-                image_id = source_params.myImagery.imageIds[0] # get full image info to obtain mosaic_id
-                self.get_image(image_id, self.get_image_callback)
-        self.view.show_processing_source(source_params)
-        window.close()
+    def show_my_imagery_source(self,
+                               source_params: MyImageryParams):
+        self.dlg.mosaicTable.clearSelection()
+        if source_params.myImagery.imageIds: # if the source was an image:
+            image_id = source_params.myImagery.imageIds[0] # get full image info to obtain mosaic_id
+            self.get_image(image_id, self.get_image_callback)
+        self.view.show_my_imagery_source(source_params)
 
     def get_image_callback(self, response: QNetworkReply):
         image = ImageReturnSchema.from_dict(json.loads(response.readAll().data()))
