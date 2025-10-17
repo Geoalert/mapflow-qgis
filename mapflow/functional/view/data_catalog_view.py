@@ -558,37 +558,22 @@ class DataCatalogView(QObject):
             hide = bool(name_filter) and ((name_filter.lower() not in item_id.lower() and name_filter.lower() not in item_name.lower()))
             table.setRowHidden(row, hide)
     
-    def show_processing_source(self, source_params):
-        """Switch to My imagery or user provider dialog when ckicking on toSourceButton in ProcessingDetailsDialog."""
-        if isinstance(source_params, MyImageryParams):
-            my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
-            if source_params.myImagery.mosaicId:
-                self.dlg.mosaicTable.clearSelection()
-                self.dlg.stackedLayout.setCurrentIndex(0)
-                self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
-                self.select_mosaic_cell(source_params.myImagery.mosaicId)
-            elif source_params.myImagery.imageIds:
+    def show_my_imagery_source(self, source_params: MyImageryParams):
+        """Switch to My imagery when ckicking on toSourceButton in ProcessingDetailsDialog."""
+        my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
+        if source_params.myImagery.mosaicId:
+            self.dlg.mosaicTable.clearSelection()
+            self.dlg.stackedLayout.setCurrentIndex(0)
+            self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
+            self.select_mosaic_cell(source_params.myImagery.mosaicId)
+        elif source_params.myImagery.imageIds:
+            try:
                 self.dlg.imageTable.clearSelection()
-                try:
-                    self.dlg.imageTable.clearSelection()
-                    self.dlg.stackedLayout.setCurrentIndex(1)
-                    self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
-                except:
-                    pass
-        elif isinstance(source_params, UserDefinedParams):
-            text = self.tr("<b>URL:</b> {url}"
-                           "<br><b>Source type:</b> {type}").format(type=source_params.userDefined.sourceType,
-                                                                    url=source_params.userDefined.url)
-            if source_params.userDefined.crs:
-                text += self.tr("<br><b>CRS:</b> {crs}").format(crs=source_params.userDefined.crs.upper())
-            if source_params.userDefined.zoom:
-                text += self.tr("<br><b>Zoom:</b> {zoom}").format(zoom=source_params.userDefined.zoom)
-            if source_params.userDefined.rasterPassword:
-                text += self.tr("<br><b>Raster login:</b> {login}" +
-                                "<br><b>Raster password:</b> {password}").format(login=source_params.userDefined.rasterLogin,
-                                                                                   password=source_params.userDefined.rasterPassword)
-            self.alert(message=text, icon=QMessageBox.Information)
-        
+                self.dlg.stackedLayout.setCurrentIndex(1)
+                self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
+            except:
+                pass
+
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """A duplicate of alert function from mapflow.py to avoid circular import.
         """

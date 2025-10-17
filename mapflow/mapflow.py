@@ -1841,7 +1841,6 @@ class Mapflow(QObject):
                 not self.dlg.mosaicTable.selectionModel().hasSelection():
                     self.dlg.disable_processing_start(reason=self.tr('Choose imagery to start processing'))
             else:
-
                 if self.user_role.can_start_processing:
                     self.http.post(
                         url=f"{self.server}/processing/cost/v2",
@@ -3403,11 +3402,25 @@ class Mapflow(QObject):
         if processing.errors:
             error = processing.error_message(raw=self.config.SHOW_RAW_ERROR)
         dialog = ProcessingDetailsDialog(self.dlg)
-        dialog.toSourceButton.clicked.connect(lambda: self.data_catalog_service.show_processing_source(
-                                                           source_params=processing.params.sourceParams,
+        dialog.toSourceButton.clicked.connect(lambda: self.show_processing_source(
+                                                           processing=processing,
                                                            window=dialog))
         dialog.setup(processing, self.zoom_selector, error or None)
         dialog.deleteLater()
+    
+    def show_processing_source(self,
+                               processing,
+                               window):
+        source_params = processing.params.sourceParams
+        if isinstance(source_params, ImagerySearchParams):
+            # Download AOI and only then fill search table
+            self.result_loader.download_aoi_file(pid=processing.id_, callback=self.duplicate_aoi_callback)
+        elif isinstance(source_params, MyImageryParams):
+            self.data_catalog_service.show_my_imagery_source(source_params)
+        elif isinstance(source_params, UserDefinedParams):
+            text = self.dlg.show_user_provider_info(source_params)
+            self.alert(message=text, icon=QMessageBox.Information)
+        window.close()
 
     def update_processing(self):
         processing = self.selected_processing()
@@ -3500,8 +3513,9 @@ class Mapflow(QObject):
         if isinstance(provider, ImagerySearchProvider):
             if local_image_indices:
                 try:
-                    zooms = [self.search_footprints[local_image_index].attribute("zoom")
-                            for local_image_index in local_image_indices]
+                    zooms = [None if str(self.search_footprints[local_image_index].attribute("zoom")) == "NULL"
+                             else self.search_footprints[local_image_index].attribute("zoom")
+                             for local_image_index in local_image_indices]
                 except KeyError:
                     zooms = []
                 # Allow zooms only for mosaics
@@ -3714,7 +3728,7 @@ class Mapflow(QObject):
             self.dlg.metadataTable.setItem(0, column, table_item)
         # Create pseudo footprints dict for one created feature
         self.search_footprints = {0: feature for feature in self.metadata_layer.getFeatures()}
-        self.dlg.metadataTable.selectRow(0)        
+        self.dlg.metadataTable.selectRow(0)
     
     def duplicate_user_provider(self, provider: UserDefinedParams):
         duplicated_provider = None

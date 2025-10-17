@@ -41,8 +41,8 @@ class ProcessingDetailsDialog(*uic.loadUiType(ui_path / 'processing_details.ui')
                 self.show_zoom(source_params.dataProvider.zoom)
             self.toSourceButton.setVisible(False)
         elif isinstance(source_params, ImagerySearchParams):
-            provider = source_params.imagerySearch.dataProvider # display name
-            self.toSourceButton.setVisible(False)
+            provider = source_params.imagerySearch.dataProvider # display name + button
+            self.toSourceButton.setVisible(True)
             if zoom_selector:
                 self.show_zoom(source_params.imagerySearch.zoom)
         elif isinstance(source_params, MyImageryParams):
