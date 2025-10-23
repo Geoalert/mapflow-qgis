@@ -1561,13 +1561,12 @@ class Mapflow(QObject):
             self.metadata_layer.selectByExpression(f"{key} in {tuple(local_indices)}")
         except RuntimeError:  # layer has been deleted
             pass
-        except Exception as e:
+        else:
+            self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+        finally:
             self.meta_layer_table_connection = self.metadata_layer.selectionChanged.connect(
                 self.sync_layer_selection_with_table)
-            raise e
-        self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
-        self.meta_layer_table_connection = self.metadata_layer.selectionChanged.connect(
-            self.sync_layer_selection_with_table)
+
 
     def sync_layer_selection_with_table(self, selected_ids: List[int]) -> None:
         """
@@ -1837,6 +1836,9 @@ class Mapflow(QObject):
                     self.dlg.disable_processing_start(self.tr("This provider requires image ID. "
                                                               "Use search tab to find imagery for you requirements, "
                                                               "and select image in the table."))
+            #elif isinstance(provider, ImagerySearchProvider): #and\
+                # Selection of metadataTable has providers that are not in the list of my providers
+            #    pass
             elif isinstance(provider, MyImageryProvider) and\
                 not self.dlg.mosaicTable.selectionModel().hasSelection():
                     self.dlg.disable_processing_start(reason=self.tr('Choose imagery to start processing'))

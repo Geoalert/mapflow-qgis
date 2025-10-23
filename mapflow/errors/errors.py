@@ -32,23 +32,33 @@ class ErrorMessage(QObject):
     def from_response(cls, response: Dict):
         return cls(response["code"], response["parameters"])
 
-    def to_str(self, raw=False):
-        default = "Unknown error. Contact us to resolve the issue! help@geoalert.io"
-        message = error_message_list.get(self.code, default=default)
-        if message == default and raw:
-            return f"Raw error: code = {self.code}, parameters={self.parameters}, message={self.message}"
+    @property
+    def formatted_message(self):
+        """
+        returns formatted translated error message; if the translation is missing from the plugin code, returns None
+        """
+        message = error_message_list.get(self.code)
+        if not message:
+            # no message description
+            return None
         try:
             message = message.format(**self.parameters)
-        except KeyError as e:
-            message = message \
-                      + self.tr("\n Warning: some error parameters were not loaded : {}!").format(str(e))
         except Exception as e:
-            if self.message:
-                # Default message which can be send by api
-                message = self.tr("Error {code}: {message}").format(code=self.code, message=self.message)
-            else:
-                message = self.tr('Unknown error while fetching errors: {exception}'
-                                  '\n Error code: {code}'
-                                  '\n Contact us to resolve the issue! help@geoalert.io').format(exception=str(e),
-                                                                                                 code=self.code)
+            # problem during formatting. Probably wrong parameters
+            message = None
         return message
+
+    @property
+    def raw_message(self):
+        return f"Raw error: code = {self.code}, parameters={self.parameters}, message={self.message}"
+
+    def to_str(self, raw=False):
+        default = "Unknown error. Contact us to resolve the issue! help@geoalert.io"
+        formated_message=self.formatted_message
+        if formated_message:
+            return formated_message
+        elif raw:
+            return self.raw_message
+        else:
+            print(self.message, self.parameters, self.code)
+            return self.message or default

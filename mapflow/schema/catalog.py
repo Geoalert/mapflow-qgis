@@ -51,6 +51,7 @@ class ImageSchema(Serializable, SkipDataClass):
     previewUrl: Optional[str] = None
     providerName: Optional[str] = None
     zoom: Optional[str] = None
+    minAreaSqkm: Optional[float] = None
 
     def __post_init__(self):
         if isinstance(self.acquisitionDate, str):

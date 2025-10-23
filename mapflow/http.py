@@ -187,7 +187,8 @@ def api_message_parser(response_body: str) -> str:
     message = ErrorMessage(code=error_data.get("code", "API_ERROR"),
                            parameters=error_data.get("parameters", {}),
                            message=error_data.get("message", "Unknown error"))
-    return message.message
+    print(message.raw_message)
+    return message.to_str()
 
 
 def securewatch_message_parser(response_body: str) -> str:
