@@ -154,6 +154,9 @@ def count_polygons_in_layer(features: list) -> int:
     """ Count polygon geometries in a multipolygon layer (instead of counting features).
     :param features: A list of fetures, obtained by "list(layer.getFeatures())"
     """
+    for feature in features:
+        if not feature.geometry():
+            features.remove(feature)
     count = sum(len(feature.geometry().asMultiPolygon()) for feature in features)
     return count
 

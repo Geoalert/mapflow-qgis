@@ -456,7 +456,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             user_role = UserRole.owner
         # Disable processing panel
         if not user_role.can_start_processing:
-            reason = self.tr('Not enough rights to start processing in a shared project ({})').format(user_role)
+            reason = self.tr('Not enough rights to start processing in a shared project ({})').format(user_role.value)
         else:
             reason = ""
         self.disable_processing_start(reason, clear_area=True)
@@ -618,6 +618,20 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             preview_label.setPixmap(icons.lens_icon.pixmap(16, 16))
             preview_label.setAlignment(Qt.AlignVCenter | Qt.AlignHCenter)
             self.metadataTable.setCellWidget(row, preview_column_index, preview_label)
+    
+    def show_user_provider_info(self, source_params):
+        text = self.tr("<b>URL:</b> {url}"
+                           "<br><b>Source type:</b> {type}").format(type=source_params.userDefined.sourceType,
+                                                                    url=source_params.userDefined.url)
+        if source_params.userDefined.crs:
+            text += self.tr("<br><b>CRS:</b> {crs}").format(crs=source_params.userDefined.crs.upper())
+        if source_params.userDefined.zoom:
+            text += self.tr("<br><b>Zoom:</b> {zoom}").format(zoom=source_params.userDefined.zoom)
+        if source_params.userDefined.rasterPassword:
+            text += self.tr("<br><b>Raster login:</b> {login}" +
+                            "<br><b>Raster password:</b> {password}").format(login=source_params.userDefined.rasterLogin,
+                                                                             password=source_params.userDefined.rasterPassword)
+        return text
 
     @property
     def project_controls(self):

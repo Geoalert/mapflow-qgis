@@ -264,6 +264,7 @@ class DataCatalogApi(QObject):
             error_summary = self.tr("Source image with id '{}' was not found in any of your imagery collections").format(error_params['uid'])
         ErrorMessageWidget(parent=QApplication.activeWindow(),
                            text=error_summary).show()
+        self.dlg.stackedLayout.setCurrentIndex(0)
         
     def delete_image(self,
                      image_id: UUID,

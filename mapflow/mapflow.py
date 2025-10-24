@@ -621,12 +621,17 @@ class Mapflow(QObject):
             filter_ = f'id not in (' + ', '.join((f"'{id_}'" for id_ in filtered_ids)) + ')'
         else:
             filter_ = ''
-        self.metadata_layer.setSubsetString(filter_)
-        # Show/hide table rows
-        for row in range(self.dlg.metadataTable.rowCount()):
-            id_ = self.dlg.metadataTable.item(row, id_column_index).data(Qt.DisplayRole)
-            is_unfit = id_ in filtered_ids
-            self.dlg.metadataTable.setRowHidden(row, is_unfit)
+        # Filter only for real search results, not for duplecated table
+        product_type = self.dlg.metadataTable.item(0, 0) # for duplicated processings it will be empty
+        if product_type: # show/hide table rows
+            self.metadata_layer.setSubsetString(filter_)
+            for row in range(self.dlg.metadataTable.rowCount()):
+                id_ = self.dlg.metadataTable.item(row, id_column_index).data(Qt.DisplayRole)
+                is_unfit = id_ in filtered_ids
+                self.dlg.metadataTable.setRowHidden(row, is_unfit)
+        else: # show the whole table (should be one row)
+            for row in range(self.dlg.metadataTable.rowCount()):
+                self.dlg.metadataTable.setRowHidden(row, False)
         self.cell_preview_connection = self.dlg.metadataTable.cellClicked.connect(self.preview_search_from_cell)
 
     def set_up_login_dialog(self) -> MapflowLoginDialog:
@@ -844,7 +849,7 @@ class Mapflow(QObject):
         self.user_providers.to_settings(self.settings)
         provider_names = {p.name: getattr(p, 'api_name', p.name) for p in self.providers}
         for name, api_name in provider_names.items():
-            self.providerCombo.addItem(name, api_name)
+            self.dlg.providerCombo.addItem(name, api_name)
         self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
 
     def monitor_polygon_layer_feature_selection(self, layers: List[QgsMapLayer]) -> None:
@@ -1841,7 +1846,6 @@ class Mapflow(QObject):
                 not self.dlg.mosaicTable.selectionModel().hasSelection():
                     self.dlg.disable_processing_start(reason=self.tr('Choose imagery to start processing'))
             else:
-
                 if self.user_role.can_start_processing:
                     self.http.post(
                         url=f"{self.server}/processing/cost/v2",
@@ -1927,7 +1931,6 @@ class Mapflow(QObject):
             raise BadProcessingInput(self.tr(
                 'Up to {} sq km can be processed at a time. '
                 'Try splitting your area(s) into several processings.').format(self.aoi_area_limit))
-
         return True
 
     def crop_aoi_with_maxar_image_footprint(self,
@@ -2027,6 +2030,7 @@ class Mapflow(QObject):
                 if selection_error:
                     return None, selection_error
                 provider_name = provider_names[0] if provider_names else None # the same for all [i] if there was no 'selection_error'
+
         elif isinstance(provider, MyImageryProvider):
             selected_mosaics = self.data_catalog_service.selected_mosaics()
             selected_images = self.data_catalog_service.selected_images()
@@ -2134,13 +2138,16 @@ class Mapflow(QObject):
                 price = None
             provider = self.providers[self.dlg.providerIndex()]
             provider_text = provider.name
-            if isinstance(provider, MyImageryProvider):
+            if isinstance(provider, DefaultProvider):
+                zoom = processing_params.params.sourceParams.dataProvider.zoom
+            elif isinstance(provider, MyImageryProvider):
                 image = self.data_catalog_service.selected_image()
                 mosaic = self.data_catalog_service.selected_mosaic()
                 if image:
                     provider_text += " ({name})". format(name=image.filename)
                 elif mosaic:
                     provider_text += " ({name})". format(name=mosaic.name)
+                zoom = None
             elif isinstance(provider, ImagerySearchProvider):
                 selected_cells = self.dlg.metadataTable.selectedItems()
                 if not selected_cells:
@@ -2148,12 +2155,17 @@ class Mapflow(QObject):
                 else:
                     id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
                     image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
+                    # Add image date to processing meta, if source is Imagery search
+                    date_column = tuple(self.config_search_columns.METADATA_TABLE_ATTRIBUTES.values()).index('acquisitionDate')
+                    image_date = self.dlg.metadataTable.item(selected_cells[0].row(), date_column)
+                    if image_date:
+                        image_date_text = image_date.text()
+                        processing_params.meta["image-date"] = image_date_text
                 if image_id:
-                    provider_text += " ({iid})". format(iid=image_id)
-            try:
-                zoom = processing_params.params.zoom
-            except AttributeError:
-                zoom = None
+                    provider_text += " ({iid})".format(iid=image_id)
+                zoom = processing_params.params.sourceParams.imagerySearch.zoom
+            elif isinstance(provider, UsersProvider):
+                zoom = processing_params.params.sourceParams.userDefined.zoom
             dialog.setup(name=processing_params.name,
                          price=price,
                          provider=provider_text,
@@ -2391,8 +2403,14 @@ class Mapflow(QObject):
             return
         # Get image preview
         footprint = self.metadata_footprint(feature=feature)
-        url = feature.attribute('previewUrl')
-        preview_type = feature.attribute('previewType')
+        try:
+            url = feature.attribute('previewUrl')
+            preview_type = feature.attribute('previewType')
+        except KeyError:
+            url = ''
+            preview_type = ''
+        self.iface.mapCanvas().zoomToSelected(self.metadata_layer)
+        self.iface.mapCanvas().refresh()
         if not preview_type:
             self.alert(self.tr("Selected imagery has no preview"))
             return
@@ -2874,7 +2892,9 @@ class Mapflow(QObject):
             self.result_loader.load_result_tiles(processing=processing)
         elif self.dlg.viewAsLocal.isChecked():
             if not self.temp_dir.exists():
-                self.alert(self.tr("Change the output directory to an existing one to download the results"), QMessageBox.Warning)
+                self.alert(self.tr("Directory '{}' does not exist").format(self.temp_dir) +
+                           self.tr("<br>Using Settings tab, change the output directory to an existing one to download the results"), QMessageBox.Warning)
+                return
             if not self.check_if_output_directory_is_selected():
                 return
             self.result_loader.download_results(processing=processing)
@@ -3437,11 +3457,25 @@ class Mapflow(QObject):
         if processing.errors:
             error = processing.error_message(raw=self.config.SHOW_RAW_ERROR)
         dialog = ProcessingDetailsDialog(self.dlg)
-        dialog.toSourceButton.clicked.connect(lambda: self.data_catalog_service.show_processing_source(
-                                                           source_params=processing.params.sourceParams,
+        dialog.toSourceButton.clicked.connect(lambda: self.show_processing_source(
+                                                           processing=processing,
                                                            window=dialog))
         dialog.setup(processing, self.zoom_selector, error or None)
         dialog.deleteLater()
+    
+    def show_processing_source(self,
+                               processing,
+                               window):
+        source_params = processing.params.sourceParams
+        if isinstance(source_params, ImagerySearchParams):
+            # Download AOI and only then fill search table
+            self.result_loader.download_aoi_file(pid=processing.id_, callback=self.duplicate_aoi_callback)
+        elif isinstance(source_params, MyImageryParams):
+            self.data_catalog_service.show_my_imagery_source(source_params)
+        elif isinstance(source_params, UserDefinedParams):
+            text = self.dlg.show_user_provider_info(source_params)
+            self.alert(message=text, icon=QMessageBox.Information)
+        window.close()
 
     def update_processing(self):
         processing = self.selected_processing()
@@ -3534,8 +3568,9 @@ class Mapflow(QObject):
         if isinstance(provider, ImagerySearchProvider):
             if local_image_indices:
                 try:
-                    zooms = [self.search_footprints[local_image_index].attribute("zoom")
-                            for local_image_index in local_image_indices]
+                    zooms = [None if str(self.search_footprints[local_image_index].attribute("zoom")) == "NULL"
+                             else self.search_footprints[local_image_index].attribute("zoom")
+                             for local_image_index in local_image_indices]
                 except KeyError:
                     zooms = []
                 # Allow zooms only for mosaics
@@ -3597,9 +3632,9 @@ class Mapflow(QObject):
         self.temp_dir = Path(self.settings.value('outputDir'), "Temp")
         try:
             shutil.rmtree(self.temp_dir) # remove old tempdir
-            self.temp_dir.mkdir(parents=True, exist_ok=True)
         except:
             pass
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
 
     def restart_processing(self):
         processing = self.selected_processing()
@@ -3748,7 +3783,8 @@ class Mapflow(QObject):
             self.dlg.metadataTable.setItem(0, column, table_item)
         # Create pseudo footprints dict for one created feature
         self.search_footprints = {0: feature for feature in self.metadata_layer.getFeatures()}
-        self.dlg.metadataTable.selectRow(0)        
+        self.dlg.metadataTableFilled.emit()
+        self.dlg.metadataTable.selectRow(0)
     
     def duplicate_user_provider(self, provider: UserDefinedParams):
         duplicated_provider = None
