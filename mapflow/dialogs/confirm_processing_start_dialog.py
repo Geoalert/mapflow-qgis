@@ -34,9 +34,11 @@ class ConfirmProcessingStartDialog(*uic.loadUiType(ui_path / 'processing_start_c
         self.areaLabel.setText(area)
         elided_model = self.modelLabel.fontMetrics().elidedText(model, Qt.ElideRight, self.modelLabel.width() + 100)
         self.modelLabel.setText(elided_model)
-        if len(blocks) == 0:
-            blocks = [self.tr("No options selected")]
-        else:
-            blocks = [block.text() for block in blocks if block.isChecked()]
+        if blocks:
+            enabled_blocks = [block.text() for block in blocks if block.isChecked()]
+            if enabled_blocks:
+                blocks = enabled_blocks
+            else:
+                blocks = [self.tr("No options selected")]
         self.modelOptionsLabel.setText(', \n'.join(blocks))
         self.exec()

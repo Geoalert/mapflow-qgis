@@ -621,12 +621,17 @@ class Mapflow(QObject):
             filter_ = f'id not in (' + ', '.join((f"'{id_}'" for id_ in filtered_ids)) + ')'
         else:
             filter_ = ''
-        self.metadata_layer.setSubsetString(filter_)
-        # Show/hide table rows
-        for row in range(self.dlg.metadataTable.rowCount()):
-            id_ = self.dlg.metadataTable.item(row, id_column_index).data(Qt.DisplayRole)
-            is_unfit = id_ in filtered_ids
-            self.dlg.metadataTable.setRowHidden(row, is_unfit)
+        # Filter only for real search results, not for duplecated table
+        product_type = self.dlg.metadataTable.item(0, 0) # for duplicated processings it will be empty
+        if product_type: # show/hide table rows
+            self.metadata_layer.setSubsetString(filter_)
+            for row in range(self.dlg.metadataTable.rowCount()):
+                id_ = self.dlg.metadataTable.item(row, id_column_index).data(Qt.DisplayRole)
+                is_unfit = id_ in filtered_ids
+                self.dlg.metadataTable.setRowHidden(row, is_unfit)
+        else: # show the whole table (should be one row)
+            for row in range(self.dlg.metadataTable.rowCount()):
+                self.dlg.metadataTable.setRowHidden(row, False)
         self.cell_preview_connection = self.dlg.metadataTable.cellClicked.connect(self.preview_search_from_cell)
 
     def set_up_login_dialog(self) -> MapflowLoginDialog:
@@ -1926,7 +1931,6 @@ class Mapflow(QObject):
             raise BadProcessingInput(self.tr(
                 'Up to {} sq km can be processed at a time. '
                 'Try splitting your area(s) into several processings.').format(self.aoi_area_limit))
-
         return True
 
     def crop_aoi_with_maxar_image_footprint(self,
@@ -2026,6 +2030,7 @@ class Mapflow(QObject):
                 if selection_error:
                     return None, selection_error
                 provider_name = provider_names[0] if provider_names else None # the same for all [i] if there was no 'selection_error'
+
         elif isinstance(provider, MyImageryProvider):
             selected_mosaics = self.data_catalog_service.selected_mosaics()
             selected_images = self.data_catalog_service.selected_images()
@@ -2152,10 +2157,10 @@ class Mapflow(QObject):
                     image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
                     # Add image date to processing meta, if source is Imagery search
                     date_column = tuple(self.config_search_columns.METADATA_TABLE_ATTRIBUTES.values()).index('acquisitionDate')
-                    image_date_text = self.dlg.metadataTable.item(selected_cells[0].row(), date_column).text()
-                    image_date = datetime.fromisoformat(image_date_text.replace("Z", "+00:00"))
-                    processing_params.name += " " + str(image_date.date())
-                    processing_params.meta["image-date"] = image_date_text
+                    image_date = self.dlg.metadataTable.item(selected_cells[0].row(), date_column)
+                    if image_date:
+                        image_date_text = image_date.text()
+                        processing_params.meta["image-date"] = image_date_text
                 if image_id:
                     provider_text += " ({iid})".format(iid=image_id)
                 zoom = processing_params.params.sourceParams.imagerySearch.zoom
@@ -2379,8 +2384,12 @@ class Mapflow(QObject):
             self.alert(self.tr("Preview is unavailable when metadata layer is removed"))
             return
         footprint = self.metadata_footprint(feature=feature)
-        url = feature.attribute('previewUrl')
-        preview_type = feature.attribute('previewType')
+        try:
+            url = feature.attribute('previewUrl')
+            preview_type = feature.attribute('previewType')
+        except KeyError:
+            url = ''
+            preview_type = ''
         self.iface.mapCanvas().zoomToSelected(self.metadata_layer)
         self.iface.mapCanvas().refresh()
         if not preview_type:
@@ -3577,9 +3586,9 @@ class Mapflow(QObject):
         self.temp_dir = Path(self.settings.value('outputDir'), "Temp")
         try:
             shutil.rmtree(self.temp_dir) # remove old tempdir
-            self.temp_dir.mkdir(parents=True, exist_ok=True)
         except:
             pass
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
 
     def restart_processing(self):
         processing = self.selected_processing()
@@ -3728,6 +3737,7 @@ class Mapflow(QObject):
             self.dlg.metadataTable.setItem(0, column, table_item)
         # Create pseudo footprints dict for one created feature
         self.search_footprints = {0: feature for feature in self.metadata_layer.getFeatures()}
+        self.dlg.metadataTableFilled.emit()
         self.dlg.metadataTable.selectRow(0)
     
     def duplicate_user_provider(self, provider: UserDefinedParams):
