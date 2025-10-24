@@ -2456,7 +2456,7 @@ class Mapflow(QObject):
         and put their coordinates as GCPs (ground control points)
         """
         # Get a list of coordinate pairs
-        corners = self.get_footprint_corners(footprint)
+        corners = self.result_loader.get_footprint_corners(footprint)
         # Get non-referenced raster and set its projection
         with open(self.temp_dir/os.urandom(32).hex(), mode='wb') as f:
             f.write(response.readAll().data())
@@ -2506,9 +2506,9 @@ class Mapflow(QObject):
         " Add preview for multi-part images (e.g. Roscosmos). "
         # Callback part: collect response images into a list
         if response:
-            georeferenced_preview = self.georeference_preview_part(response=response,
-                                                                   footprint=footprint,
-                                                                   crs=helpers.WGS84)
+            georeferenced_preview = self.result_loader.georeference_preview_part(response=response,
+                                                                                 footprint=footprint,
+                                                                                 crs=helpers.WGS84)
             georeferenced_previews_list.append(georeferenced_preview)
         # Final part: merge all coolected images into one VRT
         if len(previews) == 0:
@@ -2531,66 +2531,6 @@ class Mapflow(QObject):
                                        "footprint": image_to_preview[1],
                                        "image_id": image_id,
                                        "georeferenced_previews_list":georeferenced_previews_list})
-
-    def get_footprint_corners(self, footprint: QgsGeometry):
-        corners = []
-        footprint = footprint.asGeometryCollection()[0].asPolygon() # in case it's a MultiPolygon with only one polygon
-        if len(footprint[0]) != 5:
-            self.message_bar.pushInfo(self.plugin_name, self.tr('Preview is unavailable'))
-            return
-        for point in range(4):
-            pt = footprint[0][point]
-            coords = (pt.x(), pt.y())
-            corners.append(coords)
-        return corners
-  
-    def georeference_preview_part(self,
-                                  response: QNetworkReply,
-                                  footprint: QgsGeometry,
-                                  crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857")):
-        """ Generate World File for every part of multi-image preview before creating VRT. """
-        # Get a list of coordinate pairs
-        corners = self.get_footprint_corners(footprint)
-        # Get non-referenced raster and set its projection
-        with open(self.temp_dir/os.urandom(32).hex(), mode='wb') as f:
-            f.write(response.readAll().data())
-        preview = gdal.Open(f.name)
-        preview.SetProjection(crs.toWkt())
-        # Return a list of coordinate pairs
-        corners = []
-        footprint = footprint.asGeometryCollection()[0].asPolygon() # in case it's a MultiPolygon with only one polygon
-        if len(footprint[0]) != 5:
-            self.message_bar.pushInfo(self.plugin_name, self.tr('Preview is unavailable'))
-            return
-        for point in range(4):
-            pt = footprint[0][point]
-            coords = (pt.x(), pt.y())
-            corners.append(coords)
-        # Extract coordinates
-        ul_lon, ul_lat = corners[0]  # Upper left
-        ur_lon, ur_lat = corners[1]  # Upper right
-        lr_lon, lr_lat = corners[2]  # Lower right
-        ll_lon, ll_lat = corners[3]  # Lower left
-        # Get image dimentions
-        width = preview.RasterXSize
-        height = preview.RasterYSize
-        # Calculate pixel sizes
-        pixel_width = (ur_lon - ul_lon) / width
-        pixel_height = (ll_lat - ul_lat) / height
-        # Upper left coordinates (center of upper left pixel)
-        x_origin = ul_lon + (pixel_width / 2)
-        y_origin = ul_lat - (pixel_height / 2)
-        world_file_content = f"""{pixel_width}
-                                 0.0
-                                 0.0
-                                 {pixel_height}
-                                 {x_origin}
-                                 {y_origin}"""
-        # Write world file
-        world_file_path = f.name + '.wld'
-        with open(world_file_path, 'w') as world_file:
-            world_file.write(world_file_content)
-        return f.name
 
     def preview_png_error_handler(self, response: QNetworkReply):
         self.report_http_error(response, self.tr("Could not display preview"))
