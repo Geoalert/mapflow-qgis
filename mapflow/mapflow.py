@@ -6,6 +6,7 @@ from configparser import ConfigParser  # parse metadata.txt -> QGIS version chec
 from datetime import datetime  # processing creation datetime formatting
 from pathlib import Path
 from typing import List, Optional, Union, Callable, Tuple
+import ast #!
 
 from PyQt5.QtCore import (
     QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, QTextStream, QByteArray, QTemporaryDir, QVariant
@@ -2386,8 +2387,17 @@ class Mapflow(QObject):
         self.iface.mapCanvas().zoomToSelected(self.metadata_layer)
         self.iface.mapCanvas().refresh()
         # Get multi-image preview (e.g. Roscosmos)
-        if len(feature['previews']) != 0:
-            previews_list = [MultiPreview.from_dict(preview) for preview in feature['previews']]
+        raw_previews_value = feature['previews']
+        if not isinstance(raw_previews_value, list): # try avoiding possible issues on MacOS
+            try:
+                list_previews_value = eval(json.loads(raw_previews_value))
+            except:
+                self.alert(self.tr("Selected image has an invalid preview"))
+                return
+        else: # but in general it whould be recognised as a list
+            list_previews_value = raw_previews_value
+        if len(list_previews_value) != 0:
+            previews_list = [MultiPreview.from_dict(preview) for preview in list_previews_value]
             previews = []
             for p in previews_list:
                 # Create QgsGeometry from GeoJSON through ogr and wkt
