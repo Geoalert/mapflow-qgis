@@ -2388,6 +2388,7 @@ class Mapflow(QObject):
         self.iface.mapCanvas().refresh()
         # Get multi-image preview (e.g. Roscosmos)
         raw_previews_value = feature['previews']
+        print ("TYPE OF THE RAW VALUE: ", type(raw_previews_value))
         if not isinstance(raw_previews_value, list): # try avoiding possible issues on MacOS
             try:
                 list_previews_value = eval(json.loads(raw_previews_value))
@@ -2396,6 +2397,7 @@ class Mapflow(QObject):
                 return
         else: # but in general it whould be recognised as a list
             list_previews_value = raw_previews_value
+        print ("TYPE OF THE CONVERTED VALUE: ", type(list_previews_value))
         if len(list_previews_value) != 0:
             previews_list = [MultiPreview.from_dict(preview) for preview in list_previews_value]
             previews = []
