@@ -60,5 +60,4 @@ class ErrorMessage(QObject):
         elif raw:
             return self.raw_message
         else:
-            print(self.message, self.parameters, self.code)
             return self.message or default

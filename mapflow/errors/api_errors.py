@@ -6,7 +6,7 @@ class ApiErrors(ErrorMessageList):
         super().__init__()
         self.error_descriptions = {
             "MAXAR_PROVIDERS_UNAVAILABLE": self.tr("Upgrade your subscription to get access to Maxar imagery"),
-            "ProviderMinAreaError": self.tr("Geometry area ({aoi_area} sq km) "
-                                            "is smaller than the minimum required area for data provider {provider_name} "
-                                            "({provider_min_area} sq km)")
+            "ProviderMinAreaError": self.tr("Geometry area is {aoiArea} sq km, which "
+                                            "is smaller than the minimum required area for {providerName} data provider "
+                                            "({providerMinArea} sq km)")
         }
