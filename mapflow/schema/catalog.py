@@ -31,9 +31,10 @@ class MultiPreviewList(Serializable, SkipDataClass):
     @classmethod
     def from_dict_or_string(cls, data):
         if isinstance(data, list) and all(isinstance(entry, dict) for entry in data):
+            print ("If everything is a dict")
             return cls([MultiPreview.from_dict(entry) for entry in data])
         elif isinstance(data, list) and len(data) == 1 and isinstance(data[0], str):
-            print("Macos hack?!")
+            print("If it is a list and the first element is a string)")
             dict_data = json.loads(data[0])
             return cls.from_dict_or_string(dict_data)
         elif isinstance(data, str):
