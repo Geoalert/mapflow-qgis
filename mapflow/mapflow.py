@@ -3736,11 +3736,12 @@ class Mapflow(QObject):
         if provider.myImagery.imageIds:
             self.allow_enable_processing['my_image_loaded'] = False
             image_id = provider.myImagery.imageIds[0]
-            self.data_catalog_service.get_image(image_id, self.data_catalog_service.get_image_callback)
+            self.data_catalog_service.get_image(image_id)
         elif provider.myImagery.mosaicId:
             self.data_catalog_service.view.select_mosaic_cell(provider.myImagery.mosaicId)
         my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
         self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
+        self.data_catalog_service.set_catalog_provider(self.providers)
 
     def duplicate_imagery_search(self, provider: ImagerySearchParams):
         self.dlg.sourceCombo.setCurrentIndex(self.imagery_search_provider_index)
@@ -3810,7 +3811,7 @@ class Mapflow(QObject):
             self.update_providers()
             self.dlg.setProviderIndex(provider_index)
         if self.zoom_selector:
-            self.dlg.zoomCombo.setCurrentText(provider.userDefined.zoom)
+            self.dlg.zoomCombo.setCurrentText(str(provider.userDefined.zoom))
 
     def duplicate_aoi_callback(self, response: QNetworkReply, path: str) -> None:
         self.result_loader.download_aoi_file_callback(response, path)

@@ -15,6 +15,7 @@ from ...dialogs.main_dialog import MainDialog
 from ...dialogs.mosaic_dialog import CreateMosaicDialog, UpdateMosaicDialog
 from ...dialogs.image_dialog import RenameImageDialog
 from ...dialogs.upload_raster_layer_dialog import UploadRasterLayersDialog
+from ...dialogs.error_message_widget import ErrorMessageWidget
 from ...schema.data_catalog import PreviewSize, MosaicReturnSchema, ImageReturnSchema, UserLimitSchema
 from ...schema import DataProviderParams, MyImageryParams, ImagerySearchParams, UserDefinedParams
 from ..api.data_catalog_api import DataCatalogApi
@@ -23,7 +24,6 @@ from ...http import Http
 from ...functional import layer_utils, helpers
 from ...config import Config
 from ...entity.provider import MyImageryProvider
-
 
 
 class DataCatalogService(QObject):
@@ -61,6 +61,7 @@ class DataCatalogService(QObject):
         self.image_max_size_bytes = Config.MAX_FILE_SIZE_BYTES
         self.free_storage = None
         self.preview_idx = 0
+        self.allow_enable_processing = allow_enable_processing
 
 
     # Mosaics CRUD
@@ -361,8 +362,8 @@ class DataCatalogService(QObject):
         except IndexError:
             pass
 
-    def get_image(self, image_id: UUID, callback: Callable):
-        self.api.get_image(image_id=image_id, callback=callback)
+    def get_image(self, image_id: UUID):
+        self.api.get_image(image_id=image_id, callback=self.get_image_callback, error_handler=self.get_image_error_handler)
 
     def delete_images(self, 
                       response: QNetworkReply, 
@@ -615,13 +616,26 @@ class DataCatalogService(QObject):
         self.dlg.mosaicTable.clearSelection()
         if source_params.myImagery.imageIds: # if the source was an image:
             image_id = source_params.myImagery.imageIds[0] # get full image info to obtain mosaic_id
-            self.get_image(image_id, self.get_image_callback)
+            self.get_image(image_id)
         self.view.show_my_imagery_source(source_params)
 
     def get_image_callback(self, response: QNetworkReply):
         image = ImageReturnSchema.from_dict(json.loads(response.readAll().data()))
         self.view.select_mosaic_cell(image.mosaic_id)
         self.view.show_source_image_connection = self.dlg.imageTableFilled.connect(lambda: self.view.select_image_cell(image.id))
+
+    def get_image_error_handler(self, response: QNetworkReply) -> None:
+        response_data = json.loads(response.readAll().data())
+        error_params = response_data['detail']['parameters']
+        if error_params['instance_type'] == "mosaic":
+            error_summary = self.tr("Source imagery collection with id '{}' was not found ").format(error_params['uid'])
+        else:
+            error_summary = self.tr("Source image with id '{}' was not found in any of your imagery collections").format(error_params['uid'])
+        ErrorMessageWidget(parent=QApplication.activeWindow(),
+                           text=error_summary).show()
+        self.dlg.stackedLayout.setCurrentIndex(0)
+        self.allow_enable_processing = {k: True for k in self.allow_enable_processing}
+        self.dlg.startProcessing.setEnabled(True)
 
 
     # Other

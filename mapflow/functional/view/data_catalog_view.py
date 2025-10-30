@@ -338,8 +338,12 @@ class DataCatalogView(QObject):
             item = self.dlg.mosaicTable.findItems(mosaic_id, Qt.MatchExactly)[0]
             self.dlg.mosaicTable.setCurrentCell(item.row(), 1)
             self.allow_enable_processing['my_mosaic_loaded'] = True
+            if not False in self.allow_enable_processing.values():
+                self.dlg.startProcessing.setEnabled(True)
         except IndexError:
             self.alert(self.tr("No imagery collection with id '{mosaic_id}' was found").format(mosaic_id=mosaic_id))
+            self.allow_enable_processing = {k: True for k in self.allow_enable_processing}
+            self.dlg.startProcessing.setEnabled(True)
 
     def select_image_cell(self, image_id):
         try:
@@ -347,8 +351,12 @@ class DataCatalogView(QObject):
             item = self.dlg.imageTable.findItems(image_id, Qt.MatchExactly)[0]
             self.dlg.imageTable.setCurrentCell(item.row(), 1)
             self.allow_enable_processing['my_image_loaded'] = True
+            if not False in self.allow_enable_processing.values():
+                self.dlg.startProcessing.setEnabled(True)
         except IndexError:
             self.alert(self.tr("No image with id '{image_id}' was found").format(image_id=image_id))
+            self.allow_enable_processing = {k: True for k in self.allow_enable_processing}
+            self.dlg.startProcessing.setEnabled(True)
 
     def selected_images_indecies(self, limit=None):
         selected_rows = list(set(index.row() for index in self.dlg.imageTable.selectionModel().selectedIndexes()))
