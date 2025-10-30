@@ -2387,7 +2387,10 @@ class Mapflow(QObject):
         self.iface.mapCanvas().zoomToSelected(self.metadata_layer)
         self.iface.mapCanvas().refresh()
         # Get multi-image preview (e.g. Roscosmos)
-        previews_list = MultiPreviewList.from_dict_or_string(feature['previews'])
+        try:
+            previews_list = MultiPreviewList.from_dict_or_string(feature['previews'])
+        except KeyError: # duplicated processings don't have this field
+            previews_list = MultiPreviewList([])
         if len(previews_list.previews) != 0:
             previews = []
             for p in previews_list.previews:
@@ -2407,7 +2410,7 @@ class Mapflow(QObject):
         try:
             url = feature.attribute('previewUrl')
             preview_type = feature.attribute('previewType')
-        except KeyError:
+        except KeyError: # duplicated processings don't have these fields
             url = ''
             preview_type = ''
         self.iface.mapCanvas().zoomToSelected(self.metadata_layer)
