@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -22,6 +23,19 @@ class ProductType(str, Enum):
 class MultiPreview(Serializable, SkipDataClass):
     url: str
     geometry: dict
+
+@dataclass
+class MultiPreviewList(Serializable, SkipDataClass):
+    previews: Optional[List[MultiPreview]]
+
+    @classmethod
+    def from_dict_or_string(cls, data):
+        if isinstance(data, list) and all(isinstance(entry, dict) for entry in data):
+            return cls([MultiPreview.from_dict(entry) for entry in data])
+        elif isinstance(data, str):
+            return cls.from_dict_or_string(json.loads(data))
+        else:
+            return cls([])
 
 @dataclass
 class ImageCatalogRequestSchema(Serializable):

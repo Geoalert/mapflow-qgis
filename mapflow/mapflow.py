@@ -6,6 +6,7 @@ from configparser import ConfigParser  # parse metadata.txt -> QGIS version chec
 from datetime import datetime  # processing creation datetime formatting
 from pathlib import Path
 from typing import List, Optional, Union, Callable, Tuple
+import ast #!
 
 from PyQt5.QtCore import (
     QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, QTextStream, QByteArray, QTemporaryDir, QVariant
@@ -79,7 +80,7 @@ from .schema import (PostSourceSchema,
                      MyImageryParams, 
                      ImagerySearchParams, 
                      UserDefinedParams)
-from .schema.catalog import PreviewType, ProductType, AoiResponseSchema, MultiPreview
+from .schema.catalog import PreviewType, ProductType, AoiResponseSchema, MultiPreview, MultiPreviewList
 from .schema.project import MapflowProject, UserRole, ProjectsRequest
 
 
@@ -2386,10 +2387,10 @@ class Mapflow(QObject):
         self.iface.mapCanvas().zoomToSelected(self.metadata_layer)
         self.iface.mapCanvas().refresh()
         # Get multi-image preview (e.g. Roscosmos)
-        if len(feature['previews']) != 0:
-            previews_list = [MultiPreview.from_dict(preview) for preview in feature['previews']]
+        previews_list = MultiPreviewList.from_dict_or_string(feature['previews'])
+        if len(previews_list.previews) != 0:
             previews = []
-            for p in previews_list:
+            for p in previews_list.previews:
                 # Create QgsGeometry from GeoJSON through ogr and wkt
                 ogr_geom = ogr.CreateGeometryFromJson(str(p.geometry))
                 wkt_geom = ogr_geom.ExportToWkt()
