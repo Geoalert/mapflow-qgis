@@ -6,7 +6,6 @@ from configparser import ConfigParser  # parse metadata.txt -> QGIS version chec
 from datetime import datetime  # processing creation datetime formatting
 from pathlib import Path
 from typing import List, Optional, Union, Callable, Tuple
-import ast #!
 
 from PyQt5.QtCore import (
     QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QFile, QIODevice, QTextStream, QByteArray, QTemporaryDir, QVariant
@@ -3544,27 +3543,27 @@ class Mapflow(QObject):
         return provider_names, product_types
 
     def get_search_images_ids(self, local_image_indices, provider_names, product_types):
-        selected_cells = self.dlg.metadataTable.selectedItems()
-        if not selected_cells:
-            image_id = None
+        selected_rows = list(set(item.row() for item in self.dlg.metadataTable.selectedItems()))
+        if not selected_rows:
+            image_ids = None
         else:
             id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
-            image_id = [self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()]
+            image_ids = [self.dlg.metadataTable.item(row, id_column_index).text() for row in selected_rows]
         selection_error = ""
         try:
             if len(set(provider_names)) > 1:
                 if set(product_types) != set(["Mosaic"]):
-                    selection_error = self.tr("You can launch multiple image processing only if it has the same provider of mosaic type")
+                    selection_error = self.tr("You can launch multiple image processing only if they have the same provider")
         except:
-            return image_id, selection_error
+            return image_ids, selection_error
         # Require image id only for single images and not mosaics
-        if image_id:
+        if image_ids:
             self.imagery_search_provider_instance.requires_id = True
-            self.imagery_search_provider_instance.image_id = image_id
+            self.imagery_search_provider_instance.image_ids = image_ids
         else:
             self.imagery_search_provider_instance.requires_id = False
-            self.imagery_search_provider_instance.image_id = []
-        return image_id, selection_error
+            self.imagery_search_provider_instance.image_ids = []
+        return image_ids, selection_error
     
     def get_zoom(self, provider, local_image_indices, product_types):
         zoom = None

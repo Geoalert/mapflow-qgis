@@ -63,7 +63,7 @@ class ImagerySearchProvider(ProviderInterface):
         super().__init__(name=SEARCH_OPTION_NAME)
         self.proxy = proxy
         self.requires_id: Optional[bool] = None
-        self.image_id: Optional[List[str]] = None
+        self.image_ids: Optional[List[str]] = None
 
     def preview_url(self, image_id=None):
         return None
@@ -75,14 +75,14 @@ class ImagerySearchProvider(ProviderInterface):
     def to_processing_params(self,
                              provider_name: Optional[str] = None,
                              zoom: Optional[str] = None):
-        if not self.image_id and self.requires_id is True:
+        if not self.image_ids and self.requires_id is True:
             raise ImageIdRequired("Search provider must have image ID to launch the processing")
         if provider_name:
             data_provider = provider_name.lower()
         else:
             data_provider = None
         return ProcessingParams(sourceParams=ImagerySearchParams(ImagerySearchSchema(dataProvider=data_provider,
-                                                                                     imageIds=self.image_id,
+                                                                                     imageIds=self.image_ids,
                                                                                      zoom=zoom))), {}
 
     @property
