@@ -53,15 +53,15 @@ class DataCatalogService(QObject):
         self.project = QgsProject.instance()
         self.result_loader = result_loader
         self.plugin_version = plugin_version
+        self.allow_enable_processing = allow_enable_processing
         self.api = DataCatalogApi(http=http, server=server, dlg=dlg, iface=iface, result_loader=self.result_loader, plugin_version=self.plugin_version)
-        self.view = DataCatalogView(dlg=dlg, allow_enable_processing=allow_enable_processing)
+        self.view = DataCatalogView(dlg=dlg, allow_enable_processing=self.allow_enable_processing)
         self.mosaics = {}
         self.images = []
         self.image_max_size_pixels = Config.MAX_FILE_SIZE_PIXELS
         self.image_max_size_bytes = Config.MAX_FILE_SIZE_BYTES
         self.free_storage = None
         self.preview_idx = 0
-        self.allow_enable_processing = allow_enable_processing
 
 
     # Mosaics CRUD
@@ -634,8 +634,8 @@ class DataCatalogService(QObject):
         ErrorMessageWidget(parent=QApplication.activeWindow(),
                            text=error_summary).show()
         self.dlg.stackedLayout.setCurrentIndex(0)
-        self.allow_enable_processing = {k: True for k in self.allow_enable_processing}
-        self.dlg.startProcessing.setEnabled(True)
+        for key in self.allow_enable_processing:
+            self.allow_enable_processing[key] = True
 
 
     # Other

@@ -342,8 +342,8 @@ class DataCatalogView(QObject):
                 self.dlg.startProcessing.setEnabled(True)
         except IndexError:
             self.alert(self.tr("No imagery collection with id '{mosaic_id}' was found").format(mosaic_id=mosaic_id))
-            self.allow_enable_processing = {k: True for k in self.allow_enable_processing}
-            self.dlg.startProcessing.setEnabled(True)
+            for key in self.allow_enable_processing:
+                self.allow_enable_processing[key] = True
 
     def select_image_cell(self, image_id):
         try:
@@ -355,8 +355,8 @@ class DataCatalogView(QObject):
                 self.dlg.startProcessing.setEnabled(True)
         except IndexError:
             self.alert(self.tr("No image with id '{image_id}' was found").format(image_id=image_id))
-            self.allow_enable_processing = {k: True for k in self.allow_enable_processing}
-            self.dlg.startProcessing.setEnabled(True)
+            for key in self.allow_enable_processing:
+                self.allow_enable_processing[key] = True
 
     def selected_images_indecies(self, limit=None):
         selected_rows = list(set(index.row() for index in self.dlg.imageTable.selectionModel().selectedIndexes()))
