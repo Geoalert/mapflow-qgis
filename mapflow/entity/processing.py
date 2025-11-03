@@ -26,6 +26,7 @@ class Processing:
                  blocks: Optional[List[BlockOption]] = None,
                  description: Optional[str] = None,
                  meta: Optional[Dict] = None,
+                 style_name: Optional[str] = None,
                  **kwargs):
         self.id_ = id_
         self.name = name
@@ -44,6 +45,7 @@ class Processing:
         self.blocks = blocks
         self.description = description
         self.meta = meta
+        self.style_name = style_name
 
     @classmethod
     def from_response(cls, processing):
@@ -54,7 +56,7 @@ class Processing:
         workflow_def = processing['workflowDef']['name']
         aoi_area = round(processing['aoiArea'] / 10 ** 6, 2)
         meta = processing.get("meta") or None
-
+        style_name = processing['workflowDef'].get("styleName") or None
         if sys.version_info.minor < 7:  # python 3.6 doesn't understand 'Z' as UTC
             created = processing['created'].replace('Z', '+0000')
         else:
@@ -93,7 +95,8 @@ class Processing:
                    params,
                    blocks,
                    description,
-                   meta)
+                   meta,
+                   style_name=style_name)
 
     @property
     def is_new(self):

@@ -31,7 +31,7 @@ from .helpers import WGS84, to_wgs84, WGS84_ELLIPSOID
 from ..dialogs.error_message_widget import ErrorMessageWidget
 from ..schema.catalog import AoiResponseSchema
 from ..styles import get_style_name
-
+from ..entity.processing import Processing
 
 def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
     """Get a layer's bounding box aka extent/envelope
@@ -391,14 +391,14 @@ class ResultsLoader(QObject):
 
     # ======= Load as tile layers ====== #
 
-    def load_result_tiles(self, processing):
+    def load_result_tiles(self, processing: Processing):
         raster_tilejson = processing.raster_layer.get("tileJsonUrl", None)
         vector_tilejson = processing.vector_layer.get("tileJsonUrl", None)
         raster_layer = generate_raster_layer(processing.raster_layer.get("tileUrl", None),
                                              name=f"{processing.name} raster")
         vector_layer = generate_vector_layer(processing.vector_layer.get("tileUrl", None),
                                              name=processing.name)
-        vector_layer.loadNamedStyle(get_style_name(processing.workflow_def, vector_layer))
+        vector_layer.loadNamedStyle(get_style_name(processing.workflow_def, vector_layer, processing.style_name))
         self.request_layer_extent(tilejson_uri=raster_tilejson,
                                   layer=raster_layer,
                                   next_layers = [vector_layer],
@@ -640,18 +640,24 @@ class ResultsLoader(QObject):
             # Load Polygons
             polygon_uri = f"{output_path}|geometrytype=Polygon"
             polygon_layer = QgsVectorLayer(polygon_uri, processing.name, "ogr")
-            polygon_layer.loadNamedStyle(get_style_name(processing.workflow_def+"_polygon", polygon_layer))
+            polygon_layer.loadNamedStyle(get_style_name(processing.workflow_def,
+                                                        polygon_layer,
+                                                        processing.style_name))
             if polygon_layer.isValid():
                 results_layers.append(polygon_layer)
             # Load lineStrings
             linestring_uri = f"{output_path}|geometrytype=LineString"
             linestring_layer = QgsVectorLayer(linestring_uri, processing.name, "ogr")
-            linestring_layer.loadNamedStyle(get_style_name(processing.workflow_def+"_line", linestring_layer))
+            linestring_layer.loadNamedStyle(get_style_name(processing.workflow_def,
+                                                           linestring_layer,
+                                                           processing.style_name))
             if linestring_layer.isValid():
                 results_layers.append(linestring_layer)
         else: # regular processing with one geometry type
             results_layer = QgsVectorLayer(str(output_path), processing.name, 'ogr')
-            results_layer.loadNamedStyle(get_style_name(processing.workflow_def, layer))
+            results_layer.loadNamedStyle(get_style_name(processing.workflow_def,
+                                                        layer,
+                                                        processing.style_name))
             results_layers.append(results_layer)
         # Add the source raster (COG) if it has been created
         raster_url = processing.raster_layer.get('tileUrl')
