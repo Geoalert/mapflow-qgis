@@ -11,7 +11,7 @@ class ErrorMessageList(QObject):
         assert set(self.error_descriptions.keys()).intersection(set(other.error_descriptions.keys())) == set()
         self.error_descriptions.update(other.error_descriptions)
 
-    def get(self, key, default=None):
-        if not default:
+    def get(self, key, default=False):
+        if default:
             default = self.tr("Unknown error. Contact us to resolve the issue! help@geoalert.io")
         return self.error_descriptions.get(key, default)

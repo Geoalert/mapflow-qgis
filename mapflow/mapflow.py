@@ -1566,13 +1566,12 @@ class Mapflow(QObject):
             self.metadata_layer.selectByExpression(f"{key} in {tuple(local_indices)}")
         except RuntimeError:  # layer has been deleted
             pass
-        except Exception as e:
+        else:
+            self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+        finally:
             self.meta_layer_table_connection = self.metadata_layer.selectionChanged.connect(
                 self.sync_layer_selection_with_table)
-            raise e
-        self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
-        self.meta_layer_table_connection = self.metadata_layer.selectionChanged.connect(
-            self.sync_layer_selection_with_table)
+
 
     def sync_layer_selection_with_table(self, selected_ids: List[int]) -> None:
         """
