@@ -1836,9 +1836,6 @@ class Mapflow(QObject):
                     self.dlg.disable_processing_start(self.tr("This provider requires image ID. "
                                                               "Use search tab to find imagery for you requirements, "
                                                               "and select image in the table."))
-            #elif isinstance(provider, ImagerySearchProvider): #and\
-                # Selection of metadataTable has providers that are not in the list of my providers
-            #    pass
             elif isinstance(provider, MyImageryProvider) and\
                 not self.dlg.mosaicTable.selectionModel().hasSelection():
                     self.dlg.disable_processing_start(reason=self.tr('Choose imagery to start processing'))
