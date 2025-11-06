@@ -2,7 +2,7 @@ import json
 import os
 from osgeo import gdal
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from PyQt5.QtCore import QObject
 from PyQt5.QtNetwork import QNetworkReply
@@ -26,12 +26,14 @@ from qgis.core import (QgsRectangle,
                        QgsCoordinateTransform
                        )
 
+from ..config import Config
+from ..dialogs.error_message_widget import ErrorMessageWidget
+from ..entity.processing import Processing
 from .geometry import clip_aoi_to_image_extent, clip_aoi_to_catalog_extent
 from .helpers import WGS84, to_wgs84, WGS84_ELLIPSOID
-from ..dialogs.error_message_widget import ErrorMessageWidget
-from ..schema.catalog import AoiResponseSchema
+from ..schema.catalog import AoiResponseSchema, PreviewType
 from ..styles import get_style_name
-from ..entity.processing import Processing
+
 
 def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
     """Get a layer's bounding box aka extent/envelope
@@ -48,7 +50,11 @@ def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
     return extent_geometry
 
 
-def generate_xyz_layer_definition(url, username, password, max_zoom, source_type):
+def generate_xyz_layer_definition(url: str,
+                                  source_type: PreviewType,
+                                  max_zoom: Optional[int] = Config.MAX_ZOOM,
+                                  username: Optional[str] = "",
+                                  password: Optional[str] = ""):
     """
     It includes quadkey, tms and xyz layers, because QGIS treats them the same
     """
@@ -269,6 +275,7 @@ class ResultsLoader(QObject):
         self.settings = settings
         self.plugin_name = plugin_name
         self.temp_dir = temp_dir
+        self.preview_dict = {}
 
     # ======= General layer management  ====== #
 
@@ -303,31 +310,45 @@ class ResultsLoader(QObject):
         else:  # assume user opted to not use a group, add layers as usual
             self.project.addMapLayer(layer)
 
-    def add_preview_layer(self, preview_layer, preview_dict): 
+    def add_preview_layer(self,
+                          preview_layer: QgsRasterLayer,
+                          footprint_layer: Optional[QgsVectorLayer] = None):
         # Delete layer from dictionary if it was deleted from layer tree
-        for url, id in preview_dict.copy().items():
+        for url, id in self.preview_dict.copy().items():
             if id not in self.project.mapLayers() and id != preview_layer.id():
-                del preview_dict[url]
+                del self.preview_dict[url]
         # Revove the old layer if its url matches current one and its in the dictionary
         url = preview_layer.dataProvider().dataSourceUri()
-        if url in preview_dict.keys():
-            current_preview_id = preview_dict[url]
+        if url in self.preview_dict.keys():
+            current_preview_id = self.preview_dict[url]
             # We can't have many layers with the same ID 
-            QgsProject.instance().removeMapLayer(current_preview_id)
+            self.project.removeMapLayer(current_preview_id)
             # And delete old item from dictionary to rewrite it to a new position 
             # (So later we can easyly find the last added preview)
-            del preview_dict[url] 
+            del self.preview_dict[url] 
         # For the first added preview, just add it to the bottom
-        if len(preview_dict) == 0:
-            self.add_layer(layer = preview_layer, order=-1)
+        if len(self.preview_dict) == 0:
+            order = -1
         # In other cases - add it to the top of plugin added previews
         else:
-            top_preview_id = list(preview_dict.values())[-1]
-            top_preview_layer = QgsProject.instance().layerTreeRoot().findLayer(top_preview_id)
-            index = top_preview_layer.parent().children().index(top_preview_layer)
-            self.add_layer(layer = preview_layer, order = index)
+            top_preview_id = list(self.preview_dict.values())[-1]
+            top_preview_layer = self.project.layerTreeRoot().findLayer(top_preview_id)
+            order = top_preview_layer.parent().children().index(top_preview_layer)
+        # Add mosaic footprint if it is passed as an argument:
+        layer_names = []
+        if footprint_layer:
+            for f in self.project.mapLayers().values():
+                layer_names.append(f.name())
+            if footprint_layer.name() not in layer_names:
+                if order > 1:
+                    order += -1
+                else:
+                    order = order
+                footprint_layer.loadNamedStyle(str(Path(__file__).parents[1]/'static'/'styles'/'metadata_footprint.qml'))
+                self.add_layer(layer=footprint_layer, order=order)
+        self.add_layer(layer=preview_layer, order=order)
         # Add preview url and id to the dictionary
-        preview_dict[url] = preview_layer.id()
+        self.preview_dict[url] = preview_layer.id()
 
     def get_footprint_corners(self, footprint: QgsGeometry):
         corners = []

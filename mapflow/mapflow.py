@@ -117,7 +117,6 @@ class Mapflow(QObject):
         self.current_project = None
         self.user_role = UserRole.owner
         self.aoi_layers = []
-        self.preview_dict = {}
         self.project_connection = None
         super().__init__(self.main_window)
         self.project = QgsProject.instance()
@@ -1112,8 +1111,13 @@ class Mapflow(QObject):
         except (AttributeError, RuntimeError):  # metadata layer has been deleted
             pass
         self.metadata_layer = QgsVectorLayer(filename, layer_name, 'ogr')
-        self.project.addMapLayer(self.metadata_layer)
         self.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
+        # Place search results under AOI layer
+        aoi_layer = self.dlg.polygonCombo.currentLayer()
+        aoi_layer_tree = self.project.layerTreeRoot().findLayer(aoi_layer.id())
+        index = aoi_layer_tree.parent().children().index(aoi_layer_tree)
+        self.result_loader.add_layer(layer=self.metadata_layer, order=index+1)
+        # Connect layer with metadata table
         self.meta_layer_table_connection = self.metadata_layer.selectionChanged.connect(
             self.sync_layer_selection_with_table)
         self.search_footprints = {
@@ -1374,7 +1378,11 @@ class Mapflow(QObject):
         # Add the new features to the displayed metadata layer
         self.metadata_layer.dataProvider().addFeatures(metadata_layer.getFeatures())
         if timer:  # first page
-            self.result_loader.add_layer(self.metadata_layer)
+            # Place search results under AOI layer
+            aoi_layer = self.dlg.polygonCombo.currentLayer()
+            aoi_layer_tree = self.project.layerTreeRoot().findLayer(aoi_layer.id())
+            index = aoi_layer_tree.parent().children().index(aoi_layer_tree)
+            self.result_loader.add_layer(self.metadata_layer, index+1)
         current_row_count = self.dlg.metadataTable.rowCount()
         self.dlg.metadataTable.setRowCount(current_row_count + metadata_layer.featureCount())
         self.dlg.metadataTable.setSortingEnabled(False)
@@ -2409,9 +2417,10 @@ class Mapflow(QObject):
         try:
             url = feature.attribute('previewUrl')
             preview_type = feature.attribute('previewType')
+            provider_name = feature.attribute('providerName')
+            image_date = feature.attribute('acquisitionDate').toString("dd.MM.yyyy")
         except KeyError: # duplicated processings don't have these fields
-            url = ''
-            preview_type = ''
+            url = preview_type = provider_name = image_date = ''
         self.iface.mapCanvas().zoomToSelected(self.metadata_layer)
         self.iface.mapCanvas().refresh()
         if not preview_type:
@@ -2422,9 +2431,36 @@ class Mapflow(QObject):
                 self.alert(self.tr("Preview with such URL is unavailable"))
                 return
             self.preview_png(url, footprint, image_id)
+        elif preview_type in (PreviewType.xyz, PreviewType.tms, PreviewType.wms):
+            uri = layer_utils.generate_xyz_layer_definition(url=url, source_type=preview_type)
+            tile_layer = QgsRasterLayer(uri, provider_name, "wms")
+            if feature:
+                footprint_layer = QgsVectorLayer("Polygon?crs=EPSG:4326",
+                                                f"{provider_name}_{image_date}",
+                                                "memory")
+                footprint_layer.dataProvider().addFeatures([feature])
+                footprint_layer.updateExtents()
+            else:
+                footprint_layer = None
+            self.result_loader.add_preview_layer(preview_layer=tile_layer,
+                                                 footprint_layer=footprint_layer)
+            if self.metadata_layer: # set search results invisible
+                metadata_layer_tree = self.project.layerTreeRoot().findLayer(self.metadata_layer.id())
+                metadata_layer_tree.setItemVisibilityChecked(False)
         else:
-            self.alert(self.tr("Only PNG and JPG preview types are supported."
-                               '<br>See <a href="https://docs.mapflow.ai/api/qgis_mapflow.html#how-to-preview-the-search-results"><span style=" text-decoration: underline; color:#094fd1;">documentation</span></a> for help'))
+            self.alert(self.tr("Preview for '{iid}' is unavailable").format(iid=image_id))
+            return
+        # Move AOI layer at the top
+        aoi_layer = self.dlg.polygonCombo.currentLayer()
+        aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
+        if not aoi_layer:
+            return
+        aoi_layer_tree = self.project.layerTreeRoot().findLayer(aoi_layer.id())
+        aoi_clone = aoi_layer_tree.clone()
+        aoi_parent = aoi_layer_tree.parent()
+        aoi_parent.insertChildNode(0, aoi_clone)
+        aoi_parent.removeChildNode(aoi_layer_tree)
+        self.iface.mapCanvas().refresh()
 
     def preview_png(self,
                     url: str,
@@ -2645,16 +2681,16 @@ class Mapflow(QObject):
             # Add OSM instaed of preview, if it is unavailable (for Mapbox)
             osm = constants.OSM
             layer = QgsRasterLayer(osm, 'OpenStreetMap', 'wms')
-            self.result_loader.add_preview_layer(preview_layer=layer, preview_dict=self.preview_dict)
+            self.result_loader.add_preview_layer(preview_layer=layer)
             return
         except Exception as e:
             self.alert(str(e), QMessageBox.Warning)
             return         
         uri = layer_utils.generate_xyz_layer_definition(url,
-                                                        provider.credentials.login,
-                                                        provider.credentials.password,
+                                                        provider.source_type,
                                                         preview_max_zoom or max_zoom,
-                                                        provider.source_type)
+                                                        provider.credentials.login,
+                                                        provider.credentials.password)
         layer = QgsRasterLayer(uri, layer_name, 'wms')
         layer.setCrs(QgsCoordinateReferenceSystem(provider.crs))
         if layer.isValid():
@@ -2664,7 +2700,7 @@ class Mapflow(QObject):
                 extent = self.metadata_extent(image_id)
                 if extent:
                     layer.setExtent(extent)
-            self.result_loader.add_preview_layer(preview_layer=layer, preview_dict=self.preview_dict)            
+            self.result_loader.add_preview_layer(preview_layer=layer)
         else:
             self.alert(self.tr("We couldn't load a preview for this image"))
 
