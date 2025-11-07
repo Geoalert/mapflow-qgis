@@ -2412,7 +2412,7 @@ class Mapflow(QObject):
                                       image_id=image_id,
                                       georeferenced_previews_list=[])
             return
-        # Get image preview
+        # Get single image preview
         footprint = self.metadata_footprint(feature=feature)
         try:
             url = feature.attribute('previewUrl')
@@ -2421,32 +2421,36 @@ class Mapflow(QObject):
             image_date = feature.attribute('acquisitionDate').toString("dd.MM.yyyy")
         except KeyError: # duplicated processings don't have these fields
             url = preview_type = provider_name = image_date = ''
-        self.iface.mapCanvas().zoomToSelected(self.metadata_layer)
-        self.iface.mapCanvas().refresh()
         if not preview_type:
             self.alert(self.tr("Selected imagery has no preview"))
             return
+        # Display image preview
         if preview_type in (PreviewType.png, PreviewType.jpg):
             if not url:
                 self.alert(self.tr("Preview with such URL is unavailable"))
                 return
             self.preview_png(url, footprint, image_id)
+        # Display mosaic preview
         elif preview_type in (PreviewType.xyz, PreviewType.tms, PreviewType.wms):
+            # Add basemap layer
             uri = layer_utils.generate_xyz_layer_definition(url=url, source_type=preview_type)
             tile_layer = QgsRasterLayer(uri, provider_name, "wms")
+            tiles_to_delete = [layer.id() for layer in self.project.mapLayers().values()
+                                if layer.dataProvider().dataSourceUri() == tile_layer.dataProvider().dataSourceUri()]
+            self.project.removeMapLayers(tiles_to_delete)
+            self.result_loader.add_layer(layer=tile_layer, order=0)
+            # Add footprint layer
             if feature:
                 footprint_layer = QgsVectorLayer("Polygon?crs=EPSG:4326",
-                                                f"{provider_name}_{image_date}",
-                                                "memory")
+                                                 f"{provider_name}_{image_date}",
+                                                 "memory")
                 footprint_layer.dataProvider().addFeatures([feature])
                 footprint_layer.updateExtents()
-            else:
-                footprint_layer = None
-            self.result_loader.add_preview_layer(preview_layer=tile_layer,
-                                                 footprint_layer=footprint_layer)
-            if self.metadata_layer: # set search results invisible
-                metadata_layer_tree = self.project.layerTreeRoot().findLayer(self.metadata_layer.id())
-                metadata_layer_tree.setItemVisibilityChecked(False)
+                footprint_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata_footprint.qml'))
+                footprints_to_delete = [layer.id() for layer in self.project.mapLayers().values()
+                                        if layer.name() == footprint_layer.name()]
+                self.project.removeMapLayers(footprints_to_delete)
+                self.result_loader.add_layer(layer=footprint_layer, order=0)
         else:
             self.alert(self.tr("Preview for '{iid}' is unavailable").format(iid=image_id))
             return
@@ -2501,7 +2505,7 @@ class Mapflow(QObject):
         preview.FlushCache()
         layer = QgsRasterLayer(f.name, f"{image_id} preview", 'gdal')
         layer.setExtent(extent)
-        self.project.addMapLayer(layer)
+        self.result_loader.add_layer(layer)
 
     def display_png_preview_gcp(self,
                                 response: QNetworkReply,
@@ -2552,7 +2556,7 @@ class Mapflow(QObject):
         else:
             for band in range(layer.bandCount()):
                 layer.dataProvider().setNoDataValue(band, 0)
-        self.project.addMapLayer(layer)
+        self.result_loader.add_layer(layer)
 
     def preview_multiple_png(self,
                              response: QNetworkReply,
@@ -2574,7 +2578,7 @@ class Mapflow(QObject):
             vrt.FlushCache()
             vrt = None
             vrt_layer = QgsRasterLayer(vrt_path, "{image_id} preview".format(image_id=image_id), 'gdal')
-            self.project.addMapLayer(vrt_layer)
+            self.result_loader.add_layer(vrt_layer)
             return
         # Requset part: remove first image from the list and get its preview
         image_to_preview = previews.pop(0)
