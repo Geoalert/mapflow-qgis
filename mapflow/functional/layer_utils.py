@@ -1,7 +1,8 @@
 import json
 import os
+from osgeo import gdal
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from PyQt5.QtCore import QObject
 from PyQt5.QtNetwork import QNetworkReply
@@ -25,10 +26,12 @@ from qgis.core import (QgsRectangle,
                        QgsCoordinateTransform
                        )
 
+from ..config import Config
+from ..dialogs.error_message_widget import ErrorMessageWidget
+from ..entity.processing import Processing
 from .geometry import clip_aoi_to_image_extent, clip_aoi_to_catalog_extent
 from .helpers import WGS84, to_wgs84, WGS84_ELLIPSOID
-from ..dialogs.error_message_widget import ErrorMessageWidget
-from ..schema.catalog import AoiResponseSchema
+from ..schema.catalog import AoiResponseSchema, PreviewType
 from ..styles import get_style_name
 
 
@@ -47,7 +50,11 @@ def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
     return extent_geometry
 
 
-def generate_xyz_layer_definition(url, username, password, max_zoom, source_type):
+def generate_xyz_layer_definition(url: str,
+                                  source_type: PreviewType,
+                                  max_zoom: Optional[int] = Config.MAX_ZOOM,
+                                  username: Optional[str] = "",
+                                  password: Optional[str] = ""):
     """
     It includes quadkey, tms and xyz layers, because QGIS treats them the same
     """
@@ -153,6 +160,9 @@ def count_polygons_in_layer(features: list) -> int:
     """ Count polygon geometries in a multipolygon layer (instead of counting features).
     :param features: A list of fetures, obtained by "list(layer.getFeatures())"
     """
+    for feature in features:
+        if not feature.geometry():
+            features.remove(feature)
     count = sum(len(feature.geometry().asMultiPolygon()) for feature in features)
     return count
 
@@ -265,6 +275,7 @@ class ResultsLoader(QObject):
         self.settings = settings
         self.plugin_name = plugin_name
         self.temp_dir = temp_dir
+        self.preview_dict = {}
 
     # ======= General layer management  ====== #
 
@@ -299,42 +310,98 @@ class ResultsLoader(QObject):
         else:  # assume user opted to not use a group, add layers as usual
             self.project.addMapLayer(layer)
 
-    def add_preview_layer(self, preview_layer, preview_dict): 
+    def add_preview_layer(self, preview_layer: QgsRasterLayer):
         # Delete layer from dictionary if it was deleted from layer tree
-        for url, id in preview_dict.copy().items():
-            if id not in self.project.mapLayers() and id != preview_layer.id():
-                del preview_dict[url]
-        # Revove the old layer if its url matches current one and its in the dictionary
+        self.preview_dict = {url: id for url, id in self.preview_dict.items() if id in self.project.mapLayers()}
+        # Revove the old layer from layer tree if its url matches current one and its in the dictionary
         url = preview_layer.dataProvider().dataSourceUri()
-        if url in preview_dict.keys():
-            current_preview_id = preview_dict[url]
-            # We can't have many layers with the same ID 
-            QgsProject.instance().removeMapLayer(current_preview_id)
-            # And delete old item from dictionary to rewrite it to a new position 
-            # (So later we can easyly find the last added preview)
-            del preview_dict[url] 
+        if url in self.preview_dict.keys():
+            current_preview_id = self.preview_dict[url]
+            self.project.removeMapLayer(current_preview_id)
+            # And delete old item from dictionary to rewrite it to a new position
+            del self.preview_dict[url] 
         # For the first added preview, just add it to the bottom
-        if len(preview_dict) == 0:
-            self.add_layer(layer = preview_layer, order=-1)
+        if len(self.preview_dict) == 0:
+            order = -1
         # In other cases - add it to the top of plugin added previews
         else:
-            top_preview_id = list(preview_dict.values())[-1]
-            top_preview_layer = QgsProject.instance().layerTreeRoot().findLayer(top_preview_id)
-            index = top_preview_layer.parent().children().index(top_preview_layer)
-            self.add_layer(layer = preview_layer, order = index)
+            top_preview_id = list(self.preview_dict.values())[-1]
+            top_preview_layer = self.project.layerTreeRoot().findLayer(top_preview_id)
+            order = top_preview_layer.parent().children().index(top_preview_layer)
+        self.add_layer(layer=preview_layer, order=order)
         # Add preview url and id to the dictionary
-        preview_dict[url] = preview_layer.id()
+        self.preview_dict[url] = preview_layer.id()
+
+    def get_footprint_corners(self, footprint: QgsGeometry):
+        corners = []
+        footprint = footprint.asGeometryCollection()[0].asPolygon() # in case it's a MultiPolygon with only one polygon
+        if len(footprint[0]) != 5:
+            self.message_bar.pushInfo(self.plugin_name, self.tr('Preview is unavailable'))
+            return
+        for point in range(4):
+            pt = footprint[0][point]
+            coords = (pt.x(), pt.y())
+            corners.append(coords)
+        return corners
+  
+    def georeference_preview_part(self,
+                                  response: QNetworkReply,
+                                  footprint: QgsGeometry,
+                                  crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857")):
+        """ Generate World File for every part of multi-image preview before creating VRT. """
+        # Get a list of coordinate pairs
+        corners = self.get_footprint_corners(footprint)
+        # Get non-referenced raster and set its projection
+        with open(self.temp_dir/os.urandom(32).hex(), mode='wb') as f:
+            f.write(response.readAll().data())
+        preview = gdal.Open(f.name)
+        preview.SetProjection(crs.toWkt())
+        # Return a list of coordinate pairs
+        corners = []
+        footprint = footprint.asGeometryCollection()[0].asPolygon() # in case it's a MultiPolygon with only one polygon
+        if len(footprint[0]) != 5:
+            self.message_bar.pushInfo(self.plugin_name, self.tr('Preview is unavailable'))
+            return
+        for point in range(4):
+            pt = footprint[0][point]
+            coords = (pt.x(), pt.y())
+            corners.append(coords)
+        # Extract coordinates
+        ul_lon, ul_lat = corners[0]  # Upper left
+        ur_lon, ur_lat = corners[1]  # Upper right
+        lr_lon, lr_lat = corners[2]  # Lower right
+        ll_lon, ll_lat = corners[3]  # Lower left
+        # Get image dimentions
+        width = preview.RasterXSize
+        height = preview.RasterYSize
+        # Calculate pixel sizes
+        pixel_width = (ur_lon - ul_lon) / width
+        pixel_height = (ll_lat - ul_lat) / height
+        # Upper left coordinates (center of upper left pixel)
+        x_origin = ul_lon + (pixel_width / 2)
+        y_origin = ul_lat - (pixel_height / 2)
+        world_file_content = f"""{pixel_width}
+                                 0.0
+                                 0.0
+                                 {pixel_height}
+                                 {x_origin}
+                                 {y_origin}"""
+        # Write world file
+        world_file_path = f.name + '.wld'
+        with open(world_file_path, 'w') as world_file:
+            world_file.write(world_file_content)
+        return f.name
 
     # ======= Load as tile layers ====== #
 
-    def load_result_tiles(self, processing):
+    def load_result_tiles(self, processing: Processing):
         raster_tilejson = processing.raster_layer.get("tileJsonUrl", None)
         vector_tilejson = processing.vector_layer.get("tileJsonUrl", None)
         raster_layer = generate_raster_layer(processing.raster_layer.get("tileUrl", None),
                                              name=f"{processing.name} raster")
         vector_layer = generate_vector_layer(processing.vector_layer.get("tileUrl", None),
                                              name=processing.name)
-        vector_layer.loadNamedStyle(get_style_name(processing.workflow_def, vector_layer))
+        vector_layer.loadNamedStyle(get_style_name(processing.workflow_def, vector_layer, processing.style_name))
         self.request_layer_extent(tilejson_uri=raster_tilejson,
                                   layer=raster_layer,
                                   next_layers = [vector_layer],
@@ -576,18 +643,24 @@ class ResultsLoader(QObject):
             # Load Polygons
             polygon_uri = f"{output_path}|geometrytype=Polygon"
             polygon_layer = QgsVectorLayer(polygon_uri, processing.name, "ogr")
-            polygon_layer.loadNamedStyle(get_style_name(processing.workflow_def+"_polygon", polygon_layer))
+            polygon_layer.loadNamedStyle(get_style_name(processing.workflow_def,
+                                                        polygon_layer,
+                                                        processing.style_name))
             if polygon_layer.isValid():
                 results_layers.append(polygon_layer)
             # Load lineStrings
             linestring_uri = f"{output_path}|geometrytype=LineString"
             linestring_layer = QgsVectorLayer(linestring_uri, processing.name, "ogr")
-            linestring_layer.loadNamedStyle(get_style_name(processing.workflow_def+"_line", linestring_layer))
+            linestring_layer.loadNamedStyle(get_style_name(processing.workflow_def,
+                                                           linestring_layer,
+                                                           processing.style_name))
             if linestring_layer.isValid():
                 results_layers.append(linestring_layer)
         else: # regular processing with one geometry type
             results_layer = QgsVectorLayer(str(output_path), processing.name, 'ogr')
-            results_layer.loadNamedStyle(get_style_name(processing.workflow_def, layer))
+            results_layer.loadNamedStyle(get_style_name(processing.workflow_def,
+                                                        layer,
+                                                        processing.style_name))
             results_layers.append(results_layer)
         # Add the source raster (COG) if it has been created
         raster_url = processing.raster_layer.get('tileUrl')

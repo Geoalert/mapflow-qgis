@@ -91,7 +91,7 @@ class UserDefinedSchema(Serializable):
     sourceType: SourceType
     url: str
     zoom: Optional[int]
-    crs: str
+    crs: Optional[str]
     rasterLogin: Optional[str]
     rasterPassword: Optional[str]
 

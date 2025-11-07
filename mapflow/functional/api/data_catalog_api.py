@@ -248,22 +248,12 @@ class DataCatalogApi(QObject):
                       use_default_error_handler=False
                      )
 
-    def get_image(self, image_id: UUID, callback: Callable):
+    def get_image(self, image_id: UUID, callback: Callable, error_handler: Callable):
         self.http.get(url=f"{self.server}/rasters/image/{image_id}",
                       callback=callback,
                       use_default_error_handler=False,
-                      error_handler=self.get_image_error_handler
+                      error_handler=error_handler
                      )
-    
-    def get_image_error_handler(self, response: QNetworkReply) -> None:
-        response_data = json.loads(response.readAll().data())
-        error_params = response_data['detail']['parameters']
-        if error_params['instance_type'] == "mosaic":
-            error_summary = self.tr("Source imagery collection with id '{}' was not found ").format(error_params['uid'])
-        else:
-            error_summary = self.tr("Source image with id '{}' was not found in any of your imagery collections").format(error_params['uid'])
-        ErrorMessageWidget(parent=QApplication.activeWindow(),
-                           text=error_summary).show()
         
     def delete_image(self,
                      image_id: UUID,

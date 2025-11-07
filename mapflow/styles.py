@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 
 from qgis.core import QgsVectorLayer, QgsVectorTileLayer, QgsWkbTypes
 
@@ -14,15 +15,76 @@ STYLES = {
 
 DEFAULT_STYLE = "default"
 
+def generate_local_style_path(name: str) -> str:
+    return str(Path(__file__).parent / 'static' / 'styles' / 'file' / (name + '.qml'))
 
-def get_style_name(wd_name: str, layer: QgsVectorLayer):
+def generate_tile_style_path(name: str) -> str:
+    return str(Path(__file__).parent / 'static' / 'styles' / 'tiles' / (name + '.qml'))
+
+def get_style_name(wd_name: str, layer: QgsVectorLayer, style_name: Optional[str] = None) -> str:
     if isinstance(layer, QgsVectorTileLayer):
-        return get_tile_style_name(wd_name)
+        style_name = get_tile_style_name(wd_name, style_name)
+        return generate_tile_style_path(style_name)
     else:
-        return get_local_style_name(wd_name, layer)
+        style_name = get_local_style_name(wd_name, layer, style_name)
+        return generate_local_style_path(style_name)
+
+def get_tile_style_name(wd_name, style_name=None):
+    if style_name:
+        style = get_tile_style_name_from_api(style_name)
+        if style:
+            return style
+    return get_tile_style_name_from_wd_name(wd_name)
+
+def get_local_style_name(wd_name, layer, style_name=None):
+    if style_name:
+        style = get_local_style_name_from_api(style_name, layer)
+        if style:
+            return style
+    return get_local_style_name_from_wd_name(wd_name, layer)
+
+def get_tile_style_name_from_api(style_name: str) -> Optional[str]:
+    return {"buildings": "buildings",
+            "building_heights": "building_heights",
+            "forest": "forest",
+            "roads": "roads",
+            "construction": "construction"}.get(style_name, None)
+
+def get_local_style_name_from_api(style_name: str, layer:QgsVectorLayer) -> Optional[str]:
+    base_style = {"combo": "landuse",
+                  "buildings": "buildings",
+                  "building_heights": "building_heights",
+                  "forest": "forest",
+                  "roads": "roads",
+                  "construction": "construction",
+                  "open_data": "open_data"}.get(style_name, None)
+    if base_style == "buildings":
+        # modify buildings style according to the layer properties
+        if "class_id" in layer.fields().names() and "building_height" in layer.fields().names():
+            return "building_heights_class"
+        elif "building_height" in layer.fields().names():
+            return "building_heights"
+        elif "class_id" in layer.fields().names():
+            return "buildings"
+        else:
+            return "buildings_noclass"
+    elif base_style == "forest":
+        # modify forest style according to the layer properties (classification)
+        if "class_id" in layer.fields().names():
+            return "forest_with_heights"
+        else:
+            return "forest"
+    elif base_style == "open_data":
+        # modify open_data style according to the layer geometry (poly / line)
+        if layer.geometryType() == QgsWkbTypes.PolygonGeometry:
+            return "open_data_polygon"
+        else:
+            return "open_data_line"
+
+    return base_style
 
 
-def get_tile_style_name(wd_name):
+def get_tile_style_name_from_wd_name(wd_name: str) -> str:
     if "building" in wd_name.lower() and "height" in wd_name.lower():
         name = 'building_heights'
     elif "building" in wd_name.lower():
@@ -35,11 +97,10 @@ def get_tile_style_name(wd_name):
         name = "construction"
     else:
         name = 'default'
-    res = str(Path(__file__).parent / 'static' / 'styles' / 'tiles' / (name + '.qml'))
-    return res
+    return name
 
 
-def get_local_style_name(wd_name, layer):
+def get_local_style_name_from_wd_name(wd_name: str, layer: QgsVectorLayer) -> str:
     name = STYLES.get(wd_name, DEFAULT_STYLE)
     
     # Land use
@@ -71,5 +132,4 @@ def get_local_style_name(wd_name, layer):
             name = "open_data_polygon"
         else:
             name = "open_data_line"
-    
-    return str(Path(__file__).parent / 'static' / 'styles' / 'file' / (name + '.qml'))
+    return name

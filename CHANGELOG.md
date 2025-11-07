@@ -1,3 +1,18 @@
+## 3.4.0
+    - Imagery search:
+        - Preview images with multi image previews
+        - Preview mosaics and their footprints from search results
+        - Pass multiple images to start the processing
+        - Add min area error for Imagery search providers
+        - Button to see Imagery search table fromm processing's details
+    - Fixes:
+        - Show enabled model options in processing confirmation
+        - Show user role as str values
+        - Show user provider info w/o crs or zoom errors
+        - Enable start button after duplication of processings ran from My imagery
+        - Missed translations
+    - Read processing results' style name from Processing schema
+    - Reformat default api message parsing
 ## 3.3.1
     - Hotfix: processing review sumbmission
 ## 3.3.0

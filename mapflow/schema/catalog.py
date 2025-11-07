@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -17,6 +18,24 @@ class PreviewType(str, Enum):
 class ProductType(str, Enum):
     mosaic = "Mosaic"
     image = "Image"
+
+@dataclass
+class MultiPreview(Serializable, SkipDataClass):
+    url: str
+    geometry: dict
+
+@dataclass
+class MultiPreviewList(Serializable, SkipDataClass):
+    previews: Optional[List[MultiPreview]]
+
+    @classmethod
+    def from_dict_or_string(cls, data):
+        if isinstance(data, list) and all(isinstance(entry, dict) for entry in data):
+            return cls([MultiPreview.from_dict(entry) for entry in data])
+        elif isinstance(data, str):
+            return cls.from_dict_or_string(json.loads(data))
+        else:
+            return cls([])
 
 @dataclass
 class ImageCatalogRequestSchema(Serializable):
@@ -49,8 +68,10 @@ class ImageSchema(Serializable, SkipDataClass):
     satId: Optional[str] = None
     previewType: Optional[PreviewType] = None
     previewUrl: Optional[str] = None
+    previews: Optional[List[MultiPreview]] = None
     providerName: Optional[str] = None
     zoom: Optional[str] = None
+    minAreaSqkm: Optional[float] = None
 
     def __post_init__(self):
         if isinstance(self.acquisitionDate, str):
@@ -62,6 +83,7 @@ class ImageSchema(Serializable, SkipDataClass):
             self.previewType = PreviewType(self.previewType)
         except:
             self.previewType = None
+        self.previews = [MultiPreview.from_dict(preview) for preview in self.previews]
 
     def as_geojson(self):
         properties = {k: v for k, v in self.as_dict().items() if k != "footprint"}

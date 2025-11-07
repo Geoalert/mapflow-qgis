@@ -338,8 +338,12 @@ class DataCatalogView(QObject):
             item = self.dlg.mosaicTable.findItems(mosaic_id, Qt.MatchExactly)[0]
             self.dlg.mosaicTable.setCurrentCell(item.row(), 1)
             self.allow_enable_processing['my_mosaic_loaded'] = True
+            if not False in self.allow_enable_processing.values():
+                self.dlg.startProcessing.setEnabled(True)
         except IndexError:
             self.alert(self.tr("No imagery collection with id '{mosaic_id}' was found").format(mosaic_id=mosaic_id))
+            for key in self.allow_enable_processing:
+                self.allow_enable_processing[key] = True
 
     def select_image_cell(self, image_id):
         try:
@@ -347,8 +351,12 @@ class DataCatalogView(QObject):
             item = self.dlg.imageTable.findItems(image_id, Qt.MatchExactly)[0]
             self.dlg.imageTable.setCurrentCell(item.row(), 1)
             self.allow_enable_processing['my_image_loaded'] = True
+            if not False in self.allow_enable_processing.values():
+                self.dlg.startProcessing.setEnabled(True)
         except IndexError:
             self.alert(self.tr("No image with id '{image_id}' was found").format(image_id=image_id))
+            for key in self.allow_enable_processing:
+                self.allow_enable_processing[key] = True
 
     def selected_images_indecies(self, limit=None):
         selected_rows = list(set(index.row() for index in self.dlg.imageTable.selectionModel().selectedIndexes()))
@@ -558,39 +566,22 @@ class DataCatalogView(QObject):
             hide = bool(name_filter) and ((name_filter.lower() not in item_id.lower() and name_filter.lower() not in item_name.lower()))
             table.setRowHidden(row, hide)
     
-    def show_processing_source(self, source_params):
-        """Switch to My imagery or user provider dialog when ckicking on toSourceButton in ProcessingDetailsDialog."""
-        if isinstance(source_params, MyImageryParams):
-            my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
-            if source_params.myImagery.mosaicId:
-                self.dlg.mosaicTable.clearSelection()
-                self.dlg.stackedLayout.setCurrentIndex(0)
-                self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
-                self.select_mosaic_cell(source_params.myImagery.mosaicId)
-            elif source_params.myImagery.imageIds:
+    def show_my_imagery_source(self, source_params: MyImageryParams):
+        """Switch to My imagery when ckicking on toSourceButton in ProcessingDetailsDialog."""
+        my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
+        if source_params.myImagery.mosaicId:
+            self.dlg.mosaicTable.clearSelection()
+            self.dlg.stackedLayout.setCurrentIndex(0)
+            self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
+            self.select_mosaic_cell(source_params.myImagery.mosaicId)
+        elif source_params.myImagery.imageIds:
+            try:
                 self.dlg.imageTable.clearSelection()
-                try:
-                    self.dlg.imageTable.clearSelection()
-                    self.dlg.stackedLayout.setCurrentIndex(1)
-                    self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
-                except:
-                    pass
-        elif isinstance(source_params, UserDefinedParams):
-            settings_tab = self.dlg.tabWidget.findChild(QWidget, "settingsTab")
-            self.dlg.tabWidget.setCurrentWidget(settings_tab)
-            text = self.tr("<b>URL:</b> {url},"
-                           "<br><b>Source type:</b> {type},"
-                           "<br><b>CRS:</b> {crs}").format(type=source_params.userDefined.sourceType,
-                                                           url=source_params.userDefined.url,
-                                                           crs=source_params.userDefined.crs.upper())
-            if source_params.userDefined.zoom:
-                text += self.tr(", <br><b>Zoom:</b> {zoom}").format(zoom=source_params.zoom)
-            if source_params.userDefined.rasterPassword:
-                text += self.tr(", <br><b>Raster login:</b> {login}" +
-                                ", <br><b>Raster password:</b> {password}").format(login=source_params.userDefined.rasterLogin,
-                                                                                   password=source_params.userDefined.rasterPassword)
-            self.alert(message=text, icon=QMessageBox.Information)
-        
+                self.dlg.stackedLayout.setCurrentIndex(1)
+                self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
+            except:
+                pass
+
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """A duplicate of alert function from mapflow.py to avoid circular import.
         """
