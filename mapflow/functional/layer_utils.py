@@ -336,6 +336,7 @@ class ResultsLoader(QObject):
         corners = []
         footprint = footprint.asGeometryCollection()[0].asPolygon() # in case it's a MultiPolygon with only one polygon
         if len(footprint[0]) != 5:
+            print ("Not 5 points")
             self.message_bar.pushInfo(self.plugin_name, self.tr('Preview is unavailable'))
             return
         for point in range(4):

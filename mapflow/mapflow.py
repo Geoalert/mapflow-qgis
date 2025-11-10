@@ -1561,6 +1561,7 @@ class Mapflow(QObject):
             local_indices = []
         else:
             selected_rows = [cell.row() for cell in selected_cells]
+            print ("Selected rows: ", set(selected_rows))
             local_indices = [self.dlg.metadataTable.item(row, local_index_column).text() for row in selected_rows]
         try:
             self.metadata_layer.selectionChanged.disconnect(self.meta_layer_table_connection)
@@ -2034,6 +2035,7 @@ class Mapflow(QObject):
                 local_image_indices = self.get_local_image_indices(selected_images) 
                 provider_names, product_types = self.get_search_providers(local_image_indices)
                 image_ids, selection_error = self.get_search_images_ids(local_image_indices, provider_names, product_types)
+                print ("Selected image ids / local indecies: ", image_ids, " / ", local_image_indices)
                 if selection_error:
                     return None, selection_error
                 provider_name = provider_names[0] if provider_names else None # the same for all [i] if there was no 'selection_error'
@@ -2477,6 +2479,7 @@ class Mapflow(QObject):
                       error_handler=self.preview_png_error_handler,
                       callback_kwargs={"footprint": footprint,
                                        "image_id": image_id})
+        print ("Selected footprint of single part image: ", footprint)
 
     def display_png_preview(self,
                             response: QNetworkReply,
@@ -2591,6 +2594,7 @@ class Mapflow(QObject):
                                        "footprint": image_to_preview[1],
                                        "image_id": image_id,
                                        "georeferenced_previews_list":georeferenced_previews_list})
+        print ("Selected footprint of multi part image: ", image_to_preview[1])
 
     def preview_png_error_handler(self, response: QNetworkReply):
         self.report_http_error(response, self.tr("Could not display preview"))
