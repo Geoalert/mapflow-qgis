@@ -632,6 +632,7 @@ class Mapflow(QObject):
             for row in range(self.dlg.metadataTable.rowCount()):
                 self.dlg.metadataTable.setRowHidden(row, False)
         self.cell_preview_connection = self.dlg.metadataTable.cellClicked.connect(self.preview_search_from_cell)
+        print ("connected")
 
     def set_up_login_dialog(self) -> MapflowLoginDialog:
         """Create a login dialog, set its title and signal-slot connections."""
@@ -991,7 +992,9 @@ class Mapflow(QObject):
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
         try: # disconnect to prevent adding mutliple previews if table was refilled (multiple searches)
             self.dlg.metadataTable.disconnect(self.cell_preview_connection)
+            print ('disconnected')
         except AttributeError: # if no previous connection (first search after start)
+            print ('not disconnected')
             pass
         # If current provider does not support search, we should select ImagerySearchProvider to be able to search
         self.replace_search_provider_index()
