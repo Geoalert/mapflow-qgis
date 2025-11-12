@@ -31,7 +31,9 @@ class MultiPreviewList(Serializable, SkipDataClass):
     @classmethod
     def from_dict_or_string(cls, data):
         if isinstance(data, list) and all(isinstance(entry, dict) for entry in data):
-            return cls([MultiPreview.from_dict(entry) for entry in data])
+            return cls([MultiPreview.from_dict(entry) for entry in data]) # list of dicts
+        elif isinstance(data, list) and all(isinstance(entry, str) for entry in data):
+            return cls([MultiPreview.from_dict(json.loads(entry)) for entry in data]) # list of strings
         elif isinstance(data, str):
             return cls.from_dict_or_string(json.loads(data))
         else:

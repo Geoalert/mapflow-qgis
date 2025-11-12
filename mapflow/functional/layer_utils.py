@@ -279,7 +279,7 @@ class ResultsLoader(QObject):
 
     # ======= General layer management  ====== #
 
-    def add_layer(self, layer: Optional[QgsMapLayer], order=0) -> None:
+    def add_layer(self, layer: Optional[QgsMapLayer], order: Optional[int] = 0) -> None:
         """Add layers created by the plugin to the legend.
 
         By default, layers are added to a group with the same name as the plugin.
@@ -331,6 +331,20 @@ class ResultsLoader(QObject):
         self.add_layer(layer=preview_layer, order=order)
         # Add preview url and id to the dictionary
         self.preview_dict[url] = preview_layer.id()
+
+    def add_aoi_to_preview(self):
+        """Place AOI copy on top of every preview (and delete the old copy)."""
+        aoi_layer = self.dlg.polygonCombo.currentLayer()
+        if not aoi_layer:
+            return
+        cloned_aoi = aoi_layer.clone()
+        cloned_aoi_name = self.tr('Search area "{name}"').format(name=aoi_layer.name())
+        layers_to_remove = self.project.mapLayersByName(cloned_aoi_name)
+        for layer in layers_to_remove:
+            self.project.removeMapLayer(layer.id())
+        cloned_aoi.setName(cloned_aoi_name)
+        cloned_aoi.loadNamedStyle(os.path.join(str(Path(__file__).parents[1]), 'static', 'styles', 'aoi.qml'))
+        self.add_layer(cloned_aoi, 0)
 
     def get_footprint_corners(self, footprint: QgsGeometry):
         corners = []
