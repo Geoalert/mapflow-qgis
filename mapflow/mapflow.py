@@ -557,6 +557,7 @@ class Mapflow(QObject):
             self.providers = self.sentinel_providers
         elif not self.providers == self.basemap_providers:
             self.providers = self.basemap_providers
+            print ("USER PROVIDERS ARE ADDED: ", [p.name for p in self.basemap_providers], ", TOTAL: ", len(self.basemap_providers))
         else:
             # Providers did not change
             return
@@ -2124,7 +2125,8 @@ class Mapflow(QObject):
             self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
             try:
                 self.dlg.startProcessing.setEnabled(False)
-                self.post_processing(processing_params)
+                #!self.post_processing(processing_params)
+                print ("PROCESSING PARAMS: ", processing_params)
             except Exception as e:
                 self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
         # Show processing start confirmation dialog if checkbox is checked
@@ -2143,7 +2145,9 @@ class Mapflow(QObject):
                 price = self.tr("{cost} credits").format(cost=self.processing_cost)
             else:
                 price = None
+            print ("PROVIDERS: ", [provider.name for provider in self.providers], ", TOTAL: ", len(self.providers))
             provider = self.providers[self.dlg.providerIndex()]
+            print ("PROVIDER: ", provider.name, ", CURRENT INDEX: ", self.dlg.providerIndex())
             provider_text = provider.name
             if isinstance(provider, DefaultProvider):
                 zoom = processing_params.params.sourceParams.dataProvider.zoom
@@ -2319,6 +2323,7 @@ class Mapflow(QObject):
                                                [self.my_imagery_provider_instance] +
                                                [DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
                                                 for data in providers_data])
+        print ("DEFAULT PROVIDERS ARE SET: ", [p.name for p in self.default_providers], ", TOTAL: ", len(self.default_providers))
         self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
         # We want to clear the data from previous lauunch to avoid confusion
         for provider in self.providers:
