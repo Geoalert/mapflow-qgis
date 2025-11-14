@@ -2431,39 +2431,10 @@ class Mapflow(QObject):
             self.preview_png(url, footprint, image_id)
         # Display mosaic preview
         elif preview_type in (PreviewType.xyz, PreviewType.tms, PreviewType.wms):
-            # Add basemap layer
-            uri = layer_utils.generate_xyz_layer_definition(url=url, source_type=preview_type)
-            tile_layer = QgsRasterLayer(uri, provider_name, "wms")
-            tiles_to_delete = [layer.id() for layer in self.project.mapLayers().values()
-                                if layer.dataProvider().dataSourceUri() == tile_layer.dataProvider().dataSourceUri()]
-            self.project.removeMapLayers(tiles_to_delete)
-            self.result_loader.add_layer(layer=tile_layer, order=0)
-            # Add footprint layer
-            if feature:
-                footprint_layer = QgsVectorLayer("Polygon?crs=EPSG:4326",
-                                                 f"{provider_name}_{image_date}",
-                                                 "memory")
-                footprint_layer.dataProvider().addFeatures([feature])
-                footprint_layer.updateExtents()
-                footprint_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata_footprint.qml'))
-                footprints_to_delete = [layer.id() for layer in self.project.mapLayers().values()
-                                        if layer.name() == footprint_layer.name()]
-                self.project.removeMapLayers(footprints_to_delete)
-                self.result_loader.add_layer(layer=footprint_layer, order=0)
+            self.preview_mosaic(feature, url, preview_type, provider_name, image_date)
         else:
             self.alert(self.tr("Preview for '{iid}' is unavailable").format(iid=image_id))
             return
-        # Move AOI layer at the top
-        aoi_layer = self.dlg.polygonCombo.currentLayer()
-        aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
-        if not aoi_layer:
-            return
-        aoi_layer_tree = self.project.layerTreeRoot().findLayer(aoi_layer.id())
-        aoi_clone = aoi_layer_tree.clone()
-        aoi_parent = aoi_layer_tree.parent()
-        aoi_parent.insertChildNode(0, aoi_clone)
-        aoi_parent.removeChildNode(aoi_layer_tree)
-        self.iface.mapCanvas().refresh()
 
     def preview_png(self,
                     url: str,
@@ -2556,6 +2527,7 @@ class Mapflow(QObject):
             for band in range(layer.bandCount()):
                 layer.dataProvider().setNoDataValue(band, 0)
         self.result_loader.add_layer(layer)
+        self.result_loader.add_aoi_to_preview()
 
     def preview_multiple_png(self,
                              response: QNetworkReply,
@@ -2578,6 +2550,7 @@ class Mapflow(QObject):
             vrt = None
             vrt_layer = QgsRasterLayer(vrt_path, "{image_id} preview".format(image_id=image_id), 'gdal')
             self.result_loader.add_layer(vrt_layer)
+            self.result_loader.add_aoi_to_preview()
             return
         # Requset part: remove first image from the list and get its preview
         image_to_preview = previews.pop(0)
@@ -2594,6 +2567,32 @@ class Mapflow(QObject):
 
     def preview_png_error_handler(self, response: QNetworkReply):
         self.report_http_error(response, self.tr("Could not display preview"))
+    
+    def preview_mosaic(self,
+                       feature: QgsFeature,
+                       url: str,
+                       preview_type: str,
+                       provider_name: str,
+                       image_date: str):
+        uri = layer_utils.generate_xyz_layer_definition(url=url, source_type=preview_type)
+        tile_layer = QgsRasterLayer(uri, provider_name, "wms")
+        tiles_to_delete = [layer.id() for layer in self.project.mapLayers().values()
+                            if layer.dataProvider().dataSourceUri() == tile_layer.dataProvider().dataSourceUri()]
+        self.project.removeMapLayers(tiles_to_delete)
+        self.result_loader.add_layer(layer=tile_layer, order=0)
+        # Add footprint layer
+        if feature:
+            footprint_layer = QgsVectorLayer("Polygon?crs=EPSG:4326",
+                                                f"{provider_name}_{image_date}",
+                                                "memory")
+            footprint_layer.dataProvider().addFeatures([feature])
+            footprint_layer.updateExtents()
+            footprint_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata_footprint.qml'))
+            footprints_to_delete = [layer.id() for layer in self.project.mapLayers().values()
+                                    if layer.name() == footprint_layer.name()]
+            self.project.removeMapLayers(footprints_to_delete)
+            self.result_loader.add_layer(layer=footprint_layer, order=0)
+        self.result_loader.add_aoi_to_preview()
 
     def preview_sentinel(self, image_id):
         selected_cells = self.dlg.metadataTable.selectedItems()
