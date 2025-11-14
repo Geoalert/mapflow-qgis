@@ -2316,7 +2316,7 @@ class Mapflow(QObject):
         self.imagery_search_provider_instance = ImagerySearchProvider(proxy=self.server)
         self.my_imagery_provider_instance = MyImageryProvider()
         # Get only unique providers to avoid index shifting in souceCombo when one provider is sent multiple times
-        unique_providers = list({provider.id: provider for provider in
+        unique_providers = list({provider.name: provider for provider in
                                  [DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
                                   for data in providers_data]}.values())
         self.default_providers = ProvidersList([self.imagery_search_provider_instance] +
