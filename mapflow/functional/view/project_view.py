@@ -8,6 +8,10 @@ from ...schema.project import MapflowProject, ProjectSortBy, ProjectSortOrder
 
 
 class ProjectView(QObject):
+    def tr(self, message: str) -> str:
+        """Translate string for i18n support."""
+        from PyQt5.QtCore import QCoreApplication
+        return QCoreApplication.translate('ProjectView', message)
     def __init__(self, dlg: MainDialog):
         super().__init__()
         self.dlg = dlg

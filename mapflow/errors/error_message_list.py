@@ -2,6 +2,10 @@ from PyQt5.QtCore import QObject
 
 
 class ErrorMessageList(QObject):
+    def tr(self, message: str) -> str:
+        """Translate string for i18n support."""
+        from PyQt5.QtCore import QCoreApplication
+        return QCoreApplication.translate('ErrorMessageList', message)
     def __init__(self):
         super().__init__()
         self.error_descriptions = {}

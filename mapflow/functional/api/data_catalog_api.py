@@ -16,6 +16,10 @@ from ...dialogs.main_dialog import MainDialog
 
 
 class DataCatalogApi(QObject):
+    def tr(self, message: str) -> str:
+        """Translate string for i18n support."""
+        from PyQt5.QtCore import QCoreApplication
+        return QCoreApplication.translate('DataCatalogApi', message)
     """
 
     """

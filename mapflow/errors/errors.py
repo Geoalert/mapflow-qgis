@@ -19,6 +19,11 @@ error_message_list.update(ApiErrors())
 
 
 class ErrorMessage(QObject):
+    def tr(self, message: str) -> str:
+        """Translate string for i18n support."""
+        from PyQt5.QtCore import QCoreApplication
+        return QCoreApplication.translate('ErrorMessage', message)
+
     def __init__(self,
                  code: str,
                  parameters: Optional[Dict[str, str]] = None,

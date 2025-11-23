@@ -37,6 +37,11 @@ class DataCatalogService(QObject):
     """
     mosaicsUpdated = pyqtSignal()
 
+    def tr(self, message: str) -> str:
+        """Translate string for i18n support."""
+        from PyQt5.QtCore import QCoreApplication
+        return QCoreApplication.translate('DataCatalogService', message)
+
     def __init__(self,
                  http: Http,
                  server: str,

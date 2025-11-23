@@ -14,6 +14,11 @@ from ...schema import MyImageryParams, UserDefinedParams
 from ...schema.data_catalog import MosaicReturnSchema, ImageReturnSchema
 
 class DataCatalogView(QObject):
+    def tr(self, message: str) -> str:
+        """Translate string for i18n support."""
+        from PyQt5.QtCore import QCoreApplication
+        return QCoreApplication.translate('DataCatalogView', message)
+
     def __init__(self, dlg: MainDialog, allow_enable_processing: dict):
         super().__init__()
         self.dlg = dlg
