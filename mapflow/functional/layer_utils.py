@@ -597,18 +597,20 @@ class ResultsLoader(QObject):
         :param pid: ID of the inspected processing.
         """
         self.dlg.processingsTable.setEnabled(True)
-        # Avoid overwriting existing files by adding (n) to their names
+        # Try saving GeoPackage
+        # Define path
         output_path = Path(self.dlg.outputDirectory.text(), processing.id_).with_suffix(".gpkg")
         if output_path.exists():
             count = 1
             while output_path.with_stem(processing.id_ + f"_{count}").exists():
-                count += 1
+                count += 1 # avoid overwriting existing files by adding (n) to their names
             output_path = output_path.with_stem(processing.id_ + f"_{count}")
+        # Define transform context
         transform = self.project.transformContext()
-        # Layer creation options for QGIS 3.10.3+
-        write_options = QgsVectorFileWriter.SaveVectorOptions()
-        write_options.layerOptions = ['fid=id']
-        with open(Path(self.temp_dir, os.urandom(32).hex()), mode='wb+') as f:
+        # Define saving options
+        write_options = QgsVectorFileWriter.SaveVectorOptions() # layer creation options for QGIS 3.10.3+
+        write_options.driverName = "GPKG"
+        with open(output_path, mode='wb+') as f:
             response_data = response.readAll().data()
             # Check if there is more then 1 geometry type
             data = json.loads(response_data)
@@ -619,16 +621,68 @@ class ResultsLoader(QObject):
                     geom_types.append(geom_type)
                 if any("Polygon" in geom for geom in geom_types) and any("LineString" in geom for geom in geom_types):
                     break # stop iterating if (multi)lines and (multi)polygons are already found
-            # Create layer
-            f.write(response_data)
-            layer = QgsVectorLayer(f.name, '', 'ogr')
-            # V3 returns two additional str values but they're not documented, so just discard them
-            error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(
-                layer,
-                str(output_path),
-                transform,
-                write_options
-            )
+            # Change JSON fields to strings if they exist (or it won't save in GeoPackage)
+            for feature in data['features']:
+                try:
+                    feature['properties']['bbox'] = str(feature['properties']['bbox'])
+                except:
+                    pass
+                try:
+                    feature['properties']['properties'] = str(feature['properties']['properties'])
+                except:
+                    pass
+            # Write (modified, if there was JSON) response data to file
+            f.write(json.dumps(data).encode('utf-8'))
+            results_layers = []
+            # If there is one layer with results
+            if not (any("Polygon" in geom for geom in geom_types) and\
+                    any("LineString" in geom for geom in geom_types)):
+                layer = QgsVectorLayer(f.name, processing.name, 'ogr')
+                layer.loadNamedStyle(get_style_name(processing.workflow_def,
+                                                    layer,
+                                                    processing.style_name))
+                write_options.layerName = f"{processing.id_}"
+                # V3 returns two additional str values but they're not documented, so just discard them
+                error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(
+                    layer,
+                    str(output_path),
+                    transform,
+                    write_options
+                )
+                if layer.isValid():
+                    results_layers.append(layer)
+            # If there are multiple results layers with different geometry types
+            else:
+                # Save polygon layer
+                polygon_uri = f"{f.name}|geometrytype=Polygon"
+                polygon_layer = QgsVectorLayer(polygon_uri, processing.id_ + "_polygon", "ogr")
+                polygon_layer.loadNamedStyle(get_style_name(processing.workflow_def,
+                                                            polygon_layer,
+                                                            processing.style_name))
+                write_options.layerName = f"{processing.name}_polygon"
+                error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(
+                    polygon_layer,
+                    str(output_path),
+                    transform,
+                    write_options)
+                if polygon_layer.isValid():
+                    results_layers.append(polygon_layer)
+                # Add linestring layer to existing file
+                linestring_uri = f"{f.name}|geometrytype=LineString"
+                linestring_layer = QgsVectorLayer(linestring_uri, processing.id_ + "_line", "ogr")
+                linestring_layer.loadNamedStyle(get_style_name(processing.workflow_def,
+                                                               linestring_layer,
+                                                               processing.style_name))
+                write_options.layerName = f"{processing.name}_line"
+                write_options.actionOnExistingFile = QgsVectorFileWriter.CreateOrOverwriteLayer
+                error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(
+                    linestring_layer,
+                    str(output_path),
+                    transform,
+                    write_options)
+                if linestring_layer.isValid():
+                    results_layers.append(linestring_layer)
+        # Otherwise, try saving as GeoJSON
         if error:
             # Give an info message
             text = self.tr('Failed to save results to GeoPackage. '
@@ -650,32 +704,6 @@ class ResultsLoader(QObject):
             except:
                 self.message_bar.pushWarning(self.tr("Error"), self.tr('Failed to save results to file.'))
                 return
-        # Load the results into QGIS
-        results_layers = []
-        if any("Polygon" in geom for geom in geom_types) and\
-           any("LineString" in geom for geom in geom_types): # e.g. loading roads and buildings from open data
-            # Load Polygons
-            polygon_uri = f"{output_path}|geometrytype=Polygon"
-            polygon_layer = QgsVectorLayer(polygon_uri, processing.name, "ogr")
-            polygon_layer.loadNamedStyle(get_style_name(processing.workflow_def,
-                                                        polygon_layer,
-                                                        processing.style_name))
-            if polygon_layer.isValid():
-                results_layers.append(polygon_layer)
-            # Load lineStrings
-            linestring_uri = f"{output_path}|geometrytype=LineString"
-            linestring_layer = QgsVectorLayer(linestring_uri, processing.name, "ogr")
-            linestring_layer.loadNamedStyle(get_style_name(processing.workflow_def,
-                                                           linestring_layer,
-                                                           processing.style_name))
-            if linestring_layer.isValid():
-                results_layers.append(linestring_layer)
-        else: # regular processing with one geometry type
-            results_layer = QgsVectorLayer(str(output_path), processing.name, 'ogr')
-            results_layer.loadNamedStyle(get_style_name(processing.workflow_def,
-                                                        layer,
-                                                        processing.style_name))
-            results_layers.append(results_layer)
         # Add the source raster (COG) if it has been created
         raster_url = processing.raster_layer.get('tileUrl')
         tile_json_url = processing.raster_layer.get("tileJsonUrl")
