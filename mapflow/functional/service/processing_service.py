@@ -11,6 +11,8 @@ from ..view.processing_view import ProcessingView
 from ..api.processing_api import ProcessingApi
 from ...schema.processing import ProcessingDTO, UpdateProcessingSchema
 from ...entity.status import ProcessingStatus
+from ...entity.billing import BillingType
+from ...entity.provider import MyImageryProvider, ImagerySearchProvider
 
 @dataclass
 class ProcessingHistory:
@@ -58,7 +60,8 @@ class ProcessingService(QObject):
                  result_loader,
                  plugin_version,
                  temp_dir,
-                 settings):
+                 settings,
+                 timer_interval):
         super().__init__()
         self.http = http
         self.server = server
@@ -67,14 +70,20 @@ class ProcessingService(QObject):
         self.plugin_version = plugin_version
         self.temp_dir = temp_dir
         self.view = ProcessingView(dlg=dlg)
-        self.api = ProcessingApi(http=http, server=server, dlg=dlg, iface=iface, result_loader=self.result_loader, plugin_version=self.plugin_version)
+        self.api = ProcessingApi(http=http,
+                                 server=server,
+                                 dlg=dlg,
+                                 iface=iface,
+                                 result_loader=self.result_loader,
+                                 plugin_version=self.plugin_version)
         self.settings = settings
 
         self.current_project_id: Optional[str] = None
         self.processings = set()
-        self.processings_history = ProcessingHistory() # local storage for active processings list
-        self.processing_fetch_timer = QTimer(self.dlg)
-        self.processing_fetch_timer.setInterval(self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
+        self.processings_history = None # ProcessingHistory() - local storage for active processings list
+        self.processing_fetch_timer = QTimer(dlg)
+        self.processing_fetch_timer.setInterval(timer_interval)
+        self.deleting_processings = None
 
     def set_current_project(self, project_id: str):
         """
@@ -237,4 +246,59 @@ class ProcessingService(QObject):
             else:
                 reason = self.tr('Processing cost is not available:\n{message}').format(message=message)
             self.view.disable_processing_start(reason, clear_area=False)
+
+    def delete_processings(self) -> None:
+        """Delete one or more processings from the server.
+
+        Asks for confirmation in a pop-up dialog. Multiple processings can be selected.
+        Is called by clicking the deleteProcessings ('Delete') button.
+        """
+        # Pause refreshing processings table to avoid conflicts
+        self.processing_fetch_timer.stop()
+        selected_ids = self.selected_processing_ids()
+        # Ask for confirmation if there are selected rows
+        if selected_ids and self.alert(
+                self.tr('Delete selected processings?'), QMessageBox.Question
+        ):
+            self.deleting_processings = {id_: None for id_ in selected_ids}
+            for id_ in selected_ids:
+                self.api.delete_processing(processing_id=id_,
+                                           callback=self.delete_processings_callback,
+                                           error_handler=self.delete_processings_error_handler,
+                                           callback_kwargs={"processing_id": id_},
+                                           error_handler_kwargs={"processing_id": id_})
+
+    def _finalize_processing_delete(self):
+        self.view.delete_processings_from_table([key for key, value in self.deleting_processings.items() if value])
+        # todo: save and report error responses?
+        self.report_http_error(self.tr(f"Failed to remove processings {[key for key, value in self.deleting_processings.items() if value is False]} "))
+        self.processing_fetch_timer.start()
+        self.deleting_processings = None
+
+
+    def delete_processings_callback(self,
+                                    _: QNetworkReply,
+                                    processing_id: str) -> None:
+        """Delete processings from the table after they've been deleted from the server.
+
+        :param id_: ID of the deleted processing.
+        """
+        self.deleting_processings[processing_id] = True
+        if any(status is None for status in self.deleting_processings.values()):
+            pass
+        else:
+            self._finalize_processing_delete()
+
+    def delete_processings_error_handler(self,
+                                         _: QNetworkReply,
+                                         processing_id: str) -> None:
+        """Error handler for processing deletion request.
+
+        :param response: The HTTP response.
+        """
+        self.deleting_processings[processing_id] = False
+        if any(status is None for status in self.deleting_processings.values()):
+            pass
+        else:
+            self._finalize_processing_delete()
 
