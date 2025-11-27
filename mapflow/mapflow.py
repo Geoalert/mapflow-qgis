@@ -48,7 +48,6 @@ from .entity.provider import (UsersProvider,
                               ImagerySearchProvider,
                               MyImageryProvider,
                               ProviderInterface)
-from mapflow.schema.workflow_def import WorkflowDef
 from .errors import (ProcessingInputDataMissing,
                      BadProcessingInput,
                      PluginError,
@@ -70,7 +69,8 @@ from .schema import (PostSourceSchema,
                      ProviderReturnSchema,
                      ImageCatalogRequestSchema,
                      ImageCatalogResponseSchema,
-                     PostProcessingSchemaV2)
+                     PostProcessingSchemaV2,
+                     WorkflowDef)
 from .schema.catalog import PreviewType, ProductType
 from .schema.project import MapflowProject, UserRole
 
@@ -197,13 +197,27 @@ class Mapflow(QObject):
                                                        temp_dir=self.temp_dir
                                                        )
 
-        self.data_catalog_service = DataCatalogService(self.http, self.server, self.dlg, self.iface, self.result_loader, self.plugin_version, self.temp_dir)
+        self.data_catalog_service = DataCatalogService(self.http,
+                                                       self.server,
+                                                       self.dlg,
+                                                       self.iface,
+                                                       self.result_loader,
+                                                       self.plugin_version,
+                                                       self.temp_dir)
         self.data_catalog_controller = DataCatalogController(self.dlg, self.data_catalog_service)
 
         self.project_service = ProjectService(self.http, self.server, self.settings, self.dlg)
         self.project_service.projectsUpdated.connect(self.update_projects)
 
-        self.processing_service = ProcessingService(self.http, self.server)
+        self.processing_service = ProcessingService(self.http,
+                                                    self.server,
+                                                    self.dlg,
+                                                    self.iface,
+                                                    self.result_loader,
+                                                    self.plugin_version,
+                                                    self.temp_dir,
+                                                    self.settings,
+                                                    self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
         # load providers from settings
         errors = []
         try:
@@ -244,7 +258,7 @@ class Mapflow(QObject):
         self.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
         # Processings
         self.dlg.processingsTable.cellDoubleClicked.connect(self.load_results)
-        self.dlg.deleteProcessings.clicked.connect(self.delete_processings)
+        self.dlg.deleteProcessings.clicked.connect(self.processing_service.delete_processings)
         self.dlg.filterProcessings.textChanged.connect(self.dlg.filter_processings_table)
         # Processings ratings
         self.dlg.processingsTable.itemSelectionChanged.connect(self.enable_feedback)
@@ -1818,44 +1832,6 @@ class Mapflow(QObject):
         self.dlg.processingProblemsLabel.setPalette(self.dlg.default_palette)
         self.dlg.processingProblemsLabel.setText(self.tr("Processsing cost: {cost} credits").format(cost=response_data))
         self.dlg.startProcessing.setEnabled(True)
-
-    def delete_processings(self) -> None:
-        """Delete one or more processings from the server.
-
-        Asks for confirmation in a pop-up dialog. Multiple processings can be selected.
-        Is called by clicking the deleteProcessings ('Delete') button.
-        """
-        # Pause refreshing processings table to avoid conflicts
-        self.processing_fetch_timer.stop()
-        selected_ids = self.selected_processing_ids()
-        # Ask for confirmation if there are selected rows
-        if selected_ids and self.alert(
-                self.tr('Delete selected processings?'), QMessageBox.Question
-        ):
-            for id_ in selected_ids:
-                self.http.delete(
-                    url=f'{self.server}/processings/{id_}',
-                    callback=self.delete_processings_callback,
-                    callback_kwargs={'id_': id_},
-                    error_handler=self.delete_processings_error_handler
-                )
-
-    def delete_processings_callback(self, _: QNetworkReply, id_: str) -> None:
-        """Delete processings from the table after they've been deleted from the server.
-
-        :param id_: ID of the deleted processing.
-        """
-        row = self.dlg.processingsTable.findItems(id_, Qt.MatchExactly)[0].row()
-        self.dlg.processingsTable.removeRow(row)
-        self.processing_fetch_timer.start()
-
-    def delete_processings_error_handler(self,
-                                         response: QNetworkReply) -> None:
-        """Error handler for processing deletion request.
-
-        :param response: The HTTP response.
-        """
-        self.report_http_error(response, self.tr("Error deleting a processing"))
 
     def check_processing_ui(self, allow_empty_name=False):
         processing_name = self.dlg.processingName.text()

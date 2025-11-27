@@ -3,7 +3,7 @@ from uuid import UUID
 from PyQt5.QtCore import Qt, QCoreApplication
 from PyQt5.QtWidgets import QAbstractItemView, QTableWidgetItem
 from PyQt5.QtGui import QColor
-from mapflow.functional.view.main_dialog import MainDialog
+from ...dialogs.main_dialog import MainDialog
 from ...schema.processing import ProcessingDTO, ProcessingUIParams
 from ...config import config
 
@@ -139,3 +139,9 @@ class ProcessingView:
         
         # Processing ID not found in table
         return False
+
+    def delete_processings_from_table(self, processing_ids):
+        rows = [self.dlg.processingsTable.findItems(id_, Qt.MatchExactly)[0].row() for id_ in processing_ids]
+        rows.sort(reverse=True)
+        for row in rows:
+            self.dlg.processingsTable.removeRow(row)

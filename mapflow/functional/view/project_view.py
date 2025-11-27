@@ -63,7 +63,7 @@ class ProjectView(QObject):
         self.dlg.projectsTable.setRowCount(len(projects))
         self.dlg.projectsTable.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.dlg.projectsTable.setSelectionBehavior(QAbstractItemView.SelectRows)
-        for row, project in enumerate(projects):
+        for row, project in enumerate(projects.values()):
             id_item = QTableWidgetItem()
             id_item.setData(Qt.DisplayRole, project.id)
             self.dlg.projectsTable.setItem(row, 0, id_item)
