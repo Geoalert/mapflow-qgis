@@ -1,22 +1,19 @@
 import sys
 from pathlib import Path
 from typing import Iterable, Optional, List
-from datetime import datetime
 
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette
-from PyQt5.QtWidgets import (QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton, 
-                             QAction, QMenu, QAbstractItemView, QHeaderView, QVBoxLayout, QButtonGroup, QTableWidget)
+from PyQt5.QtWidgets import (QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton,
+                             QAction, QMenu, QAbstractItemView)
 from qgis.core import QgsMapLayerProxyModel, QgsSettings
 
 from . import icons
 from ..config import config, ConfigColumns
-from ..entity.billing import BillingType
+from ..schema import BillingType, UserRole
 from ..entity.provider import ProviderInterface
 from ..functional import helpers
-from ..schema.project import MapflowProject, UserRole
-from ..schema.catalog import ProductType
 
 ui_path = Path(__file__).parent/'static'/'ui'
 
@@ -240,8 +237,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         """
         set the UI elements according to user's billing type
         """
-        credits_used = billing_type == billing_type.credits
-        balance_visible = billing_type != billing_type.none
+        credits_used = billing_type == BillingType.credits
+        balance_visible = billing_type != BillingType.none
 
         self.topUpBalanceButton.setVisible(credits_used)
         self.labelCoins_1.setVisible(False)  # credits_used

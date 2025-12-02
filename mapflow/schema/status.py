@@ -5,7 +5,7 @@ from typing import Optional
 
 from PyQt5.QtCore import QObject
 
-from ..schema.base import Serializable, SkipDataClass
+from .base import Serializable, SkipDataClass
 
 
 class ProcessingStatusDict(QObject):

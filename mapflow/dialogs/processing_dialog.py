@@ -3,9 +3,8 @@ from pathlib import Path
 from PyQt5 import uic
 from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 
-from ..entity.processing import Processing
 from .icons import plugin_icon
-from ..schema.processing import UpdateProcessingSchema
+from ..schema.processing import UpdateProcessingSchema, ProcessingDTO
 
 ui_path = Path(__file__).parent/'static'/'ui'
 
@@ -27,7 +26,7 @@ class UpdateProcessingDialog(*uic.loadUiType(ui_path/'processing_dialog.ui')):
             self.ok.setEnabled(True)
             self.ok.setToolTip("")
 
-    def setup(self, processing: Processing):
+    def setup(self, processing: ProcessingDTO):
         if not processing:
             raise TypeError("Can edit only existing processing!")
         self.setWindowTitle(self.tr("Edit processing {}").format(processing.name))

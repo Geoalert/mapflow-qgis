@@ -52,3 +52,6 @@ class ErrorMessage(QObject):
                                   '\n Contact us to resolve the issue! help@geoalert.io').format(exception=str(e),
                                                                                                  code=self.code)
         return message
+    
+    def __reduce__(self):
+        return (self.__class__, (self.code, self.parameters, self.message))

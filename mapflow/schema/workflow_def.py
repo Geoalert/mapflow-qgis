@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional, List
 
-from mapflow.schema import SkipDataClass
+from .base import SkipDataClass
 
 
 @dataclass

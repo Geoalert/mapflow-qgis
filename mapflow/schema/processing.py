@@ -3,12 +3,13 @@ from dataclasses import dataclass, fields
 from datetime import datetime, timedelta
 from typing import Optional, Mapping, Any, Union, Iterable, List
 from uuid import UUID
+
 from .base import SkipDataClass, Serializable
-from ..entity.provider.provider import SourceType
-from ..entity.status import ProcessingStatus, ProcessingReviewStatus
-from ..errors import ErrorMessage
-from ..schema.layer import RasterLayer, VectorLayer
+from .status import ProcessingStatus, ProcessingReviewStatus
+from .layer import RasterLayer, VectorLayer
 from .workflow_def import WorkflowDef
+from ..entity.provider.provider import SourceType
+from ..errors import ErrorMessage
 
 @dataclass
 class PostSourceSchema(Serializable, SkipDataClass):
@@ -114,7 +115,9 @@ class ProcessingParams(Serializable, SkipDataClass):
                         UserDefinedParams]
     
     @classmethod
-    def from_dict(cls, params_dict: dict):
+    def from_dict(cls, params_dict: Optional[dict]):
+        if not params_dict:
+            return None
         clsf = [f.name for f in fields(cls)]
         processing_params = cls(**{k: v for k, v in params_dict.items() if k in clsf})
         source_params = processing_params.sourceParams
@@ -167,32 +170,63 @@ class ProcessingDTO(Serializable, SkipDataClass):
     rasterLayer: RasterLayer
     vectorLayer: VectorLayer
     messages: list[ErrorMessage]
-
-    percent_completed: int
-    review_status: ProcessingReviewStatus
-    in_review_until: datetime
     params: ProcessingParams
     blocks: List[BlockOption]
 
+    percentCompleted: Optional[int] = None
+    reviewStatus: Optional[ProcessingReviewStatus] = None
+
     def __post_init__(self):
-        self.review_status = ProcessingReviewStatus(self.review_status)
         self.status = ProcessingStatus(self.status)
         self.created = datetime.strptime(self.created, '%Y-%m-%dT%H:%M:%S.%f%z').astimezone()
         self.params = ProcessingParams.from_dict(self.params)
         self.blocks = [BlockOption.from_dict(block) for block in self.blocks]
         self.workflowDef = WorkflowDef.from_dict(self.workflowDef)
         self.messages = [ErrorMessage.from_response(message) for message in self.messages]
+        self.rasterLayer = RasterLayer.from_dict(self.rasterLayer)
+        self.vectorLayer = VectorLayer.from_dict(self.vectorLayer)
+        if self.reviewStatus is None:
+            self.reviewStatus = ProcessingReviewStatus()
+        else:
+            self.reviewStatus = ProcessingReviewStatus.from_dict(self.reviewStatus)
 
     @property
     def review_expires(self):
-        if not isinstance(self.in_review_until, datetime)\
-                or not self.review_status.is_in_review:
+        if not isinstance(self.reviewStatus.inReviewUntil, datetime)\
+                or not self.reviewStatus.is_in_review:
             return False
         now = datetime.now().astimezone()
         one_day = timedelta(1)
-        return self.in_review_until - now < one_day
+        return self.reviewStatus.inReviewUntil - now < one_day
+
+    @property
+    def reviewUntil(self):
+        """
+        backwards compatibility
+        """
+        return self.reviewStatus.inReviewUntil
+
+    @property
+    def is_final_state(self):
+        """
+        means that the processing is reached final state and can't change it without user interaction
+        """
+        return  self.status.is_terminal and not self.reviewStatus.is_not_accepted
 
     def error_message(self, raw=False):
-        if not self.errors:
+        if not self.messages:
             return ""
-        return "\n".join([error.to_str(raw=raw) for error in self.errors])
+        return "\n".join([error.to_str(raw=raw) for error in self.messages])
+
+    def as_processing_table_dict(self):
+        return {
+            "name": self.name,
+            "workflowDef": self.workflowDef.name,
+            "status": self.status.value,
+            "percentCompleted": self.percentCompleted,
+            "aoiArea": self.aoiArea/1000000,
+            "cost": self.cost,
+            "created": self.created.strftime('%Y-%m-%d %H:%M'),
+            "reviewUntil": self.reviewUntil,
+            "id": self.id
+        }

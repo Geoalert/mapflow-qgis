@@ -2,6 +2,7 @@ import dataclasses
 import json
 from dataclasses import dataclass, fields
 from datetime import datetime
+from typing import Optional
 
 
 @dataclass
@@ -12,8 +13,11 @@ class SkipDataClass:
 
     This is abstract class and will do nothing, as it has no fields
     """
+
     @classmethod
-    def from_dict(cls, params_dict: dict):
+    def from_dict(cls, params_dict: Optional[dict]):
+        if not params_dict:
+            return None
         clsf = [f.name for f in fields(cls)]
         return cls(**{k: v for k, v in params_dict.items() if k in clsf})
 

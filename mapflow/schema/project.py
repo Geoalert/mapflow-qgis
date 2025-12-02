@@ -37,6 +37,15 @@ class ShareProject(SkipDataClass):
         if self.users:
             self.users = [ShareProjectUser.from_dict(item) for item in self.users]
 
+    def get_user_role(self, email):
+        for owner in self.owners:
+            if owner.email == email:
+                 return UserRole.owner
+        for user in self.users:
+            if user.email == email:
+                return UserRole(user.role)
+
+
 @dataclass
 class MapflowProjectInfo(SkipDataClass):
     id: str
@@ -49,8 +58,8 @@ class MapflowProject(SkipDataClass):
     name: str
     isDefault: bool
     description: Optional[str]
-    workflowDefs: Optional[List[dict]] = None
-    shareProject: Optional[Dict[str, ShareProject]] = None
+    workflowDefs: Optional[dict] = None
+    shareProject: Optional[ShareProject] = None
     updated: Optional[datetime] = None
     created: Optional[datetime] = None
     processingCounts: Optional[Dict[str, int]] = None
@@ -58,14 +67,14 @@ class MapflowProject(SkipDataClass):
 
     def __post_init__(self):
         if self.workflowDefs:
-            self.workflowDefs = [WorkflowDef.from_dict(item) for item in self.workflowDefs]
+            self.workflowDefs = {item['id']: WorkflowDef.from_dict(item) for item in self.workflowDefs}
         else:
-            self.workflowDefs = []
+            self.workflowDefs = {}
 
         if self.shareProject:
             self.shareProject = ShareProject.from_dict(self.shareProject)
         else:
-            self.shareProject = []
+            self.shareProject = None
         if self.created and self.updated:
             self.created = datetime.fromisoformat(self.created.replace("Z", "+00:00"))
             self.updated = datetime.fromisoformat(self.updated.replace("Z", "+00:00"))
@@ -110,3 +119,7 @@ class ProjectsResult(SkipDataClass):
     results: Optional[List[MapflowProject]] = None
     total: int = 0
     count: int = None
+
+    def __post_init__(self):
+        if self.results:
+            self.results = [MapflowProject.from_dict(proj) for proj in self.results]

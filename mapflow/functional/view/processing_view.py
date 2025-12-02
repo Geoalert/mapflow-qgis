@@ -1,11 +1,12 @@
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 from PyQt5.QtCore import Qt, QCoreApplication
-from PyQt5.QtWidgets import QAbstractItemView, QTableWidgetItem
+from PyQt5.QtWidgets import QAbstractItemView, QTableWidgetItem, QMessageBox
 from PyQt5.QtGui import QColor
 from ...dialogs.main_dialog import MainDialog
 from ...schema.processing import ProcessingDTO, ProcessingUIParams
 from ...config import config
+from ..service.alert_service import alert
 
 class ProcessingView:
     """
@@ -38,7 +39,7 @@ class ProcessingView:
             name = self.dlg.processingName or None,
             wd_name = self.dlg.modelCombo.currentText(),
             data_source_index = self.dlg.providerIndex(),
-
+            # todo: add other params
         )
 
     def clear_processing_name(self, name):
@@ -53,7 +54,7 @@ class ProcessingView:
     def create_table_items(self, processing: ProcessingDTO):
         table_items = []
         set_color = False
-        processing_dict = processing.as_dict()
+        processing_dict = processing.as_processing_table_dict()
         if processing.status.is_ok and processing.review_expires:
             # setting color for close review
             set_color = True
@@ -63,11 +64,11 @@ class ProcessingView:
             table_item.setData(Qt.DisplayRole, processing_dict[attr])
             if processing.status.is_failed:
                 table_item.setToolTip(processing.error_message(raw=config.SHOW_RAW_ERROR))
-            elif processing.in_review_until:
+            elif processing.reviewUntil:
                 table_item.setToolTip(self.tr("Please review or accept this processing until {}."
                                               " Double click to add results"
                                               " to the map").format(
-                    processing.in_review_until.strftime('%Y-%m-%d %H:%M') if processing.in_review_until else ""))
+                    processing.reviewUntil.strftime('%Y-%m-%d %H:%M') if processing.reviewUntil else ""))
             elif processing.status.is_ok:
                 table_item.setToolTip(self.tr("Double click to add results to the map."
                                               ))
@@ -76,10 +77,10 @@ class ProcessingView:
             table_items.append(table_item)
         return table_items
 
-    def update_processing_table(self, processings: dict[UUID, ProcessingDTO]):
+    def update_processing_table(self, processings: List[ProcessingDTO]):
         # UPDATE THE TABLE
         # Memorize the selection to restore it after table update
-        selected_processings = self.dlg.selected_processing_ids()
+        selected_processings = self.selected_processing_ids()
         # Explicitly clear selection since resetting row count won't do it
         self.dlg.processingsTable.clearSelection()
         # Temporarily enable multi selection so that selectRow won't clear previous selection
@@ -88,7 +89,7 @@ class ProcessingView:
         self.dlg.processingsTable.setSortingEnabled(False)
         self.dlg.processingsTable.setRowCount(len(processings))
         # Fill out the table
-        for row, proc in enumerate(processings.values()):
+        for row, proc in enumerate(processings):
             table_items = self.create_table_items(processing=proc)
             for col, item in enumerate(table_items):
                 self.dlg.processingsTable.setItem(row, col, item)
@@ -140,8 +141,87 @@ class ProcessingView:
         # Processing ID not found in table
         return False
 
+    def set_table_loading(self):
+        table_item = QTableWidgetItem(self.tr("Loading..."))
+        table_item.setToolTip(self.tr('Fetching your processings from server, please wait'))
+        self.dlg.processingsTable.setRowCount(1)
+        self.dlg.processingsTable.setItem(0, 0, table_item)
+        for column in range(1, self.dlg.processingsTable.columnCount()):
+            empty_item = QTableWidgetItem("")
+            self.dlg.processingsTable.setItem(0, column, empty_item)
+
+
     def delete_processings_from_table(self, processing_ids):
         rows = [self.dlg.processingsTable.findItems(id_, Qt.MatchExactly)[0].row() for id_ in processing_ids]
         rows.sort(reverse=True)
         for row in rows:
             self.dlg.processingsTable.removeRow(row)
+
+    def set_processing_cost(self, cost: int):
+        self.dlg.processingProblemsLabel.setPalette(self.dlg.default_palette)
+        self.dlg.processingProblemsLabel.setText(self.tr("Processsing cost: {cost} credits").format(cost=cost))
+        self.dlg.startProcessing.setEnabled(True)
+
+    def alert_failed_processings(self, failed_processings):
+        if not failed_processings:
+            return
+            # this means that some of processings have failed since last update and the limit must have been returned
+        if len(failed_processings) == 1:
+            proc = failed_processings[0]
+            alert(
+                proc.name +
+                self.tr(' failed with error:\n') + proc.error_message(self.config.SHOW_RAW_ERROR),
+                QMessageBox.Critical,
+                blocking=False)
+        elif 1 < len(failed_processings) < 10:
+            # If there are more than one failed processing, we will not
+            alert(self.tr('{} processings failed: \n {} \n '
+                               'See tooltip over the processings table'
+                               ' for error details').format(len(failed_processings),
+                                                            '\n'.join((proc.name for proc in failed_processings))),
+                       QMessageBox.Critical,
+                       blocking=False)
+        else:  # >= 10
+            alert(self.tr(
+                '{} processings failed: \n '
+                'See tooltip over the processings table for error details').format(len(failed_processings)),
+                       QMessageBox.Critical,
+                       blocking=False)
+
+    def alert_finished_processings(self, finished_processings):
+        if not finished_processings:
+            return
+        if len(finished_processings) == 1:
+            # Print error message from first failed processing
+            proc = finished_processings[0]
+            alert(
+                proc.name +
+                self.tr(' finished. Double-click it in the table to download the results.'),
+                QMessageBox.Information,
+                blocking=False  # don't repeat if user doesn't close the alert
+            )
+        elif 1 < len(finished_processings) < 10:
+            # If there are more than one failed processing, we will not
+            alert(self.tr(
+                '{} processings finished: \n {} \n '
+                'Double-click it in the table '
+                'to download the results').format(len(finished_processings),
+                                                  '\n'.join((proc.name for proc in finished_processings))),
+                       QMessageBox.Information,
+                       blocking=False)
+        else:  # >= 10
+            alert(self.tr(
+                '{} processings finished. \n '
+                'Double-click it in the table to download the results').format(len(finished_processings)),
+                       QMessageBox.Information,
+                       blocking=False)
+
+    def selected_processing_ids(self, limit=None):
+        # add unique selected rows
+        selected_rows = list(set(index.row() for index in self.dlg.processingsTable.selectionModel().selectedIndexes()))
+        if not selected_rows:
+            return []
+        pids = [self.dlg.processingsTable.item(row,
+                                               config.PROCESSING_TABLE_ID_COLUMN_INDEX).text()
+                for row in selected_rows[:limit]]
+        return pids

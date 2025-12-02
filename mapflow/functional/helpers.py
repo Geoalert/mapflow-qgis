@@ -10,7 +10,7 @@ from qgis.core import (
 )
 
 from ..config import config
-from ..entity.billing import BillingType
+from ..schema.billing import BillingType
 from ..schema.project import UserRole
 
 PROJECT = QgsProject.instance()

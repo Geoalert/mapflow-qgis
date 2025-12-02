@@ -1,9 +1,12 @@
+from typing import List
+
 from PyQt5.QtCore import QObject, Qt
 from PyQt5.QtWidgets import QWidget, QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView
 
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs import icons
 from ...config import ConfigColumns
+from ...schema import WorkflowDef
 from ...schema.project import MapflowProject, ProjectSortBy, ProjectSortOrder
 
 
@@ -54,7 +57,7 @@ class ProjectView(QObject):
         self.dlg.projectsNextPageButton.setEnabled(enable)
         self.dlg.projectsPreviousPageButton.setEnabled(enable) 
         
-    def setup_projects_table(self, projects: dict[str, MapflowProject]):
+    def setup_projects_table(self, projects: List[MapflowProject]):
         if not projects:
             return
         # First column is ID, hidden; second is name
@@ -63,7 +66,7 @@ class ProjectView(QObject):
         self.dlg.projectsTable.setRowCount(len(projects))
         self.dlg.projectsTable.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.dlg.projectsTable.setSelectionBehavior(QAbstractItemView.SelectRows)
-        for row, project in enumerate(projects.values()):
+        for row, project in enumerate(projects):
             id_item = QTableWidgetItem()
             id_item.setData(Qt.DisplayRole, project.id)
             self.dlg.projectsTable.setItem(row, 0, id_item)
@@ -95,6 +98,16 @@ class ProjectView(QObject):
         self.dlg.projectsTable.horizontalHeader().setStretchLastSection(True)
         self.dlg.projectsTable.setSelectionMode(QAbstractItemView.SingleSelection)
         self.dlg.projectsTable.setSortingEnabled(True) # enable sorting by header click
+
+    def clear_projects_table(self):
+        self.dlg.projectsTable.clear()
+        # Add a row with an error message to projects table
+        table_item = QTableWidgetItem(self.tr("No project that meets specified criteria was found"))
+        self.dlg.projectsTable.setRowCount(1)
+        self.dlg.projectsTable.setColumnCount(2)
+        self.dlg.projectsTable.setItem(0, 1, table_item)
+        self.dlg.projectsTable.setHorizontalHeaderLabels(["ID", self.tr("Project")])
+        return
 
     def select_project(self, project_id):
         try:
@@ -131,3 +144,16 @@ class ProjectView(QObject):
         else: # Z-A, Newest first, Updated recently
             sort_order = ProjectSortOrder.descending
         return sort_by.value, sort_order.value
+
+    def setup_workflow_defs(self,
+                            workflow_defs: dict[str, WorkflowDef],
+                            default_model_name,
+                            ):
+        self.dlg.modelCombo.clear()
+        self.dlg.modelCombo.addItems(wd.name for wd in workflow_defs.values())
+        self.dlg.modelCombo.setCurrentText(default_model_name)
+        self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex()) # ??
+
+    @property
+    def projects_filter(self):
+        return self.dlg.filterProjects.text()
