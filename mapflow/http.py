@@ -14,12 +14,14 @@ class Http(QObject):
     """"""
 
     def __init__(self,
+                 server: str,
                  plugin_version: str,
                  default_error_handler: Callable) -> None:
         """
         oauth_id is defined if we are using oauth2 configuration
         """
         self.oauth_id = None
+        self.server = server
         self.plugin_version = plugin_version
         self._basic_auth = b''
         self._oauth = None
@@ -120,7 +122,8 @@ class Http(QObject):
     def send_request(
             self,
             method: Callable,
-            url: str,
+            url: Optional[str] = None,
+            path: Optional[str] = None,
             headers: dict = None,
             auth: bytes = None,
             callback: Callable = None,
@@ -132,6 +135,14 @@ class Http(QObject):
             body: Union[QHttpMultiPart, bytes] = None
     ) -> QNetworkReply:
         """Send an actual request."""
+        if url is not None and path is not None:
+            raise ValueError("Only one of url/path can be specified")
+        elif url is None and path is None:
+            raise ValueError("url or path must be specified")
+        elif path is not None:
+            # relative path that is bound to the self.server, allowes to NOT repeat the server loaction
+            url = f"{self.server}/{path.lstrip('/')}"
+
         request = QNetworkRequest(QUrl(url))
         if isinstance(body, bytes):
             request.setHeader(QNetworkRequest.ContentTypeHeader, 'application/json')

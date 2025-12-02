@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from mapflow.schema import SkipDataClass
+from .base import SkipDataClass
 
 
 @dataclass

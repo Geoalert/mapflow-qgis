@@ -9,14 +9,12 @@ from ...http import Http
 
 class ProjectApi(QObject):
     def __init__(self,
-                 http: Http,
-                 server: str):
+                 http: Http):
         super().__init__()
-        self.server = server
         self.http = http
 
     def create_project(self, project: CreateProjectSchema, callback: Callable):
-        self.http.post(url=f"{self.server}/projects",
+        self.http.post(path="projects",
                        body=project.as_json().encode(),
                        headers={},
                        callback=callback,
@@ -24,14 +22,14 @@ class ProjectApi(QObject):
                        timeout=5)
         
     def delete_project(self, project_id, callback: Callable):
-        self.http.delete(url=f"{self.server}/projects/{project_id}",
+        self.http.delete(path=f"projects/{project_id}",
                          headers={},
                          callback=callback,
                          use_default_error_handler=True,
                          timeout=5)
     
     def update_project(self, project_id, project: UpdateProjectSchema, callback: Callable):
-        self.http.put(url=f"{self.server}/projects/{project_id}",
+        self.http.put(path=f"projects/{project_id}",
                       body=project.as_json().encode(),
                       headers={},
                       callback=callback,
@@ -39,7 +37,7 @@ class ProjectApi(QObject):
                       timeout=5)
 
     def get_project(self, project_id, callback: Callable, error_handler: Callable):
-        self.http.get(url=f"{self.server}/projects/{project_id}",
+        self.http.get(path=f"projects/{project_id}",
                       headers={},
                       callback=callback,
                       use_default_error_handler= False,
@@ -49,7 +47,7 @@ class ProjectApi(QObject):
     def get_projects(self, 
                      request_body: ProjectsRequest, 
                      callback: Callable):
-        self.http.post(url=f"{self.server}/projects/page",
+        self.http.post(path="projects/page",
                        headers={},
                        body=request_body.as_json().encode(),
                        callback=callback,

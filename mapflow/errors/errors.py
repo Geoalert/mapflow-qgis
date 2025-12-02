@@ -61,3 +61,6 @@ class ErrorMessage(QObject):
             return self.raw_message
         else:
             return self.message or default
+    
+    def __reduce__(self):
+        return (self.__class__, (self.code, self.parameters, self.message))
