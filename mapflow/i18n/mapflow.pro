@@ -10,4 +10,4 @@ SOURCES = ../mapflow.py ../errors/data_errors.py ../errors/error_message_list.py
           ../functional/view/data_catalog_view.py ../functional/api/data_catalog_api.py ../dialogs/mosaic_dialog.py ../config.py\
           ../dialogs/project_dialog.py ../functional/helpers.py ../functional/view/project_view.py ../dialogs/processing_dialog.py\
           ../dialogs/processing_details_dialog.py ../dialogs/image_dialog.py ../dialogs/confirm_processing_start_dialog.py
-TRANSLATIONS = mapflow_ru.ts
+TRANSLATIONS = mapflow_ru.ts mapflow_es.ts mapflow_pt.ts
