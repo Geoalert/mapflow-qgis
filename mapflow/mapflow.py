@@ -2486,51 +2486,16 @@ class Mapflow(QObject):
                                 crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857"),
                                 image_id: str = ""):
         """
-        We take corner points of a polygon that represents image footprint
-        and put their coordinates as GCPs (ground control points)
+        Display image preview using Ground Control Points from footprint corners.
+        Delegates to ResultsLoader.display_preview_with_gcp().
         """
-        # Get a list of coordinate pairs
-        corners = self.result_loader.get_footprint_corners(footprint)
-        # Get non-referenced raster and set its projection
-        with open(self.temp_dir/os.urandom(32).hex(), mode='wb') as f:
-            f.write(response.readAll().data())
-        preview = gdal.Open(f.name)
-        preview.SetProjection(crs.toWkt())
-        # Specify (inter)cardinal directions
-            # Right now it is implemented just by points order in a list
-            # We assume that points go from NE in clockwise direcrtion
-            # If we won't find a different and more accurate solution
-            # I would suggest creating a dictionary, storing x and y coordinates as values
-            # Then we can check min and max coords from bounding box
-            # And scecify that the point that has the same x as xmin is SW, xmax - NE,
-            # Same y as ymin - SE, ymax - NW
-        # Assuming raster is n*m size, where n is width and m is height, we get:
-            # NW is a 1 point in a list (clockwise) and 0,0 - in our image
-            # NE - 2 and n,0
-            # SW - 4 and 0,m
-            # SE - 3 and n,m
-        # Create a list of GCPS
-        # Where each GCP is (x, y, z, pixel(n or width), line(m or height))
-        gcp_list = [
-        gdal.GCP(corners[0][0], corners[0][1], 0, 0, 0),
-        gdal.GCP(corners[1][0], corners[1][1], 0, preview.RasterXSize-1, 0),
-        gdal.GCP(corners[3][0], corners[3][1], 0, 0, preview.RasterYSize-1),
-        gdal.GCP(corners[2][0], corners[2][1], 0, preview.RasterXSize-1, preview.RasterYSize-1)
-        ]
-        # Set control points, clear cache, add preview layer
-        preview.SetGCPs(gcp_list, crs.toWkt())
-        preview.FlushCache()
-        layer = QgsRasterLayer(f.name, f"{image_id} preview", 'gdal')
-        # If (for some reason) transparent band is not set automatically, but it exists, set it
-        if layer.bandCount() == 4:
-            if layer.renderer().alphaBand() != 4:
-                layer.renderer().setAlphaBand(4)
-        # Otherwise, for each band set "0" as No Data value
-        else:
-            for band in range(layer.bandCount()):
-                layer.dataProvider().setNoDataValue(band, 0)
-        self.result_loader.add_layer(layer)
-        self.result_loader.add_aoi_to_preview()
+        self.result_loader.display_preview_with_gcp(
+            response=response,
+            footprint=footprint,
+            crs=crs,
+            image_name=image_id,
+            add_aoi=True
+        )
 
     def preview_multiple_png(self,
                              response: QNetworkReply,
