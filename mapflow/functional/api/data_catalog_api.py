@@ -6,7 +6,7 @@ from uuid import UUID
 from PyQt5.QtCore import QObject, pyqtSignal, QFile, QIODevice
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
 from PyQt5.QtWidgets import QApplication, QProgressBar
-from qgis.core import QgsMapLayer, QgsRectangle
+from qgis.core import QgsMapLayer
 
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, ImageReturnSchema, MosaicUpdateSchema
 from ...http import Http, get_error_report_body, data_catalog_message_parser
@@ -297,14 +297,14 @@ class DataCatalogApi(QObject):
     
     def get_image_preview_l(self,
                             image: ImageReturnSchema,
-                            extent: QgsRectangle,
+                            footprint,
                             callback: Callable,
                             image_name: str = ""):
         self.http.get(url=image.preview_url_l,
                       callback=callback,
                       use_default_error_handler=False,
                       error_handler=self.image_preview_l_error_handler,
-                      callback_kwargs={"extent": extent,
+                      callback_kwargs={"footprint": footprint,
                                        "image_name": image_name}
                      )
 

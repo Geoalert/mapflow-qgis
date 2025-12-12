@@ -9,7 +9,7 @@ from PyQt5.QtCore import QObject, pyqtSignal, Qt
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply
 from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog, QAbstractItemView, QWidget
-from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsRasterLayer, QgsRectangle
+from qgis.core import QgsCoordinateReferenceSystem, QgsGeometry, QgsProject, QgsRasterLayer
 
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs.mosaic_dialog import CreateMosaicDialog, UpdateMosaicDialog
@@ -445,9 +445,9 @@ class DataCatalogService(QObject):
     def get_image_preview_l(self):
         try:
             image = self.selected_image()
-            extent = layer_utils.footprint_to_extent(image.footprint)
+            footprint = QgsGeometry.fromWkt(image.footprint)  # already in WGS84
             self.api.get_image_preview_l(image=image,
-                                         extent=extent,
+                                         footprint=footprint,
                                          callback=self.display_image_preview,
                                          image_name=image.filename)
         except AttributeError:
@@ -455,34 +455,24 @@ class DataCatalogService(QObject):
 
     def display_image_preview(self,
                               response: QNetworkReply,
-                              extent: QgsRectangle,
-                              crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857"),
+                              footprint: QgsGeometry,
+                              crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:4326"),
                               image_name: str = ""):
-        if not self.temp_dir:
-            self.view.alert(self.tr("Please, select existing output directory in the Settings tab"))
-            settings_tab = self.dlg.tabWidget.findChild(QWidget, "settingsTab")
-            self.dlg.tabWidget.setCurrentWidget(settings_tab) 
-            return
-        with open(Path(self.temp_dir)/os.urandom(32).hex(), mode='wb') as f:
-            f.write(response.readAll().data())
-        preview = gdal.Open(f.name)
-        pixel_xsize = extent.width() / preview.RasterXSize
-        pixel_ysize = extent.height() / preview.RasterYSize
-        preview.SetProjection(crs.toWkt())
-        preview.SetGeoTransform([
-            extent.xMinimum(),  # north-west corner x
-            pixel_xsize,  # pixel horizontal resolution (m)
-            0,  # x-axis rotation
-            extent.yMaximum(),  # north-west corner y
-            0,  # y-axis rotation
-            -pixel_ysize  # pixel vertical resolution (m)
-        ])
-        preview.FlushCache()
-        layer = QgsRasterLayer(f.name, f"preview {image_name}", 'gdal')
-        layer.setExtent(extent)
-        self.project.addMapLayer(layer)
-        self.iface.setActiveLayer(layer)
-        self.iface.zoomToActiveLayer()
+        """Display image preview using GCP-based georeferencing.
+
+        Uses ResultsLoader.display_preview_with_gcp() which handles rotated/skewed footprints correctly.
+        QGIS will reproject on-the-fly to match the project CRS.
+        """
+        layer = self.result_loader.display_preview_with_gcp(
+            response=response,
+            footprint=footprint,
+            crs=crs,
+            image_name=image_name,
+            add_aoi=False
+        )
+        if layer:
+            self.iface.setActiveLayer(layer)
+            self.iface.zoomToActiveLayer()
 
     def rename_image_callback(self, response: QNetworkReply):
         new_image = ImageReturnSchema.from_dict(json.loads(response.readAll().data()))
