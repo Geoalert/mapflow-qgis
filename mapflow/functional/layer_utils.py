@@ -346,13 +346,11 @@ class ResultsLoader(QObject):
         cloned_aoi.loadNamedStyle(os.path.join(str(Path(__file__).parents[1]), 'static', 'styles', 'aoi.qml'))
         self.add_layer(cloned_aoi, 0)
 
+
     def get_footprint_corners(self, footprint: QgsGeometry):
         """Extract corners from footprint and order them as [NW, NE, SE, SW].
-        
-        Uses quadrant-based detection relative to the polygon center to determine
-        which corner is which, regardless of the original point order in the geometry.
-        
-        Note: This assumes rotation < 45° (each corner stays in its natural quadrant).
+        We assume that the points are sent by the server in this particular order.
+        It is guaranteed by MyImagery server, and PROBABLY will be also like this for the imagery search
         """
         footprint_poly = footprint.asGeometryCollection()[0].asPolygon()  # in case it's a MultiPolygon
         if len(footprint_poly[0]) != 5:
@@ -362,30 +360,7 @@ class ResultsLoader(QObject):
         # Get all 4 corners (ignore the 5th closing point)
         points = [(footprint_poly[0][i].x(), footprint_poly[0][i].y()) for i in range(4)]
         
-        # Find center of bounding box
-        xs = [p[0] for p in points]
-        ys = [p[1] for p in points]
-        cx = (min(xs) + max(xs)) / 2
-        cy = (min(ys) + max(ys)) / 2
-        
-        # Classify each point by quadrant relative to center
-        nw = ne = se = sw = None
-        for p in points:
-            if p[0] <= cx and p[1] >= cy:  # left and top
-                nw = p
-            elif p[0] >= cx and p[1] >= cy:  # right and top
-                ne = p
-            elif p[0] >= cx and p[1] <= cy:  # right and bottom
-                se = p
-            elif p[0] <= cx and p[1] <= cy:  # left and bottom
-                sw = p
-        
-        # Check all corners were found
-        if None in (nw, ne, se, sw):
-            self.message_bar.pushInfo(self.plugin_name, self.tr('Preview is unavailable'))
-            return None
-        
-        return [nw, ne, se, sw]
+        return points
 
     def display_preview_with_gcp(self,
                                  response: QNetworkReply,
