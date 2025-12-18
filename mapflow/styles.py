@@ -70,7 +70,9 @@ def get_local_style_name_from_api(style_name: str, layer:QgsVectorLayer) -> Opti
             return "buildings_noclass"
     elif base_style == "forest":
         # modify forest style according to the layer properties (classification)
-        if "class_id" in layer.fields().names():
+        if layer.geometryType() == QgsWkbTypes.PointGeometry:
+            return "forest_crowns_points"
+        elif "class_id" in layer.fields().names():
             return "forest_with_heights"
         else:
             return "forest"
@@ -106,6 +108,7 @@ def get_local_style_name_from_wd_name(wd_name: str, layer: QgsVectorLayer) -> st
     # Land use
     if "building" in wd_name.lower() and "road" in wd_name.lower():
         name = 'landuse'
+
     # Buildings with heights
     elif "building" in wd_name.lower() and "height" in wd_name.lower():
         name = 'building_heights'
@@ -122,6 +125,9 @@ def get_local_style_name_from_wd_name(wd_name: str, layer: QgsVectorLayer) -> st
     elif "building" in wd_name.lower():
         name = 'buildings'
 
+    # Show crowns as points
+    elif name == "forest" and layer.geometryType() == QgsWkbTypes.PointGeometry:
+        name = "forest_crowns_points"
     # Show forest heights for new (updated) forest with block config
     elif name == "forest" and "class_id" in layer.fields().names():
         name = "forest_with_heights"
