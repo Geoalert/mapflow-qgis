@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from PyQt5 import uic
-from PyQt5.QtWidgets import QWidget
+from PyQt5.QtWidgets import QWidget, QApplication
 
 from .icons import plugin_icon
 
@@ -12,7 +12,8 @@ class ErrorMessageWidget(*uic.loadUiType(ui_path / 'error_message.ui')):
         """A message box notifying user about a plugin error, with a 'Send a report' button."""
         super().__init__(parent)
         self.setupUi(self)
-        self.setWindowIcon(plugin_icon)
+        self.setWindowIcon(QApplication.activeWindow().windowIcon())
+        self.setWindowTitle(QApplication.activeWindow().windowTitle())
         self.text.setText(text)
         if title:
             self.title.setText(title)

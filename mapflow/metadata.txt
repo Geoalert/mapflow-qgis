@@ -9,12 +9,17 @@ about=Mapflow provides AI models for automatic feature extraction from satellite
         - roads
         - construction sites
     For a step-by-step user guide, go to https://docs.mapflow.ai/api/qgis_mapflow#user-interface
-version=3.4.0
-experimental=True
+version=3.5.0
+experimental=False
 deprecated=False
 author=Geoalert
 email=hello@geoalert.io
 changelog:
+    3.5.0
+    - Translations to Chinese, Spanish and Portuguese
+    - Save results of all geometry types as one file's layers
+    - Tree crowns' style for forest
+    - Water objects' style for land use
     3.4.0
     - Imagery search:
         - Preview all images from search results
