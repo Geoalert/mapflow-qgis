@@ -346,17 +346,79 @@ class ResultsLoader(QObject):
         cloned_aoi.loadNamedStyle(os.path.join(str(Path(__file__).parents[1]), 'static', 'styles', 'aoi.qml'))
         self.add_layer(cloned_aoi, 0)
 
+
     def get_footprint_corners(self, footprint: QgsGeometry):
-        corners = []
-        footprint = footprint.asGeometryCollection()[0].asPolygon() # in case it's a MultiPolygon with only one polygon
-        if len(footprint[0]) != 5:
+        """Extract corners from footprint and order them as [NW, NE, SE, SW].
+        We assume that the points are sent by the server in this particular order.
+        It is guaranteed by MyImagery server, and PROBABLY will be also like this for the imagery search
+        """
+        footprint_poly = footprint.asGeometryCollection()[0].asPolygon()  # in case it's a MultiPolygon
+        if len(footprint_poly[0]) != 5:
             self.message_bar.pushInfo(self.plugin_name, self.tr('Preview is unavailable'))
-            return
-        for point in range(4):
-            pt = footprint[0][point]
-            coords = (pt.x(), pt.y())
-            corners.append(coords)
-        return corners
+            return None
+        
+        # Get all 4 corners (ignore the 5th closing point)
+        points = [(footprint_poly[0][i].x(), footprint_poly[0][i].y()) for i in range(4)]
+        
+        return points
+
+    def display_preview_with_gcp(self,
+                                 response: QNetworkReply,
+                                 footprint: QgsGeometry,
+                                 crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:3857"),
+                                 image_name: str = "",
+                                 add_aoi: bool = False) -> Optional[QgsRasterLayer]:
+        """Display image preview using Ground Control Points from footprint corners.
+
+        Works correctly for rotated/skewed footprints (non axis-aligned).
+        Uses GCPs instead of GeoTransform to handle any footprint orientation.
+
+        :param response: HTTP response containing the image data
+        :param footprint: QgsGeometry of the image footprint (polygon)
+        :param crs: Coordinate reference system for the preview
+        :param image_name: Name to use for the layer
+        :param add_aoi: Whether to add AOI overlay on top of the preview
+        :return: The created raster layer, or None if failed
+        """
+        corners = self.get_footprint_corners(footprint)
+        if not corners:
+            return None
+
+        with open(self.temp_dir / os.urandom(32).hex(), mode='wb') as f:
+            f.write(response.readAll().data())
+
+        preview = gdal.Open(f.name)
+        preview.SetProjection(crs.toWkt())
+
+        # GCPs map image pixel coordinates to ground coordinates
+        # corners order: [0]=NW, [1]=NE, [2]=SE, [3]=SW (clockwise from NW)
+        # pixel coords: (0,0)=NW, (width,0)=NE, (width,height)=SE, (0,height)=SW
+        gcp_list = [
+            gdal.GCP(corners[0][0], corners[0][1], 0, 0, 0),
+            gdal.GCP(corners[1][0], corners[1][1], 0, preview.RasterXSize - 1, 0),
+            gdal.GCP(corners[3][0], corners[3][1], 0, 0, preview.RasterYSize - 1),
+            gdal.GCP(corners[2][0], corners[2][1], 0, preview.RasterXSize - 1, preview.RasterYSize - 1)
+        ]
+
+        preview.SetGCPs(gcp_list, crs.toWkt())
+        preview.FlushCache()
+
+        layer = QgsRasterLayer(f.name, f"{image_name} preview", 'gdal')
+
+        # Handle transparency
+        if layer.bandCount() == 4:
+            if layer.renderer().alphaBand() != 4:
+                layer.renderer().setAlphaBand(4)
+        else:
+            for band in range(layer.bandCount()):
+                layer.dataProvider().setNoDataValue(band, 0)
+
+        self.add_layer(layer)
+
+        if add_aoi:
+            self.add_aoi_to_preview()
+
+        return layer
   
     def georeference_preview_part(self,
                                   response: QNetworkReply,
