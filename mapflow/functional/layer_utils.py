@@ -617,12 +617,12 @@ class ResultsLoader(QObject):
         if error:
             # Give an info message
             text = self.tr('Failed to save results to GeoPackage. '
-                        'Error code: {code}. '.format(code=error))
+                           'Error code: {code}. '.format(code=error))
             if msg:
                 text += self.tr('Message: {message}. '.format(message=msg))
             text += self.tr('File will be saved as GeoJSON instead.')
             self.message_bar.pushMessage(self.tr("Warning"), text)
-            # Save
+            # Save GeoJSON
             results_layers, error, msg = self.save_layers(temp_file_path,
                                                           processing,
                                                           geom_types_dict,
@@ -719,23 +719,19 @@ class ResultsLoader(QObject):
     
     def collect_geometry_types(self, data: dict):
         """Collect unique geometry types from original data to save all needed layers later."""
-        geom_types = []
-        for feature in data.get('features', []):
-            geometry = feature.get('geometry', {})
-            geom_type = geometry.get('type')
-            if geom_type and geom_type not in geom_types:
-                geom_types.append(geom_type)
-        geom_types_dict = {"Polygon": any(geom == "Polygon" or geom == "MultiPolygon" 
-                                          for geom in geom_types),
-                           "LineString": any(geom == "LineString" or geom == "MultiLineString" 
-                                             for geom in geom_types),
-                           "Point": any(geom == "Point" or geom == "MultiPoint" 
-                                        for geom in geom_types)}
+        geom_types = set()
+        for feature in data.get('features',[]):
+            geom_type = feature.get('geometry', {}).get('type')
+            if geom_type:
+                geom_types.add(geom_type)
+        geom_types_dict = {"Polygon": "Polygon" in geom_types or "MultiPolygon" in geom_types,
+                           "LineString": "LineString" in geom_types or "MultiLineString" in geom_types,
+                           "Point": "Point" in geom_types or "MultiPoint" in geom_types}
         return geom_types_dict
     
     def normalize_json_properties(self, data: dict):
         """Convert selected JSON properties to strings for GeoPackage compatibility."""
-        # Collect names of fields of JSON type
+        # Collect names of fields of JSON type (dictionaries)
         json_properties = []
         features = data.get("features", [])
         for feature in features:
@@ -743,7 +739,11 @@ class ResultsLoader(QObject):
             for key, value in properties.items():
                 if isinstance(value, dict) and key not in json_properties:
                     json_properties.append(key)
-        # Change field type to str
+        # Change field type to str.
+        # E.g., "Download open data" returns field "bbox" that looks like this:
+        # {'xmax': 39.11619186401367, 'xmin': 38.879783630371094, 'ymax': 45.05481719970703, 'ymin': 44.967098236083984}
+        # Without changing it to str, it will be of type JSON (QVariantMap)
+        # and QgsVectorFileWriter will return OGR error trying to save it to GeoPackage
         for field in json_properties:
             for feature in features:
                 try:
