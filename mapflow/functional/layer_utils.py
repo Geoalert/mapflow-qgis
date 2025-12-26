@@ -597,86 +597,44 @@ class ResultsLoader(QObject):
         :param pid: ID of the inspected processing.
         """
         self.dlg.processingsTable.setEnabled(True)
-        # Avoid overwriting existing files by adding (n) to their names
-        output_path = Path(self.dlg.outputDirectory.text(), processing.id_).with_suffix(".gpkg")
-        if output_path.exists():
-            count = 1
-            while output_path.with_stem(processing.id_ + f"_{count}").exists():
-                count += 1
-            output_path = output_path.with_stem(processing.id_ + f"_{count}")
-        transform = self.project.transformContext()
-        # Layer creation options for QGIS 3.10.3+
-        write_options = QgsVectorFileWriter.SaveVectorOptions()
-        write_options.layerOptions = ['fid=id']
-        with open(Path(self.temp_dir, os.urandom(32).hex()), mode='wb+') as f:
-            response_data = response.readAll().data()
-            # Check if there is more then 1 geometry type
-            data = json.loads(response_data)
-            geom_types = []
-            for feature in data['features']:
-                geom_type = feature['geometry']['type']
-                if geom_type not in geom_types: # check if we have different geometry types
-                    geom_types.append(geom_type)
-                if any("Polygon" in geom for geom in geom_types) and any("LineString" in geom for geom in geom_types):
-                    break # stop iterating if (multi)lines and (multi)polygons are already found
-            # Create layer
-            f.write(response_data)
-            layer = QgsVectorLayer(f.name, '', 'ogr')
-            # V3 returns two additional str values but they're not documented, so just discard them
-            error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(
-                layer,
-                str(output_path),
-                transform,
-                write_options
-            )
+        # Read and decode response data
+        response_data = response.readAll().data()
+        data = json.loads(response_data)
+        # Check geometry types in the data
+        geom_types_dict = self.collect_geometry_types(data)
+        # Change JSON fields to str
+        data = self.normalize_json_properties(data)
+        # TEMP: Save the modified data to a temporary file
+        with open(self.temp_dir/os.urandom(32).hex(), mode='wb') as f:
+            f.write(json.dumps(data).encode('utf-8'))
+            temp_file_path = f.name
+        # GEOPACKAGE: Try saving first
+        results_layers, error, msg = self.save_layers(temp_file_path,
+                                                      processing,
+                                                      geom_types_dict,
+                                                      "GPKG")
+        # GEOJSON: Try saving if gpkg failed
         if error:
             # Give an info message
             text = self.tr('Failed to save results to GeoPackage. '
                            'Error code: {code}. '.format(code=error))
             if msg:
-                text +=self.tr('Message: {message}. '.format(message=msg))
+                text += self.tr('Message: {message}. '.format(message=msg))
             text += self.tr('File will be saved as GeoJSON instead.')
             self.message_bar.pushMessage(self.tr("Warning"), text)
-            # Save as GeoJSON instead
-            output_path = output_path.with_suffix(".geojson")
-            if output_path.exists():
-                count = 1
-                while output_path.with_stem(processing.id_ + f"_{count}").exists():
-                    count += 1
-                output_path = output_path.with_stem(processing.id_ + f"_{count}")
-            try:
-                with open(str(output_path), mode='wb+') as f:
-                        f.write(response_data)
-            except:
-                self.message_bar.pushWarning(self.tr("Error"), self.tr('Failed to save results to file.'))
+            # Save GeoJSON
+            results_layers, error, msg = self.save_layers(temp_file_path,
+                                                          processing,
+                                                          geom_types_dict,
+                                                          "GeoJSON")
+            if error:
+                text = self.tr('Failed to save results. '
+                               'Error code: {code}. '.format(code=error))
+                if msg:
+                    text += self.tr('Message: {message}. '.format(message=msg))
+                self.message_bar.pushMessage(self.tr("Error"), text)
                 return
-        # Load the results into QGIS
-        results_layers = []
-        if any("Polygon" in geom for geom in geom_types) and\
-           any("LineString" in geom for geom in geom_types): # e.g. loading roads and buildings from open data
-            # Load Polygons
-            polygon_uri = f"{output_path}|geometrytype=Polygon"
-            polygon_layer = QgsVectorLayer(polygon_uri, processing.name, "ogr")
-            polygon_layer.loadNamedStyle(get_style_name(processing.workflow_def,
-                                                        polygon_layer,
-                                                        processing.style_name))
-            if polygon_layer.isValid():
-                results_layers.append(polygon_layer)
-            # Load lineStrings
-            linestring_uri = f"{output_path}|geometrytype=LineString"
-            linestring_layer = QgsVectorLayer(linestring_uri, processing.name, "ogr")
-            linestring_layer.loadNamedStyle(get_style_name(processing.workflow_def,
-                                                           linestring_layer,
-                                                           processing.style_name))
-            if linestring_layer.isValid():
-                results_layers.append(linestring_layer)
-        else: # regular processing with one geometry type
-            results_layer = QgsVectorLayer(str(output_path), processing.name, 'ogr')
-            results_layer.loadNamedStyle(get_style_name(processing.workflow_def,
-                                                        layer,
-                                                        processing.style_name))
-            results_layers.append(results_layer)
-        # Add the source raster (COG) if it has been created
+        # COG: Add the source raster if it has been created
         raster_url = processing.raster_layer.get('tileUrl')
         tile_json_url = processing.raster_layer.get("tileJsonUrl")
         if raster_url:
@@ -684,12 +642,12 @@ class ResultsLoader(QObject):
                 'type': 'xyz',
                 'url': raster_url,
                 'zmin': 0,
-                'zmax': 18,
+                'zmax': 18
                 # 'username': self.username,
                 # 'password': self.password
             }
             raster = QgsRasterLayer(
-                '&'.join(f'{key}={val}' for key, val in params.items()),  # don't URL-encode it
+                '&'.join(f'{key}={val}' for key, val in params.items()), # don't URL-encode it
                 processing.name + ' image',
                 'wms'
             )
@@ -758,3 +716,104 @@ class ResultsLoader(QObject):
             self.add_layer(vector)
         self.iface.setActiveLayer(vectors[0])
         self.iface.zoomToActiveLayer()
+    
+    def collect_geometry_types(self, data: dict):
+        """Collect unique geometry types from original data to save all needed layers later."""
+        geom_types = set()
+        for feature in data.get('features',[]):
+            geom_type = feature.get('geometry', {}).get('type')
+            if geom_type:
+                geom_types.add(geom_type)
+        geom_types_dict = {"Polygon": "Polygon" in geom_types or "MultiPolygon" in geom_types,
+                           "LineString": "LineString" in geom_types or "MultiLineString" in geom_types,
+                           "Point": "Point" in geom_types or "MultiPoint" in geom_types}
+        return geom_types_dict
+    
+    def normalize_json_properties(self, data: dict):
+        """Convert selected JSON properties to strings for GeoPackage compatibility."""
+        # Collect names of fields of JSON type (dictionaries)
+        json_properties = []
+        features = data.get("features", [])
+        for feature in features:
+            properties = feature.get("properties", {})
+            for key, value in properties.items():
+                if isinstance(value, dict) and key not in json_properties:
+                    json_properties.append(key)
+        # Change field type to str.
+        # E.g., "Download open data" returns field "bbox" that looks like this:
+        # {'xmax': 39.11619186401367, 'xmin': 38.879783630371094, 'ymax': 45.05481719970703, 'ymin': 44.967098236083984}
+        # Without changing it to str, it will be of type JSON (QVariantMap)
+        # and QgsVectorFileWriter will return OGR error trying to save it to GeoPackage
+        for field in json_properties:
+            for feature in features:
+                try:
+                    feature['properties'][field] = str(feature['properties'][field])
+                except:
+                    break # leave json fields and later try save file to GeoJSON instead
+        return data
+    
+    def save_layers(self,
+                    temp_path: Path,
+                    processing,
+                    geom_types_dict: Dict[str, bool],
+                    driver: str):
+        """Try saving available geometry layers into GPKG or GeoJSON."""
+        transform = self.project.transformContext()
+        write_options = QgsVectorFileWriter.SaveVectorOptions()
+        write_options.driverName = driver
+        suffix = "." + driver.lower() # pick suffix based on driver
+        output_path = self.ensure_unique_path(Path(self.dlg.outputDirectory.text()), processing.id_, suffix)
+        written_layers = []
+        error = None
+        msg = None
+        # Go through possible geometry types and create layers only for present
+        for i, (geom_key, present) in enumerate(geom_types_dict.items()):
+            if not present:
+                continue
+            suffix_name = "_" + str(geom_key).lower() # suffix for layer name based on geometry type
+            layer_name = f"{processing.name}{suffix_name}"
+            uri = f"{temp_path}|geometrytype={geom_key}" # uri based on geometry type
+            layer = QgsVectorLayer(uri, layer_name, "ogr")
+            layer.loadNamedStyle(get_style_name(processing.workflow_def, layer, processing.style_name))
+            write_options.layerName = layer_name
+            # For gpkg: use QgsVectorFileWriter
+            if driver == "GPKG":
+                # Use 'action on existing file' for every layer except first to add them to one file
+                if i > 0:
+                    write_options.actionOnExistingFile = QgsVectorFileWriter.CreateOrOverwriteLayer
+                error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(layer, 
+                                                                           str(output_path), 
+                                                                           transform, 
+                                                                           write_options)
+            # For geojson: read tempfile and dump it to output file
+            else:
+                with open(temp_path, 'r', encoding='utf-8') as file:
+                    data = json.load(file)
+                with open(str(output_path), 'w', encoding='utf-8') as f:
+                    json.dump(data, f)
+            # Collect added layers to later preview them
+            written_layers.append(layer)
+            if error:
+                # GPKG is a first try, if it fails - clear everything and try GeoJSON
+                if driver == "GPKG":
+                    written_layers = []
+                    try:
+                        os.remove(output_path)
+                    except:
+                        pass
+        return written_layers, error, msg
+
+    def ensure_unique_path(self,
+                           base_dir: Path, 
+                           stem: str, 
+                           suffix: str):
+        """Return a Path that does not overwrite existing files by adding _n to the stem."""
+        candidate = base_dir.joinpath(stem).with_suffix(suffix)
+        if not candidate.exists():
+            return candidate
+        count = 1
+        while True:
+            candidate = base_dir.joinpath(f"{stem}_{count}").with_suffix(suffix)
+            if not candidate.exists():
+                return candidate
+            count += 1
