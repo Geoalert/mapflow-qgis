@@ -2,9 +2,12 @@
     - Translations to Chinese, Spanish and Portuguese
     - Save results as GeoPackage, converting JSON fields to str
     - Save results of all geometry types as one file's layers
+    - Fix rotated image preview (My imagery)
     - Tree crowns' style for forest
     - Water objects' style for land use
     - Active window icon and title for error message window
+## 3.4.1
+    - Stable version
 ## 3.4.0
     - Imagery search:
         - Preview images with multi image previews

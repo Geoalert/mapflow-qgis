@@ -20,6 +20,8 @@ changelog:
     - Save results of all geometry types as one file's layers
     - Tree crowns' style for forest
     - Water objects' style for land use
+    3.4.1
+    - Stable version
     3.4.0
     - Imagery search:
         - Preview all images from search results
