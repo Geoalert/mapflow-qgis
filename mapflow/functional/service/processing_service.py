@@ -4,11 +4,21 @@ from typing import Dict, Optional, List
 from PyQt5.QtCore import QObject, QTimer
 from PyQt5.QtNetwork import QNetworkReply
 from PyQt5.QtWidgets import QMessageBox
+from .provider_service import get_provider_params, setup_provider_info, validate_provider_params
+from .. import helpers
 from ...dialogs.main_dialog import MainDialog
+from ...dialogs.confirm_processing_start_dialog import ConfirmProcessingStartDialog
+from ...errors import (ProcessingInputDataMissing,
+                       BadProcessingInput,
+                       PluginError,
+                       ImageIdRequired,
+                       AoiNotIntersectsImage)
 from ...http import Http, api_message_parser
 from ..view.processing_view import ProcessingView
 from ..api.processing_api import ProcessingApi
-from ...schema import ProcessingDTO, UpdateProcessingSchema, ProcessingStatus, BillingType, ProcessingHistory
+from ...schema import ProcessingDTO, UpdateProcessingSchema, ProcessingStatus, BillingType, ProcessingHistory, PostProcessingSchemaV2
+from ...schema.processing import ProcessingUIParams
+from ..service.alert_service import alert, AlertService
 from ..app_context import AppContext
 
 class ProcessingService(QObject):
@@ -23,20 +33,23 @@ class ProcessingService(QObject):
                  result_loader,
                  app_context: AppContext,
                  settings,
-                 timer_interval):
+                 timer_interval,
+                 processing_request_callback=None):
         super().__init__()
         self.http = http
+        self.dlg = dlg
         self.iface = iface
         self.result_loader = result_loader
         self.app_context = app_context
         self.settings = settings
+        self.processing_request_callback = processing_request_callback
         self.view = ProcessingView(dlg=dlg)
         self.api = ProcessingApi(http=http,
                                  dlg=dlg,
                                  iface=iface,
                                  result_loader=self.result_loader)
 
-        self.processings = set()
+        self.processings = {}
         self.processings_history = None # ProcessingHistory() - local storage for active processings list
         self.processing_fetch_timer = QTimer(dlg)
         self.processing_fetch_timer.setInterval(timer_interval)
@@ -63,8 +76,52 @@ class ProcessingService(QObject):
         # self.get_processings()  # Uncomment when this method is implemented
 
     # ================  CREATE  ====================== #
-    def validate_params(self, ui_start_params):
-        pass
+    def validate_processing_params(self, processing_params, allow_empty_name: bool = False):
+        error = None
+        if not processing_params:
+            error = self.tr("Specify processing parameters")
+            return error
+        
+        try:
+            if not processing_params.name and not allow_empty_name:
+                error = self.tr('Please, specify a name for your processing')
+                alert(error)
+                raise ProcessingInputDataMissing(self.tr('Please, specify a name for your processing'))
+            if not self.app_context.aoi:
+                if self.dlg.polygonCombo.currentLayer():
+                    raise BadProcessingInput(self.tr('Processing area layer is corrupted or has invalid projection'))
+                else:
+                    raise BadProcessingInput(self.tr('Please, select a valid area of interest'))
+            if self.app_context.aoi_area_limit < self.app_context.aoi_size:
+                raise BadProcessingInput(self.tr(
+                    'Up to {} sq km can be processed at a time. '
+                    'Try splitting your area(s) into several processings.').format(self.app_context.aoi_area_limit))
+        except AoiNotIntersectsImage:
+            error = self.tr("Selected AOI does not intersect the selected imagery")
+        except ImageIdRequired:
+            error = self.tr("This provider requires image ID. Use search tab to find imagery for you requirements, "
+                            "and select image in the table.")
+        except PluginError as e:
+            error = str(e)
+        return error
+    
+    def validate_context_params(self):
+        error = None
+        if not self.app_context.aoi:
+            # Here the button must already be disabled, and the warning text set
+            if self.view.dlg.startProcessing.isEnabled():
+                if not self.app_context.user_role.can_start_processing:
+                    error = self.tr('Not enough rights to start processing in a shared project ({})').format(self.app_context.user_role.value)
+                else:
+                    error = self.tr("Set AOI to start processing")
+        elif not self.app_context.workflow_defs:
+            error = self.tr("Error! Models are not initialized.\n"
+                            "Please, make sure you have selected a project")
+        elif self.app_context.billing_type != BillingType.credits:
+            self.view.dlg.startProcessing.setEnabled(True)
+            self.view.dlg.processingProblemsLabel.clear()
+            error = None
+        return error
 
     def start_processing(self):
         """
@@ -73,18 +130,110 @@ class ProcessingService(QObject):
 
         """
         self.processing_fetch_timer.stop()
-        ui_start_params = self.view.read_processing_start_params()
-        # maybe some logic behind validation?
-        self.validate_params(ui_start_params)
-        provider = self.get_data_provider(ui_start_params)
-        source_params = provider.source_params()
-        # gather all the other logic
-        self.api.create_processing()
 
+        context_error = self.validate_context_params()
+        if context_error:
+            self.dlg.disable_processing_start(context_error)
+            return
+        
+        ui_start_params = self.view.read_processing_start_params()       
+        provider = self.app_context.data_provider
+
+        processing_params = self.get_processing_schema(ui_start_params, provider)
+        
+        params_error = self.validate_processing_params(processing_params)
+        if params_error:
+            self.dlg.disable_processing_start(params_error)
+            return
+        
+        provider_error = validate_provider_params(provider)
+        if provider_error:
+            self.dlg.disable_processing_start(provider_error, clear_area=True)
+            return
+        
+        if not helpers.check_processing_limit(billing_type=self.app_context.billing_type,
+                                              remaining_limit=self.app_context.remaining_limit,
+                                              remaining_credits=self.app_context.remaining_credits,
+                                              aoi_size=self.app_context.aoi_size,
+                                              processing_cost=self.processing_cost):
+            alert(self.tr('Processing limit exceeded. '
+                          'Visit "<a href=\"https://app.mapflow.ai/account/balance\">Mapflow</a>" '
+                          'to top up your balance'),
+                  icon=QMessageBox.Warning)
+            return
+        
+        # Define starting to use later after confirmation or without it
+        def post_processing():
+            self.iface.messageBar().pushInfo(self.app_context.plugin_name, self.tr('Starting the processing...'))
+            try:
+                self.dlg.startProcessing.setEnabled(False)
+                self.api.create_processing(processing_params, 
+                                           self.start_processing_callback,
+                                           self.start_processing_error_handler)
+            except Exception as e:
+                alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
+        # Show processing start confirmation dialog if checkbox is checked
+        if self.dlg.cornfirmProcessingStart.isChecked():
+            dialog = ConfirmProcessingStartDialog(self.dlg)
+            # Define actions on checkbox toggling
+            def set_start_confirmation():
+                # Set "Confirm" checkbox opposite to "Don't show again" if they are not already the same
+                if not dialog.checkBox.isChecked() != self.dlg.cornfirmProcessingStart.isChecked():
+                    self.dlg.cornfirmProcessingStart.setChecked(not dialog.checkBox.isChecked())
+                    self.settings.setValue("confirmProcessingStart", str(not dialog.checkBox.isChecked()))
+            dialog.checkBox.toggled.connect(set_start_confirmation)
+            dialog.accepted.connect(post_processing)
+            # Fill dialog with parameters
+            if self.app_context.billing_type==BillingType.credits:
+                price = self.tr("{cost} credits").format(cost=self.processing_cost)
+            else:
+                price = None
+            provider_text = setup_provider_info(provider)
+            dialog.setup(name=processing_params.name,
+                         price=price,
+                         provider=provider_text,
+                         zoom=str(ui_start_params.zoom),
+                         area=str(round(self.app_context.aoi_size, 2))+self.tr(" sq.km"),
+                         model=self.dlg.modelCombo.currentText(),
+                         blocks=[self.dlg.modelOptionsLayout.itemAt(i).widget()
+                                 for i in range(self.dlg.modelOptionsLayout.count())])
+            dialog.deleteLater()
+        # Or just post the processing
+        else:
+            post_processing()
+        return
+        
+    def get_processing_schema(self, ui_start_params, provider):
+        if not provider:
+            return None
+        
+        wd = self.app_context.get_workflow_def(ui_start_params.wd_name)\
+
+        provider_params, processing_meta = get_provider_params(provider=provider,
+                                                               zoom=ui_start_params.zoom)
+
+        #! print (provider_params)
+        processing_params = PostProcessingSchemaV2(
+            name=ui_start_params.name,
+            description=None,
+            projectId=self.app_context.project_id,
+            wdId=wd.id,
+            geometry=json.loads(self.app_context.aoi.asJson()),
+            params=provider_params,
+            meta=processing_meta,
+            blocks=wd.get_enabled_blocks(self.dlg.enabled_blocks())
+        )
+
+
+
+
+
+        
+        return processing_params
 
     def start_processing_callback(self, response: QNetworkReply) -> None:
         """Display a success message and clear the processing name field."""
-        self.alert(
+        alert(
             self.tr("Success! We'll notify you when the processing has finished."),
             QMessageBox.Information
         )
@@ -101,7 +250,7 @@ class ProcessingService(QObject):
     def start_processing_error_handler(self):
         self.dlg.startProcessing.setEnabled(True)
         self.processing_fetch_timer.start()
-        self.alert(self.tr("Failed to start processing"), QMessageBox.Warning)
+        alert(self.tr("Failed to start processing"), QMessageBox.Warning)
 
     # =============  REQUEST ================= #
     def setup_processings_table(self):
@@ -205,7 +354,8 @@ class ProcessingService(QObject):
         
         Uses app_context for: aoi, workflow_defs, user_role, billing_type
         """
-        aoi = self.app_context.aoi
+        
+        """ aoi = self.app_context.aoi
         workflow_defs = self.app_context.workflow_defs
         user_role = self.app_context.user_role
         
@@ -217,25 +367,75 @@ class ProcessingService(QObject):
                 else:
                     reason = self.tr("Set AOI to start processing")
                 self.view.disable_processing_start(reason, clear_area=False)
+            return
         elif not workflow_defs:
             self.view.disable_processing_start(reason=self.tr("Error! Models are not initialized.\n"
                                                              "Please, make sure you have selected a project"),
                                               clear_area=True)
+            return
         elif self.app_context.billing_type != BillingType.credits:
             self.view.dlg.startProcessing.setEnabled(True)
             self.view.dlg.processingProblemsLabel.clear()
+            return
         else:  # billing_type == BillingType.credits
             # TODO: This method needs access to providers and create_processing_request
             # which are currently in Mapflow class. Consider:
             # 1. Moving provider logic to a ProviderService
             # 2. Passing a callback for request creation
             # 3. Moving this entire cost calculation to Mapflow
-            pass
+            #! pass """
+        
+        context_error = self.validate_context_params()
+        if context_error:
+            self.dlg.disable_processing_start(context_error)
+            print (context_error)
+            return
+        
+        ui_start_params = self.view.read_processing_start_params()       
+        provider = self.app_context.data_provider
+
+        processing_params = self.get_processing_schema(ui_start_params, provider)
+        
+        params_error = self.validate_processing_params(processing_params, allow_empty_name=True)
+        if params_error:
+            self.dlg.disable_processing_start(params_error)
+            return
+        
+        provider_error = validate_provider_params(provider)
+        if provider_error:
+            self.dlg.disable_processing_start(provider_error, clear_area=True)
+            return
+
+        self.api.get_cost(data=processing_params,
+                            callback=self.calculate_processing_cost_callback,
+                            error_handler=self.disable_processing_start)
+
+
+
+
+        """ # Use callback if available
+            if self.processing_request_callback:
+                request_body, error = self.processing_request_callback(allow_empty_name=True)
+                if error:
+                    self.view.disable_processing_start(error, clear_area=False)
+                    return
+                # Send request to calculate cost
+                self.api.get_cost(data=request_body,
+                                  callback=self.calculate_processing_cost_callback,
+                                  error_handler=self.disable_processing_start) """
+                
+        """ self.http.post(
+                    path="processing/cost/v2",
+                    callback=self.calculate_processing_cost_callback,
+                    error_handler=self.disable_processing_start,
+                    use_default_error_handler=False,
+                    body=request_body.as_json().encode()
+                ) #! """
+                
 
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         self.processing_cost = int(response.readAll().data().decode())
         self.view.set_processing_cost(self.processing_cost)
-
 
     def disable_processing_start(self, response: QNetworkReply):
         """
@@ -263,7 +463,7 @@ class ProcessingService(QObject):
         self.processing_fetch_timer.stop()
         selected_ids = self.selected_processing_ids()
         # Ask for confirmation if there are selected rows
-        if selected_ids and self.alert(
+        if selected_ids and alert(
                 self.tr('Delete selected processings?'), QMessageBox.Question
         ):
             self.deleting_processings = {id_: None for id_ in selected_ids}

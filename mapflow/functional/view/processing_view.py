@@ -1,7 +1,7 @@
 from typing import List, Optional
 from uuid import UUID
 from PyQt5.QtCore import Qt, QCoreApplication
-from PyQt5.QtWidgets import QAbstractItemView, QTableWidgetItem, QMessageBox
+from PyQt5.QtWidgets import QAbstractItemView, QTableWidgetItem, QMessageBox, QCheckBox
 from PyQt5.QtGui import QColor
 from ...dialogs.main_dialog import MainDialog
 from ...schema.processing import ProcessingDTO, ProcessingUIParams
@@ -36,11 +36,23 @@ class ProcessingView:
 
     def read_processing_start_params(self):
         return ProcessingUIParams(
-            name = self.dlg.processingName or None,
+            name = self.dlg.processingName.text() or None,
             wd_name = self.dlg.modelCombo.currentText(),
             data_source_index = self.dlg.providerIndex(),
-            # todo: add other params
+            zoom = int(self.dlg.zoomCombo.currentText()) if self.dlg.zoomCombo.currentIndex() != 0 else None, 
+            model_options = [self.dlg.modelOptionsLayout.itemAt(i).widget().text() 
+                             for i in range(self.dlg.modelOptionsLayout.count())
+                             if isinstance(i, QCheckBox) and
+                             self.dlg.modelOptionsLayout.itemAt(i).widget().isChecked()] #!
+            #! todo: add other params
         )
+    
+        """ name: Optional[str]
+        area: Optional[QgsVectorLayer]
+        data_source_index: int
+        zoom: Optional[int]
+        wd_name: str
+        model_options: list[BlockOption] """
 
     def clear_processing_name(self, name):
         # If the name is expected, we clear it after the processsing is launched;

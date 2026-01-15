@@ -49,6 +49,9 @@ class AppContext:
     aoi_area_limit: float = 0.0
     max_aois_per_processing: int = 1
     review_workflow_enabled: bool = False
+
+    # === Provider State ===
+    data_provider: Optional["ProviderInterface"] = None
     
     # === Imagery Search State ===
     search_provider: Optional["ProviderInterface"] = None
@@ -59,6 +62,12 @@ class AppContext:
     
     # === Preview State ===
     preview_dict: Dict[str, Any] = field(default_factory=dict)
+
+    # === My Imagery State ===
+    selected_mosaic: Optional["MosaicReturnSchema"] = None
+    selected_image: Optional["ImageReturnSchema"] = None
+    mosaics = Optional[Dict]
+    images = Optional[List]
 
     @property
     def workflow_defs(self):
@@ -71,4 +80,9 @@ class AppContext:
         if not self.workflow_defs:
             return None
         else:
-            return self.workflow_defs.get(wd_name)
+            workflow_def = None
+            #! return self.workflow_defs.get(wd_name)
+            for wd in self.workflow_defs.values():
+                if wd.name == wd_name:
+                    workflow_def = wd
+            return workflow_def

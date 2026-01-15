@@ -262,7 +262,7 @@ class ProjectService(QObject):
             self.view.clear_projects_table()
         self.filter_projects(self.view.projects_filter)
         if self.app_context.project_id:
-            self.project_service.select_project(self.app_context.project_id)
+            self.select_project(self.app_context.project_id)
 
     def filter_projects(self, name_filter):
         if not name_filter:

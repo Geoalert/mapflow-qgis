@@ -154,7 +154,7 @@ class PostProcessingSchemaV2(Serializable):
 @dataclass
 class ProcessingUIParams(Serializable, SkipDataClass):
     name: Optional[str]
-    area: Optional[QgsVectorLayer]
+    #! area: Optional[QgsVectorLayer]
     data_source_index: int
     zoom: Optional[int]
     wd_name: str

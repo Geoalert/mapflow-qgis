@@ -3,8 +3,16 @@ from PyQt5.QtCore import QObject
 from qgis.core import QgsVectorLayer, QgsWkbTypes, QgsGeometry, QgsProject, QgsFeature, QgsCoordinateReferenceSystem
 from ..app_context import AppContext
 from .. import layer_utils
+from .. import helpers
 from ...dialogs import MainDialog
-from ...entity.provider import MyImageryProvider
+from ...entity.provider import (MaxarProvider,
+                                SentinelProvider,
+                                ImagerySearchProvider,
+                                MyImageryProvider)
+from ...errors import (BadProcessingInput,
+                       PluginError,
+                       ImageIdRequired,
+                       AoiNotIntersectsImage)
 
 class AreaCalculatorService(QObject):
     def __init__(self,
@@ -161,3 +169,48 @@ class AreaCalculatorService(QObject):
 
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.app_context.aoi_size))
         self.processing_service.update_processing_cost()
+    
+    def get_aoi(self,
+                provider_index: Optional[int],
+                selected_aoi: QgsGeometry,
+                local_image_indices: Optional[List[int]]) -> QgsGeometry:
+        if not helpers.check_aoi(selected_aoi):
+            raise BadProcessingInput(self.tr('Bad AOI. AOI must be inside boundaries:'
+                                             ' \n[-180, 180] by longitude, [-90, 90] by latitude'))
+        else:
+            provider = self.providers[provider_index]
+            if not provider:
+                raise PluginError(self.tr('Providers are not initialized'))
+            if len(local_image_indices) != 0:
+                if isinstance(provider, (MaxarProvider, ImagerySearchProvider)):
+                    aoi = self.crop_aoi_with_maxar_image_footprint(selected_aoi, local_image_indices)
+                    if not aoi:
+                        raise AoiNotIntersectsImage()
+                elif isinstance(provider, SentinelProvider):
+                    # todo: crop sentinel aoi with image footprint?
+                    aoi = selected_aoi
+                else:
+                    aoi = selected_aoi
+                    # We ignore image ID if the provider does not support it
+                    # raise PluginError(self.tr("Selection is not available for  {}").format(provider.name))
+            elif provider.requires_image_id:
+                aoi = selected_aoi
+                # raise PluginError(self.tr("Please select image in Search table for {}").format(provider.name))
+            elif isinstance(provider, MyImageryProvider):
+                image = self.data_catalog_service.selected_image()
+                mosaic = self.data_catalog_service.selected_mosaic()
+                if image:
+                    catalog_aoi = QgsGeometry().fromWkt(image.footprint)
+                elif mosaic:
+                    catalog_aoi = QgsGeometry().fromWkt(mosaic.footprint)
+                if image or mosaic:
+                    aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
+                                                      selected_aoi=selected_aoi)
+                    if not aoi:
+                        raise AoiNotIntersectsImage()
+                    aoi = selected_aoi
+                else:
+                    aoi = selected_aoi
+            else:
+                aoi = selected_aoi
+        return aoi
