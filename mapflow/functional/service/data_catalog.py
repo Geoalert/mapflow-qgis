@@ -45,11 +45,13 @@ class DataCatalogService(QObject):
                  result_loader,
                  plugin_version,
                  temp_dir,
-                 allow_enable_processing):
+                 allow_enable_processing,
+                 app_context):
         super().__init__()
         self.dlg = dlg
         self.iface = iface
         self.temp_dir = temp_dir
+        self.app_context = app_context
         self.project = QgsProject.instance()
         self.result_loader = result_loader
         self.plugin_version = plugin_version
@@ -136,6 +138,7 @@ class DataCatalogService(QObject):
         self.view.display_mosaics(list(self.mosaics.values()))
         self.mosaicsUpdated.emit()
         self.dlg.mosaicTable.clearSelection()
+        self.app_context.mosaics = self.mosaics
 
     def get_mosaic(self, mosaic_id: UUID):
         self.api.get_mosaic(mosaic_id=mosaic_id,
@@ -151,6 +154,7 @@ class DataCatalogService(QObject):
         # Allow selection back
         self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.SingleSelection) 
         self.view.select_mosaic_cell(mosaic.id)
+        self.app_context.mosaics = self.mosaics
 
     def update_mosaic(self):
         mosaic = self.selected_mosaic()
@@ -225,6 +229,7 @@ class DataCatalogService(QObject):
             self.get_mosaic_images(mosaic.id)
         self.view.add_mosaic_cell_buttons()
         self.view.show_mosaic_info(mosaic.name)
+        self.app_context.selected_mosaic = mosaic
 
     def mosaic_preview(self):
         try:
@@ -345,6 +350,7 @@ class DataCatalogService(QObject):
                 self.get_image_preview_s(self.images[self.preview_idx])
             else:
                 self.view.enable_mosaic_images_preview(len(self.images), self.preview_idx)
+        self.app_context.images = self.images
     
     def get_next_preview(self):
         try:
@@ -422,6 +428,7 @@ class DataCatalogService(QObject):
             self.get_image_preview_s(image)
         self.view.show_image_info(image)
         self.view.add_image_cell_buttons()
+        self.app_context.selected_image = image
         return image
 
     def image_info(self):

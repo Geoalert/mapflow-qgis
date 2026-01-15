@@ -56,7 +56,8 @@ from .errors import (ProcessingInputDataMissing,
 from .functional import layer_utils, helpers
 from .functional.auth import get_auth_id
 from .functional.geometry import clip_aoi_to_image_extent
-from .functional.service import ProcessingService, ProjectService, DataCatalogService
+from .functional.service import ProcessingService, ProjectService, DataCatalogService, ProviderService
+from .functional.service import provider_service
 from .functional.service.alert_service import alert, AlertService
 from .http import (Http,
                    get_error_report_body,
@@ -196,7 +197,8 @@ class Mapflow(QObject):
                                                        self.result_loader,
                                                        self.plugin_version,
                                                        self.temp_dir,
-                                                       self.allow_enable_processing)
+                                                       self.allow_enable_processing,
+                                                       app_context=self.app_context)
         self.data_catalog_controller = DataCatalogController(self.dlg, self.data_catalog_service)
 
         self.project_service = ProjectService(http=self.http,
@@ -212,7 +214,8 @@ class Mapflow(QObject):
                                                     result_loader=self.result_loader,
                                                     app_context=self.app_context,
                                                     settings=self.settings,
-                                                    timer_interval=self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
+                                                    timer_interval=self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000,
+                                                    processing_request_callback=self.create_processing_request)
         self.project_processing_controller = ProjectProcessingController(self.dlg,
                                                                          self.processing_service,
                                                                          self.project_service,
@@ -246,7 +249,7 @@ class Mapflow(QObject):
         self.dlg.logoutButton.clicked.connect(self.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         self.dlg.downloadResultsButton.clicked.connect(self.load_results)
-        self.dlg.startProcessing.clicked.connect(self.create_processing)
+        #! self.dlg.startProcessing.clicked.connect(self.create_processing)
         # Calculate AOI size
         self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area_polygon_layer)
         self.dlg.mosaicTable.itemSelectionChanged.connect(self.calculate_aoi_area_catalog)
@@ -283,6 +286,8 @@ class Mapflow(QObject):
         self.dlg.addProvider.clicked.connect(self.add_provider)
         self.dlg.editProvider.clicked.connect(self.edit_provider)
         self.dlg.removeProvider.clicked.connect(self.remove_provider)
+
+        ProviderService(self.providers, self.dlg, self.app_context, self.config)
 
         # Maxar
         self.config_search_columns = ConfigColumns()
@@ -619,6 +624,7 @@ class Mapflow(QObject):
         # This is done after area calculation, because there the provider list is updated?
         provider_index = self.dlg.providerIndex()
         provider = self.providers[provider_index]
+        self.app_context.data_provider = provider
         # Changes in search tab
         self.toggle_imagery_search(provider)
         # re-calculate AOI because it may change due to intersection of image/area
@@ -1600,6 +1606,8 @@ class Mapflow(QObject):
         self.data_catalog_service.set_catalog_provider(self.providers)
         image = self.data_catalog_service.selected_image()
         mosaic = self.data_catalog_service.selected_mosaic()
+        self.app_context.selected_mosaic = mosaic
+        self.app_context.selected_image = image
         if image or mosaic:
             self.use_imagery_extent.setEnabled(True)
             if image:
@@ -1614,7 +1622,7 @@ class Mapflow(QObject):
             aoi_geom = layer_utils.collect_geometry_from_layer(self.dlg.polygonCombo.currentLayer())
             selected_aoi = helpers.to_wgs84(aoi_geom, self.dlg.polygonCombo.currentLayer().crs())
             aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
-                                              selected_aoi=self.app_context.aoi)
+                                              selected_aoi=selected_aoi)
         else:
             aoi = self.get_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
             self.use_imagery_extent.setText(self.tr("Use imagery extent"))
@@ -1890,7 +1898,7 @@ class Mapflow(QObject):
             self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
             try:
                 self.dlg.startProcessing.setEnabled(False)
-                self.processing_service.start_processing(processing_params)
+                self.processing_service.start_processing() #!(processing_params)
             except Exception as e:
                 self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
         # Show processing start confirmation dialog if checkbox is checked
@@ -2058,6 +2066,7 @@ class Mapflow(QObject):
         # We want to clear the data from previous lauunch to avoid confusion
         for provider in self.providers:
             provider.clear_saved_search(self.temp_dir)
+        provider_service.update_providers_list(self.default_providers)
     
     def setup_search_providers(self, providers_data):
         search_providers = ProvidersList([DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
