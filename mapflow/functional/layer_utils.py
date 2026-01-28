@@ -660,7 +660,12 @@ class ResultsLoader(QObject):
         """
         self.dlg.processingsTable.setEnabled(True)
         # Read and decode response data
-        response_data = response.readAll().data()
+        try:
+            response_data = response.readAll().data()
+        except:
+            self.message_bar.pushMessage(self.tr("Mapflow error"),
+                                         self.tr("Empty response from server"))
+            return
         data = json.loads(response_data)
         # Check geometry types in the data
         geom_types_dict = self.collect_geometry_types(data)
