@@ -936,6 +936,7 @@ class Mapflow(QObject):
             self.settings.setValue('outputDir', path)
             self.setup_tempdir()
             self.data_catalog_service.temp_dir = self.temp_dir
+            self.result_loader.temp_dir = self.temp_dir
             return path
 
     def check_if_output_directory_is_selected(self) -> bool:
@@ -2900,7 +2901,9 @@ class Mapflow(QObject):
         if self.dlg.viewAsTiles.isChecked():
             self.result_loader.load_result_tiles(processing=processing)
         elif self.dlg.viewAsLocal.isChecked():
-            if not self.temp_dir.exists():
+            if not self.temp_dir:
+                self.select_output_directory()
+            elif not self.temp_dir.exists():
                 self.alert(self.tr("Directory '{}' does not exist").format(self.temp_dir) +
                            self.tr("<br>Using Settings tab, change the output directory to an existing one to download the results"), QMessageBox.Warning)
                 return
@@ -2927,6 +2930,14 @@ class Mapflow(QObject):
         """
         processing = self.selected_processing()
         if not processing:
+            return
+        if not self.temp_dir:
+            self.select_output_directory()
+        elif not self.temp_dir.exists():
+            self.alert(self.tr("Directory '{}' does not exist").format(self.temp_dir) +
+                       self.tr("<br>Using Settings tab, change the output directory to an existing one to download the results"), QMessageBox.Warning)
+            return
+        if not self.check_if_output_directory_is_selected():
             return
         self.result_loader.download_aoi_file(pid=processing.id_, callback=self.result_loader.download_aoi_file_callback)
 
