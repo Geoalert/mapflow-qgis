@@ -826,48 +826,63 @@ class ResultsLoader(QObject):
                     driver: str):
         """Try saving available geometry layers into GPKG or GeoJSON."""
         transform = self.project.transformContext()
-        write_options = QgsVectorFileWriter.SaveVectorOptions()
-        write_options.driverName = driver
         suffix = "." + driver.lower() # pick suffix based on driver
         output_path = self.ensure_unique_path(Path(self.dlg.outputDirectory.text()), processing.id_, suffix)
+        write_options = QgsVectorFileWriter.SaveVectorOptions()
+        write_options.driverName = driver
+        # Specify parameters that will change
         written_layers = []
         error = None
         msg = None
+        first_layer = True
         # Go through possible geometry types and create layers only for present
-        for i, (geom_key, present) in enumerate(geom_types_dict.items()):
+        for geom_key, present in geom_types_dict.items():
             if not present:
                 continue
-            suffix_name = "_" + str(geom_key).lower() # suffix for layer name based on geometry type
+            # Define layer name
+            suffix_name = f"_{str(geom_key).lower()}"
             layer_name = f"{processing.name}{suffix_name}"
-            uri = f"{temp_path}|geometrytype={geom_key}" # uri based on geometry type
-            layer = QgsVectorLayer(uri, layer_name, "ogr")
-            layer.loadNamedStyle(get_style_name(processing.workflow_def, layer, processing.style_name))
+            uri = f"{temp_path}|geometrytype={geom_key}"
             write_options.layerName = layer_name
-            # For gpkg: use QgsVectorFileWriter
+            # Define layer
+            temp_layer = QgsVectorLayer(uri, layer_name, "ogr")
+            if not temp_layer.isValid():
+                continue
+            # For GPKG: use QgsVectorFileWriter
             if driver == "GPKG":
-                # Use 'action on existing file' for every layer except first to add them to one file
-                if i > 0:
-                    write_options.actionOnExistingFile = QgsVectorFileWriter.CreateOrOverwriteLayer
-                error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(layer, 
-                                                                           str(output_path), 
-                                                                           transform, 
+                write_options.actionOnExistingFile = (QgsVectorFileWriter.CreateOrOverwriteFile
+                                if first_layer else QgsVectorFileWriter.CreateOrOverwriteLayer)
+                error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(temp_layer,
+                                                                           str(output_path),
+                                                                           transform,
                                                                            write_options)
-            # For geojson: read tempfile and dump it to output file
-            else:
-                with open(temp_path, 'r', encoding='utf-8') as file:
-                    data = json.load(file)
-                with open(str(output_path), 'w', encoding='utf-8') as f:
-                    json.dump(data, f)
-            # Collect added layers to later preview them
-            written_layers.append(layer)
-            if error:
-                # GPKG is a first try, if it fails - clear everything and try GeoJSON
-                if driver == "GPKG":
-                    written_layers = []
+                if error:
+                    # Cleanup on failure
                     try:
-                        os.remove(output_path)
-                    except:
+                        output_path.unlink()
+                    except OSError:
                         pass
+                    written_layers.clear()
+                    break
+                # Load the output layer
+                out_uri = f"{output_path}|layername={layer_name}"
+                out_layer = QgsVectorLayer(out_uri, layer_name, "ogr")
+                if out_layer.isValid():
+                    written_layers.append(out_layer)
+                first_layer = False
+            # For GeoJSON: write with json
+            else:
+                if not output_path.exists():
+                    with Path(temp_path).open("r", encoding="utf-8") as src, \
+                        output_path.open("w", encoding="utf-8") as dst:
+                        json.dump(json.load(src), dst)
+                out_layer = QgsVectorLayer(f"{output_path}|geometrytype={geom_key}", layer_name, "ogr")
+                if out_layer.isValid():
+                    written_layers.append(out_layer)
+            # Add layer style
+            out_layer.loadNamedStyle(get_style_name(processing.workflow_def,
+                                                    out_layer,
+                                                    processing.style_name))
         return written_layers, error, msg
 
     def ensure_unique_path(self,
