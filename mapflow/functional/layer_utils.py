@@ -873,9 +873,8 @@ class ResultsLoader(QObject):
             # For GeoJSON: write with json
             else:
                 if not output_path.exists():
-                    with Path(temp_path).open("r", encoding="utf-8") as src, \
-                        output_path.open("w", encoding="utf-8") as dst:
-                        json.dump(json.load(src), dst)
+                    with Path(temp_path).open("rb") as src, output_path.open("wb") as dst:
+                        dst.write(src.read())
                 out_layer = QgsVectorLayer(f"{output_path}|geometrytype={geom_key}", layer_name, "ogr")
                 if out_layer.isValid():
                     written_layers.append(out_layer)
