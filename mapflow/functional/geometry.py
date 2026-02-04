@@ -47,7 +47,6 @@ def clip_aoi_to_catalog_extent(catalog_aoi: QgsGeometry,
     try:
         # Find the intersection
         intersection = intersect_geoms(aoi_layer, catalog_layer)
-        print ("no fix needed")
     except:
         # If intersection function fails, fix geometries beforehand
         fixed_aoi_layer = fix_geoms(aoi_layer)
@@ -62,7 +61,6 @@ def fix_geoms(layer: QgsVectorLayer) -> QgsVectorLayer:
             'native:fixgeometries', 
             {'INPUT':layer, 'METHOD':1, 'OUTPUT':'memory:'}
         )['OUTPUT']
-        print ("fix with method 1")
         return fixed_layer
     except: # if structure repair (union) fails, try linework repair (keeps areas that don't overlap)
         try:
@@ -70,7 +68,6 @@ def fix_geoms(layer: QgsVectorLayer) -> QgsVectorLayer:
             'native:fixgeometries', 
             {'INPUT':layer, 'METHOD':0, 'OUTPUT':'memory:'}
             )['OUTPUT']
-            print ("fix with method 0")
             return fixed_layer
         except: # if that also fails, just return original
             return layer
