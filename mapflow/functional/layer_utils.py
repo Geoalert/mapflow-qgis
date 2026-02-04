@@ -662,11 +662,11 @@ class ResultsLoader(QObject):
         # Read and decode response data
         try:
             response_data = response.readAll().data()
+            data = json.loads(response_data)
         except:
-            self.message_bar.pushMessage(self.tr("Mapflow error"),
-                                         self.tr("Empty response from server"))
+            self.message_bar.pushWarning(self.tr("Mapflow error"),
+                                         self.tr("Invalid response from the server"))
             return
-        data = json.loads(response_data)
         # Check geometry types in the data
         geom_types_dict = self.collect_geometry_types(data)
         # Change JSON fields to str
