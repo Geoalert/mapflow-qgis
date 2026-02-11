@@ -207,6 +207,7 @@ class ProcessingService(QObject):
         if not provider:
             return None
         
+        print (ui_start_params)
         wd = self.app_context.get_workflow_def(ui_start_params.wd_name)\
 
         provider_params, processing_meta = get_provider_params(provider=provider,
@@ -271,6 +272,7 @@ class ProcessingService(QObject):
         :param response: The HTTP response.
         """
         response_data = json.loads(response.readAll().data())
+        print (response_data)
         processings = [ProcessingDTO.from_dict(entry) for entry in response_data]
         if all(p.is_final_state for p in processings):
             # We do not re-fetch the processings, if nothing is going to change.

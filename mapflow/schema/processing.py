@@ -116,11 +116,7 @@ class ProcessingParams(Serializable, SkipDataClass):
                         UserDefinedParams]
     
     @classmethod
-<<<<<<< HEAD
-    def from_dict(cls, params_dict: dict):
-=======
     def from_dict(cls, params_dict: Optional[dict]):
->>>>>>> bc12a4d (WIP big refactor: app_context class; processing and project service/controller/view; processing history full refactoring)
         if not params_dict:
             return None
         clsf = [f.name for f in fields(cls)]

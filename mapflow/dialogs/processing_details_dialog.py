@@ -22,7 +22,7 @@ class ProcessingDetailsDialog(*uic.loadUiType(ui_path / 'processing_details.ui')
         # Set name
         self.nameInfo.setText(processing.name)
         # Set id
-        self.idInfo.setText(processing.id_)
+        self.idInfo.setText(processing.id)
         # Set description 
         if processing.description:
             self.descriptionLabel.setVisible(True)
@@ -60,7 +60,7 @@ class ProcessingDetailsDialog(*uic.loadUiType(ui_path / 'processing_details.ui')
         self.providerInfo.setText(str(provider))
         self.providerInfo.setFixedWidth(self.providerInfo.sizeHint().width())
         # Set model
-        self.modelInfo.setText(processing.workflow_def)
+        self.modelInfo.setText(processing.workflowDef.name)
         # Set model options
         if processing.blocks: 
             blocks = ", \n".join(block.name for block in processing.blocks if block.enabled)

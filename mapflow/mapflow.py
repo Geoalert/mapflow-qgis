@@ -46,7 +46,7 @@ from .entity.provider import (UsersProvider,
                               MyImageryProvider,
                               ProviderInterface,
                               BasicAuth)
-from mapflow.schema.workflow_def import WorkflowDef
+from .schema.workflow_def import WorkflowDef
 from .errors import (ProcessingInputDataMissing,
                      BadProcessingInput,
                      PluginError,
@@ -195,7 +195,7 @@ class Mapflow(QObject):
                                                        self.dlg,
                                                        self.iface,
                                                        self.result_loader,
-                                                       self.plugin_version,
+                                                       self.app_context.plugin_version,
                                                        self.temp_dir,
                                                        self.allow_enable_processing,
                                                        app_context=self.app_context)
@@ -2521,7 +2521,7 @@ class Mapflow(QObject):
     def review_processing_callback(self, response: QNetworkReply):
         # Clear successfully uploaded review
         self.review_dialog.reviewComment.setText("")
-        self.processing_fetch_timer.start()
+        self.processing_service.processing_fetch_timer.start()
         self.processing_service.get_processings()
 
     def show_review_dialog(self):
@@ -2600,7 +2600,7 @@ class Mapflow(QObject):
             self.enable_review_submit(processing.status.is_ok and processing.reviewStatus.is_in_review)
         else:
             self.enable_rating_submit(processing.status.is_ok)
-        self.enable_restart_action(self.user_role.can_start_processing 
+        self.enable_restart_action(self.app_context.user_role.can_start_processing 
                                    and (processing.status.is_failed 
                                         or processing.status.is_cancelled))
     
@@ -2774,7 +2774,7 @@ class Mapflow(QObject):
         """Close the plugin and clear credentials from cache."""
         # set token to empty to delete it from settings
         self.settings.setValue('token', '')
-        self.processing_fetch_timer.stop()
+        self.processing_service.processing_fetch_timer.stop()
         self.user_status_update_timer.stop()
         self.app_context.logged_in = False
         self.http.logout()
@@ -2976,7 +2976,7 @@ class Mapflow(QObject):
         if not processing:
             return
         error = None
-        if processing.errors:
+        if processing.messages:
             error = processing.error_message(raw=self.config.SHOW_RAW_ERROR)
         dialog = ProcessingDetailsDialog(self.dlg)
         dialog.toSourceButton.clicked.connect(lambda: self.show_processing_source(
@@ -3123,7 +3123,7 @@ class Mapflow(QObject):
         if not processing:
             return
         pid = processing.id_
-        if self.user_role.can_start_processing:
+        if self.app_context.user_role.can_start_processing:
             self.http.post(
                 url=f"{self.server}/processings/{pid}/restart",
                 callback=self.post_processing_callback,
