@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Dict, List, Optional, Any
 
-from qgis.core import QgsGeometry, QgsVectorLayer, QgsProject
+from qgis.core import QgsGeometry, QgsVectorLayer, QgsProject, QgsSettings
 from ..schema.project import UserRole
 
 if TYPE_CHECKING:
@@ -24,6 +24,7 @@ class AppContext:
     plugin_name: str = ""
     plugin_version: str = ""
     temp_dir: Optional[str] = None
+    settings = QgsSettings()
     
     # === Project & Processing Selection ===
     project_id: Optional[str] = None
@@ -68,6 +69,15 @@ class AppContext:
     selected_image: Optional["ImageReturnSchema"] = None
     mosaics = Optional[Dict]
     images = Optional[List]
+
+    # === Permissions ===
+    allow_enable_processing = {'aoi_loaded': True, 
+                               'my_mosaic_loaded': True, 
+                               'my_image_loaded': True} # all true -> startProcessing button can be enabled
+    
+    def __init__(self, config):
+        self.config = config
+        self.zoom_selector = (self.config.ZOOM_SELECTOR.lower() == "true")
 
     @property
     def workflow_defs(self):

@@ -4,7 +4,12 @@ from typing import Dict, Optional, List
 from PyQt5.QtCore import QObject, QTimer
 from PyQt5.QtNetwork import QNetworkReply
 from PyQt5.QtWidgets import QMessageBox
-from .provider_service import get_provider_params, setup_provider_info, validate_provider_params
+from .provider_service import (get_provider_params, 
+                               setup_provider_info, 
+                               validate_provider_params, 
+                               duplicate_aoi_based_on_provider,
+                               duplicate_provider_and_model)
+                               
 from .. import helpers
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs.confirm_processing_start_dialog import ConfirmProcessingStartDialog
@@ -20,6 +25,7 @@ from ...schema import ProcessingDTO, UpdateProcessingSchema, ProcessingStatus, B
 from ...schema.processing import ProcessingUIParams
 from ..service.alert_service import alert, AlertService
 from ..app_context import AppContext
+from ...functional.layer_utils import ResultsLoader
 
 class ProcessingService(QObject):
     """
@@ -30,9 +36,8 @@ class ProcessingService(QObject):
                  http: Http,
                  dlg: MainDialog,
                  iface,
-                 result_loader,
+                 result_loader: ResultsLoader,
                  app_context: AppContext,
-                 settings,
                  timer_interval,
                  processing_request_callback=None):
         super().__init__()
@@ -41,7 +46,6 @@ class ProcessingService(QObject):
         self.iface = iface
         self.result_loader = result_loader
         self.app_context = app_context
-        self.settings = settings
         self.processing_request_callback = processing_request_callback
         self.view = ProcessingView(dlg=dlg)
         self.api = ProcessingApi(http=http,
@@ -53,7 +57,6 @@ class ProcessingService(QObject):
         self.processings_history = None # ProcessingHistory() - local storage for active processings list
         self.processing_fetch_timer = QTimer(dlg)
         self.processing_fetch_timer.setInterval(timer_interval)
-        self.deleting_processings = None
         self.processing_cost = 0
 
     def load_processing_history(self):
@@ -64,7 +67,7 @@ class ProcessingService(QObject):
         if self.app_context.current_project:
             try:
                 self.processings_history = ProcessingHistory.from_settings(
-                    self.settings, UUID(self.app_context.current_project.id)
+                    self.app_context.settings, UUID(self.app_context.current_project.id)
                 )
                 print(f"Read processings history: {len(self.processings_history.processing_statuses)}")
             except (ValueError, KeyError):
@@ -180,7 +183,7 @@ class ProcessingService(QObject):
                 # Set "Confirm" checkbox opposite to "Don't show again" if they are not already the same
                 if not dialog.checkBox.isChecked() != self.dlg.cornfirmProcessingStart.isChecked():
                     self.dlg.cornfirmProcessingStart.setChecked(not dialog.checkBox.isChecked())
-                    self.settings.setValue("confirmProcessingStart", str(not dialog.checkBox.isChecked()))
+                    self.app_context.settings.setValue("confirmProcessingStart", str(not dialog.checkBox.isChecked()))
             dialog.checkBox.toggled.connect(set_start_confirmation)
             dialog.accepted.connect(post_processing)
             # Fill dialog with parameters
@@ -204,16 +207,19 @@ class ProcessingService(QObject):
         return
         
     def get_processing_schema(self, ui_start_params, provider):
-        if not provider:
+        if not provider or not self.app_context.aoi:
             return None
         
-        print (ui_start_params)
-        wd = self.app_context.get_workflow_def(ui_start_params.wd_name)\
+        wd = self.app_context.get_workflow_def(ui_start_params.wd_name)
+        if len(wd.blocks) > 0 and len(self.dlg.modelOptions) == 0:
+            # Wait till options are added and this function is  re-called
+            blocks = []
+        else:
+            blocks = wd.get_enabled_blocks(self.dlg.enabled_blocks())
 
         provider_params, processing_meta = get_provider_params(provider=provider,
                                                                zoom=ui_start_params.zoom)
-
-        #! print (provider_params)
+        
         processing_params = PostProcessingSchemaV2(
             name=ui_start_params.name,
             description=None,
@@ -222,8 +228,7 @@ class ProcessingService(QObject):
             geometry=json.loads(self.app_context.aoi.asJson()),
             params=provider_params,
             meta=processing_meta,
-            blocks=wd.get_enabled_blocks(self.dlg.enabled_blocks())
-        )
+            blocks=blocks)
 
 
 
@@ -238,7 +243,8 @@ class ProcessingService(QObject):
             self.tr("Success! We'll notify you when the processing has finished."),
             QMessageBox.Information
         )
-        new_processing = ProcessingDTO.from_dict(json.loads(response.readAll().data()))
+        response_data = json.loads(response.readAll().data())
+        new_processing = ProcessingDTO.from_dict(response_data)
         self.view.clear_processing_name(new_processing.name)
         self.processing_fetch_timer.start()  # start monitoring
         # Add to history
@@ -272,7 +278,6 @@ class ProcessingService(QObject):
         :param response: The HTTP response.
         """
         response_data = json.loads(response.readAll().data())
-        print (response_data)
         processings = [ProcessingDTO.from_dict(entry) for entry in response_data]
         if all(p.is_final_state for p in processings):
             # We do not re-fetch the processings, if nothing is going to change.
@@ -298,7 +303,7 @@ class ProcessingService(QObject):
         
         # Update history and get report of terminal status changes
         print(f"In update_local_processings: {len(self.processings_history.processing_statuses)}")
-        terminal_changes = self.processings_history.update(processings_dict, self.settings)
+        terminal_changes = self.processings_history.update(processings_dict, self.app_context.settings)
         
         # Notify user of newly completed/failed processings
         self._notify_status_changes(terminal_changes, processings_dict)
@@ -340,15 +345,21 @@ class ProcessingService(QObject):
         """Add new processing status to history and persist to settings."""
         if self.processings_history:
             self.processings_history.add(new_processing.id, new_processing.status)
-            self.processings_history.to_settings(self.settings)
+            self.processings_history.to_settings(self.app_context.settings)
 
-    def update_processing(self, processing_id: UUID, processing: UpdateProcessingSchema):
-        self.api.update_processing(processing_id=processing_id, processing=processing, callback=self.update_processing_callback)
+    def update_processing(self, processing_id: Optional[UUID] = None, processing: Optional[UpdateProcessingSchema] = None):
+        if not processing:
+            return
+        self.api.update_processing(processing_id=processing_id, 
+                                   processing=processing, 
+                                   callback=self.update_processing_callback)
 
     def update_processing_callback(self, response: QNetworkReply):
-        processing = ProcessingDTO.from_dict(json.loads(response.readAll().data()))
+        response_data = json.loads(response.readAll().data())
+        processing = ProcessingDTO.from_dict(response_data)
         self.save_processing(processing)
         self.view.update_processing_name(processing_id=processing.id, new_name=processing.name)
+        self.processings[processing.id] = processing
 
     # Processing cost
     def update_processing_cost(self):
@@ -390,7 +401,6 @@ class ProcessingService(QObject):
         context_error = self.validate_context_params()
         if context_error:
             self.dlg.disable_processing_start(context_error)
-            print (context_error)
             return
         
         ui_start_params = self.view.read_processing_start_params()       
@@ -455,7 +465,7 @@ class ProcessingService(QObject):
                 reason = self.tr('Processing cost is not available:\n{message}').format(message=message)
             self.view.disable_processing_start(reason, clear_area=False)
 
-    def delete_processings(self) -> None:
+    def confirm_delete_processings(self) -> None:
         """Delete one or more processings from the server.
 
         Asks for confirmation in a pop-up dialog. Multiple processings can be selected.
@@ -463,51 +473,37 @@ class ProcessingService(QObject):
         """
         # Pause refreshing processings table to avoid conflicts
         self.processing_fetch_timer.stop()
-        selected_ids = self.selected_processing_ids()
+        selected_ids = self.view.selected_processing_ids()
         # Ask for confirmation if there are selected rows
         if selected_ids and alert(
                 self.tr('Delete selected processings?'), QMessageBox.Question
         ):
-            self.deleting_processings = {id_: None for id_ in selected_ids}
-            for id_ in selected_ids:
-                self.api.delete_processing(processing_id=id_,
-                                           callback=self.delete_processings_callback,
-                                           error_handler=self.delete_processings_error_handler,
-                                           callback_kwargs={"processing_id": id_},
-                                           error_handler_kwargs={"processing_id": id_})
-
-    def _finalize_processing_delete(self):
-        self.view.delete_processings_from_table([key for key, value in self.deleting_processings.items() if value])
+            self.delete_processings(response=None, processings=selected_ids, deleted=[], failed=[])
+            
+    def delete_processings(self, 
+                           response: QNetworkReply, 
+                           processings: List[UUID],
+                           deleted: List[UUID], 
+                           failed: List[UUID]):
         # todo: save and report error responses?
-        self.report_http_error(self.tr(f"Failed to remove processings {[key for key, value in self.deleting_processings.items() if value is False]} "))
-        self.processing_fetch_timer.start()
-        self.deleting_processings = None
-
-    def delete_processings_callback(self,
-                                    _: QNetworkReply,
-                                    processing_id: str) -> None:
-        """Delete processings from the table after they've been deleted from the server.
-
-        :param id_: ID of the deleted processing.
-        """
-        self.deleting_processings[processing_id] = True
-        if any(status is None for status in self.deleting_processings.values()):
-            pass
+        if len(processings) == 0:
+            self.view.delete_processings_from_table(deleted)
+            if len(failed) > 0:
+                failed_ids = ', <br>'.join(failed)
+                alert(self.tr(f"Failed to remove processings with following ids: <center> {failed_ids}"))
+            self.processing_fetch_timer.start()
         else:
-            self._finalize_processing_delete()
-
-    def delete_processings_error_handler(self,
-                                         _: QNetworkReply,
-                                         processing_id: str) -> None:
-        """Error handler for processing deletion request.
-
-        :param response: The HTTP response.
-        """
-        self.deleting_processings[processing_id] = False
-        if any(status is None for status in self.deleting_processings.values()):
-            pass
-        else:
-            self._finalize_processing_delete()
+            processing_to_delete = processings[0]
+            non_deleted = processings[1:]
+            self.api.delete_processing(processing_id=processing_to_delete,
+                                       callback=self.delete_processings,
+                                       error_handler=self.delete_processings,
+                                       callback_kwargs={'processings': non_deleted,
+                                                        'deleted': list(deleted) + [processing_to_delete],
+                                                        'failed': failed},
+                                       error_handler_kwargs={'processings': non_deleted,
+                                                             'deleted': deleted,
+                                                             'failed': list(failed) + [processing_to_delete]})
 
     def stop(self):
         self.processing_fetch_timer.stop()
@@ -524,3 +520,31 @@ class ProcessingService(QObject):
         if not first:
             return None
         return first[0]
+    
+    def restart_processing(self):
+        processing = self.selected_processing()
+        if not processing:
+            return
+        pid = processing.id
+        if self.app_context.user_role.can_start_processing:
+            self.api.restart_processing(processing_id=pid,
+                                        callback=self.start_processing_callback,
+                                        error_handler=self.start_processing_error_handler)
+            
+    def duplicate_processing(self):
+        processing = self.selected_processing()
+        if not processing:
+            return
+        self.dlg.disable_processing_start("")
+        self.app_context.allow_enable_processing['aoi_loaded'] = False
+        self.dlg.processingName.setText(processing.name)
+        """ self.duplicate_provider(processing)
+        self.duplicate_model(processing)
+        self.duplicate_model_options(processing) """ #!
+        duplicate_provider_and_model(processing)
+        self.result_loader.download_aoi_file(pid=processing.id, callback=self.duplicate_aoi_callback)
+
+    def duplicate_aoi_callback(self, response: QNetworkReply, path: str) -> None:
+        self.result_loader.download_aoi_file_callback(response, path)
+        provider = self.selected_processing().params.sourceParams
+        duplicate_aoi_based_on_provider(provider)

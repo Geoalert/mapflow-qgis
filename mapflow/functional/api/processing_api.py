@@ -1,4 +1,4 @@
-from typing import Callable, Union
+from typing import Callable, Union, Optional
 from uuid import UUID
 
 from PyQt5.QtCore import QObject, pyqtSignal, QFile, QIODevice
@@ -38,8 +38,11 @@ class ProcessingApi(QObject):
             body=data.as_json().encode()
         )
 
-    def update_processing(self, processing_id: Union[UUID, str], processing: UpdateProcessingSchema, callback: Callable, error_handler: Callable):
-        self.http.put(path=f"processings/{processing_id}",
+    def update_processing(self, processing_id: Union[UUID, str], 
+                          processing: UpdateProcessingSchema, 
+                          callback: Callable, 
+                          error_handler: Optional[Callable] = None):
+        self.http.put(path=f"processings/{processing_id}/v2",
                        body=processing.as_json().encode(),
                        headers={},
                        callback=callback,
@@ -51,7 +54,7 @@ class ProcessingApi(QObject):
                           error_handler: Callable,
                           callback_kwargs: dict,
                           error_handler_kwargs: dict) -> None:
-        self.http.delete(path="processings/{processing_id}",
+        self.http.delete(path=f"processings/{processing_id}",
                          callback = callback,
                          callback_kwargs = callback_kwargs,
                          use_default_error_handler=False,
@@ -79,4 +82,15 @@ class ProcessingApi(QObject):
             body=data.as_json().encode(),
             use_default_error_handler=False,
             error_handler=callback
+        )
+    
+    def restart_processing(self,
+                           processing_id: UUID,
+                           callback: Callable,
+                           error_handler: Callable):
+        self.http.post(
+            path=f"processings/{processing_id}/restart/v2",
+            callback=callback,
+            error_handler=error_handler,
+            use_default_error_handler=False
         )

@@ -21,7 +21,8 @@ def generate_local_style_path(name: str) -> str:
 def generate_tile_style_path(name: str) -> str:
     return str(Path(__file__).parent / 'static' / 'styles' / 'tiles' / (name + '.qml'))
 
-def get_style_name(wd_name: str, layer: QgsVectorLayer, style_name: Optional[str] = None) -> str:
+def get_style_name(wd: str, layer: QgsVectorLayer, style_name: Optional[str] = None) -> str:
+    wd_name = wd.name
     if isinstance(layer, QgsVectorTileLayer):
         style_name = get_tile_style_name(wd_name, style_name)
         return generate_tile_style_path(style_name)

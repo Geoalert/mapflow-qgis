@@ -828,7 +828,7 @@ class ResultsLoader(QObject):
         """Try saving available geometry layers into GPKG or GeoJSON."""
         transform = self.context.project.transformContext()
         suffix = "." + driver.lower() # pick suffix based on driver
-        output_path = self.ensure_unique_path(Path(self.dlg.outputDirectory.text()), processing.id_, suffix)
+        output_path = self.ensure_unique_path(Path(self.dlg.outputDirectory.text()), processing.id, suffix)
         write_options = QgsVectorFileWriter.SaveVectorOptions()
         write_options.driverName = driver
         # Specify parameters that will change
@@ -880,9 +880,8 @@ class ResultsLoader(QObject):
                 if out_layer.isValid():
                     written_layers.append(out_layer)
             # Add layer style
-            out_layer.loadNamedStyle(get_style_name(processing.workflow_def,
-                                                    out_layer,
-                                                    processing.style_name))
+            out_layer.loadNamedStyle(get_style_name(processing.workflowDef,
+                                                    out_layer))
         return written_layers, error, msg
 
     def ensure_unique_path(self,

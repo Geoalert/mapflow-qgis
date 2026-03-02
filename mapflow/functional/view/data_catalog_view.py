@@ -9,15 +9,16 @@ from PyQt5.QtGui import QPixmap, QFontMetrics
 from ...dialogs import icons
 from ...dialogs.error_message_widget import ErrorMessageWidget
 from ...dialogs.main_dialog import MainDialog
+from ...functional.app_context import AppContext
 from ...functional.helpers import get_readable_size
 from ...schema import MyImageryParams, UserDefinedParams
 from ...schema.data_catalog import MosaicReturnSchema, ImageReturnSchema
 
 class DataCatalogView(QObject):
-    def __init__(self, dlg: MainDialog, allow_enable_processing: dict):
+    def __init__(self, dlg: MainDialog, app_context: AppContext):
         super().__init__()
         self.dlg = dlg
-        self.allow_enable_processing = allow_enable_processing
+        self.app_context = app_context
 
         # Setup menu for uploading images to mosaic
         self.upload_image_menu = QMenu()
@@ -337,26 +338,26 @@ class DataCatalogView(QObject):
             self.show_mosaics_table(None)
             item = self.dlg.mosaicTable.findItems(mosaic_id, Qt.MatchExactly)[0]
             self.dlg.mosaicTable.setCurrentCell(item.row(), 1)
-            self.allow_enable_processing['my_mosaic_loaded'] = True
-            if not False in self.allow_enable_processing.values():
+            self.app_context.allow_enable_processing['my_mosaic_loaded'] = True
+            if not False in self.app_context.allow_enable_processing.values():
                 self.dlg.startProcessing.setEnabled(True)
         except IndexError:
             self.alert(self.tr("No imagery collection with id '{mosaic_id}' was found").format(mosaic_id=mosaic_id))
-            for key in self.allow_enable_processing:
-                self.allow_enable_processing[key] = True
+            for key in self.app_context.allow_enable_processing:
+                self.app_context.allow_enable_processing[key] = True
 
     def select_image_cell(self, image_id):
         try:
             self.show_images_table()
             item = self.dlg.imageTable.findItems(image_id, Qt.MatchExactly)[0]
             self.dlg.imageTable.setCurrentCell(item.row(), 1)
-            self.allow_enable_processing['my_image_loaded'] = True
-            if not False in self.allow_enable_processing.values():
+            self.app_context.allow_enable_processing['my_image_loaded'] = True
+            if not False in self.app_context.allow_enable_processing.values():
                 self.dlg.startProcessing.setEnabled(True)
         except IndexError:
             self.alert(self.tr("No image with id '{image_id}' was found").format(image_id=image_id))
-            for key in self.allow_enable_processing:
-                self.allow_enable_processing[key] = True
+            for key in self.app_context.allow_enable_processing:
+                self.app_context.allow_enable_processing[key] = True
 
     def selected_images_indecies(self, limit=None):
         selected_rows = list(set(index.row() for index in self.dlg.imageTable.selectionModel().selectedIndexes()))

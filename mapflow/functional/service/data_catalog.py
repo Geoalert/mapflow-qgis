@@ -22,6 +22,7 @@ from ..api.data_catalog_api import DataCatalogApi
 from ..view.data_catalog_view import DataCatalogView
 from ...http import Http
 from ...functional import layer_utils, helpers
+from ...functional.app_context import AppContext
 from ...config import Config
 from ...entity.provider import MyImageryProvider
 
@@ -45,8 +46,7 @@ class DataCatalogService(QObject):
                  result_loader,
                  plugin_version,
                  temp_dir,
-                 allow_enable_processing,
-                 app_context):
+                 app_context: AppContext):
         super().__init__()
         self.dlg = dlg
         self.iface = iface
@@ -55,9 +55,8 @@ class DataCatalogService(QObject):
         self.project = QgsProject.instance()
         self.result_loader = result_loader
         self.plugin_version = plugin_version
-        self.allow_enable_processing = allow_enable_processing
         self.api = DataCatalogApi(http=http, server=server, dlg=dlg, iface=iface, result_loader=self.result_loader, plugin_version=self.plugin_version)
-        self.view = DataCatalogView(dlg=dlg, allow_enable_processing=self.allow_enable_processing)
+        self.view = DataCatalogView(dlg=dlg, app_context=self.app_context)
         self.mosaics = {}
         self.images = []
         self.image_max_size_pixels = Config.MAX_FILE_SIZE_PIXELS
@@ -631,8 +630,8 @@ class DataCatalogService(QObject):
         ErrorMessageWidget(parent=QApplication.activeWindow(),
                            text=error_summary).show()
         self.dlg.stackedLayout.setCurrentIndex(0)
-        for key in self.allow_enable_processing:
-            self.allow_enable_processing[key] = True
+        for key in self.app_context.allow_enable_processing:
+            self.app_context.allow_enable_processing[key] = True
 
 
     # Other
