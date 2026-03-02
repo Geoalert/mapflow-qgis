@@ -122,6 +122,7 @@ class ProcessingParams(Serializable, SkipDataClass):
         clsf = [f.name for f in fields(cls)]
         processing_params = cls(**{k: v for k, v in params_dict.items() if k in clsf})
         source_params = processing_params.sourceParams
+
         if source_params.get("dataProvider"):
             source_params = DataProviderParams(DataProviderSchema(**source_params.get("dataProvider")))
         elif source_params.get("myImagery"):

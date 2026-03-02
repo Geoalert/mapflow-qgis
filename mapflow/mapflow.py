@@ -57,7 +57,7 @@ from .functional import layer_utils, helpers
 from .functional.auth import get_auth_id
 from .functional.geometry import clip_aoi_to_image_extent
 from .functional.service import ProcessingService, ProjectService, DataCatalogService, ProviderService
-from .functional.service import provider_service
+from .functional.service import provider_service #!
 from .functional.service.alert_service import alert, AlertService
 from .http import (Http,
                    get_error_report_body,
@@ -94,7 +94,7 @@ class Mapflow(QObject):
         """
         # init configs
         self.config = Config()
-        self.app_context = AppContext()
+        self.app_context = AppContext(self.config)
         # Set max_aois_per_processing from config as default
         self.app_context.max_aois_per_processing = self.config.MAX_AOIS_PER_PROCESSING
         # init empty params
@@ -108,7 +108,7 @@ class Mapflow(QObject):
         self.plugin_dir = os.path.dirname(__file__)
         self.plugin_name = self.config.PLUGIN_NAME  # aliased here to be overloaded in submodules
         # Settings will be used to store credentials and various UI customizations
-        self.settings = QgsSettings()
+        #! self.app_context.settings = QgsSettings()
         # Get the server environment to connect to (for admins)
         self.server = self.config.SERVER
         
@@ -123,7 +123,7 @@ class Mapflow(QObject):
         self.toolbar.setObjectName(self.plugin_name)
         # Init project
         # Translation
-        locale = self.settings.value('locale/userLocale', 'en_US')[0:2]
+        locale = self.app_context.settings.value('locale/userLocale', 'en_US')[0:2]
         locale_path = os.path.join(self.plugin_dir, 'i18n', f'mapflow_{locale}.qm')
         if os.path.exists(locale_path):
             self.translator = QTranslator()
@@ -134,11 +134,11 @@ class Mapflow(QObject):
         QCoreApplication.translate('QPlatformTheme', '&Yes')
         QCoreApplication.translate('QPlatformTheme', '&No')
         # Create a namespace for the plugin settings
-        self.settings.beginGroup(self.plugin_name.lower())
-        if self.settings.value('processings') is None:
-            self.settings.setValue('processings', {})
-        # Set projectsfrom settings if it was opened before
-        self.app_contextproject_id = self.settings.value("project_id")
+        self.app_context.settings.beginGroup(self.plugin_name.lower())
+        if self.app_context.settings.value('processings') is None:
+            self.app_context.settings.setValue('processings', {})
+        # Set projects from settings if it was opened before
+        self.app_context.project_id = self.app_context.settings.value("project_id")
         # Store user's current processing
         # Imagery search pagination
         self.search_page_offset = 0
@@ -148,9 +148,9 @@ class Mapflow(QObject):
         self.my_imagery_provider_instance = None
 
         # Init dialogs
-        self.use_oauth = (self.settings.value('use_oauth', 'false').lower() == 'true')
+        self.use_oauth = (self.app_context.settings.value('use_oauth', 'false').lower() == 'true')
         self.plugin_icon = plugin_icon
-        self.dlg = MainDialog(self.main_window, self.settings)
+        self.dlg = MainDialog(self.main_window, self.app_context.settings)
         self.dlg_login = self.set_up_login_dialog()
         self.review_dialog = ReviewDialog(self.dlg)
         self.dlg_provider = ProviderDialog(self.dlg)
@@ -170,15 +170,12 @@ class Mapflow(QObject):
                          self.default_error_handler)
         self.calculator = QgsDistanceArea()
         # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
-        self.dlg.outputDirectory.setText(self.settings.value('outputDir'))
+        self.dlg.outputDirectory.setText(self.app_context.settings.value('outputDir'))
 
         # Setup temporary directory from setting or skip for now
         self.temp_dir = None
         self.setup_tempdir()
         self.app_context.temp_dir = self.temp_dir
-
-        # Permisssions for startProcessing button to be enabled back after disabling
-        self.allow_enable_processing = {'aoi_loaded': True, 'my_mosaic_loaded': True, 'my_image_loaded': True}
 
         # Initialize services
         # Initialize AlertService singleton
@@ -186,7 +183,7 @@ class Mapflow(QObject):
         self.result_loader = layer_utils.ResultsLoader(iface=self.iface,
                                                        maindialog=self.dlg,
                                                        http=self.http,
-                                                       settings=self.settings,
+                                                       settings=self.app_context.settings,
                                                        context=self.app_context
                                                        )
 
@@ -197,49 +194,53 @@ class Mapflow(QObject):
                                                        self.result_loader,
                                                        self.app_context.plugin_version,
                                                        self.temp_dir,
-                                                       self.allow_enable_processing,
                                                        app_context=self.app_context)
         self.data_catalog_controller = DataCatalogController(self.dlg, self.data_catalog_service)
 
         self.project_service = ProjectService(http=self.http,
                                               app_context=self.app_context,
-                                              settings=self.settings,
                                               dlg=self.dlg,
                                               config=self.config,
                                               area_calc_fn=self.calculate_aoi_area_use_image_extent)
+        
+        self.provider_service = ProviderService(providers=ProvidersList([]),
+                                                dlg=self.dlg,
+                                                app_context=self.app_context,
+                                                config=self.config,
+                                                data_catalog_service=self.data_catalog_service)
 
         self.processing_service = ProcessingService(http=self.http,
                                                     dlg=self.dlg,
                                                     iface=self.iface,
                                                     result_loader=self.result_loader,
                                                     app_context=self.app_context,
-                                                    settings=self.settings,
                                                     timer_interval=self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000,
                                                     processing_request_callback=self.create_processing_request)
-        self.project_processing_controller = ProjectProcessingController(self.dlg,
-                                                                         self.processing_service,
-                                                                         self.project_service,
-                                                                         self.settings,
-                                                                         self.app_context)
+        
+        self.project_processing_controller = ProjectProcessingController(dlg=self.dlg,
+                                                                         processing_service=self.processing_service,
+                                                                         project_service=self.project_service,
+                                                                         app_context=self.app_context)
+        
         # load providers from settings
         errors = []
         try:
-            self.user_providers, errors = ProvidersList.from_settings(settings=self.settings)
-            self.sentinel_providers = ProvidersList([SentinelProvider(proxy=self.server)])
-            self.default_providers = ProvidersList([])
-            self.providers = ProvidersList([])
+            self.provider_service.user_providers, errors = ProvidersList.from_settings(settings=self.app_context.settings)
+            self.provider_service.sentinel_providers = ProvidersList([SentinelProvider(proxy=self.server)])
+            self.provider_service.default_providers = ProvidersList([])
+            self.provider_service.providers = ProvidersList([])
         except Exception as e:
             self.alert(self.tr("Error during loading the data providers: {e}").format(str(e)), icon=Qgis.Warning)
         if errors:
             self.alert(self.tr('We failed to import providers from the settings. Please add them again'),
                        icon=Qgis.Warning)
-        self.update_providers()
-        self.dlg.minIntersection.setValue(int(self.settings.value('metadataMinIntersection', 0)))
-        self.dlg.maxCloudCover.setValue(int(self.settings.value('metadataMaxCloudCover', 100)))
+        self.provider_service.update_providers()
+        self.dlg.minIntersection.setValue(int(self.app_context.settings.value('metadataMinIntersection', 0)))
+        self.dlg.maxCloudCover.setValue(int(self.app_context.settings.value('metadataMaxCloudCover', 100)))
         # Set default metadata dates
         today = QDate.currentDate()
-        self.dlg.metadataFrom.setDate(self.settings.value('metadataFrom', today.addMonths(-6)))
-        self.dlg.metadataTo.setDate(self.settings.value('metadataTo', today))
+        self.dlg.metadataFrom.setDate(self.app_context.settings.value('metadataFrom', today.addMonths(-6)))
+        self.dlg.metadataTo.setDate(self.app_context.settings.value('metadataTo', today))
         # SET UP SIGNALS & SLOTS
         self.dlg.modelCombo.currentIndexChanged.connect(self.on_model_change)
         self.dlg.modelOptionsChanged.connect(self.on_options_change)
@@ -261,7 +262,7 @@ class Mapflow(QObject):
         self.app_context.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
         # Processings
         self.dlg.processingsTable.cellDoubleClicked.connect(self.load_results)
-        self.dlg.deleteProcessings.clicked.connect(self.processing_service.delete_processings)
+        self.dlg.deleteProcessings.clicked.connect(self.processing_service.confirm_delete_processings)
         self.dlg.filterProcessings.textChanged.connect(self.dlg.filter_processings_table)
         # Processings ratings
         self.dlg.processingsTable.itemSelectionChanged.connect(self.enable_feedback)
@@ -286,8 +287,6 @@ class Mapflow(QObject):
         self.dlg.addProvider.clicked.connect(self.add_provider)
         self.dlg.editProvider.clicked.connect(self.edit_provider)
         self.dlg.removeProvider.clicked.connect(self.remove_provider)
-
-        ProviderService(self.providers, self.dlg, self.app_context, self.config)
 
         # Maxar
         self.config_search_columns = ConfigColumns()
@@ -335,9 +334,9 @@ class Mapflow(QObject):
         # Zoom selection for data source
         self.zoom_selector = (self.config.ZOOM_SELECTOR.lower() == "true")
         self.zoom = None
-        if self.zoom_selector:
+        if self.app_context.zoom_selector:
             self.dlg.zoomCombo.currentIndexChanged.connect(self.on_zoom_change)
-            saved_zoom = self.settings.value('zoom')
+            saved_zoom = self.app_context.settings.value('zoom')
             if saved_zoom is None:
                 self.dlg.zoomCombo.setCurrentIndex(0)
             else:
@@ -345,7 +344,7 @@ class Mapflow(QObject):
                 if zoom_index == -1:
                     # Fallback for situation if the settings contain value not available in the list
                     self.dlg.zoomCombo.setCurrentIndex(0)
-                    self.settings.setValue('zoom', None)
+                    self.app_context.settings.setValue('zoom', None)
                 else:
                     self.dlg.zoomCombo.setCurrentIndex(zoom_index)
 
@@ -375,7 +374,7 @@ class Mapflow(QObject):
 
     def toggle_all_layers(self, state: bool):
         self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
-        self.settings.setValue('useAllVectorLayers', str(self.dlg.useAllVectorLayers.isChecked()))
+        self.app_context.settings.setValue('useAllVectorLayers', str(self.dlg.useAllVectorLayers.isChecked()))
 
     def refresh_status(self):
         self.http.get(
@@ -407,6 +406,9 @@ class Mapflow(QObject):
         self.dlg.save_result_action.triggered.connect(self.download_results_file)
         self.dlg.download_aoi_action.triggered.connect(self.download_aoi_file)
         self.dlg.see_details_action.triggered.connect(self.show_details)
+        self.dlg.processing_update_action.triggered.connect(self.processing_service.update_processing)
+        self.dlg.processing_restart_action.triggered.connect(self.processing_service.restart_processing)
+        self.dlg.processing_duplicate_action.triggered.connect(self.processing_service.duplicate_processing)
         self.dlg.saveOptionsButton.setMenu(self.dlg.options_menu)
 
     def create_aoi_layer_from_map(self, action: QAction):
@@ -493,21 +495,22 @@ class Mapflow(QObject):
                         index: Optional[int] = None) -> None:
         wd_name = self.dlg.modelCombo.currentText()
         wd = self.app_context.get_workflow_def(wd_name)
-        self.set_available_imagery_sources(wd_name)
+        self.provider_service.set_available_imagery_sources(wd_name)
         if not wd:
             return
         self.show_wd_options(wd)
         self.dlg.show_wd_price(wd_price=wd.get_price(enable_blocks=self.dlg.enabled_blocks()),
                                wd_description=wd.description,
                                display_price=self.app_context.billing_type == BillingType.credits)
-        if self.app_context.billing_type == BillingType.credits:
-            # todo: here was a toggle to not call if from setup_workflow_defs, but maybe not so important?
-            self.processing_service.update_processing_cost()
+        if len(wd.blocks) == 0: # and for wd with options it will update cost later
+            if self.app_context.billing_type == BillingType.credits:
+                # todo: here was a toggle to not call if from setup_workflow_defs, but maybe not so important?
+                self.processing_service.update_processing_cost()
 
     def show_wd_options(self, wd: WorkflowDef):
         self.dlg.clear_model_options()
         for block in wd.optional_blocks:
-            self.dlg.add_model_option(block.displayName, checked=bool(self.settings.value(f"wd/{wd.id}/{block.name}", False)))
+            self.dlg.add_model_option(block.displayName, checked=bool(self.app_context.settings.value(f"wd/{wd.id}/{block.name}", False)))
         # Other wigets are disabled before the appearence of these checkboxes, so we do it here separately after adding them
         self.dlg.enable_model_options(self.app_context.user_role.can_start_processing)
 
@@ -516,20 +519,20 @@ class Mapflow(QObject):
         for block in enabled_blocks_dict:
             name = block["name"]
             enabled = block["enabled"]
-            self.settings.setValue(f"wd/{wd.id}/{name}", enabled)
+            self.app_context.settings.setValue(f"wd/{wd.id}/{name}", enabled)
 
-    def set_available_imagery_sources(self, wd: str) -> None:
+    '''def set_available_imagery_sources(self, wd: str) -> None:
         """Restrict the list of imagery sources according to the selected model."""
-        if self.config.SENTINEL_WD_NAME_PATTERN in wd and self.providers != self.sentinel_providers:
-            self.providers = self.sentinel_providers
-        elif not self.providers == self.basemap_providers:
-            self.providers = self.basemap_providers
+        if self.config.SENTINEL_WD_NAME_PATTERN in wd and self.provider_service.providers != self.sentinel_providers:
+            self.provider_service.providers = self.sentinel_providers
+        elif not self.provider_service.providers == self.basemap_providers:
+            self.provider_service.providers = self.basemap_providers
         else:
             # Providers did not change
             return
-        provider_names = {p.name: getattr(p, 'api_name', p.name) for p in self.providers}
+        provider_names = {p.name: getattr(p, 'api_name', p.name) for p in self.provider_service.providers}
         self.dlg.set_raster_sources(provider_names=provider_names,
-                                    default_provider_names=['Mapbox', '🌍 Mapbox Satellite'])
+                                    default_provider_names=['Mapbox', '🌍 Mapbox Satellite']) ''' #!
 
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
         """Filter out the metadata table and layer every time user changes a filter."""
@@ -602,7 +605,7 @@ class Mapflow(QObject):
 
     def set_up_login_dialog(self) -> MapflowLoginDialog:
         """Create a login dialog, set its title and signal-slot connections."""
-        dlg_login = MapflowLoginDialog(self.main_window, self.use_oauth, self.settings.value("token", ""))
+        dlg_login = MapflowLoginDialog(self.main_window, self.use_oauth, self.app_context.settings.value("token", ""))
         dlg_login.setWindowTitle(helpers.generate_plugin_header(self.tr("Log in ") + self.plugin_name,
                                                                      self.config.MAPFLOW_ENV,
                                                                      None, None, None))
@@ -612,8 +615,8 @@ class Mapflow(QObject):
 
     def set_auth_type(self, use_oauth: bool = False):
         self.use_oauth = use_oauth
-        self.settings.setValue("use_oauth", str(use_oauth).lower())
-        self.dlg_login.set_auth_type(use_oauth=use_oauth, token = self.settings.value('token', ""))
+        self.app_context.settings.setValue("use_oauth", str(use_oauth).lower())
+        self.dlg_login.set_auth_type(use_oauth=use_oauth, token = self.app_context.settings.value('token', ""))
 
     def on_provider_change(self) -> None:
         """Adjust max and current zoom, and update the metadata table when user selects another
@@ -623,7 +626,7 @@ class Mapflow(QObject):
         """
         # This is done after area calculation, because there the provider list is updated?
         provider_index = self.dlg.providerIndex()
-        provider = self.providers[provider_index]
+        provider = self.provider_service.providers[provider_index]
         self.app_context.data_provider = provider
         # Changes in search tab
         self.toggle_imagery_search(provider)
@@ -644,15 +647,15 @@ class Mapflow(QObject):
         """ Set chosen zoom and update cost (if it depends on zoom for provider).
         """
         if self.dlg.zoomCombo.currentIndex() != 0:
-            self.settings.setValue('zoom', str(self.dlg.zoomCombo.currentText()))
+            self.app_context.settings.setValue('zoom', str(self.dlg.zoomCombo.currentText()))
         else:
-            self.settings.setValue('zoom', None)
+            self.app_context.settings.setValue('zoom', None)
         self.processing_service.update_processing_cost()
 
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
         # Save main dialog size & position
-        self.settings.setValue('mainDialogState', self.dlg.saveGeometry())
+        self.app_context.settings.setValue('mainDialogState', self.dlg.saveGeometry())
 
     # ========= Providers ============ #
     def remove_provider(self) -> None:
@@ -661,7 +664,7 @@ class Mapflow(QObject):
         Is called by clicking the red minus button near the provider dropdown list.
         """
         provider_index = self.dlg.providerCombo.currentIndex()
-        provider = self.providers[provider_index]
+        provider = self.provider_service.providers[provider_index]
         if provider.is_default:
             # We want to protect built in providers!
             self.alert(self.tr("This provider is default and cannot be removed"),
@@ -670,8 +673,8 @@ class Mapflow(QObject):
         # Ask for confirmation
         elif self.alert(self.tr('Permanently remove {}?').format(provider.name),
                         icon=QMessageBox.Question):
-            self.user_providers.remove(provider)
-            self.update_providers()
+            self.provider_service.user_providers.remove(provider)
+            self.provider_service.update_providers()
 
     def edit_provider_callback(self) -> None:
         """Add a web imagery provider or commit edits to an existing one."""
@@ -684,21 +687,21 @@ class Mapflow(QObject):
 
         if not old_provider:
             # we have added new one - without current one
-            if new_provider.name in self.providers:
+            if new_provider.name in self.provider_service.providers:
                 self.alert(self.tr("Provider name must be unique. {name} already exists, "
                                    "select another or delete/edit existing").format(name=new_provider.name),
                            icon=QMessageBox.Warning)
                 self.dlg_provider.show()
                 return
             else:
-                self.user_providers.append(new_provider)
-                provider_index = len(self.providers)
+                self.provider_service.user_providers.append(new_provider)
+                provider_index = len(self.provider_service.providers)
         else:
             # we replace old provider with a new one
             # if self.dlg_provider.property('mode') == 'edit':  #
-            provider_index = self.providers.index(old_provider)
-            user_provider_index = self.user_providers.index(old_provider)
-            if new_provider.name != old_provider.name and new_provider.name in self.providers:
+            provider_index = self.provider_service.providers.index(old_provider)
+            user_provider_index = self.provider_service.user_providers.index(old_provider)
+            if new_provider.name != old_provider.name and new_provider.name in self.provider_service.providers:
                 # we do not want user to replace another provider when editing this one
                 self.alert(self.tr("Provider name must be unique. {name} already exists,"
                                    " select another or delete/edit existing").format(name=new_provider.name),
@@ -706,9 +709,9 @@ class Mapflow(QObject):
                 self.dlg_provider.show()
                 return
             else:
-                self.user_providers[user_provider_index] = new_provider
+                self.provider_service.user_providers[user_provider_index] = new_provider
 
-        self.update_providers()
+        self.provider_service.update_providers()
         self.dlg.setProviderIndex(provider_index)
 
     def add_provider(self) -> None:
@@ -718,23 +721,23 @@ class Mapflow(QObject):
         """Prepare and show the provider edit dialog.
         Is called by the corresponding button.
         """
-        provider = self.providers[self.dlg.providerIndex()]
+        provider = self.provider_service.providers[self.dlg.providerIndex()]
         if provider.is_default:
             self.alert(self.tr("This is a default provider, it cannot be edited"),
                        icon=QMessageBox.Warning)
         else:
             self.dlg_provider.setup(provider)
 
-    def update_providers(self) -> None:
+    ''' def update_providers(self) -> None:
         """Update imagery & providers dropdown list after edit/add/remove
         It works both ways: if providers is specified, it updates the settings;
         otherwise loads providers list from settings
         """
-        self.user_providers.to_settings(self.settings)
-        provider_names = {p.name: getattr(p, 'api_name', p.name) for p in self.providers}
+        self.provider_service.user_providers.to_settings(self.app_context.settings)
+        provider_names = {p.name: getattr(p, 'api_name', p.name) for p in self.provider_service.providers}
         for name, api_name in provider_names.items():
             self.dlg.providerCombo.addItem(name, api_name)
-        self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
+        self.set_available_imagery_sources(self.dlg.modelCombo.currentText()) #! '''
 
     def monitor_polygon_layer_feature_selection(self, layers: List[QgsMapLayer]) -> None:
         """Set up connection between feature selection in polygon layers and AOI area calculation.
@@ -778,7 +781,7 @@ class Mapflow(QObject):
             hidden_columns = (len(columns) - 1,)
             sort_by = self.config.MAXAR_DATETIME_COLUMN_INDEX
             max_zoom = self.config.MAX_ZOOM
-            current_zoom = int(self.settings.value('maxZoom', self.config.DEFAULT_ZOOM))
+            current_zoom = int(self.app_context.settings.value('maxZoom', self.config.DEFAULT_ZOOM))
             image_id_tooltip = self.tr(
                 'If you already know which {provider_name} image you want to process,\n'
                 'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
@@ -818,7 +821,7 @@ class Mapflow(QObject):
         )
         if path:
             self.dlg.outputDirectory.setText(path)
-            self.settings.setValue('outputDir', path)
+            self.app_context.settings.setValue('outputDir', path)
             self.setup_tempdir()
             self.data_catalog_service.temp_dir = self.temp_dir
             self.result_loader.temp_dir = self.temp_dir
@@ -836,14 +839,14 @@ class Mapflow(QObject):
 
     @property
     def imagery_search_provider_index(self):
-        for index, provider in enumerate(self.providers):
+        for index, provider in enumerate(self.provider_service.providers):
             if isinstance(provider, ImagerySearchProvider):
                 return index
         return -1
 
     @property
     def imagery_search_provider(self):
-        for provider in self.providers:
+        for provider in self.provider_service.providers:
             if isinstance(provider, ImagerySearchProvider):
                 return provider
         return None
@@ -866,7 +869,7 @@ class Mapflow(QObject):
 
     def replace_search_provider_index(self):
         try:
-            provider_supports_search = self.providers[self.dlg.providerIndex()].meta_url is not None
+            provider_supports_search = self.provider_service.providers[self.dlg.providerIndex()].meta_url is not None
         except (NotImplementedError, AttributeError):
             provider_supports_search = False
 
@@ -888,7 +891,7 @@ class Mapflow(QObject):
         if more_button:
             self.dlg.layoutMetadataTable.removeWidget(more_button)
             more_button.deleteLater()
-        provider = self.providers[self.dlg.providerIndex()]
+        provider = self.provider_service.providers[self.dlg.providerIndex()]
         # Check if the AOI is defined
         if self.app_context.aoi:
             aoi = self.app_context.aoi
@@ -939,7 +942,7 @@ class Mapflow(QObject):
 
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
-        #provider = self.providers[self.dlg.providerIndex()]
+        #provider = self.provider_service.providers[self.dlg.providerIndex()]
         self.app_context.search_provider.clear_saved_search(self.temp_dir)
 
     def request_mapflow_metadata(self,
@@ -1517,7 +1520,7 @@ class Mapflow(QObject):
         if not image_id:
             self.dlg.metadataTable.clearSelection()
             return
-        provider = self.providers[self.dlg.providerIndex()]
+        provider = self.provider_service.providers[self.dlg.providerIndex()]
 
         if isinstance(provider, SentinelProvider):
             if not ((
@@ -1584,7 +1587,7 @@ class Mapflow(QObject):
         :param layer: The current polygon layer
         """
         self.get_aoi_area_polygon_layer(layer)
-        provider = self.providers[self.dlg.providerIndex()]
+        provider = self.provider_service.providers[self.dlg.providerIndex()]
         if isinstance(provider, MyImageryProvider):
             self.calculate_aoi_area_catalog()
 
@@ -1593,7 +1596,7 @@ class Mapflow(QObject):
 
         :param use_image_extent: The current state of the checkbox
         """
-        provider = self.providers[self.dlg.providerIndex()]
+        provider = self.provider_service.providers[self.dlg.providerIndex()]
         if isinstance(provider, MyImageryProvider):
             self.calculate_aoi_area_catalog()
         else:
@@ -1603,7 +1606,7 @@ class Mapflow(QObject):
         """Get the AOI size when a new mosaic or image in 'My imagery' is selected.
         """
         # If different provider is chosen, set it to My imagery
-        self.data_catalog_service.set_catalog_provider(self.providers)
+        self.data_catalog_service.set_catalog_provider(self.provider_service.providers)
         image = self.data_catalog_service.selected_image()
         mosaic = self.data_catalog_service.selected_mosaic()
         self.app_context.selected_mosaic = mosaic
@@ -1733,7 +1736,7 @@ class Mapflow(QObject):
                               s3_uri: str = "",
                               zoom: Optional[str] = None,
                               provider_name: Optional[str] = None):
-        provider = self.providers[provider_index]
+        provider = self.provider_service.providers[provider_index]
         meta = {'source-app': 'qgis',
                 'version': self.app_context.plugin_version,
                 'source': provider.name.lower()}
@@ -1752,7 +1755,7 @@ class Mapflow(QObject):
             raise BadProcessingInput(self.tr('Bad AOI. AOI must be inside boundaries:'
                                              ' \n[-180, 180] by longitude, [-90, 90] by latitude'))
         else:
-            provider = self.providers[provider_index]
+            provider = self.provider_service.providers[provider_index]
             if not provider:
                 raise PluginError(self.tr('Providers are not initialized'))
             if len(local_image_indices) != 0:
@@ -1795,7 +1798,7 @@ class Mapflow(QObject):
         wd_name = self.dlg.modelCombo.currentText()
         wd = self.app_context.get_workflow_def(wd_name)
         provider_index = self.dlg.providerIndex()
-        provider = self.providers[provider_index]
+        provider = self.provider_service.providers[provider_index]
         s3_uri = self.get_s3_uri(provider)
 
         local_image_indices = []
@@ -1843,7 +1846,7 @@ class Mapflow(QObject):
                                                                           s3_uri=s3_uri,
                                                                           zoom=zoom,
                                                                           provider_name=provider_name)
-            if self.zoom_selector:
+            if self.app_context.zoom_selector:
                 if isinstance(provider_params, PostSourceSchema): # no zoom for tifs
                     if provider_params.source_type == 'tif':
                         provider_params.zoom = None
@@ -1909,7 +1912,7 @@ class Mapflow(QObject):
                 # Set "Confirm" checkbox opposite to "Don't show again" if they are not already the same
                 if not dialog.checkBox.isChecked() != self.dlg.cornfirmProcessingStart.isChecked():
                     self.dlg.cornfirmProcessingStart.setChecked(not dialog.checkBox.isChecked())
-                    self.settings.setValue("confirmProcessingStart", str(not dialog.checkBox.isChecked()))
+                    self.app_context.settings.setValue("confirmProcessingStart", str(not dialog.checkBox.isChecked()))
             dialog.checkBox.toggled.connect(set_start_confirmation)
             dialog.accepted.connect(start_processing)
             # Fill dialog with parameters
@@ -1917,7 +1920,7 @@ class Mapflow(QObject):
                 price = self.tr("{cost} credits").format(cost=self.processing_service.processing_cost)
             else:
                 price = None
-            provider = self.providers[self.dlg.providerIndex()]
+            provider = self.provider_service.providers[self.dlg.providerIndex()]
             provider_text = provider.name
             if isinstance(provider, DefaultProvider):
                 zoom = processing_params.params.sourceParams.dataProvider.zoom
@@ -2001,7 +2004,7 @@ class Mapflow(QObject):
                                text= error_summary,
                                title=self.tr('Processing creation failed'),
                                email_body=email_body).show()
-        if not False in self.allow_enable_processing.values():
+        if not False in self.app_context.allow_enable_processing.values():
             self.dlg.startProcessing.setEnabled(True)
 
     def update_processing_limit(self) -> None:
@@ -2059,14 +2062,14 @@ class Mapflow(QObject):
         unique_providers = list({provider.name: provider for provider in
                                  [DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
                                   for data in providers_data]}.values())
-        self.default_providers = ProvidersList([self.imagery_search_provider_instance] +
+        self.provider_service.default_providers = ProvidersList([self.imagery_search_provider_instance] +
                                                [self.my_imagery_provider_instance] +
                                                unique_providers)
-        self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
+        self.provider_service.set_available_imagery_sources(self.dlg.modelCombo.currentText())
         # We want to clear the data from previous lauunch to avoid confusion
-        for provider in self.providers:
+        for provider in self.provider_service.providers:
             provider.clear_saved_search(self.temp_dir)
-        provider_service.update_providers_list(self.default_providers)
+        self.provider_service.update_providers_list(self.provider_service.default_providers)
     
     def setup_search_providers(self, providers_data):
         search_providers = ProvidersList([DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
@@ -2426,7 +2429,7 @@ class Mapflow(QObject):
         else:
             id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
             image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
-        provider = self.providers[self.dlg.providerIndex()]
+        provider = self.provider_service.providers[self.dlg.providerIndex()]
         if provider.requires_image_id and not image_id:
             self.alert(self.tr("This provider requires image ID!"), QMessageBox.Warning)
             return
@@ -2445,7 +2448,7 @@ class Mapflow(QObject):
 
     def preview_or_search(self, provider) -> None:
         provider_index = self.dlg.providerIndex()
-        provider = self.providers[provider_index]
+        provider = self.provider_service.providers[provider_index]
         if provider.requires_image_id:
             imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
             self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
@@ -2658,7 +2661,7 @@ class Mapflow(QObject):
             return
         if not self.check_if_output_directory_is_selected():
             return
-        self.result_loader.download_aoi_file(pid=processing.id_, callback=self.result_loader.download_aoi_file_callback)
+        self.result_loader.download_aoi_file(pid=processing.id, callback=self.result_loader.download_aoi_file_callback)
 
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         alert(message, icon, blocking)
@@ -2684,12 +2687,12 @@ class Mapflow(QObject):
 
     def set_layer_group(self) -> None:
         """Setup a legend group where all layers created by the plugin will be added."""
-        self.layer_group = self.layer_tree_root.findGroup(self.settings.value('layerGroup'))
+        self.layer_group = self.layer_tree_root.findGroup(self.app_context.settings.value('layerGroup'))
         if self.layer_group:
             # If the group has been deleted, assume user wants to add layers to root, memorize it
             self.layer_group.destroyed.connect(lambda: setattr(self, 'add_layers_to_group', False))
             # Let user rename the group, memorize the new name
-            self.layer_group.nameChanged.connect(lambda _, name: self.settings.setValue('layerGroup', name))
+            self.layer_group.nameChanged.connect(lambda _, name: self.app_context.settings.setValue('layerGroup', name))
 
     def unload(self) -> None:
         """Remove the plugin icon & toolbar from QGIS GUI."""
@@ -2701,10 +2704,10 @@ class Mapflow(QObject):
             if dlg:
                 dlg.close()
         del self.toolbar
-        self.settings.setValue('metadataMinIntersection', self.dlg.minIntersection.value())
-        self.settings.setValue('metadataMaxCloudCover', self.dlg.maxCloudCover.value())
-        self.settings.setValue('metadataFrom', self.dlg.metadataFrom.date())
-        self.settings.setValue('metadataTo', self.dlg.metadataTo.date())
+        self.app_context.settings.setValue('metadataMinIntersection', self.dlg.minIntersection.value())
+        self.app_context.settings.setValue('metadataMaxCloudCover', self.dlg.maxCloudCover.value())
+        self.app_context.settings.setValue('metadataFrom', self.dlg.metadataFrom.date())
+        self.app_context.settings.setValue('metadataTo', self.dlg.metadataTo.date())
 
     def read_mapflow_token(self) -> None:
         """Compose and memorize the user's credentils as Basic Auth."""
@@ -2750,7 +2753,7 @@ class Mapflow(QObject):
     def login_basic(self, token) -> None:
         """Log into Mapflow."""
         # save new token to settings immediately to overwrite old one, if any
-        self.settings.setValue('token', token)
+        self.app_context.settings.setValue('token', token)
         # keep login/password from token
         try:
             self.app_context.username, self.app_context.password = b64decode(token).decode().split(':')
@@ -2773,7 +2776,7 @@ class Mapflow(QObject):
     def logout(self) -> None:
         """Close the plugin and clear credentials from cache."""
         # set token to empty to delete it from settings
-        self.settings.setValue('token', '')
+        self.app_context.settings.setValue('token', '')
         self.processing_service.processing_fetch_timer.stop()
         self.user_status_update_timer.stop()
         self.app_context.logged_in = False
@@ -2798,7 +2801,7 @@ class Mapflow(QObject):
             # Prevent deadlocks
             if self.app_context.logged_in:  # token re-issued during a plugin session
                 self.logout()
-            elif self.settings.value('token'):  # env changed w/out logging out (admin)
+            elif self.app_context.settings.value('token'):  # env changed w/out logging out (admin)
                 self.alert(self.tr('Wrong token. '
                                    'Visit "<a href=\"https://app.mapflow.ai/account/api\">mapflow.ai</a>" '
                                    'to get a new one'),
@@ -2909,7 +2912,7 @@ class Mapflow(QObject):
         # We have different behavior for admin as he has access to all processings
         self.is_admin = userinfo.get("role") == "ADMIN"
 
-        self.dlg.restoreGeometry(self.settings.value('mainDialogState', b''))
+        self.dlg.restoreGeometry(self.app_context.settings.value('mainDialogState', b''))
         # Authenticate and keep user logged in
         self.app_context.logged_in = True
         self.dlg_login.close()
@@ -2917,13 +2920,18 @@ class Mapflow(QObject):
         # Get all projects & setup processings table (see callback)
         if self.is_admin:
             self.app_context.project_id = Config.PROJECT_ID
-            self.project_service.setup_workflow_defs(default_project.workflowDefs)
+            self.project_service.view.setup_workflow_defs(default_project.workflowDefs, 
+                                                          self.config.DEFAULT_MODEL)
             self.processing_service.setup_processings_table()
         else:
             if self.app_context.project_id:
-                self.project_service.get_project(self.app_context.project_id,
-                                                 self.get_project_callback,
-                                                 self.get_project_error_handler)
+                self.app_context.current_project = self.project_service.get_project(
+                    project_id=self.app_context.project_id,
+                    callback=self.project_service.get_project_callback,
+                    error_handler=self.project_service.get_project_error_handler,
+                    error_handler_kwargs={'default_error_handler': self.default_error_handler,
+                                          'show_projects': self.project_processing_controller.show_projects}
+                )
             self.data_catalog_service.get_mosaics()
         self.dlg.setup_for_billing(self.app_context.billing_type)
         self.dlg.show()
@@ -2941,7 +2949,7 @@ class Mapflow(QObject):
         """
 
         server_version = response.readAll().data().decode('utf-8')
-        latest_reported_version = self.settings.value('latest_reported_version', self.app_context.plugin_version)
+        latest_reported_version = self.app_context.settings.value('latest_reported_version', self.app_context.plugin_version)
 
         force_upgrade, recommend_upgrade = helpers.check_version(local_version=self.app_context.plugin_version,
                                                                  server_version=server_version,
@@ -2964,11 +2972,11 @@ class Mapflow(QObject):
                 local_version=self.app_context.plugin_version,
                 icon=QMessageBox.Information))
             # saving the requested version to not bother the user next time, if he decides not to upgrade
-            self.settings.setValue('latest_reported_version', server_version)
+            self.app_context.settings.setValue('latest_reported_version', server_version)
             self.version_ok = True
         else:
             # it is if the upgrade is not needed, we want to save it
-            self.settings.setValue('latest_reported_version', server_version)
+            self.app_context.settings.setValue('latest_reported_version', server_version)
             self.version_ok = True
 
     def show_details(self):
@@ -3070,8 +3078,8 @@ class Mapflow(QObject):
         elif isinstance(provider, MyImageryProvider):
             self.dlg.enable_zoom_selector(False, zoom)
         else:
-            if self.zoom_selector:
-                self.zoom = self.settings.value('zoom')
+            if self.app_context.zoom_selector:
+                self.zoom = self.app_context.settings.value('zoom')
                 zoom = self.zoom
             self.dlg.enable_zoom_selector(True, zoom)
         return zoom, zoom_error
@@ -3109,16 +3117,16 @@ class Mapflow(QObject):
         return product_types
 
     def setup_tempdir(self):
-        if not self.settings.value('outputDir'):
+        if not self.app_context.settings.value('outputDir'):
             return # don't ask to specify tempdir at the plugin start
-        self.temp_dir = Path(self.settings.value('outputDir'), "Temp")
+        self.temp_dir = Path(self.app_context.settings.value('outputDir'), "Temp")
         try:
             shutil.rmtree(self.temp_dir) # remove old tempdir
         except:
             pass
         self.temp_dir.mkdir(parents=True, exist_ok=True)
 
-    def restart_processing(self):
+    """ def restart_processing(self):
         processing = self.selected_processing()
         if not processing:
             return
@@ -3130,10 +3138,11 @@ class Mapflow(QObject):
                 callback_kwargs={'processing_name': processing.name},
                 error_handler=self.post_processing_error_handler,
                 use_default_error_handler=False
-            )
+            ) #! """
     
-    def duplicate_processing(self):
+    """ def duplicate_processing(self):
         processing = self.selected_processing()
+        print("s", processing)
         if not processing:
             return
         self.dlg.disable_processing_start("")
@@ -3142,15 +3151,15 @@ class Mapflow(QObject):
         self.duplicate_provider(processing)
         self.duplicate_model(processing)
         self.duplicate_model_options(processing)
-        self.result_loader.download_aoi_file(pid=processing.id_, callback=self.duplicate_aoi_callback)
+        self.result_loader.download_aoi_file(pid=processing.id_, callback=self.duplicate_aoi_callback) """ #!
         
-    def duplicate_provider(self, processing):
+    """ def duplicate_provider(self, processing):
         try:
             provider = processing.params.sourceParams
             if isinstance(provider, DataProviderParams):
                 self.duplicate_data_provider(provider)
             elif isinstance(provider, MyImageryParams):
-                self.allow_enable_processing['my_mosaic_loaded'] = False
+                self.app_context.allow_enable_processing['my_mosaic_loaded'] = False
                 self.duplicate_my_imagery(provider)
             elif isinstance(provider, ImagerySearchParams):
                 pass # duplicate imagery search after aoi is downloaded
@@ -3158,23 +3167,23 @@ class Mapflow(QObject):
                 self.duplicate_user_provider(provider)
         except:
             self.alert(self.tr("Duplication failed on copying data source"))
-            for key in self.allow_enable_processing:
-                self.allow_enable_processing[key] = True
+            for key in self.app_context.allow_enable_processing:
+                self.app_context.allow_enable_processing[key] = True
             self.dlg.startProcessing.setEnabled(True)
     
     def duplicate_model(self, processing):
         try:
             if self.dlg.modelCombo.findText(processing.workflow_def) == -1: # index is -1, the item is not found
                 self.alert(self.tr("Model '{wd}' is not enabled for your account").format(wd=processing.workflow_def))
-                for key in self.allow_enable_processing:
-                    self.allow_enable_processing[key] = True
+                for key in self.app_context.allow_enable_processing:
+                    self.app_context.allow_enable_processing[key] = True
                 self.dlg.startProcessing.setEnabled(True)
             else: # item is found
                 self.dlg.modelCombo.setCurrentText(processing.workflow_def)
         except:
             self.alert(self.tr("Duplication failed on copying model"))
-            for key in self.allow_enable_processing:
-                self.allow_enable_processing[key] = True
+            for key in self.app_context.allow_enable_processing:
+                self.app_context.allow_enable_processing[key] = True
             self.dlg.startProcessing.setEnabled(True)
     
     def duplicate_model_options(self, processing):
@@ -3195,13 +3204,13 @@ class Mapflow(QObject):
             deleted_options = [enabled_option for enabled_option in enabled_options if enabled_option not in model_options]
             if deleted_options:
                 self.alert(self.tr("The following options no longer exist, so they have not been duplicated: {}").format(', '.join(deleted_options)))
-                for key in self.allow_enable_processing:
-                    self.allow_enable_processing[key] = True
+                for key in self.app_context.allow_enable_processing:
+                    self.app_context.allow_enable_processing[key] = True
                 self.dlg.startProcessing.setEnabled(True)
         except:
             self.alert(self.tr("Duplication failed on copying model options"))
-            for key in self.allow_enable_processing:
-                self.allow_enable_processing[key] = True
+            for key in self.app_context.allow_enable_processing:
+                self.aapp_context.llow_enable_processing[key] = True
             self.dlg.startProcessing.setEnabled(True)
 
     def duplicate_data_provider(self, provider: DataProviderParams):
@@ -3209,8 +3218,8 @@ class Mapflow(QObject):
         index = self.dlg.sourceCombo.findData(provider_name)
         if index == -1:
             self.alert(self.tr("Provider '{provider}' is not enabled for your account").format(provider=provider_name))
-            for key in self.allow_enable_processing:
-                self.allow_enable_processing[key] = True
+            for key in self.app_context.allow_enable_processing:
+                self.app_context.allow_enable_processing[key] = True
             self.dlg.startProcessing.setEnabled(True)
         else:
             self.dlg.sourceCombo.setCurrentIndex(index)
@@ -3223,14 +3232,14 @@ class Mapflow(QObject):
     def duplicate_my_imagery(self, provider: MyImageryParams):
         self.dlg.mosaicTable.clearSelection()
         if provider.myImagery.imageIds:
-            self.allow_enable_processing['my_image_loaded'] = False
+            self.app_context.allow_enable_processing['my_image_loaded'] = False
             image_id = provider.myImagery.imageIds[0]
             self.data_catalog_service.get_image(image_id)
         elif provider.myImagery.mosaicId:
             self.data_catalog_service.view.select_mosaic_cell(provider.myImagery.mosaicId)
         my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
         self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
-        self.data_catalog_service.set_catalog_provider(self.providers)
+        self.data_catalog_service.set_catalog_provider(self.provider_service.providers)
 
     def duplicate_imagery_search(self, provider: ImagerySearchParams):
         self.dlg.sourceCombo.setCurrentIndex(self.imagery_search_provider_index)
@@ -3278,7 +3287,7 @@ class Mapflow(QObject):
     
     def duplicate_user_provider(self, provider: UserDefinedParams):
         duplicated_provider = None
-        for p in self.providers:
+        for p in self.provider_service.providers:
             if isinstance(p, UsersProvider) and p.url == provider.userDefined.url:
                 duplicated_provider = p
                 self.dlg.sourceCombo.setCurrentText(duplicated_provider.name)
@@ -3296,7 +3305,7 @@ class Mapflow(QObject):
                                 save_credentials=True)
             duplicated_provider = create_provider(**provider_dict)
             self.user_providers.append(duplicated_provider)
-            provider_index = len(self.providers)
+            provider_index = len(self.provider_service.providers)
             self.update_providers()
             self.dlg.setProviderIndex(provider_index)
         if self.zoom_selector:
@@ -3307,16 +3316,16 @@ class Mapflow(QObject):
         provider = self.selected_processing().params.sourceParams
         if isinstance(provider, ImagerySearchParams):
             self.duplicate_imagery_search(provider)
-        if self.allow_enable_processing['aoi_loaded'] == True: # it became true somewhere else in error handler
+        if self.app_context.allow_enable_processing['aoi_loaded'] == True: # it became true somewhere else in error handler
             return
         else: # if other two are True - enable start
-            self.allow_enable_processing['aoi_loaded'] = True
-            if not False in self.allow_enable_processing.values():
-                self.dlg.startProcessing.setEnabled(True)
+            self.app_context.allow_enable_processing['aoi_loaded'] = True
+            if not False in self.app_context.allow_enable_processing.values():
+                self.dlg.startProcessing.setEnabled(True) """ #!
             
-    @property
+    """ @property
     def basemap_providers(self):
-        return ProvidersList(self.default_providers + self.user_providers)
+        return ProvidersList(self.default_providers + self.provider_service.user_providers) """ #!
 
     def tr(self, message: str) -> str:
         """Localize a UI element text.
@@ -3346,7 +3355,7 @@ class Mapflow(QObject):
             self.user_status_update_timer.start()
             return
 
-        token = self.settings.value('token')
+        token = self.app_context.settings.value('token')
         if not self.use_oauth and token:
             # Saved token for basic auth
             self.login_basic(token)

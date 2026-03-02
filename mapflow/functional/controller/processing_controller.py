@@ -22,13 +22,11 @@ class ProjectProcessingController(QObject):
     def __init__(self, dlg: MainDialog,
                  processing_service: ProcessingService,
                  project_service: ProjectService,
-                 settings: QSettings,
                  app_context: AppContext):
         super().__init__()
         self.dlg = dlg
         self.processing_service = processing_service
         self.project_service = project_service
-        self.settings = settings
         self.app_context = app_context
         
         self._setup_processing_bindings()
@@ -88,7 +86,7 @@ class ProjectProcessingController(QObject):
                 'sort_order': sort_order,
                 'filter': self.project_service.view.projects_filter
             }
-            self.settings.setValue('projectsPage', projects_page)
+            self.app_context.settings.setValue('projectsPage', projects_page)
         # Load processing history
         self.processing_service.load_processing_history()
         # Switch view
@@ -102,8 +100,8 @@ class ProjectProcessingController(QObject):
         if not processing:
             return
         dialog = UpdateProcessingDialog(self.dlg)
-        dialog.accepted.connect(lambda: self.processing_service.update_processing(processing.id,
-                                                                                  dialog.processing()))
+        dialog.accepted.connect(lambda: self.processing_service.update_processing(processing_id=processing.id,
+                                                                                  processing=dialog.processing()))
         dialog.setup(processing)
         dialog.deleteLater()
 

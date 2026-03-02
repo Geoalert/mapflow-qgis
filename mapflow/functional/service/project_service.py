@@ -19,10 +19,9 @@ class ProjectService(QObject):
     projectsUpdated = pyqtSignal()
     projectsFiltered = pyqtSignal()
 
-    def __init__(self, http, app_context: AppContext, settings: QgsSettings, dlg: MainDialog, config: Config, area_calc_fn):
+    def __init__(self, http, app_context: AppContext, dlg: MainDialog, config: Config, area_calc_fn):
         super().__init__()
         self.http = http
-        self.settings = settings
         self.app_context = app_context
         self.dlg = dlg
         self.config = config
@@ -30,7 +29,7 @@ class ProjectService(QObject):
         self.view = ProjectView(self.dlg)
         self.projects_data = None
         self.projects = {}
-        self.app_context.project_id = None
+        self.app_context.project_id = self.app_context.project_id
         self.projects_page_limit = Config.PROJECTS_PAGE_LIMIT
         self.projects_page_offset = 0
         # Connections
@@ -75,8 +74,8 @@ class ProjectService(QObject):
         self.set_current_project(project)
         self.get_projects()
     
-    def get_project(self, project_id, callback: Callable, error_handler: Callable):
-        self.api.get_project(project_id, callback, error_handler)
+    def get_project(self, project_id, callback: Callable, error_handler: Callable, error_handler_kwargs: dict):
+        self.api.get_project(project_id, callback, error_handler, error_handler_kwargs)
 
     def get_project_callback(self, response: QNetworkReply):
         self.app_context.current_project = MapflowProject.from_dict(json.loads(response.readAll().data()))
@@ -89,17 +88,16 @@ class ProjectService(QObject):
             self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(elided_name))
             self.dlg.currentProjectLabel.adjustSize()
         self.get_project_sharing()
-        self.project_service.setup_project_change_rights()
-        self.settings.setValue("project_id", self.app_context.project_id)
-        self.view.setup_workflow_defs(self.app_context.current_project.workflowDefs)
+        self.setup_project_change_rights()
+        self.app_context.settings.setValue("project_id", self.app_context.project_id)
+        self.view.setup_workflow_defs(self.app_context.current_project.workflowDefs, 
+                                      self.config.DEFAULT_MODEL)
         # Manually toggle function to avoid race condition
         # TODO: Can we avoid this? Calling the function from here is ugly
         self.calculate_aoi_area_use_image_extent()
 
-    def get_project_error_handler(self, response: QNetworkReply):
-        self.default_error_handler(response)
-        # Switch to projects table if couldn't get current project
-        self.project_processing_controller.show_projects()
+    def get_project_error_handler(self, response: QNetworkReply, **kwargs):
+        pass
 
     def get_projects(self, open_saved_page: Optional[bool] = False):
         """Get projects depending on page parameters (offset, sorting, filtering).
@@ -118,7 +116,7 @@ class ProjectService(QObject):
         # Open the page containing current project
         if open_saved_page is True:
             # Get each page parameter from dict in settings (if no dict - create one with default values)
-            projects_page = self.settings.value('projectsPage', {'offset' : self.projects_page_offset,
+            projects_page = self.app_context.settings.value('projectsPage', {'offset' : self.projects_page_offset,
                                                                  'sort_by' : ProjectSortBy.updated,
                                                                  'sort_order' : ProjectSortOrder.descending,
                                                                  'filter': ""})
@@ -212,7 +210,7 @@ class ProjectService(QObject):
             return
         if selected_id is None:
             self.app_context.current_project = self.app_context.project_id = None
-            self.settings.setValue("project_id", None)
+            self.app_context.settings.setValue("project_id", None)
             self.setup_project_change_rights()
             self.dlg.setWindowTitle(helpers.generate_plugin_header(self.app_context.plugin_name,
                                                                    env=self.config.MAPFLOW_ENV))
@@ -231,10 +229,10 @@ class ProjectService(QObject):
                     self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(elided_name))
             if self.app_context.current_project:
                 self.get_project_sharing()
-                self.view.setup_workflow_defs(self.app_context.current_project.workflowDefs,
+                self.view.setup_workflow_defs(self.app_context.current_project.workflowDefs, 
                                               self.config.DEFAULT_MODEL)
             self.setup_project_change_rights()
-            self.settings.setValue("project_id", self.app_context.project_id)
+            self.app_context.settings.setValue("project_id", self.app_context.project_id)
 
             # Manually toggle function to avoid race condition
             # TODO: Can we avoid this? Calling the function from here is ugly
