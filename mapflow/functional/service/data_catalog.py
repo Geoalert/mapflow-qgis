@@ -45,14 +45,11 @@ class DataCatalogService(QObject):
                  iface,
                  result_loader,
                  plugin_version,
-                 temp_dir,
                  app_context: AppContext):
         super().__init__()
         self.dlg = dlg
         self.iface = iface
-        self.temp_dir = temp_dir
         self.app_context = app_context
-        self.project = QgsProject.instance()
         self.result_loader = result_loader
         self.plugin_version = plugin_version
         self.api = DataCatalogApi(http=http, server=server, dlg=dlg, iface=iface, result_loader=self.result_loader, plugin_version=self.plugin_version)
@@ -90,7 +87,7 @@ class DataCatalogService(QObject):
                 dialog.accepted.connect(get_paths)
                 # Show all acceptable raster layers in dialog
                 layers = []
-                for layer in self.project.mapLayers().values():
+                for layer in self.app_context.project.mapLayers().values():
                     if Path(layer.source()).suffix.lower() in ['.tif', '.tiff']:
                         layers.append(layer)
                 dialog.setup(layers)
@@ -151,7 +148,7 @@ class DataCatalogService(QObject):
         self.mosaicsUpdated.emit()
         self.view.display_mosaics(list(self.mosaics.values()))
         # Allow selection back
-        self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.SingleSelection) 
+        self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.ExtendedSelection) 
         self.view.select_mosaic_cell(mosaic.id)
         self.app_context.mosaics = self.mosaics
 
@@ -267,7 +264,7 @@ class DataCatalogService(QObject):
         dialog.accepted.connect(lambda: dialog.get_selected_rasters_list(callback=self.upload_raster_layers_to_mosaic))
         # Show all acceptable (TIFF) raster layers
         layers = []
-        for layer in self.project.mapLayers().values():
+        for layer in self.app_context.project.mapLayers().values():
             if Path(layer.source()).suffix.lower() in ['.tif', '.tiff']:
                 layers.append(layer)
         dialog.setup(layers)
@@ -545,7 +542,7 @@ class DataCatalogService(QObject):
             self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.NoSelection) 
             self.get_mosaics()
             self.dlg.mosaicTable.clearSelection()
-            self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.SingleSelection)
+            self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
         else:
             if self.selected_mosaic():
                 self.get_mosaic_images(self.selected_mosaic().id)

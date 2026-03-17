@@ -60,7 +60,15 @@ class ErrorMessage(QObject):
         elif raw:
             return self.raw_message
         else:
-            return self.message or default
+            if len(self.parameters.items()) > 0:
+                params = ',\n'.join([f"{key}: {value}" for key, value in self.parameters.items()])
+            if self.message and params:
+                message = self.message + ':\n' + params
+            elif self.message:
+                message = self.message
+            elif params:
+                message = params
+            return message or default
     
     def __reduce__(self):
         return (self.__class__, (self.code, self.parameters, self.message))

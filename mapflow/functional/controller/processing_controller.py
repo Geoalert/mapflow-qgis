@@ -3,6 +3,7 @@ from PyQt5.QtCore import QObject, QSettings
 from PyQt5.QtWidgets import QMessageBox
 
 from ..app_context import AppContext
+from ..service.alert_service import alert
 from ..service.processing_service import ProcessingService
 from ..service.project_service import ProjectService
 from ...dialogs import CreateProjectDialog, UpdateProjectDialog, MainDialog, UpdateProcessingDialog
@@ -118,9 +119,12 @@ class ProjectProcessingController(QObject):
         
         # Fetch projects (handles saved page restoration internally)
         self.project_service.get_projects(open_saved_page)
-        
+
         # Switch view
         self.project_service.view.switch_to_projects()
+
+        # Remove old cost
+        self.processing_service.update_processing_cost()
 
     def create_project(self):
         dialog = CreateProjectDialog(self.dlg)
@@ -136,8 +140,8 @@ class ProjectProcessingController(QObject):
         dialog.deleteLater()
 
     def delete_project(self):
-        if self.alert(self.tr('Do you really want to remove project {}? '
-                              'This action cannot be undone, all processings will be lost!').format(
+        if alert(self.tr('Do you really want to remove project {}? '
+                         'This action cannot be undone, all processings will be lost!').format(
             self.app_context.current_project.name),
                       icon=QMessageBox.Question):
             # Unload current project as we are deleting it

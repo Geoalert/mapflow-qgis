@@ -474,7 +474,7 @@ class DataCatalogView(QObject):
         self.dlg.addCatalogButton.setText(self.tr("Add image"))
         self.dlg.addCatalogButton.setMenu(self.upload_image_menu)
         # Allow selection back
-        self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.dlg.mosaicTable.setCurrentCell(row, column)
         # Because we open images table always with empty selection
         self.clear_image_info()

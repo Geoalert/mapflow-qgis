@@ -224,7 +224,9 @@ class ProcessingDTO(Serializable, SkipDataClass):
         return {
             "name": self.name,
             "workflowDef": self.workflowDef.name,
-            "status": self.status.value,
+            "status": self.reviewStatus.reviewStatus.display_value 
+                      if (self.reviewStatus and not self.reviewStatus.is_none) 
+                      else self.status.display_value,
             "percentCompleted": self.percentCompleted,
             "aoiArea": self.aoiArea/1000000,
             "cost": self.cost,

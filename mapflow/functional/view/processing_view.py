@@ -171,7 +171,7 @@ class ProcessingView:
 
     def set_processing_cost(self, cost: int):
         self.dlg.processingProblemsLabel.setPalette(self.dlg.default_palette)
-        self.dlg.processingProblemsLabel.setText(self.tr("Processsing cost: {cost} credits").format(cost=cost))
+        self.dlg.processingProblemsLabel.setText(self.tr("Processing cost: {cost} credits").format(cost=cost))
         self.dlg.startProcessing.setEnabled(True)
 
     def alert_failed_processings(self, failed_processings):

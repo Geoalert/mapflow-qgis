@@ -2,7 +2,7 @@ import json
 import os
 from osgeo import gdal
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Callable
 
 from PyQt5.QtCore import QObject
 from PyQt5.QtNetwork import QNetworkReply
@@ -309,29 +309,28 @@ class ResultsLoader(QObject):
 
     def add_preview_layer(self, preview_layer):
         """Add a preview layer, using preview_dict from context to track layers."""
-        preview_dict = self.context.preview_dict
         # Delete layer from dictionary if it was deleted from layer tree
-        for url, id in preview_dict.copy().items():
+        for url, id in self.context.preview_dict.copy().items():
             if id not in self.context.project.mapLayers() and id != preview_layer.id():
-                del preview_dict[url]
+                del self.context.preview_dict[url]
         # Revove the old layer if its url matches current one and its in the dictionary
         url = preview_layer.dataProvider().dataSourceUri()
-        if url in self.preview_dict.keys():
-            current_preview_id = self.preview_dict[url]
-            self.project.removeMapLayer(current_preview_id)
+        if url in self.context.preview_dict.keys():
+            current_preview_id = self.context.preview_dict[url]
+            self.context.project.removeMapLayer(current_preview_id)
             # And delete old item from dictionary to rewrite it to a new position
-            del self.preview_dict[url] 
+            del self.context.preview_dict[url] 
         # For the first added preview, just add it to the bottom
-        if len(self.preview_dict) == 0:
+        if len(self.context.preview_dict) == 0:
             order = -1
         # In other cases - add it to the top of plugin added previews
         else:
-            top_preview_id = list(self.preview_dict.values())[-1]
-            top_preview_layer = self.project.layerTreeRoot().findLayer(top_preview_id)
+            top_preview_id = list(self.context.preview_dict.values())[-1]
+            top_preview_layer = self.context.project.layerTreeRoot().findLayer(top_preview_id)
             order = top_preview_layer.parent().children().index(top_preview_layer)
         self.add_layer(layer=preview_layer, order=order)
         # Add preview url and id to the dictionary
-        self.preview_dict[url] = preview_layer.id()
+        self.context.preview_dict[url] = preview_layer.id()
 
     def add_aoi_to_preview(self):
         """Place AOI copy on top of every preview (and delete the old copy)."""
@@ -340,9 +339,9 @@ class ResultsLoader(QObject):
             return
         cloned_aoi = aoi_layer.clone()
         cloned_aoi_name = self.tr('Search area "{name}"').format(name=aoi_layer.name())
-        layers_to_remove = self.project.mapLayersByName(cloned_aoi_name)
+        layers_to_remove = self.context.project.mapLayersByName(cloned_aoi_name)
         for layer in layers_to_remove:
-            self.project.removeMapLayer(layer.id())
+            self.context.project.removeMapLayer(layer.id())
         cloned_aoi.setName(cloned_aoi_name)
         cloned_aoi.loadNamedStyle(os.path.join(str(Path(__file__).parents[1]), 'static', 'styles', 'aoi.qml'))
         self.add_layer(cloned_aoi, 0)
@@ -385,7 +384,7 @@ class ResultsLoader(QObject):
         if not corners:
             return None
 
-        with open(self.temp_dir / os.urandom(32).hex(), mode='wb') as f:
+        with open(self.context.temp_dir / os.urandom(32).hex(), mode='wb') as f:
             f.write(response.readAll().data())
 
         preview = gdal.Open(f.name)
@@ -429,7 +428,7 @@ class ResultsLoader(QObject):
         # Get a list of coordinate pairs
         corners = self.get_footprint_corners(footprint)
         # Get non-referenced raster and set its projection
-        with open(self.temp_dir/os.urandom(32).hex(), mode='wb') as f:
+        with open(self.context.temp_dir/os.urandom(32).hex(), mode='wb') as f:
             f.write(response.readAll().data())
         preview = gdal.Open(f.name)
         preview.SetProjection(crs.toWkt())
@@ -474,11 +473,11 @@ class ResultsLoader(QObject):
     def load_result_tiles(self, processing):
         raster_tilejson = processing.rasterLayer.tileJsonUrl
         vector_tilejson = processing.vectorLayer.tileJsonUrl
-        raster_layer = generate_raster_layer(processing.rasterLayer.tileJsonUrl,
+        raster_layer = generate_raster_layer(processing.rasterLayer.tileUrl,
                                              name=f"{processing.name} raster")
-        vector_layer = generate_vector_layer(processing.vectorLayer.tileJsonUrl,
+        vector_layer = generate_vector_layer(processing.vectorLayer.tileUrl,
                                              name=processing.name)
-        vector_layer.loadNamedStyle(get_style_name(processing.workflowDef.name, vector_layer))
+        vector_layer.loadNamedStyle(get_style_name(processing.workflowDef, vector_layer))
         self.request_layer_extent(tilejson_uri=raster_tilejson,
                                   layer=raster_layer,
                                   next_layers = [vector_layer],
@@ -582,7 +581,7 @@ class ResultsLoader(QObject):
             timeout=300
         )
 
-    def download_aoi_file(self, pid, callback) -> None:
+    def download_aoi_file(self, pid, callback: Optional[Callable] = None) -> None:
         """
         Download area of interest and save to a geojson file
         """ 
@@ -590,7 +589,7 @@ class ResultsLoader(QObject):
         self.dlg.saveOptionsButton.setEnabled(False)
         self.http.get(
             url=f'{self.context.server}/processings/{pid}/aois',
-            callback=self.download_aoi_file_callback,
+            callback=callback if callback else self.download_aoi_file_callback,
             callback_kwargs={'path': path},
             use_default_error_handler=True,
             timeout=30
@@ -650,7 +649,7 @@ class ResultsLoader(QObject):
             callback_kwargs={'processing': processing},
             use_default_error_handler=False,
             error_handler=self.download_results_error_handler,
-            timeout=300
+            timeout=3600 #!300
         )
 
     def download_results_callback(self, response: QNetworkReply, processing: ProcessingDTO) -> None:
