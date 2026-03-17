@@ -1,7 +1,7 @@
 # provider_service.py
 from typing import List, Optional, Tuple
 
-from PyQt5.QtCore import Qt, QObject 
+from PyQt5.QtCore import Qt, QObject, QVariant
 from PyQt5.QtWidgets import QTableWidgetItem, QWidget
 from PyQt5.QtNetwork import QNetworkReply
 from qgis.core import QgsGeometry, QgsVectorLayer, QgsFeature
@@ -30,12 +30,21 @@ class ProviderService(QObject):
     _instance: Optional['ProviderService'] = None
     _initialized: bool = False
     
-    def __new__(cls, providers, dlg, app_context: AppContext, config: Config, data_catalog_service: DataCatalogService):
+    """ def __new__(cls, providers, dlg, app_context: AppContext, config: Config, data_catalog_service: DataCatalogService):
         if cls._instance is None:
             cls._instance = super().__new__(cls, providers, dlg, app_context, config, data_catalog_service)
-        return cls._instance
+        return cls._instance """ #!
+    """ def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance """
+    """ def __new__(cls, providers, dlg, app_context: AppContext, config: Config, data_catalog_service: DataCatalogService):
+        if cls._instance is None:
+            # Use *args and **kwargs to pass all arguments to parent
+            cls._instance = super().__new__(cls)
+        return cls._instance """
     
-    def __init__(self, providers, dlg, app_context, config: Config, data_catalog_service: DataCatalogService):
+    def __init__(self, providers: ProvidersList, dlg, app_context: AppContext, config: Config, data_catalog_service: DataCatalogService):
         if ProviderService._initialized:
             return
         super().__init__()
@@ -47,15 +56,21 @@ class ProviderService(QObject):
         self.data_catalog_service = data_catalog_service
         self.my_imagery_provider_instance = None
         self.imagery_search_provider_instance = None
-        self.metadata_layer = None
         self.user_providers = ProvidersList([])
         self.default_providers = ProvidersList([])
         self.sentinel_providers = ProvidersList([])
+        self.config_search_columns = ConfigColumns().METADATA_TABLE_ATTRIBUTES
 
     @classmethod
     def instance(cls) -> 'ProviderService':
         if cls._instance is None:
             raise RuntimeError("ProviderService not initialized.")
+        return cls._instance
+    
+    @classmethod
+    def get_instance(cls, providers: ProvidersList, dlg, app_context: AppContext, config: Config, data_catalog_service: DataCatalogService) -> 'ProviderService':
+        if cls._instance is None:
+            cls._instance = cls(providers, dlg, app_context, config, data_catalog_service)
         return cls._instance
         
     def get_current_provider_index(self):
@@ -65,7 +80,7 @@ class ProviderService(QObject):
         return self.providers[self.dlg.providerIndex()]
     
     def update_providers_list(self, new_providers):
-        self.providers += new_providers
+        #! self.providers += new_providers
         for provider in self.providers:
             if isinstance(provider, MyImageryProvider):
                 self.my_imagery_provider_instance = provider
@@ -103,6 +118,8 @@ class ProviderService(QObject):
         if not provider:
             raise PluginError(self.tr('Providers are not initialized'))
         provider_name = None
+        local_image_indices = product_types = []
+
         if isinstance(provider, MyImageryProvider):
             selected_mosaic = self.app_context.selected_mosaic
             selected_image = self.app_context.selected_image
@@ -130,14 +147,16 @@ class ProviderService(QObject):
                 provider_names, product_types = self.get_search_providers(local_image_indices)
                 image_ids, selection_error = self.get_search_images_ids(provider_names, product_types)
                 if selection_error:
-                    self.dlg.disable_processing_start("Test") #!
-                self.imagery_search_provider_instance.image_id = image_ids
+                    self.dlg.disable_processing_start(selection_error)
+                self.imagery_search_provider_instance.image_ids = image_ids
                 provider_name = provider_names[0] if provider_names else None # the same for all [i] if there was no 'selection_error'
+
         if not provider_name:
             try:
                 provider_name = provider.api_name
             except:
                 provider_name = None
+
         provider_params, provider_meta = provider.to_processing_params(provider_name=provider_name,
                                                                        zoom=zoom)
         meta.update(**provider_meta)
@@ -164,13 +183,36 @@ class ProviderService(QObject):
         return provider_text
     
     def validate_provider_params(self, provider):
+        error = None
         if isinstance(provider, MyImageryProvider):
             if self.my_imagery_provider_instance.mosaic_id == self.my_imagery_provider_instance.image_ids == None:
-                return self.tr('Choose imagery collection or image to start processing')
+                error = self.tr('Choose imagery collection or image to start processing')
         elif isinstance(provider, ImagerySearchProvider):
-            if self.imagery_search_provider_instance.image_id == None:
-                return self.tr("This provider requires image ID. Use search tab to find imagery for you requirements, "
-                               "and select image in the table.")
+            if self.imagery_search_provider_instance.image_ids == None:
+                error = self.tr("This provider requires image ID. Use search tab to find imagery for you requirements, "
+                                "and select image in the table.")
+        # Check for zoom errors by examining the UI state
+        if not error and isinstance(provider, ImagerySearchProvider):
+            selected_images = self.dlg.metadataTable.selectedItems()
+            if selected_images:
+                local_image_indices = self.get_local_image_indices(selected_images)
+                _, product_types = self.get_search_providers(local_image_indices)
+                # Check for zoom consistency
+                if local_image_indices:
+                    zooms = []
+                    for local_image_index in local_image_indices:
+                        try:
+                            zoom_val = self.app_context.search_footprints[local_image_index].attribute("zoom")
+                            if zoom_val not in (None, '', 'NULL'):
+                                zooms.append(zoom_val)
+                        except (KeyError, AttributeError):
+                            continue
+                    if len(set(product_types)) > 1: # no image + mosaic
+                        error = self.tr("Selected search results must be of the same product type")
+                    elif set(product_types) == set(["Mosaic"]) and len(set(zooms)) > 1: # no mosaics with different zooms
+                        error = self.tr("Selected search results must have the same zoom level")
+        
+        return error
 
     def get_local_image_indices(self, selected_images):
         try:
@@ -211,10 +253,10 @@ class ProviderService(QObject):
         # Require image id only for single images and not mosaics
         if image_id:
             self.imagery_search_provider_instance.requires_id = True
-            self.imagery_search_provider_instance.image_id = image_id
+            self.imagery_search_provider_instance.image_ids = image_id
         else:
             self.imagery_search_provider_instance.requires_id = False
-            self.imagery_search_provider_instance.image_id = []
+            self.imagery_search_provider_instance.image_ids = []
         return image_id, selection_error        
     
     """ def get_search_images_ids(self, provider_names, product_types):
@@ -279,20 +321,20 @@ class ProviderService(QObject):
                 self.app_context.allow_enable_processing[key] = True
             self.dlg.startProcessing.setEnabled(True)
     
-    def duplicate_model(self, processing):
-        #! try:
-        if self.dlg.modelCombo.findText(processing.workflowDef.name) == -1: # index is -1, the item is not found
-            alert(self.tr("Model '{wd}' is not enabled for your account").format(wd=processing.workflowDef))
-            for key in self.app_context.allow_enable_processing:
-                self.app_context.allow_enable_processing[key] = True
-            self.dlg.startProcessing.setEnabled(True)
-        else: # item is found
-            self.dlg.modelCombo.setCurrentText(processing.workflowDef.name)
-        """ except:
+    def duplicate_model(self, processing: ProcessingDTO):
+        try:
+            if self.dlg.modelCombo.findText(processing.workflowDef.name) == -1: # index is -1, the item is not found
+                alert(self.tr("Model '{wd}' is not enabled for your account").format(wd=processing.workflowDef.name))
+                for key in self.app_context.allow_enable_processing:
+                    self.app_context.allow_enable_processing[key] = True
+                self.dlg.startProcessing.setEnabled(True)
+            else: # item is found
+                self.dlg.modelCombo.setCurrentText(processing.workflowDef.name)
+        except:
             alert(self.tr("Duplication failed on copying model"))
             for key in self.app_context.allow_enable_processing:
                 self.app_context.allow_enable_processing[key] = True
-            self.dlg.startProcessing.setEnabled(True) """ #!
+            self.dlg.startProcessing.setEnabled(True)
     
     def duplicate_model_options(self, processing):
         try:
@@ -364,33 +406,32 @@ class ProviderService(QObject):
         # And with column indecies we get corresponding field names
         column_names = []
         for index in columns.keys():
-            config_search_columns = ConfigColumns().METADATA_TABLE_ATTRIBUTES
-            column_names.append(list(config_search_columns.values())[index])
+            column_names.append(list(self.config_search_columns.values())[index])
         # Create pseudo search metadata vector layer
-        self.metadata_layer = QgsVectorLayer('polygon?crs=epsg:4326&index=yes&' +
-                                             '&'.join(f'field={name}' for name in column_names),
-                                            'Duplicated Imagery Search',
-                                            'memory')
-        data_provider = self.metadata_layer.dataProvider()
+        self.app_context.metadata_layer = QgsVectorLayer('polygon?crs=epsg:4326&index=yes&' +
+                                                         '&'.join(f'field={name}' for name in column_names),
+                                                         'Duplicated Imagery Search',
+                                                         'memory')
+        data_provider = self.app_context.metadata_layer.dataProvider()
         # Fill this layer with AOI (since we don't have accsess to footprint)
         for f in self.dlg.polygonCombo.currentLayer().getFeatures():
-            feature = QgsFeature(self.metadata_layer.fields())
+            feature = QgsFeature(self.app_context.metadata_layer.fields())
             feature.setGeometry(f.geometry())
-            self.metadata_layer.startEditing()
+            self.app_context.metadata_layer.startEditing()
             for column, value in columns.items():
-                field_name = list(self.config_search_columns.METADATA_TABLE_ATTRIBUTES.values())[column]
+                field_name = list(self.config_search_columns.values())[column]
                 feature.setAttribute(field_name, value)
             data_provider.addFeatures([feature])
-            self.metadata_layer.commitChanges()
-        self.metadata_layer.updateExtents()
-        self.meta_layer_table_connection = self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
+            self.app_context.metadata_layer.commitChanges()
+        self.app_context.metadata_layer.updateExtents()
+        #! self.meta_layer_table_connection = self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
         # Fill metadata table with the returned values
         for column, value in columns.items():
             table_item = QTableWidgetItem()
             table_item.setData(Qt.DisplayRole, value)
             self.dlg.metadataTable.setItem(0, column, table_item)
         # Create pseudo footprints dict for one created feature
-        self.search_footprints = {0: feature for feature in self.metadata_layer.getFeatures()}
+        self.search_footprints = {0: feature for feature in self.app_context.metadata_layer.getFeatures()}
         self.dlg.metadataTableFilled.emit()
         self.dlg.metadataTable.selectRow(0)
     
@@ -433,6 +474,13 @@ class ProviderService(QObject):
     @property
     def basemap_providers(self):
         return ProvidersList(self.default_providers + self.user_providers)
+    
+    @property
+    def imagery_search_provider_index(self):
+        for index, provider in enumerate(self.providers):
+            if isinstance(provider, ImagerySearchProvider):
+                return index
+        return -1
 
 def get_data_provider():
     return ProviderService.instance().get_data_provider()

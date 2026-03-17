@@ -29,7 +29,7 @@ from .dialogs import (MainDialog,
                       ProviderDialog,
                       ReviewDialog
                       )
-from .dialogs.confirm_processing_start_dialog import ConfirmProcessingStartDialog
+#! from .dialogs.confirm_processing_start_dialog import ConfirmProcessingStartDialog
 from .dialogs.processing_details_dialog import ProcessingDetailsDialog
 from .dialogs.icons import plugin_icon
 from .functional.app_context import AppContext
@@ -95,6 +95,7 @@ class Mapflow(QObject):
         # init configs
         self.config = Config()
         self.app_context = AppContext(self.config)
+        self.app_context.config = self.config
         # Set max_aois_per_processing from config as default
         self.app_context.max_aois_per_processing = self.config.MAX_AOIS_PER_PROCESSING
         # init empty params
@@ -144,8 +145,8 @@ class Mapflow(QObject):
         self.search_page_offset = 0
         self.search_page_limit = self.config.SEARCH_RESULTS_PAGE_LIMIT
         # Imagery provider instances
-        self.imagery_search_provider_instance = None
-        self.my_imagery_provider_instance = None
+        #! self.imagery_search_provider_instance = None
+        #! self.my_imagery_provider_instance = None
 
         # Init dialogs
         self.use_oauth = (self.app_context.settings.value('use_oauth', 'false').lower() == 'true')
@@ -173,9 +174,7 @@ class Mapflow(QObject):
         self.dlg.outputDirectory.setText(self.app_context.settings.value('outputDir'))
 
         # Setup temporary directory from setting or skip for now
-        self.temp_dir = None
         self.setup_tempdir()
-        self.app_context.temp_dir = self.temp_dir
 
         # Initialize services
         # Initialize AlertService singleton
@@ -193,7 +192,6 @@ class Mapflow(QObject):
                                                        self.iface,
                                                        self.result_loader,
                                                        self.app_context.plugin_version,
-                                                       self.temp_dir,
                                                        app_context=self.app_context)
         self.data_catalog_controller = DataCatalogController(self.dlg, self.data_catalog_service)
 
@@ -203,19 +201,18 @@ class Mapflow(QObject):
                                               config=self.config,
                                               area_calc_fn=self.calculate_aoi_area_use_image_extent)
         
-        self.provider_service = ProviderService(providers=ProvidersList([]),
-                                                dlg=self.dlg,
-                                                app_context=self.app_context,
-                                                config=self.config,
-                                                data_catalog_service=self.data_catalog_service)
+        self.provider_service = ProviderService.get_instance(providers=ProvidersList([]),
+                                                             dlg=self.dlg,
+                                                             app_context=self.app_context,
+                                                             config=self.config,
+                                                             data_catalog_service=self.data_catalog_service)
 
         self.processing_service = ProcessingService(http=self.http,
                                                     dlg=self.dlg,
                                                     iface=self.iface,
                                                     result_loader=self.result_loader,
                                                     app_context=self.app_context,
-                                                    timer_interval=self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000,
-                                                    processing_request_callback=self.create_processing_request)
+                                                    timer_interval=self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
         
         self.project_processing_controller = ProjectProcessingController(dlg=self.dlg,
                                                                          processing_service=self.processing_service,
@@ -228,7 +225,7 @@ class Mapflow(QObject):
             self.provider_service.user_providers, errors = ProvidersList.from_settings(settings=self.app_context.settings)
             self.provider_service.sentinel_providers = ProvidersList([SentinelProvider(proxy=self.server)])
             self.provider_service.default_providers = ProvidersList([])
-            self.provider_service.providers = ProvidersList([])
+            #! self.provider_service.providers = ProvidersList([])
         except Exception as e:
             self.alert(self.tr("Error during loading the data providers: {e}").format(str(e)), icon=Qgis.Warning)
         if errors:
@@ -332,7 +329,7 @@ class Mapflow(QObject):
         self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
 
         # Zoom selection for data source
-        self.zoom_selector = (self.config.ZOOM_SELECTOR.lower() == "true")
+        #! self.app_context.zoom_selector = (self.config.ZOOM_SELECTOR.lower() == "true")
         self.zoom = None
         if self.app_context.zoom_selector:
             self.dlg.zoomCombo.currentIndexChanged.connect(self.on_zoom_change)
@@ -408,7 +405,7 @@ class Mapflow(QObject):
         self.dlg.see_details_action.triggered.connect(self.show_details)
         self.dlg.processing_update_action.triggered.connect(self.processing_service.update_processing)
         self.dlg.processing_restart_action.triggered.connect(self.processing_service.restart_processing)
-        self.dlg.processing_duplicate_action.triggered.connect(self.processing_service.duplicate_processing)
+        self.dlg.processing_duplicate_action.triggered.connect(self.check_dir_and_duplicate_processing)
         self.dlg.saveOptionsButton.setMenu(self.dlg.options_menu)
 
     def create_aoi_layer_from_map(self, action: QAction):
@@ -636,8 +633,14 @@ class Mapflow(QObject):
             my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
             self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
             self.calculate_aoi_area_catalog()
-            self.create_processing_request()
+            self.processing_service.validate_all_processing_params(allow_empty_name=True)
+            self.dlg.zoomCombo.setEnabled(False)
+            self.dlg.zoomCombo.setCurrentIndex(0)
         else:
+            if isinstance(provider, ImagerySearchProvider):
+                self.dlg.zoomCombo.setEnabled(False)
+            else:
+                self.dlg.zoomCombo.setEnabled(True)
             self.calculate_aoi_area_polygon_layer(polygon_layer)
         if provider.requires_image_id:
             imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
@@ -710,7 +713,6 @@ class Mapflow(QObject):
                 return
             else:
                 self.provider_service.user_providers[user_provider_index] = new_provider
-
         self.provider_service.update_providers()
         self.dlg.setProviderIndex(provider_index)
 
@@ -790,10 +792,10 @@ class Mapflow(QObject):
 
             # If we have searched with current provider previously, we want to restore the search results as it were
             # We store the results in a temp folder, separate file for each provider
-            geoms = self.app_context.search_provider.load_search_layer(self.temp_dir)
+            geoms = self.app_context.search_provider.load_search_layer(self.app_context.temp_dir)
             if geoms:
                 self.display_metadata_geojson_layer(
-                    os.path.join(self.temp_dir, self.app_context.search_provider.metadata_layer_name),
+                    os.path.join(self.app_context.temp_dir, self.app_context.search_provider.metadata_layer_name),
                     f"{self.app_context.search_provider.name} metadata")
             else:
                 self.clear_metadata()
@@ -823,8 +825,6 @@ class Mapflow(QObject):
             self.dlg.outputDirectory.setText(path)
             self.app_context.settings.setValue('outputDir', path)
             self.setup_tempdir()
-            self.data_catalog_service.temp_dir = self.temp_dir
-            self.result_loader.temp_dir = self.temp_dir
             return path
 
     def check_if_output_directory_is_selected(self) -> bool:
@@ -837,12 +837,12 @@ class Mapflow(QObject):
         self.alert(self.tr('Please, specify an existing output directory'))
         return False
 
-    @property
+    """ @property
     def imagery_search_provider_index(self):
         for index, provider in enumerate(self.provider_service.providers):
             if isinstance(provider, ImagerySearchProvider):
                 return index
-        return -1
+        return -1 """ #!
 
     @property
     def imagery_search_provider(self):
@@ -874,7 +874,7 @@ class Mapflow(QObject):
             provider_supports_search = False
 
         if not provider_supports_search:
-            self.dlg.setProviderIndex(self.imagery_search_provider_index)
+            self.dlg.setProviderIndex(self.provider_service.imagery_search_provider_index)
 
     def get_metadata(self, _: Optional[bool] = False, offset: Optional[int] = 0) -> None:
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
@@ -943,7 +943,7 @@ class Mapflow(QObject):
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
         #provider = self.provider_service.providers[self.dlg.providerIndex()]
-        self.app_context.search_provider.clear_saved_search(self.temp_dir)
+        self.app_context.search_provider.clear_saved_search(self.app_context.temp_dir)
 
     def request_mapflow_metadata(self,
                                  aoi: QgsGeometry,
@@ -1000,7 +1000,6 @@ class Mapflow(QObject):
         except (AttributeError, RuntimeError):  # metadata layer has been deleted
             pass
         self.app_context.metadata_layer = QgsVectorLayer(filename, layer_name, 'ogr')
-        self.app_context.project.addMapLayer(self.app_context.metadata_layer)
         self.app_context.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
         # Place search results under AOI layer
         aoi_layer = self.dlg.polygonCombo.currentLayer()
@@ -1034,7 +1033,7 @@ class Mapflow(QObject):
         # Save the current search results to load later
         provider = self.imagery_search_provider
         try:
-            filename = provider.save_search_layer(self.temp_dir, geoms)
+            filename = provider.save_search_layer(self.app_context.temp_dir, geoms)
         except:
             self.alert(self.tr("<b>Results could not be loaded </b><br>Please, make sure you chose the right output folder in the Settings tab \
                                 and you have access rights to this folder"))
@@ -1261,7 +1260,7 @@ class Mapflow(QObject):
             for feature in metadata['features']
         })
         # Create a temporary layer for the current page of metadata
-        output_file_name = os.path.join(self.temp_dir, os.urandom(32).hex())
+        output_file_name = os.path.join(self.app_context.temp_dir, os.urandom(32).hex())
         with open(output_file_name, 'w') as file:
             json.dump(metadata, file)
         metadata_layer = QgsVectorLayer(output_file_name, '', 'ogr')
@@ -1410,7 +1409,7 @@ class Mapflow(QObject):
             if feature['properties']['cloudCover']:
                 feature['properties']['cloudCover'] = round(feature['properties']['cloudCover'] * 100)
         # Save metadata to file to return to previous search
-        filename = provider.save_search_layer(self.temp_dir, metadata)
+        filename = provider.save_search_layer(self.app_context.temp_dir, metadata)
         self.display_metadata_geojson_layer(filename, f'{provider.name} metadata')
         # Memorize IDs and extents to be able to clip the user's AOI to image on processing creation
         self.dlg.fill_metadata_table(metadata)
@@ -1471,6 +1470,16 @@ class Mapflow(QObject):
         self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
         self.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(
             self.sync_layer_selection_with_table)
+        
+        # Set zoom (if available) #!
+        if self.app_context.zoom_selector:
+            zooms = [self.dlg.metadataTable.item(row, self.config.ZOOM_COLUMN_INDEX).text() for row in selected_rows]
+            zoom_index = self.dlg.zoomCombo.findText(zooms[0]) # different zooms are not allowed
+            if zoom_index == -1:
+                self.dlg.zoomCombo.setCurrentIndex(0)
+            else:
+                self.dlg.zoomCombo.setCurrentIndex(zoom_index)
+
 
     def sync_layer_selection_with_table(self, selected_ids: List[int]) -> None:
         """
@@ -1721,7 +1730,7 @@ class Mapflow(QObject):
                                             local_image_indices: List[int]):
         extents = [self.app_context.search_footprints[local_image_index] for local_image_index in local_image_indices]
         try:
-            extents = [self.search_footprints[local_image_index] for local_image_index in local_image_indices]
+            extents = [self.app_context.search_footprints[local_image_index] for local_image_index in local_image_indices]
             clipped_aoi_features = clip_aoi_to_image_extent(aoi, extents)
             aoi = QgsGeometry.fromWkt('GEOMETRYCOLLECTION()')
             for feature in clipped_aoi_features:
@@ -1792,6 +1801,7 @@ class Mapflow(QObject):
                 aoi = selected_aoi
         return aoi
 
+    '''
     def create_processing_request(self,
                                   allow_empty_name: bool = False) -> Tuple[Optional[PostProcessingSchema], str]:
         processing_name = self.dlg.processingName.text()
@@ -1828,8 +1838,8 @@ class Mapflow(QObject):
                 else:
                     image_ids = [image.id for image in selected_images]
                     mosaic_id = None
-            self.my_imagery_provider_instance.mosaic_id = mosaic_id
-            self.my_imagery_provider_instance.image_ids = image_ids
+            self.provider_service.my_imagery_provider_instance.mosaic_id = mosaic_id
+            self.provider_service.my_imagery_provider_instance.image_ids = image_ids
         if not provider_names:
             try:
                 provider_name = provider.api_name
@@ -1875,7 +1885,9 @@ class Mapflow(QObject):
             blocks=wd.get_enabled_blocks(self.dlg.enabled_blocks())
         )
         return processing_params, ""
+    '''
 
+    '''
     def create_processing(self) -> None:
         """Create and start a processing on the server.
 
@@ -1962,7 +1974,7 @@ class Mapflow(QObject):
         # Or just post the processing
         else:
             start_processing()
-        return
+        return '''
 
     def post_processing(self, request_body: PostProcessingSchema) -> None:
         """Submit a processing to Mapflow.
@@ -2056,20 +2068,20 @@ class Mapflow(QObject):
                 self.project_service.setup_project_change_rights()
 
     def setup_providers(self, providers_data):
-        self.imagery_search_provider_instance = ImagerySearchProvider(proxy=self.server)
-        self.my_imagery_provider_instance = MyImageryProvider()
+        self.provider_service.imagery_search_provider_instance = ImagerySearchProvider(proxy=self.server)
+        self.provider_service.my_imagery_provider_instance = MyImageryProvider()
         # Get only unique providers to avoid index shifting in souceCombo when one provider is sent multiple times
         unique_providers = list({provider.name: provider for provider in
                                  [DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
                                   for data in providers_data]}.values())
-        self.provider_service.default_providers = ProvidersList([self.imagery_search_provider_instance] +
-                                               [self.my_imagery_provider_instance] +
+        self.provider_service.default_providers = ProvidersList([self.provider_service.imagery_search_provider_instance] +
+                                               [self.provider_service.my_imagery_provider_instance] +
                                                unique_providers)
         self.provider_service.set_available_imagery_sources(self.dlg.modelCombo.currentText())
         # We want to clear the data from previous lauunch to avoid confusion
         for provider in self.provider_service.providers:
-            provider.clear_saved_search(self.temp_dir)
-        self.provider_service.update_providers_list(self.provider_service.default_providers)
+            provider.clear_saved_search(self.app_context.temp_dir)
+        #! self.provider_service.update_providers_list(self.provider_service.default_providers)
     
     def setup_search_providers(self, providers_data):
         search_providers = ProvidersList([DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
@@ -2083,7 +2095,7 @@ class Mapflow(QObject):
 
     def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
         """Save and open the preview image as a layer."""
-        with open(self.temp_dir/os.urandom(32).hex(), mode='wb') as f:
+        with open(self.app_context.temp_dir/os.urandom(32).hex(), mode='wb') as f:
             f.write(response.readAll().data())
         # Some previews aren't georef-ed
         preview = gdal.Open(f.name)
@@ -2208,7 +2220,7 @@ class Mapflow(QObject):
         We assume that png preview is not internally georeferenced,
         but the footprint specified in the metadata has the same extent, so we generate georef for the image
         """
-        with open(self.temp_dir/os.urandom(32).hex(), mode='wb') as f:
+        with open(self.app_context.temp_dir/os.urandom(32).hex(), mode='wb') as f:
             f.write(response.readAll().data())
         preview = gdal.Open(f.name)
         pixel_xsize = extent.width() / preview.RasterXSize
@@ -2259,7 +2271,7 @@ class Mapflow(QObject):
             georeferenced_previews_list.append(georeferenced_preview)
         # Final part: merge all coolected images into one VRT
         if len(previews) == 0:
-            vrt_path = os.path.join(self.temp_dir, os.urandom(32).hex())
+            vrt_path = os.path.join(self.app_context.temp_dir, os.urandom(32).hex())
             vrt = gdal.BuildVRT(vrt_path, georeferenced_previews_list)
             vrt.FlushCache()
             vrt = None
@@ -2291,9 +2303,9 @@ class Mapflow(QObject):
                        image_date: str):
         uri = layer_utils.generate_xyz_layer_definition(url=url, source_type=preview_type)
         tile_layer = QgsRasterLayer(uri, provider_name, "wms")
-        tiles_to_delete = [layer.id() for layer in self.project.mapLayers().values()
+        tiles_to_delete = [layer.id() for layer in self.app_context.project.mapLayers().values()
                             if layer.dataProvider().dataSourceUri() == tile_layer.dataProvider().dataSourceUri()]
-        self.project.removeMapLayers(tiles_to_delete)
+        self.app_context.project.removeMapLayers(tiles_to_delete)
         self.result_loader.add_layer(layer=tile_layer, order=0)
         # Add footprint layer
         if feature:
@@ -2303,9 +2315,9 @@ class Mapflow(QObject):
             footprint_layer.dataProvider().addFeatures([feature])
             footprint_layer.updateExtents()
             footprint_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata_footprint.qml'))
-            footprints_to_delete = [layer.id() for layer in self.project.mapLayers().values()
+            footprints_to_delete = [layer.id() for layer in self.app_context.project.mapLayers().values()
                                     if layer.name() == footprint_layer.name()]
-            self.project.removeMapLayers(footprints_to_delete)
+            self.app_context.project.removeMapLayers(footprints_to_delete)
             self.result_loader.add_layer(layer=footprint_layer, order=0)
         self.result_loader.add_aoi_to_preview()
 
@@ -2623,10 +2635,10 @@ class Mapflow(QObject):
         if self.dlg.viewAsTiles.isChecked():
             self.result_loader.load_result_tiles(processing=processing)
         elif self.dlg.viewAsLocal.isChecked():
-            if not self.temp_dir:
+            if not self.app_context.temp_dir:
                 self.select_output_directory()
-            elif not self.temp_dir.exists():
-                self.alert(self.tr("Directory '{}' does not exist").format(self.temp_dir) +
+            elif not self.app_context.temp_dir.exists():
+                self.alert(self.tr("Directory '{}' does not exist").format(self.app_context.temp_dir) +
                            self.tr("<br>Using Settings tab, change the output directory to an existing one to download the results"), QMessageBox.Warning)
                 return
             if not self.check_if_output_directory_is_selected():
@@ -2653,10 +2665,10 @@ class Mapflow(QObject):
         processing = self.processing_service.selected_processing()
         if not processing:
             return
-        if not self.temp_dir:
+        if not self.app_context.temp_dir:
             self.select_output_directory()
-        elif not self.temp_dir.exists():
-            self.alert(self.tr("Directory '{}' does not exist").format(self.temp_dir) +
+        elif not self.app_context.temp_dir.exists():
+            self.alert(self.tr("Directory '{}' does not exist").format(self.app_context.temp_dir) +
                        self.tr("<br>Using Settings tab, change the output directory to an existing one to download the results"), QMessageBox.Warning)
             return
         if not self.check_if_output_directory_is_selected():
@@ -2664,7 +2676,7 @@ class Mapflow(QObject):
         self.result_loader.download_aoi_file(pid=processing.id, callback=self.result_loader.download_aoi_file_callback)
 
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
-        alert(message, icon, blocking)
+        return alert(message, icon, blocking)
 
     def initGui(self) -> None:
         """Create the menu entries and toolbar icons inside the QGIS GUI.
@@ -2990,7 +3002,7 @@ class Mapflow(QObject):
         dialog.toSourceButton.clicked.connect(lambda: self.show_processing_source(
                                                            processing=processing,
                                                            window=dialog))
-        dialog.setup(processing, self.zoom_selector, error or None)
+        dialog.setup(processing, self.app_context.zoom_selector, error or None)
         dialog.deleteLater()
     
     def show_processing_source(self,
@@ -2999,7 +3011,7 @@ class Mapflow(QObject):
         source_params = processing.params.sourceParams
         if isinstance(source_params, ImagerySearchParams):
             # Download AOI and only then fill search table
-            self.result_loader.download_aoi_file(pid=processing.id_, callback=self.duplicate_aoi_callback)
+            self.result_loader.download_aoi_file(pid=processing.id, callback=self.processing_service.duplicate_aoi_callback)
         elif isinstance(source_params, MyImageryParams):
             self.data_catalog_service.show_my_imagery_source(source_params)
         elif isinstance(source_params, UserDefinedParams):
@@ -3045,13 +3057,14 @@ class Mapflow(QObject):
             return image_ids, selection_error
         # Require image id only for single images and not mosaics
         if image_ids:
-            self.imagery_search_provider_instance.requires_id = True
-            self.imagery_search_provider_instance.image_ids = image_ids
+            self.provider_service.imagery_search_provider_instance.requires_id = True
+            self.provider_service.imagery_search_provider_instance.image_ids = image_ids
         else:
-            self.imagery_search_provider_instance.requires_id = False
-            self.imagery_search_provider_instance.image_ids = []
+            self.provider_service.imagery_search_provider_instance.requires_id = False
+            self.provider_service.imagery_search_provider_instance.image_ids = []
         return image_ids, selection_error
     
+    """
     def get_zoom(self, provider, local_image_indices, product_types):
         zoom = None
         zoom_error = ""
@@ -3082,7 +3095,9 @@ class Mapflow(QObject):
                 self.zoom = self.app_context.settings.value('zoom')
                 zoom = self.zoom
             self.dlg.enable_zoom_selector(True, zoom)
+        print ("Test", zoom, zoom_error)
         return zoom, zoom_error
+    """
     
     def get_s3_uri(self, provider):
         s3_uri = None
@@ -3119,12 +3134,17 @@ class Mapflow(QObject):
     def setup_tempdir(self):
         if not self.app_context.settings.value('outputDir'):
             return # don't ask to specify tempdir at the plugin start
-        self.temp_dir = Path(self.app_context.settings.value('outputDir'), "Temp")
+        self.app_context.temp_dir = Path(self.app_context.settings.value('outputDir'), "Temp")
         try:
-            shutil.rmtree(self.temp_dir) # remove old tempdir
+            shutil.rmtree(self.app_context.temp_dir) # remove old tempdir
         except:
             pass
-        self.temp_dir.mkdir(parents=True, exist_ok=True)
+        self.app_context.temp_dir.mkdir(parents=True, exist_ok=True)
+
+    def check_dir_and_duplicate_processing(self):
+        if not self.check_if_output_directory_is_selected():
+            return # only when outputDirectory is empty AND user closed selection dialog
+        self.processing_service.duplicate_processing()
 
     """ def restart_processing(self):
         processing = self.selected_processing()

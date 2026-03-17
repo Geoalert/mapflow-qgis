@@ -81,7 +81,7 @@ class ProcessingApi(QObject):
             callback=callback,
             body=data.as_json().encode(),
             use_default_error_handler=False,
-            error_handler=callback
+            error_handler=error_handler
         )
     
     def restart_processing(self,

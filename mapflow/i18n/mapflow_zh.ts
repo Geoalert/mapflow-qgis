@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.1" language="zh_CN" sourcelanguage="en">
+<TS version="2.1" language="zh_CN" sourcelanguage="en_US">
 <context>
     <name>ApiErrors</name>
     <message>
@@ -12,6 +12,56 @@
         <location filename="../errors/api_errors.py" line="9"/>
         <source>Geometry area is {aoiArea} sq km, which is smaller than the minimum required area for {providerName} data provider ({providerMinArea} sq km)</source>
         <translation>几何区域面积为 {aoiArea} 平方公里，小于 {providerName} 数据提供商要求的最小面积 ({providerMinArea} 平方公里)</translation>
+    </message>
+</context>
+<context>
+    <name>AreaCalculatorService</name>
+    <message>
+        <location filename="../functional/service/area_calculator_service.py" line="54"/>
+        <source>Not enough rights to start processing in a shared project ({})</source>
+        <translation>权限不足，无法在共享项目（{}）中开始处理</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/area_calculator_service.py" line="31"/>
+        <source>Set AOI to start processing</source>
+        <translation>设置感兴趣区域以开始处理</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/area_calculator_service.py" line="56"/>
+        <source>AOI must contain not more than {} polygons</source>
+        <translation>感兴趣区域不能包含超过 {} 个多边形</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/area_calculator_service.py" line="96"/>
+        <source>Use extent of &apos;{name}&apos;</source>
+        <translation>使用 &apos;{name}&apos; 的范围</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/area_calculator_service.py" line="101"/>
+        <source>Use imagery extent</source>
+        <translation>使用影像范围</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/area_calculator_service.py" line="106"/>
+        <source>Selected AOI does not intersect the selected imagery</source>
+        <translation>选择的感兴趣区域与所选影像没有交集</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/area_calculator_service.py" line="170"/>
+        <source>Area: {:.2f} sq.km</source>
+        <translation>面积：{:.2f} 平方公里</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/area_calculator_service.py" line="178"/>
+        <source>Bad AOI. AOI must be inside boundaries: 
+[-180, 180] by longitude, [-90, 90] by latitude</source>
+        <translation>无效的感兴趣区域。感兴趣区域必须在边界内： 
+经度 [-180, 180]，纬度 [-90, 90]</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/area_calculator_service.py" line="183"/>
+        <source>Providers are not initialized</source>
+        <translation>提供商未初始化</translation>
     </message>
 </context>
 <context>
@@ -151,7 +201,7 @@
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="127"/>
         <source>Could not delete imagery collection &apos;{mosaic_name}&apos;</source>
-        <translation>无法删除影像集 '{mosaic_name}'</translation>
+        <translation>无法删除影像集 &apos;{mosaic_name}&apos;</translation>
     </message>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="129"/>
@@ -162,7 +212,8 @@
         <location filename="../functional/api/data_catalog_api.py" line="171"/>
         <source>Failed to load imagery collection. 
 Please try again later or report error</source>
-        <translation>加载影像集失败。请稍后重试或报告错误</translation>
+        <translation>加载影像集失败。 
+请稍后重试或报告错误</translation>
     </message>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="228"/>
@@ -172,7 +223,7 @@ Please try again later or report error</source>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="230"/>
         <source>Imagery collection &apos;{mosaic_name}&apos; does not exist</source>
-        <translation>影像集 '{mosaic_name}' 不存在</translation>
+        <translation>影像集 &apos;{mosaic_name}&apos; 不存在</translation>
     </message>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="232"/>
@@ -183,12 +234,13 @@ Please try again later or report error</source>
         <location filename="../functional/api/data_catalog_api.py" line="234"/>
         <source>The image does not meet this imagery collection &apos;{mosaic_name}&apos; parameters. 
 Either modify your image or upload it to a different collection</source>
-        <translation>该影像不符合此影像集 '{mosaic_name}' 的参数要求。请修改您的影像或上传到其他影像集</translation>
+        <translation>该影像不符合此影像集 &apos;{mosaic_name}&apos; 的参数要求。
+请修改您的影像或上传到其他影像集</translation>
     </message>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="237"/>
         <source>Could not upload &apos;{image}&apos; to imagery collection</source>
-        <translation>无法将 '{image}' 上传到影像集</translation>
+        <translation>无法将 &apos;{image}&apos; 上传到影像集</translation>
     </message>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="239"/>
@@ -200,7 +252,7 @@ Either modify your image or upload it to a different collection</source>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="275"/>
         <source>Could not delete &apos;{image}&apos; from imagery collection</source>
-        <translation>无法从影像集中删除 '{image}'</translation>
+        <translation>无法从影像集中删除 &apos;{image}&apos;</translation>
     </message>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="277"/>
@@ -211,69 +263,69 @@ Either modify your image or upload it to a different collection</source>
 <context>
     <name>DataCatalogService</name>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="80"/>
+        <location filename="../functional/service/data_catalog.py" line="81"/>
         <source>Choose image to upload</source>
         <translation>选择要上传的影像</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="122"/>
+        <location filename="../functional/service/data_catalog.py" line="123"/>
         <source>&lt;center&gt;Creation of imagery collection &apos;{mosaic_name}&apos; failed&lt;br&gt;while trying to upload &apos;{image}&apos;</source>
-        <translation>&lt;center&gt;创建影像集 '{mosaic_name}' 失败&lt;br&gt;尝试上传 '{image}' 时</translation>
-    </message>
-    <message>
-        <location filename="../functional/service/data_catalog.py" line="201"/>
-        <source>&lt;center&gt;Delete imagery collection &lt;b&gt;&apos;{name}&apos;&lt;/b&gt;?</source>
-        <translation>&lt;center&gt;删除影像集 &lt;b&gt;'{name}'&lt;/b&gt;？</translation>
+        <translation>&lt;center&gt;创建影像集 &apos;{mosaic_name}&apos; 失败&lt;br&gt;尝试上传 &apos;{image}&apos; 时</translation>
     </message>
     <message>
         <location filename="../functional/service/data_catalog.py" line="204"/>
-        <source>&lt;center&gt;Delete following imagery collections:&lt;br&gt;&lt;b&gt;&apos;{names}&apos;&lt;/b&gt;?</source>
-        <translation>&lt;center&gt;删除以下影像集：&lt;br&gt;&lt;b&gt;'{names}'&lt;/b&gt;？</translation>
+        <source>&lt;center&gt;Delete imagery collection &lt;b&gt;&apos;{name}&apos;&lt;/b&gt;?</source>
+        <translation>&lt;center&gt;删除影像集 &lt;b&gt;&apos;{name}&apos;&lt;/b&gt;？</translation>
     </message>
     <message>
         <location filename="../functional/service/data_catalog.py" line="207"/>
+        <source>&lt;center&gt;Delete following imagery collections:&lt;br&gt;&lt;b&gt;&apos;{names}&apos;&lt;/b&gt;?</source>
+        <translation>&lt;center&gt;删除以下影像集：&lt;br&gt;&lt;b&gt;&apos;{names}&apos;&lt;/b&gt;？</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/data_catalog.py" line="210"/>
         <source>&lt;center&gt;Delete &lt;b&gt;{len}&lt;/b&gt; imagery collections?</source>
         <translation>&lt;center&gt;删除 &lt;b&gt;{len}&lt;/b&gt; 个影像集？</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="247"/>
+        <location filename="../functional/service/data_catalog.py" line="251"/>
         <source>Please, select existing imagery collection</source>
         <translation>请选择现有的影像集</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="249"/>
+        <location filename="../functional/service/data_catalog.py" line="253"/>
         <source>Choose images to upload</source>
         <translation>选择要上传的影像</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="298"/>
+        <location filename="../functional/service/data_catalog.py" line="302"/>
         <source>Raster TIFF file must be georeferenced, have size less than {size} pixels and file size less than {memory}</source>
         <translation>栅格TIFF文件必须经过地理配准，像素尺寸小于 {size} 且文件大小小于 {memory}</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="302"/>
+        <location filename="../functional/service/data_catalog.py" line="306"/>
         <source>&lt;center&gt;&lt;b&gt;Error uploading &apos;{name}&apos;&lt;/b&gt;</source>
-        <translation>&lt;center&gt;&lt;b&gt;上传 '{name}' 时出错&lt;/b&gt;</translation>
+        <translation>&lt;center&gt;&lt;b&gt;上传 &apos;{name}&apos; 时出错&lt;/b&gt;</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="307"/>
+        <location filename="../functional/service/data_catalog.py" line="311"/>
         <source>&lt;b&gt;Not enough storage space. &lt;/b&gt;You have {free_storage} left, but &apos;{name}&apos; is {image_size}</source>
-        <translation>&lt;b&gt;存储空间不足。&lt;/b&gt;您剩余 {free_storage}，但 '{name}' 大小为 {image_size}</translation>
+        <translation>&lt;b&gt;存储空间不足。&lt;/b&gt;您剩余 {free_storage}，但 &apos;{name}&apos; 大小为 {image_size}</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="401"/>
+        <location filename="../functional/service/data_catalog.py" line="406"/>
         <source>&lt;center&gt;Delete image &lt;b&gt;&apos;{name}&apos;&lt;/b&gt; from &apos;{mosaic}&apos; imagery collection?</source>
-        <translation>&lt;center&gt;从 '{mosaic}' 影像集中删除影像 &lt;b&gt;'{name}'&lt;/b&gt;？</translation>
+        <translation>&lt;center&gt;从 &apos;{mosaic}&apos; 影像集中删除影像 &lt;b&gt;&apos;{name}&apos;&lt;/b&gt;？</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="404"/>
+        <location filename="../functional/service/data_catalog.py" line="409"/>
         <source>&lt;center&gt;Delete following images from &apos;{mosaic}&apos; imagery collection:&lt;br&gt;&lt;b&gt;&apos;{names}&apos;&lt;/b&gt;?</source>
-        <translation>&lt;center&gt;从 '{mosaic}' 影像集中删除以下影像：&lt;br&gt;&lt;b&gt;'{names}'&lt;/b&gt;？</translation>
+        <translation>&lt;center&gt;从 &apos;{mosaic}&apos; 影像集中删除以下影像：&lt;br&gt;&lt;b&gt;&apos;{names}&apos;&lt;/b&gt;？</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="407"/>
+        <location filename="../functional/service/data_catalog.py" line="412"/>
         <source>&lt;center&gt;Delete &lt;b&gt;{len}&lt;/b&gt; images from &apos;{mosaic}&apos; imagery collection?</source>
-        <translation>&lt;center&gt;从 '{mosaic}' 影像集中删除 &lt;b&gt;{len}&lt;/b&gt; 个影像？</translation>
+        <translation>&lt;center&gt;从 &apos;{mosaic}&apos; 影像集中删除 &lt;b&gt;{len}&lt;/b&gt; 个影像？</translation>
     </message>
     <message>
         <location filename="../functional/service/data_catalog.py" line="462"/>
@@ -281,132 +333,132 @@ Either modify your image or upload it to a different collection</source>
         <translation>请在设置选项卡中选择现有的输出目录</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="505"/>
+        <location filename="../functional/service/data_catalog.py" line="501"/>
         <source>Image name should be 1-255 characters long</source>
         <translation>影像名称应为 1-255 个字符</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="631"/>
+        <location filename="../functional/service/data_catalog.py" line="627"/>
         <source>Source imagery collection with id &apos;{}&apos; was not found </source>
-        <translation>未找到ID为 '{}' 的源影像集</translation>
+        <translation>未找到ID为 &apos;{}&apos; 的源影像集</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="633"/>
+        <location filename="../functional/service/data_catalog.py" line="629"/>
         <source>Source image with id &apos;{}&apos; was not found in any of your imagery collections</source>
-        <translation>未在任何影像集中找到ID为 '{}' 的源影像</translation>
+        <translation>未在任何影像集中找到ID为 &apos;{}&apos; 的源影像</translation>
     </message>
 </context>
 <context>
     <name>DataCatalogView</name>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="24"/>
+        <location filename="../functional/view/data_catalog_view.py" line="25"/>
         <source>Upload from file</source>
         <translation>从文件上传</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="25"/>
+        <location filename="../functional/view/data_catalog_view.py" line="26"/>
         <source>Choose raster layer</source>
         <translation>选择栅格图层</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="44"/>
+        <location filename="../functional/view/data_catalog_view.py" line="45"/>
         <source>Add images</source>
         <translation>添加影像</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="45"/>
+        <location filename="../functional/view/data_catalog_view.py" line="46"/>
         <source>Show images</source>
         <translation>显示影像</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="48"/>
+        <location filename="../functional/view/data_catalog_view.py" line="49"/>
         <source>Preview</source>
         <translation>预览</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="47"/>
+        <location filename="../functional/view/data_catalog_view.py" line="48"/>
         <source>Edit</source>
         <translation>编辑</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="49"/>
+        <location filename="../functional/view/data_catalog_view.py" line="50"/>
         <source>Info</source>
         <translation>信息</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="50"/>
+        <location filename="../functional/view/data_catalog_view.py" line="51"/>
         <source>Rename</source>
         <translation>重命名</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="72"/>
+        <location filename="../functional/view/data_catalog_view.py" line="73"/>
         <source>A-Z</source>
         <translation>A-Z</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="72"/>
+        <location filename="../functional/view/data_catalog_view.py" line="73"/>
         <source>Z-A</source>
         <translation>Z-A</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="72"/>
+        <location filename="../functional/view/data_catalog_view.py" line="73"/>
         <source>Biggest first</source>
         <translation>最大优先</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="72"/>
+        <location filename="../functional/view/data_catalog_view.py" line="73"/>
         <source>Smallest first</source>
         <translation>最小优先</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="72"/>
+        <location filename="../functional/view/data_catalog_view.py" line="73"/>
         <source>Newest first</source>
         <translation>最新优先</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="72"/>
+        <location filename="../functional/view/data_catalog_view.py" line="73"/>
         <source>Oldest first</source>
         <translation>最旧优先</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="93"/>
+        <location filename="../functional/view/data_catalog_view.py" line="94"/>
         <source>More about My imagery</source>
         <translation>关于“我的影像”的更多信息</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="508"/>
+        <location filename="../functional/view/data_catalog_view.py" line="509"/>
         <source>Filter imagery collections by name or id</source>
         <translation>按名称或ID筛选影像集</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="127"/>
+        <location filename="../functional/view/data_catalog_view.py" line="128"/>
         <source>Imagery collections</source>
         <translation>影像集</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="288"/>
+        <location filename="../functional/view/data_catalog_view.py" line="289"/>
         <source>Size</source>
         <translation>大小</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="127"/>
+        <location filename="../functional/view/data_catalog_view.py" line="128"/>
         <source>Created</source>
         <translation>创建时间</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="458"/>
+        <location filename="../functional/view/data_catalog_view.py" line="459"/>
         <source>Double-click to show images</source>
         <translation>双击显示影像</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="175"/>
+        <location filename="../functional/view/data_catalog_view.py" line="176"/>
         <source>Number of images: {count} 
 </source>
         <translation>影像数量：{count} 
 </translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="185"/>
+        <location filename="../functional/view/data_catalog_view.py" line="186"/>
         <source>Size: {mosaic_size} 
 Pixel size: {pixel_size} 
 CRS: {crs} 
@@ -419,54 +471,54 @@ Number of bands: {count}
 </translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="193"/>
+        <location filename="../functional/view/data_catalog_view.py" line="194"/>
         <source>Created: {date} at {time} 
 Tags: {tags}</source>
         <translation>创建时间：{date} {time} 
 标签：{tags}</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="244"/>
+        <location filename="../functional/view/data_catalog_view.py" line="245"/>
         <source>&lt;b&gt;Name&lt;/b&gt;: {filename}                              &lt;br&gt;&lt;b&gt;Uploaded&lt;/b&gt;&lt;/br&gt;: {date} at {time}                              &lt;br&gt;&lt;b&gt;Size&lt;/b&gt;&lt;/br&gt;: {file_size}                              &lt;br&gt;&lt;b&gt;CRS&lt;/b&gt;&lt;/br&gt;: {crs}                              &lt;br&gt;&lt;b&gt;Number of bands&lt;/br&gt;&lt;/b&gt;: {bands}                              &lt;br&gt;&lt;b&gt;Width&lt;/br&gt;&lt;/b&gt;: {width} pixels                              &lt;br&gt;&lt;b&gt;Height&lt;/br&gt;&lt;/b&gt;: {height} pixels                              &lt;br&gt;&lt;b&gt;Pixel size&lt;/br&gt;&lt;/b&gt;: {pixel_size}</source>
         <translation>&lt;b&gt;名称&lt;/b&gt;：{filename}                              &lt;br&gt;&lt;b&gt;上传时间&lt;/b&gt;&lt;/br&gt;：{date} {time}                              &lt;br&gt;&lt;b&gt;大小&lt;/b&gt;&lt;/br&gt;：{file_size}                              &lt;br&gt;&lt;b&gt;坐标系&lt;/b&gt;&lt;/br&gt;：{crs}                              &lt;br&gt;&lt;b&gt;波段数&lt;/br&gt;&lt;/b&gt;：{bands}                              &lt;br&gt;&lt;b&gt;宽度&lt;/br&gt;&lt;/b&gt;：{width} 像素                              &lt;br&gt;&lt;b&gt;高度&lt;/br&gt;&lt;/b&gt;：{height} 像素                              &lt;br&gt;&lt;b&gt;像素大小&lt;/br&gt;&lt;/b&gt;：{pixel_size}</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="288"/>
+        <location filename="../functional/view/data_catalog_view.py" line="289"/>
         <source>Images</source>
         <translation>影像</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="288"/>
+        <location filename="../functional/view/data_catalog_view.py" line="289"/>
         <source>Uploaded</source>
         <translation>上传时间</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="344"/>
+        <location filename="../functional/view/data_catalog_view.py" line="345"/>
         <source>No imagery collection with id &apos;{mosaic_id}&apos; was found</source>
-        <translation>未找到ID为 '{mosaic_id}' 的影像集</translation>
+        <translation>未找到ID为 &apos;{mosaic_id}&apos; 的影像集</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="357"/>
+        <location filename="../functional/view/data_catalog_view.py" line="358"/>
         <source>No image with id &apos;{image_id}&apos; was found</source>
-        <translation>未找到ID为 '{image_id}' 的影像</translation>
+        <translation>未找到ID为 &apos;{image_id}&apos; 的影像</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="371"/>
+        <location filename="../functional/view/data_catalog_view.py" line="372"/>
         <source>Your data: {taken}. Free space: {free}</source>
         <translation>您的数据：{taken}。剩余空间：{free}</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="387"/>
+        <location filename="../functional/view/data_catalog_view.py" line="388"/>
         <source>Selected imagery collection: &lt;b&gt;{mosaic_name}</source>
         <translation>已选影像集：&lt;b&gt;{mosaic_name}</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="401"/>
+        <location filename="../functional/view/data_catalog_view.py" line="402"/>
         <source>No imagery collection selected</source>
         <translation>未选择影像集</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="422"/>
+        <location filename="../functional/view/data_catalog_view.py" line="423"/>
         <source>Uploaded: {date} at {time} 
 File size: {size} 
 Pixel size: {pixel_size} 
@@ -479,47 +531,47 @@ Bands: {count}</source>
 波段数：{count}</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="435"/>
+        <location filename="../functional/view/data_catalog_view.py" line="436"/>
         <source>Selected image: &lt;b&gt;{image_name}</source>
         <translation>已选影像：&lt;b&gt;{image_name}</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="445"/>
+        <location filename="../functional/view/data_catalog_view.py" line="446"/>
         <source>No image selected</source>
         <translation>未选择影像</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="455"/>
+        <location filename="../functional/view/data_catalog_view.py" line="456"/>
         <source>&apos;Cmd&apos; + click to deselect</source>
-        <translation>按住 'Cmd' 并点击以取消选择</translation>
+        <translation>按住 &apos;Cmd&apos; 并点击以取消选择</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="455"/>
+        <location filename="../functional/view/data_catalog_view.py" line="456"/>
         <source>&apos;Ctrl&apos; + click to deselect</source>
-        <translation>按住 'Ctrl' 并点击以取消选择</translation>
+        <translation>按住 &apos;Ctrl&apos; 并点击以取消选择</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="472"/>
+        <location filename="../functional/view/data_catalog_view.py" line="473"/>
         <source>Delete image</source>
         <translation>删除影像</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="473"/>
+        <location filename="../functional/view/data_catalog_view.py" line="474"/>
         <source>Add image</source>
         <translation>添加影像</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="486"/>
+        <location filename="../functional/view/data_catalog_view.py" line="487"/>
         <source>Filter images by name or id</source>
         <translation>按名称或ID筛选影像</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="493"/>
+        <location filename="../functional/view/data_catalog_view.py" line="494"/>
         <source>Delete collection</source>
         <translation>删除影像集</translation>
     </message>
     <message>
-        <location filename="../functional/view/data_catalog_view.py" line="494"/>
+        <location filename="../functional/view/data_catalog_view.py" line="495"/>
         <source>Add collection</source>
         <translation>添加影像集</translation>
     </message>
@@ -591,11 +643,27 @@ Bands: {count}</source>
     </message>
 </context>
 <context>
+    <name>ErrorDialog</name>
+    <message>
+        <location filename="../dialogs/static/ui/error_message.ui" line="64"/>
+        <source>Error</source>
+        <translation>错误</translation>
+    </message>
+</context>
+<context>
     <name>ErrorMessageList</name>
     <message>
         <location filename="../errors/error_message_list.py" line="16"/>
         <source>Unknown error. Contact us to resolve the issue! help@geoalert.io</source>
         <translation>未知错误。请联系我们解决问题！help@geoalert.io</translation>
+    </message>
+</context>
+<context>
+    <name>ErrorMessageWidget</name>
+    <message>
+        <location filename="../dialogs/error_message_widget.py" line="23"/>
+        <source>&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;Let us know&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
+        <translation>&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0057ae;&quot;&gt;告诉我们&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
 </context>
 <context>
@@ -677,7 +745,7 @@ Bands: {count}</source>
         <translation>数据源：</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="533"/>
+        <location filename="../dialogs/main_dialog.py" line="531"/>
         <source>Zoom</source>
         <translation>缩放级别</translation>
     </message>
@@ -757,7 +825,7 @@ Bands: {count}</source>
         <translation>开始处理</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="469"/>
+        <location filename="../dialogs/main_dialog.py" line="467"/>
         <source>Rate processing:</source>
         <translation>评价处理：</translation>
     </message>
@@ -807,7 +875,7 @@ Bands: {count}</source>
         <translation>审核</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="358"/>
+        <location filename="../dialogs/main_dialog.py" line="356"/>
         <source>Please select processing and rating to submit</source>
         <translation>请选择要提交的处理和评分</translation>
     </message>
@@ -967,7 +1035,7 @@ Bands: {count}</source>
         <translation>点击并等待几秒钟，直到下方表格填充完成</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="302"/>
+        <location filename="../dialogs/main_dialog.py" line="300"/>
         <source>Search </source>
         <translation>搜索</translation>
     </message>
@@ -1197,114 +1265,114 @@ Bands: {count}</source>
         <translation>查看详情操作</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="129"/>
+        <location filename="../dialogs/main_dialog.py" line="127"/>
         <source>Save results</source>
         <translation>保存结果</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="130"/>
+        <location filename="../dialogs/main_dialog.py" line="128"/>
         <source>Download AOI</source>
         <translation>下载感兴趣区域</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="131"/>
+        <location filename="../dialogs/main_dialog.py" line="129"/>
         <source>See details</source>
         <translation>查看详情</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="132"/>
+        <location filename="../dialogs/main_dialog.py" line="130"/>
         <source>Rename</source>
         <translation>重命名</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="133"/>
+        <location filename="../dialogs/main_dialog.py" line="131"/>
         <source>Restart</source>
         <translation>重新开始</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="134"/>
+        <location filename="../dialogs/main_dialog.py" line="132"/>
         <source>Duplicate</source>
         <translation>复制</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="319"/>
+        <location filename="../dialogs/main_dialog.py" line="317"/>
         <source>
 Price: {} credits per square km</source>
         <translation>
 价格：每平方公里 {} 点数</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="330"/>
+        <location filename="../dialogs/main_dialog.py" line="328"/>
         <source>Rate processing &lt;b&gt;{name}&lt;/b&gt;:</source>
         <translation>评价处理 &lt;b&gt;{name}&lt;/b&gt;：</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="459"/>
+        <location filename="../dialogs/main_dialog.py" line="457"/>
         <source>Not enough rights to start processing in a shared project ({})</source>
         <translation>权限不足，无法在共享项目（{}）中开始处理</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="472"/>
+        <location filename="../dialogs/main_dialog.py" line="470"/>
         <source>Not enough rights to rate processing in a shared project ({})</source>
         <translation>权限不足，无法在共享项目（{}）中评价处理</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="474"/>
+        <location filename="../dialogs/main_dialog.py" line="472"/>
         <source>Please select processing</source>
         <translation>请选择处理</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="478"/>
+        <location filename="../dialogs/main_dialog.py" line="476"/>
         <source>Not enough rights to delete processing in a shared project ({})</source>
         <translation>权限不足，无法在共享项目（{}）中删除处理</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="511"/>
+        <location filename="../dialogs/main_dialog.py" line="509"/>
         <source>Delete project</source>
         <translation>删除项目</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="512"/>
+        <location filename="../dialogs/main_dialog.py" line="510"/>
         <source>Edit project</source>
         <translation>编辑项目</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="528"/>
+        <location filename="../dialogs/main_dialog.py" line="526"/>
         <source>Zoom is derived from found imagery resolution</source>
         <translation>缩放级别根据找到的影像分辨率推算</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="543"/>
+        <location filename="../dialogs/main_dialog.py" line="541"/>
         <source>Previous page</source>
         <translation>上一页</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="544"/>
+        <location filename="../dialogs/main_dialog.py" line="542"/>
         <source>Next page</source>
         <translation>下一页</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="545"/>
+        <location filename="../dialogs/main_dialog.py" line="543"/>
         <source>Page</source>
         <translation>页码</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="623"/>
+        <location filename="../dialogs/main_dialog.py" line="621"/>
         <source>&lt;b&gt;URL:&lt;/b&gt; {url}&lt;br&gt;&lt;b&gt;Source type:&lt;/b&gt; {type}</source>
         <translation>&lt;b&gt;URL：&lt;/b&gt; {url}&lt;br&gt;&lt;b&gt;源类型：&lt;/b&gt; {type}</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="627"/>
+        <location filename="../dialogs/main_dialog.py" line="625"/>
         <source>&lt;br&gt;&lt;b&gt;CRS:&lt;/b&gt; {crs}</source>
         <translation>&lt;br&gt;&lt;b&gt;坐标系：&lt;/b&gt; {crs}</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="629"/>
+        <location filename="../dialogs/main_dialog.py" line="627"/>
         <source>&lt;br&gt;&lt;b&gt;Zoom:&lt;/b&gt; {zoom}</source>
         <translation>&lt;br&gt;&lt;b&gt;缩放级别：&lt;/b&gt; {zoom}</translation>
     </message>
     <message>
-        <location filename="../dialogs/main_dialog.py" line="631"/>
+        <location filename="../dialogs/main_dialog.py" line="629"/>
         <source>&lt;br&gt;&lt;b&gt;Raster login:&lt;/b&gt; {login}&lt;br&gt;&lt;b&gt;Raster password:&lt;/b&gt; {password}</source>
         <translation>&lt;br&gt;&lt;b&gt;栅格登录名：&lt;/b&gt; {login}&lt;br&gt;&lt;b&gt;栅格密码：&lt;/b&gt; {password}</translation>
     </message>
@@ -1312,27 +1380,27 @@ Price: {} credits per square km</source>
 <context>
     <name>Mapflow</name>
     <message>
-        <location filename="../mapflow.py" line="228"/>
+        <location filename="../mapflow.py" line="234"/>
         <source>Error during loading the data providers: {e}</source>
         <translation>加载数据提供商时出错：{e}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="230"/>
+        <location filename="../mapflow.py" line="236"/>
         <source>We failed to import providers from the settings. Please add them again</source>
         <translation>我们从设置导入提供商失败。请重新添加</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="323"/>
+        <location filename="../mapflow.py" line="315"/>
         <source>Draw AOI at the map</source>
         <translation>在地图上绘制感兴趣区域</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1752"/>
+        <location filename="../mapflow.py" line="1631"/>
         <source>Use imagery extent</source>
         <translation>使用影像范围</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="326"/>
+        <location filename="../mapflow.py" line="318"/>
         <source>Create AOI from map extent</source>
         <translation>从地图范围创建感兴趣区域</translation>
     </message>
@@ -1342,12 +1410,12 @@ Price: {} credits per square km</source>
         <translation>项目：&lt;b&gt;{}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="470"/>
+        <location filename="../mapflow.py" line="441"/>
         <source>Choose imagery collection or image to start processing</source>
         <translation>选择影像集或影像以开始处理</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="639"/>
+        <location filename="../mapflow.py" line="610"/>
         <source>Log in </source>
         <translation>登录</translation>
     </message>
@@ -1372,153 +1440,153 @@ Price: {} credits per square km</source>
         <translation>您确定要删除项目 {} 吗？此操作无法撤销，所有处理都将丢失！</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="782"/>
+        <location filename="../mapflow.py" line="671"/>
         <source>This provider is default and cannot be removed</source>
         <translation>此提供商为默认提供商，无法删除</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="786"/>
+        <location filename="../mapflow.py" line="675"/>
         <source>Permanently remove {}?</source>
         <translation>永久删除 {}？</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="818"/>
+        <location filename="../mapflow.py" line="707"/>
         <source>Provider name must be unique. {name} already exists, select another or delete/edit existing</source>
         <translation>提供商名称必须唯一。{name} 已存在，请选择其他名称或删除/编辑现有项</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="830"/>
+        <location filename="../mapflow.py" line="719"/>
         <source>Add new provider</source>
         <translation>添加新提供商</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="838"/>
+        <location filename="../mapflow.py" line="727"/>
         <source>This is a default provider, it cannot be edited</source>
         <translation>此为默认提供商，无法编辑</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="897"/>
+        <location filename="../mapflow.py" line="786"/>
         <source>If you already know which {provider_name} image you want to process,
 simply paste its ID here. Otherwise, search suitable images in the catalog below.</source>
         <translation>如果您已确定要处理哪个 {provider_name} 影像，只需将其ID粘贴在此处。否则，请在下方目录中搜索合适的影像。</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="889"/>
+        <location filename="../mapflow.py" line="778"/>
         <source>e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00</source>
         <translation>例如：S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="901"/>
+        <location filename="../mapflow.py" line="790"/>
         <source>e.g. a3b154c40cc74f3b934c0ffc9b34ecd1</source>
         <translation>例如：a3b154c40cc74f3b934c0ffc9b34ecd1</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="930"/>
+        <location filename="../mapflow.py" line="819"/>
         <source>Select output directory</source>
         <translation>选择输出目录</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="948"/>
+        <location filename="../mapflow.py" line="838"/>
         <source>Please, specify an existing output directory</source>
         <translation>请指定一个现有的输出目录</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1936"/>
+        <location filename="../mapflow.py" line="1711"/>
         <source>Please, select a valid area of interest</source>
         <translation>请选择有效的感兴趣区域</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1102"/>
+        <location filename="../mapflow.py" line="992"/>
         <source>We couldn&apos;t get metadata from the Mapflow Imagery Catalog</source>
         <translation>我们无法从Mapflow影像目录获取元数据</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1105"/>
+        <location filename="../mapflow.py" line="995"/>
         <source>. Error {error}</source>
         <translation>。错误 {error}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1506"/>
+        <location filename="../mapflow.py" line="1396"/>
         <source>No images match your criteria. Try relaxing the filters.</source>
         <translation>没有符合您条件的影像。请尝试放宽筛选条件。</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1149"/>
+        <location filename="../mapflow.py" line="1039"/>
         <source>&lt;b&gt;Results could not be loaded &lt;/b&gt;&lt;br&gt;Please, make sure you chose the right output folder in the Settings tab                                 and you have access rights to this folder</source>
         <translation>&lt;b&gt;结果无法加载&lt;/b&gt;&lt;br&gt;请确保您在设置选项卡中选择了正确的输出文件夹，并且您有访问该文件夹的权限</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1192"/>
+        <location filename="../mapflow.py" line="1082"/>
         <source>Your area of interest is too large.</source>
         <translation>您的感兴趣区域太大。</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1295"/>
+        <location filename="../mapflow.py" line="1185"/>
         <source>Please, check your credentials</source>
         <translation>请检查您的凭据</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1449"/>
+        <location filename="../mapflow.py" line="1339"/>
         <source>We couldn&apos;t fetch Sentinel metadata</source>
         <translation>我们无法获取Sentinel元数据</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1416"/>
+        <location filename="../mapflow.py" line="1306"/>
         <source>More</source>
         <translation>更多</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1535"/>
+        <location filename="../mapflow.py" line="1425"/>
         <source>Please, check your Maxar credentials</source>
         <translation>请检查您的Maxar凭据</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1537"/>
+        <location filename="../mapflow.py" line="1427"/>
         <source>We couldn&apos;t get metadata from Maxar, error {error}</source>
         <translation>我们无法从Maxar获取元数据，错误 {error}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1640"/>
+        <location filename="../mapflow.py" line="1531"/>
         <source>A Sentinel image ID should look like S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 or /36/S/XA/2022/02/09/0/</source>
         <translation>Sentinel影像ID应类似 S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 或 /36/S/XA/2022/02/09/0/</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1648"/>
+        <location filename="../mapflow.py" line="1539"/>
         <source>A Maxar image ID should look like a3b154c40cc74f3b934c0ffc9b34ecd1</source>
         <translation>Maxar影像ID应类似 a3b154c40cc74f3b934c0ffc9b34ecd1</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1876"/>
+        <location filename="../mapflow.py" line="1577"/>
         <source>Not enough rights to start processing in a shared project ({})</source>
         <translation>权限不足，无法在共享项目（{}）中开始处理</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1830"/>
+        <location filename="../mapflow.py" line="1554"/>
         <source>Set AOI to start processing</source>
         <translation>设置感兴趣区域以开始处理</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1688"/>
+        <location filename="../mapflow.py" line="1579"/>
         <source>AOI must contain not more than {} polygons</source>
         <translation>感兴趣区域不能包含超过 {} 个多边形</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1742"/>
+        <location filename="../mapflow.py" line="1621"/>
         <source>Use extent of &apos;{name}&apos;</source>
-        <translation>使用 '{name}' 的范围</translation>
+        <translation>使用 &apos;{name}&apos; 的范围</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1744"/>
+        <location filename="../mapflow.py" line="1623"/>
         <source>Select AOI to start processing</source>
         <translation>选择感兴趣区域以开始处理</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2081"/>
+        <location filename="../mapflow.py" line="1858"/>
         <source>Selected AOI does not intersect the selected imagery</source>
         <translation>选择的感兴趣区域与所选影像没有交集</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1820"/>
+        <location filename="../mapflow.py" line="1699"/>
         <source>Area: {:.2f} sq.km</source>
         <translation>面积：{:.2f} 平方公里</translation>
     </message>
@@ -1537,7 +1605,7 @@ Please, make sure you have selected a project</source>
 {error}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2083"/>
+        <location filename="../mapflow.py" line="1860"/>
         <source>This provider requires image ID. Use search tab to find imagery for you requirements, and select image in the table.</source>
         <translation>此提供商需要影像ID。请使用搜索选项卡查找符合您要求的影像，并在表格中选择影像。</translation>
     </message>
@@ -1569,59 +1637,59 @@ Please, make sure you have selected a project</source>
         <translation>删除处理时出错</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1931"/>
+        <location filename="../mapflow.py" line="1706"/>
         <source>Please, specify a name for your processing</source>
         <translation>请为您的处理指定一个名称</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1934"/>
+        <location filename="../mapflow.py" line="1709"/>
         <source>Processing area layer is corrupted or has invalid projection</source>
         <translation>处理区域图层已损坏或具有无效投影</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1938"/>
+        <location filename="../mapflow.py" line="1713"/>
         <source>Up to {} sq km can be processed at a time. Try splitting your area(s) into several processings.</source>
         <translation>一次最多可处理 {} 平方公里。请尝试将您的区域分割为多个处理。</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1983"/>
+        <location filename="../mapflow.py" line="1760"/>
         <source>Providers are not initialized</source>
         <translation>提供商未初始化</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1978"/>
+        <location filename="../mapflow.py" line="1755"/>
         <source>Bad AOI. AOI must be inside boundaries: 
 [-180, 180] by longitude, [-90, 90] by latitude</source>
         <translation>无效的感兴趣区域。感兴趣区域必须在边界内： 
 经度 [-180, 180]，纬度 [-90, 90]</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2088"/>
+        <location filename="../mapflow.py" line="1865"/>
         <source>No project is selected</source>
         <translation>未选择项目</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2117"/>
+        <location filename="../mapflow.py" line="1894"/>
         <source>Processing limit exceeded. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; to top up your balance</source>
         <translation>超出处理限制。请访问 &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; 充值余额</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2124"/>
+        <location filename="../mapflow.py" line="1901"/>
         <source>Starting the processing...</source>
         <translation>正在开始处理...</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2129"/>
+        <location filename="../mapflow.py" line="1906"/>
         <source>Could not launch processing! Error: {}.</source>
         <translation>无法启动处理！错误：{}。</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2143"/>
+        <location filename="../mapflow.py" line="1920"/>
         <source>{cost} credits</source>
         <translation>{cost} 点数</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2176"/>
+        <location filename="../mapflow.py" line="1953"/>
         <source> sq.km</source>
         <translation> 平方公里</translation>
     </message>
@@ -1636,7 +1704,7 @@ Please, make sure you have selected a project</source>
         <translation>成功！处理完成后我们将通知您。</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2249"/>
+        <location filename="../mapflow.py" line="1992"/>
         <source>The selected data provider is unavailable on your plan. 
  Upgrade your subscription to get access to the data. 
 See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&lt;/a&gt;</source>
@@ -1645,151 +1713,151 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
 请查看 &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&lt;/a&gt; 的定价</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2260"/>
+        <location filename="../mapflow.py" line="2003"/>
         <source>Processing creation failed</source>
         <translation>处理创建失败</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2290"/>
+        <location filename="../mapflow.py" line="2033"/>
         <source>Your balance: {} credits</source>
         <translation>您的余额：{} 点数</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2292"/>
+        <location filename="../mapflow.py" line="2035"/>
         <source>Remaining limit: {:.2f} sq.km</source>
         <translation>剩余限制：{:.2f} 平方公里</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2338"/>
+        <location filename="../mapflow.py" line="2082"/>
         <source>Show all</source>
         <translation>显示全部</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2388"/>
+        <location filename="../mapflow.py" line="2132"/>
         <source>Sorry, we couldn&apos;t load the image</source>
         <translation>抱歉，我们无法加载该影像</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2389"/>
+        <location filename="../mapflow.py" line="2133"/>
         <source>Error previewing Sentinel imagery</source>
         <translation>预览Sentinel影像时出错</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2394"/>
+        <location filename="../mapflow.py" line="2138"/>
         <source>Preview is unavailable when metadata layer is removed</source>
         <translation>元数据图层被移除时预览不可用</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2427"/>
+        <location filename="../mapflow.py" line="2174"/>
         <source>Selected imagery has no preview</source>
         <translation>所选影像无预览</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2432"/>
+        <location filename="../mapflow.py" line="2179"/>
         <source>Preview with such URL is unavailable</source>
         <translation>该URL的预览不可用</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2439"/>
+        <location filename="../mapflow.py" line="2186"/>
         <source>Preview for &apos;{iid}&apos; is unavailable</source>
-        <translation>'{iid}' 的预览不可用</translation>
+        <translation>&apos;{iid}&apos; 的预览不可用</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2572"/>
+        <location filename="../mapflow.py" line="2284"/>
         <source>Could not display preview</source>
         <translation>无法显示预览</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2606"/>
+        <location filename="../mapflow.py" line="2318"/>
         <source>Sorry, there&apos;s no preview for this image</source>
         <translation>抱歉，此影像无预览</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2710"/>
+        <location filename="../mapflow.py" line="2422"/>
         <source>We couldn&apos;t load a preview for this image</source>
         <translation>我们无法加载此影像的预览</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2621"/>
+        <location filename="../mapflow.py" line="2333"/>
         <source>Please, select an image to preview</source>
         <translation>请选择要预览的影像</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2681"/>
+        <location filename="../mapflow.py" line="2393"/>
         <source>Provider {name} requires image id for preview!</source>
         <translation>提供商 {name} 需要影像ID才能预览！</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2685"/>
+        <location filename="../mapflow.py" line="2397"/>
         <source>Preview is unavailable for the provider {}. 
 OSM layer will be added instead.</source>
         <translation>提供商 {} 的预览不可用。
 将添加OSM图层作为替代。</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2722"/>
+        <location filename="../mapflow.py" line="2434"/>
         <source>This provider requires image ID!</source>
         <translation>此提供商需要影像ID！</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2847"/>
+        <location filename="../mapflow.py" line="2535"/>
         <source>Only finished processings can be rated</source>
         <translation>仅完成处理可被评价</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2850"/>
+        <location filename="../mapflow.py" line="2538"/>
         <source>Processing must be in `Review required` status</source>
         <translation>处理必须处于“需要审核”状态</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2866"/>
+        <location filename="../mapflow.py" line="2554"/>
         <source>Thank you! Your rating is submitted!
 We would appreciate if you add feedback as well.</source>
         <translation>谢谢！您的评价已提交！
 如能同时提供反馈我们将不胜感激。</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2873"/>
+        <location filename="../mapflow.py" line="2561"/>
         <source>Thank you! Your rating and feedback are submitted!</source>
         <translation>谢谢！您的评价和反馈已提交！</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2882"/>
+        <location filename="../mapflow.py" line="2570"/>
         <source>Only correctly finished processings (status OK) can be reviewed</source>
         <translation>仅正确完成（状态为OK）的处理可被审核</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2888"/>
+        <location filename="../mapflow.py" line="2576"/>
         <source>Not enough rights to rate processing in a shared project ({})</source>
         <translation>权限不足，无法在共享项目（{}）中评价处理</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2891"/>
+        <location filename="../mapflow.py" line="2579"/>
         <source>Please select processing</source>
         <translation>请选择处理</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2893"/>
+        <location filename="../mapflow.py" line="2581"/>
         <source>Only correctly finished processings (status OK) can be rated</source>
         <translation>仅正确完成（状态为OK）的处理可被评价</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2895"/>
+        <location filename="../mapflow.py" line="2583"/>
         <source>Please select rating to submit</source>
         <translation>请选择要提交的评分</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2955"/>
+        <location filename="../mapflow.py" line="2645"/>
         <source>Only the results of correctly finished processing can be loaded</source>
         <translation>仅正确完成的处理结果可被加载</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2939"/>
+        <location filename="../mapflow.py" line="2659"/>
         <source>Directory &apos;{}&apos; does not exist</source>
-        <translation>目录 '{}' 不存在</translation>
+        <translation>目录 &apos;{}&apos; 不存在</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2939"/>
+        <location filename="../mapflow.py" line="2659"/>
         <source>&lt;br&gt;Using Settings tab, change the output directory to an existing one to download the results</source>
         <translation>&lt;br&gt;请使用设置选项卡，将输出目录更改为现有目录以下载结果</translation>
     </message>
@@ -1848,40 +1916,40 @@ We would appreciate if you add feedback as well.</source>
         <translation>双击以将结果添加到地图。</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3190"/>
+        <location filename="../mapflow.py" line="2718"/>
         <source>We have just set the authentication config for you. 
  You may need to restart QGIS to apply it so you could log in</source>
         <translation>我们已为您设置认证配置。
 您可能需要重启QGIS以应用配置，然后才能登录</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3215"/>
+        <location filename="../mapflow.py" line="2743"/>
         <source>Please restart QGIS before using OAuth2 login.</source>
         <translation>使用OAuth2登录前请重启QGIS。</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3277"/>
+        <location filename="../mapflow.py" line="2805"/>
         <source>Wrong token. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/api&quot;&gt;mapflow.ai&lt;/a&gt;&quot; to get a new one</source>
         <translation>令牌错误。请访问 &quot;&lt;a href=&quot;https://app.mapflow.ai/account/api&quot;&gt;mapflow.ai&lt;/a&gt;&quot; 获取新令牌</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3309"/>
+        <location filename="../mapflow.py" line="2837"/>
         <source>Proxy error. Please, check your proxy settings.</source>
         <translation>代理错误。请检查您的代理设置。</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3313"/>
+        <location filename="../mapflow.py" line="2841"/>
         <source>Not enough rights for this action
 in a shared project &apos;{project_name}&apos; ({user_role})</source>
-        <translation>在共享项目 '{project_name}'（{user_role}）中权限不足，无法执行此操作</translation>
+        <translation>在共享项目 &apos;{project_name}&apos;（{user_role}）中权限不足，无法执行此操作</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3319"/>
+        <location filename="../mapflow.py" line="2847"/>
         <source>This operation is forbidden for your account, contact us</source>
         <translation>您的账户无权执行此操作，请联系我们</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3324"/>
+        <location filename="../mapflow.py" line="2852"/>
         <source>Error</source>
         <translation>错误</translation>
     </message>
@@ -1896,7 +1964,7 @@ in a shared project &apos;{project_name}&apos; ({user_role})</source>
         <translation>项目</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3472"/>
+        <location filename="../mapflow.py" line="2958"/>
         <source>You must upgrade your plugin version to continue work with Mapflow. 
 The server requires version {server_version}, your plugin is {local_version}
 Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
@@ -1905,7 +1973,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
 请转到插件 -&gt; 管理和安装插件 -&gt; 可升级</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3482"/>
+        <location filename="../mapflow.py" line="2968"/>
         <source>A new version of Mapflow plugin {server_version} is released 
 We recommend you to upgrade to get all the latest features
 Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
@@ -1914,12 +1982,12 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
 请转到插件 -&gt; 管理和安装插件 -&gt; 可升级</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3597"/>
+        <location filename="../mapflow.py" line="3043"/>
         <source>You can launch multiple image processing only if they have the same provider</source>
         <translation>仅当多个影像处理使用相同提供商时，您才能启动它们</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="3626"/>
+        <location filename="../mapflow.py" line="3072"/>
         <source>Selected search results must have the same zoom level</source>
         <translation>选中的搜索结果必须具有相同的缩放级别</translation>
     </message>
@@ -1931,7 +1999,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
     <message>
         <location filename="../mapflow.py" line="3730"/>
         <source>Model &apos;{wd}&apos; is not enabled for your account</source>
-        <translation>模型 '{wd}' 对您的账户未启用</translation>
+        <translation>模型 &apos;{wd}&apos; 对您的账户未启用</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="3737"/>
@@ -1951,7 +2019,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
     <message>
         <location filename="../mapflow.py" line="3773"/>
         <source>Provider &apos;{provider}&apos; is not enabled for your account</source>
-        <translation>提供商 '{provider}' 对您的账户未启用</translation>
+        <translation>提供商 &apos;{provider}&apos; 对您的账户未启用</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="3848"/>
@@ -2033,7 +2101,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
     <message>
         <location filename="../errors/processing_errors.py" line="17"/>
         <source>Key &apos;url&apos; in your request must be a string, got {url_type} instead.</source>
-        <translation>请求中的键 'url' 必须是字符串，实际为 {url_type}。</translation>
+        <translation>请求中的键 &apos;url&apos; 必须是字符串，实际为 {url_type}。</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="19"/>
@@ -2048,7 +2116,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
     <message>
         <location filename="../errors/processing_errors.py" line="24"/>
         <source>Format of &apos;url&apos; is invalid and cannot be parsed. Error: {parse_error_message}</source>
-        <translation>'url' 的格式无效且无法解析。错误：{parse_error_message}</translation>
+        <translation>&apos;url&apos; 的格式无效且无法解析。错误：{parse_error_message}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="26"/>
@@ -2083,7 +2151,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
     <message>
         <location filename="../errors/processing_errors.py" line="35"/>
         <source>Request must contain either &apos;profile&apos; or &apos;url&apos; keys</source>
-        <translation>请求必须包含 'profile' 或 'url' 键</translation>
+        <translation>请求必须包含 &apos;profile&apos; 或 &apos;url&apos; 键</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="36"/>
@@ -2118,7 +2186,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
     <message>
         <location filename="../errors/processing_errors.py" line="49"/>
         <source>Your &apos;url&apos; doesn&apos;t match the format, Quadkey basemap must be a link containing &quot;q&quot; placeholder.</source>
-        <translation>您的 'url' 格式不匹配，Quadkey底图必须是包含 &quot;q&quot; 占位符的链接。</translation>
+        <translation>您的 &apos;url&apos; 格式不匹配，Quadkey底图必须是包含 &quot;q&quot; 占位符的链接。</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="52"/>
@@ -2242,9 +2310,208 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
     </message>
 </context>
 <context>
+    <name>ProcessingService</name>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="85"/>
+        <source>Specify processing parameters</source>
+        <translation>指定处理参数</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="92"/>
+        <source>Please, specify a name for your processing</source>
+        <translation>请为您的处理指定一个名称</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="95"/>
+        <source>Processing area layer is corrupted or has invalid projection</source>
+        <translation>处理区域图层已损坏或具有无效投影</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="97"/>
+        <source>Please, select a valid area of interest</source>
+        <translation>请选择有效的感兴趣区域</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="99"/>
+        <source>Up to {} sq km can be processed at a time. Try splitting your area(s) into several processings.</source>
+        <translation>一次最多可处理 {} 平方公里。请尝试将您的区域分割为多个处理。</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="103"/>
+        <source>Selected AOI does not intersect the selected imagery</source>
+        <translation>选择的感兴趣区域与所选影像没有交集</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="105"/>
+        <source>This provider requires image ID. Use search tab to find imagery for you requirements, and select image in the table.</source>
+        <translation>此提供商需要影像ID。请使用搜索选项卡查找符合您要求的影像，并在表格中选择影像。</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="461"/>
+        <source>Not enough rights to start processing in a shared project ({})</source>
+        <translation>权限不足，无法在共享项目（{}）中开始处理</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="119"/>
+        <source>Set AOI to start processing</source>
+        <translation>设置感兴趣区域以开始处理</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="121"/>
+        <source>Error! Models are not initialized.
+Please, make sure you have selected a project</source>
+        <translation>错误！模型未初始化。
+请确保您已选择项目</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="162"/>
+        <source>Processing limit exceeded. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; to top up your balance</source>
+        <translation>超出处理限制。请访问 &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; 充值余额</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="170"/>
+        <source>Starting the processing...</source>
+        <translation>正在开始处理...</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="177"/>
+        <source>Could not launch processing! Error: {}.</source>
+        <translation>无法启动处理！错误：{}。</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="191"/>
+        <source>{cost} credits</source>
+        <translation>{cost} 点数</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="195"/>
+        <source> sq.km</source>
+        <translation> 平方公里</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="242"/>
+        <source>Success! We&apos;ll notify you when the processing has finished.</source>
+        <translation>成功！处理完成后我们将通知您。</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="260"/>
+        <source>Failed to start processing</source>
+        <translation>启动处理失败</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="329"/>
+        <source>Processing completed</source>
+        <translation>处理完成</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="329"/>
+        <source>Processing &apos;{name}&apos; has finished successfully</source>
+        <translation>处理 &apos;{name}&apos; 已成功完成</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="339"/>
+        <source>Processing failed</source>
+        <translation>处理失败</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="339"/>
+        <source>Processing &apos;{name}&apos; has failed</source>
+        <translation>处理 &apos;{name}&apos; 失败</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="463"/>
+        <source>Processing cost is not available:
+{message}</source>
+        <translation>处理费用不可用：
+{message}</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="476"/>
+        <source>Delete selected processings?</source>
+        <translation>删除选中的处理？</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="491"/>
+        <source>Failed to remove processings with following ids: &lt;center&gt; {failed_ids}</source>
+        <translation>无法删除以下ID的处理：&lt;center&gt; {failed_ids}</translation>
+    </message>
+</context>
+<context>
+    <name>ProcessingView</name>
+    <message>
+        <location filename="../functional/view/processing_view.py" line="80"/>
+        <source>Please review or accept this processing until {}. Double click to add results to the map</source>
+        <translation>请在 {} 前审核或接受此处理。双击以将结果添加到地图</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/processing_view.py" line="85"/>
+        <source>Double click to add results to the map.</source>
+        <translation>双击以将结果添加到地图。</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/processing_view.py" line="157"/>
+        <source>Loading...</source>
+        <translation>加载中...</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/processing_view.py" line="158"/>
+        <source>Fetching your processings from server, please wait</source>
+        <translation>正在从服务器获取您的处理，请稍候</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/processing_view.py" line="174"/>
+        <source>Processing cost: {cost} credits</source>
+        <translation>处理费用：{cost} 点数</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/processing_view.py" line="183"/>
+        <source> failed with error:
+</source>
+        <translation> 失败，错误：
+</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/processing_view.py" line="190"/>
+        <source>{} processings failed: 
+ {} 
+ See tooltip over the processings table for error details</source>
+        <translation>{} 个处理失败： 
+ {} 
+ 请查看处理表格上的工具提示以获取错误详情</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/processing_view.py" line="197"/>
+        <source>{} processings failed: 
+ See tooltip over the processings table for error details</source>
+        <translation>{} 个处理失败： 
+ 请查看处理表格上的工具提示以获取错误详情</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/processing_view.py" line="209"/>
+        <source> finished. Double-click it in the table to download the results.</source>
+        <translation> 已完成。双击表格中的该项以下载结果。</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/processing_view.py" line="217"/>
+        <source>{} processings finished: 
+ {} 
+ Double-click it in the table to download the results</source>
+        <translation>{} 个处理完成： 
+ {} 
+ 双击表格中的该项以下载结果</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/processing_view.py" line="225"/>
+        <source>{} processings finished. 
+ Double-click it in the table to download the results</source>
+        <translation>{} 个处理完成。 
+ 双击表格中的该项以下载结果</translation>
+    </message>
+</context>
+<context>
     <name>ProjectDialog</name>
     <message>
-        <location filename="../dialogs/static/ui/processing_details.ui" line="14"/>
+        <location filename="../dialogs/static/ui/project_dialog.ui" line="14"/>
         <source>Project</source>
         <translation>项目</translation>
     </message>
@@ -2294,7 +2561,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation>区域：</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/processing_details.ui" line="336"/>
+        <location filename="../dialogs/static/ui/processing_start_confirmation.ui" line="82"/>
         <source>Name:</source>
         <translation>名称：</translation>
     </message>
@@ -2304,12 +2571,12 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation>数据源：</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/processing_details.ui" line="460"/>
+        <location filename="../dialogs/static/ui/processing_start_confirmation.ui" line="216"/>
         <source>Zoom:</source>
         <translation>缩放级别：</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/processing_details.ui" line="476"/>
+        <location filename="../dialogs/static/ui/processing_start_confirmation.ui" line="232"/>
         <source>Model options:</source>
         <translation>模型选项：</translation>
     </message>
@@ -2319,7 +2586,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation>价格：</translation>
     </message>
     <message>
-        <location filename="../dialogs/static/ui/processing_details.ui" line="124"/>
+        <location filename="../dialogs/static/ui/processing_start_confirmation.ui" line="332"/>
         <source>Model:</source>
         <translation>模型：</translation>
     </message>
@@ -2365,66 +2632,94 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
     </message>
 </context>
 <context>
+    <name>ProjectService</name>
+    <message>
+        <location filename="../functional/service/project_service.py" line="229"/>
+        <source>Project: &lt;b&gt;{}</source>
+        <translation>项目：&lt;b&gt;{}</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/project_service.py" line="246"/>
+        <source>No project selected</source>
+        <translation>未选择项目</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/project_service.py" line="248"/>
+        <source>You can&apos;t remove or modify default project</source>
+        <translation>您不能删除或修改默认项目</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/project_service.py" line="251"/>
+        <source>Not enough rights to delete or update shared project ({})</source>
+        <translation>权限不足，无法删除或更新共享项目（{}）</translation>
+    </message>
+</context>
+<context>
     <name>ProjectView</name>
     <message>
-        <location filename="../functional/view/project_view.py" line="23"/>
+        <location filename="../functional/view/project_view.py" line="26"/>
         <source>See projects</source>
         <translation>查看项目</translation>
     </message>
     <message>
-        <location filename="../functional/view/project_view.py" line="25"/>
+        <location filename="../functional/view/project_view.py" line="28"/>
         <source>See processings</source>
         <translation>查看处理</translation>
     </message>
     <message>
-        <location filename="../functional/view/project_view.py" line="27"/>
+        <location filename="../functional/view/project_view.py" line="30"/>
         <source>Filter projects by name</source>
         <translation>按名称筛选项目</translation>
     </message>
     <message>
-        <location filename="../functional/view/project_view.py" line="28"/>
+        <location filename="../functional/view/project_view.py" line="31"/>
         <source>Create project</source>
         <translation>创建项目</translation>
     </message>
     <message>
-        <location filename="../functional/view/project_view.py" line="30"/>
+        <location filename="../functional/view/project_view.py" line="33"/>
         <source>A-Z</source>
         <translation>A-Z</translation>
     </message>
     <message>
-        <location filename="../functional/view/project_view.py" line="30"/>
+        <location filename="../functional/view/project_view.py" line="33"/>
         <source>Z-A</source>
         <translation>Z-A</translation>
     </message>
     <message>
-        <location filename="../functional/view/project_view.py" line="30"/>
+        <location filename="../functional/view/project_view.py" line="33"/>
         <source>Newest first</source>
         <translation>最新优先</translation>
     </message>
     <message>
-        <location filename="../functional/view/project_view.py" line="30"/>
+        <location filename="../functional/view/project_view.py" line="33"/>
         <source>Oldest first</source>
         <translation>最旧优先</translation>
     </message>
     <message>
-        <location filename="../functional/view/project_view.py" line="30"/>
+        <location filename="../functional/view/project_view.py" line="33"/>
         <source>Updated recently</source>
         <translation>最近更新</translation>
     </message>
     <message>
-        <location filename="../functional/view/project_view.py" line="30"/>
+        <location filename="../functional/view/project_view.py" line="33"/>
         <source>Updated long ago</source>
         <translation>很久前更新</translation>
     </message>
     <message>
-        <location filename="../functional/view/project_view.py" line="111"/>
+        <location filename="../functional/view/project_view.py" line="124"/>
         <source>Project</source>
         <translation>项目</translation>
     </message>
     <message>
-        <location filename="../functional/view/project_view.py" line="117"/>
+        <location filename="../functional/view/project_view.py" line="130"/>
         <source>Processing</source>
         <translation>处理</translation>
+    </message>
+    <message>
+        <location filename="../functional/view/project_view.py" line="105"/>
+        <source>No project that meets specified criteria was found</source>
+        <translation>未找到符合指定条件的项目</translation>
     </message>
 </context>
 <context>
@@ -2496,19 +2791,72 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
     </message>
 </context>
 <context>
+    <name>ProviderService</name>
+    <message>
+        <location filename="../functional/service/provider_service.py" line="104"/>
+        <source>Providers are not initialized</source>
+        <translation>提供商未初始化</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/provider_service.py" line="169"/>
+        <source>Choose imagery collection or image to start processing</source>
+        <translation>选择影像集或影像以开始处理</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/provider_service.py" line="172"/>
+        <source>This provider requires image ID. Use search tab to find imagery for you requirements, and select image in the table.</source>
+        <translation>此提供商需要影像ID。请使用搜索选项卡查找符合您要求的影像，并在表格中选择影像。</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/provider_service.py" line="208"/>
+        <source>You can launch multiple image processing only if it has the same provider of mosaic type</source>
+        <translation>仅当多个影像处理使用相同提供商（影像集类型）时，您才能启动它们</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/provider_service.py" line="277"/>
+        <source>Duplication failed on copying data source</source>
+        <translation>复制数据源时复制失败</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/provider_service.py" line="285"/>
+        <source>Model &apos;{wd}&apos; is not enabled for your account</source>
+        <translation>模型 &apos;{wd}&apos; 对您的账户未启用</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/provider_service.py" line="314"/>
+        <source>The following options no longer exist, so they have not been duplicated: {}</source>
+        <translation>以下选项已不存在，因此未被复制：{}</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/provider_service.py" line="319"/>
+        <source>Duplication failed on copying model options</source>
+        <translation>复制模型选项时复制失败</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/provider_service.py" line="328"/>
+        <source>Provider &apos;{provider}&apos; is not enabled for your account</source>
+        <translation>提供商 &apos;{provider}&apos; 对您的账户未启用</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/provider_service.py" line="404"/>
+        <source>Duplicated user provider</source>
+        <translation>已复制用户提供商</translation>
+    </message>
+</context>
+<context>
     <name>QPlatformTheme</name>
     <message>
-        <location filename="../mapflow.py" line="145"/>
+        <location filename="../mapflow.py" line="134"/>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="146"/>
+        <location filename="../mapflow.py" line="135"/>
         <source>&amp;Yes</source>
         <translation>&amp;是</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="147"/>
+        <location filename="../mapflow.py" line="136"/>
         <source>&amp;No</source>
         <translation>&amp;否</translation>
     </message>
@@ -2532,6 +2880,14 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
     </message>
 </context>
 <context>
+    <name>ReviewDialog</name>
+    <message>
+        <location filename="../dialogs/review_dialog.py" line="25"/>
+        <source>Review {processing}</source>
+        <translation>审核 {processing}</translation>
+    </message>
+</context>
+<context>
     <name>UpdateMosaicDialog</name>
     <message>
         <location filename="../dialogs/mosaic_dialog.py" line="49"/>
@@ -2552,14 +2908,43 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
 <context>
     <name>UpdateProcessingDialog</name>
     <message>
-        <location filename="../dialogs/processing_dialog.py" line="24"/>
+        <location filename="../dialogs/processing_dialog.py" line="23"/>
         <source>Processing name must not be empty!</source>
         <translation>处理名称不能为空！</translation>
     </message>
     <message>
-        <location filename="../dialogs/processing_dialog.py" line="32"/>
+        <location filename="../dialogs/processing_dialog.py" line="31"/>
         <source>Edit processing {}</source>
         <translation>编辑处理 {}</translation>
+    </message>
+</context>
+<context>
+    <name>UploadRasterLayersDialog</name>
+    <message>
+        <location filename="../dialogs/upload_raster_layer_dialog.py" line="18"/>
+        <source>Choose raster layers to upload to imagery collection</source>
+        <translation>选择要上传到影像集的栅格图层</translation>
+    </message>
+</context>
+<context>
+    <name>raterLayerSelection</name>
+    <message>
+        <location filename="../dialogs/static/ui/raster_layers_dialog.ui" line="14"/>
+        <source>Multiple selection</source>
+        <translation>多项选择</translation>
+    </message>
+</context>
+<context>
+    <name>reviewDialog</name>
+    <message>
+        <location filename="../dialogs/static/ui/review_dialog.ui" line="14"/>
+        <source>Dialog</source>
+        <translation>对话框</translation>
+    </message>
+    <message>
+        <location filename="../dialogs/static/ui/review_dialog.ui" line="25"/>
+        <source>Map layer with review</source>
+        <translation>带有审核结果的地图图层</translation>
     </message>
 </context>
 </TS>

@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Any
 
 from qgis.core import QgsGeometry, QgsVectorLayer, QgsProject, QgsSettings
 from ..schema.project import UserRole
+from ..config import Config
 
 if TYPE_CHECKING:
     from ..schema.project import MapflowProject
@@ -24,6 +25,7 @@ class AppContext:
     plugin_name: str = ""
     plugin_version: str = ""
     temp_dir: Optional[str] = None
+    config: Optional[Config] = None
     settings = QgsSettings()
     
     # === Project & Processing Selection ===
@@ -75,9 +77,9 @@ class AppContext:
                                'my_mosaic_loaded': True, 
                                'my_image_loaded': True} # all true -> startProcessing button can be enabled
     
-    def __init__(self, config):
+    """ def __init__(self, config):
         self.config = config
-        self.zoom_selector = (self.config.ZOOM_SELECTOR.lower() == "true")
+        self.zoom_selector = (self.config.ZOOM_SELECTOR.lower() == "true") """
 
     @property
     def workflow_defs(self):
@@ -85,6 +87,10 @@ class AppContext:
             return self.current_project.workflowDefs
         else:
             return None
+        
+    @property
+    def zoom_selector(self):
+        return self.config.ZOOM_SELECTOR.lower() == "true" if self.config else None
 
     def get_workflow_def(self, wd_name):
         if not self.workflow_defs:
