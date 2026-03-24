@@ -24,6 +24,44 @@ The plugin can be found in the [official QGIS plugin repository](https://plugins
 
 To learn how to use the plugin, please, follow our [guide](https://docs.mapflow.ai/api/qgis_mapflow).
 
+## Contributing
+
+### Running tests
+
+Tests run inside the QGIS Python environment. Use the Python bundled with your QGIS installation.
+
+**macOS** (QGIS-LTR):
+
+```bash
+# Install test dependencies (once)
+/Applications/QGIS-LTR.app/Contents/MacOS/bin/python3 -m pip install pytest-qt
+
+# Run tests
+/Applications/QGIS-LTR.app/Contents/MacOS/bin/python3 -m pytest tests/
+```
+
+**Linux** (system package, e.g. `apt install qgis`):
+
+```bash
+# QGIS Python is typically the system Python with QGIS packages available
+python3 -m pip install pytest-qt
+
+python3 -m pytest tests/
+```
+
+If you installed QGIS from a non-standard location, use the Python binary bundled with it (e.g. `/usr/bin/qgis_python3` or similar).
+
+**Windows** (OSGeo4W):
+
+```cmd
+:: Open the OSGeo4W Shell, then:
+pip install pytest-qt
+
+python -m pytest tests/
+```
+
+If using the standalone QGIS installer, open the **OSGeo4W Shell** shortcut that comes with QGIS — it sets up the correct Python environment automatically.
+
 ## License
 
 This software is released under the [GNU Public License (GPL)](mapflow/LICENSE) Version 2 or any later version. This license means that you can inspect and modify the source code and guarantees that you always have access to this software under the same termas as QGIS, that is free of cost and can be freely modified.
