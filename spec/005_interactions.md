@@ -13,13 +13,13 @@ Describe integration boundaries and interaction rules with external/internal sys
 - Retry: no automatic retry; user can re-trigger actions manually
 - Failure handling: parse error response (multiple formats), display user-friendly message via QMessageBox or QGIS message bar
 
-### Maxar SecureWatch
+### Maxar SecureWatch — LEGACY, to be replaced by Mapflow API native data providers
 - Direction: outbound
 - Protocol: WFS (XML over HTTPS) for metadata search; WMTS for tile preview
 - Auth: ConnectID credential (user-provided or Geoalert default)
 - Failure handling: parse HTML error responses, display to user
 
-### Sentinel-2 (via Skywatch)
+### Sentinel-2 (via Skywatch) — LEGACY, to be replaced by Mapflow API native data providers
 - Direction: outbound
 - Protocol: HTTPS (JSON metadata, JPEG2000 preview)
 - Auth: routed through Mapflow backend (no direct Skywatch auth from plugin)
