@@ -20,7 +20,7 @@ All 5 specs populated from codebase analysis: goal (plugin purpose/constraints),
 All tests require QGIS runtime — no value in partial testing without it. Tools: pytest + pytest-qt + unittest.mock (stdlib). QgsApplication bootstrapped via qgis.testing.start_app() in pytest_configure hook (must run before collection because plugin modules create QIcon at import time). conftest.py provides iface mock and http_mock fixtures. pytest-qt chosen over raw PyQt5.QtTest for signal-heavy architecture (waitSignal, auto widget cleanup via qtbot).
 
 ## 4. Feature: download image from data-catalog
-[ready-for-review]
+[v]
 - Refactored 002_api.md into index + 4 sub-files (A: project, B: processing, C: my imagery, D: search) for maintainability
 - Added `GET /rest/rasters/image/{image_id}/download` spec with presigned URL response model and error codes (404/403/409)
 - Added `available_for_download` boolean to ImageReturnSchema (defaults True for backward compat via SkipDataClass.from_dict)
