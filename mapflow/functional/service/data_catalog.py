@@ -5,9 +5,9 @@ import json
 import os.path
 from osgeo import gdal
 
-from PyQt5.QtCore import QObject, pyqtSignal, Qt
+from PyQt5.QtCore import QObject, QUrl, pyqtSignal, Qt
 from PyQt5.QtGui import QImage
-from PyQt5.QtNetwork import QNetworkReply
+from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
 from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog, QAbstractItemView, QWidget
 from qgis.core import QgsCoordinateReferenceSystem, QgsGeometry, QgsProject, QgsRasterLayer
 
@@ -525,8 +525,6 @@ class DataCatalogService(QObject):
         self._download_file_from_url(download_url, save_path)
 
     def _download_file_from_url(self, url: str, save_path: str):
-        from PyQt5.QtNetwork import QNetworkRequest
-        from PyQt5.QtCore import QUrl
         request = QNetworkRequest(QUrl(url))
         nam = self.api.http.nam
         reply = nam.get(request)
