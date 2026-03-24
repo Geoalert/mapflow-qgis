@@ -17,49 +17,49 @@
 <context>
     <name>AreaCalculatorService</name>
     <message>
-        <location filename="../functional/service/area_calculator_service.py" line="54"/>
+        <location filename="../functional/service/area_calculator_service.py" line="65"/>
         <source>Not enough rights to start processing in a shared project ({})</source>
         <translation>Недостаточно прав в проекте для запауска обработки ({})</translation>
     </message>
     <message>
-        <location filename="../functional/service/area_calculator_service.py" line="31"/>
+        <location filename="../functional/service/area_calculator_service.py" line="42"/>
         <source>Set AOI to start processing</source>
         <translation>Задайте область интереса, чтобы запустить обработку</translation>
     </message>
     <message>
-        <location filename="../functional/service/area_calculator_service.py" line="56"/>
+        <location filename="../functional/service/area_calculator_service.py" line="67"/>
         <source>AOI must contain not more than {} polygons</source>
         <translation>Область интереса не должна содержать более {} полигонов</translation>
     </message>
     <message>
-        <location filename="../functional/service/area_calculator_service.py" line="96"/>
+        <location filename="../functional/service/area_calculator_service.py" line="107"/>
         <source>Use extent of &apos;{name}&apos;</source>
         <translation>Использовать пространственный охват &apos;{name}&apos;</translation>
     </message>
     <message>
-        <location filename="../functional/service/area_calculator_service.py" line="101"/>
+        <location filename="../functional/service/area_calculator_service.py" line="112"/>
         <source>Use imagery extent</source>
         <translation>Использовать охват изображений</translation>
     </message>
     <message>
-        <location filename="../functional/service/area_calculator_service.py" line="106"/>
+        <location filename="../functional/service/area_calculator_service.py" line="117"/>
         <source>Selected AOI does not intersect the selected imagery</source>
         <translation>Выбранная область не пересекается с выбранным изображением</translation>
     </message>
     <message>
-        <location filename="../functional/service/area_calculator_service.py" line="170"/>
+        <location filename="../functional/service/area_calculator_service.py" line="182"/>
         <source>Area: {:.2f} sq.km</source>
         <translation>Площадь: {:.2f} кв.км</translation>
     </message>
     <message>
-        <location filename="../functional/service/area_calculator_service.py" line="178"/>
+        <location filename="../functional/service/area_calculator_service.py" line="191"/>
         <source>Bad AOI. AOI must be inside boundaries: 
 [-180, 180] by longitude, [-90, 90] by latitude</source>
         <translation>Неверный AOI. AOI должен быть в пределах:
 [-180, 180] по долготе, [-90, 90] по широте</translation>
     </message>
     <message>
-        <location filename="../functional/service/area_calculator_service.py" line="183"/>
+        <location filename="../functional/service/area_calculator_service.py" line="196"/>
         <source>Providers are not initialized</source>
         <translation>Провайдеры данных не установлены</translation>
     </message>
@@ -353,7 +353,7 @@ Either modify your image or upload it to a different collection</source>
         <translation type="obsolete">Удалить мозаику &apos;{name}&apos;?</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="81"/>
+        <location filename="../functional/service/data_catalog.py" line="78"/>
         <source>Choose image to upload</source>
         <translation>Выберите изображение для загрузки</translation>
     </message>
@@ -363,7 +363,7 @@ Either modify your image or upload it to a different collection</source>
         <translation type="obsolete">Растровый TIFF файл должен иметь географическую привязку, размер растра менее {size} пикселей и менее {memory} Мб</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="306"/>
+        <location filename="../functional/service/data_catalog.py" line="302"/>
         <source>&lt;center&gt;&lt;b&gt;Error uploading &apos;{name}&apos;&lt;/b&gt;</source>
         <translation>&lt;center&gt;&lt;b&gt;Ошибка загрузки &apos;{name}&apos;&lt;/b&gt;</translation>
     </message>
@@ -408,12 +408,12 @@ Either modify your image or upload it to a different collection</source>
         <translation type="obsolete">Пожалуйста, выберите существующую мозаику</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="302"/>
+        <location filename="../functional/service/data_catalog.py" line="298"/>
         <source>Raster TIFF file must be georeferenced, have size less than {size} pixels and file size less than {memory}</source>
         <translation>Растровый TIFF файл должен иметь географическую привязку, размер менее {size} пикселей и менее {memory} Мб</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="311"/>
+        <location filename="../functional/service/data_catalog.py" line="307"/>
         <source>&lt;b&gt;Not enough storage space. &lt;/b&gt;You have {free_storage} left, but &apos;{name}&apos; is {image_size}</source>
         <translation>&lt;b&gt;Недостаточно места. &lt;/b&gt;Свободно {free_storage}, но размер &apos;{name}&apos; составляет {image_size}</translation>
     </message>
@@ -423,62 +423,62 @@ Either modify your image or upload it to a different collection</source>
         <translation type="obsolete">Пожалуйста, выберите рабочую папку для сохраенения временных файлов во вкладке Настройки</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="123"/>
+        <location filename="../functional/service/data_catalog.py" line="120"/>
         <source>&lt;center&gt;Creation of imagery collection &apos;{mosaic_name}&apos; failed&lt;br&gt;while trying to upload &apos;{image}&apos;</source>
         <translation>&lt;center&gt;Не удолось создать коллекцию изображений &apos;{mosaic_name}&apos;&lt;br&gt;при попытке загрузить &apos;{image}&apos;</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="204"/>
+        <location filename="../functional/service/data_catalog.py" line="201"/>
         <source>&lt;center&gt;Delete imagery collection &lt;b&gt;&apos;{name}&apos;&lt;/b&gt;?</source>
         <translation>&lt;center&gt;Удалить коллекцию изображений &lt;br&gt;&lt;b&gt;&apos;{name}&apos;&lt;/b&gt;?</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="207"/>
+        <location filename="../functional/service/data_catalog.py" line="204"/>
         <source>&lt;center&gt;Delete following imagery collections:&lt;br&gt;&lt;b&gt;&apos;{names}&apos;&lt;/b&gt;?</source>
         <translation>&lt;center&gt;Удалить следующие коллекции изображений:&lt;br&gt;&lt;b&gt;&apos;{names}&apos;&lt;/b&gt;?</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="210"/>
+        <location filename="../functional/service/data_catalog.py" line="207"/>
         <source>&lt;center&gt;Delete &lt;b&gt;{len}&lt;/b&gt; imagery collections?</source>
         <translation>&lt;center&gt;Удалить &lt;b&gt;{len}&lt;/b&gt; коллекций изображений&apos;?</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="251"/>
+        <location filename="../functional/service/data_catalog.py" line="247"/>
         <source>Please, select existing imagery collection</source>
         <translation>Пожалуйста, выберите существующую коллекцию изображений</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="253"/>
+        <location filename="../functional/service/data_catalog.py" line="249"/>
         <source>Choose images to upload</source>
         <translation>Выберите изображения для загрузки</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="406"/>
+        <location filename="../functional/service/data_catalog.py" line="402"/>
         <source>&lt;center&gt;Delete image &lt;b&gt;&apos;{name}&apos;&lt;/b&gt; from &apos;{mosaic}&apos; imagery collection?</source>
         <translation>&lt;center&gt;Удалить изображение &lt;b&gt;&apos;{name}&apos;&lt;/b&gt; из коллекции &apos;{mosaic}&apos;?</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="409"/>
+        <location filename="../functional/service/data_catalog.py" line="405"/>
         <source>&lt;center&gt;Delete following images from &apos;{mosaic}&apos; imagery collection:&lt;br&gt;&lt;b&gt;&apos;{names}&apos;&lt;/b&gt;?</source>
         <translation>&lt;center&gt;Удалить следующие изображения из коллекции &apos;{mosaic}&apos;:&lt;br&gt;&lt;b&gt;&apos;{names}&apos;&lt;/b&gt;?</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="412"/>
+        <location filename="../functional/service/data_catalog.py" line="408"/>
         <source>&lt;center&gt;Delete &lt;b&gt;{len}&lt;/b&gt; images from &apos;{mosaic}&apos; imagery collection?</source>
         <translation>&lt;center&gt;Удалить &lt;b&gt;{len}&lt;/b&gt; изображений из коллекции &apos;{mosaic}&apos;?</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="501"/>
+        <location filename="../functional/service/data_catalog.py" line="497"/>
         <source>Image name should be 1-255 characters long</source>
         <translation>Название изображения должно иметь длину 1-255 символов</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="627"/>
+        <location filename="../functional/service/data_catalog.py" line="624"/>
         <source>Source imagery collection with id &apos;{}&apos; was not found </source>
         <translation>Коллекция изображений с id &apos;{}&apos; не найдена </translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="629"/>
+        <location filename="../functional/service/data_catalog.py" line="626"/>
         <source>Source image with id &apos;{}&apos; was not found in any of your imagery collections</source>
         <translation>Изображение с id &apos;{}&apos; не найдено ни в одной из Ваших коллекций</translation>
     </message>
@@ -2213,19 +2213,19 @@ Price: {} credits per square km</source>
         <translation type="obsolete">Вход</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="786"/>
+        <location filename="../mapflow.py" line="779"/>
         <source>If you already know which {provider_name} image you want to process,
 simply paste its ID here. Otherwise, search suitable images in the catalog below.</source>
         <translation>Если вы уже знаете ID снимка {provider_name} который вы хотите обработать,
 просто вставьте его в это поле. Иначе, используйте каталог ниже чтобы найти подходящий снимок.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="778"/>
+        <location filename="../mapflow.py" line="771"/>
         <source>e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00</source>
         <translation>например S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="790"/>
+        <location filename="../mapflow.py" line="783"/>
         <source>e.g. a3b154c40cc74f3b934c0ffc9b34ecd1</source>
         <translation>например, a3b154c40cc74f3b934c0ffc9b34ecd1</translation>
     </message>
@@ -2245,17 +2245,17 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete"> - Каталог снимков</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="675"/>
+        <location filename="../mapflow.py" line="680"/>
         <source>Permanently remove {}?</source>
         <translation>Удалить {}?</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="819"/>
+        <location filename="../mapflow.py" line="812"/>
         <source>Select output directory</source>
         <translation>Выберите папку для сохранения данных</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="838"/>
+        <location filename="../mapflow.py" line="829"/>
         <source>Please, specify an existing output directory</source>
         <translation>Пожалуйста, выберите папку для сохранения данных</translation>
     </message>
@@ -2270,27 +2270,27 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Пожалуйста, выберите слой с областью обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1082"/>
+        <location filename="../mapflow.py" line="1059"/>
         <source>Your area of interest is too large.</source>
         <translation>Слишком большая область запроса метаданных.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1185"/>
+        <location filename="../mapflow.py" line="1162"/>
         <source>Please, check your credentials</source>
         <translation>Пожалуйста, проверьте реквизиты</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1339"/>
+        <location filename="../mapflow.py" line="1316"/>
         <source>We couldn&apos;t fetch Sentinel metadata</source>
         <translation>Мы не смогли получить метаданные Сентинел</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1396"/>
+        <location filename="../mapflow.py" line="1373"/>
         <source>No images match your criteria. Try relaxing the filters.</source>
         <translation>Нет подходящих снимков. Попробуйте изменить параметры поиска.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1306"/>
+        <location filename="../mapflow.py" line="1283"/>
         <source>More</source>
         <translation>Еще</translation>
     </message>
@@ -2300,14 +2300,14 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Мы не смогли получить метаданные от Максар</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1531"/>
+        <location filename="../mapflow.py" line="1520"/>
         <source>A Sentinel image ID should look like S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 or /36/S/XA/2022/02/09/0/</source>
         <translation>ID снимка Sentinel должен иметь формат S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 или /36/S/XA/2022/02/09/0/</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1699"/>
         <source>Area: {:.2f} sq.km</source>
-        <translation>Площадь: {:.2f} кв.км</translation>
+        <translation type="obsolete">Площадь: {:.2f} кв.км</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1899"/>
@@ -2320,7 +2320,7 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Ошибка при удалении обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1706"/>
+        <location filename="../mapflow.py" line="1542"/>
         <source>Please, specify a name for your processing</source>
         <translation>Пожалуйста, укажите название обработки</translation>
     </message>
@@ -2335,7 +2335,7 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Мы не смогли распознать проекцию области обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1713"/>
+        <location filename="../mapflow.py" line="1549"/>
         <source>Up to {} sq km can be processed at a time. Try splitting your area(s) into several processings.</source>
         <translation>За раз можно обработать не более {} кв км. Попробуйте разделить область обработки на части.</translation>
     </message>
@@ -2355,7 +2355,7 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Я хотел бы стать премиум пользователем Mapflow чтобы обрабатывать по Максар.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1709"/>
+        <location filename="../mapflow.py" line="1545"/>
         <source>Processing area layer is corrupted or has invalid projection</source>
         <translation>Выбранная область некорректна или имеет неправильную проекцию</translation>
     </message>
@@ -2363,13 +2363,13 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <location filename="../mapflow.py" line="1755"/>
         <source>Bad AOI. AOI must be inside boundaries: 
 [-180, 180] by longitude, [-90, 90] by latitude</source>
-        <translation>Неверный AOI. AOI должен быть в пределах:
+        <translation type="obsolete">Неверный AOI. AOI должен быть в пределах:
 [-180, 180] по долготе, [-90, 90] по широте</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1901"/>
         <source>Starting the processing...</source>
-        <translation>Создаем обработку...</translation>
+        <translation type="obsolete">Создаем обработку...</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1852"/>
@@ -2384,7 +2384,7 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
     <message>
         <location filename="../mapflow.py" line="2003"/>
         <source>Processing creation failed</source>
-        <translation>Мы не смогли создать обработку</translation>
+        <translation type="obsolete">Мы не смогли создать обработку</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="2227"/>
@@ -2397,27 +2397,27 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Доступный лимит: {} кв.км</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2132"/>
+        <location filename="../mapflow.py" line="1692"/>
         <source>Sorry, we couldn&apos;t load the image</source>
         <translation>Ошибка предпросмотра снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2133"/>
+        <location filename="../mapflow.py" line="1693"/>
         <source>Error previewing Sentinel imagery</source>
         <translation>Ошибка предпросмотра снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2318"/>
+        <location filename="../mapflow.py" line="1878"/>
         <source>Sorry, there&apos;s no preview for this image</source>
-        <translation>К сожалению, для этого снимка нет предпросмотра</translation>
+        <translation>Стоимость обработки недоступна</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2422"/>
+        <location filename="../mapflow.py" line="1982"/>
         <source>We couldn&apos;t load a preview for this image</source>
         <translation>Мы не смогли осуществить предпросмотр этого снимка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2333"/>
+        <location filename="../mapflow.py" line="1893"/>
         <source>Please, select an image to preview</source>
         <translation>Пожалуйста, выберите снимок</translation>
     </message>
@@ -2459,7 +2459,7 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Неверный токен</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2837"/>
+        <location filename="../mapflow.py" line="2397"/>
         <source>Proxy error. Please, check your proxy settings.</source>
         <translation>Ошибка прокси. Пожалуйста, проверьте настройки прокси в QGIS.</translation>
     </message>
@@ -2469,7 +2469,7 @@ simply paste its ID here. Otherwise, search suitable images in the catalog below
         <translation type="obsolete">Неизвестная ошибка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2968"/>
+        <location filename="../mapflow.py" line="2528"/>
         <source>A new version of Mapflow plugin {server_version} is released 
 We recommend you to upgrade to get all the latest features
 Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
@@ -2486,7 +2486,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation type="obsolete">Создать новый слой области интереса из видимой области карты</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="315"/>
+        <location filename="../mapflow.py" line="253"/>
         <source>Draw AOI at the map</source>
         <translation>Нарисовать AOI на карте</translation>
     </message>
@@ -2523,7 +2523,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
     <message>
         <location filename="../mapflow.py" line="1906"/>
         <source>Could not launch processing! Error: {}.</source>
-        <translation>Не удалось запустить обработку! Ошибка: {}.</translation>
+        <translation type="obsolete">Не удалось запустить обработку! Ошибка: {}.</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="3050"/>
@@ -2533,7 +2533,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
 </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="234"/>
+        <location filename="../mapflow.py" line="245"/>
         <source>Error during loading the data providers: {e}</source>
         <translation>Ошибка при загрузке источников данных: {e}</translation>
     </message>
@@ -2543,19 +2543,19 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation type="obsolete">Нам не удалось импортировать провайдеров из настроек {errors}. Пожалуйста, добавьте их снова</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="707"/>
+        <location filename="../mapflow.py" line="712"/>
         <source>Provider name must be unique. {name} already exists, select another or delete/edit existing</source>
         <translation>Название источника данных должен быть уникальным. {name} уже существует, выберите другое название или удалите/измените существующий</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1427"/>
+        <location filename="../mapflow.py" line="1404"/>
         <source>We couldn&apos;t get metadata from Maxar, error {error}</source>
         <translation>Мы не смогли получить метаданные от Maxar, ошибка {error}</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1894"/>
         <source>Processing limit exceeded. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; to top up your balance</source>
-        <translation>Превышен доступный лимит обработки. Посетите &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; для пополнения баланса</translation>
+        <translation type="obsolete">Превышен доступный лимит обработки. Посетите &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; для пополнения баланса</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1525"/>
@@ -2568,29 +2568,29 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation type="obsolete">Просмотр недоступен для источника данных {}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2847"/>
+        <location filename="../mapflow.py" line="2407"/>
         <source>This operation is forbidden for your account, contact us</source>
         <translation>Эта операция запрещена для вашего аккаунта, свяжитесь с нами</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2805"/>
+        <location filename="../mapflow.py" line="2365"/>
         <source>Wrong token. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/api&quot;&gt;mapflow.ai&lt;/a&gt;&quot; to get a new one</source>
         <translation>Неправильный токен. Перейдите на &quot;&lt;a href=&quot;https://app.mapflow.ai/account/api&quot;&gt;mapflow.ai&lt;/a&gt;&quot; чтообы получить новый</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2958"/>
+        <location filename="../mapflow.py" line="2518"/>
         <source>You must upgrade your plugin version to continue work with Mapflow. 
 The server requires version {server_version}, your plugin is {local_version}
 Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation>Обновите версию плагина чтобы продолжить работать с Mapflow. Требуется версия {server_version}, установлена версия {local_version}. Выберите меню Модули -&gt; Управление модулями -&gt; Обновляемые</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="719"/>
+        <location filename="../mapflow.py" line="723"/>
         <source>Add new provider</source>
         <translation>Добавить новый источник данных</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="727"/>
+        <location filename="../mapflow.py" line="731"/>
         <source>This is a default provider, it cannot be edited</source>
         <translation>Этот источник данных встроен в mapflow, его нельзя редактировать</translation>
     </message>
@@ -2629,7 +2629,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
     <message>
         <location filename="../mapflow.py" line="1554"/>
         <source>Set AOI to start processing</source>
-        <translation>Задайте область интереса, чтобы запустить обработку</translation>
+        <translation type="obsolete">Задайте область интереса, чтобы запустить обработку</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1568"/>
@@ -2642,7 +2642,7 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation type="obsolete">Лимит обработки: {:.2f} кв.км</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2535"/>
+        <location filename="../mapflow.py" line="2095"/>
         <source>Only finished processings can be rated</source>
         <translation>Только законченные обработки могут быть оценены</translation>
     </message>
@@ -2652,43 +2652,43 @@ Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
         <translation type="obsolete">Пожалуйста, оставьте отзыв для оценки. Спасибо!</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2561"/>
+        <location filename="../mapflow.py" line="2121"/>
         <source>Thank you! Your rating and feedback are submitted!</source>
         <translation>Спасибо! Ваша оценка и отзыв отправлены!</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2581"/>
+        <location filename="../mapflow.py" line="2141"/>
         <source>Only correctly finished processings (status OK) can be rated</source>
         <translation>Только правильно завершенные обработки (состояние OK) могут быть оценены</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1760"/>
+        <location filename="../mapflow.py" line="1565"/>
         <source>Providers are not initialized</source>
         <translation>Провайдеры данных не установлены</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2645"/>
+        <location filename="../mapflow.py" line="2205"/>
         <source>Only the results of correctly finished processing can be loaded</source>
         <translation>Загружать можно только результаты корректно законченной обработки</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2852"/>
+        <location filename="../mapflow.py" line="2412"/>
         <source>Error</source>
         <translation>Ошибка</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2554"/>
+        <location filename="../mapflow.py" line="2114"/>
         <source>Thank you! Your rating is submitted!
 We would appreciate if you add feedback as well.</source>
         <translation>Спасибо! Ваша оценка отправлена! Мы будем благодарны, если добавите комментарий к оценке.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="610"/>
+        <location filename="../mapflow.py" line="609"/>
         <source>Log in </source>
         <translation>Вход </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="671"/>
+        <location filename="../mapflow.py" line="676"/>
         <source>This provider is default and cannot be removed</source>
         <translation>Этот провайдер встроен в плагин, его нельзя удалить</translation>
     </message>
@@ -2700,7 +2700,7 @@ We would appreciate if you add feedback as well.</source>
     <message>
         <location filename="../mapflow.py" line="1579"/>
         <source>AOI must contain not more than {} polygons</source>
-        <translation>Область интереса не должна содержать более {} полигонов</translation>
+        <translation type="obsolete">Область интереса не должна содержать более {} полигонов</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1845"/>
@@ -2708,13 +2708,6 @@ We would appreciate if you add feedback as well.</source>
 {error}</source>
         <translation type="obsolete">Стоимость обработки недоступна:
 {error}</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="1878"/>
-        <source>Processing cost is not available:
-{message}</source>
-        <translation type="obsolete">Стоимость обработки недоступна:
-{message}</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1885"/>
@@ -2727,27 +2720,27 @@ We would appreciate if you add feedback as well.</source>
         <translation type="obsolete">Пожалуйста выберете изображение в таблице поиска для {}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2033"/>
+        <location filename="../mapflow.py" line="1594"/>
         <source>Your balance: {} credits</source>
         <translation>Ваш баланс: {} кредитов</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2393"/>
+        <location filename="../mapflow.py" line="1953"/>
         <source>Provider {name} requires image id for preview!</source>
         <translation>Чтобы открыть предпросмотр провайдера {name}, задайте ID изображения!</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2434"/>
+        <location filename="../mapflow.py" line="1994"/>
         <source>This provider requires image ID!</source>
         <translation>Выберите ID изображения!</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2035"/>
+        <location filename="../mapflow.py" line="1596"/>
         <source>Remaining limit: {:.2f} sq.km</source>
         <translation>Доступная площадь: {:.2f} кв.км</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1539"/>
+        <location filename="../mapflow.py" line="1528"/>
         <source>A Maxar image ID should look like a3b154c40cc74f3b934c0ffc9b34ecd1</source>
         <translation>ID снимка Maxar должен выглядеть как a3b154c40cc74f3b934c0ffc9b34ecd1</translation>
     </message>
@@ -2764,17 +2757,17 @@ Please, make sure you have selected a project</source>
         <translation type="obsolete">Недопустимое изображение. Это должен быть файл Tiff , иметь размер растра меньше чем {size} пикселей, и размер файла менее чем {memory} МБ</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2538"/>
+        <location filename="../mapflow.py" line="2098"/>
         <source>Processing must be in `Review required` status</source>
         <translation>Обработка должна быть в статусе &quot;Ожидается отзыв&quot;</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="2570"/>
         <source>Only correctly finished processings (status OK) can be reviewed</source>
-        <translation>Только на корректно завершенные обработки (статус Ок) можно оставить отзыв</translation>
+        <translation type="obsolete">Только на корректно завершенные обработки (статус Ок) можно оставить отзыв</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2583"/>
+        <location filename="../mapflow.py" line="2143"/>
         <source>Please select rating to submit</source>
         <translation>Пожалуйста, выберите оценку</translation>
     </message>
@@ -2784,7 +2777,7 @@ Please, make sure you have selected a project</source>
         <translation type="obsolete">Пожалуйста, оставьте отзыв до {}. Двойной клик для добавления результатов на карту</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="236"/>
+        <location filename="../mapflow.py" line="247"/>
         <source>We failed to import providers from the settings. Please add them again</source>
         <translation>Не получилось загрузить провайдеров данных из настроек. Пожалуйста, добавьте их заново</translation>
     </message>
@@ -2844,7 +2837,7 @@ Data source link {url}</source>
         <translation type="obsolete">Мы не смогли получить метаданные из каталога изображений, ошибка {error}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1425"/>
+        <location filename="../mapflow.py" line="1402"/>
         <source>Please, check your Maxar credentials</source>
         <translation>Пожалуйста проверьте реквизиты своего аккаунта Maxar</translation>
     </message>
@@ -2858,7 +2851,7 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
 Тарифные планы на  &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&lt;/a&gt;</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2138"/>
+        <location filename="../mapflow.py" line="1698"/>
         <source>Preview is unavailable when metadata layer is removed</source>
         <translation>Предпросмотр недоступен когда слой с метаданными поиска удален</translation>
     </message>
@@ -2870,7 +2863,7 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
  попробуйте позже или сообщите нам об ошибке</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1711"/>
+        <location filename="../mapflow.py" line="1547"/>
         <source>Please, select a valid area of interest</source>
         <translation>Пожалуйста, выберите допустимый слой с областью обработки</translation>
     </message>
@@ -2882,16 +2875,16 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
     <message>
         <location filename="../mapflow.py" line="1860"/>
         <source>This provider requires image ID. Use search tab to find imagery for you requirements, and select image in the table.</source>
-        <translation>Этому провайдеру нужен ID снимка. Используйте вкладку &quot;Поиск&quot; чтобы найти изображения по вашим требованиям, и выберите изображение в таблице.</translation>
+        <translation type="obsolete">Этому провайдеру нужен ID снимка. Используйте вкладку &quot;Поиск&quot; чтобы найти изображения по вашим требованиям, и выберите изображение в таблице.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2718"/>
+        <location filename="../mapflow.py" line="2278"/>
         <source>We have just set the authentication config for you. 
  You may need to restart QGIS to apply it so you could log in</source>
         <translation>Авторизация настроена. Может потребоваться перезагрузить QGIS чтобы применить конфигурацию и войти в систему</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2743"/>
+        <location filename="../mapflow.py" line="2303"/>
         <source>Please restart QGIS before using OAuth2 login.</source>
         <translation>Пожалуйста перезагрузите QGIS перед использованием авторизации OAuth2.</translation>
     </message>
@@ -2926,7 +2919,7 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
         <translation type="obsolete">Вы действительно хотите удалить проект {}? Это действие нельзя отменить, все обработки будут потеряны!</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2397"/>
+        <location filename="../mapflow.py" line="1957"/>
         <source>Preview is unavailable for the provider {}. 
 OSM layer will be added instead.</source>
         <translation>Предпросмотр для источника {} недоступен.
@@ -2975,7 +2968,7 @@ OSM layer will be added instead.</source>
     <message>
         <location filename="../mapflow.py" line="1577"/>
         <source>Not enough rights to start processing in a shared project ({})</source>
-        <translation>Недостаточно прав в проекте для запауска обработки ({})</translation>
+        <translation type="obsolete">Недостаточно прав в проекте для запауска обработки ({})</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="2457"/>
@@ -2983,22 +2976,22 @@ OSM layer will be added instead.</source>
         <translation type="obsolete">Предпросмотр недоступен</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2284"/>
+        <location filename="../mapflow.py" line="1844"/>
         <source>Could not display preview</source>
         <translation>Неудалось осуществить предпросмотр</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2576"/>
+        <location filename="../mapflow.py" line="2136"/>
         <source>Not enough rights to rate processing in a shared project ({})</source>
         <translation>Недостаточно прав в проекте для оценивания обработки ({})</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2579"/>
+        <location filename="../mapflow.py" line="2139"/>
         <source>Please select processing</source>
         <translation>Пожалуйста, выберите обработку</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2841"/>
+        <location filename="../mapflow.py" line="2401"/>
         <source>Not enough rights for this action
 in a shared project &apos;{project_name}&apos; ({user_role})</source>
         <translation>Недостаточно прав для этого действия
@@ -3012,14 +3005,14 @@ in a shared project &apos;{project_name}&apos; ({user_role})</source>
     <message>
         <location filename="../mapflow.py" line="1858"/>
         <source>Selected AOI does not intersect the selected imagery</source>
-        <translation>Выбранная область не пересекается с выбранным изображением</translation>
+        <translation type="obsolete">Выбранная область не пересекается с выбранным изображением</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1992"/>
         <source>The selected data provider is unavailable on your plan. 
  Upgrade your subscription to get access to the data. 
 See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&lt;/a&gt;</source>
-        <translation>Выбранный провайдер данных недоступен в Вашем тарифном плане 
+        <translation type="obsolete">Выбранный провайдер данных недоступен в Вашем тарифном плане 
  Обновите подписку для получения доступа к данным. 
 Узнать цену: &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&lt;/a&gt;</translation>
     </message>
@@ -3039,12 +3032,12 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
         <translation type="obsolete">Нельзя удалять или менять проект по умолчанию</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="992"/>
+        <location filename="../mapflow.py" line="969"/>
         <source>We couldn&apos;t get metadata from the Mapflow Imagery Catalog</source>
         <translation>Мы не смогли получить метаданные из каталога изображений</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="995"/>
+        <location filename="../mapflow.py" line="972"/>
         <source>. Error {error}</source>
         <translation>. Ошибка {error}</translation>
     </message>
@@ -3056,7 +3049,7 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
     <message>
         <location filename="../mapflow.py" line="3072"/>
         <source>Selected search results must have the same zoom level</source>
-        <translation>Выбранные результаты поиска должны иметь один уровень масштабирования</translation>
+        <translation type="obsolete">Выбранные результаты поиска должны иметь один уровень масштабирования</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1099"/>
@@ -3064,7 +3057,7 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
         <translation type="obsolete">&lt;b&gt;Неудалось загрузить результат поиска &lt;/b&gt;&lt;br&gt;Пожалуйста, убедитесь, что во вкладке Настройки выбрана существующая рабочая папка                             и что пользователь обладает правами доступа к ней</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1039"/>
+        <location filename="../mapflow.py" line="1016"/>
         <source>&lt;b&gt;Results could not be loaded &lt;/b&gt;&lt;br&gt;Please, make sure you chose the right output folder in the Settings tab                                 and you have access rights to this folder</source>
         <translation>&lt;b&gt;Не удалось загрузить результаты поиска &lt;/b&gt;&lt;br&gt;Пожалуйста, убедитесь, что во вкладке Настройки выбрана существующая рабочая папка                                 и к ней имеются права доступа</translation>
     </message>
@@ -3074,24 +3067,24 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
         <translation type="obsolete">Проект: &lt;b&gt;{}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1631"/>
+        <location filename="../mapflow.py" line="254"/>
         <source>Use imagery extent</source>
         <translation>Использовать охват изображений</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="318"/>
+        <location filename="../mapflow.py" line="256"/>
         <source>Create AOI from map extent</source>
         <translation>Создать слой области интереса из видимой области карты</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="441"/>
+        <location filename="../mapflow.py" line="453"/>
         <source>Choose imagery collection or image to start processing</source>
         <translation>Выберите изображение или коллекцию для запуска обработки</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1621"/>
         <source>Use extent of &apos;{name}&apos;</source>
-        <translation>Использовать пространственный охват &apos;{name}&apos;</translation>
+        <translation type="obsolete">Использовать пространственный охват &apos;{name}&apos;</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1854"/>
@@ -3101,15 +3094,15 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
     <message>
         <location filename="../mapflow.py" line="1920"/>
         <source>{cost} credits</source>
-        <translation>{cost} кредитов</translation>
+        <translation type="obsolete">{cost} кредитов</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1953"/>
         <source> sq.km</source>
-        <translation> кв.км</translation>
+        <translation type="obsolete"> кв.км</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2082"/>
+        <location filename="../mapflow.py" line="1642"/>
         <source>Show all</source>
         <translation>Показать все</translation>
     </message>
@@ -3131,20 +3124,20 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
     <message>
         <location filename="../mapflow.py" line="1623"/>
         <source>Select AOI to start processing</source>
-        <translation>Задайте область интереса, чтобы запустить обработку</translation>
+        <translation type="obsolete">Задайте область интереса, чтобы запустить обработку</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1865"/>
         <source>No project is selected</source>
-        <translation>Проект не выбран</translation>
+        <translation type="obsolete">Проект не выбран</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2174"/>
+        <location filename="../mapflow.py" line="1734"/>
         <source>Selected imagery has no preview</source>
         <translation>Предпросмотр данного изображения недоступен</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2179"/>
+        <location filename="../mapflow.py" line="1739"/>
         <source>Preview with such URL is unavailable</source>
         <translation>Предпросмотр данного изображения недоступен</translation>
     </message>
@@ -3194,24 +3187,29 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
         <translation type="obsolete">Дублированный пользовательский источник</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2659"/>
+        <location filename="../mapflow.py" line="2219"/>
         <source>Directory &apos;{}&apos; does not exist</source>
         <translation>Путь &apos;{}&apos; не существует</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2659"/>
+        <location filename="../mapflow.py" line="2219"/>
         <source>&lt;br&gt;Using Settings tab, change the output directory to an existing one to download the results</source>
         <translation>&lt;br&gt;Используя вкладку Настройки, выберите существующую рабочую папку, чтобы сохранить результаты обработки</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="3043"/>
         <source>You can launch multiple image processing only if they have the same provider</source>
-        <translation>Запуск по нескольким изображениям доступен только если они имеют один источник</translation>
+        <translation type="obsolete">Запуск по нескольким изображениям доступен только если они имеют один источник</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2186"/>
+        <location filename="../mapflow.py" line="1746"/>
         <source>Preview for &apos;{iid}&apos; is unavailable</source>
         <translation>Предпросмотр для &apos;{iid}&apos; недоступен</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="2130"/>
+        <source>Only correctly finished processings with &apos;Review required&apos; status can be reviewed</source>
+        <translation>Только на корректно завершенные обработки со статусом &apos;Review reqired&apos; можно оставить отзыв</translation>
     </message>
 </context>
 <context>
@@ -3499,166 +3497,180 @@ See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&l
 <context>
     <name>ProcessingService</name>
     <message>
-        <location filename="../functional/service/processing_service.py" line="85"/>
+        <location filename="../functional/service/processing_service.py" line="84"/>
         <source>Specify processing parameters</source>
         <translation>Укажите параметры обработки</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="92"/>
+        <location filename="../functional/service/processing_service.py" line="89"/>
         <source>Please, specify a name for your processing</source>
         <translation>Пожалуйста, укажите название обработки</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="95"/>
+        <location filename="../functional/service/processing_service.py" line="94"/>
         <source>Processing area layer is corrupted or has invalid projection</source>
         <translation>Выбранная область некорректна или имеет неправильную проекцию</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="97"/>
+        <location filename="../functional/service/processing_service.py" line="96"/>
         <source>Please, select a valid area of interest</source>
         <translation>Пожалуйста, выберите допустимый слой с областью обработки</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="99"/>
+        <location filename="../functional/service/processing_service.py" line="98"/>
         <source>Up to {} sq km can be processed at a time. Try splitting your area(s) into several processings.</source>
         <translation>За раз можно обработать не более {} кв км. Попробуйте разделить область обработки на части.</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="103"/>
+        <location filename="../functional/service/processing_service.py" line="102"/>
         <source>Selected AOI does not intersect the selected imagery</source>
         <translation>Выбранная область не пересекается с выбранным изображением</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="105"/>
+        <location filename="../functional/service/processing_service.py" line="104"/>
         <source>This provider requires image ID. Use search tab to find imagery for you requirements, and select image in the table.</source>
         <translation>Этому провайдеру нужен ID снимка. Используйте вкладку &quot;Поиск&quot;, чтобы найти изображения по вашим требованиям, и выберите изображение в таблице.</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="461"/>
+        <location filename="../functional/service/processing_service.py" line="429"/>
         <source>Not enough rights to start processing in a shared project ({})</source>
         <translation>Недостаточно прав в проекте для запауска обработки ({})</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="119"/>
+        <location filename="../functional/service/processing_service.py" line="118"/>
         <source>Set AOI to start processing</source>
         <translation>Задайте область интереса, чтобы запустить обработку</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="121"/>
+        <location filename="../functional/service/processing_service.py" line="120"/>
         <source>Error! Models are not initialized.
 Please, make sure you have selected a project</source>
         <translation>Ошибка! Модели не инициализирваны
 Пожалуйста, убедитесь, что выбран проект</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="162"/>
+        <location filename="../functional/service/processing_service.py" line="157"/>
         <source>Processing limit exceeded. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; to top up your balance</source>
         <translation>Превышен доступный лимит обработки. Посетите &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; для пополнения баланса</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="170"/>
+        <location filename="../functional/service/processing_service.py" line="171"/>
         <source>Starting the processing...</source>
         <translation>Создаем обработку...</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="177"/>
+        <location filename="../functional/service/processing_service.py" line="183"/>
         <source>Could not launch processing! Error: {}.</source>
         <translation>Не удалось запустить обработку! Ошибка: {}.</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="191"/>
+        <location filename="../functional/service/processing_service.py" line="209"/>
         <source>{cost} credits</source>
         <translation>{cost} кредитов</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="195"/>
+        <location filename="../functional/service/processing_service.py" line="213"/>
         <source> sq.km</source>
         <translation> кв.км</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="242"/>
+        <location filename="../functional/service/processing_service.py" line="255"/>
         <source>Success! We&apos;ll notify you when the processing has finished.</source>
         <translation>Обработка создана! Мы оповестим вас, когда она завершится.</translation>
     </message>
     <message>
         <location filename="../functional/service/processing_service.py" line="260"/>
         <source>Failed to start processing</source>
-        <translation>Не удалось запустить обработку</translation>
+        <translation type="obsolete">Не удалось запустить обработку</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="329"/>
+        <location filename="../functional/service/processing_service.py" line="363"/>
         <source>Processing completed</source>
         <translation>Обработка завершена</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="329"/>
+        <location filename="../functional/service/processing_service.py" line="363"/>
         <source>Processing &apos;{name}&apos; has finished successfully</source>
         <translation>Обработка &apos;{name}&apos; завершена успешно</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="339"/>
+        <location filename="../functional/service/processing_service.py" line="373"/>
         <source>Processing failed</source>
         <translation>Ошибка обработки</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="339"/>
+        <location filename="../functional/service/processing_service.py" line="373"/>
         <source>Processing &apos;{name}&apos; has failed</source>
         <translation>Не удалось завершить обработку &apos;{name}&apos;</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="463"/>
+        <location filename="../functional/service/processing_service.py" line="431"/>
         <source>Processing cost is not available:
 {message}</source>
         <translation>Стоимость обработки недоступна:
 {message}</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="476"/>
+        <location filename="../functional/service/processing_service.py" line="444"/>
         <source>Delete selected processings?</source>
         <translation>Удалить выбранные обработки?</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="491"/>
+        <location filename="../functional/service/processing_service.py" line="459"/>
         <source>Failed to remove processings with following ids: &lt;center&gt; {failed_ids}</source>
         <translation>Неудалось удалить обработки со следующими id: &lt;center&gt; {failed_ids}</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="279"/>
+        <source>The selected data provider is unavailable on your plan. 
+ Upgrade your subscription to get access to the data. 
+See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&lt;/a&gt;</source>
+        <translation>Выбранный провайдер данных недоступен в Вашем тарифном плане 
+ Обновите подписку для получения доступа к данным. 
+Узнать цену: &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&lt;/a&gt;</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="290"/>
+        <source>Processing creation failed</source>
+        <translation>Не удалось создать обработку</translation>
     </message>
 </context>
 <context>
     <name>ProcessingView</name>
     <message>
-        <location filename="../functional/view/processing_view.py" line="80"/>
+        <location filename="../functional/view/processing_view.py" line="72"/>
         <source>Please review or accept this processing until {}. Double click to add results to the map</source>
         <translation>Пожалуйста, оставьте отзыв или примите результаты до {}. Двойной клик для добавления результатов на карту</translation>
     </message>
     <message>
-        <location filename="../functional/view/processing_view.py" line="85"/>
+        <location filename="../functional/view/processing_view.py" line="77"/>
         <source>Double click to add results to the map.</source>
         <translation>Двойной клик, чтобы добавить результаты на карту.</translation>
     </message>
     <message>
-        <location filename="../functional/view/processing_view.py" line="157"/>
+        <location filename="../functional/view/processing_view.py" line="149"/>
         <source>Loading...</source>
         <translation>Загрузка...</translation>
     </message>
     <message>
-        <location filename="../functional/view/processing_view.py" line="158"/>
+        <location filename="../functional/view/processing_view.py" line="150"/>
         <source>Fetching your processings from server, please wait</source>
         <translation>Получаение обработки с сервера. Пожалуйста, подождите</translation>
     </message>
     <message>
-        <location filename="../functional/view/processing_view.py" line="174"/>
+        <location filename="../functional/view/processing_view.py" line="166"/>
         <source>Processing cost: {cost} credits</source>
         <translation>Стоимость обработки: {cost} кредитов</translation>
     </message>
     <message>
-        <location filename="../functional/view/processing_view.py" line="183"/>
+        <location filename="../functional/view/processing_view.py" line="175"/>
         <source> failed with error:
 </source>
         <translation> завершилась с ошибкой:
 </translation>
     </message>
     <message>
-        <location filename="../functional/view/processing_view.py" line="190"/>
+        <location filename="../functional/view/processing_view.py" line="182"/>
         <source>{} processings failed: 
  {} 
  See tooltip over the processings table for error details</source>
@@ -3667,19 +3679,19 @@ Please, make sure you have selected a project</source>
  Наведите курсор мыши на обработку в таблице, чтобы увидеть сообщение об ошибке</translation>
     </message>
     <message>
-        <location filename="../functional/view/processing_view.py" line="197"/>
+        <location filename="../functional/view/processing_view.py" line="189"/>
         <source>{} processings failed: 
  See tooltip over the processings table for error details</source>
         <translation>Завершено с ошибкой {} обработок
  Наведите курсор мыши на обработку в таблице чтобы увидеть сообщение об ошибке</translation>
     </message>
     <message>
-        <location filename="../functional/view/processing_view.py" line="209"/>
+        <location filename="../functional/view/processing_view.py" line="201"/>
         <source> finished. Double-click it in the table to download the results.</source>
         <translation> завершилась. Дважды кликните на нее в таблице, чтобы загрузить результаты.</translation>
     </message>
     <message>
-        <location filename="../functional/view/processing_view.py" line="217"/>
+        <location filename="../functional/view/processing_view.py" line="209"/>
         <source>{} processings finished: 
  {} 
  Double-click it in the table to download the results</source>
@@ -3688,7 +3700,7 @@ Please, make sure you have selected a project</source>
  Двойной клик по строке обработки в таблице скачает результаты</translation>
     </message>
     <message>
-        <location filename="../functional/view/processing_view.py" line="225"/>
+        <location filename="../functional/view/processing_view.py" line="217"/>
         <source>{} processings finished. 
  Double-click it in the table to download the results</source>
         <translation>Завершено успешно {} обработок.
@@ -3824,24 +3836,32 @@ Please, make sure you have selected a project</source>
     </message>
 </context>
 <context>
+    <name>ProjectProcessingController</name>
+    <message>
+        <location filename="../functional/controller/processing_controller.py" line="143"/>
+        <source>Do you really want to remove project {}? This action cannot be undone, all processings will be lost!</source>
+        <translation>Вы действительно хотите удалить проект {}? Это действие нельзя отменить, все обработки будут потеряны!</translation>
+    </message>
+</context>
+<context>
     <name>ProjectService</name>
     <message>
-        <location filename="../functional/service/project_service.py" line="229"/>
+        <location filename="../functional/service/project_service.py" line="228"/>
         <source>Project: &lt;b&gt;{}</source>
         <translation>Проект: &lt;b&gt;{}</translation>
     </message>
     <message>
-        <location filename="../functional/service/project_service.py" line="246"/>
+        <location filename="../functional/service/project_service.py" line="245"/>
         <source>No project selected</source>
         <translation>Проект не выбран</translation>
     </message>
     <message>
-        <location filename="../functional/service/project_service.py" line="248"/>
+        <location filename="../functional/service/project_service.py" line="247"/>
         <source>You can&apos;t remove or modify default project</source>
         <translation>Нельзя удалять или менять проект по умолчанию</translation>
     </message>
     <message>
-        <location filename="../functional/service/project_service.py" line="251"/>
+        <location filename="../functional/service/project_service.py" line="250"/>
         <source>Not enough rights to delete or update shared project ({})</source>
         <translation>Недостаточно прав для удаления или изменения проекта ({})</translation>
     </message>
@@ -3985,70 +4005,85 @@ Please, make sure you have selected a project</source>
 <context>
     <name>ProviderService</name>
     <message>
-        <location filename="../functional/service/provider_service.py" line="104"/>
+        <location filename="../functional/service/provider_service.py" line="105"/>
         <source>Providers are not initialized</source>
         <translation>Провайдеры данных не установлены</translation>
     </message>
     <message>
-        <location filename="../functional/service/provider_service.py" line="169"/>
+        <location filename="../functional/service/provider_service.py" line="175"/>
         <source>Choose imagery collection or image to start processing</source>
         <translation>Выберите изображение или коллекцию для запуска обработки</translation>
     </message>
     <message>
-        <location filename="../functional/service/provider_service.py" line="172"/>
+        <location filename="../functional/service/provider_service.py" line="178"/>
         <source>This provider requires image ID. Use search tab to find imagery for you requirements, and select image in the table.</source>
         <translation>Этому провайдеру нужен ID снимка. Используйте вкладку &quot;Поиск&quot;, чтобы найти изображения по вашим требованиям, и выберите изображение в таблице.</translation>
     </message>
     <message>
-        <location filename="../functional/service/provider_service.py" line="208"/>
+        <location filename="../functional/service/provider_service.py" line="235"/>
         <source>You can launch multiple image processing only if it has the same provider of mosaic type</source>
         <translation>Запуск по нескольким изображениям доступен только если у них один источник мозаичного типа</translation>
     </message>
     <message>
-        <location filename="../functional/service/provider_service.py" line="277"/>
+        <location filename="../functional/service/provider_service.py" line="265"/>
         <source>Duplication failed on copying data source</source>
         <translation>Ошибка дублирования при копировании источника данных</translation>
     </message>
     <message>
-        <location filename="../functional/service/provider_service.py" line="285"/>
+        <location filename="../functional/service/provider_service.py" line="273"/>
         <source>Model &apos;{wd}&apos; is not enabled for your account</source>
         <translation>Модель &apos;{wd}&apos; не подключена к Вашему аккаунту</translation>
     </message>
     <message>
-        <location filename="../functional/service/provider_service.py" line="314"/>
+        <location filename="../functional/service/provider_service.py" line="302"/>
         <source>The following options no longer exist, so they have not been duplicated: {}</source>
         <translation>В настоящий момент данные опции не существуют, поэтому они не были продублированы: {}</translation>
     </message>
     <message>
-        <location filename="../functional/service/provider_service.py" line="319"/>
+        <location filename="../functional/service/provider_service.py" line="307"/>
         <source>Duplication failed on copying model options</source>
         <translation>Ошибка дублирования при копировании опций модели</translation>
     </message>
     <message>
-        <location filename="../functional/service/provider_service.py" line="328"/>
+        <location filename="../functional/service/provider_service.py" line="316"/>
         <source>Provider &apos;{provider}&apos; is not enabled for your account</source>
         <translation>Источник данных &apos;{provider}&apos; не подключён к Вашему аккаунту</translation>
     </message>
     <message>
-        <location filename="../functional/service/provider_service.py" line="404"/>
+        <location filename="../functional/service/provider_service.py" line="392"/>
         <source>Duplicated user provider</source>
         <translation>Дублированный пользовательский источник</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/provider_service.py" line="197"/>
+        <source>Selected search results must be of the same product type</source>
+        <translation>Тип продукта для выбранных результатов поиска должен быть одинаковым</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/provider_service.py" line="199"/>
+        <source>Selected search results must have the same zoom level</source>
+        <translation>Выбранные результаты поиска должны иметь один уровень масштабирования</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/provider_service.py" line="280"/>
+        <source>Duplication failed on copying model</source>
+        <translation>Ошибка дублирования при копировании модели</translation>
     </message>
 </context>
 <context>
     <name>QPlatformTheme</name>
     <message>
-        <location filename="../mapflow.py" line="134"/>
+        <location filename="../mapflow.py" line="142"/>
         <source>Cancel</source>
         <translation>Отмена</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="135"/>
+        <location filename="../mapflow.py" line="143"/>
         <source>&amp;Yes</source>
         <translation>&amp;Да</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="136"/>
+        <location filename="../mapflow.py" line="144"/>
         <source>&amp;No</source>
         <translation>&amp;Нет</translation>
     </message>

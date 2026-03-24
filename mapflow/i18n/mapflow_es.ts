@@ -17,49 +17,49 @@
 <context>
     <name>AreaCalculatorService</name>
     <message>
-        <location filename="../functional/service/area_calculator_service.py" line="54"/>
+        <location filename="../functional/service/area_calculator_service.py" line="65"/>
         <source>Not enough rights to start processing in a shared project ({})</source>
         <translation>No tienes suficientes permisos para iniciar un procesamiento en un proyecto compartido ({})</translation>
     </message>
     <message>
-        <location filename="../functional/service/area_calculator_service.py" line="31"/>
+        <location filename="../functional/service/area_calculator_service.py" line="42"/>
         <source>Set AOI to start processing</source>
         <translation>Establecer Área de Interés para iniciar el procesamiento</translation>
     </message>
     <message>
-        <location filename="../functional/service/area_calculator_service.py" line="56"/>
+        <location filename="../functional/service/area_calculator_service.py" line="67"/>
         <source>AOI must contain not more than {} polygons</source>
         <translation>El Área de Interés no debe contener más de {} polígonos</translation>
     </message>
     <message>
-        <location filename="../functional/service/area_calculator_service.py" line="96"/>
+        <location filename="../functional/service/area_calculator_service.py" line="107"/>
         <source>Use extent of &apos;{name}&apos;</source>
-        <translation>Usar extensión de &apos;{name}&apos;</translation>
+        <translation>Usar extensión de '{name}'</translation>
     </message>
     <message>
-        <location filename="../functional/service/area_calculator_service.py" line="101"/>
+        <location filename="../functional/service/area_calculator_service.py" line="112"/>
         <source>Use imagery extent</source>
         <translation>Usar extensión de la imagen</translation>
     </message>
     <message>
-        <location filename="../functional/service/area_calculator_service.py" line="106"/>
+        <location filename="../functional/service/area_calculator_service.py" line="117"/>
         <source>Selected AOI does not intersect the selected imagery</source>
         <translation>El Área de Interés seleccionada no intersecta con la imagen seleccionada</translation>
     </message>
     <message>
-        <location filename="../functional/service/area_calculator_service.py" line="170"/>
+        <location filename="../functional/service/area_calculator_service.py" line="182"/>
         <source>Area: {:.2f} sq.km</source>
         <translation>Área: {:.2f} km²</translation>
     </message>
     <message>
-        <location filename="../functional/service/area_calculator_service.py" line="178"/>
+        <location filename="../functional/service/area_calculator_service.py" line="191"/>
         <source>Bad AOI. AOI must be inside boundaries: 
 [-180, 180] by longitude, [-90, 90] by latitude</source>
         <translation>Área de Interés inválida. El Área de Interés debe estar dentro de los límites: 
 [-180, 180] en longitud, [-90, 90] en latitud</translation>
     </message>
     <message>
-        <location filename="../functional/service/area_calculator_service.py" line="183"/>
+        <location filename="../functional/service/area_calculator_service.py" line="196"/>
         <source>Providers are not initialized</source>
         <translation>Los proveedores no están inicializados</translation>
     </message>
@@ -201,7 +201,7 @@
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="127"/>
         <source>Could not delete imagery collection &apos;{mosaic_name}&apos;</source>
-        <translation>No se pudo eliminar la colección de imágenes &apos;{mosaic_name}&apos;</translation>
+        <translation>No se pudo eliminar la colección de imágenes '{mosaic_name}'</translation>
     </message>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="129"/>
@@ -223,7 +223,7 @@ Por favor, inténtalo de nuevo más tarde o informa del error</translation>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="230"/>
         <source>Imagery collection &apos;{mosaic_name}&apos; does not exist</source>
-        <translation>La colección de imágenes &apos;{mosaic_name}&apos; no existe</translation>
+        <translation>La colección de imágenes '{mosaic_name}' no existe</translation>
     </message>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="232"/>
@@ -234,13 +234,13 @@ Por favor, inténtalo de nuevo más tarde o informa del error</translation>
         <location filename="../functional/api/data_catalog_api.py" line="234"/>
         <source>The image does not meet this imagery collection &apos;{mosaic_name}&apos; parameters. 
 Either modify your image or upload it to a different collection</source>
-        <translation>La imagen no cumple con los parámetros de esta colección de imágenes &apos;{mosaic_name}&apos;. 
+        <translation>La imagen no cumple con los parámetros de esta colección de imágenes '{mosaic_name}'. 
 Modifica tu imagen o súbela a una colección diferente</translation>
     </message>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="237"/>
         <source>Could not upload &apos;{image}&apos; to imagery collection</source>
-        <translation>No se pudo subir &apos;{image}&apos; a la colección de imágenes</translation>
+        <translation>No se pudo subir '{image}' a la colección de imágenes</translation>
     </message>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="239"/>
@@ -252,7 +252,7 @@ Modifica tu imagen o súbela a una colección diferente</translation>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="275"/>
         <source>Could not delete &apos;{image}&apos; from imagery collection</source>
-        <translation>No se pudo eliminar &apos;{image}&apos; de la colección de imágenes</translation>
+        <translation>No se pudo eliminar '{image}' de la colección de imágenes</translation>
     </message>
     <message>
         <location filename="../functional/api/data_catalog_api.py" line="277"/>
@@ -263,89 +263,89 @@ Modifica tu imagen o súbela a una colección diferente</translation>
 <context>
     <name>DataCatalogService</name>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="81"/>
+        <location filename="../functional/service/data_catalog.py" line="78"/>
         <source>Choose image to upload</source>
         <translation>Elegir imagen para subir</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="123"/>
+        <location filename="../functional/service/data_catalog.py" line="120"/>
         <source>&lt;center&gt;Creation of imagery collection &apos;{mosaic_name}&apos; failed&lt;br&gt;while trying to upload &apos;{image}&apos;</source>
-        <translation>&lt;center&gt;La creación de la colección de imágenes &apos;{mosaic_name}&apos; falló&lt;br&gt;al intentar subir &apos;{image}&apos;</translation>
+        <translation>&lt;center&gt;La creación de la colección de imágenes '{mosaic_name}' falló&lt;br&gt;al intentar subir '{image}'</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/data_catalog.py" line="201"/>
+        <source>&lt;center&gt;Delete imagery collection &lt;b&gt;&apos;{name}&apos;&lt;/b&gt;?</source>
+        <translation>&lt;center&gt;¿Eliminar colección de imágenes &lt;b&gt;'{name}'&lt;/b&gt;?</translation>
     </message>
     <message>
         <location filename="../functional/service/data_catalog.py" line="204"/>
-        <source>&lt;center&gt;Delete imagery collection &lt;b&gt;&apos;{name}&apos;&lt;/b&gt;?</source>
-        <translation>&lt;center&gt;¿Eliminar colección de imágenes &lt;b&gt;&apos;{name}&apos;&lt;/b&gt;?</translation>
+        <source>&lt;center&gt;Delete following imagery collections:&lt;br&gt;&lt;b&gt;&apos;{names}&apos;&lt;/b&gt;?</source>
+        <translation>&lt;center&gt;¿Eliminar las siguientes colecciones de imágenes:&lt;br&gt;&lt;b&gt;'{names}'&lt;/b&gt;?</translation>
     </message>
     <message>
         <location filename="../functional/service/data_catalog.py" line="207"/>
-        <source>&lt;center&gt;Delete following imagery collections:&lt;br&gt;&lt;b&gt;&apos;{names}&apos;&lt;/b&gt;?</source>
-        <translation>&lt;center&gt;¿Eliminar las siguientes colecciones de imágenes:&lt;br&gt;&lt;b&gt;&apos;{names}&apos;&lt;/b&gt;?</translation>
-    </message>
-    <message>
-        <location filename="../functional/service/data_catalog.py" line="210"/>
         <source>&lt;center&gt;Delete &lt;b&gt;{len}&lt;/b&gt; imagery collections?</source>
         <translation>&lt;center&gt;¿Eliminar &lt;b&gt;{len}&lt;/b&gt; colecciones de imágenes?</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="251"/>
+        <location filename="../functional/service/data_catalog.py" line="247"/>
         <source>Please, select existing imagery collection</source>
         <translation>Por favor, selecciona una colección de imágenes existente</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="253"/>
+        <location filename="../functional/service/data_catalog.py" line="249"/>
         <source>Choose images to upload</source>
         <translation>Elegir imágenes para subir</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="302"/>
+        <location filename="../functional/service/data_catalog.py" line="298"/>
         <source>Raster TIFF file must be georeferenced, have size less than {size} pixels and file size less than {memory}</source>
         <translation>El archivo TIFF ráster debe estar georreferenciado, tener un tamaño menor a {size} píxeles y tamaño de archivo menor a {memory}</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="306"/>
+        <location filename="../functional/service/data_catalog.py" line="302"/>
         <source>&lt;center&gt;&lt;b&gt;Error uploading &apos;{name}&apos;&lt;/b&gt;</source>
-        <translation>&lt;center&gt;&lt;b&gt;Error al subir &apos;{name}&apos;&lt;/b&gt;</translation>
+        <translation>&lt;center&gt;&lt;b&gt;Error al subir '{name}'&lt;/b&gt;</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="311"/>
+        <location filename="../functional/service/data_catalog.py" line="307"/>
         <source>&lt;b&gt;Not enough storage space. &lt;/b&gt;You have {free_storage} left, but &apos;{name}&apos; is {image_size}</source>
-        <translation>&lt;b&gt;No hay suficiente espacio de almacenamiento. &lt;/b&gt;Te quedan {free_storage}, pero &apos;{name}&apos; ocupa {image_size}</translation>
+        <translation>&lt;b&gt;No hay suficiente espacio de almacenamiento. &lt;/b&gt;Te quedan {free_storage}, pero '{name}' ocupa {image_size}</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="406"/>
+        <location filename="../functional/service/data_catalog.py" line="402"/>
         <source>&lt;center&gt;Delete image &lt;b&gt;&apos;{name}&apos;&lt;/b&gt; from &apos;{mosaic}&apos; imagery collection?</source>
-        <translation>&lt;center&gt;¿Eliminar imagen &lt;b&gt;&apos;{name}&apos;&lt;/b&gt; de la colección de imágenes &apos;{mosaic}&apos;?</translation>
+        <translation>&lt;center&gt;¿Eliminar imagen &lt;b&gt;'{name}'&lt;/b&gt; de la colección de imágenes '{mosaic}'?</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="409"/>
+        <location filename="../functional/service/data_catalog.py" line="405"/>
         <source>&lt;center&gt;Delete following images from &apos;{mosaic}&apos; imagery collection:&lt;br&gt;&lt;b&gt;&apos;{names}&apos;&lt;/b&gt;?</source>
-        <translation>&lt;center&gt;¿Eliminar las siguientes imágenes de la colección de imágenes &apos;{mosaic}&apos;:&lt;br&gt;&lt;b&gt;&apos;{names}&apos;&lt;/b&gt;?</translation>
+        <translation>&lt;center&gt;¿Eliminar las siguientes imágenes de la colección de imágenes '{mosaic}':&lt;br&gt;&lt;b&gt;'{names}'&lt;/b&gt;?</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="412"/>
+        <location filename="../functional/service/data_catalog.py" line="408"/>
         <source>&lt;center&gt;Delete &lt;b&gt;{len}&lt;/b&gt; images from &apos;{mosaic}&apos; imagery collection?</source>
-        <translation>&lt;center&gt;¿Eliminar &lt;b&gt;{len}&lt;/b&gt; imágenes de la colección de imágenes &apos;{mosaic}&apos;?</translation>
+        <translation>&lt;center&gt;¿Eliminar &lt;b&gt;{len}&lt;/b&gt; imágenes de la colección de imágenes '{mosaic}'?</translation>
     </message>
     <message>
         <location filename="../functional/service/data_catalog.py" line="462"/>
         <source>Please, select existing output directory in the Settings tab</source>
-        <translation>Por favor, selecciona un directorio de salida existente en la pestaña Configuración</translation>
+        <translation type="obsolete">Por favor, selecciona un directorio de salida existente en la pestaña Configuración</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="501"/>
+        <location filename="../functional/service/data_catalog.py" line="497"/>
         <source>Image name should be 1-255 characters long</source>
         <translation>El nombre de la imagen debe tener entre 1 y 255 caracteres</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="627"/>
+        <location filename="../functional/service/data_catalog.py" line="624"/>
         <source>Source imagery collection with id &apos;{}&apos; was not found </source>
-        <translation>No se encontró la colección de imágenes fuente con id &apos;{}&apos;</translation>
+        <translation>No se encontró la colección de imágenes fuente con id '{}'</translation>
     </message>
     <message>
-        <location filename="../functional/service/data_catalog.py" line="629"/>
+        <location filename="../functional/service/data_catalog.py" line="626"/>
         <source>Source image with id &apos;{}&apos; was not found in any of your imagery collections</source>
-        <translation>No se encontró la imagen fuente con id &apos;{}&apos; en ninguna de tus colecciones de imágenes</translation>
+        <translation>No se encontró la imagen fuente con id '{}' en ninguna de tus colecciones de imágenes</translation>
     </message>
 </context>
 <context>
@@ -495,12 +495,12 @@ Etiquetas: {tags}</translation>
     <message>
         <location filename="../functional/view/data_catalog_view.py" line="345"/>
         <source>No imagery collection with id &apos;{mosaic_id}&apos; was found</source>
-        <translation>No se encontró ninguna colección de imágenes con id &apos;{mosaic_id}&apos;</translation>
+        <translation>No se encontró ninguna colección de imágenes con id '{mosaic_id}'</translation>
     </message>
     <message>
         <location filename="../functional/view/data_catalog_view.py" line="358"/>
         <source>No image with id &apos;{image_id}&apos; was found</source>
-        <translation>No se encontró ninguna imagen con id &apos;{image_id}&apos;</translation>
+        <translation>No se encontró ninguna imagen con id '{image_id}'</translation>
     </message>
     <message>
         <location filename="../functional/view/data_catalog_view.py" line="372"/>
@@ -543,12 +543,12 @@ Bandas: {count}</translation>
     <message>
         <location filename="../functional/view/data_catalog_view.py" line="456"/>
         <source>&apos;Cmd&apos; + click to deselect</source>
-        <translation>&apos;Cmd&apos; + clic para deseleccionar</translation>
+        <translation>'Cmd' + clic para deseleccionar</translation>
     </message>
     <message>
         <location filename="../functional/view/data_catalog_view.py" line="456"/>
         <source>&apos;Ctrl&apos; + click to deselect</source>
-        <translation>&apos;Ctrl&apos; + clic para deseleccionar</translation>
+        <translation>'Ctrl' + clic para deseleccionar</translation>
     </message>
     <message>
         <location filename="../functional/view/data_catalog_view.py" line="473"/>
@@ -1380,255 +1380,253 @@ Precio: {} créditos por km cuadrado</translation>
 <context>
     <name>Mapflow</name>
     <message>
-        <location filename="../mapflow.py" line="234"/>
+        <location filename="../mapflow.py" line="245"/>
         <source>Error during loading the data providers: {e}</source>
         <translation>Error durante la carga de los proveedores de datos: {e}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="236"/>
+        <location filename="../mapflow.py" line="247"/>
         <source>We failed to import providers from the settings. Please add them again</source>
         <translation>Fallamos al importar proveedores desde la configuración. Por favor, añádelos nuevamente</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="315"/>
+        <location filename="../mapflow.py" line="253"/>
         <source>Draw AOI at the map</source>
         <translation>Dibujar Área de Interés en el mapa</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1631"/>
+        <location filename="../mapflow.py" line="254"/>
         <source>Use imagery extent</source>
         <translation>Usar extensión de la imagen</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="318"/>
+        <location filename="../mapflow.py" line="256"/>
         <source>Create AOI from map extent</source>
         <translation>Crear Área de Interés desde la extensión del mapa</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="441"/>
+        <location filename="../mapflow.py" line="453"/>
         <source>Choose imagery collection or image to start processing</source>
         <translation>Elige una colección de imágenes o imagen para iniciar el procesamiento</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="610"/>
+        <location filename="../mapflow.py" line="609"/>
         <source>Log in </source>
         <translation>Iniciar sesión </translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="671"/>
+        <location filename="../mapflow.py" line="676"/>
         <source>This provider is default and cannot be removed</source>
         <translation>Este proveedor es por defecto y no puede ser eliminado</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="675"/>
+        <location filename="../mapflow.py" line="680"/>
         <source>Permanently remove {}?</source>
         <translation>¿Eliminar permanentemente {}?</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="707"/>
+        <location filename="../mapflow.py" line="712"/>
         <source>Provider name must be unique. {name} already exists, select another or delete/edit existing</source>
         <translation>El nombre del proveedor debe ser único. {name} ya existe, selecciona otro o elimina/edita el existente</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="719"/>
+        <location filename="../mapflow.py" line="723"/>
         <source>Add new provider</source>
         <translation>Añadir nuevo proveedor</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="727"/>
+        <location filename="../mapflow.py" line="731"/>
         <source>This is a default provider, it cannot be edited</source>
         <translation>Este es un proveedor por defecto, no puede ser editado</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="786"/>
+        <location filename="../mapflow.py" line="779"/>
         <source>If you already know which {provider_name} image you want to process,
 simply paste its ID here. Otherwise, search suitable images in the catalog below.</source>
         <translation>Si ya sabes qué imagen de {provider_name} quieres procesar,
 simplemente pega su ID aquí. De lo contrario, busca imágenes adecuadas en el catálogo a continuación.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="778"/>
+        <location filename="../mapflow.py" line="771"/>
         <source>e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00</source>
         <translation>ej. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="790"/>
+        <location filename="../mapflow.py" line="783"/>
         <source>e.g. a3b154c40cc74f3b934c0ffc9b34ecd1</source>
         <translation>ej. a3b154c40cc74f3b934c0ffc9b34ecd1</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="819"/>
+        <location filename="../mapflow.py" line="812"/>
         <source>Select output directory</source>
         <translation>Seleccionar directorio de salida</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="838"/>
+        <location filename="../mapflow.py" line="829"/>
         <source>Please, specify an existing output directory</source>
         <translation>Por favor, especifica un directorio de salida existente</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1711"/>
+        <location filename="../mapflow.py" line="1547"/>
         <source>Please, select a valid area of interest</source>
         <translation>Por favor, selecciona un área de interés válida</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="992"/>
+        <location filename="../mapflow.py" line="969"/>
         <source>We couldn&apos;t get metadata from the Mapflow Imagery Catalog</source>
         <translation>No pudimos obtener metadatos del Catálogo de Imágenes de Mapflow</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="995"/>
+        <location filename="../mapflow.py" line="972"/>
         <source>. Error {error}</source>
         <translation>. Error {error}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1396"/>
+        <location filename="../mapflow.py" line="1373"/>
         <source>No images match your criteria. Try relaxing the filters.</source>
         <translation>Ninguna imagen coincide con tus criterios. Intenta relajar los filtros.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1039"/>
+        <location filename="../mapflow.py" line="1016"/>
         <source>&lt;b&gt;Results could not be loaded &lt;/b&gt;&lt;br&gt;Please, make sure you chose the right output folder in the Settings tab                                 and you have access rights to this folder</source>
         <translation>&lt;b&gt;No se pudieron cargar los resultados &lt;/b&gt;&lt;br&gt;Por favor, asegúrate de haber elegido la carpeta de salida correcta en la pestaña Configuración                                 y de que tienes derechos de acceso a esta carpeta</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1082"/>
+        <location filename="../mapflow.py" line="1059"/>
         <source>Your area of interest is too large.</source>
         <translation>Tu área de interés es demasiado grande.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1185"/>
+        <location filename="../mapflow.py" line="1162"/>
         <source>Please, check your credentials</source>
         <translation>Por favor, verifica tus credenciales</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1339"/>
+        <location filename="../mapflow.py" line="1316"/>
         <source>We couldn&apos;t fetch Sentinel metadata</source>
         <translation>No pudimos obtener metadatos de Sentinel</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1306"/>
+        <location filename="../mapflow.py" line="1283"/>
         <source>More</source>
         <translation>Más</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1425"/>
+        <location filename="../mapflow.py" line="1402"/>
         <source>Please, check your Maxar credentials</source>
         <translation>Por favor, verifica tus credenciales de Maxar</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1427"/>
+        <location filename="../mapflow.py" line="1404"/>
         <source>We couldn&apos;t get metadata from Maxar, error {error}</source>
         <translation>No pudimos obtener metadatos de Maxar, error {error}</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1531"/>
+        <location filename="../mapflow.py" line="1520"/>
         <source>A Sentinel image ID should look like S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 or /36/S/XA/2022/02/09/0/</source>
         <translation>Un ID de imagen de Sentinel debe verse como S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 o /36/S/XA/2022/02/09/0/</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1539"/>
+        <location filename="../mapflow.py" line="1528"/>
         <source>A Maxar image ID should look like a3b154c40cc74f3b934c0ffc9b34ecd1</source>
         <translation>Un ID de imagen de Maxar debe verse como a3b154c40cc74f3b934c0ffc9b34ecd1</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1577"/>
         <source>Not enough rights to start processing in a shared project ({})</source>
-        <translation>No tienes suficientes permisos para iniciar un procesamiento en un proyecto compartido ({})</translation>
+        <translation type="obsolete">No tienes suficientes permisos para iniciar un procesamiento en un proyecto compartido ({})</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1554"/>
         <source>Set AOI to start processing</source>
-        <translation>Establecer Área de Interés para iniciar el procesamiento</translation>
+        <translation type="obsolete">Establecer Área de Interés para iniciar el procesamiento</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1579"/>
         <source>AOI must contain not more than {} polygons</source>
-        <translation>El Área de Interés no debe contener más de {} polígonos</translation>
+        <translation type="obsolete">El Área de Interés no debe contener más de {} polígonos</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1621"/>
         <source>Use extent of &apos;{name}&apos;</source>
-        <translation>Usar extensión de &apos;{name}&apos;</translation>
+        <translation type="obsolete">Usar extensión de '{name}'</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1623"/>
         <source>Select AOI to start processing</source>
-        <translation>Seleccionar Área de Interés para iniciar el procesamiento</translation>
+        <translation type="obsolete">Seleccionar Área de Interés para iniciar el procesamiento</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1858"/>
         <source>Selected AOI does not intersect the selected imagery</source>
-        <translation>El Área de Interés seleccionada no intersecta con la imagen seleccionada</translation>
+        <translation type="obsolete">El Área de Interés seleccionada no intersecta con la imagen seleccionada</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1699"/>
         <source>Area: {:.2f} sq.km</source>
-        <translation>Área: {:.2f} km²</translation>
+        <translation type="obsolete">Área: {:.2f} km²</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1833"/>
         <source>Error! Models are not initialized.
 Please, make sure you have selected a project</source>
-        <translation>¡Error! Los modelos no están inicializados.
+        <translation type="obsolete">¡Error! Los modelos no están inicializados.
 Por favor, asegúrate de haber seleccionado un proyecto</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1845"/>
         <source>Processing cost is not available:
 {error}</source>
-        <translation>El costo del procesamiento no está disponible:
+        <translation type="obsolete">El costo del procesamiento no está disponible:
 {error}</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1860"/>
         <source>This provider requires image ID. Use search tab to find imagery for you requirements, and select image in the table.</source>
-        <translation>Este proveedor requiere ID de imagen. Usa la pestaña de búsqueda para encontrar imágenes según tus requisitos y selecciona la imagen en la tabla.</translation>
+        <translation type="obsolete">Este proveedor requiere ID de imagen. Usa la pestaña de búsqueda para encontrar imágenes según tus requisitos y selecciona la imagen en la tabla.</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1854"/>
         <source>Choose imagery to start processing</source>
-        <translation>Elige imágenes para iniciar el procesamiento</translation>
+        <translation type="obsolete">Elige imágenes para iniciar el procesamiento</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1878"/>
-        <source>Processing cost is not available:
-{message}</source>
-        <translation>El costo del procesamiento no está disponible:
-{message}</translation>
+        <source>Sorry, there&apos;s no preview for this image</source>
+        <translation>Lo sentimos, no hay vista previa para esta imagen</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1885"/>
         <source>Processsing cost: {cost} credits</source>
-        <translation>Costo del procesamiento: {cost} créditos</translation>
+        <translation type="obsolete">Costo del procesamiento: {cost} créditos</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1899"/>
         <source>Delete selected processings?</source>
-        <translation>¿Eliminar los procesamientos seleccionados?</translation>
+        <translation type="obsolete">¿Eliminar los procesamientos seleccionados?</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1925"/>
         <source>Error deleting a processing</source>
-        <translation>Error al eliminar un procesamiento</translation>
+        <translation type="obsolete">Error al eliminar un procesamiento</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1706"/>
+        <location filename="../mapflow.py" line="1542"/>
         <source>Please, specify a name for your processing</source>
         <translation>Por favor, especifica un nombre para tu procesamiento</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1709"/>
+        <location filename="../mapflow.py" line="1545"/>
         <source>Processing area layer is corrupted or has invalid projection</source>
         <translation>La capa del área de procesamiento está corrupta o tiene proyección inválida</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1713"/>
+        <location filename="../mapflow.py" line="1549"/>
         <source>Up to {} sq km can be processed at a time. Try splitting your area(s) into several processings.</source>
         <translation>Se pueden procesar hasta {} km² a la vez. Intenta dividir tu(s) área(s) en varios procesamientos.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="1760"/>
+        <location filename="../mapflow.py" line="1565"/>
         <source>Providers are not initialized</source>
         <translation>Los proveedores no están inicializados</translation>
     </message>
@@ -1636,248 +1634,243 @@ Por favor, asegúrate de haber seleccionado un proyecto</translation>
         <location filename="../mapflow.py" line="1755"/>
         <source>Bad AOI. AOI must be inside boundaries: 
 [-180, 180] by longitude, [-90, 90] by latitude</source>
-        <translation>Área de Interés inválida. El Área de Interés debe estar dentro de los límites: 
+        <translation type="obsolete">Área de Interés inválida. El Área de Interés debe estar dentro de los límites: 
 [-180, 180] en longitud, [-90, 90] en latitud</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1865"/>
         <source>No project is selected</source>
-        <translation>No se seleccionó ningún proyecto</translation>
+        <translation type="obsolete">No se seleccionó ningún proyecto</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1894"/>
         <source>Processing limit exceeded. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; to top up your balance</source>
-        <translation>Límite de procesamiento excedido. Visita &lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt; para recargar tu saldo</translation>
+        <translation type="obsolete">Límite de procesamiento excedido. Visita &lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt; para recargar tu saldo</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1901"/>
         <source>Starting the processing...</source>
-        <translation>Iniciando el procesamiento...</translation>
+        <translation type="obsolete">Iniciando el procesamiento...</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1906"/>
         <source>Could not launch processing! Error: {}.</source>
-        <translation>¡No se pudo lanzar el procesamiento! Error: {}.</translation>
+        <translation type="obsolete">¡No se pudo lanzar el procesamiento! Error: {}.</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1920"/>
         <source>{cost} credits</source>
-        <translation>{cost} créditos</translation>
+        <translation type="obsolete">{cost} créditos</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1953"/>
         <source> sq.km</source>
-        <translation> km²</translation>
+        <translation type="obsolete"> km²</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="2205"/>
         <source>We couldn&apos;t upload your GeoTIFF</source>
-        <translation>No pudimos subir tu GeoTIFF</translation>
+        <translation type="obsolete">No pudimos subir tu GeoTIFF</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="2227"/>
         <source>Success! We&apos;ll notify you when the processing has finished.</source>
-        <translation>¡Éxito! Te notificaremos cuando el procesamiento haya terminado.</translation>
+        <translation type="obsolete">¡Éxito! Te notificaremos cuando el procesamiento haya terminado.</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="1992"/>
         <source>The selected data provider is unavailable on your plan. 
  Upgrade your subscription to get access to the data. 
 See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&lt;/a&gt;</source>
-        <translation>El proveedor de datos seleccionado no está disponible en tu plan. 
+        <translation type="obsolete">El proveedor de datos seleccionado no está disponible en tu plan. 
  Actualiza tu suscripción para acceder a los datos. 
 Ver precios en &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&lt;/a&gt;</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="2003"/>
         <source>Processing creation failed</source>
-        <translation>La creación del procesamiento falló</translation>
+        <translation type="obsolete">La creación del procesamiento falló</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2033"/>
+        <location filename="../mapflow.py" line="1594"/>
         <source>Your balance: {} credits</source>
         <translation>Tu saldo: {} créditos</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2035"/>
+        <location filename="../mapflow.py" line="1596"/>
         <source>Remaining limit: {:.2f} sq.km</source>
         <translation>Límite restante: {:.2f} km²</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2082"/>
+        <location filename="../mapflow.py" line="1642"/>
         <source>Show all</source>
         <translation>Mostrar todos</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2132"/>
+        <location filename="../mapflow.py" line="1692"/>
         <source>Sorry, we couldn&apos;t load the image</source>
         <translation>Lo sentimos, no pudimos cargar la imagen</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2133"/>
+        <location filename="../mapflow.py" line="1693"/>
         <source>Error previewing Sentinel imagery</source>
         <translation>Error al previsualizar imágenes Sentinel</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2138"/>
+        <location filename="../mapflow.py" line="1698"/>
         <source>Preview is unavailable when metadata layer is removed</source>
         <translation>La vista previa no está disponible cuando se elimina la capa de metadatos</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2174"/>
+        <location filename="../mapflow.py" line="1734"/>
         <source>Selected imagery has no preview</source>
         <translation>La imagen seleccionada no tiene vista previa</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2179"/>
+        <location filename="../mapflow.py" line="1739"/>
         <source>Preview with such URL is unavailable</source>
         <translation>La vista previa con dicha URL no está disponible</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2186"/>
+        <location filename="../mapflow.py" line="1746"/>
         <source>Preview for &apos;{iid}&apos; is unavailable</source>
-        <translation>La vista previa para &apos;{iid}&apos; no está disponible</translation>
+        <translation>La vista previa para '{iid}' no está disponible</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2284"/>
+        <location filename="../mapflow.py" line="1844"/>
         <source>Could not display preview</source>
         <translation>No se pudo mostrar la vista previa</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2318"/>
-        <source>Sorry, there&apos;s no preview for this image</source>
-        <translation>Lo sentimos, no hay vista previa para esta imagen</translation>
-    </message>
-    <message>
-        <location filename="../mapflow.py" line="2422"/>
+        <location filename="../mapflow.py" line="1982"/>
         <source>We couldn&apos;t load a preview for this image</source>
         <translation>No pudimos cargar una vista previa para esta imagen</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2333"/>
+        <location filename="../mapflow.py" line="1893"/>
         <source>Please, select an image to preview</source>
         <translation>Por favor, selecciona una imagen para previsualizar</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2393"/>
+        <location filename="../mapflow.py" line="1953"/>
         <source>Provider {name} requires image id for preview!</source>
         <translation>¡El proveedor {name} requiere ID de imagen para la vista previa!</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2397"/>
+        <location filename="../mapflow.py" line="1957"/>
         <source>Preview is unavailable for the provider {}. 
 OSM layer will be added instead.</source>
         <translation>La vista previa no está disponible para el proveedor {}. 
 En su lugar se añadirá la capa OSM.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2434"/>
+        <location filename="../mapflow.py" line="1994"/>
         <source>This provider requires image ID!</source>
         <translation>¡Este proveedor requiere ID de imagen!</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2535"/>
+        <location filename="../mapflow.py" line="2095"/>
         <source>Only finished processings can be rated</source>
         <translation>Solo los procesamientos finalizados pueden ser calificados</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2538"/>
+        <location filename="../mapflow.py" line="2098"/>
         <source>Processing must be in `Review required` status</source>
         <translation>El procesamiento debe estar en estado `Revisión requerida`</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2554"/>
+        <location filename="../mapflow.py" line="2114"/>
         <source>Thank you! Your rating is submitted!
 We would appreciate if you add feedback as well.</source>
         <translation>¡Gracias! ¡Tu calificación ha sido enviada!
 Agradeceríamos si también añades comentarios.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2561"/>
+        <location filename="../mapflow.py" line="2121"/>
         <source>Thank you! Your rating and feedback are submitted!</source>
         <translation>¡Gracias! ¡Tu calificación y comentarios han sido enviados!</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="2570"/>
         <source>Only correctly finished processings (status OK) can be reviewed</source>
-        <translation>Solo los procesamientos correctamente finalizados (estado OK) pueden ser revisados</translation>
+        <translation type="obsolete">Solo los procesamientos correctamente finalizados (estado OK) pueden ser revisados</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2576"/>
+        <location filename="../mapflow.py" line="2136"/>
         <source>Not enough rights to rate processing in a shared project ({})</source>
         <translation>No tienes suficientes permisos para calificar un procesamiento en un proyecto compartido ({})</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2579"/>
+        <location filename="../mapflow.py" line="2139"/>
         <source>Please select processing</source>
         <translation>Por favor, selecciona un procesamiento</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2581"/>
+        <location filename="../mapflow.py" line="2141"/>
         <source>Only correctly finished processings (status OK) can be rated</source>
         <translation>Solo los procesamientos correctamente finalizados (estado OK) pueden ser calificados</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2583"/>
+        <location filename="../mapflow.py" line="2143"/>
         <source>Please select rating to submit</source>
         <translation>Por favor, selecciona una calificación para enviar</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2645"/>
+        <location filename="../mapflow.py" line="2205"/>
         <source>Only the results of correctly finished processing can be loaded</source>
         <translation>Solo los resultados de procesamientos correctamente finalizados pueden ser cargados</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2659"/>
+        <location filename="../mapflow.py" line="2219"/>
         <source>Directory &apos;{}&apos; does not exist</source>
-        <translation>El directorio &apos;{}&apos; no existe</translation>
+        <translation>El directorio '{}' no existe</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2659"/>
+        <location filename="../mapflow.py" line="2219"/>
         <source>&lt;br&gt;Using Settings tab, change the output directory to an existing one to download the results</source>
         <translation>&lt;br&gt;Usando la pestaña Configuración, cambia el directorio de salida a uno existente para descargar los resultados</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2718"/>
+        <location filename="../mapflow.py" line="2278"/>
         <source>We have just set the authentication config for you. 
  You may need to restart QGIS to apply it so you could log in</source>
         <translation>Acabamos de configurar la autenticación para ti. 
  Es posible que necesites reiniciar QGIS para aplicarla y poder iniciar sesión</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2743"/>
+        <location filename="../mapflow.py" line="2303"/>
         <source>Please restart QGIS before using OAuth2 login.</source>
         <translation>Por favor, reinicia QGIS antes de usar el inicio de sesión OAuth2.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2805"/>
+        <location filename="../mapflow.py" line="2365"/>
         <source>Wrong token. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/api&quot;&gt;mapflow.ai&lt;/a&gt;&quot; to get a new one</source>
         <translation>Token incorrecto. Visita &lt;a href=&quot;https://app.mapflow.ai/account/api&quot;&gt;mapflow.ai&lt;/a&gt; para obtener uno nuevo</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2837"/>
+        <location filename="../mapflow.py" line="2397"/>
         <source>Proxy error. Please, check your proxy settings.</source>
         <translation>Error de proxy. Por favor, verifica la configuración de tu proxy.</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2841"/>
+        <location filename="../mapflow.py" line="2401"/>
         <source>Not enough rights for this action
 in a shared project &apos;{project_name}&apos; ({user_role})</source>
         <translation>No tienes suficientes permisos para esta acción
-en un proyecto compartido &apos;{project_name}&apos; ({user_role})</translation>
+en un proyecto compartido '{project_name}' ({user_role})</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2847"/>
+        <location filename="../mapflow.py" line="2407"/>
         <source>This operation is forbidden for your account, contact us</source>
         <translation>Esta operación está prohibida para tu cuenta, contáctanos</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2852"/>
+        <location filename="../mapflow.py" line="2412"/>
         <source>Error</source>
         <translation>Error</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2958"/>
+        <location filename="../mapflow.py" line="2518"/>
         <source>You must upgrade your plugin version to continue work with Mapflow. 
 The server requires version {server_version}, your plugin is {local_version}
 Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
@@ -1886,7 +1879,7 @@ El servidor requiere la versión {server_version}, tu complemento es {local_vers
 Ve a Complementos -&gt; Administrar e instalar complementos -&gt; Actualizables</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="2968"/>
+        <location filename="../mapflow.py" line="2528"/>
         <source>A new version of Mapflow plugin {server_version} is released 
 We recommend you to upgrade to get all the latest features
 Go to Plugins -&gt; Manage and Install Plugins -&gt; Upgradable</source>
@@ -1897,12 +1890,17 @@ Ve a Complementos -&gt; Administrar e instalar complementos -&gt; Actualizables<
     <message>
         <location filename="../mapflow.py" line="3043"/>
         <source>You can launch multiple image processing only if they have the same provider</source>
-        <translation>Solo puedes lanzar múltiples procesamientos de imágenes si tienen el mismo proveedor</translation>
+        <translation type="obsolete">Solo puedes lanzar múltiples procesamientos de imágenes si tienen el mismo proveedor</translation>
     </message>
     <message>
         <location filename="../mapflow.py" line="3072"/>
         <source>Selected search results must have the same zoom level</source>
-        <translation>Los resultados de búsqueda seleccionados deben tener el mismo nivel de zoom</translation>
+        <translation type="obsolete">Los resultados de búsqueda seleccionados deben tener el mismo nivel de zoom</translation>
+    </message>
+    <message>
+        <location filename="../mapflow.py" line="2130"/>
+        <source>Only correctly finished processings with &apos;Review required&apos; status can be reviewed</source>
+        <translation>Solo los procesamientos finalizados correctamente con estado &apos;Revisión requerida&apos; pueden ser revisados</translation>
     </message>
 </context>
 <context>
@@ -1979,7 +1977,7 @@ Ve a Complementos -&gt; Administrar e instalar complementos -&gt; Actualizables<
     <message>
         <location filename="../errors/processing_errors.py" line="17"/>
         <source>Key &apos;url&apos; in your request must be a string, got {url_type} instead.</source>
-        <translation>La clave &apos;url&apos; en tu solicitud debe ser una cadena, se obtuvo {url_type} en su lugar.</translation>
+        <translation>La clave 'url' en tu solicitud debe ser una cadena, se obtuvo {url_type} en su lugar.</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="19"/>
@@ -1994,7 +1992,7 @@ Ve a Complementos -&gt; Administrar e instalar complementos -&gt; Actualizables<
     <message>
         <location filename="../errors/processing_errors.py" line="24"/>
         <source>Format of &apos;url&apos; is invalid and cannot be parsed. Error: {parse_error_message}</source>
-        <translation>El formato de &apos;url&apos; es inválido y no puede ser analizado. Error: {parse_error_message}</translation>
+        <translation>El formato de 'url' es inválido y no puede ser analizado. Error: {parse_error_message}</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="26"/>
@@ -2029,7 +2027,7 @@ Ve a Complementos -&gt; Administrar e instalar complementos -&gt; Actualizables<
     <message>
         <location filename="../errors/processing_errors.py" line="35"/>
         <source>Request must contain either &apos;profile&apos; or &apos;url&apos; keys</source>
-        <translation>La solicitud debe contener las claves &apos;profile&apos; o &apos;url&apos;</translation>
+        <translation>La solicitud debe contener las claves 'profile' o 'url'</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="36"/>
@@ -2064,7 +2062,7 @@ Ve a Complementos -&gt; Administrar e instalar complementos -&gt; Actualizables<
     <message>
         <location filename="../errors/processing_errors.py" line="49"/>
         <source>Your &apos;url&apos; doesn&apos;t match the format, Quadkey basemap must be a link containing &quot;q&quot; placeholder.</source>
-        <translation>Tu &apos;url&apos; no coincide con el formato, el mapa base Quadkey debe ser un enlace que contenga el marcador &quot;q&quot;.</translation>
+        <translation>Tu 'url' no coincide con el formato, el mapa base Quadkey debe ser un enlace que contenga el marcador &quot;q&quot;.</translation>
     </message>
     <message>
         <location filename="../errors/processing_errors.py" line="52"/>
@@ -2190,166 +2188,180 @@ Ve a Complementos -&gt; Administrar e instalar complementos -&gt; Actualizables<
 <context>
     <name>ProcessingService</name>
     <message>
-        <location filename="../functional/service/processing_service.py" line="85"/>
+        <location filename="../functional/service/processing_service.py" line="84"/>
         <source>Specify processing parameters</source>
         <translation>Especifica los parámetros del procesamiento</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="92"/>
+        <location filename="../functional/service/processing_service.py" line="89"/>
         <source>Please, specify a name for your processing</source>
         <translation>Por favor, especifica un nombre para tu procesamiento</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="95"/>
+        <location filename="../functional/service/processing_service.py" line="94"/>
         <source>Processing area layer is corrupted or has invalid projection</source>
         <translation>La capa del área de procesamiento está corrupta o tiene proyección inválida</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="97"/>
+        <location filename="../functional/service/processing_service.py" line="96"/>
         <source>Please, select a valid area of interest</source>
         <translation>Por favor, selecciona un área de interés válida</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="99"/>
+        <location filename="../functional/service/processing_service.py" line="98"/>
         <source>Up to {} sq km can be processed at a time. Try splitting your area(s) into several processings.</source>
         <translation>Se pueden procesar hasta {} km² a la vez. Intenta dividir tu(s) área(s) en varios procesamientos.</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="103"/>
+        <location filename="../functional/service/processing_service.py" line="102"/>
         <source>Selected AOI does not intersect the selected imagery</source>
         <translation>El Área de Interés seleccionada no intersecta con la imagen seleccionada</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="105"/>
+        <location filename="../functional/service/processing_service.py" line="104"/>
         <source>This provider requires image ID. Use search tab to find imagery for you requirements, and select image in the table.</source>
         <translation>Este proveedor requiere ID de imagen. Usa la pestaña de búsqueda para encontrar imágenes según tus requisitos y selecciona la imagen en la tabla.</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="461"/>
+        <location filename="../functional/service/processing_service.py" line="429"/>
         <source>Not enough rights to start processing in a shared project ({})</source>
         <translation>No tienes suficientes permisos para iniciar un procesamiento en un proyecto compartido ({})</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="119"/>
+        <location filename="../functional/service/processing_service.py" line="118"/>
         <source>Set AOI to start processing</source>
         <translation>Establecer Área de Interés para iniciar el procesamiento</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="121"/>
+        <location filename="../functional/service/processing_service.py" line="120"/>
         <source>Error! Models are not initialized.
 Please, make sure you have selected a project</source>
         <translation>¡Error! Los modelos no están inicializados.
 Por favor, asegúrate de haber seleccionado un proyecto</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="162"/>
+        <location filename="../functional/service/processing_service.py" line="157"/>
         <source>Processing limit exceeded. Visit &quot;&lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt;&quot; to top up your balance</source>
         <translation>Límite de procesamiento excedido. Visita &lt;a href=&quot;https://app.mapflow.ai/account/balance&quot;&gt;Mapflow&lt;/a&gt; para recargar tu saldo</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="170"/>
+        <location filename="../functional/service/processing_service.py" line="171"/>
         <source>Starting the processing...</source>
         <translation>Iniciando el procesamiento...</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="177"/>
+        <location filename="../functional/service/processing_service.py" line="183"/>
         <source>Could not launch processing! Error: {}.</source>
         <translation>¡No se pudo lanzar el procesamiento! Error: {}.</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="191"/>
+        <location filename="../functional/service/processing_service.py" line="209"/>
         <source>{cost} credits</source>
         <translation>{cost} créditos</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="195"/>
+        <location filename="../functional/service/processing_service.py" line="213"/>
         <source> sq.km</source>
         <translation> km²</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="242"/>
+        <location filename="../functional/service/processing_service.py" line="255"/>
         <source>Success! We&apos;ll notify you when the processing has finished.</source>
         <translation>¡Éxito! Te notificaremos cuando el procesamiento haya terminado.</translation>
     </message>
     <message>
         <location filename="../functional/service/processing_service.py" line="260"/>
         <source>Failed to start processing</source>
-        <translation>Error al iniciar el procesamiento</translation>
+        <translation type="obsolete">Error al iniciar el procesamiento</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="329"/>
+        <location filename="../functional/service/processing_service.py" line="363"/>
         <source>Processing completed</source>
         <translation>Procesamiento completado</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="329"/>
+        <location filename="../functional/service/processing_service.py" line="363"/>
         <source>Processing &apos;{name}&apos; has finished successfully</source>
-        <translation>El procesamiento &apos;{name}&apos; ha finalizado correctamente</translation>
+        <translation>El procesamiento '{name}' ha finalizado correctamente</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="339"/>
+        <location filename="../functional/service/processing_service.py" line="373"/>
         <source>Processing failed</source>
         <translation>Procesamiento fallido</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="339"/>
+        <location filename="../functional/service/processing_service.py" line="373"/>
         <source>Processing &apos;{name}&apos; has failed</source>
-        <translation>El procesamiento &apos;{name}&apos; ha fallado</translation>
+        <translation>El procesamiento '{name}' ha fallado</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="463"/>
+        <location filename="../functional/service/processing_service.py" line="431"/>
         <source>Processing cost is not available:
 {message}</source>
         <translation>El costo del procesamiento no está disponible:
 {message}</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="476"/>
+        <location filename="../functional/service/processing_service.py" line="444"/>
         <source>Delete selected processings?</source>
         <translation>¿Eliminar los procesamientos seleccionados?</translation>
     </message>
     <message>
-        <location filename="../functional/service/processing_service.py" line="491"/>
+        <location filename="../functional/service/processing_service.py" line="459"/>
         <source>Failed to remove processings with following ids: &lt;center&gt; {failed_ids}</source>
         <translation>Error al eliminar los procesamientos con los siguientes ids: &lt;center&gt; {failed_ids}</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="279"/>
+        <source>The selected data provider is unavailable on your plan. 
+ Upgrade your subscription to get access to the data. 
+See pricing at &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&lt;/a&gt;</source>
+        <translation>El proveedor de datos seleccionado no está disponible en tu plan. 
+ Actualiza tu suscripción para acceder a los datos. 
+Ver precios en &lt;a href=&quot;https://mapflow.ai/pricing&quot;&gt;mapflow.ai&lt;/a&gt;</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/processing_service.py" line="290"/>
+        <source>Processing creation failed</source>
+        <translation>La creación del procesamiento falló</translation>
     </message>
 </context>
 <context>
     <name>ProcessingView</name>
     <message>
-        <location filename="../functional/view/processing_view.py" line="80"/>
+        <location filename="../functional/view/processing_view.py" line="72"/>
         <source>Please review or accept this processing until {}. Double click to add results to the map</source>
         <translation>Por favor, revisa o acepta este procesamiento hasta {}. Haz doble clic para añadir resultados al mapa</translation>
     </message>
     <message>
-        <location filename="../functional/view/processing_view.py" line="85"/>
+        <location filename="../functional/view/processing_view.py" line="77"/>
         <source>Double click to add results to the map.</source>
         <translation>Haz doble clic para añadir resultados al mapa.</translation>
     </message>
     <message>
-        <location filename="../functional/view/processing_view.py" line="157"/>
+        <location filename="../functional/view/processing_view.py" line="149"/>
         <source>Loading...</source>
         <translation>Cargando...</translation>
     </message>
     <message>
-        <location filename="../functional/view/processing_view.py" line="158"/>
+        <location filename="../functional/view/processing_view.py" line="150"/>
         <source>Fetching your processings from server, please wait</source>
         <translation>Obteniendo tus procesamientos del servidor, por favor espera</translation>
     </message>
     <message>
-        <location filename="../functional/view/processing_view.py" line="174"/>
+        <location filename="../functional/view/processing_view.py" line="166"/>
         <source>Processing cost: {cost} credits</source>
         <translation>Costo del procesamiento: {cost} créditos</translation>
     </message>
     <message>
-        <location filename="../functional/view/processing_view.py" line="183"/>
+        <location filename="../functional/view/processing_view.py" line="175"/>
         <source> failed with error:
 </source>
         <translation> falló con error:
 </translation>
     </message>
     <message>
-        <location filename="../functional/view/processing_view.py" line="190"/>
+        <location filename="../functional/view/processing_view.py" line="182"/>
         <source>{} processings failed: 
  {} 
  See tooltip over the processings table for error details</source>
@@ -2358,19 +2370,19 @@ Por favor, asegúrate de haber seleccionado un proyecto</translation>
  Ver información sobre herramientas en la tabla de procesamientos para detalles del error</translation>
     </message>
     <message>
-        <location filename="../functional/view/processing_view.py" line="197"/>
+        <location filename="../functional/view/processing_view.py" line="189"/>
         <source>{} processings failed: 
  See tooltip over the processings table for error details</source>
         <translation>{} procesamientos fallaron: 
  Ver información sobre herramientas en la tabla de procesamientos para detalles del error</translation>
     </message>
     <message>
-        <location filename="../functional/view/processing_view.py" line="209"/>
+        <location filename="../functional/view/processing_view.py" line="201"/>
         <source> finished. Double-click it in the table to download the results.</source>
         <translation> finalizado. Haz doble clic en la tabla para descargar los resultados.</translation>
     </message>
     <message>
-        <location filename="../functional/view/processing_view.py" line="217"/>
+        <location filename="../functional/view/processing_view.py" line="209"/>
         <source>{} processings finished: 
  {} 
  Double-click it in the table to download the results</source>
@@ -2379,7 +2391,7 @@ Por favor, asegúrate de haber seleccionado un proyecto</translation>
  Haz doble clic en la tabla para descargar los resultados</translation>
     </message>
     <message>
-        <location filename="../functional/view/processing_view.py" line="225"/>
+        <location filename="../functional/view/processing_view.py" line="217"/>
         <source>{} processings finished. 
  Double-click it in the table to download the results</source>
         <translation>{} procesamientos finalizaron. 
@@ -2510,24 +2522,32 @@ Por favor, asegúrate de haber seleccionado un proyecto</translation>
     </message>
 </context>
 <context>
+    <name>ProjectProcessingController</name>
+    <message>
+        <location filename="../functional/controller/processing_controller.py" line="143"/>
+        <source>Do you really want to remove project {}? This action cannot be undone, all processings will be lost!</source>
+        <translation>¿Realmente desea eliminar el proyecto {}? ¡Esta acción no se puede deshacer, todos los procesamientos se perderán!</translation>
+    </message>
+</context>
+<context>
     <name>ProjectService</name>
     <message>
-        <location filename="../functional/service/project_service.py" line="229"/>
+        <location filename="../functional/service/project_service.py" line="228"/>
         <source>Project: &lt;b&gt;{}</source>
         <translation>Proyecto: &lt;b&gt;{}</translation>
     </message>
     <message>
-        <location filename="../functional/service/project_service.py" line="246"/>
+        <location filename="../functional/service/project_service.py" line="245"/>
         <source>No project selected</source>
         <translation>No se seleccionó ningún proyecto</translation>
     </message>
     <message>
-        <location filename="../functional/service/project_service.py" line="248"/>
+        <location filename="../functional/service/project_service.py" line="247"/>
         <source>You can&apos;t remove or modify default project</source>
         <translation>No puedes eliminar o modificar el proyecto por defecto</translation>
     </message>
     <message>
-        <location filename="../functional/service/project_service.py" line="251"/>
+        <location filename="../functional/service/project_service.py" line="250"/>
         <source>Not enough rights to delete or update shared project ({})</source>
         <translation>No tienes suficientes permisos para eliminar o actualizar un proyecto compartido ({})</translation>
     </message>
@@ -2671,70 +2691,85 @@ Por favor, asegúrate de haber seleccionado un proyecto</translation>
 <context>
     <name>ProviderService</name>
     <message>
-        <location filename="../functional/service/provider_service.py" line="104"/>
+        <location filename="../functional/service/provider_service.py" line="105"/>
         <source>Providers are not initialized</source>
         <translation>Los proveedores no están inicializados</translation>
     </message>
     <message>
-        <location filename="../functional/service/provider_service.py" line="169"/>
+        <location filename="../functional/service/provider_service.py" line="175"/>
         <source>Choose imagery collection or image to start processing</source>
         <translation>Elige una colección de imágenes o imagen para iniciar el procesamiento</translation>
     </message>
     <message>
-        <location filename="../functional/service/provider_service.py" line="172"/>
+        <location filename="../functional/service/provider_service.py" line="178"/>
         <source>This provider requires image ID. Use search tab to find imagery for you requirements, and select image in the table.</source>
         <translation>Este proveedor requiere ID de imagen. Usa la pestaña de búsqueda para encontrar imágenes según tus requisitos y selecciona la imagen en la tabla.</translation>
     </message>
     <message>
-        <location filename="../functional/service/provider_service.py" line="208"/>
+        <location filename="../functional/service/provider_service.py" line="235"/>
         <source>You can launch multiple image processing only if it has the same provider of mosaic type</source>
         <translation>Solo puedes lanzar múltiples procesamientos de imágenes si tienen el mismo proveedor o tipo de mosaico</translation>
     </message>
     <message>
-        <location filename="../functional/service/provider_service.py" line="277"/>
+        <location filename="../functional/service/provider_service.py" line="265"/>
         <source>Duplication failed on copying data source</source>
         <translation>La duplicación falló al copiar la fuente de datos</translation>
     </message>
     <message>
-        <location filename="../functional/service/provider_service.py" line="285"/>
+        <location filename="../functional/service/provider_service.py" line="273"/>
         <source>Model &apos;{wd}&apos; is not enabled for your account</source>
-        <translation>El modelo &apos;{wd}&apos; no está habilitado para tu cuenta</translation>
+        <translation>El modelo '{wd}' no está habilitado para tu cuenta</translation>
     </message>
     <message>
-        <location filename="../functional/service/provider_service.py" line="314"/>
+        <location filename="../functional/service/provider_service.py" line="302"/>
         <source>The following options no longer exist, so they have not been duplicated: {}</source>
         <translation>Las siguientes opciones ya no existen, por lo que no se han duplicado: {}</translation>
     </message>
     <message>
-        <location filename="../functional/service/provider_service.py" line="319"/>
+        <location filename="../functional/service/provider_service.py" line="307"/>
         <source>Duplication failed on copying model options</source>
         <translation>La duplicación falló al copiar las opciones del modelo</translation>
     </message>
     <message>
-        <location filename="../functional/service/provider_service.py" line="328"/>
+        <location filename="../functional/service/provider_service.py" line="316"/>
         <source>Provider &apos;{provider}&apos; is not enabled for your account</source>
-        <translation>El proveedor &apos;{provider}&apos; no está habilitado para tu cuenta</translation>
+        <translation>El proveedor '{provider}' no está habilitado para tu cuenta</translation>
     </message>
     <message>
-        <location filename="../functional/service/provider_service.py" line="404"/>
+        <location filename="../functional/service/provider_service.py" line="392"/>
         <source>Duplicated user provider</source>
         <translation>Proveedor de usuario duplicado</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/provider_service.py" line="197"/>
+        <source>Selected search results must be of the same product type</source>
+        <translation>Los resultados de búsqueda seleccionados deben ser del mismo tipo de producto</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/provider_service.py" line="199"/>
+        <source>Selected search results must have the same zoom level</source>
+        <translation>Los resultados de búsqueda seleccionados deben tener el mismo nivel de zoom</translation>
+    </message>
+    <message>
+        <location filename="../functional/service/provider_service.py" line="280"/>
+        <source>Duplication failed on copying model</source>
+        <translation>La duplicación falló al copiar el modelo</translation>
     </message>
 </context>
 <context>
     <name>QPlatformTheme</name>
     <message>
-        <location filename="../mapflow.py" line="134"/>
+        <location filename="../mapflow.py" line="142"/>
         <source>Cancel</source>
         <translation>Cancelar</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="135"/>
+        <location filename="../mapflow.py" line="143"/>
         <source>&amp;Yes</source>
         <translation>&amp;Sí</translation>
     </message>
     <message>
-        <location filename="../mapflow.py" line="136"/>
+        <location filename="../mapflow.py" line="144"/>
         <source>&amp;No</source>
         <translation>&amp;No</translation>
     </message>
