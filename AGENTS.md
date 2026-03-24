@@ -8,11 +8,14 @@
 - Use raw `git` only when `agent-git` cannot express the required operation. Such usage is **not recommended** and must be explicitly justified in the command text.
 
 # PROJECT STRUCTURE AND ADDRESSING
-- Dockerfile: image for both test and deployment
-- Makefile: local build, test and run
+- /mapflow: QGIS plugin source code (Python, Qt/PyQGIS)
+- /mapflow/dialogs: Qt dialog classes and `.ui` files
+- /mapflow/functional: business logic, API clients, controllers, views
+- /mapflow/entity: domain models (processing, provider, billing, etc.)
+- /mapflow/schema: data schemas
+- /mapflow/errors: error types and messages
+- /tests: test files (pytest)
 - /spec: contains specifications, ordered by hierarchy: the very foundation in 001, then go the most important architecture details (api, db, stack), all further decisions and rationale are documented in subsequent files
-- /app: application code
-- /tests/unit, /tests/it - unit- and integration- tests
 - WAL.md - file with current implementation plan, updated regularly on completion/changes
 
 # SESSION PROTOCOL FOR FEATURE IMPLEMENTATION
@@ -73,7 +76,7 @@ Execute it every time a session is initiated.
 
 # IMPLEMENTATION DEFINITION OF DONE (PRE-MERGE)
 - tests added/updated according to the feature specification
-- `make test` runs successfully
+- `pytest tests/` runs successfully
 - branch pushed and `[Draft]` MR created
 - WAL step is updated to `[ready-for-review]` with concise motivation
 
@@ -88,7 +91,7 @@ Execute it every time a session is initiated.
 
 # COMPANION INSTRUCTIONS (SCOPED)
 - `.github/instructions/planning.instructions.md`: use for strategic planning and architecture decisions in `spec/**`.
-- `.github/instructions/delivery.instructions.md`: use for feature/fix delivery in `{app,alembic,tests}/**`.
+- `.github/instructions/delivery.instructions.md`: use for feature/fix delivery in `{mapflow,tests}/**`.
 - `.github/instructions/stabilization.instructions.md`: use when tests fail, CI is red, or user review requests iterations.
 - If multiple companion instructions seem relevant, prioritize by phase: `planning` -> `delivery` -> `stabilization`.
 - These companion files augment this `AGENTS.md`; they do not override specification requirements.
@@ -107,19 +110,14 @@ limited connections to avoid server DDoS protection, issues can start around 40 
 ```
 
 # COMMANDS TO RUN
-`make build` to build container
-`make run` to run full system with docker-compose setup
-`make test` to run full test suite with image rebuild (`BUILD=1` by default)
-`make test BUILD=0` to run full test suite without rebuilding image
-`make utest` to run unit tests separately
-`make itest` to run integration tests separately
-`make test-attach-shell` to run test container with source code mounted from local repo (`$(PWD)` -> `/app`)
-`make test-attach` to run full test suite with source code mounted from local repo (`$(PWD)` -> `/app`)
+`pytest tests/` to run the full test suite
+`pytest tests/test_<name>.py` to run a specific test file
+`pytest tests/ -k "test_name"` to run a specific test by name
 
 # TEST EXECUTION MODES
-- Rebuild mode (safer): use `make test` after major changes, dependency/migration updates, Dockerfile changes, or when image state might affect behavior.
-- Attached-code mode (faster): use `make test-attach` for quick iterations when only app/tests code changed and installed dependencies are unchanged.
-- Interactive attached mode: use `make test-attach-shell` when you need a shell in the test container with live local code mounted.
+- All tests run locally with pytest (no containers).
+- QGIS-dependent tests may require a QGIS environment or mocking of `qgis.*` / `PyQt5.*` imports.
+- Pure logic tests (data transforms, URL building, schema validation) should not depend on QGIS runtime.
 
 # TERMINAL COMMAND BATCHING
 - Combine commands that both require user approval into a single `&&`-chained invocation to minimize approval prompts.
@@ -129,4 +127,5 @@ limited connections to avoid server DDoS protection, issues can start around 40 
 - Read-only commands (`agent-git status`, `agent-git diff`, `agent-git log`) do NOT need batching — they are auto-approved.
 
 # IMPLEMENTATION GUIDELINES
-- Full implementation conventions are defined in `.github/instructions/delivery.instructions.md` and apply to `{app,alembic,tests}/**`.
+- Full implementation conventions are defined in `.github/instructions/delivery.instructions.md` and apply to `{mapflow,tests}/**`.
+- UI-specific conventions are in `.github/instructions/ui.delivery.instructions.md` and apply to `mapflow/dialogs/**`.

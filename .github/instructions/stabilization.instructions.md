@@ -1,6 +1,6 @@
 ---
 description: "Use when tests fail, CI is red, or review feedback requests rework: run iterative fix cycles with breakpoints and explicit stop conditions."
-applyTo: "{app,alembic,tests}/**"
+applyTo: "{mapflow,tests}/**"
 ---
 
 # Stabilization Instructions
@@ -11,14 +11,14 @@ Drive failing work to implementation DoD through controlled iterative fix cycles
 ## Iteration Loop
 1. Reproduce failures and capture the exact failing signature.
 2. Apply the smallest targeted fix.
-3. Re-run the narrowest relevant tests, then broader tests.
+3. Re-run the narrowest relevant tests (`pytest tests/test_<name>.py -k "failing_test"`), then broader tests (`pytest tests/`).
 4. Repeat until green or a stop condition is reached.
 
 ## Breakpoints and Stop Conditions
 - Stop after 3 failed cycles and ask user whether to continue.
 - Stop earlier if the same failure signature repeats after a fix attempt.
 - Stop if resolving requires changing the spec or accepting a behavior tradeoff.
-- Stop if tool/runtime limits prevent reliable validation.
+- Stop if tool/runtime limits prevent reliable validation (e.g. QGIS runtime unavailable for integration tests).
 
 ## Feedback Handling
 - Treat user review feedback as authoritative input.
