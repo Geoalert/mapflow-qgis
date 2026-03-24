@@ -13,7 +13,8 @@ Adapted from generic Docker/Makefile/alembic template to QGIS plugin structure; 
 All 5 specs populated from codebase analysis: goal (plugin purpose/constraints), API (all Mapflow/Maxar/Sentinel endpoints consumed), persistence (full QgsSettings key inventory from code), stack (PyQt5/QGIS/pytest + strict no-external-deps policy), interactions (all external systems; Maxar/Sentinel marked legacy)
 
 ## 3. Plan test
-[ ]
+[v]
 - Unit tests on functional
 - Integration tests on API calls
 - UI testing
+Chose Option B (all tests require QGIS runtime) — no value in partial testing without QGIS. Tools: pytest + pytest-qt + unittest.mock (stdlib). QgsApplication bootstrapped via qgis.testing.start_app() in pytest_configure hook (must run before collection because plugin modules create QIcon at import time). conftest.py provides iface mock and http_mock fixtures. pytest-qt chosen over raw PyQt5.QtTest for signal-heavy architecture (waitSignal, auto widget cleanup via qtbot).
