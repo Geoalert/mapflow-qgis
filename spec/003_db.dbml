@@ -1,17 +1,20 @@
-// 003 Database (DBML)
-// Purpose: define relational schema when a database is part of the system.
-// This sample repo is documentation-only, so the model below is illustrative.
+// 003 Local Persistence (DBML-style notation)
+// Purpose: describe the plugin's local persistence layer.
+// This plugin has no database — all persistence is via QgsSettings (key-value store in QGIS profile).
 
-Table guidance_documents {
-  id int [pk, increment]
-  path varchar [not null, unique]
-  kind varchar [not null, note: 'agents|instruction|spec|wal']
-  updated_at timestamp [not null]
+Table qgs_settings {
+  key varchar [pk, note: 'QgsSettings key path']
+  value varchar [note: 'stored as string, parsed by plugin']
 }
 
-Table guidance_references {
-  id int [pk, increment]
-  from_document_id int [not null, ref: > guidance_documents.id]
-  to_document_id int [not null, ref: > guidance_documents.id]
-  relation varchar [not null, note: 'requires|extends|related']
-}
+// Known keys:
+// mapflow/token            — Basic auth token (string)
+// mapflow/processings      — Known processing IDs (serialized list)
+// mapflow_env              — Server environment: production|staging|internal|duty (default: production)
+// mapflow_project_id       — Currently selected project ID (string)
+// mapflow_enable_sentinel  — Feature flag for Sentinel-2 (bool)
+// mapflow_raw_error        — Debug flag for raw error display (bool)
+// mapflow/columns/*        — Table column visibility settings (bool per column)
+//
+// OAuth2 tokens are stored via QGIS Auth Manager (QgsAuthMethodConfig),
+// not directly in QgsSettings.
