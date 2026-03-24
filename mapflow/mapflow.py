@@ -6,82 +6,93 @@ from configparser import ConfigParser  # parse metadata.txt -> QGIS version chec
 from datetime import datetime  # processing creation datetime formatting
 from pathlib import Path
 from typing import List, Optional, Union, Callable, Tuple
+from osgeo import gdal, ogr
 
 from PyQt5.QtCore import (
-    QDate, QObject, QCoreApplication, QTimer, QTranslator, Qt, QTextStream, QByteArray, QVariant
+    QByteArray, QCoreApplication, QDate, QObject, Qt, 
+    QTextStream, QTimer, QTranslator
 )
 from PyQt5.QtGui import QColor
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
 from PyQt5.QtWidgets import (
-    QApplication, QMessageBox, QFileDialog, QPushButton, QTableWidgetItem, QAbstractItemView, QMenu, QAction, QWidget
+    QAbstractItemView, QAction, QApplication, QFileDialog, QMenu, 
+    QMessageBox, QPushButton, QTableWidgetItem, QWidget
 )
 from PyQt5.QtXml import QDomDocument
-from osgeo import gdal, ogr
 from qgis.core import (
-    QgsProject, QgsSettings, QgsMapLayer, QgsVectorLayer, QgsRasterLayer, QgsFeature, Qgis,
-    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsGeometry, QgsWkbTypes, QgsPoint, QgsMapLayerType, QgsRectangle
+    Qgis, QgsCoordinateReferenceSystem, QgsDistanceArea, QgsFeature, QgsGeometry, 
+    QgsMapLayer, QgsMapLayerType, QgsPoint, QgsProject, QgsRasterLayer, 
+    QgsRectangle, QgsVectorLayer, QgsWkbTypes
 )
 
 from . import constants
-from .dialogs import (MainDialog,
-                      MapflowLoginDialog,
-                      ErrorMessageWidget,
-                      ProviderDialog,
-                      ReviewDialog
-                      )
-#! from .dialogs.confirm_processing_start_dialog import ConfirmProcessingStartDialog
-from .dialogs.processing_details_dialog import ProcessingDetailsDialog
-from .dialogs.icons import plugin_icon
+from .config import Config, ConfigColumns
+from .errors import (AoiNotIntersectsImage,
+                     BadProcessingInput,
+                     ImageIdRequired,
+                     PluginError,
+                     ProcessingInputDataMissing,
+                     ProxyIsAlreadySet)
+# Functional
+from .functional import helpers, layer_utils
 from .functional.app_context import AppContext
+from .functional.auth import get_auth_id
 from .functional.controller.data_catalog_controller import DataCatalogController
 from .functional.controller.processing_controller import ProjectProcessingController
-from .config import Config, ConfigColumns
-from .entity.provider import (UsersProvider,
-                              MaxarProvider,
-                              ProvidersList,
-                              SentinelProvider,
+from .functional.service import (DataCatalogService,
+                                 ProcessingService,
+                                 ProjectService,
+                                 ProviderService)
+from .functional.service.alert_service import AlertService, alert
+from .functional.service.area_calculator_service import AreaCalculatorService
+# HTTP
+from .http import (Http,
+                   api_message_parser,
+                   get_error_report_body,
+                   securewatch_message_parser)
+# Schema
+from .schema import (BillingType,
+                     DataProviderParams,
+                     ImageCatalogRequestSchema,
+                     ImageCatalogResponseSchema,
+                     ImagerySearchParams,
+                     MapflowProject,
+                     MyImageryParams,
+                     PostProcessingSchema,
+                     PostProcessingSchemaV2,
+                     PostSourceSchema,
+                     PreviewType,
+                     ProductType,
+                     ProviderReturnSchema,
+                     UserDefinedParams,
+                     UserRole,
+                     WorkflowDef)
+from .schema.catalog import (AoiResponseSchema,
+                             MultiPreview,
+                             MultiPreviewList,
+                             PreviewType,
+                             ProductType)
+from .schema.project import MapflowProject, ProjectsRequest, UserRole
+from .schema.workflow_def import WorkflowDef
+# Dialogs
+from .dialogs import (ErrorMessageWidget,
+                      MainDialog,
+                      MapflowLoginDialog,
+                      ProviderDialog,
+                      ReviewDialog)
+from .dialogs.icons import plugin_icon
+from .dialogs.processing_details_dialog import ProcessingDetailsDialog
+# Entity/providers
+from .entity.provider import (BasicAuth,
                               create_provider,
                               DefaultProvider,
                               ImagerySearchProvider,
+                              MaxarProvider,
                               MyImageryProvider,
                               ProviderInterface,
-                              BasicAuth)
-from .schema.workflow_def import WorkflowDef
-from .errors import (ProcessingInputDataMissing,
-                     BadProcessingInput,
-                     PluginError,
-                     ImageIdRequired,
-                     AoiNotIntersectsImage,
-                     ProxyIsAlreadySet)
-from .functional import layer_utils, helpers
-from .functional.auth import get_auth_id
-from .functional.geometry import clip_aoi_to_image_extent
-from .functional.service import ProcessingService, ProjectService, DataCatalogService, ProviderService
-from .functional.service import provider_service #!
-from .functional.service.alert_service import alert, AlertService
-from .http import (Http,
-                   get_error_report_body,
-                   securewatch_message_parser,
-                   api_message_parser,
-                   )
-from .schema import (PostSourceSchema,
-                     PostProcessingSchema,
-                     ProviderReturnSchema,
-                     ImageCatalogRequestSchema,
-                     ImageCatalogResponseSchema,
-                     PostProcessingSchemaV2,
-                     DataProviderParams, 
-                     MyImageryParams, 
-                     ImagerySearchParams, 
-                     UserDefinedParams,
-                     WorkflowDef,
-                     BillingType,
-                     PreviewType,
-                     ProductType,
-                     MapflowProject,
-                     UserRole)
-from .schema.catalog import PreviewType, ProductType, AoiResponseSchema, MultiPreview, MultiPreviewList
-from .schema.project import MapflowProject, UserRole, ProjectsRequest
+                              ProvidersList,
+                              SentinelProvider,
+                              UsersProvider)
 
 
 class Mapflow(QObject):
@@ -92,13 +103,10 @@ class Mapflow(QObject):
 
         :param iface: an instance of the QGIS interface.
         """
-        # init configs
+        # ========== 1. BASIC CONFIGURATION ==========
+        # Init configs
         self.config = Config()
         self.app_context = AppContext(self.config)
-        self.app_context.config = self.config
-        # Set max_aois_per_processing from config as default
-        self.app_context.max_aois_per_processing = self.config.MAX_AOIS_PER_PROCESSING
-        # init empty params
         self.version_ok = True
         # Save refs to key variables used throughout the plugin
         self.iface = iface
@@ -108,21 +116,21 @@ class Mapflow(QObject):
         self.message_bar = self.iface.messageBar()
         self.plugin_dir = os.path.dirname(__file__)
         self.plugin_name = self.config.PLUGIN_NAME  # aliased here to be overloaded in submodules
-        # Settings will be used to store credentials and various UI customizations
-        #! self.app_context.settings = QgsSettings()
-        # Get the server environment to connect to (for admins)
+        # Get the server environment to connect to
         self.server = self.config.SERVER
         
+        # ========== 2. APP_CONTEXT ==========
         # Populate infrastructure in app_context
         self.app_context.server = self.server
+        self.app_context.config = self.config
+        self.app_context.max_aois_per_processing = self.config.MAX_AOIS_PER_PROCESSING
         self.app_context.project = QgsProject.instance()
         self.app_context.plugin_name = self.plugin_name
-        
+        # Get the layer tree root from app context
         self.layer_tree_root = self.app_context.project.layerTreeRoot()
         # Init toolbar and toolbar buttons
         self.toolbar = self.iface.addToolBar(self.plugin_name)
         self.toolbar.setObjectName(self.plugin_name)
-        # Init project
         # Translation
         locale = self.app_context.settings.value('locale/userLocale', 'en_US')[0:2]
         locale_path = os.path.join(self.plugin_dir, 'i18n', f'mapflow_{locale}.qm')
@@ -130,7 +138,7 @@ class Mapflow(QObject):
             self.translator = QTranslator()
             self.translator.load(locale_path)
             QCoreApplication.installTranslator(self.translator)
-        # Translate native Qt texts; doesn't work in a cycle for some reason
+        # Translate native Qt texts
         QCoreApplication.translate('QPlatformTheme', 'Cancel')
         QCoreApplication.translate('QPlatformTheme', '&Yes')
         QCoreApplication.translate('QPlatformTheme', '&No')
@@ -140,24 +148,19 @@ class Mapflow(QObject):
             self.app_context.settings.setValue('processings', {})
         # Set projects from settings if it was opened before
         self.app_context.project_id = self.app_context.settings.value("project_id")
-        # Store user's current processing
         # Imagery search pagination
         self.search_page_offset = 0
         self.search_page_limit = self.config.SEARCH_RESULTS_PAGE_LIMIT
-        # Imagery provider instances
-        #! self.imagery_search_provider_instance = None
-        #! self.my_imagery_provider_instance = None
 
-        # Init dialogs
+        # ========== 3. INIT DIALOGS ==========
+        # Init dialogs before creating timers that need them as parent
         self.use_oauth = (self.app_context.settings.value('use_oauth', 'false').lower() == 'true')
         self.plugin_icon = plugin_icon
         self.dlg = MainDialog(self.main_window, self.app_context.settings)
         self.dlg_login = self.set_up_login_dialog()
         self.review_dialog = ReviewDialog(self.dlg)
         self.dlg_provider = ProviderDialog(self.dlg)
-
         self.dlg_provider.accepted.connect(self.edit_provider_callback)
-        # Display the plugin's version
         # todo: Move to Maindialog
         metadata_parser = ConfigParser()
         metadata_parser.read(os.path.join(self.plugin_dir, 'metadata.txt'))
@@ -170,42 +173,54 @@ class Mapflow(QObject):
                          self.app_context.plugin_version,
                          self.default_error_handler)
         self.calculator = QgsDistanceArea()
-        # RESTORE LATEST FIELD VALUES & OTHER ELEMENTS STATE
+        # Restore directory from settings
         self.dlg.outputDirectory.setText(self.app_context.settings.value('outputDir'))
 
-        # Setup temporary directory from setting or skip for now
+        # ========== 4. CREATE TIMERS ==========
+        # Poll user status to get limits
+        self.user_status_update_timer = QTimer(self.dlg)
+        self.user_status_update_timer.setInterval(self.config.USER_STATUS_UPDATE_INTERVAL * 1000)
+        self.user_status_update_timer.timeout.connect(self.refresh_status)
+        # Timer for user update at startup, in case get_processings request takes too long
+        # Stopped as soon as first /user/status request is made
+        self.app_startup_user_update_timer = QTimer(self.dlg)
+        self.app_startup_user_update_timer.setInterval(500)
+        self.app_startup_user_update_timer.timeout.connect(self.first_status_request)
+
+        # ========== 5. SETUP TEMP DIRECTORY ==========
         self.setup_tempdir()
 
-        # Initialize services
+        # ========== 6. INITIALIZE INDEPENDENT SERVICES ==========
         # Initialize AlertService singleton
         AlertService(self.plugin_name)
         self.result_loader = layer_utils.ResultsLoader(iface=self.iface,
-                                                       maindialog=self.dlg,
-                                                       http=self.http,
-                                                       settings=self.app_context.settings,
-                                                       context=self.app_context
-                                                       )
+                                                    maindialog=self.dlg,
+                                                    http=self.http,
+                                                    settings=self.app_context.settings,
+                                                    context=self.app_context
+                                                    )
 
         self.data_catalog_service = DataCatalogService(self.http,
-                                                       self.server,
-                                                       self.dlg,
-                                                       self.iface,
-                                                       self.result_loader,
-                                                       self.app_context.plugin_version,
-                                                       app_context=self.app_context)
+                                                    self.server,
+                                                    self.dlg,
+                                                    self.iface,
+                                                    self.result_loader,
+                                                    self.app_context.plugin_version,
+                                                    app_context=self.app_context)
         self.data_catalog_controller = DataCatalogController(self.dlg, self.data_catalog_service)
 
+        # ========== 7. INITIALIZE PROJECT AND PROCESSING SERVICES ==========
         self.project_service = ProjectService(http=self.http,
-                                              app_context=self.app_context,
-                                              dlg=self.dlg,
-                                              config=self.config,
-                                              area_calc_fn=self.calculate_aoi_area_use_image_extent)
+                                            app_context=self.app_context,
+                                            dlg=self.dlg,
+                                            config=self.config)
         
         self.provider_service = ProviderService.get_instance(providers=ProvidersList([]),
-                                                             dlg=self.dlg,
-                                                             app_context=self.app_context,
-                                                             config=self.config,
-                                                             data_catalog_service=self.data_catalog_service)
+                                                            dlg=self.dlg,
+                                                            app_context=self.app_context,
+                                                            config=self.config,
+                                                            data_catalog_service=self.data_catalog_service)
+        self.provider_service.selection_sync_callback = self.sync_layer_selection_with_table
 
         self.processing_service = ProcessingService(http=self.http,
                                                     dlg=self.dlg,
@@ -215,98 +230,25 @@ class Mapflow(QObject):
                                                     timer_interval=self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
         
         self.project_processing_controller = ProjectProcessingController(dlg=self.dlg,
-                                                                         processing_service=self.processing_service,
-                                                                         project_service=self.project_service,
-                                                                         app_context=self.app_context)
+                                                                        processing_service=self.processing_service,
+                                                                        project_service=self.project_service,
+                                                                        app_context=self.app_context)
         
-        # load providers from settings
+        # ========== 8. LOAD PROVIDERS FROM SETTINGS ==========
+        # load providers from settings before initializing area calculator service
         errors = []
         try:
             self.provider_service.user_providers, errors = ProvidersList.from_settings(settings=self.app_context.settings)
             self.provider_service.sentinel_providers = ProvidersList([SentinelProvider(proxy=self.server)])
             self.provider_service.default_providers = ProvidersList([])
-            #! self.provider_service.providers = ProvidersList([])
         except Exception as e:
             self.alert(self.tr("Error during loading the data providers: {e}").format(str(e)), icon=Qgis.Warning)
         if errors:
             self.alert(self.tr('We failed to import providers from the settings. Please add them again'),
-                       icon=Qgis.Warning)
+                    icon=Qgis.Warning)
         self.provider_service.update_providers()
-        self.dlg.minIntersection.setValue(int(self.app_context.settings.value('metadataMinIntersection', 0)))
-        self.dlg.maxCloudCover.setValue(int(self.app_context.settings.value('metadataMaxCloudCover', 100)))
-        # Set default metadata dates
-        today = QDate.currentDate()
-        self.dlg.metadataFrom.setDate(self.app_context.settings.value('metadataFrom', today.addMonths(-6)))
-        self.dlg.metadataTo.setDate(self.app_context.settings.value('metadataTo', today))
-        # SET UP SIGNALS & SLOTS
-        self.dlg.modelCombo.currentIndexChanged.connect(self.on_model_change)
-        self.dlg.modelOptionsChanged.connect(self.on_options_change)
-        # Memorize dialog element sizes & positioning
-        self.dlg.finished.connect(self.save_dialog_state)
-        # Connect buttons
-        self.dlg.logoutButton.clicked.connect(self.logout)
-        self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
-        self.dlg.downloadResultsButton.clicked.connect(self.load_results)
-        #! self.dlg.startProcessing.clicked.connect(self.create_processing)
-        # Calculate AOI size
-        self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area_polygon_layer)
-        self.dlg.mosaicTable.itemSelectionChanged.connect(self.calculate_aoi_area_catalog)
-        self.dlg.imageTable.itemSelectionChanged.connect(self.calculate_aoi_area_catalog)
-        self.monitor_polygon_layer_feature_selection([
-            self.app_context.project.mapLayer(layer_id) for layer_id in self.app_context.project.mapLayers(validOnly=True)
-        ])
-        self.app_context.project.layersAdded.connect(self.setup_layers_context_menu)
-        self.app_context.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
-        # Processings
-        self.dlg.processingsTable.cellDoubleClicked.connect(self.load_results)
-        self.dlg.deleteProcessings.clicked.connect(self.processing_service.confirm_delete_processings)
-        self.dlg.filterProcessings.textChanged.connect(self.dlg.filter_processings_table)
-        # Processings ratings
-        self.dlg.processingsTable.itemSelectionChanged.connect(self.enable_feedback)
-        self.dlg.ratingSubmitButton.clicked.connect(self.submit_processing_rating)
-        self.dlg.enable_rating(False, False)  # by default disabled
-        self.dlg.enable_review(False)
-        # processing feedback fields
-        self.dlg.ratingComboBox.activated.connect(self.enable_feedback)
-        self.dlg.processingsTable.cellClicked.connect(self.update_processing_current_rating)
-        # processing review
-        self.dlg.acceptButton.clicked.connect(self.accept_processing)
-        self.dlg.reviewButton.clicked.connect(self.show_review_dialog)
-        self.review_dialog.accepted.connect(self.submit_review)
 
-        # Providers
-        self.dlg.minIntersectionSpinBox.valueChanged.connect(self.filter_metadata)
-        self.dlg.maxCloudCoverSpinBox.valueChanged.connect(self.filter_metadata)
-        self.dlg.metadataFrom.dateChanged.connect(self.filter_metadata)
-        self.dlg.metadataTo.dateChanged.connect(self.filter_metadata)
-        self.dlg.searchImageryButton.clicked.connect(self.preview_or_search)
-
-        self.dlg.addProvider.clicked.connect(self.add_provider)
-        self.dlg.editProvider.clicked.connect(self.edit_provider)
-        self.dlg.removeProvider.clicked.connect(self.remove_provider)
-
-        # Maxar
-        self.config_search_columns = ConfigColumns()
-        self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
-            self.sync_table_selection_with_image_id_and_layer)
-        self.meta_layer_table_connection = None
-        self.dlg.getMetadata.clicked.connect(self.get_metadata)
-        self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
-        self.dlg.rasterSourceChanged.connect(self.on_provider_change)
-        self.dlg.clearSearch.clicked.connect(self.clear_metadata)
-        self.dlg.metadataTableFilled.connect(self.filter_metadata)
-        self.dlg.searchRightButton.clicked.connect(self.show_search_next_page)
-        self.dlg.searchLeftButton.clicked.connect(self.show_search_previous_page)
-        # Poll user status to get limits
-        self.user_status_update_timer = QTimer(self.dlg)
-        self.user_status_update_timer.setInterval(self.config.USER_STATUS_UPDATE_INTERVAL * 1000)
-        self.user_status_update_timer.timeout.connect(self.refresh_status)
-        # timer for user update at startup, in case get_processings request takes too long
-        # stopped as soon as first /user/status request is made
-        self.app_startup_user_update_timer = QTimer(self.dlg)
-        self.app_startup_user_update_timer.setInterval(500)
-        self.app_startup_user_update_timer.timeout.connect(self.first_status_request)
-        # Add layer menu
+        # ========== 9. ADD LAYER MENU ==========
         self.add_layer_menu = QMenu()
         self.draw_aoi = QAction(self.tr("Draw AOI at the map"))
         self.use_imagery_extent = QAction(self.tr("Use imagery extent"))
@@ -328,9 +270,83 @@ class Mapflow(QObject):
         self.dlg.useAllVectorLayers.stateChanged.connect(self.toggle_all_layers)
         self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
 
-        # Zoom selection for data source
-        #! self.app_context.zoom_selector = (self.config.ZOOM_SELECTOR.lower() == "true")
-        self.zoom = None
+        # ========== 10. INITIALIZE AREA CALCULATOR SERVICE ==========
+        self.area_calculator_service = AreaCalculatorService(app_context=self.app_context,
+                                                             dlg=self.dlg,
+                                                             config=self.config,
+                                                             data_catalog_service=self.data_catalog_service,
+                                                             processing_service=self.processing_service,
+                                                             provider_service=self.provider_service,
+                                                             use_imagery_extent=self.use_imagery_extent)
+        self.project_service.area_calculator_service = self.area_calculator_service
+        
+        # ========== 11. SETUP METADATA FILTERS ==========
+        self.dlg.minIntersection.setValue(int(self.app_context.settings.value('metadataMinIntersection', 0)))
+        self.dlg.maxCloudCover.setValue(int(self.app_context.settings.value('metadataMaxCloudCover', 100)))
+        # Set default metadata dates
+        today = QDate.currentDate()
+        self.dlg.metadataFrom.setDate(self.app_context.settings.value('metadataFrom', today.addMonths(-6)))
+        self.dlg.metadataTo.setDate(self.app_context.settings.value('metadataTo', today))
+
+        # ========== 12. SET UP SIGNALS & SLOTS ==========
+        self.dlg.modelCombo.currentIndexChanged.connect(self.on_model_change)
+        self.dlg.modelOptionsChanged.connect(self.on_options_change)
+        # Memorize dialog element sizes & positioning
+        self.dlg.finished.connect(self.save_dialog_state)
+        # Connect buttons
+        self.dlg.logoutButton.clicked.connect(self.logout)
+        self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
+        self.dlg.downloadResultsButton.clicked.connect(self.load_results)
+        # Calculate AOI size
+        self.dlg.polygonCombo.layerChanged.connect(self.area_calculator_service.calculate_aoi_area_polygon_layer)
+        self.dlg.mosaicTable.itemSelectionChanged.connect(self.area_calculator_service.calculate_aoi_area_catalog)
+        self.dlg.imageTable.itemSelectionChanged.connect(self.area_calculator_service.calculate_aoi_area_catalog)
+        self.monitor_polygon_layer_feature_selection([
+            self.app_context.project.mapLayer(layer_id) for layer_id in self.app_context.project.mapLayers(validOnly=True)
+        ])
+        self.app_context.project.layersAdded.connect(self.setup_layers_context_menu)
+        self.app_context.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
+        # Processings
+        self.dlg.processingsTable.cellDoubleClicked.connect(self.load_results)
+        self.dlg.deleteProcessings.clicked.connect(self.processing_service.confirm_delete_processings)
+        self.dlg.filterProcessings.textChanged.connect(self.dlg.filter_processings_table)
+        # Processings ratings
+        self.dlg.processingsTable.itemSelectionChanged.connect(self.enable_feedback)
+        self.dlg.ratingSubmitButton.clicked.connect(self.submit_processing_rating)
+        self.dlg.enable_rating(False, False)  # by default disabled
+        self.dlg.enable_review(False)
+        # Processing feedback
+        self.dlg.ratingComboBox.activated.connect(self.enable_feedback)
+        self.dlg.processingsTable.cellClicked.connect(self.update_processing_current_rating)
+        # Processing review
+        self.dlg.acceptButton.clicked.connect(self.accept_processing)
+        self.dlg.reviewButton.clicked.connect(self.show_review_dialog)
+        self.review_dialog.accepted.connect(self.submit_review)
+
+        # ========== 13. PROVIDERS ==========
+        self.dlg.minIntersectionSpinBox.valueChanged.connect(self.filter_metadata)
+        self.dlg.maxCloudCoverSpinBox.valueChanged.connect(self.filter_metadata)
+        self.dlg.metadataFrom.dateChanged.connect(self.filter_metadata)
+        self.dlg.metadataTo.dateChanged.connect(self.filter_metadata)
+        self.dlg.searchImageryButton.clicked.connect(self.preview_or_search)
+
+        self.dlg.addProvider.clicked.connect(self.add_provider)
+        self.dlg.editProvider.clicked.connect(self.edit_provider)
+        self.dlg.removeProvider.clicked.connect(self.remove_provider)
+
+        self.config_search_columns = ConfigColumns()
+        self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
+            self.sync_table_selection_with_image_id_and_layer)
+        self.app_context.meta_layer_table_connection = None
+        self.dlg.getMetadata.clicked.connect(self.get_metadata)
+        self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
+        self.dlg.rasterSourceChanged.connect(self.on_provider_change)
+        self.dlg.clearSearch.clicked.connect(self.clear_metadata)
+        self.dlg.metadataTableFilled.connect(self.filter_metadata)
+        self.dlg.searchRightButton.clicked.connect(self.show_search_next_page)
+        self.dlg.searchLeftButton.clicked.connect(self.show_search_previous_page)
+
+        # ========== 14. ZOOM SELECTOR CONFIGURATION ==========
         if self.app_context.zoom_selector:
             self.dlg.zoomCombo.currentIndexChanged.connect(self.on_zoom_change)
             saved_zoom = self.app_context.settings.value('zoom')
@@ -344,7 +360,7 @@ class Mapflow(QObject):
                     self.app_context.settings.setValue('zoom', None)
                 else:
                     self.dlg.zoomCombo.setCurrentIndex(zoom_index)
-
+    
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
             self.iface.addCustomActionForLayer(self.add_layer_action, layer)
@@ -518,19 +534,6 @@ class Mapflow(QObject):
             enabled = block["enabled"]
             self.app_context.settings.setValue(f"wd/{wd.id}/{name}", enabled)
 
-    '''def set_available_imagery_sources(self, wd: str) -> None:
-        """Restrict the list of imagery sources according to the selected model."""
-        if self.config.SENTINEL_WD_NAME_PATTERN in wd and self.provider_service.providers != self.sentinel_providers:
-            self.provider_service.providers = self.sentinel_providers
-        elif not self.provider_service.providers == self.basemap_providers:
-            self.provider_service.providers = self.basemap_providers
-        else:
-            # Providers did not change
-            return
-        provider_names = {p.name: getattr(p, 'api_name', p.name) for p in self.provider_service.providers}
-        self.dlg.set_raster_sources(provider_names=provider_names,
-                                    default_provider_names=['Mapbox', '🌍 Mapbox Satellite']) ''' #!
-
     def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
         """Filter out the metadata table and layer every time user changes a filter."""
         try:
@@ -632,7 +635,7 @@ class Mapflow(QObject):
         if isinstance(provider, MyImageryProvider):
             my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
             self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
-            self.calculate_aoi_area_catalog()
+            self.area_calculator_service.calculate_aoi_area_catalog()
             self.processing_service.validate_all_processing_params(allow_empty_name=True)
             self.dlg.zoomCombo.setEnabled(False)
             self.dlg.zoomCombo.setCurrentIndex(0)
@@ -641,7 +644,7 @@ class Mapflow(QObject):
                 self.dlg.zoomCombo.setEnabled(False)
             else:
                 self.dlg.zoomCombo.setEnabled(True)
-            self.calculate_aoi_area_polygon_layer(polygon_layer)
+            self.area_calculator_service.calculate_aoi_area_polygon_layer(polygon_layer)
         if provider.requires_image_id:
             imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
             self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
@@ -730,17 +733,6 @@ class Mapflow(QObject):
         else:
             self.dlg_provider.setup(provider)
 
-    ''' def update_providers(self) -> None:
-        """Update imagery & providers dropdown list after edit/add/remove
-        It works both ways: if providers is specified, it updates the settings;
-        otherwise loads providers list from settings
-        """
-        self.provider_service.user_providers.to_settings(self.app_context.settings)
-        provider_names = {p.name: getattr(p, 'api_name', p.name) for p in self.provider_service.providers}
-        for name, api_name in provider_names.items():
-            self.dlg.providerCombo.addItem(name, api_name)
-        self.set_available_imagery_sources(self.dlg.modelCombo.currentText()) #! '''
-
     def monitor_polygon_layer_feature_selection(self, layers: List[QgsMapLayer]) -> None:
         """Set up connection between feature selection in polygon layers and AOI area calculation.
 
@@ -752,10 +744,10 @@ class Mapflow(QObject):
         :param layers: A list of layers of any type (all non-polygon layers will be skipped)
         """
         for layer in filter(layer_utils.is_polygon_layer, layers):
-            layer.selectionChanged.connect(self.calculate_aoi_area_selection)
-            layer.geometryChanged.connect(self.calculate_aoi_area_layer_edited)
-            layer.featureAdded.connect(self.calculate_aoi_area_layer_edited)
-            layer.featuresDeleted.connect(self.calculate_aoi_area_layer_edited)
+            layer.selectionChanged.connect(self.area_calculator_service.calculate_aoi_area_selection)
+            layer.geometryChanged.connect(self.area_calculator_service.calculate_aoi_area_layer_edited)
+            layer.featureAdded.connect(self.area_calculator_service.calculate_aoi_area_layer_edited)
+            layer.featuresDeleted.connect(self.area_calculator_service.calculate_aoi_area_layer_edited)
 
     def toggle_imagery_search(self,
                               provider):
@@ -836,20 +828,6 @@ class Mapflow(QObject):
             return True
         self.alert(self.tr('Please, specify an existing output directory'))
         return False
-
-    """ @property
-    def imagery_search_provider_index(self):
-        for index, provider in enumerate(self.provider_service.providers):
-            if isinstance(provider, ImagerySearchProvider):
-                return index
-        return -1 """ #!
-
-    @property
-    def imagery_search_provider(self):
-        for provider in self.provider_service.providers:
-            if isinstance(provider, ImagerySearchProvider):
-                return provider
-        return None
 
     def replace_search_provider(self, provider: ProviderInterface):
         if not provider:
@@ -1007,7 +985,7 @@ class Mapflow(QObject):
         index = aoi_layer_tree.parent().children().index(aoi_layer_tree)
         self.result_loader.add_layer(layer=self.app_context.metadata_layer, order=index+1)
         # Connect layer with metadata table
-        self.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(
+        self.app_context.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(
             self.sync_layer_selection_with_table)
         self.app_context.search_footprints = {
             feature['local_index']: feature
@@ -1156,7 +1134,7 @@ class Mapflow(QObject):
             'memory'
         )
         self.app_context.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
-        self.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(
+        self.app_context.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(
             self.sync_layer_selection_with_table)
         # Poll processings
         metadata_fetch_timer = QTimer(self.dlg)
@@ -1447,12 +1425,12 @@ class Mapflow(QObject):
 
         selected_cells = self.dlg.metadataTable.selectedItems()
         if not selected_cells:
-            local_indices = []
+            selected_rows = local_indices = []
         else:
             selected_rows = [cell.row() for cell in selected_cells]
             local_indices = [self.dlg.metadataTable.item(row, local_index_column).text() for row in selected_rows]
         try:
-            self.app_context.metadata_layer.selectionChanged.disconnect(self.meta_layer_table_connection)
+            self.app_context.metadata_layer.selectionChanged.disconnect(self.app_context.meta_layer_table_connection)
             # disconnect to prevent loop of signals
         except (RuntimeError, AttributeError, TypeError):
             # metadata layer was removed or not initialized
@@ -1464,22 +1442,24 @@ class Mapflow(QObject):
         except RuntimeError:  # layer has been deleted
             pass
         except Exception as e:
-            self.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(
+            self.app_context.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(
                 self.sync_layer_selection_with_table)
             raise e
-        self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
-        self.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(
+        self.area_calculator_service.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+        self.app_context.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(
             self.sync_layer_selection_with_table)
         
-        # Set zoom (if available) #!
+        # Set zoom (if available)
         if self.app_context.zoom_selector:
-            zooms = [self.dlg.metadataTable.item(row, self.config.ZOOM_COLUMN_INDEX).text() for row in selected_rows]
-            zoom_index = self.dlg.zoomCombo.findText(zooms[0]) # different zooms are not allowed
+            if selected_rows:
+                zooms = [self.dlg.metadataTable.item(row, self.config.ZOOM_COLUMN_INDEX).text() for row in selected_rows]
+                zoom_index = self.dlg.zoomCombo.findText(zooms[0]) # different zooms are not allowed
+            else:
+                zoom_index = -1
             if zoom_index == -1:
                 self.dlg.zoomCombo.setCurrentIndex(0)
             else:
                 self.dlg.zoomCombo.setCurrentIndex(zoom_index)
-
 
     def sync_layer_selection_with_table(self, selected_ids: List[int]) -> None:
         """
@@ -1555,159 +1535,6 @@ class Mapflow(QObject):
             #self.dlg.metadataTable.selectRow(items[0].row())
         # Redundant since imageId is temorary removed
 
-    def get_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
-        if not layer or layer.featureCount() == 0:
-            if not self.app_context.user_role.can_start_processing:
-                reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.app_context.user_role.value)
-            else:
-                reason = self.tr('Set AOI to start processing')
-            self.dlg.disable_processing_start(reason, clear_area=True)
-            self.app_context.aoi = self.app_context.aoi_size = None
-            return
-
-        features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
-        if QgsWkbTypes.flatType(layer.wkbType()) == QgsWkbTypes.Polygon:
-            geoms_count = len(features)
-        elif QgsWkbTypes.flatType(layer.wkbType()) == QgsWkbTypes.MultiPolygon:
-            geoms_count = layer_utils.count_polygons_in_layer(features)
-        else: # type of layer is not supported
-            # (but it shouldn't be the case, because point and line layers will not appear in AOI-combo,
-            # and collections are devided by QGIS into separate layers with different types)
-            raise ValueError("Only polygon and multipolyon layers supported for this operation")
-        if self.app_context.max_aois_per_processing >= geoms_count:
-            if len(features) == 1:
-                aoi = features[0].geometry()
-            else:
-                aoi = QgsGeometry.collectGeometry([feature.geometry() for feature in features])
-            self.calculate_aoi_area(aoi, layer.crs())
-            return aoi
-        else:  # self.app_context.max_aois_per_processing < number of polygons (as features and as parts of multipolygons):
-            if not self.app_context.user_role.can_start_processing:
-                reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.app_context.user_role.value)
-            else:
-                reason = self.tr('AOI must contain not more than {} polygons').format(self.app_context.max_aois_per_processing)
-            self.dlg.disable_processing_start(reason, clear_area=True)
-            self.app_context.aoi = self.app_context.aoi_size = None
-
-    def calculate_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
-        """Get the AOI size total when polygon another layer is chosen,
-        current layer's selection is changed or the layer's features are modified.
-
-        :param layer: The current polygon layer
-        """
-        self.get_aoi_area_polygon_layer(layer)
-        provider = self.provider_service.providers[self.dlg.providerIndex()]
-        if isinstance(provider, MyImageryProvider):
-            self.calculate_aoi_area_catalog()
-
-    def calculate_aoi_area_use_image_extent(self) -> None:
-        """Get the AOI size when the Use image extent checkbox is toggled.
-
-        :param use_image_extent: The current state of the checkbox
-        """
-        provider = self.provider_service.providers[self.dlg.providerIndex()]
-        if isinstance(provider, MyImageryProvider):
-            self.calculate_aoi_area_catalog()
-        else:
-            self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
-
-    def calculate_aoi_area_catalog(self) -> None:
-        """Get the AOI size when a new mosaic or image in 'My imagery' is selected.
-        """
-        # If different provider is chosen, set it to My imagery
-        self.data_catalog_service.set_catalog_provider(self.provider_service.providers)
-        image = self.data_catalog_service.selected_image()
-        mosaic = self.data_catalog_service.selected_mosaic()
-        self.app_context.selected_mosaic = mosaic
-        self.app_context.selected_image = image
-        if image or mosaic:
-            self.use_imagery_extent.setEnabled(True)
-            if image:
-                catalog_aoi = QgsGeometry().fromWkt(image.footprint)
-                self.use_imagery_extent.setText(self.tr("Use extent of '{name}'").format(name=image.filename))
-            else:
-                catalog_aoi = QgsGeometry().fromWkt(mosaic.footprint)
-                self.use_imagery_extent.setText(self.tr("Use extent of '{name}'").format(name=mosaic.name))
-            if not self.dlg.polygonCombo.currentLayer():
-                self.dlg.disable_processing_start(reason=self.tr("Select AOI to start processing"), clear_area=True)
-                return
-            aoi_geom = layer_utils.collect_geometry_from_layer(self.dlg.polygonCombo.currentLayer())
-            selected_aoi = helpers.to_wgs84(aoi_geom, self.dlg.polygonCombo.currentLayer().crs())
-            aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
-                                              selected_aoi=selected_aoi)
-        else:
-            aoi = self.get_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
-            self.use_imagery_extent.setText(self.tr("Use imagery extent"))
-            self.use_imagery_extent.setEnabled(False)
-        if not self.app_context.aoi: # other error message is already shown
-            pass
-        elif not aoi: # error after intersection
-            self.dlg.disable_processing_start(reason=self.tr("Selected AOI does not intersect the selected imagery"),
-                                                clear_area=True)
-            return
-        # Don't recalculate AOI if first selected mosaic/image didn't change
-        selected_mosaics = self.dlg.mosaicTable.selectedIndexes()
-        selected_images = self.dlg.imageTable.selectedIndexes()
-        if len(selected_mosaics) > 1 and self.dlg.selected_mosaic_cell == selected_mosaics[0] \
-        or len(selected_images) > 1 and self.dlg.selected_image_cell == selected_images[0]:
-            return
-        self.calculate_aoi_area(aoi, helpers.WGS84)
-
-    def calculate_aoi_area_selection(self, _: List[QgsFeature]) -> None:
-        """Get the AOI size when the selection changed on a polygon layer.
-
-        :param _: A list of currently selected features
-        """
-        layer = self.dlg.polygonCombo.currentLayer()
-        if layer == self.iface.activeLayer():
-            self.calculate_aoi_area_polygon_layer(layer)
-
-    def calculate_aoi_area_layer_edited(self) -> None:
-        """Get the AOI size when a feature is added or remove from a layer."""
-        layer = self.sender()
-        if layer == self.dlg.polygonCombo.currentLayer():
-            self.calculate_aoi_area_polygon_layer(layer)
-
-    def calculate_aoi_area(self, aoi: QgsGeometry, crs: QgsCoordinateReferenceSystem) -> None:
-        """Display the AOI size in sq.km.
-            This is the only place where app_context.aoi is changed! This is important because it is the place where we
-            send request to update processing cost!
-        :param aoi: the processing area.
-        :param crs: the CRS of the processing area.
-        """
-        if crs != helpers.WGS84:
-            aoi = helpers.to_wgs84(aoi, crs)
-
-        self.app_context.aoi = aoi  # save for reuse in processing creation or metadata requests
-        # fetch UI data
-        provider_index = self.dlg.providerIndex()
-        selected_images = self.dlg.metadataTable.selectedItems()
-        if selected_images:
-            rows = list(set(image.row() for image in selected_images))
-            local_image_indices = [int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text()) 
-                                   for row in rows]
-        else:
-            local_image_indices = []
-        # This is AOI with respect to selected Maxar images and raster image extent
-        try:
-            real_aoi = self.get_aoi(provider_index=provider_index,
-                                    local_image_indices=local_image_indices,
-                                    selected_aoi=self.app_context.aoi)
-        except ImageIdRequired:
-            # AOI is OK, but image ID is not selected,
-            # in this case we should use selected AOI without cut by AOI
-            real_aoi = self.app_context.aoi
-        except Exception as e:
-            # Could not calculate AOI size
-            real_aoi = QgsGeometry()
-        try:
-            self.app_context.aoi_size = layer_utils.calculate_aoi_area(real_aoi, self.app_context.project.transformContext())
-        except Exception as e:
-            self.app_context.aoi_size = 0
-        
-        self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.app_context.aoi_size))
-        self.processing_service.update_processing_cost()
-
     def check_processing_ui(self, allow_empty_name=False):
         processing_name = self.dlg.processingName.text()
 
@@ -1725,21 +1552,6 @@ class Mapflow(QObject):
 
         return True
 
-    def crop_aoi_with_maxar_image_footprint(self,
-                                            aoi: QgsFeature,
-                                            local_image_indices: List[int]):
-        extents = [self.app_context.search_footprints[local_image_index] for local_image_index in local_image_indices]
-        try:
-            extents = [self.app_context.search_footprints[local_image_index] for local_image_index in local_image_indices]
-            clipped_aoi_features = clip_aoi_to_image_extent(aoi, extents)
-            aoi = QgsGeometry.fromWkt('GEOMETRYCOLLECTION()')
-            for feature in clipped_aoi_features:
-                geom = feature.geometry()
-                aoi = aoi.combine(geom)
-        except StopIteration:
-            raise AoiNotIntersectsImage()
-        return aoi
-
     def get_processing_params(self,
                               provider_index: Optional[int],
                               s3_uri: str = "",
@@ -1755,269 +1567,6 @@ class Mapflow(QObject):
                                                                        zoom=zoom)
         meta.update(**provider_meta)
         return provider_params, meta
-
-    def get_aoi(self,
-                provider_index: Optional[int],
-                selected_aoi: QgsGeometry,
-                local_image_indices: Optional[List[int]]) -> QgsGeometry:
-        if not helpers.check_aoi(selected_aoi):
-            raise BadProcessingInput(self.tr('Bad AOI. AOI must be inside boundaries:'
-                                             ' \n[-180, 180] by longitude, [-90, 90] by latitude'))
-        else:
-            provider = self.provider_service.providers[provider_index]
-            if not provider:
-                raise PluginError(self.tr('Providers are not initialized'))
-            if len(local_image_indices) != 0:
-                if isinstance(provider, (MaxarProvider, ImagerySearchProvider)):
-                    aoi = self.crop_aoi_with_maxar_image_footprint(selected_aoi, local_image_indices)
-                    if not aoi:
-                        raise AoiNotIntersectsImage()
-                elif isinstance(provider, SentinelProvider):
-                    # todo: crop sentinel aoi with image footprint?
-                    aoi = selected_aoi
-                else:
-                    aoi = selected_aoi
-                    # We ignore image ID if the provider does not support it
-                    # raise PluginError(self.tr("Selection is not available for  {}").format(provider.name))
-            elif provider.requires_image_id:
-                aoi = selected_aoi
-                # raise PluginError(self.tr("Please select image in Search table for {}").format(provider.name))
-            elif isinstance(provider, MyImageryProvider):
-                image = self.data_catalog_service.selected_image()
-                mosaic = self.data_catalog_service.selected_mosaic()
-                if image:
-                    catalog_aoi = QgsGeometry().fromWkt(image.footprint)
-                elif mosaic:
-                    catalog_aoi = QgsGeometry().fromWkt(mosaic.footprint)
-                if image or mosaic:
-                    aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
-                                                      selected_aoi=selected_aoi)
-                    if not aoi:
-                        raise AoiNotIntersectsImage()
-                    aoi = selected_aoi
-                else:
-                    aoi = selected_aoi
-            else:
-                aoi = selected_aoi
-        return aoi
-
-    '''
-    def create_processing_request(self,
-                                  allow_empty_name: bool = False) -> Tuple[Optional[PostProcessingSchema], str]:
-        processing_name = self.dlg.processingName.text()
-        wd_name = self.dlg.modelCombo.currentText()
-        wd = self.app_context.get_workflow_def(wd_name)
-        provider_index = self.dlg.providerIndex()
-        provider = self.provider_service.providers[provider_index]
-        s3_uri = self.get_s3_uri(provider)
-
-        local_image_indices = []
-        provider_names, product_types = [], []
-        image_ids, selection_error = None, ""
-        mosaic_id = None
-        if isinstance(provider, ImagerySearchProvider):
-            selected_images = self.dlg.metadataTable.selectedItems()
-            if selected_images:
-                local_image_indices = self.get_local_image_indices(selected_images) 
-                provider_names, product_types = self.get_search_providers(local_image_indices)
-                image_ids, selection_error = self.get_search_images_ids(local_image_indices, provider_names, product_types)
-                if selection_error:
-                    return None, selection_error
-                provider_name = provider_names[0] if provider_names else None # the same for all [i] if there was no 'selection_error'
-
-        elif isinstance(provider, MyImageryProvider):
-            selected_mosaics = self.data_catalog_service.selected_mosaics()
-            selected_images = self.data_catalog_service.selected_images()
-            if not selected_mosaics:
-                mosaic_id = None
-                image_ids = None
-            else:
-                mosaic_id = selected_mosaics[0].id
-                if not selected_images:
-                    image_ids = None
-                else:
-                    image_ids = [image.id for image in selected_images]
-                    mosaic_id = None
-            self.provider_service.my_imagery_provider_instance.mosaic_id = mosaic_id
-            self.provider_service.my_imagery_provider_instance.image_ids = image_ids
-        if not provider_names:
-            try:
-                provider_name = provider.api_name
-            except:
-                provider_name = None
-
-        zoom, zoom_error = self.get_zoom(provider, local_image_indices, product_types)
-        if zoom_error:
-            return None, zoom_error
-        
-        try:
-            self.check_processing_ui(allow_empty_name=allow_empty_name)
-            provider_params, processing_meta = self.get_processing_params(provider_index=provider_index,
-                                                                          s3_uri=s3_uri,
-                                                                          zoom=zoom,
-                                                                          provider_name=provider_name)
-            if self.app_context.zoom_selector:
-                if isinstance(provider_params, PostSourceSchema): # no zoom for tifs
-                    if provider_params.source_type == 'tif':
-                        provider_params.zoom = None
-
-            aoi = self.get_aoi(provider_index=provider_index,
-                               local_image_indices=local_image_indices,
-                               selected_aoi=self.app_context.aoi)
-        except AoiNotIntersectsImage:
-            return None, self.tr("Selected AOI does not intersect the selected imagery")
-        except ImageIdRequired:
-            return None, self.tr("This provider requires image ID. Use search tab to find imagery for you requirements, "
-                                 "and select image in the table.")
-        except PluginError as e:
-            return None, str(e)
-        if not self.app_context.current_project:
-            return None, self.tr("No project is selected")
-        project_id = self.app_context.current_project.id
-        processing_params = PostProcessingSchemaV2(
-            name=processing_name,
-            description=None,
-            projectId=project_id,
-            wdId=wd.id,
-            geometry=json.loads(aoi.asJson()),
-            params=provider_params,
-            meta=processing_meta,
-            blocks=wd.get_enabled_blocks(self.dlg.enabled_blocks())
-        )
-        return processing_params, ""
-    '''
-
-    '''
-    def create_processing(self) -> None:
-        """Create and start a processing on the server.
-
-        Is called by clicking the 'Create processing' button.
-        """
-        # get the data from UI
-        processing_params, error = self.create_processing_request()
-        if not processing_params:
-            self.alert(error, icon=QMessageBox.Warning)
-            return
-        if not helpers.check_processing_limit(billing_type=self.app_context.billing_type,
-                                              remaining_limit=self.app_context.remaining_limit,
-                                              remaining_credits=self.app_context.remaining_credits,
-                                              aoi_size=self.app_context.aoi_size,
-                                              processing_cost=self.processing_service.processing_cost):
-            self.alert(self.tr('Processing limit exceeded. '
-                               'Visit "<a href=\"https://app.mapflow.ai/account/balance\">Mapflow</a>" '
-                               'to top up your balance'),
-                       icon=QMessageBox.Warning)
-            return
-        # Define starting to use later after confirmation or without it
-        def start_processing():
-            self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
-            try:
-                self.dlg.startProcessing.setEnabled(False)
-                self.processing_service.start_processing() #!(processing_params)
-            except Exception as e:
-                self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
-        # Show processing start confirmation dialog if checkbox is checked
-        if self.dlg.cornfirmProcessingStart.isChecked():
-            dialog = ConfirmProcessingStartDialog(self.dlg)
-            # Define actions on checkbox toggling
-            def set_start_confirmation():
-                # Set "Confirm" checkbox opposite to "Don't show again" if they are not already the same
-                if not dialog.checkBox.isChecked() != self.dlg.cornfirmProcessingStart.isChecked():
-                    self.dlg.cornfirmProcessingStart.setChecked(not dialog.checkBox.isChecked())
-                    self.app_context.settings.setValue("confirmProcessingStart", str(not dialog.checkBox.isChecked()))
-            dialog.checkBox.toggled.connect(set_start_confirmation)
-            dialog.accepted.connect(start_processing)
-            # Fill dialog with parameters
-            if self.app_context.billing_type==BillingType.credits:
-                price = self.tr("{cost} credits").format(cost=self.processing_service.processing_cost)
-            else:
-                price = None
-            provider = self.provider_service.providers[self.dlg.providerIndex()]
-            provider_text = provider.name
-            if isinstance(provider, DefaultProvider):
-                zoom = processing_params.params.sourceParams.dataProvider.zoom
-            elif isinstance(provider, MyImageryProvider):
-                image = self.data_catalog_service.selected_image()
-                mosaic = self.data_catalog_service.selected_mosaic()
-                if image:
-                    provider_text += " ({name})". format(name=image.filename)
-                elif mosaic:
-                    provider_text += " ({name})". format(name=mosaic.name)
-                zoom = None
-            elif isinstance(provider, ImagerySearchProvider):
-                selected_cells = self.dlg.metadataTable.selectedItems()
-                if not selected_cells:
-                    image_id = None
-                else:
-                    id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
-                    image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
-                    # Add image date to processing meta, if source is Imagery search
-                    date_column = tuple(self.config_search_columns.METADATA_TABLE_ATTRIBUTES.values()).index('acquisitionDate')
-                    image_date = self.dlg.metadataTable.item(selected_cells[0].row(), date_column)
-                    if image_date:
-                        image_date_text = image_date.text()
-                        processing_params.meta["image-date"] = image_date_text
-                if image_id:
-                    provider_text += " ({iid})".format(iid=image_id)
-                zoom = processing_params.params.sourceParams.imagerySearch.zoom
-            elif isinstance(provider, UsersProvider):
-                zoom = processing_params.params.sourceParams.userDefined.zoom
-            dialog.setup(name=processing_params.name,
-                         price=price,
-                         provider=provider_text,
-                         zoom=zoom,
-                         area=str(round(self.app_context.aoi_size, 2))+self.tr(" sq.km"),
-                         model=self.dlg.modelCombo.currentText(),
-                         blocks=[self.dlg.modelOptionsLayout.itemAt(i).widget()
-                                 for i in range(self.dlg.modelOptionsLayout.count())])
-            dialog.deleteLater()
-        # Or just post the processing
-        else:
-            start_processing()
-        return '''
-
-    def post_processing(self, request_body: PostProcessingSchema) -> None:
-        """Submit a processing to Mapflow.
-
-        :param request_body: Processing parameters.
-        """
-        if self.app_context.project_id != 'default':
-            request_body.projectId = self.app_context.project_id
-        self.http.post(
-            url=f'{self.server}/processings/v2',
-            callback=self.post_processing_callback,
-            callback_kwargs={'processing_name': request_body.name},
-            error_handler=self.post_processing_error_handler,
-            use_default_error_handler=False,
-            body=request_body.as_json().encode()
-        )
-
-    def post_processing_error_handler(self, response: QNetworkReply) -> None:
-        """Error handler for processing creation requests.
-
-        :param response: The HTTP response.
-        """
-        error = response.error()
-        response_body = response.readAll().data().decode()
-        if error == QNetworkReply.ContentAccessDenied \
-                and "data provider" in response_body.lower():
-            self.alert(self.tr('The selected data provider is unavailable on your plan. \n '
-                               'Upgrade your subscription to get access to the data. \n'
-                               'See pricing at <a href=\"https://mapflow.ai/pricing\">mapflow.ai</a>'),
-                       QMessageBox.Information)
-            # provider ID is the last "word" in the message.
-            # In this case, when "data provider" is in the message, there can't be index error
-        else:
-            error_summary, email_body = get_error_report_body(response=response,
-                                                              response_body=response_body,
-                                                              plugin_version=self.app_context.plugin_version,
-                                                              error_message_parser=api_message_parser)
-            ErrorMessageWidget(parent=QApplication.activeWindow(),
-                               text= error_summary,
-                               title=self.tr('Processing creation failed'),
-                               email_body=email_body).show()
-        if not False in self.app_context.allow_enable_processing.values():
-            self.dlg.startProcessing.setEnabled(True)
 
     def update_processing_limit(self) -> None:
         """Set the user's processing limit as reported by Mapflow."""
@@ -2081,7 +1630,6 @@ class Mapflow(QObject):
         # We want to clear the data from previous lauunch to avoid confusion
         for provider in self.provider_service.providers:
             provider.clear_saved_search(self.app_context.temp_dir)
-        #! self.provider_service.update_providers_list(self.provider_service.default_providers)
     
     def setup_search_providers(self, providers_data):
         search_providers = ProvidersList([DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
@@ -2580,7 +2128,7 @@ class Mapflow(QObject):
 
     def enable_review_submit(self, status_ok: bool) -> None:
         self.dlg.enable_review(status_ok,
-                               self.tr("Only correctly finished processings (status OK) can be reviewed"))
+                               self.tr("Only correctly finished processings with 'Review required' status can be reviewed"))
 
     def enable_rating_submit(self, status_ok: bool) -> None:
         rating_selected = 5 >= self.dlg.ratingComboBox.currentIndex() > 0
@@ -3040,80 +2588,6 @@ class Mapflow(QObject):
         except KeyError:
             product_types = []
         return provider_names, product_types
-
-    def get_search_images_ids(self, local_image_indices, provider_names, product_types):
-        selected_rows = list(set(item.row() for item in self.dlg.metadataTable.selectedItems()))
-        if not selected_rows:
-            image_ids = None
-        else:
-            id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
-            image_ids = [self.dlg.metadataTable.item(row, id_column_index).text() for row in selected_rows]
-        selection_error = ""
-        try:
-            if len(set(provider_names)) > 1:
-                if set(product_types) != set(["Mosaic"]):
-                    selection_error = self.tr("You can launch multiple image processing only if they have the same provider")
-        except:
-            return image_ids, selection_error
-        # Require image id only for single images and not mosaics
-        if image_ids:
-            self.provider_service.imagery_search_provider_instance.requires_id = True
-            self.provider_service.imagery_search_provider_instance.image_ids = image_ids
-        else:
-            self.provider_service.imagery_search_provider_instance.requires_id = False
-            self.provider_service.imagery_search_provider_instance.image_ids = []
-        return image_ids, selection_error
-    
-    """
-    def get_zoom(self, provider, local_image_indices, product_types):
-        zoom = None
-        zoom_error = ""
-        if isinstance(provider, ImagerySearchProvider):
-            if local_image_indices:
-                try:
-                    zooms = [None if str(self.app_context.search_footprints[local_image_index].attribute("zoom")) == "NULL"
-                             else self.app_context.search_footprints[local_image_index].attribute("zoom")
-                             for local_image_index in local_image_indices]
-                except KeyError:
-                    zooms = []
-                # Allow zooms only for mosaics
-                if set(product_types) == set(["Mosaic"]):
-                    # No specified zoom if NULL is returned or it's None
-                    unique_zooms = set(filter(lambda x: (x is not None and x != QVariant()), zooms))
-                    # Forbid multiselection for results with different zooms
-                    if len(unique_zooms) > 1:
-                        zoom_error = self.tr("Selected search results must have the same zoom level")
-                    elif len(unique_zooms) == 1: # get unique zoom as a parameter
-                        zoom = str(int(list(unique_zooms)[0]))
-                elif len(product_types) == 0: # when duplicating processing with search, type field is empty
-                    zoom = zooms[0]
-            self.dlg.enable_zoom_selector(False, zoom)
-        elif isinstance(provider, MyImageryProvider):
-            self.dlg.enable_zoom_selector(False, zoom)
-        else:
-            if self.app_context.zoom_selector:
-                self.zoom = self.app_context.settings.value('zoom')
-                zoom = self.zoom
-            self.dlg.enable_zoom_selector(True, zoom)
-        print ("Test", zoom, zoom_error)
-        return zoom, zoom_error
-    """
-    
-    def get_s3_uri(self, provider):
-        s3_uri = None
-        if isinstance(provider, MyImageryProvider):
-            image = self.data_catalog_service.selected_image()
-            mosaic = self.data_catalog_service.selected_mosaic()
-            if image:
-                s3_uri = image.image_url
-            elif mosaic:
-                try:
-                    image_uri = self.data_catalog_service.images[0].image_url
-                    # to launch for the whole mosaic we need to use minio path without the filename
-                    s3_uri = image_uri.rsplit('/',1)[0]+'/'
-                except:
-                    s3_uri = None
-        return s3_uri
     
     def show_search_next_page(self):
         self.get_metadata(offset=self.search_page_offset + self.search_page_limit)
@@ -3145,207 +2619,6 @@ class Mapflow(QObject):
         if not self.check_if_output_directory_is_selected():
             return # only when outputDirectory is empty AND user closed selection dialog
         self.processing_service.duplicate_processing()
-
-    """ def restart_processing(self):
-        processing = self.selected_processing()
-        if not processing:
-            return
-        pid = processing.id_
-        if self.app_context.user_role.can_start_processing:
-            self.http.post(
-                url=f"{self.server}/processings/{pid}/restart",
-                callback=self.post_processing_callback,
-                callback_kwargs={'processing_name': processing.name},
-                error_handler=self.post_processing_error_handler,
-                use_default_error_handler=False
-            ) #! """
-    
-    """ def duplicate_processing(self):
-        processing = self.selected_processing()
-        print("s", processing)
-        if not processing:
-            return
-        self.dlg.disable_processing_start("")
-        self.allow_enable_processing['aoi_loaded'] = False
-        self.dlg.processingName.setText(processing.name)
-        self.duplicate_provider(processing)
-        self.duplicate_model(processing)
-        self.duplicate_model_options(processing)
-        self.result_loader.download_aoi_file(pid=processing.id_, callback=self.duplicate_aoi_callback) """ #!
-        
-    """ def duplicate_provider(self, processing):
-        try:
-            provider = processing.params.sourceParams
-            if isinstance(provider, DataProviderParams):
-                self.duplicate_data_provider(provider)
-            elif isinstance(provider, MyImageryParams):
-                self.app_context.allow_enable_processing['my_mosaic_loaded'] = False
-                self.duplicate_my_imagery(provider)
-            elif isinstance(provider, ImagerySearchParams):
-                pass # duplicate imagery search after aoi is downloaded
-            elif isinstance(provider, UserDefinedParams):
-                self.duplicate_user_provider(provider)
-        except:
-            self.alert(self.tr("Duplication failed on copying data source"))
-            for key in self.app_context.allow_enable_processing:
-                self.app_context.allow_enable_processing[key] = True
-            self.dlg.startProcessing.setEnabled(True)
-    
-    def duplicate_model(self, processing):
-        try:
-            if self.dlg.modelCombo.findText(processing.workflow_def) == -1: # index is -1, the item is not found
-                self.alert(self.tr("Model '{wd}' is not enabled for your account").format(wd=processing.workflow_def))
-                for key in self.app_context.allow_enable_processing:
-                    self.app_context.allow_enable_processing[key] = True
-                self.dlg.startProcessing.setEnabled(True)
-            else: # item is found
-                self.dlg.modelCombo.setCurrentText(processing.workflow_def)
-        except:
-            self.alert(self.tr("Duplication failed on copying model"))
-            for key in self.app_context.allow_enable_processing:
-                self.app_context.allow_enable_processing[key] = True
-            self.dlg.startProcessing.setEnabled(True)
-    
-    def duplicate_model_options(self, processing):
-        try:
-            model_options = []
-            enabled_options = []
-            for checkbox in self.dlg.modelOptions:
-                model_options.append(checkbox.text())
-            for block in processing.blocks:
-                if block.enabled:
-                    enabled_options.append(block.displayName)
-            options_to_enable = [option for option in enabled_options if option in model_options]
-            for checkbox in self.dlg.modelOptions:
-                if checkbox.text() in options_to_enable:
-                    checkbox.setChecked(True)
-                else:
-                    checkbox.setChecked(False) 
-            deleted_options = [enabled_option for enabled_option in enabled_options if enabled_option not in model_options]
-            if deleted_options:
-                self.alert(self.tr("The following options no longer exist, so they have not been duplicated: {}").format(', '.join(deleted_options)))
-                for key in self.app_context.allow_enable_processing:
-                    self.app_context.allow_enable_processing[key] = True
-                self.dlg.startProcessing.setEnabled(True)
-        except:
-            self.alert(self.tr("Duplication failed on copying model options"))
-            for key in self.app_context.allow_enable_processing:
-                self.aapp_context.llow_enable_processing[key] = True
-            self.dlg.startProcessing.setEnabled(True)
-
-    def duplicate_data_provider(self, provider: DataProviderParams):
-        provider_name = provider.dataProvider.providerName
-        index = self.dlg.sourceCombo.findData(provider_name)
-        if index == -1:
-            self.alert(self.tr("Provider '{provider}' is not enabled for your account").format(provider=provider_name))
-            for key in self.app_context.allow_enable_processing:
-                self.app_context.allow_enable_processing[key] = True
-            self.dlg.startProcessing.setEnabled(True)
-        else:
-            self.dlg.sourceCombo.setCurrentIndex(index)
-            if self.zoom_selector:
-                if provider.dataProvider.zoom:
-                    self.dlg.zoomCombo.setCurrentText(str(provider.dataProvider.zoom))
-                else:
-                    self.dlg.zoomCombo.setCurrentIndex(0)
-    
-    def duplicate_my_imagery(self, provider: MyImageryParams):
-        self.dlg.mosaicTable.clearSelection()
-        if provider.myImagery.imageIds:
-            self.app_context.allow_enable_processing['my_image_loaded'] = False
-            image_id = provider.myImagery.imageIds[0]
-            self.data_catalog_service.get_image(image_id)
-        elif provider.myImagery.mosaicId:
-            self.data_catalog_service.view.select_mosaic_cell(provider.myImagery.mosaicId)
-        my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
-        self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
-        self.data_catalog_service.set_catalog_provider(self.provider_service.providers)
-
-    def duplicate_imagery_search(self, provider: ImagerySearchParams):
-        self.dlg.sourceCombo.setCurrentIndex(self.imagery_search_provider_index)
-        # Setup table to have one row
-        self.dlg.metadataTable.clearContents()
-        self.dlg.metadataTable.setRowCount(1)
-        imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
-        self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
-        # Only name, zoom and id are returned, so we create dict with them as values and indecies as keys
-        columns = {self.config.NAME_COLUMN_INDEX: provider.imagerySearch.dataProvider, 
-                   self.config.MAXAR_ID_COLUMN_INDEX: provider.imagerySearch.imageIds[0], 
-                   self.config.ZOOM_COLUMN_INDEX: provider.imagerySearch.zoom,
-                   self.config.LOCAL_INDEX_COLUMN: 0}
-        # And with column indecies we get corresponding field names
-        column_names = []
-        for index in columns.keys():
-            column_names.append(list(self.config_search_columns.METADATA_TABLE_ATTRIBUTES.values())[index])
-        # Create pseudo search metadata vector layer
-        self.metadata_layer = QgsVectorLayer('polygon?crs=epsg:4326&index=yes&' +
-                                             '&'.join(f'field={name}' for name in column_names),
-                                            'Duplicated Imagery Search',
-                                            'memory')
-        data_provider = self.metadata_layer.dataProvider()
-        # Fill this layer with AOI (since we don't have accsess to footprint)
-        for f in self.dlg.polygonCombo.currentLayer().getFeatures():
-            feature = QgsFeature(self.metadata_layer.fields())
-            feature.setGeometry(f.geometry())
-            self.metadata_layer.startEditing()
-            for column, value in columns.items():
-                field_name = list(self.config_search_columns.METADATA_TABLE_ATTRIBUTES.values())[column]
-                feature.setAttribute(field_name, value)
-            data_provider.addFeatures([feature])
-            self.metadata_layer.commitChanges()
-        self.metadata_layer.updateExtents()
-        self.meta_layer_table_connection = self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
-        # Fill metadata table with the returned values
-        for column, value in columns.items():
-            table_item = QTableWidgetItem()
-            table_item.setData(Qt.DisplayRole, value)
-            self.dlg.metadataTable.setItem(0, column, table_item)
-        # Create pseudo footprints dict for one created feature
-        self.search_footprints = {0: feature for feature in self.metadata_layer.getFeatures()}
-        self.dlg.metadataTableFilled.emit()
-        self.dlg.metadataTable.selectRow(0)
-    
-    def duplicate_user_provider(self, provider: UserDefinedParams):
-        duplicated_provider = None
-        for p in self.provider_service.providers:
-            if isinstance(p, UsersProvider) and p.url == provider.userDefined.url:
-                duplicated_provider = p
-                self.dlg.sourceCombo.setCurrentText(duplicated_provider.name)
-        if not duplicated_provider:
-            provider_dict = dict(option_name=provider.userDefined.sourceType.lower(),
-                                name=self.tr("Duplicated user provider"),
-                                url=provider.userDefined.url,
-                                crs=(provider.userDefined.crs.upper() 
-                                     if provider.userDefined.crs 
-                                     else None),
-                                credentials=BasicAuth(str(provider.userDefined.rasterLogin), 
-                                                        str(provider.userDefined.rasterPassword))
-                                                        if provider.userDefined.rasterLogin
-                                                        else BasicAuth(),
-                                save_credentials=True)
-            duplicated_provider = create_provider(**provider_dict)
-            self.user_providers.append(duplicated_provider)
-            provider_index = len(self.provider_service.providers)
-            self.update_providers()
-            self.dlg.setProviderIndex(provider_index)
-        if self.zoom_selector:
-            self.dlg.zoomCombo.setCurrentText(str(provider.userDefined.zoom))
-
-    def duplicate_aoi_callback(self, response: QNetworkReply, path: str) -> None:
-        self.result_loader.download_aoi_file_callback(response, path)
-        provider = self.selected_processing().params.sourceParams
-        if isinstance(provider, ImagerySearchParams):
-            self.duplicate_imagery_search(provider)
-        if self.app_context.allow_enable_processing['aoi_loaded'] == True: # it became true somewhere else in error handler
-            return
-        else: # if other two are True - enable start
-            self.app_context.allow_enable_processing['aoi_loaded'] = True
-            if not False in self.app_context.allow_enable_processing.values():
-                self.dlg.startProcessing.setEnabled(True) """ #!
-            
-    """ @property
-    def basemap_providers(self):
-        return ProvidersList(self.default_providers + self.provider_service.user_providers) """ #!
 
     def tr(self, message: str) -> str:
         """Localize a UI element text.
@@ -3381,3 +2654,10 @@ class Mapflow(QObject):
             self.login_basic(token)
         else:
             self.dlg_login.show()
+
+    @property
+    def imagery_search_provider(self):
+        for provider in self.provider_service.providers:
+            if isinstance(provider, ImagerySearchProvider):
+                return provider
+        return None

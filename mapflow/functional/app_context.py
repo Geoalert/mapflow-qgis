@@ -60,6 +60,7 @@ class AppContext:
     search_provider: Optional["ProviderInterface"] = None
     metadata_aoi: Optional[QgsGeometry] = None
     metadata_layer: Optional[QgsVectorLayer] = None
+    meta_layer_table_connection = None
     search_footprints: Dict[str, Any] = field(default_factory=dict)
     search_page_offset: int = 0
     
@@ -76,10 +77,6 @@ class AppContext:
     allow_enable_processing = {'aoi_loaded': True, 
                                'my_mosaic_loaded': True, 
                                'my_image_loaded': True} # all true -> startProcessing button can be enabled
-    
-    """ def __init__(self, config):
-        self.config = config
-        self.zoom_selector = (self.config.ZOOM_SELECTOR.lower() == "true") """
 
     @property
     def workflow_defs(self):
@@ -97,7 +94,6 @@ class AppContext:
             return None
         else:
             workflow_def = None
-            #! return self.workflow_defs.get(wd_name)
             for wd in self.workflow_defs.values():
                 if wd.name == wd_name:
                     workflow_def = wd

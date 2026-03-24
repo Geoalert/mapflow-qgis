@@ -649,7 +649,7 @@ class ResultsLoader(QObject):
             callback_kwargs={'processing': processing},
             use_default_error_handler=False,
             error_handler=self.download_results_error_handler,
-            timeout=3600 #!300
+            timeout=300
         )
 
     def download_results_callback(self, response: QNetworkReply, processing: ProcessingDTO) -> None:

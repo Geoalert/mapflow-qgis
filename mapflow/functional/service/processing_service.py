@@ -3,7 +3,7 @@ from uuid import UUID
 from typing import Dict, Optional, List
 from PyQt5.QtCore import QObject, QTimer
 from PyQt5.QtNetwork import QNetworkReply
-from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtWidgets import QMessageBox, QApplication
 from .provider_service import (get_provider_params, 
                                setup_provider_info, 
                                validate_provider_params, 
@@ -26,6 +26,8 @@ from ...schema.processing import ProcessingUIParams
 from ..service.alert_service import alert, AlertService
 from ..app_context import AppContext
 from ...functional.layer_utils import ResultsLoader
+from ...http import Http, get_error_report_body
+from ...dialogs.error_message_widget import ErrorMessageWidget
 
 class ProcessingService(QObject):
     """
@@ -50,7 +52,6 @@ class ProcessingService(QObject):
                                  dlg=dlg,
                                  iface=iface,
                                  result_loader=self.result_loader)
-
         self.processings = {}
         self.processings_history = None # ProcessingHistory() - local storage for active processings list
         self.processing_fetch_timer = QTimer(dlg)
@@ -67,11 +68,9 @@ class ProcessingService(QObject):
                 self.processings_history = ProcessingHistory.from_settings(
                     self.app_context.settings, UUID(self.app_context.current_project.id)
                 )
-                print(f"Read processings history: {len(self.processings_history.processing_statuses)}")
             except (ValueError, KeyError):
                 # If no history exists for this project, create new one
                 self.processings_history = ProcessingHistory(project_id=UUID(self.app_context.current_project.id))
-                print(f"Failed to read processings history: {len(self.processings_history.processing_statuses)}")
 
         # Optionally refresh processings for the new project
         # self.get_processings()  # Uncomment when this method is implemented
@@ -90,7 +89,6 @@ class ProcessingService(QObject):
                 error = self.tr('Please, specify a name for your processing')
                 alert(error)
                 disable_start = False
-                #! raise ProcessingInputDataMissing(error)
             if not self.app_context.aoi:
                 if self.dlg.polygonCombo.currentLayer():
                     raise BadProcessingInput(self.tr('Processing area layer is corrupted or has invalid projection'))
@@ -128,11 +126,6 @@ class ProcessingService(QObject):
         return error
 
     def start_processing(self):
-        """
-            if self.project_id != 'default':
-            request_body.projectId = self.project_id
-
-        """
         self.processing_fetch_timer.stop()
 
         processing_params, error = self.validate_all_processing_params(allow_empty_name=False)
@@ -274,10 +267,32 @@ class ProcessingService(QObject):
         self.view.add_new_processing(new_processing)
         self.dlg.startProcessing.setEnabled(True)
 
-    def start_processing_error_handler(self):
-        self.dlg.startProcessing.setEnabled(True)
-        self.processing_fetch_timer.start()
-        alert(self.tr("Failed to start processing"), QMessageBox.Warning)
+    def start_processing_error_handler(self, response: QNetworkReply) -> None:        
+        """Error handler for processing creation requests.
+
+        :param response: The HTTP response.
+        """
+        error = response.error()
+        response_body = response.readAll().data().decode()
+        if error == QNetworkReply.ContentAccessDenied \
+                and "data provider" in response_body.lower():
+            alert(self.tr('The selected data provider is unavailable on your plan. \n '
+                          'Upgrade your subscription to get access to the data. \n'
+                          'See pricing at <a href=\"https://mapflow.ai/pricing\">mapflow.ai</a>'),
+                       QMessageBox.Information)
+            # provider ID is the last "word" in the message.
+            # In this case, when "data provider" is in the message, there can't be index error
+        else:
+            error_summary, email_body = get_error_report_body(response=response,
+                                                              response_body=response_body,
+                                                              plugin_version=self.app_context.plugin_version,
+                                                              error_message_parser=api_message_parser)
+            ErrorMessageWidget(parent=QApplication.activeWindow(),
+                               text= error_summary,
+                               title=self.tr('Processing creation failed'),
+                               email_body=email_body).show()
+        if not False in self.app_context.allow_enable_processing.values():
+            self.dlg.startProcessing.setEnabled(True)
 
     # =============  REQUEST ================= #
     def setup_processings_table(self):
@@ -322,7 +337,6 @@ class ProcessingService(QObject):
         processings_dict = {p.id: p for p in processings}
         
         # Update history and get report of terminal status changes
-        print(f"In update_local_processings: {len(self.processings_history.processing_statuses)}")
         terminal_changes = self.processings_history.update(processings_dict, self.app_context.settings)
         
         # Notify user of newly completed/failed processings
@@ -387,39 +401,8 @@ class ProcessingService(QObject):
         
         Uses app_context for: aoi, workflow_defs, user_role, billing_type
         """
-        
-        """ aoi = self.app_context.aoi
-        workflow_defs = self.app_context.workflow_defs
-        user_role = self.app_context.user_role
-        
-        if not aoi:
-            # Here the button must already be disabled, and the warning text set
-            if self.view.dlg.startProcessing.isEnabled():
-                if not user_role.can_start_processing:
-                    reason = self.tr('Not enough rights to start processing in a shared project ({})').format(user_role.value)
-                else:
-                    reason = self.tr("Set AOI to start processing")
-                self.view.disable_processing_start(reason, clear_area=False)
-            return
-        elif not workflow_defs:
-            self.view.disable_processing_start(reason=self.tr("Error! Models are not initialized.\n"
-                                                             "Please, make sure you have selected a project"),
-                                              clear_area=True)
-            return
-        elif self.app_context.billing_type != BillingType.credits:
-            self.view.dlg.startProcessing.setEnabled(True)
-            self.view.dlg.processingProblemsLabel.clear()
-            return
-        else:  # billing_type == BillingType.credits
-            # TODO: This method needs access to providers and create_processing_request
-            # which are currently in Mapflow class. Consider:
-            # 1. Moving provider logic to a ProviderService
-            # 2. Passing a callback for request creation
-            # 3. Moving this entire cost calculation to Mapflow
-            #! pass """
-        
         processing_params, error = self.validate_all_processing_params(allow_empty_name=True)
-    
+
         if error:
             self.dlg.disable_processing_start(error, clear_area=error)
             return
@@ -427,26 +410,6 @@ class ProcessingService(QObject):
         self.api.get_cost(data=processing_params,
                           callback=self.calculate_processing_cost_callback,
                           error_handler=self.disable_processing_start)
-
-        """ # Use callback if available
-            if self.processing_request_callback:
-                request_body, error = self.processing_request_callback(allow_empty_name=True)
-                if error:
-                    self.view.disable_processing_start(error, clear_area=False)
-                    return
-                # Send request to calculate cost
-                self.api.get_cost(data=request_body,
-                                  callback=self.calculate_processing_cost_callback,
-                                  error_handler=self.disable_processing_start) """
-                
-        """ self.http.post(
-                    path="processing/cost/v2",
-                    callback=self.calculate_processing_cost_callback,
-                    error_handler=self.disable_processing_start,
-                    use_default_error_handler=False,
-                    body=request_body.as_json().encode()
-                ) #! """
-                
 
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         self.processing_cost = int(response.readAll().data().decode())
@@ -541,9 +504,6 @@ class ProcessingService(QObject):
         self.dlg.disable_processing_start("")
         self.app_context.allow_enable_processing['aoi_loaded'] = False
         self.dlg.processingName.setText(processing.name)
-        """ self.duplicate_provider(processing)
-        self.duplicate_model(processing)
-        self.duplicate_model_options(processing) """ #!
         duplicate_provider_and_model(processing)
         self.result_loader.download_aoi_file(pid=processing.id, callback=self.duplicate_aoi_callback)
 

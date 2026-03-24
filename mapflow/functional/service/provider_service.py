@@ -1,7 +1,7 @@
 # provider_service.py
 from typing import List, Optional, Tuple
 
-from PyQt5.QtCore import Qt, QObject, QVariant
+from PyQt5.QtCore import Qt, QObject, QVariant, pyqtSignal
 from PyQt5.QtWidgets import QTableWidgetItem, QWidget
 from PyQt5.QtNetwork import QNetworkReply
 from qgis.core import QgsGeometry, QgsVectorLayer, QgsFeature
@@ -30,20 +30,6 @@ class ProviderService(QObject):
     _instance: Optional['ProviderService'] = None
     _initialized: bool = False
     
-    """ def __new__(cls, providers, dlg, app_context: AppContext, config: Config, data_catalog_service: DataCatalogService):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls, providers, dlg, app_context, config, data_catalog_service)
-        return cls._instance """ #!
-    """ def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance """
-    """ def __new__(cls, providers, dlg, app_context: AppContext, config: Config, data_catalog_service: DataCatalogService):
-        if cls._instance is None:
-            # Use *args and **kwargs to pass all arguments to parent
-            cls._instance = super().__new__(cls)
-        return cls._instance """
-    
     def __init__(self, providers: ProvidersList, dlg, app_context: AppContext, config: Config, data_catalog_service: DataCatalogService):
         if ProviderService._initialized:
             return
@@ -60,6 +46,7 @@ class ProviderService(QObject):
         self.default_providers = ProvidersList([])
         self.sentinel_providers = ProvidersList([])
         self.config_search_columns = ConfigColumns().METADATA_TABLE_ATTRIBUTES
+        self.selection_sync_callback = None
 
     @classmethod
     def instance(cls) -> 'ProviderService':
@@ -80,7 +67,6 @@ class ProviderService(QObject):
         return self.providers[self.dlg.providerIndex()]
     
     def update_providers_list(self, new_providers):
-        #! self.providers += new_providers
         for provider in self.providers:
             if isinstance(provider, MyImageryProvider):
                 self.my_imagery_provider_instance = provider
@@ -211,7 +197,6 @@ class ProviderService(QObject):
                         error = self.tr("Selected search results must be of the same product type")
                     elif set(product_types) == set(["Mosaic"]) and len(set(zooms)) > 1: # no mosaics with different zooms
                         error = self.tr("Selected search results must have the same zoom level")
-        
         return error
 
     def get_local_image_indices(self, selected_images):
@@ -258,45 +243,6 @@ class ProviderService(QObject):
             self.imagery_search_provider_instance.requires_id = False
             self.imagery_search_provider_instance.image_ids = []
         return image_id, selection_error        
-    
-    """ def get_search_images_ids(self, provider_names, product_types):
-        selected_cells = self.dlg.metadataTable.selectedItems()
-        if not selected_cells:
-            image_id = None
-        else:
-            id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
-            image_id = [self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()]
-        selection_error = ""
-        try:
-            if len(set(provider_names)) > 1:
-                if set(product_types) != set(["Mosaic"]):
-                    selection_error = self.tr("You can launch multiple image processing only if it has the same provider of mosaic type")
-        except:
-            return image_id, selection_error
-        # Require image id only for single images and not mosaics
-        if image_id:
-            self.imagery_search_provider_instance.requires_id = True
-            self.imagery_search_provider_instance.image_id = image_id
-        else:
-            self.imagery_search_provider_instance.requires_id = False
-            self.imagery_search_provider_instance.image_id = []
-        return image_id, selection_error """
-
-    """ def get_s3_uri(self, provider):
-        s3_uri = None
-        if isinstance(provider, MyImageryProvider):
-            image = self.app_context.selected_image
-            mosaic = self.app_context.selected_mosaic
-            if image:
-                s3_uri = image.image_url
-            elif mosaic:
-                try:
-                    image_uri = self.app_context.images[0].image_url
-                    # to launch for the whole mosaic we need to use minio path without the filename
-                    s3_uri = image_uri.rsplit('/',1)[0]+'/'
-                except:
-                    s3_uri = None
-        return s3_uri """
     
     def duplicate_provider_and_model(self, processing):
         self.duplicate_provider(processing)
@@ -424,16 +370,17 @@ class ProviderService(QObject):
             data_provider.addFeatures([feature])
             self.app_context.metadata_layer.commitChanges()
         self.app_context.metadata_layer.updateExtents()
-        #! self.meta_layer_table_connection = self.metadata_layer.selectionChanged.connect(self.sync_layer_selection_with_table)
+        self.app_context.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(self.selection_sync_callback)
         # Fill metadata table with the returned values
         for column, value in columns.items():
             table_item = QTableWidgetItem()
             table_item.setData(Qt.DisplayRole, value)
             self.dlg.metadataTable.setItem(0, column, table_item)
         # Create pseudo footprints dict for one created feature
-        self.search_footprints = {0: feature for feature in self.app_context.metadata_layer.getFeatures()}
+        self.app_context.search_footprints = {0: feature for feature in self.app_context.metadata_layer.getFeatures()}
         self.dlg.metadataTableFilled.emit()
         self.dlg.metadataTable.selectRow(0)
+
     
     def duplicate_user_provider(self, provider: UserDefinedParams):
         duplicated_provider = None
@@ -482,6 +429,7 @@ class ProviderService(QObject):
                 return index
         return -1
 
+
 def get_data_provider():
     return ProviderService.instance().get_data_provider()
 
@@ -496,81 +444,6 @@ def setup_provider_info(provider):
 
 def validate_provider_params(provider):
     return ProviderService.instance().validate_provider_params(provider)
-
-""" def get_s3_uri(provider):
-    return ProviderService.instance().get_s3_uri(provider) """
-    
-'''
-    def get_selected_image_indices(self):
-        """Get local image indices from metadata table."""
-        selected_images = self.dlg.metadataTable.selectedItems()
-        if not selected_images:
-            return []
-        
-        rows = list(set(image.row() for image in selected_images))
-        return [int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text()) 
-                for row in rows]
-    
-    def get_search_providers_and_types(self, local_image_indices):
-        """Get provider names and product types for selected images."""
-        provider_names, product_types = [], []
-        try:
-            for idx in local_image_indices:
-                feature = self.app_context.search_footprints.get(idx)
-                if feature:
-                    provider_names.append(feature.attribute("providerName"))
-                    product_types.append(feature.attribute("productType"))
-        except KeyError:
-            pass
-        return provider_names, product_types
-    
-    def get_selected_imagery_info(self):
-        """Get information about selected imagery for processing request."""
-        provider = self.get_current_provider()
-        local_image_indices = self.get_selected_image_indices()
-        provider_names, product_types = self.get_search_providers_and_types(local_image_indices)
-        
-        return {
-            'provider': provider,
-            'local_image_indices': local_image_indices,
-            'provider_names': provider_names,
-            'product_types': product_types
-        }
-    
-    def get_zoom_info(self, provider, local_image_indices, product_types):
-        """Get zoom information for the current provider."""
-        zoom = None
-        zoom_error = ""
-        
-        if isinstance(provider, ImagerySearchProvider):
-            if local_image_indices:
-                zooms = []
-                for idx in local_image_indices:
-                    feature = self.app_context.search_footprints.get(idx)
-                    if feature:
-                        zoom_val = feature.attribute("zoom")
-                        if zoom_val not in (None, ''):
-                            zooms.append(zoom_val)
-                
-                # Allow zooms only for mosaics
-                if set(product_types) == set(["Mosaic"]):
-                    unique_zooms = set(zooms)
-                    if len(unique_zooms) > 1:
-                        zoom_error = self.tr("Selected search results must have the same zoom level")
-                    elif len(unique_zooms) == 1:
-                        zoom = str(int(list(unique_zooms)[0]))
-        elif isinstance(provider, MyImageryProvider):
-            # No zoom for MyImagery
-            pass
-        else:
-            # For XYZ providers, use settings
-            if self.dlg.zoomCombo.isVisible():
-                saved_zoom = self.app_context.settings.value('zoom')
-                if saved_zoom:
-                    zoom = saved_zoom
-        
-        return zoom, zoom_error
-        '''
 
 def duplicate_provider_and_model(processing):
     ProviderService.instance().duplicate_provider_and_model(processing)

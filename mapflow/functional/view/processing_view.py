@@ -43,16 +43,8 @@ class ProcessingView:
             model_options = [self.dlg.modelOptionsLayout.itemAt(i).widget().text() 
                              for i in range(self.dlg.modelOptionsLayout.count())
                              if isinstance(i, QCheckBox) and
-                             self.dlg.modelOptionsLayout.itemAt(i).widget().isChecked()] #!
-            #! todo: add other params
+                             self.dlg.modelOptionsLayout.itemAt(i).widget().isChecked()]
         )
-    
-        """ name: Optional[str]
-        area: Optional[QgsVectorLayer]
-        data_source_index: int
-        zoom: Optional[int]
-        wd_name: str
-        model_options: list[BlockOption] """
 
     def clear_processing_name(self, name):
         # If the name is expected, we clear it after the processsing is launched;
