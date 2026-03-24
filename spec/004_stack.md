@@ -25,3 +25,15 @@ Test tools: pytest (local execution, no containers).
 CI/CD: GitHub Actions (implied by `.github/` structure).
 
 External dependencies: Mapflow REST API backend (required for all functionality beyond UI).
+
+## Dependency policy
+
+**Only libraries bundled with the QGIS Python environment are allowed.** Adding third-party packages that are not part of the standard QGIS/PyQt5/GDAL distribution is strictly forbidden — the plugin must install and run without `pip install` on any QGIS 3.20+ installation.
+
+Prefer native QGIS/Qt tools over external alternatives:
+- Networking: use `QgsNetworkAccessManager`, not requests/httpx/aiohttp
+- Geometry: use `QgsGeometry`/`QgsCoordinateTransform`, not shapely
+- File dialogs: use `QFileDialog`, not tkinter
+- JSON: use stdlib `json`, not orjson/ujson
+- HTTP auth: use `QgsAuthManager`, not custom token stores
+- Settings: use `QgsSettings`, not configparser/dotenv
