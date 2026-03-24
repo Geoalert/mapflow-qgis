@@ -225,7 +225,6 @@ class DataCatalogService(QObject):
             self.get_mosaic_images(mosaic.id)
         self.view.add_mosaic_cell_buttons()
         self.view.show_mosaic_info(mosaic.name)
-        self.app_context.selected_mosaic = mosaic
 
     def mosaic_preview(self):
         try:
@@ -574,6 +573,7 @@ class DataCatalogService(QObject):
         first = self.selected_mosaics(limit=1)
         if not first:
             return None
+        self.app_context.selected_mosaic = first[0]
         return first[0]
         
     def selected_images(self, limit=None) -> List[MosaicReturnSchema]:

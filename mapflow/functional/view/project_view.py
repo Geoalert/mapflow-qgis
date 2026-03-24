@@ -152,7 +152,7 @@ class ProjectView(QObject):
         self.dlg.modelCombo.clear()
         self.dlg.modelCombo.addItems(wd.name for wd in workflow_defs.values())
         self.dlg.modelCombo.setCurrentText(default_model_name)
-        self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex()) #! ??
+        self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex())
 
     @property
     def projects_filter(self):

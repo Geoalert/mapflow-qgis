@@ -1,4 +1,4 @@
-from typing import Union, List
+from typing import Union, List, Optional
 from PyQt5.QtCore import QObject
 from qgis.core import QgsVectorLayer, QgsWkbTypes, QgsGeometry, QgsProject, QgsFeature, QgsCoordinateReferenceSystem
 from ..app_context import AppContext
@@ -13,15 +13,26 @@ from ...errors import (BadProcessingInput,
                        PluginError,
                        ImageIdRequired,
                        AoiNotIntersectsImage)
+from ..geometry import clip_aoi_to_image_extent
 
 class AreaCalculatorService(QObject):
     def __init__(self,
                  app_context: AppContext,
-                 qgs_project: QgsProject,
-                 dlg: MainDialog):
+                 dlg: MainDialog,
+                 config,
+                 data_catalog_service,
+                 processing_service,
+                 provider_service,
+                 use_imagery_extent
+                 ):
+        super().__init__()
         self.app_context = app_context
-        self.qgs_project = qgs_project
         self.dlg = dlg
+        self.config = config
+        self.data_catalog_service = data_catalog_service
+        self.processing_service = processing_service
+        self.provider_service = provider_service
+        self.use_imagery_extent = use_imagery_extent
 
     def get_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
         if not layer or layer.featureCount() == 0:
@@ -64,7 +75,7 @@ class AreaCalculatorService(QObject):
         :param layer: The current polygon layer
         """
         self.get_aoi_area_polygon_layer(layer)
-        provider = self.app_context.provider
+        provider = self.provider_service.providers[self.dlg.providerIndex()]
         if isinstance(provider, MyImageryProvider):
             self.calculate_aoi_area_catalog()
 
@@ -73,7 +84,7 @@ class AreaCalculatorService(QObject):
 
         :param use_image_extent: The current state of the checkbox
         """
-        provider = self.providers[self.dlg.providerIndex()]
+        provider = self.provider_service.providers[self.dlg.providerIndex()]
         if isinstance(provider, MyImageryProvider):
             self.calculate_aoi_area_catalog()
         else:
@@ -83,7 +94,7 @@ class AreaCalculatorService(QObject):
         """Get the AOI size when a new mosaic or image in 'My imagery' is selected.
         """
         # If different provider is chosen, set it to My imagery
-        self.data_catalog_service.set_catalog_provider(self.providers)
+        self.data_catalog_service.set_catalog_provider(self.provider_service.providers)
         image = self.data_catalog_service.selected_image()
         mosaic = self.data_catalog_service.selected_mosaic()
         if image or mosaic:
@@ -140,6 +151,7 @@ class AreaCalculatorService(QObject):
             aoi = helpers.to_wgs84(aoi, crs)
 
         self.app_context.aoi = aoi  # save for reuse in processing creation or metadata requests
+
         # fetch UI data
         provider_index = self.dlg.providerIndex()
         selected_images = self.dlg.metadataTable.selectedItems()
@@ -168,7 +180,8 @@ class AreaCalculatorService(QObject):
             self.app_context.aoi_size = 0
 
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.app_context.aoi_size))
-        self.processing_service.update_processing_cost()
+        if self.app_context.aoi_size > 0:
+            self.processing_service.update_processing_cost()
     
     def get_aoi(self,
                 provider_index: Optional[int],
@@ -178,7 +191,7 @@ class AreaCalculatorService(QObject):
             raise BadProcessingInput(self.tr('Bad AOI. AOI must be inside boundaries:'
                                              ' \n[-180, 180] by longitude, [-90, 90] by latitude'))
         else:
-            provider = self.providers[provider_index]
+            provider = self.provider_service.providers[provider_index]
             if not provider:
                 raise PluginError(self.tr('Providers are not initialized'))
             if len(local_image_indices) != 0:
@@ -213,4 +226,19 @@ class AreaCalculatorService(QObject):
                     aoi = selected_aoi
             else:
                 aoi = selected_aoi
+        return aoi
+    
+    def crop_aoi_with_maxar_image_footprint(self,
+                                            aoi: QgsFeature,
+                                            local_image_indices: List[int]):
+        extents = [self.app_context.search_footprints[local_image_index] for local_image_index in local_image_indices]
+        try:
+            extents = [self.app_context.search_footprints[local_image_index] for local_image_index in local_image_indices]
+            clipped_aoi_features = clip_aoi_to_image_extent(aoi, extents)
+            aoi = QgsGeometry.fromWkt('GEOMETRYCOLLECTION()')
+            for feature in clipped_aoi_features:
+                geom = feature.geometry()
+                aoi = aoi.combine(geom)
+        except StopIteration:
+            raise AoiNotIntersectsImage()
         return aoi

@@ -86,7 +86,6 @@ class ProcessingHistory:
 
         # Persist to settings only if terminal statuses changed
         if terminal_changes:
-            print(f"Saving to settings: {len(self.processing_statuses)}")
             self.to_settings(settings)
 
         return terminal_changes

@@ -19,7 +19,7 @@ class ProjectService(QObject):
     projectsUpdated = pyqtSignal()
     projectsFiltered = pyqtSignal()
 
-    def __init__(self, http, app_context: AppContext, dlg: MainDialog, config: Config, area_calc_fn):
+    def __init__(self, http, app_context: AppContext, dlg: MainDialog, config: Config):
         super().__init__()
         self.http = http
         self.app_context = app_context
@@ -37,9 +37,8 @@ class ProjectService(QObject):
         self.dlg.projectsPreviousPageButton.clicked.connect(self.show_projects_previous_page)
         self.dlg.filterProjects.textEdited.connect(self.get_filtered_projects)
         self.dlg.sortProjectsCombo.activated.connect(self.get_projects)
-        # TODO: move area calculation to area_calculator_service
-        self.calculate_aoi_area_use_image_extent = area_calc_fn
-
+        self.area_calculator_service = None # will be set later to avoid circular import
+    
     def set_current_project(self, project: MapflowProject):
         self.app_context.project_id = project.id
         self.app_context.current_project = project
@@ -94,7 +93,7 @@ class ProjectService(QObject):
                                       self.config.DEFAULT_MODEL)
         # Manually toggle function to avoid race condition
         # TODO: Can we avoid this? Calling the function from here is ugly
-        self.calculate_aoi_area_use_image_extent()
+        self.area_calculator_service.calculate_aoi_area_use_image_extent()
 
     def get_project_error_handler(self, response: QNetworkReply, **kwargs):
         pass
@@ -236,7 +235,7 @@ class ProjectService(QObject):
 
             # Manually toggle function to avoid race condition
             # TODO: Can we avoid this? Calling the function from here is ugly
-            self.calculate_aoi_area_use_image_extent()
+            self.area_calculator_service.calculate_aoi_area_use_image_extent()
 
 
     def setup_project_change_rights(self):
