@@ -7,10 +7,10 @@
 Adapted from generic Docker/Makefile/alembic template to QGIS plugin structure; UI instructions derived from existing dialog patterns (uic.loadUiType, signal/slot, separation of concerns)
 
 ## 2. Generate spec
-[ready-for-review]
+[v]
 - Research existing codebase
 - Populate spec with necessary documents; ask for API documentation if needed
-All 5 specs populated from codebase analysis: goal (plugin purpose/constraints), API (all Mapflow/Maxar/Sentinel endpoints consumed), persistence (QgsSettings keys), stack (PyQt5/QGIS/pytest), interactions (all external systems with protocols and failure handling)
+All 5 specs populated from codebase analysis: goal (plugin purpose/constraints), API (all Mapflow/Maxar/Sentinel endpoints consumed), persistence (full QgsSettings key inventory from code), stack (PyQt5/QGIS/pytest + strict no-external-deps policy), interactions (all external systems; Maxar/Sentinel marked legacy)
 
 ## 3. Plan test
 [ ]
