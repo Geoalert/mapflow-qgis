@@ -8,8 +8,8 @@ Full scope of the application: why it exists and what problem it solves.
 ## 002_api.md
 REST API contracts consumed by the plugin: Mapflow backend endpoints, external APIs (Maxar, Sentinel), authentication, error model.
 
-## 003_db.dbml
-Local persistence layer: QgsSettings keys used by the plugin (no database).
+## 003_local_storage.md
+Local persistence: QgsSettings keys, QGIS Auth Manager (OAuth2), temporary files. Full key inventory derived from code.
 
 ## 004_stack.md
 Used libraries, pinned versions where important, and external system implementation choices.
