@@ -3351,6 +3351,531 @@
            </item>
           </layout>
          </widget>
+         <widget class="QWidget" name="samTab">
+          <attribute name="title">
+           <string>SAM Interactive</string>
+          </attribute>
+          <layout class="QVBoxLayout" name="samTabLayout">
+           <item>
+            <widget class="QScrollArea" name="samScrollArea">
+             <property name="widgetResizable">
+              <bool>true</bool>
+             </property>
+             <widget class="QWidget" name="samScrollContent">
+              <property name="geometry">
+               <rect>
+                <x>0</x>
+                <y>0</y>
+                <width>400</width>
+                <height>1200</height>
+               </rect>
+              </property>
+              <layout class="QVBoxLayout" name="samScrollLayout">
+               <!-- Connection -->
+               <item>
+                <widget class="QGroupBox" name="samConnectionGroup">
+                 <property name="title">
+                  <string>Connection</string>
+                 </property>
+                 <layout class="QHBoxLayout" name="samConnectionLayout">
+                  <item>
+                   <widget class="QLabel" name="samBaseUrlLabel">
+                    <property name="text">
+                     <string>Base URL:</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QLabel" name="samBaseUrlValue">
+                    <property name="text">
+                     <string>-</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QPushButton" name="samHeartbeatButton">
+                    <property name="text">
+                     <string>Heartbeat</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QLabel" name="samConnectionStatus">
+                    <property name="text">
+                     <string>Unknown</string>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <!-- Processings -->
+               <item>
+                <widget class="QGroupBox" name="samProcessingsGroup">
+                 <property name="title">
+                  <string>Processings</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="samProcessingsLayout">
+                  <item>
+                   <widget class="QTableWidget" name="samProcessingsTable">
+                    <property name="columnCount">
+                     <number>4</number>
+                    </property>
+                    <property name="selectionMode">
+                     <enum>QAbstractItemView::SingleSelection</enum>
+                    </property>
+                    <property name="selectionBehavior">
+                     <enum>QAbstractItemView::SelectRows</enum>
+                    </property>
+                    <column>
+                     <property name="text">
+                      <string>ID</string>
+                     </property>
+                    </column>
+                    <column>
+                     <property name="text">
+                      <string>Name</string>
+                     </property>
+                    </column>
+                    <column>
+                     <property name="text">
+                      <string>Status</string>
+                     </property>
+                    </column>
+                    <column>
+                     <property name="text">
+                      <string>Created</string>
+                     </property>
+                    </column>
+                   </widget>
+                  </item>
+                  <item>
+                   <layout class="QHBoxLayout" name="samProcessingsButtonsLayout">
+                    <item>
+                     <widget class="QPushButton" name="samRefreshProcessings">
+                      <property name="text">
+                       <string>Refresh</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QPushButton" name="samViewWorkflows">
+                      <property name="text">
+                       <string>View Workflows</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QPushButton" name="samViewSessions">
+                      <property name="text">
+                       <string>View Sessions</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <!-- Prompts -->
+               <item>
+                <widget class="QGroupBox" name="samPromptsGroup">
+                 <property name="title">
+                  <string>Prompts</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="samPromptsLayout">
+                  <item>
+                   <layout class="QHBoxLayout" name="samPromptCreateLayout">
+                    <item>
+                     <widget class="QLabel" name="samPromptLabel">
+                      <property name="text">
+                       <string>Text prompt:</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QLineEdit" name="samPromptText">
+                      <property name="placeholderText">
+                       <string>Enter text prompt (optional)</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QPushButton" name="samCreatePrompt">
+                      <property name="text">
+                       <string>Create</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                  <item>
+                   <widget class="QTableWidget" name="samPromptsTable">
+                    <property name="columnCount">
+                     <number>2</number>
+                    </property>
+                    <property name="selectionMode">
+                     <enum>QAbstractItemView::SingleSelection</enum>
+                    </property>
+                    <property name="selectionBehavior">
+                     <enum>QAbstractItemView::SelectRows</enum>
+                    </property>
+                    <column>
+                     <property name="text">
+                      <string>ID</string>
+                     </property>
+                    </column>
+                    <column>
+                     <property name="text">
+                      <string>Text Prompt</string>
+                     </property>
+                    </column>
+                   </widget>
+                  </item>
+                  <item>
+                   <layout class="QHBoxLayout" name="samPromptsButtonsLayout">
+                    <item>
+                     <widget class="QPushButton" name="samRefreshPrompts">
+                      <property name="text">
+                       <string>Refresh</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QPushButton" name="samViewPromptDetail">
+                      <property name="text">
+                       <string>View Detail</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QPushButton" name="samAddPointPrompt">
+                      <property name="text">
+                       <string>Add Point</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QPushButton" name="samAddBboxPrompt">
+                      <property name="text">
+                       <string>Add Bbox</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <!-- Sessions -->
+               <item>
+                <widget class="QGroupBox" name="samSessionsGroup">
+                 <property name="title">
+                  <string>Sessions</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="samSessionsLayout">
+                  <item>
+                   <layout class="QHBoxLayout" name="samSessionCreateLayout">
+                    <item>
+                     <widget class="QLabel" name="samSessionProcessingLabel">
+                      <property name="text">
+                       <string>Processing:</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QComboBox" name="samSessionProcessingCombo">
+                      <property name="sizePolicy">
+                       <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                        <horstretch>0</horstretch>
+                        <verstretch>0</verstretch>
+                       </sizepolicy>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QLabel" name="samSessionPromptLabel">
+                      <property name="text">
+                       <string>Prompt:</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QComboBox" name="samSessionPromptCombo">
+                      <property name="sizePolicy">
+                       <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                        <horstretch>0</horstretch>
+                        <verstretch>0</verstretch>
+                       </sizepolicy>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QPushButton" name="samCreateSession">
+                      <property name="text">
+                       <string>Create</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                  <item>
+                   <widget class="QTableWidget" name="samSessionsTable">
+                    <property name="columnCount">
+                     <number>3</number>
+                    </property>
+                    <property name="selectionMode">
+                     <enum>QAbstractItemView::SingleSelection</enum>
+                    </property>
+                    <property name="selectionBehavior">
+                     <enum>QAbstractItemView::SelectRows</enum>
+                    </property>
+                    <column>
+                     <property name="text">
+                      <string>ID</string>
+                     </property>
+                    </column>
+                    <column>
+                     <property name="text">
+                      <string>Processing ID</string>
+                     </property>
+                    </column>
+                    <column>
+                     <property name="text">
+                      <string>Prompt ID</string>
+                     </property>
+                    </column>
+                   </widget>
+                  </item>
+                  <item>
+                   <layout class="QHBoxLayout" name="samSessionsButtonsLayout">
+                    <item>
+                     <widget class="QPushButton" name="samRefreshSessions">
+                      <property name="text">
+                       <string>Refresh</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QPushButton" name="samViewSessionDetail">
+                      <property name="text">
+                       <string>View Detail</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QPushButton" name="samCopySession">
+                      <property name="text">
+                       <string>Copy Session</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <!-- Inference -->
+               <item>
+                <widget class="QGroupBox" name="samInferenceGroup">
+                 <property name="title">
+                  <string>Inference</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="samInferenceLayout">
+                  <item>
+                   <layout class="QHBoxLayout" name="samInferenceCreateLayout">
+                    <item>
+                     <widget class="QLabel" name="samInferenceSessionLabel">
+                      <property name="text">
+                       <string>Session:</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QComboBox" name="samInferenceSessionCombo">
+                      <property name="sizePolicy">
+                       <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                        <horstretch>0</horstretch>
+                        <verstretch>0</verstretch>
+                       </sizepolicy>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QLabel" name="samInferenceWorkflowLabel">
+                      <property name="text">
+                       <string>Workflow:</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QComboBox" name="samInferenceWorkflowCombo">
+                      <property name="sizePolicy">
+                       <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                        <horstretch>0</horstretch>
+                        <verstretch>0</verstretch>
+                       </sizepolicy>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                  <item>
+                   <layout class="QHBoxLayout" name="samInferenceActionsLayout">
+                    <item>
+                     <widget class="QPushButton" name="samDrawAoi">
+                      <property name="text">
+                       <string>Draw AOI</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QPushButton" name="samRunInference">
+                      <property name="text">
+                       <string>Run Inference</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                  <item>
+                   <layout class="QHBoxLayout" name="samInferenceStatusLayout">
+                    <item>
+                     <widget class="QLabel" name="samInferenceIdLabel">
+                      <property name="text">
+                       <string>Inference:</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QLabel" name="samInferenceIdValue">
+                      <property name="text">
+                       <string>-</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QLabel" name="samInferenceStatusLabel">
+                      <property name="text">
+                       <string>Status:</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QLabel" name="samInferenceStatusValue">
+                      <property name="text">
+                       <string>-</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QLabel" name="samWorkflowStatusLabel">
+                      <property name="text">
+                       <string>Workflow:</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QLabel" name="samWorkflowStatusValue">
+                      <property name="text">
+                       <string>-</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QPushButton" name="samRefreshInferenceStatus">
+                      <property name="text">
+                       <string>Refresh Status</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <!-- Results -->
+               <item>
+                <widget class="QGroupBox" name="samResultsGroup">
+                 <property name="title">
+                  <string>Results</string>
+                 </property>
+                 <layout class="QHBoxLayout" name="samResultsLayout">
+                  <item>
+                   <widget class="QLabel" name="samResultSessionLabel">
+                    <property name="text">
+                     <string>Session:</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QComboBox" name="samResultSessionCombo">
+                    <property name="sizePolicy">
+                     <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                      <horstretch>0</horstretch>
+                      <verstretch>0</verstretch>
+                     </sizepolicy>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QPushButton" name="samLoadResult">
+                    <property name="text">
+                     <string>Load Result</string>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <!-- Debug Output -->
+               <item>
+                <widget class="QGroupBox" name="samDebugGroup">
+                 <property name="title">
+                  <string>Debug Output</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="samDebugLayout">
+                  <item>
+                   <widget class="QTextEdit" name="samDebugOutput">
+                    <property name="readOnly">
+                     <bool>true</bool>
+                    </property>
+                    <property name="font">
+                     <font>
+                      <family>Courier</family>
+                      <pointsize>9</pointsize>
+                     </font>
+                    </property>
+                    <property name="minimumSize">
+                     <size>
+                      <width>0</width>
+                      <height>150</height>
+                     </size>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
+                <spacer name="samVerticalSpacer">
+                 <property name="orientation">
+                  <enum>Qt::Vertical</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>20</width>
+                   <height>10</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+              </layout>
+             </widget>
+            </widget>
+           </item>
+          </layout>
+         </widget>
         </widget>
        </item>
       </layout>

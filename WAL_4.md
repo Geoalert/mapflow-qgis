@@ -80,9 +80,19 @@ SAM Tab layout (sub-sections via QGroupBox or QToolBox):
 ```
 
 Acceptance criteria:
-- [ ] SAM tab visible in main dialog
-- [ ] All widgets placed and named
-- [ ] No logic connected yet
+- [x] SAM tab visible in main dialog
+- [x] All widgets placed and named
+- [x] No logic connected yet
+
+#### Implementation-time findings
+
+1. **QScrollArea required**: The SAM tab has 7 group boxes which exceeds the minimum dialog height (400px). A QScrollArea wraps all groups to allow scrolling.
+
+2. **Icon reuse**: No SAM-specific icon exists. Reused `settings.svg` as `sam_icon` — the gear icon has a debug/tools connotation suitable for a debug interface. Can be replaced with a custom icon later.
+
+3. **Widget naming convention**: All SAM widgets prefixed with `sam` (e.g., `samProcessingsTable`, `samPromptText`, `samDebugOutput`) to avoid name collisions with existing widgets. Follows existing camelCase pattern.
+
+4. **Font property in .ui**: `samDebugOutput` QTextEdit uses Courier 9pt monospace font set directly in the .ui file via `<font>` property. This is acceptable for a debug panel where monospace is always desired.
 
 ### Pass 3: Processing Creation Integration
 **Goal**: Add "Create SAM3 Interactive Processing" to existing processingsTab.

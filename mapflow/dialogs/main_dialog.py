@@ -54,6 +54,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.tabWidget.setTabIcon(2, icons.images_icon)
         self.tabWidget.setTabIcon(3, icons.user_gear_icon)
         self.tabWidget.setTabIcon(4, icons.info_icon)
+        self.tabWidget.setTabIcon(5, icons.sam_icon)
         self.saveOptionsButton.setIcon(icons.options_icon)
         self.createProject.setIcon(icons.plus_icon)
         self.deleteProject.setIcon(icons.minus_icon)
