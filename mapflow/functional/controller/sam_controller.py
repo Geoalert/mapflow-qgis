@@ -40,6 +40,25 @@ class SamController(QObject):
         self.dlg.samAddPointPrompt.clicked.connect(self._activate_point_tool)
         self.dlg.samAddBboxPrompt.clicked.connect(self._activate_bbox_tool)
 
+        # Sessions
+        self.dlg.samCreateSession.clicked.connect(self._create_session)
+        self.dlg.samRefreshSessions.clicked.connect(self._refresh_sessions)
+        self.dlg.samViewSessionDetail.clicked.connect(self._view_session_detail)
+        self.dlg.samCopySession.clicked.connect(self._copy_session)
+
+        # Inference
+        self.dlg.samDrawAoi.clicked.connect(self._activate_aoi_tool)
+        self.dlg.samRunInference.clicked.connect(self._run_inference)
+        self.dlg.samRefreshInferenceStatus.clicked.connect(self._refresh_inference_status)
+
+        # Results
+        self.dlg.samLoadResult.clicked.connect(self._load_result)
+
+        # AOI tool (reuse bbox tool for drawing inference AOI)
+        self._aoi_tool = SamBboxMapTool(canvas)
+        self._aoi_tool.bbox_captured.connect(self._on_aoi_captured)
+        self._inference_aoi = None
+
     # ------------------------------------------------------------------
     # Processings
     # ------------------------------------------------------------------
@@ -135,3 +154,76 @@ class SamController(QObject):
         if self._prev_map_tool is not None:
             self._canvas.setMapTool(self._prev_map_tool)
             self._prev_map_tool = None
+
+    # ------------------------------------------------------------------
+    # Sessions
+    # ------------------------------------------------------------------
+
+    def _create_session(self):
+        processing_id = self.dlg.samSessionProcessingCombo.currentData()
+        prompt_id = self.dlg.samSessionPromptCombo.currentData()
+        if not processing_id or not prompt_id:
+            self.view.append_debug(
+                "Create Session",
+                {"error": "Select a processing and a prompt in the combo boxes"},
+            )
+            return
+        self.service.create_session(processing_id, prompt_id)
+
+    def _refresh_sessions(self):
+        processing_id = self.view.selected_processing_id()
+        if processing_id:
+            self.service.list_sessions(processing_id)
+
+    def _view_session_detail(self):
+        session_id = self.view.selected_session_id()
+        if session_id:
+            self.service.get_session_detail(session_id)
+
+    def _copy_session(self):
+        session_id = self.view.selected_session_id()
+        if session_id:
+            self.service.copy_session(session_id)
+
+    # ------------------------------------------------------------------
+    # Inference
+    # ------------------------------------------------------------------
+
+    def _activate_aoi_tool(self):
+        self._prev_map_tool = self._canvas.mapTool()
+        self._canvas.setMapTool(self._aoi_tool)
+        self.view.append_debug(
+            "Draw AOI",
+            {"status": "Draw rectangle on map for inference AOI"},
+        )
+
+    def _on_aoi_captured(self, geojson: dict):
+        self._inference_aoi = geojson
+        self.view.append_debug("AOI Captured", geojson)
+        self._restore_map_tool()
+
+    def _run_inference(self):
+        session_id = self.dlg.samInferenceSessionCombo.currentData()
+        workflow_id = self.dlg.samInferenceWorkflowCombo.currentData()
+        if not session_id or not workflow_id or not self._inference_aoi:
+            self.view.append_debug(
+                "Run Inference",
+                {"error": "Select session, workflow, and draw AOI first"},
+            )
+            return
+        self.service.create_inference(session_id, workflow_id, self._inference_aoi)
+        self._inference_aoi = None
+
+    def _refresh_inference_status(self):
+        inference_id = getattr(self.service, '_current_inference_id', None)
+        if inference_id:
+            self.service.get_inference_status(inference_id)
+
+    # ------------------------------------------------------------------
+    # Results
+    # ------------------------------------------------------------------
+
+    def _load_result(self):
+        session_id = self.dlg.samResultSessionCombo.currentData()
+        if session_id:
+            self.service.get_result(session_id)

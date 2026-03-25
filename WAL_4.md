@@ -15,8 +15,10 @@ Reference: `WAL_4_exploration.md` for full API docs and architecture findings.
 
 - **Pass 5** (pending commit): Prompt CRUD + spatial prompt creation via map tools. `SamPointMapTool` (QgsMapToolEmitPoint) and `SamBboxMapTool` (QgsMapToolExtent) in new `map_tools.py`. Service layer extended with 7 prompt callbacks. View extended with prompts table, prompt detail display, and memory vector layer visualization (categorized renderer: green=positive, red=negative). Controller wires all prompt buttons + map tool activation/deactivation with automatic restore of previous tool. `samPositivePrompt` checkbox added to UI. `iface.mapCanvas()` passed to SamController.
 
-### Next: Pass 6 — Sessions + Inference + Results
-- Session creation, inference execution, result loading
+- **Pass 6** (pending commit): Sessions + Inference + Results. Service extended with session CRUD (create, detail, copy, list), inference (create, poll status), and result loading. View adds sessions table, session combo population (inference + result combos), inference status labels, GeoJSON result layer loading via `ogr` provider. Controller wires all session/inference/result buttons. Inference AOI drawn via a second `SamBboxMapTool` instance. Workflow combo populated from `display_workflows`. Processing/prompt combos for session creation populated when processings/prompts are listed.
+
+### Next: Pass 7 — Polish + Tests
+- Error handling, UI state management, integration tests
 - Key files: `sam_service.py`, `sam_controller.py`, `sam_view.py`
 
 ### Open items
@@ -237,12 +239,24 @@ Features:
 - Processing result via existing Mapflow result viewer
 
 Acceptance criteria:
-- [ ] Session creation works
-- [ ] Inference creation works
-- [ ] Inference status polling works
-- [ ] GeoJSON result loaded as map layer
-- [ ] Debug output shows all raw JSON responses
-- [ ] Full workflow completable: create processing → create prompt → add prompts → create session → run inference → view result
+- [x] Session creation works
+- [x] Inference creation works
+- [x] Inference status polling works
+- [x] GeoJSON result loaded as map layer
+- [x] Debug output shows all raw JSON responses
+- [x] Full workflow completable: create processing → create prompt → add prompts → create session → run inference → view result
+
+#### Implementation-time findings
+
+1. **Combo population from list operations**: Processing and prompt combos for session creation are populated as a side effect of `display_processings` and `display_prompts`. This avoids separate API calls just to fill combos. Same pattern for workflow combo populated from `display_workflows`.
+
+2. **Session combos shared**: Newly created/copied sessions are added to both `samInferenceSessionCombo` and `samResultSessionCombo` via `add_session_to_combos`, auto-selecting the new entry.
+
+3. **AOI reuses SamBboxMapTool**: Inference AOI drawing uses a second `SamBboxMapTool` instance (separate from the prompt bbox tool) to avoid signal conflict. The captured AOI is stored in `_inference_aoi` until `Run Inference` is clicked.
+
+4. **Result loading via ogr**: `load_result_layer` passes the raw GeoJSON string to `QgsVectorLayer` with `ogr` provider. QGIS handles GeoJSON parsing natively this way — no manual feature creation needed.
+
+5. **Inference status tracking**: `_current_inference_id` is set on the service when an inference is created. `Refresh Status` button reads this to poll the same inference.
 
 ### Pass 7: Polish + Tests
 **Goal**: Stabilize, add missing tests, clean up.

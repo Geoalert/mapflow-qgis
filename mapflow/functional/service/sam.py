@@ -22,6 +22,11 @@ from ...schema.sam import (
     PointPromptRequest,
     BboxPromptRequest,
     SpatialPromptResponse,
+    SessionCreateRequest,
+    SessionResponse,
+    InferenceCreateRequest,
+    InferenceResponse,
+    ResultResponse,
 )
 
 
@@ -174,6 +179,114 @@ class SamService(QObject):
         prompt = SpatialPromptResponse.from_dict(data)
         self.view.add_prompt_to_map(prompt)
         self.view.append_debug("Bbox Prompt", data)
+
+    # ------------------------------------------------------------------
+    # Sessions
+    # ------------------------------------------------------------------
+
+    def create_session(self, processing_id: str, prompt_id: str):
+        request = SessionCreateRequest(
+            processing_id=processing_id,
+            prompt_id=prompt_id,
+        )
+        self.api.create_session(
+            request=request,
+            callback=self.create_session_callback,
+        )
+
+    def create_session_callback(self, response: QNetworkReply):
+        data = json.loads(response.readAll().data().decode())
+        session = SessionResponse.from_dict(data)
+        self.view.append_debug("Create Session", data)
+        self.view.add_session_to_combos(session.id)
+
+    def get_session_detail(self, session_id: str):
+        self.api.get_session(
+            session_id=session_id,
+            callback=self.get_session_detail_callback,
+        )
+
+    def get_session_detail_callback(self, response: QNetworkReply):
+        data = json.loads(response.readAll().data().decode())
+        session = SessionResponse.from_dict(data)
+        self.view.display_session_detail(session)
+        self.view.append_debug("Session Detail", data)
+
+    def copy_session(self, session_id: str):
+        self.api.copy_session(
+            session_id=session_id,
+            callback=self.copy_session_callback,
+        )
+
+    def copy_session_callback(self, response: QNetworkReply):
+        data = json.loads(response.readAll().data().decode())
+        session = SessionResponse.from_dict(data)
+        self.view.append_debug("Copy Session", data)
+        self.view.add_session_to_combos(session.id)
+
+    def list_sessions(self, processing_id: str):
+        self.api.get_processing_sessions(
+            processing_id=processing_id,
+            callback=self.list_sessions_callback,
+        )
+
+    def list_sessions_callback(self, response: QNetworkReply):
+        data = json.loads(response.readAll().data().decode())
+        if isinstance(data, list):
+            sessions = [SessionResponse.from_dict(s) for s in data]
+        else:
+            sessions = []
+        self.view.display_sessions(sessions)
+        self.view.append_debug("List Sessions", data)
+
+    # ------------------------------------------------------------------
+    # Inference
+    # ------------------------------------------------------------------
+
+    def create_inference(self, session_id: str, workflow_id: str, geometry: dict):
+        request = InferenceCreateRequest(
+            session_id=session_id,
+            workflow_id=workflow_id,
+            geometry=geometry,
+        )
+        self.api.create_inference(
+            request=request,
+            callback=self.create_inference_callback,
+        )
+
+    def create_inference_callback(self, response: QNetworkReply):
+        data = json.loads(response.readAll().data().decode())
+        inference = InferenceResponse.from_dict(data)
+        self.view.display_inference_status(inference)
+        self.view.append_debug("Create Inference", data)
+        self._current_inference_id = inference.id
+
+    def get_inference_status(self, inference_id: str):
+        self.api.get_inference(
+            inference_id=inference_id,
+            callback=self.get_inference_status_callback,
+        )
+
+    def get_inference_status_callback(self, response: QNetworkReply):
+        data = json.loads(response.readAll().data().decode())
+        inference = InferenceResponse.from_dict(data)
+        self.view.display_inference_status(inference)
+        self.view.append_debug("Inference Status", data)
+
+    # ------------------------------------------------------------------
+    # Results
+    # ------------------------------------------------------------------
+
+    def get_result(self, session_id: str):
+        self.api.get_result(
+            session_id=session_id,
+            callback=self.get_result_callback,
+        )
+
+    def get_result_callback(self, response: QNetworkReply):
+        data = json.loads(response.readAll().data().decode())
+        self.view.load_result_layer(data)
+        self.view.append_debug("Session Result", data)
 
     # ------------------------------------------------------------------
     # Pagination

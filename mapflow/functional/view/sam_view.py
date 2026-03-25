@@ -31,6 +31,8 @@ from ...schema.sam import (
     PromptResponse,
     PromptDetailResponse,
     SpatialPromptResponse,
+    SessionResponse,
+    InferenceResponse,
 )
 
 
@@ -40,7 +42,9 @@ class SamView(QObject):
         self.dlg = dlg
         self._setup_processings_table()
         self._setup_prompts_table()
+        self._setup_sessions_table()
         self._prompts_layer = None
+        self._result_layer = None
 
     def _setup_processings_table(self):
         table = self.dlg.samProcessingsTable
@@ -62,6 +66,16 @@ class SamView(QObject):
         table.setColumnHidden(0, True)
         table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
 
+    def _setup_sessions_table(self):
+        table = self.dlg.samSessionsTable
+        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        table.setSelectionBehavior(QTableWidget.SelectRows)
+        table.setSelectionMode(QTableWidget.SingleSelection)
+        table.setColumnCount(3)
+        table.setHorizontalHeaderLabels(["ID", "Processing ID", "Prompt ID"])
+        table.setColumnHidden(0, True)
+        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+
     # ------------------------------------------------------------------
     # Processings
     # ------------------------------------------------------------------
@@ -69,6 +83,7 @@ class SamView(QObject):
     def display_processings(self, items: List[ProcessingSummaryResponse]):
         table = self.dlg.samProcessingsTable
         table.setRowCount(len(items))
+        self.dlg.samSessionProcessingCombo.clear()
         for row, proc in enumerate(items):
             id_item = QTableWidgetItem()
             id_item.setData(Qt.DisplayRole, proc.id)
@@ -86,6 +101,10 @@ class SamView(QObject):
             created_item.setData(Qt.DisplayRole, proc.created_at or "")
             table.setItem(row, 3, created_item)
 
+            # Populate session creation combo
+            label = f"{proc.name} ({proc.id[:8]}...)" if proc.name else proc.id
+            self.dlg.samSessionProcessingCombo.addItem(label, proc.id)
+
     def selected_processing_id(self) -> Optional[str]:
         table = self.dlg.samProcessingsTable
         selected = table.selectionModel().selectedRows()
@@ -99,7 +118,10 @@ class SamView(QObject):
         pass
 
     def display_workflows(self, workflows: List[WorkflowSummaryResponse]):
-        pass
+        self.dlg.samInferenceWorkflowCombo.clear()
+        for wf in workflows:
+            label = f"{wf.id[:8]}... ({wf.status})"
+            self.dlg.samInferenceWorkflowCombo.addItem(label, wf.id)
 
     # ------------------------------------------------------------------
     # Prompts
@@ -108,6 +130,7 @@ class SamView(QObject):
     def display_prompts(self, items: List[PromptResponse]):
         table = self.dlg.samPromptsTable
         table.setRowCount(len(items))
+        self.dlg.samSessionPromptCombo.clear()
         for row, prompt in enumerate(items):
             id_item = QTableWidgetItem()
             id_item.setData(Qt.DisplayRole, prompt.id)
@@ -116,6 +139,10 @@ class SamView(QObject):
             text_item = QTableWidgetItem()
             text_item.setData(Qt.DisplayRole, prompt.text_prompt or "")
             table.setItem(row, 1, text_item)
+
+            # Populate session creation combo
+            label = prompt.text_prompt or prompt.id
+            self.dlg.samSessionPromptCombo.addItem(label, prompt.id)
 
     def selected_prompt_id(self) -> Optional[str]:
         table = self.dlg.samPromptsTable
@@ -202,6 +229,77 @@ class SamView(QObject):
         if self._prompts_layer is not None and self._prompts_layer.isValid():
             self._prompts_layer.dataProvider().truncate()
             self._prompts_layer.triggerRepaint()
+
+    # ------------------------------------------------------------------
+    # Sessions
+    # ------------------------------------------------------------------
+
+    def display_sessions(self, sessions: List[SessionResponse]):
+        table = self.dlg.samSessionsTable
+        table.setRowCount(len(sessions))
+        for row, sess in enumerate(sessions):
+            id_item = QTableWidgetItem()
+            id_item.setData(Qt.DisplayRole, sess.id)
+            table.setItem(row, 0, id_item)
+
+            proc_item = QTableWidgetItem()
+            proc_item.setData(Qt.DisplayRole, sess.processing_id)
+            table.setItem(row, 1, proc_item)
+
+            prompt_item = QTableWidgetItem()
+            prompt_item.setData(Qt.DisplayRole, sess.prompt_id)
+            table.setItem(row, 2, prompt_item)
+
+        # Also populate session combos (inference + result)
+        self._populate_session_combos(sessions)
+
+    def _populate_session_combos(self, sessions: List[SessionResponse]):
+        for combo in (self.dlg.samInferenceSessionCombo,
+                      self.dlg.samResultSessionCombo):
+            combo.clear()
+            for sess in sessions:
+                combo.addItem(sess.id, sess.id)
+
+    def add_session_to_combos(self, session_id: str):
+        """Add a newly created/copied session to inference + result combos."""
+        for combo in (self.dlg.samInferenceSessionCombo,
+                      self.dlg.samResultSessionCombo):
+            combo.addItem(session_id, session_id)
+            combo.setCurrentIndex(combo.count() - 1)
+
+    def selected_session_id(self) -> Optional[str]:
+        table = self.dlg.samSessionsTable
+        selected = table.selectionModel().selectedRows()
+        if not selected:
+            return None
+        row = selected[0].row()
+        item = table.item(row, 0)
+        return item.data(Qt.DisplayRole) if item else None
+
+    def display_session_detail(self, session: SessionResponse):
+        """Show session detail in debug; populate inference combo with inferences."""
+        pass
+
+    # ------------------------------------------------------------------
+    # Inference
+    # ------------------------------------------------------------------
+
+    def display_inference_status(self, inference: InferenceResponse):
+        self.dlg.samInferenceIdValue.setText(inference.id or "-")
+        self.dlg.samInferenceStatusValue.setText(inference.status or "-")
+        self.dlg.samWorkflowStatusValue.setText(inference.we_workflow_status or "-")
+
+    # ------------------------------------------------------------------
+    # Results
+    # ------------------------------------------------------------------
+
+    def load_result_layer(self, data: dict):
+        """Load GeoJSON result as a vector layer on the map."""
+        geojson_str = json.dumps(data)
+        layer = QgsVectorLayer(geojson_str, "SAM Result", "ogr")
+        if layer.isValid():
+            QgsProject.instance().addMapLayer(layer)
+        self._result_layer = layer
 
     # ------------------------------------------------------------------
     # Debug output
