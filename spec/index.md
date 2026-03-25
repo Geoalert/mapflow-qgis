@@ -17,5 +17,8 @@ Used libraries, pinned versions where important, and external system implementat
 ## 005_interactions.md
 Integration boundaries: Mapflow backend, Maxar WFS, Sentinel/Skywatch, Keycloak OAuth2, QGIS application, local filesystem.
 
+## 006_sam_interactive_api.md
+SAM Interactive backend API: endpoints, request/response schemas, pagination, auth. Used by the debug interface (WAL step 4).
+
 ## etc.
-Additional documents can be added with increasing numeric prefixes (for example: `006_security.md`, `007_observability.md`).
+Additional documents can be added with increasing numeric prefixes (for example: `007_security.md`, `008_observability.md`).
