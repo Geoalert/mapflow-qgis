@@ -34,6 +34,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         super().__init__(parent)
         self.settings = settings
         self.setupUi(self)
+        # Allow the project label to shrink below its text width so the window can be resized smaller
+        self.currentProjectLabel.setMinimumWidth(150)
         # Restrict combos to relevant layer types; QGIS 3.10-3.20 (at least) bugs up if set in .ui
         self.polygonCombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
         # Don't allow to change path directly (without ... and selection in file dialog) to avoid errors
@@ -135,6 +137,17 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # Imagery Search
         self.metadataTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.enable_search_pages(False)
+
+    def update_project_label(self):
+        full_name = self.currentProjectLabel.property("fullProjectName")
+        if full_name:
+            elided = self.currentProjectLabel.fontMetrics().elidedText(
+                full_name, Qt.ElideRight, self.currentProjectLabel.width() - 75)
+            self.currentProjectLabel.setText(self.tr("Project: <b>{}").format(elided))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.update_project_label()
 
     # ===== Settings management ===== #
     def save_view_results_mode(self):
