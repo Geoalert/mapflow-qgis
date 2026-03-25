@@ -9,11 +9,12 @@ Reference: `WAL_4_exploration.md` for full API docs and architecture findings.
 ### Completed
 - **Pass 1** (commit `15904a9`): API client (`sam_api.py`), schemas (`sam.py`), tests (`test_sam_api.py`), spec (`006_sam_interactive_api.md`). Tests written but not runnable without QGIS runtime.
 - **Pass 2** (commit `d883109`): SAM Interactive tab static UI layout in `main_dialog.ui` (7 group boxes inside QScrollArea), icon in `icons.py`, tab icon wiring in `main_dialog.py`.
+- **Pass 3**: Processing creation integration — "SAM Interactive" group box with text prompt + button in processingsTab, `SamApi` instantiated in `mapflow.py`, `create_sam_processing` method wired to button signal, response displayed in SAM debug output.
 
-### Next: Pass 3 — Processing Creation Integration
-- Add "Create SAM3 Interactive Processing" button to existing `processingsTab`
-- Wire it to `SamApi.create_processing` using existing form data (name, AOI, source params) + text prompt
-- Key files: `main_dialog.ui`, `main_dialog.py`, `mapflow.py`, `sam_api.py`
+### Next: Pass 4 — Processings + Workflows Browsing (SAM Tab)
+- Wire up processings table in SAM tab to list/view SAM processings
+- Add workflow browsing
+- Key files: `sam_controller.py` (new), `sam_view.py` (new), `mapflow.py`
 
 ### Open items
 - Tests not runnable locally (QGIS runtime required by `conftest.py`)
@@ -128,10 +129,20 @@ Flow:
 5. Processing appears in SAM tab processings table
 
 Acceptance criteria:
-- [ ] Button visible in processingsTab
-- [ ] Text prompt input shown/hidden appropriately
-- [ ] Processing created via SAM API
-- [ ] Response displayed in debug output
+- [x] Button visible in processingsTab
+- [x] Text prompt input shown/hidden appropriately
+- [x] Processing created via SAM API
+- [x] Response displayed in debug output
+
+#### Implementation-time findings
+
+1. **No main_dialog.py changes needed**: Widgets defined in .ui are auto-loaded by `uic.loadUiType`, so `samTextPromptInput`, `startSamProcessing`, and `samProcessingGroup` are available without explicit Python-side wiring in the dialog class.
+
+2. **Simplified SAM processing request**: Unlike the existing `create_processing_request()` which assembles complex provider params, WD references, and image IDs, the SAM processing only needs name, projectId, geometry, and optional text prompt. Source/inference params are left to the SAM backend defaults. This avoids coupling SAM creation to the provider/model selection logic.
+
+3. **No billing/limit check for SAM**: The SAM debug interface bypasses `check_processing_limit` since it's a debug tool. The backend handles its own authorization.
+
+4. **Tab switch on response**: After SAM processing creation, the UI automatically switches to the SAM tab (index 5) so the user can see the debug output. This is a debug convenience pattern not used by the regular processing flow.
 
 ### Pass 4: Processings + Workflows Browsing (SAM Tab)
 **Goal**: Wire up processings table and workflow browsing in SAM tab.

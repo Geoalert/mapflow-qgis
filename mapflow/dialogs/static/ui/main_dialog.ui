@@ -622,6 +622,58 @@
         </layout>
        </item>
        <item>
+        <widget class="QGroupBox" name="samProcessingGroup">
+         <property name="title">
+          <string>SAM Interactive</string>
+         </property>
+         <layout class="QVBoxLayout" name="samProcessingGroupLayout">
+          <item>
+           <layout class="QHBoxLayout" name="samPromptLayout">
+            <item>
+             <widget class="QLabel" name="samPromptLabel">
+              <property name="text">
+               <string>Text prompt:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="samTextPromptInput">
+              <property name="placeholderText">
+               <string>Optional text prompt for SAM processing</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QPushButton" name="startSamProcessing">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>200</width>
+              <height>32</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>500</width>
+              <height>32</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>Start SAM Interactive Processing</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
         <widget class="QSplitter" name="splitter">
          <property name="enabled">
           <bool>true</bool>

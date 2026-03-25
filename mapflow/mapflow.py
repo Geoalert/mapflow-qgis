@@ -63,6 +63,8 @@ from .functional.geometry import clip_aoi_to_image_extent
 from .functional.processing import ProcessingService
 from .functional.service.project import ProjectService
 from .functional.service.data_catalog import DataCatalogService
+from .functional.api.sam_api import SamApi
+from .schema.sam import ProcessingCreateRequest, MapflowProcessingResponse
 from .http import (Http,
                    get_error_report_body,
                    data_catalog_message_parser,
@@ -217,6 +219,9 @@ class Mapflow(QObject):
         self.processing_service.processingUpdated.connect(
             lambda: self.processing_service.get_processings(project_id=self.project_id,
                                                             callback=self.get_processings_callback))
+
+        self.sam_api = SamApi(self.http, self.server)
+
         # load providers from settings
         errors = []
         try:
@@ -246,6 +251,7 @@ class Mapflow(QObject):
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         self.dlg.downloadResultsButton.clicked.connect(self.load_results)
         self.dlg.startProcessing.clicked.connect(self.create_processing)
+        self.dlg.startSamProcessing.clicked.connect(self.create_sam_processing)
         # Calculate AOI size
         self.dlg.polygonCombo.layerChanged.connect(self.calculate_aoi_area_polygon_layer)
         self.dlg.mosaicTable.itemSelectionChanged.connect(self.calculate_aoi_area_catalog)
@@ -2187,6 +2193,57 @@ class Mapflow(QObject):
         else:
             start_processing()
         return
+
+    # ------------------------------------------------------------------
+    # SAM Interactive processing creation
+    # ------------------------------------------------------------------
+
+    def create_sam_processing(self) -> None:
+        """Create a SAM Interactive processing using the current form data.
+
+        Collects name, AOI, project ID, and optional text prompt from UI,
+        then calls SamApi.create_processing. Response is shown in SAM debug output.
+        """
+        processing_name = self.dlg.processingName.text()
+        if not processing_name:
+            self.alert(self.tr('Please, specify a name for your processing'), icon=QMessageBox.Warning)
+            return
+        if not self.aoi:
+            self.alert(self.tr('Please, select a valid area of interest'), icon=QMessageBox.Warning)
+            return
+        if not self.current_project:
+            self.alert(self.tr('No project is selected'), icon=QMessageBox.Warning)
+            return
+
+        text_prompt = self.dlg.samTextPromptInput.text().strip() or None
+        geometry = json.loads(self.aoi.asJson())
+
+        request = ProcessingCreateRequest(
+            name=processing_name,
+            projectId=self.current_project.id,
+            geometry=geometry,
+            prompt=text_prompt,
+        )
+
+        self.dlg.startSamProcessing.setEnabled(False)
+        self.message_bar.pushInfo(self.plugin_name, self.tr('Starting SAM Interactive processing...'))
+        self.sam_api.create_processing(request, callback=self.create_sam_processing_callback)
+
+    def create_sam_processing_callback(self, response: QNetworkReply) -> None:
+        """Handle SAM processing creation response."""
+        self.dlg.startSamProcessing.setEnabled(True)
+        response_data = response.readAll().data().decode()
+        try:
+            parsed = json.loads(response_data)
+            debug_text = json.dumps(parsed, indent=2, ensure_ascii=False)
+        except (json.JSONDecodeError, ValueError):
+            debug_text = response_data
+
+        self.dlg.samDebugOutput.append(
+            f"--- Create SAM Processing Response ---\n{debug_text}\n"
+        )
+        # Switch to SAM tab to show result
+        self.dlg.tabWidget.setCurrentIndex(5)
 
     def upload_tif_callback(self,
                             response: QNetworkReply,
