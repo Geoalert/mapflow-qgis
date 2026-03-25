@@ -558,6 +558,13 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         if enable is True:
             self.projectsPageLabel.setText(f"{page_number}/{total_pages}")
 
+    def enable_processings_pages(self, enable: bool = False, page_number: int = 1, total_pages: int = 1):
+        self.processingsPreviousPageButton.setVisible(enable)
+        self.processingsNextPageButton.setVisible(enable)
+        self.processingsPageLabel.setVisible(enable)
+        if enable is True:
+            self.processingsPageLabel.setText(f"{page_number}/{total_pages}")
+
     def enable_restart_duplicate_processing(self, can_start_processing: bool = True):
         """
         Remove processing's restarting option from '...' menu near 'View results' button depending on user role property.
@@ -603,12 +610,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # Save new checked state in settings
         self.settings.setValue("visibleSearchColumns", new_visible_columns)
 
-    def filter_processings_table(self, name_filter: str = None):
-        for row in range(self.processingsTable.rowCount()):
-            processing_name = self.processingsTable.item(row, 0).data(Qt.DisplayRole)
-            hide = bool(name_filter) and (name_filter.lower() not in processing_name.lower())
-            self.processingsTable.setRowHidden(row, hide)
-    
     def add_preview_cell(self):
         preview_column_index = config.PPRVIEW_INDEX_COLUMN
         for row in range(self.metadataTable.rowCount()):

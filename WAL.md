@@ -20,7 +20,7 @@ All 5 specs populated from codebase analysis: goal (plugin purpose/constraints),
 All tests require QGIS runtime — no value in partial testing without it. Tools: pytest + pytest-qt + unittest.mock (stdlib). QgsApplication bootstrapped via qgis.testing.start_app() in pytest_configure hook (must run before collection because plugin modules create QIcon at import time). conftest.py provides iface mock and http_mock fixtures. pytest-qt chosen over raw PyQt5.QtTest for signal-heavy architecture (waitSignal, auto widget cleanup via qtbot).
 
 ## 4. Feature: download image from data-catalog
-[ ]
+[v]
 - Add button "Donwload image" in My Imagery tab when mosaic is opened (images table active, image is selected)
 - Refactor 002_api.md: divide into A)project/b)processing/c)myimagery/d)search API docs in separate files; keep endpoints index in spec/002,
 - add more details to separate files. 
@@ -62,7 +62,32 @@ All tests require QGIS runtime — no value in partial testing without it. Tools
 - Implement image download API, add file save path dialog
 - Disable button if the selected image has `avaliable_for_download=False`
 
-## 5. Add new zoom-selector feature
+## 5. Feature: processings pagination
+[v]
+- Add arrow buttons (like projectsPreviousPageButton and projectsNextPageButton) to be able to show in processings table only 30 processings per page;
+- Add 'sort by' combo box, filtering line edit already exists;
+- Change get_processings function, use the following description for new api:
+#### `POST /projects/{projectId}/processings/v2/page`
+    Returns paginated processings of project with filtering and sorting.
+    
+    Parameters:
+    - 'terms' (string) - Search term to filter by name, project name, workflow name, or email;
+    - 'limit' (integer) - Maximum number of results to return
+    - 'offset' (integer) - Number of results to skip
+    - sortBy	(string) - Field to sort by: [ scenario, name, project, email, created, status, progress, completed, cost, area, provider ]
+    - sortOrder	(string) - Sort direction [ ASC, DESC ]
+    
+    Response shape:
+    ```json
+    {
+        "results": List[Processing],
+        "total": integer,
+        "count": integer
+    }
+    ```;
+- Implement pagination, sorting and new filtering (troug the request on text change, not though the table filtering).
+
+## 6. Add new zoom-selector feature
 [ ]
 Use 002_E_zoom_selector_api.md
 - Add small button near zoom selector comboBox to call for zoom selector api, active if selected source is Mapflow data provider

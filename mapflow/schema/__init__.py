@@ -13,7 +13,11 @@ from .processing import (PostSourceSchema,
                          ImagerySearchSchema,
                          UserDefinedParams,
                          ProcessingDTO,
-                         UpdateProcessingSchema)
+                         UpdateProcessingSchema,
+                         ProcessingSortBy,
+                         ProcessingSortOrder,
+                         ProcessingsRequest,
+                         ProcessingsResult)
 from .provider import ProviderReturnSchema
 from .workflow_def import WorkflowDef, BlockConfig
 from .status import ProcessingStatus, ProcessingReviewStatus

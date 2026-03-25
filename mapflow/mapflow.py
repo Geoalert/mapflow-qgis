@@ -309,7 +309,7 @@ class Mapflow(QObject):
         # Processings
         self.dlg.processingsTable.cellDoubleClicked.connect(self.load_results)
         self.dlg.deleteProcessings.clicked.connect(self.processing_service.confirm_delete_processings)
-        self.dlg.filterProcessings.textChanged.connect(self.dlg.filter_processings_table)
+        self.processing_service.connect_processings_pagination()
         # Processings ratings
         self.dlg.processingsTable.itemSelectionChanged.connect(self.enable_feedback)
         self.dlg.ratingSubmitButton.clicked.connect(self.submit_processing_rating)

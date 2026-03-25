@@ -1237,7 +1237,7 @@
                 </widget>
                </item>
                <item row="2" column="0">
-                <layout class="QHBoxLayout" name="processingFooter" stretch="0,0,0,0">
+                <layout class="QHBoxLayout" name="processingFooter" stretch="0,0,0,0,0,0,0">
                  <item>
                   <widget class="QPushButton" name="downloadResultsButton">
                    <property name="minimumSize">
@@ -1302,6 +1302,45 @@
                   </spacer>
                  </item>
                  <item>
+                  <widget class="QPushButton" name="processingsPreviousPageButton">
+                   <property name="minimumSize">
+                    <size>
+                     <width>35</width>
+                     <height>0</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string/>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QLabel" name="processingsPageLabel">
+                   <property name="font">
+                    <font>
+                     <weight>50</weight>
+                     <bold>false</bold>
+                    </font>
+                   </property>
+                   <property name="text">
+                    <string/>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="processingsNextPageButton">
+                   <property name="minimumSize">
+                    <size>
+                     <width>35</width>
+                     <height>0</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string/>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
                   <widget class="QPushButton" name="deleteProcessings">
                    <property name="minimumSize">
                     <size>
@@ -1340,6 +1379,16 @@
                    </property>
                    <property name="placeholderText">
                     <string>Filter processings by name</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="0" column="6">
+                  <widget class="QComboBox" name="sortProcessingsCombo">
+                   <property name="minimumSize">
+                    <size>
+                     <width>120</width>
+                     <height>0</height>
+                    </size>
                    </property>
                   </widget>
                  </item>

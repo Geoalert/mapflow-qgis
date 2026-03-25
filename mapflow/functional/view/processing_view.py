@@ -4,7 +4,8 @@ from PyQt5.QtCore import Qt, QCoreApplication
 from PyQt5.QtWidgets import QAbstractItemView, QTableWidgetItem, QMessageBox, QCheckBox
 from PyQt5.QtGui import QColor
 from ...dialogs.main_dialog import MainDialog
-from ...schema.processing import ProcessingDTO, ProcessingUIParams
+from ...dialogs import icons
+from ...schema.processing import ProcessingDTO, ProcessingUIParams, ProcessingSortBy, ProcessingSortOrder
 from ...config import config
 from ..service.alert_service import alert
 
@@ -19,6 +20,24 @@ class ProcessingView:
     """
     def __init__(self, dlg: MainDialog):
         self.dlg = dlg
+        # Setup pagination icons
+        self.dlg.processingsPreviousPageButton.setIcon(icons.arrow_left_icon)
+        self.dlg.processingsNextPageButton.setIcon(icons.arrow_right_icon)
+        # Hide pagination controls initially
+        self.dlg.processingsPreviousPageButton.setVisible(False)
+        self.dlg.processingsNextPageButton.setVisible(False)
+        self.dlg.processingsPageLabel.setVisible(False)
+        # Setup sort combo
+        self.dlg.sortProcessingsCombo.addItems([
+            self.tr("Newest first"),
+            self.tr("Oldest first"),
+            self.tr("A-Z"),
+            self.tr("Z-A"),
+            self.tr("Status A-Z"),
+            self.tr("Status Z-A"),
+        ])
+        self.dlg.sortProcessingsCombo.setCurrentIndex(0)
+        self.dlg.filterProcessings.setPlaceholderText(self.tr("Filter processings"))
 
     def tr(self, message: str) -> str:
         """Translate message using QCoreApplication."""
@@ -100,9 +119,8 @@ class ProcessingView:
             if proc.id in selected_processings:
                 self.dlg.processingsTable.selectRow(row)
         self.dlg.processingsTable.setSortingEnabled(True)
-        # Restore extended selection and filtering
+        # Restore extended selection
         self.dlg.processingsTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.dlg.filter_processings_table(self.dlg.filterProcessings.text())
 
     def add_new_processing(self, processing: ProcessingDTO):
         self.dlg.processingsTable.insertRow(0)
@@ -154,6 +172,42 @@ class ProcessingView:
             empty_item = QTableWidgetItem("")
             self.dlg.processingsTable.setItem(0, column, empty_item)
 
+    def show_processings_pages(self, enable: bool = False, page_number: int = 1, total_pages: int = 1):
+        self.dlg.processingsPreviousPageButton.setVisible(enable)
+        self.dlg.processingsNextPageButton.setVisible(enable)
+        self.dlg.processingsPageLabel.setVisible(enable)
+        if enable is True:
+            self.dlg.processingsPageLabel.setText(f"{page_number}/{total_pages}")
+        # Disable next arrow for the last page
+        if page_number == total_pages:
+            self.dlg.processingsNextPageButton.setEnabled(False)
+        else:
+            self.dlg.processingsNextPageButton.setEnabled(True)
+        # Disable previous arrow for the first page
+        if page_number == 1:
+            self.dlg.processingsPreviousPageButton.setEnabled(False)
+        else:
+            self.dlg.processingsPreviousPageButton.setEnabled(True)
+
+    def enable_processings_pages(self, enable: bool = False):
+        self.dlg.processingsNextPageButton.setEnabled(enable)
+        self.dlg.processingsPreviousPageButton.setEnabled(enable)
+
+    def sort_processings(self):
+        index = self.dlg.sortProcessingsCombo.currentIndex()
+        # Sort by
+        if index in (0, 1):  # Newest/Oldest first
+            sort_by = ProcessingSortBy.created
+        elif index in (2, 3):  # A-Z / Z-A
+            sort_by = ProcessingSortBy.name
+        else:  # Status A-Z / Z-A
+            sort_by = ProcessingSortBy.status
+        # Sort order
+        if index in (1, 2, 4):  # Oldest, A-Z, Status A-Z
+            sort_order = ProcessingSortOrder.ascending
+        else:  # Newest, Z-A, Status Z-A
+            sort_order = ProcessingSortOrder.descending
+        return sort_by.value, sort_order.value
 
     def delete_processings_from_table(self, processing_ids):
         rows = [self.dlg.processingsTable.findItems(id_, Qt.MatchExactly)[0].row() for id_ in processing_ids]

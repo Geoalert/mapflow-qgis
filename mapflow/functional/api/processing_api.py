@@ -4,7 +4,7 @@ from uuid import UUID
 from PyQt5.QtCore import QObject, pyqtSignal, QFile, QIODevice
 from ...http import Http
 from ...dialogs.main_dialog import MainDialog
-from ...schema.processing import PostProcessingSchema, UpdateProcessingSchema
+from ...schema.processing import PostProcessingSchema, UpdateProcessingSchema, ProcessingsRequest
 
 class ProcessingApi(QObject):
     """
@@ -68,11 +68,12 @@ class ProcessingApi(QObject):
                          use_default_error_handler=True,
                          timeout=5)
 
-    def get_processings(self, project_id: Union[UUID, str], callback: Callable):
-        self.http.get(path=f"projects/{project_id}/processings/v2",
-                         callback=callback,
-                         use_default_error_handler=False,
-                         timeout=5)
+    def get_processings(self, project_id: Union[UUID, str], request_body: ProcessingsRequest, callback: Callable):
+        self.http.post(path=f"projects/{project_id}/processings/v2/page",
+                       body=request_body.as_json().encode(),
+                       callback=callback,
+                       use_default_error_handler=False,
+                       timeout=5)
 
 
     def get_cost(self, data: PostProcessingSchema, callback: Callable, error_handler: Callable):
