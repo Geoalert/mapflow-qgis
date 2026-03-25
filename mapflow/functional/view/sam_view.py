@@ -7,6 +7,7 @@ No business logic or API calls.
 import json
 from typing import List, Optional
 
+import sip
 from PyQt5.QtCore import QObject, Qt
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView
@@ -18,6 +19,7 @@ from qgis.core import (
     QgsGeometry,
     QgsField,
     QgsSymbol,
+    QgsFillSymbol,
     QgsRendererCategory,
     QgsCategorizedSymbolRenderer,
     QgsPointXY,
@@ -44,7 +46,9 @@ class SamView(QObject):
         self._setup_prompts_table()
         self._setup_sessions_table()
         self._setup_initial_button_states()
-        self._prompts_layer = None
+        self._point_prompts_layer = None
+        self._bbox_prompts_layer = None
+        self._workflows_layer = None
         self._result_layer = None
 
     def _setup_processings_table(self):
@@ -116,7 +120,6 @@ class SamView(QObject):
     def display_processings(self, items: List[ProcessingSummaryResponse]):
         table = self.dlg.samProcessingsTable
         table.setRowCount(len(items))
-        self.dlg.samSessionProcessingCombo.clear()
         for row, proc in enumerate(items):
             id_item = QTableWidgetItem()
             id_item.setData(Qt.DisplayRole, proc.id)
@@ -133,10 +136,6 @@ class SamView(QObject):
             created_item = QTableWidgetItem()
             created_item.setData(Qt.DisplayRole, proc.created_at or "")
             table.setItem(row, 3, created_item)
-
-            # Populate session creation combo
-            label = f"{proc.name} ({proc.id[:8]}...)" if proc.name else proc.id
-            self.dlg.samSessionProcessingCombo.addItem(label, proc.id)
 
     def selected_processing_id(self) -> Optional[str]:
         table = self.dlg.samProcessingsTable
@@ -155,6 +154,90 @@ class SamView(QObject):
         for wf in workflows:
             label = f"{wf.id[:8]}... ({wf.status})"
             self.dlg.samInferenceWorkflowCombo.addItem(label, wf.id)
+        self._display_workflow_geometries(workflows)
+        # Highlight selected workflow when combo changes
+        try:
+            self.dlg.samInferenceWorkflowCombo.currentIndexChanged.disconnect(
+                self._highlight_selected_workflow)
+        except TypeError:
+            pass
+        self.dlg.samInferenceWorkflowCombo.currentIndexChanged.connect(
+            self._highlight_selected_workflow)
+        self._highlight_selected_workflow()
+
+    def selected_workflow_id(self) -> Optional[str]:
+        comboBox = self.dlg.samInferenceWorkflowCombo
+        data = comboBox.currentData()
+        return str(data) if data else None
+
+    # ------------------------------------------------------------------
+    # Workflow geometry layer
+    # ------------------------------------------------------------------
+
+    def _display_workflow_geometries(self, workflows: List[WorkflowSummaryResponse]):
+        """Replace existing workflows layer with a new one showing workflow polygons."""
+        self._remove_workflows_layer()
+
+        layer = QgsVectorLayer("Polygon?crs=EPSG:4326", "SAM Workflows", "memory")
+        provider = layer.dataProvider()
+        provider.addAttributes([
+            QgsField("id", QVariant_String()),
+            QgsField("selected", QVariant_String()),
+        ])
+        layer.updateFields()
+
+        for wf in workflows:
+            if wf.geometry is None:
+                continue
+            feature = QgsFeature(layer.fields())
+            feature.setAttribute("id", wf.id)
+            feature.setAttribute("selected", "false")
+            geometry = QgsGeometry.fromWkt(_geojson_to_wkt(wf.geometry))
+            if geometry and not geometry.isNull():
+                feature.setGeometry(geometry)
+                provider.addFeatures([feature])
+
+        # Normal: 90% transparent fill, thin border
+        normal_symbol = QgsFillSymbol.createSimple({
+            "color": "100,100,255,25",       # ~90% transparent blue
+            "outline_color": "100,100,255,180",
+            "outline_width": "0.3",
+        })
+        # Selected/highlighted: more visible
+        selected_symbol = QgsFillSymbol.createSimple({
+            "color": "255,200,0,80",
+            "outline_color": "255,160,0,255",
+            "outline_width": "0.8",
+        })
+        categories = [
+            QgsRendererCategory("false", normal_symbol, "Workflow"),
+            QgsRendererCategory("true", selected_symbol, "Selected"),
+        ]
+        renderer = QgsCategorizedSymbolRenderer("selected", categories)
+        layer.setRenderer(renderer)
+
+        QgsProject.instance().addMapLayer(layer)
+        self._workflows_layer = layer
+
+    def _highlight_selected_workflow(self):
+        """Update the 'selected' attribute to highlight the current combo selection."""
+        if not self._layer_alive(self._workflows_layer):
+            return
+        layer = self._workflows_layer
+        selected_id = self.selected_workflow_id()
+        layer.startEditing()
+        idx = layer.fields().indexOf("selected")
+        for feature in layer.getFeatures():
+            is_selected = "true" if feature["id"] == selected_id else "false"
+            layer.changeAttributeValue(feature.id(), idx, is_selected)
+        layer.commitChanges()
+        layer.triggerRepaint()
+
+    def _remove_workflows_layer(self):
+        """Remove existing workflows layer from the project."""
+        if self._layer_alive(self._workflows_layer):
+            QgsProject.instance().removeMapLayer(self._workflows_layer.id())
+        self._workflows_layer = None
 
     # ------------------------------------------------------------------
     # Prompts
@@ -163,7 +246,6 @@ class SamView(QObject):
     def display_prompts(self, items: List[PromptResponse]):
         table = self.dlg.samPromptsTable
         table.setRowCount(len(items))
-        self.dlg.samSessionPromptCombo.clear()
         for row, prompt in enumerate(items):
             id_item = QTableWidgetItem()
             id_item.setData(Qt.DisplayRole, prompt.id)
@@ -173,9 +255,6 @@ class SamView(QObject):
             text_item.setData(Qt.DisplayRole, prompt.text_prompt or "")
             table.setItem(row, 1, text_item)
 
-            # Populate session creation combo
-            label = prompt.text_prompt or prompt.id
-            self.dlg.samSessionPromptCombo.addItem(label, prompt.id)
 
     def selected_prompt_id(self) -> Optional[str]:
         table = self.dlg.samPromptsTable
@@ -187,44 +266,35 @@ class SamView(QObject):
         return item.data(Qt.DisplayRole) if item else None
 
     def display_prompt_detail(self, detail: PromptDetailResponse):
-        self._clear_prompts_layer()
+        self._clear_prompts_layers()
         for pt in detail.point_prompts:
-            self._add_spatial_prompt_feature(pt, "point")
+            self._add_spatial_prompt_feature(pt, "Point")
         for bx in detail.bbox_prompts:
-            self._add_spatial_prompt_feature(bx, "polygon")
+            self._add_spatial_prompt_feature(bx, "Polygon")
 
     def add_prompt_to_map(self, prompt: SpatialPromptResponse):
         if prompt.geometry is None:
             return
-        geom_type = prompt.geometry.get("type", "")
-        if geom_type == "Point":
-            self._add_spatial_prompt_feature(prompt, "point")
-        else:
-            self._add_spatial_prompt_feature(prompt, "polygon")
+        geom_type = prompt.geometry.get("type", "Point")
+        self._add_spatial_prompt_feature(prompt, geom_type)
 
     # ------------------------------------------------------------------
-    # Map layer for prompt visualization
+    # Map layers for prompt visualization
     # ------------------------------------------------------------------
 
-    def _get_or_create_prompts_layer(self, geom_type: str) -> QgsVectorLayer:
-        """Get or create a memory layer for displaying SAM prompts."""
-        if self._prompts_layer is not None and self._prompts_layer.isValid():
-            return self._prompts_layer
-
+    def _create_prompts_layer(self, geom_type: str, name: str) -> QgsVectorLayer:
         layer = QgsVectorLayer(
             f"{geom_type}?crs=EPSG:4326",
-            "SAM Prompts",
+            name,
             "memory",
         )
         provider = layer.dataProvider()
         provider.addAttributes([
             QgsField("id", QVariant_String()),
             QgsField("positive", QVariant_String()),
-            QgsField("type", QVariant_String()),
         ])
         layer.updateFields()
 
-        # Categorized renderer: green for positive, red for negative
         positive_symbol = QgsSymbol.defaultSymbol(layer.geometryType())
         positive_symbol.setColor(QColor(0, 200, 0, 180))
         negative_symbol = QgsSymbol.defaultSymbol(layer.geometryType())
@@ -238,30 +308,46 @@ class SamView(QObject):
         layer.setRenderer(renderer)
 
         QgsProject.instance().addMapLayer(layer)
-        self._prompts_layer = layer
         return layer
+
+    @staticmethod
+    def _layer_alive(layer) -> bool:
+        return layer is not None and not sip.isdeleted(layer) and layer.isValid()
+
+    def _get_or_create_point_layer(self) -> QgsVectorLayer:
+        if not self._layer_alive(self._point_prompts_layer):
+            self._point_prompts_layer = self._create_prompts_layer("Point", "SAM Point Prompts")
+        return self._point_prompts_layer
+
+    def _get_or_create_bbox_layer(self) -> QgsVectorLayer:
+        if not self._layer_alive(self._bbox_prompts_layer):
+            self._bbox_prompts_layer = self._create_prompts_layer("Polygon", "SAM Bbox Prompts")
+        return self._bbox_prompts_layer
 
     def _add_spatial_prompt_feature(self, prompt: SpatialPromptResponse, geom_type: str):
         if prompt.geometry is None:
             return
 
-        layer = self._get_or_create_prompts_layer(geom_type)
+        if geom_type == "Point":
+            layer = self._get_or_create_point_layer()
+        else:
+            layer = self._get_or_create_bbox_layer()
+
         feature = QgsFeature(layer.fields())
         feature.setAttribute("id", prompt.id)
         feature.setAttribute("positive", str(prompt.positive).lower())
-        feature.setAttribute("type", geom_type)
 
-        geom_json = json.dumps(prompt.geometry)
         geometry = QgsGeometry.fromWkt(_geojson_to_wkt(prompt.geometry))
         if geometry and not geometry.isNull():
             feature.setGeometry(geometry)
             layer.dataProvider().addFeatures([feature])
             layer.triggerRepaint()
 
-    def _clear_prompts_layer(self):
-        if self._prompts_layer is not None and self._prompts_layer.isValid():
-            self._prompts_layer.dataProvider().truncate()
-            self._prompts_layer.triggerRepaint()
+    def _clear_prompts_layers(self):
+        for layer in (self._point_prompts_layer, self._bbox_prompts_layer):
+            if self._layer_alive(layer):
+                layer.dataProvider().truncate()
+                layer.triggerRepaint()
 
     # ------------------------------------------------------------------
     # Sessions
@@ -283,22 +369,25 @@ class SamView(QObject):
             prompt_item.setData(Qt.DisplayRole, sess.prompt_id)
             table.setItem(row, 2, prompt_item)
 
-        # Also populate session combos (inference + result)
-        self._populate_session_combos(sessions)
 
-    def _populate_session_combos(self, sessions: List[SessionResponse]):
-        for combo in (self.dlg.samInferenceSessionCombo,
-                      self.dlg.samResultSessionCombo):
-            combo.clear()
-            for sess in sessions:
-                combo.addItem(sess.id, sess.id)
+    def add_session_to_table(self, session: SessionResponse):
+        table = self.dlg.samSessionsTable
+        row = table.rowCount()
+        table.insertRow(row)
 
-    def add_session_to_combos(self, session_id: str):
-        """Add a newly created/copied session to inference + result combos."""
-        for combo in (self.dlg.samInferenceSessionCombo,
-                      self.dlg.samResultSessionCombo):
-            combo.addItem(session_id, session_id)
-            combo.setCurrentIndex(combo.count() - 1)
+        id_item = QTableWidgetItem()
+        id_item.setData(Qt.DisplayRole, session.id)
+        table.setItem(row, 0, id_item)
+
+        proc_item = QTableWidgetItem()
+        proc_item.setData(Qt.DisplayRole, session.processing_id)
+        table.setItem(row, 1, proc_item)
+
+        prompt_item = QTableWidgetItem()
+        prompt_item.setData(Qt.DisplayRole, session.prompt_id)
+        table.setItem(row, 2, prompt_item)
+
+        table.selectRow(row)
 
     def selected_session_id(self) -> Optional[str]:
         table = self.dlg.samSessionsTable

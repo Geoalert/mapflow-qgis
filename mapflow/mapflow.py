@@ -224,7 +224,10 @@ class Mapflow(QObject):
 
         self.sam_api = SamApi(self.http, self.server)
         self.sam_service = SamService(self.dlg, self.sam_api)
-        self.sam_controller = SamController(self.dlg, self.sam_service, self.iface.mapCanvas())
+        self.sam_controller = SamController(
+            self.dlg, self.sam_service, self.iface.mapCanvas(),
+            aoi_provider=lambda: self.aoi,
+        )
 
         # load providers from settings
         errors = []
@@ -2205,28 +2208,24 @@ class Mapflow(QObject):
     def create_sam_processing(self) -> None:
         """Create a SAM Interactive processing using the current form data.
 
-        Collects name, AOI, project ID, and optional text prompt from UI,
-        then calls SamApi.create_processing. Response is shown in SAM debug output.
+        Reuses create_processing_request() to build proper ProcessingParams
+        (with sourceParams), then constructs SAM-specific request without
+        wdId/blocks and with optional text prompt.
         """
-        processing_name = self.dlg.processingName.text()
-        if not processing_name:
-            self.alert(self.tr('Please, specify a name for your processing'), icon=QMessageBox.Warning)
-            return
-        if not self.aoi:
-            self.alert(self.tr('Please, select a valid area of interest'), icon=QMessageBox.Warning)
-            return
-        if not self.current_project:
-            self.alert(self.tr('No project is selected'), icon=QMessageBox.Warning)
+        base_request, error = self.create_processing_request()
+        if error:
+            self.alert(error, icon=QMessageBox.Warning)
             return
 
         text_prompt = self.dlg.samTextPromptInput.text().strip() or None
-        geometry = json.loads(self.aoi.asJson())
 
         request = ProcessingCreateRequest(
-            name=processing_name,
-            projectId=self.current_project.id,
-            geometry=geometry,
-            prompt=text_prompt,
+            name=base_request.name,
+            projectId=base_request.projectId,
+            geometry=base_request.geometry,
+            params=base_request.params,
+            text_prompt=text_prompt,
+            meta=base_request.meta,
         )
 
         self.dlg.startSamProcessing.setEnabled(False)

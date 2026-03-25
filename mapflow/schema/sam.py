@@ -5,8 +5,9 @@ Follows existing conventions:
 - Response schemas inherit SkipDataClass (from_dict, tolerates unknown fields)
 """
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional, List, Union, Mapping, Any
 
+from ..schema.processing import PostSourceSchema, PostProviderSchema
 from .base import Serializable, SkipDataClass
 
 
@@ -18,10 +19,10 @@ from .base import Serializable, SkipDataClass
 class ProcessingCreateRequest(Serializable):
     name: str
     projectId: str
-    geometry: dict  # GeoJSON
-    params: Optional[dict] = None
+    geometry: Mapping[str, Any]  # GeoJSON
+    params: Union[PostSourceSchema, PostProviderSchema]
     promptId: Optional[str] = None
-    prompt: Optional[str] = None
+    text_prompt: Optional[str] = None
     description: Optional[str] = None
     meta: Optional[dict] = None
 

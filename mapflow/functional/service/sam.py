@@ -89,7 +89,7 @@ class SamService(QObject):
 
     def list_workflows_callback(self, response: QNetworkReply):
         data = json.loads(response.readAll().data().decode())
-        workflows = [WorkflowSummaryResponse.from_dict(w) for w in data]
+        workflows = [WorkflowSummaryResponse.from_dict(w) for w in data.get('items', [])]
         self.view.display_workflows(workflows)
         self.view.append_debug("Workflows", data)
 
@@ -180,6 +180,14 @@ class SamService(QObject):
         self.view.add_prompt_to_map(prompt)
         self.view.append_debug("Bbox Prompt", data)
 
+    def delete_prompt(self):
+        prompt_id = self.view.selected_prompt_id()
+        self.api.delete_prompt(prompt_id,
+                               callback = self.delete_prompt_callback)
+
+    def delete_prompt_callback(self, response: QNetworkReply):
+        self.list_prompts()
+
     # ------------------------------------------------------------------
     # Sessions
     # ------------------------------------------------------------------
@@ -198,7 +206,15 @@ class SamService(QObject):
         data = json.loads(response.readAll().data().decode())
         session = SessionResponse.from_dict(data)
         self.view.append_debug("Create Session", data)
-        self.view.add_session_to_combos(session.id)
+        self.view.add_session_to_table(session)
+
+    def delete_session(self):
+        session_id = self.view.selected_session_id()
+        self.api.delete_session(session_id,
+                               callback=self.delete_session_callback)
+
+    def delete_session_callback(self, response: QNetworkReply):
+        self.list_sessions(self.view.selected_processing_id())
 
     def get_session_detail(self, session_id: str):
         self.api.get_session(
@@ -222,7 +238,7 @@ class SamService(QObject):
         data = json.loads(response.readAll().data().decode())
         session = SessionResponse.from_dict(data)
         self.view.append_debug("Copy Session", data)
-        self.view.add_session_to_combos(session.id)
+        self.view.add_session_to_table(session)
 
     def list_sessions(self, processing_id: str):
         self.api.get_processing_sessions(
@@ -232,10 +248,7 @@ class SamService(QObject):
 
     def list_sessions_callback(self, response: QNetworkReply):
         data = json.loads(response.readAll().data().decode())
-        if isinstance(data, list):
-            sessions = [SessionResponse.from_dict(s) for s in data]
-        else:
-            sessions = []
+        sessions = [SessionResponse.from_dict(s) for s in data.get('items', [])]
         self.view.display_sessions(sessions)
         self.view.append_debug("List Sessions", data)
 

@@ -2,8 +2,11 @@
 
 SamPointMapTool — click on map to capture a WGS84 point.
 SamBboxMapTool — draw a rectangle to capture a WGS84 bbox polygon.
+
+Both tools emit (geojson, positive) where positive is derived from
+mouse button: left-click = positive (True), right-click = negative (False).
 """
-from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtCore import pyqtSignal, Qt
 
 from qgis.core import (
     QgsCoordinateReferenceSystem,
@@ -16,7 +19,7 @@ from qgis.gui import QgsMapToolEmitPoint, QgsMapToolExtent
 class SamPointMapTool(QgsMapToolEmitPoint):
     """Click on the map canvas to emit a GeoJSON Point in WGS84."""
 
-    point_captured = pyqtSignal(dict)  # GeoJSON Point geometry
+    point_captured = pyqtSignal(dict, bool)  # (GeoJSON Point, positive)
 
     def __init__(self, canvas):
         super().__init__(canvas)
@@ -24,7 +27,8 @@ class SamPointMapTool(QgsMapToolEmitPoint):
 
     def canvasReleaseEvent(self, event):
         point = self.toMapCoordinates(event.pos())
-        # Transform to WGS84
+        positive = event.button() != Qt.RightButton
+
         crs_src = self._canvas.mapSettings().destinationCrs()
         crs_dst = QgsCoordinateReferenceSystem("EPSG:4326")
         transform = QgsCoordinateTransform(crs_src, crs_dst, QgsProject.instance())
@@ -34,20 +38,24 @@ class SamPointMapTool(QgsMapToolEmitPoint):
             "type": "Point",
             "coordinates": [wgs84_point.x(), wgs84_point.y()],
         }
-        self.point_captured.emit(geojson)
+        self.point_captured.emit(geojson, positive)
 
 
 class SamBboxMapTool(QgsMapToolExtent):
     """Draw a rectangle on the map canvas to emit a GeoJSON Polygon in WGS84."""
 
-    bbox_captured = pyqtSignal(dict)  # GeoJSON Polygon geometry
+    bbox_captured = pyqtSignal(dict, bool)  # (GeoJSON Polygon, positive)
 
     def __init__(self, canvas):
         super().__init__(canvas)
+        self._positive = True
         self.extentChanged.connect(self._on_extent)
 
+    def canvasPressEvent(self, event):
+        self._positive = event.button() != Qt.RightButton
+        super().canvasPressEvent(event)
+
     def _on_extent(self, extent):
-        # Transform to WGS84
         canvas = self.canvas()
         crs_src = canvas.mapSettings().destinationCrs()
         crs_dst = QgsCoordinateReferenceSystem("EPSG:4326")
@@ -69,4 +77,4 @@ class SamBboxMapTool(QgsMapToolExtent):
                 [x_min, y_min],
             ]],
         }
-        self.bbox_captured.emit(geojson)
+        self.bbox_captured.emit(geojson, self._positive)

@@ -60,14 +60,14 @@ It shares the same base URL and authentication as the main Mapflow API (`config.
   "name": "string (1-512)",
   "projectId": "string",
   "promptId": "UUID | null",
-  "prompt": "string | null",
+  "text_prompt": "string | null",
   "geometry": "GeoJSON",
   "params": {"sourceParams": {}, "inferenceParams": {}},
   "description": "string | null",
   "meta": "object | null"
 }
 ```
-- `promptId` and `prompt` are mutually exclusive.
+- `promptId` and `text_prompt` are mutually exclusive.
 
 ### ProcessingSummaryResponse
 ```json

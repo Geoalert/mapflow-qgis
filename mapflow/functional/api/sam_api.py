@@ -19,10 +19,12 @@ from ...schema.sam import (
 
 
 class SamApi(QObject):
+
     def __init__(self, http: Http, server: str):
         super().__init__()
-        self.server = server
+        self.server = f"{server}/sam-interactive"
         self.http = http
+
 
     # ------------------------------------------------------------------
     # Processing endpoints
@@ -156,6 +158,12 @@ class SamApi(QObject):
             timeout=5,
         )
 
+    def delete_prompt(self, prompt_id, callback: Callable):
+        self.http.delete(
+            url=f"{self.server}/prompts/{prompt_id}",
+            callback=callback,
+            timeout=5
+        )
     # ------------------------------------------------------------------
     # Session endpoints
     # ------------------------------------------------------------------
@@ -187,6 +195,13 @@ class SamApi(QObject):
             callback=callback,
             use_default_error_handler=True,
             timeout=5,
+        )
+
+    def delete_session(self, session_id, callback: Callable):
+        self.http.delete(
+            url=f"{self.server}/prompts/{session_id}",
+            callback=callback,
+            timeout=5
         )
 
     # ------------------------------------------------------------------

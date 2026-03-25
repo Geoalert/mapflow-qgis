@@ -34,7 +34,7 @@ class TestCreateProcessing:
             name="test-proc",
             projectId="proj-1",
             geometry={"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
-            prompt="detect buildings",
+            text_prompt="detect buildings",
         )
         api.create_processing(request, callback=_noop)
 
