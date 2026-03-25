@@ -2,6 +2,23 @@
 
 Reference: `WAL_4_exploration.md` for full API docs and architecture findings.
 
+> **Note**: All git work is local-only on branch `feature/sam-interactive-api`. `agent-git` push auth is not configured; branch has not been published to remote.
+
+## Handover
+
+### Completed
+- **Pass 1** (commit `15904a9`): API client (`sam_api.py`), schemas (`sam.py`), tests (`test_sam_api.py`), spec (`006_sam_interactive_api.md`). Tests written but not runnable without QGIS runtime.
+- **Pass 2** (commit `d883109`): SAM Interactive tab static UI layout in `main_dialog.ui` (7 group boxes inside QScrollArea), icon in `icons.py`, tab icon wiring in `main_dialog.py`.
+
+### Next: Pass 3 — Processing Creation Integration
+- Add "Create SAM3 Interactive Processing" button to existing `processingsTab`
+- Wire it to `SamApi.create_processing` using existing form data (name, AOI, source params) + text prompt
+- Key files: `main_dialog.ui`, `main_dialog.py`, `mapflow.py`, `sam_api.py`
+
+### Open items
+- Tests not runnable locally (QGIS runtime required by `conftest.py`)
+- Branch not pushed — needs `agent-git` auth or manual `git push -u origin feature/sam-interactive-api`
+
 ## Design Decisions
 
 1. **Base URL**: Same as existing Mapflow API (`config.SERVER`)
