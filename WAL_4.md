@@ -11,10 +11,11 @@ Reference: `WAL_4_exploration.md` for full API docs and architecture findings.
 - **Pass 2** (commit `d883109`): SAM Interactive tab static UI layout in `main_dialog.ui` (7 group boxes inside QScrollArea), icon in `icons.py`, tab icon wiring in `main_dialog.py`.
 - **Pass 3**: Processing creation integration — "SAM Interactive" group box with text prompt + button in processingsTab, `SamApi` instantiated in `mapflow.py`, `create_sam_processing` method wired to button signal, response displayed in SAM debug output.
 
-### Next: Pass 4 — Processings + Workflows Browsing (SAM Tab)
-- Wire up processings table in SAM tab to list/view SAM processings
-- Add workflow browsing
-- Key files: `sam_controller.py` (new), `sam_view.py` (new), `mapflow.py`
+- **Pass 4** (pending commit): 3-tier architecture (SamService/SamController/SamView) for processings table + workflow browsing. Pagination state in service. Debug output centralized in view. Existing `create_sam_processing_callback` refactored to use `SamView.append_debug`.
+
+### Next: Pass 5 — Prompts + Point/Bbox Map Tools
+- Prompt management with text, point (map click), bbox (map rectangle) creation
+- Key files: `sam_service.py`, `sam_controller.py`, `sam_view.py`, `map_tools.py` (new)
 
 ### Open items
 - Tests not runnable locally (QGIS runtime required by `conftest.py`)
@@ -147,10 +148,12 @@ Acceptance criteria:
 ### Pass 4: Processings + Workflows Browsing (SAM Tab)
 **Goal**: Wire up processings table and workflow browsing in SAM tab.
 
-Files to modify:
-- `mapflow/functional/controller/sam_controller.py` — new controller
-- `mapflow/functional/view/sam_view.py` — new view for SAM tab
-- `mapflow/mapflow.py` — instantiate controller
+Files to create/modify:
+- `mapflow/functional/service/sam.py` — new service (business logic, callbacks, pagination)
+- `mapflow/functional/controller/sam_controller.py` — new controller (thin signal wiring)
+- `mapflow/functional/view/sam_view.py` — new view (UI state management)
+- `mapflow/mapflow.py` — instantiate service + controller
+- `tests/test_sam_service.py` — unit tests for service callbacks and pagination
 
 Features:
 - List processings (paginated, with filter)
@@ -160,10 +163,20 @@ Features:
 - All responses shown in debug output
 
 Acceptance criteria:
-- [ ] Processings table populated from SAM API
-- [ ] Pagination works
-- [ ] Workflow list shown on selection
-- [ ] Debug output shows raw JSON
+- [x] Processings table populated from SAM API
+- [x] Pagination works
+- [x] Workflow list shown on selection
+- [x] Debug output shows raw JSON
+
+#### Implementation-time findings
+
+1. **3-tier pattern adopted**: Used Service/Controller/View pattern matching existing `DataCatalogService`/`DataCatalogController`/`DataCatalogView`. The API+Service layer is production-grade and will likely outlive the debug UI. Controller is a thin wiring layer; service holds all business logic and pagination state.
+
+2. **Pagination state in service**: `_offset`, `_limit`, `_total` tracked in `SamService`. `has_next_page`/`has_prev_page` properties and `next_page()`/`prev_page()` methods handle navigation. UI pagination buttons (not yet in .ui) will be wired in a future pass.
+
+3. **Debug output centralized in view**: `SamView.append_debug(title, data)` is the single point for all debug JSON output. The existing `create_sam_processing_callback` in `mapflow.py` was refactored to use this method instead of direct `samDebugOutput.append`.
+
+4. **Tests not runnable locally**: Same as Pass 1 — QGIS runtime required by `conftest.py`. Tests written with mocked HTTP responses covering all 4 callbacks + pagination logic.
 
 ### Pass 5: Prompts + Point/Bbox Map Tools
 **Goal**: Prompt management with spatial prompt creation via map tools.
@@ -235,8 +248,10 @@ Acceptance criteria:
 | `mapflow/functional/api/sam_api.py` | 1 | SAM API client |
 | `mapflow/schema/sam.py` | 1 | SAM request/response schemas |
 | `tests/test_sam_api.py` | 1 | API client tests |
-| `mapflow/functional/controller/sam_controller.py` | 4 | SAM tab controller |
-| `mapflow/functional/view/sam_view.py` | 4 | SAM tab view |
+| `mapflow/functional/service/sam.py` | 4 | SAM service (business logic, pagination) |
+| `mapflow/functional/controller/sam_controller.py` | 4 | SAM tab controller (thin signal wiring) |
+| `mapflow/functional/view/sam_view.py` | 4 | SAM tab view (UI state) |
+| `tests/test_sam_service.py` | 4 | SAM service unit tests |
 | `mapflow/functional/map_tools.py` | 5 | Point/bbox map tools |
 
 ### Modified Files

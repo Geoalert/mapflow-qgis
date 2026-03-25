@@ -64,6 +64,8 @@ from .functional.processing import ProcessingService
 from .functional.service.project import ProjectService
 from .functional.service.data_catalog import DataCatalogService
 from .functional.api.sam_api import SamApi
+from .functional.service.sam import SamService
+from .functional.controller.sam_controller import SamController
 from .schema.sam import ProcessingCreateRequest, MapflowProcessingResponse
 from .http import (Http,
                    get_error_report_body,
@@ -221,6 +223,8 @@ class Mapflow(QObject):
                                                             callback=self.get_processings_callback))
 
         self.sam_api = SamApi(self.http, self.server)
+        self.sam_service = SamService(self.dlg, self.sam_api)
+        self.sam_controller = SamController(self.dlg, self.sam_service)
 
         # load providers from settings
         errors = []
@@ -2235,13 +2239,10 @@ class Mapflow(QObject):
         response_data = response.readAll().data().decode()
         try:
             parsed = json.loads(response_data)
-            debug_text = json.dumps(parsed, indent=2, ensure_ascii=False)
         except (json.JSONDecodeError, ValueError):
-            debug_text = response_data
+            parsed = response_data
 
-        self.dlg.samDebugOutput.append(
-            f"--- Create SAM Processing Response ---\n{debug_text}\n"
-        )
+        self.sam_service.view.append_debug("Create SAM Processing", parsed)
         # Switch to SAM tab to show result
         self.dlg.tabWidget.setCurrentIndex(5)
 
