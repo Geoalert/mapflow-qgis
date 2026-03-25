@@ -1,4 +1,7 @@
-"""Tests for SAM Interactive service layer (Pass 4: Processings + Workflows).
+"""Tests for SAM Interactive service layer.
+
+Pass 4: Processings + Workflows
+Pass 5: Prompts + Point/Bbox
 
 Tests verify that SamService correctly:
 - parses API responses into schema objects
@@ -16,6 +19,10 @@ from mapflow.schema.sam import (
     ProcessingSummaryResponse,
     ProcessingDetailResponse,
     WorkflowSummaryResponse,
+    PromptResponse,
+    PromptDetailResponse,
+    PromptListResponse,
+    SpatialPromptResponse,
 )
 
 
@@ -271,3 +278,213 @@ class TestPagination:
 
         sam_service._offset = 20
         assert sam_service.has_prev_page is True
+
+
+# ---------------------------------------------------------------------------
+# create_prompt
+# ---------------------------------------------------------------------------
+
+class TestCreatePrompt:
+    def test_calls_api_with_text_prompt(self, sam_service, http_mock):
+        sam_service.create_prompt(text_prompt="find buildings")
+
+        http_mock.post.assert_called_once()
+        url = http_mock.post.call_args[1]["url"]
+        assert "/prompts" in url
+        body = json.loads(http_mock.post.call_args[1]["body"])
+        assert body["text_prompt"] == "find buildings"
+
+    def test_calls_api_with_empty_text(self, sam_service, http_mock):
+        sam_service.create_prompt(text_prompt=None)
+
+        http_mock.post.assert_called_once()
+
+
+class TestCreatePromptCallback:
+    PROMPT_DATA = {"id": "pr1", "text_prompt_id": "tp1", "text_prompt": "find buildings"}
+
+    def test_appends_debug(self, sam_service, sam_view):
+        reply = _make_reply(self.PROMPT_DATA)
+        sam_service.create_prompt_callback(reply)
+
+        sam_view.append_debug.assert_called_once()
+        title, data = sam_view.append_debug.call_args[0]
+        assert "Create Prompt" in title
+        assert data["id"] == "pr1"
+
+    def test_refreshes_prompts_list(self, sam_service, sam_view):
+        reply = _make_reply(self.PROMPT_DATA)
+        with patch.object(sam_service, 'list_prompts') as mock_list:
+            sam_service.create_prompt_callback(reply)
+            mock_list.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# list_prompts
+# ---------------------------------------------------------------------------
+
+class TestListPrompts:
+    def test_calls_api(self, sam_service, http_mock):
+        sam_service.list_prompts()
+
+        http_mock.get.assert_called_once()
+        url = http_mock.get.call_args[1]["url"]
+        assert "/prompts/page" in url
+
+
+class TestListPromptsCallback:
+    RESPONSE_DATA = {
+        "total": 2,
+        "limit": 20,
+        "offset": 0,
+        "items": [
+            {"id": "pr1", "text_prompt_id": "tp1", "text_prompt": "find buildings"},
+            {"id": "pr2", "text_prompt_id": None, "text_prompt": None},
+        ],
+    }
+
+    def test_populates_view_with_prompts(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.list_prompts_callback(reply)
+
+        sam_view.display_prompts.assert_called_once()
+        items = sam_view.display_prompts.call_args[0][0]
+        assert len(items) == 2
+        assert items[0].id == "pr1"
+        assert items[0].text_prompt == "find buildings"
+
+    def test_appends_debug(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.list_prompts_callback(reply)
+
+        sam_view.append_debug.assert_called_once()
+        title, _ = sam_view.append_debug.call_args[0]
+        assert "List Prompts" in title
+
+
+# ---------------------------------------------------------------------------
+# get_prompt_detail
+# ---------------------------------------------------------------------------
+
+class TestGetPromptDetailCallback:
+    DETAIL_DATA = {
+        "id": "pr1",
+        "text_prompt_id": "tp1",
+        "text_prompt": "find buildings",
+        "point_prompts": [
+            {"id": "pp1", "processing_id": "p1", "geometry": {"type": "Point", "coordinates": [37.6, 55.7]}, "positive": True},
+        ],
+        "bbox_prompts": [
+            {"id": "bp1", "processing_id": "p1", "geometry": {"type": "Polygon", "coordinates": [[[37, 55], [38, 55], [38, 56], [37, 56], [37, 55]]]}, "positive": False},
+        ],
+    }
+
+    def test_displays_prompt_detail(self, sam_service, sam_view):
+        reply = _make_reply(self.DETAIL_DATA)
+        sam_service.get_prompt_detail_callback(reply)
+
+        sam_view.display_prompt_detail.assert_called_once()
+        detail = sam_view.display_prompt_detail.call_args[0][0]
+        assert isinstance(detail, PromptDetailResponse)
+        assert len(detail.point_prompts) == 1
+        assert len(detail.bbox_prompts) == 1
+        assert detail.point_prompts[0].positive is True
+        assert detail.bbox_prompts[0].positive is False
+
+    def test_appends_debug(self, sam_service, sam_view):
+        reply = _make_reply(self.DETAIL_DATA)
+        sam_service.get_prompt_detail_callback(reply)
+
+        sam_view.append_debug.assert_called_once()
+        title, _ = sam_view.append_debug.call_args[0]
+        assert "Prompt Detail" in title
+
+
+# ---------------------------------------------------------------------------
+# add_point_prompt
+# ---------------------------------------------------------------------------
+
+class TestAddPointPrompt:
+    def test_calls_api(self, sam_service, http_mock):
+        geojson = {"type": "Point", "coordinates": [37.6, 55.7]}
+        sam_service.add_point_prompt(
+            prompt_id="pr1", processing_id="p1",
+            geometry=geojson, positive=True,
+        )
+
+        http_mock.post.assert_called_once()
+        url = http_mock.post.call_args[1]["url"]
+        assert "/prompts/pr1/point_prompts" in url
+        body = json.loads(http_mock.post.call_args[1]["body"])
+        assert body["processing_id"] == "p1"
+        assert body["geometry"] == geojson
+        assert body["positive"] is True
+
+
+class TestAddPointPromptCallback:
+    RESPONSE_DATA = {
+        "id": "pp1", "processing_id": "p1",
+        "geometry": {"type": "Point", "coordinates": [37.6, 55.7]},
+        "positive": True,
+    }
+
+    def test_appends_debug(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.add_point_prompt_callback(reply)
+
+        sam_view.append_debug.assert_called_once()
+        title, data = sam_view.append_debug.call_args[0]
+        assert "Point Prompt" in title
+
+    def test_adds_to_map_layer(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.add_point_prompt_callback(reply)
+
+        sam_view.add_prompt_to_map.assert_called_once()
+        prompt = sam_view.add_prompt_to_map.call_args[0][0]
+        assert isinstance(prompt, SpatialPromptResponse)
+        assert prompt.positive is True
+
+
+# ---------------------------------------------------------------------------
+# add_bbox_prompt
+# ---------------------------------------------------------------------------
+
+class TestAddBboxPrompt:
+    def test_calls_api(self, sam_service, http_mock):
+        geojson = {"type": "Polygon", "coordinates": [[[37, 55], [38, 55], [38, 56], [37, 56], [37, 55]]]}
+        sam_service.add_bbox_prompt(
+            prompt_id="pr1", processing_id="p1",
+            geometry=geojson, positive=False,
+        )
+
+        http_mock.post.assert_called_once()
+        url = http_mock.post.call_args[1]["url"]
+        assert "/prompts/pr1/bbox_prompts" in url
+        body = json.loads(http_mock.post.call_args[1]["body"])
+        assert body["positive"] is False
+
+
+class TestAddBboxPromptCallback:
+    RESPONSE_DATA = {
+        "id": "bp1", "processing_id": "p1",
+        "geometry": {"type": "Polygon", "coordinates": [[[37, 55], [38, 55], [38, 56], [37, 56], [37, 55]]]},
+        "positive": False,
+    }
+
+    def test_appends_debug(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.add_bbox_prompt_callback(reply)
+
+        sam_view.append_debug.assert_called_once()
+        title, _ = sam_view.append_debug.call_args[0]
+        assert "Bbox Prompt" in title
+
+    def test_adds_to_map_layer(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.add_bbox_prompt_callback(reply)
+
+        sam_view.add_prompt_to_map.assert_called_once()
+        prompt = sam_view.add_prompt_to_map.call_args[0][0]
+        assert isinstance(prompt, SpatialPromptResponse)
+        assert prompt.positive is False

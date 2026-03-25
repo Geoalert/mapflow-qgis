@@ -13,9 +13,11 @@ Reference: `WAL_4_exploration.md` for full API docs and architecture findings.
 
 - **Pass 4** (pending commit): 3-tier architecture (SamService/SamController/SamView) for processings table + workflow browsing. Pagination state in service. Debug output centralized in view. Existing `create_sam_processing_callback` refactored to use `SamView.append_debug`.
 
-### Next: Pass 5 — Prompts + Point/Bbox Map Tools
-- Prompt management with text, point (map click), bbox (map rectangle) creation
-- Key files: `sam_service.py`, `sam_controller.py`, `sam_view.py`, `map_tools.py` (new)
+- **Pass 5** (pending commit): Prompt CRUD + spatial prompt creation via map tools. `SamPointMapTool` (QgsMapToolEmitPoint) and `SamBboxMapTool` (QgsMapToolExtent) in new `map_tools.py`. Service layer extended with 7 prompt callbacks. View extended with prompts table, prompt detail display, and memory vector layer visualization (categorized renderer: green=positive, red=negative). Controller wires all prompt buttons + map tool activation/deactivation with automatic restore of previous tool. `samPositivePrompt` checkbox added to UI. `iface.mapCanvas()` passed to SamController.
+
+### Next: Pass 6 — Sessions + Inference + Results
+- Session creation, inference execution, result loading
+- Key files: `sam_service.py`, `sam_controller.py`, `sam_view.py`
 
 ### Open items
 - Tests not runnable locally (QGIS runtime required by `conftest.py`)
@@ -197,12 +199,26 @@ Features:
 - processing_id selector (from SAM processings table)
 
 Acceptance criteria:
-- [ ] Text prompt creation works
-- [ ] Point prompt via map click works
-- [ ] Bbox prompt via map rectangle works
-- [ ] Positive/negative toggle works
-- [ ] Prompts visualized on map layer
-- [ ] Debug output shows raw JSON
+- [x] Text prompt creation works
+- [x] Point prompt via map click works
+- [x] Bbox prompt via map rectangle works
+- [x] Positive/negative toggle works
+- [x] Prompts visualized on map layer
+- [x] Debug output shows raw JSON
+
+#### Implementation-time findings
+
+1. **Map tools use Qt signals**: `SamPointMapTool.point_captured` and `SamBboxMapTool.bbox_captured` emit GeoJSON dicts. CRS transform from canvas CRS to EPSG:4326 is done inside the tool, so consumers always get WGS84 coordinates.
+
+2. **QgsMapToolExtent.extentChanged**: Unlike QgsMapToolEmitPoint which needs `canvasReleaseEvent` override, QgsMapToolExtent emits `extentChanged(QgsRectangle)` signal on rectangle completion. The bbox tool connects to this signal and converts the extent to a GeoJSON Polygon.
+
+3. **Processing ID from processings table**: Point/bbox prompts require `processing_id`. Rather than adding a separate combo, the controller reads it from the already-selected row in `samProcessingsTable`. Both a prompt and a processing must be selected before map tools activate.
+
+4. **Memory layer with categorized renderer**: Prompt visualization uses a single memory layer (`SAM Prompts`) with a `QgsCategorizedSymbolRenderer` on the `positive` field. Green for positive, red for negative. Layer is created on first spatial prompt and reused. `display_prompt_detail` clears and repopulates it.
+
+5. **Map tool restoration**: After a point/bbox capture, the controller restores the previously active map tool. This prevents the SAM tools from staying active after a single use.
+
+6. **GeoJSON-to-WKT helper**: `_geojson_to_wkt()` in `sam_view.py` converts Point and Polygon GeoJSON to WKT for `QgsGeometry.fromWkt()`. Only these two types are needed for SAM prompts.
 
 ### Pass 6: Sessions + Inference + Results
 **Goal**: Complete the interactive workflow: create session → run inference → view results.

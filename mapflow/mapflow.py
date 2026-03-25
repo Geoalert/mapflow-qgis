@@ -224,7 +224,7 @@ class Mapflow(QObject):
 
         self.sam_api = SamApi(self.http, self.server)
         self.sam_service = SamService(self.dlg, self.sam_api)
-        self.sam_controller = SamController(self.dlg, self.sam_service)
+        self.sam_controller = SamController(self.dlg, self.sam_service, self.iface.mapCanvas())
 
         # load providers from settings
         errors = []

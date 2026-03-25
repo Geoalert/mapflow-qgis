@@ -3616,6 +3616,20 @@
                     </item>
                    </layout>
                   </item>
+                  <item>
+                   <layout class="QHBoxLayout" name="samPromptOptionsLayout">
+                    <item>
+                     <widget class="QCheckBox" name="samPositivePrompt">
+                      <property name="text">
+                       <string>Positive prompt</string>
+                      </property>
+                      <property name="checked">
+                       <bool>true</bool>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
                  </layout>
                 </widget>
                </item>

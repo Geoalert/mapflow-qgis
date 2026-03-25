@@ -16,6 +16,12 @@ from ...schema.sam import (
     ProcessingListResponse,
     ProcessingDetailResponse,
     WorkflowSummaryResponse,
+    PromptListResponse,
+    PromptDetailResponse,
+    PromptCreateRequest,
+    PointPromptRequest,
+    BboxPromptRequest,
+    SpatialPromptResponse,
 )
 
 
@@ -91,6 +97,83 @@ class SamService(QObject):
     def get_workflow_callback(self, response: QNetworkReply):
         data = json.loads(response.readAll().data().decode())
         self.view.append_debug("Workflow Detail", data)
+
+    # ------------------------------------------------------------------
+    # Prompts
+    # ------------------------------------------------------------------
+
+    def create_prompt(self, text_prompt: Optional[str] = None):
+        request = PromptCreateRequest(text_prompt=text_prompt)
+        self.api.create_prompt(
+            request=request,
+            callback=self.create_prompt_callback,
+        )
+
+    def create_prompt_callback(self, response: QNetworkReply):
+        data = json.loads(response.readAll().data().decode())
+        self.view.append_debug("Create Prompt", data)
+        self.list_prompts()
+
+    def list_prompts(self):
+        self.api.list_prompts(
+            callback=self.list_prompts_callback,
+        )
+
+    def list_prompts_callback(self, response: QNetworkReply):
+        data = json.loads(response.readAll().data().decode())
+        result = PromptListResponse.from_dict(data)
+        self.view.display_prompts(result.items)
+        self.view.append_debug("List Prompts", data)
+
+    def get_prompt_detail(self, prompt_id: str):
+        self.api.get_prompt(
+            prompt_id=prompt_id,
+            callback=self.get_prompt_detail_callback,
+        )
+
+    def get_prompt_detail_callback(self, response: QNetworkReply):
+        data = json.loads(response.readAll().data().decode())
+        detail = PromptDetailResponse.from_dict(data)
+        self.view.display_prompt_detail(detail)
+        self.view.append_debug("Prompt Detail", data)
+
+    def add_point_prompt(self, prompt_id: str, processing_id: str,
+                         geometry: dict, positive: bool = True):
+        request = PointPromptRequest(
+            processing_id=processing_id,
+            geometry=geometry,
+            positive=positive,
+        )
+        self.api.add_point_prompt(
+            prompt_id=prompt_id,
+            request=request,
+            callback=self.add_point_prompt_callback,
+        )
+
+    def add_point_prompt_callback(self, response: QNetworkReply):
+        data = json.loads(response.readAll().data().decode())
+        prompt = SpatialPromptResponse.from_dict(data)
+        self.view.add_prompt_to_map(prompt)
+        self.view.append_debug("Point Prompt", data)
+
+    def add_bbox_prompt(self, prompt_id: str, processing_id: str,
+                        geometry: dict, positive: bool = True):
+        request = BboxPromptRequest(
+            processing_id=processing_id,
+            geometry=geometry,
+            positive=positive,
+        )
+        self.api.add_bbox_prompt(
+            prompt_id=prompt_id,
+            request=request,
+            callback=self.add_bbox_prompt_callback,
+        )
+
+    def add_bbox_prompt_callback(self, response: QNetworkReply):
+        data = json.loads(response.readAll().data().decode())
+        prompt = SpatialPromptResponse.from_dict(data)
+        self.view.add_prompt_to_map(prompt)
+        self.view.append_debug("Bbox Prompt", data)
 
     # ------------------------------------------------------------------
     # Pagination
