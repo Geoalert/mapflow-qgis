@@ -23,6 +23,8 @@ from mapflow.schema.sam import (
     PromptDetailResponse,
     PromptListResponse,
     SpatialPromptResponse,
+    SessionResponse,
+    InferenceResponse,
 )
 
 
@@ -488,3 +490,239 @@ class TestAddBboxPromptCallback:
         prompt = sam_view.add_prompt_to_map.call_args[0][0]
         assert isinstance(prompt, SpatialPromptResponse)
         assert prompt.positive is False
+
+
+# ---------------------------------------------------------------------------
+# create_session
+# ---------------------------------------------------------------------------
+
+class TestCreateSessionService:
+    def test_calls_api(self, sam_service, http_mock):
+        sam_service.create_session("proc-1", "prompt-1")
+
+        http_mock.post.assert_called_once()
+        url = http_mock.post.call_args[1]["url"]
+        assert "/sessions" in url
+
+
+class TestCreateSessionCallback:
+    RESPONSE_DATA = {
+        "id": "s1", "processing_id": "p1", "prompt_id": "pr1",
+        "inferences": [], "layer_id": "l1", "tile_url": "https://tiles",
+    }
+
+    def test_appends_debug(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.create_session_callback(reply)
+
+        sam_view.append_debug.assert_called_once()
+        title, data = sam_view.append_debug.call_args[0]
+        assert "Create Session" in title
+        assert data["id"] == "s1"
+
+    def test_adds_session_to_combos(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.create_session_callback(reply)
+
+        sam_view.add_session_to_combos.assert_called_once_with("s1")
+
+
+# ---------------------------------------------------------------------------
+# get_session_detail
+# ---------------------------------------------------------------------------
+
+class TestGetSessionDetailCallback:
+    RESPONSE_DATA = {
+        "id": "s1", "processing_id": "p1", "prompt_id": "pr1",
+        "inferences": [{"id": "i1", "status": "done"}],
+        "layer_id": "l1", "tile_url": "https://tiles",
+    }
+
+    def test_displays_session_detail(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.get_session_detail_callback(reply)
+
+        sam_view.display_session_detail.assert_called_once()
+        session = sam_view.display_session_detail.call_args[0][0]
+        assert isinstance(session, SessionResponse)
+        assert session.id == "s1"
+        assert len(session.inferences) == 1
+
+    def test_appends_debug(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.get_session_detail_callback(reply)
+
+        sam_view.append_debug.assert_called_once()
+        title, _ = sam_view.append_debug.call_args[0]
+        assert "Session Detail" in title
+
+
+# ---------------------------------------------------------------------------
+# copy_session
+# ---------------------------------------------------------------------------
+
+class TestCopySessionCallback:
+    RESPONSE_DATA = {
+        "id": "s2", "processing_id": "p1", "prompt_id": "pr1",
+        "inferences": [], "layer_id": "l2", "tile_url": "https://tiles2",
+    }
+
+    def test_appends_debug(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.copy_session_callback(reply)
+
+        sam_view.append_debug.assert_called_once()
+        title, data = sam_view.append_debug.call_args[0]
+        assert "Copy Session" in title
+        assert data["id"] == "s2"
+
+    def test_adds_session_to_combos(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.copy_session_callback(reply)
+
+        sam_view.add_session_to_combos.assert_called_once_with("s2")
+
+
+# ---------------------------------------------------------------------------
+# list_sessions
+# ---------------------------------------------------------------------------
+
+class TestListSessionsCallback:
+    RESPONSE_DATA = [
+        {"id": "s1", "processing_id": "p1", "prompt_id": "pr1",
+         "inferences": [], "layer_id": "l1", "tile_url": "https://tiles"},
+        {"id": "s2", "processing_id": "p1", "prompt_id": "pr2",
+         "inferences": [], "layer_id": "l2", "tile_url": "https://tiles2"},
+    ]
+
+    def test_displays_sessions(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.list_sessions_callback(reply)
+
+        sam_view.display_sessions.assert_called_once()
+        sessions = sam_view.display_sessions.call_args[0][0]
+        assert len(sessions) == 2
+        assert isinstance(sessions[0], SessionResponse)
+        assert sessions[0].id == "s1"
+
+    def test_appends_debug(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.list_sessions_callback(reply)
+
+        sam_view.append_debug.assert_called_once()
+        title, _ = sam_view.append_debug.call_args[0]
+        assert "List Sessions" in title
+
+    def test_empty_response_non_list(self, sam_service, sam_view):
+        reply = _make_reply({})
+        sam_service.list_sessions_callback(reply)
+
+        sam_view.display_sessions.assert_called_once()
+        sessions = sam_view.display_sessions.call_args[0][0]
+        assert len(sessions) == 0
+
+
+# ---------------------------------------------------------------------------
+# create_inference
+# ---------------------------------------------------------------------------
+
+class TestCreateInferenceService:
+    def test_calls_api(self, sam_service, http_mock):
+        geojson = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}
+        sam_service.create_inference("s1", "wf1", geojson)
+
+        http_mock.post.assert_called_once()
+        url = http_mock.post.call_args[1]["url"]
+        assert "/inference" in url
+
+
+class TestCreateInferenceCallback:
+    RESPONSE_DATA = {
+        "id": "inf1", "session_id": "s1", "status": "in_progress",
+        "geometry": None, "we_workflow_id": 42, "we_workflow_status": "running",
+        "created_at": "2025-01-01T00:00:00", "updated_at": "2025-01-01T00:00:00",
+    }
+
+    def test_displays_inference_status(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.create_inference_callback(reply)
+
+        sam_view.display_inference_status.assert_called_once()
+        inference = sam_view.display_inference_status.call_args[0][0]
+        assert isinstance(inference, InferenceResponse)
+        assert inference.status == "in_progress"
+
+    def test_appends_debug(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.create_inference_callback(reply)
+
+        sam_view.append_debug.assert_called_once()
+        title, data = sam_view.append_debug.call_args[0]
+        assert "Create Inference" in title
+        assert data["id"] == "inf1"
+
+    def test_stores_current_inference_id(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.create_inference_callback(reply)
+
+        assert sam_service._current_inference_id == "inf1"
+
+    def test_enables_inference_refresh(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.create_inference_callback(reply)
+
+        sam_view.set_inference_refresh_enabled.assert_called_once_with(True)
+
+
+# ---------------------------------------------------------------------------
+# get_inference_status
+# ---------------------------------------------------------------------------
+
+class TestGetInferenceStatusCallback:
+    RESPONSE_DATA = {
+        "id": "inf1", "session_id": "s1", "status": "done",
+        "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
+    }
+
+    def test_displays_inference_status(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.get_inference_status_callback(reply)
+
+        sam_view.display_inference_status.assert_called_once()
+        inference = sam_view.display_inference_status.call_args[0][0]
+        assert isinstance(inference, InferenceResponse)
+        assert inference.status == "done"
+
+    def test_appends_debug(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.get_inference_status_callback(reply)
+
+        sam_view.append_debug.assert_called_once()
+        title, _ = sam_view.append_debug.call_args[0]
+        assert "Inference Status" in title
+
+
+# ---------------------------------------------------------------------------
+# get_result
+# ---------------------------------------------------------------------------
+
+class TestGetResultCallback:
+    RESPONSE_DATA = {
+        "id": "r1", "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
+        "layer_id": "l1", "processing_id": "p1", "session_id": "s1",
+    }
+
+    def test_loads_result_layer(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.get_result_callback(reply)
+
+        sam_view.load_result_layer.assert_called_once_with(self.RESPONSE_DATA)
+
+    def test_appends_debug(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.get_result_callback(reply)
+
+        sam_view.append_debug.assert_called_once()
+        title, data = sam_view.append_debug.call_args[0]
+        assert "Session Result" in title
+        assert data["id"] == "r1"

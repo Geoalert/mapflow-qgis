@@ -43,6 +43,7 @@ class SamView(QObject):
         self._setup_processings_table()
         self._setup_prompts_table()
         self._setup_sessions_table()
+        self._setup_initial_button_states()
         self._prompts_layer = None
         self._result_layer = None
 
@@ -75,6 +76,38 @@ class SamView(QObject):
         table.setHorizontalHeaderLabels(["ID", "Processing ID", "Prompt ID"])
         table.setColumnHidden(0, True)
         table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+
+    def _setup_initial_button_states(self):
+        """Disable buttons that require a selection or prior action."""
+        # Require processing selection
+        self.dlg.samViewWorkflows.setEnabled(False)
+        self.dlg.samViewSessions.setEnabled(False)
+        # Require prompt selection
+        self.dlg.samViewPromptDetail.setEnabled(False)
+        self.dlg.samAddPointPrompt.setEnabled(False)
+        self.dlg.samAddBboxPrompt.setEnabled(False)
+        # Require session selection
+        self.dlg.samViewSessionDetail.setEnabled(False)
+        self.dlg.samCopySession.setEnabled(False)
+        self.dlg.samRefreshSessions.setEnabled(False)
+        # Require prior inference
+        self.dlg.samRefreshInferenceStatus.setEnabled(False)
+
+    def set_processing_buttons_enabled(self, enabled: bool):
+        self.dlg.samViewWorkflows.setEnabled(enabled)
+        self.dlg.samViewSessions.setEnabled(enabled)
+
+    def set_prompt_buttons_enabled(self, enabled: bool):
+        self.dlg.samViewPromptDetail.setEnabled(enabled)
+        self.dlg.samAddPointPrompt.setEnabled(enabled)
+        self.dlg.samAddBboxPrompt.setEnabled(enabled)
+
+    def set_session_buttons_enabled(self, enabled: bool):
+        self.dlg.samViewSessionDetail.setEnabled(enabled)
+        self.dlg.samCopySession.setEnabled(enabled)
+
+    def set_inference_refresh_enabled(self, enabled: bool):
+        self.dlg.samRefreshInferenceStatus.setEnabled(enabled)
 
     # ------------------------------------------------------------------
     # Processings

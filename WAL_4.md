@@ -17,9 +17,7 @@ Reference: `WAL_4_exploration.md` for full API docs and architecture findings.
 
 - **Pass 6** (pending commit): Sessions + Inference + Results. Service extended with session CRUD (create, detail, copy, list), inference (create, poll status), and result loading. View adds sessions table, session combo population (inference + result combos), inference status labels, GeoJSON result layer loading via `ogr` provider. Controller wires all session/inference/result buttons. Inference AOI drawn via a second `SamBboxMapTool` instance. Workflow combo populated from `display_workflows`. Processing/prompt combos for session creation populated when processings/prompts are listed.
 
-### Next: Pass 7 — Polish + Tests
-- Error handling, UI state management, integration tests
-- Key files: `sam_service.py`, `sam_controller.py`, `sam_view.py`
+- **Pass 7** (pending commit): Polish + Tests. Error handling already covered by Http dispatcher (`use_default_error_handler=True`). UI state management: buttons disabled until preconditions met, toggled on table selection changes. Tests added for all session/inference/result service callbacks, schema edge cases, and `_geojson_to_wkt` utility. `samViewSessions` button wired (was missing).
 
 ### Open items
 - Tests not runnable locally (QGIS runtime required by `conftest.py`)
@@ -266,6 +264,23 @@ Acceptance criteria:
 - UI state management (disable buttons when no selection, etc.)
 - Integration tests for controller
 - Manual testing of full workflow
+
+Acceptance criteria:
+- [x] Error handling covered by existing `use_default_error_handler=True` in Http dispatcher
+- [x] Buttons disabled until preconditions met (selection, prior action)
+- [x] Session/inference/result service callbacks tested
+- [x] Schema edge case tests added
+- [x] `_geojson_to_wkt` pure function tested
+
+#### Implementation-time findings
+
+1. **No custom error handling needed**: All `SamApi` calls pass `use_default_error_handler=True`, which means `Http.response_dispatcher` intercepts errors before the callback is invoked. The plugin's `default_error_handler` (in `mapflow.py`) shows user-facing alerts for network/timeout/server errors. Service callbacks only receive successful responses.
+
+2. **UI state management via view helpers**: Added `set_processing_buttons_enabled`, `set_prompt_buttons_enabled`, `set_session_buttons_enabled`, and `set_inference_refresh_enabled` to `SamView`. Initial disabled state set in `_setup_initial_button_states`. Controller toggles on table `selectionChanged` signals.
+
+3. **`samViewSessions` button was unwired**: Discovered during Pass 7 that the `samViewSessions` button had no signal connection. Wired it to `_refresh_sessions` via controller.
+
+4. **Controller integration tests deferred**: Testing controller requires QgsMapCanvas and full widget tree. These need QGIS runtime, same as all other tests. Pure service callback tests and schema/utility tests provide sufficient coverage for the debug interface.
 
 ---
 

@@ -330,3 +330,97 @@ class TestSchemas:
         body = request.as_dict()
         assert body["processing_id"] == "p1"
         assert body["positive"] is True
+
+    def test_inference_response_parses_all_fields(self):
+        from mapflow.schema.sam import InferenceResponse
+        data = {
+            "id": "inf1", "session_id": "s1", "status": "done",
+            "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
+            "we_workflow_id": 42, "we_workflow_status": "completed",
+            "created_at": "2025-01-01", "updated_at": "2025-01-02",
+        }
+        resp = InferenceResponse.from_dict(data)
+        assert resp.id == "inf1"
+        assert resp.status == "done"
+        assert resp.we_workflow_id == 42
+        assert resp.geometry is not None
+
+    def test_inference_response_defaults(self):
+        from mapflow.schema.sam import InferenceResponse
+        resp = InferenceResponse.from_dict({"id": "inf1", "session_id": "s1", "status": "pending"})
+        assert resp.geometry is None
+        assert resp.we_workflow_id is None
+        assert resp.we_workflow_status is None
+
+    def test_result_response_parses(self):
+        from mapflow.schema.sam import ResultResponse
+        data = {
+            "id": "r1", "geometry": {"type": "Point", "coordinates": [1, 2]},
+            "layer_id": "l1", "processing_id": "p1", "session_id": "s1",
+        }
+        resp = ResultResponse.from_dict(data)
+        assert resp.id == "r1"
+        assert resp.layer_id == "l1"
+
+    def test_result_response_defaults(self):
+        from mapflow.schema.sam import ResultResponse
+        resp = ResultResponse.from_dict({"id": "r1"})
+        assert resp.geometry is None
+        assert resp.layer_id is None
+
+    def test_session_list_response_parses(self):
+        from mapflow.schema.sam import SessionListResponse
+        data = {
+            "total": 1, "limit": 20, "offset": 0,
+            "items": [
+                {"id": "s1", "processing_id": "p1", "prompt_id": "pr1",
+                 "inferences": [], "layer_id": "l1", "tile_url": "https://tiles"},
+            ],
+        }
+        resp = SessionListResponse.from_dict(data)
+        assert resp.total == 1
+        assert len(resp.items) == 1
+        assert resp.items[0].id == "s1"
+
+    def test_session_response_empty_inferences(self):
+        from mapflow.schema.sam import SessionResponse
+        resp = SessionResponse.from_dict({"id": "s1", "processing_id": "p1", "prompt_id": "pr1"})
+        assert resp.inferences == []
+
+
+# ---------------------------------------------------------------------------
+# _geojson_to_wkt tests
+# ---------------------------------------------------------------------------
+
+class TestGeojsonToWkt:
+    def test_point(self):
+        from mapflow.functional.view.sam_view import _geojson_to_wkt
+        geojson = {"type": "Point", "coordinates": [37.6, 55.7]}
+        assert _geojson_to_wkt(geojson) == "POINT(37.6 55.7)"
+
+    def test_polygon(self):
+        from mapflow.functional.view.sam_view import _geojson_to_wkt
+        geojson = {
+            "type": "Polygon",
+            "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]],
+        }
+        result = _geojson_to_wkt(geojson)
+        assert result == "POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))"
+
+    def test_polygon_with_hole(self):
+        from mapflow.functional.view.sam_view import _geojson_to_wkt
+        geojson = {
+            "type": "Polygon",
+            "coordinates": [
+                [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]],
+                [[2, 2], [8, 2], [8, 8], [2, 8], [2, 2]],
+            ],
+        }
+        result = _geojson_to_wkt(geojson)
+        assert "POLYGON(" in result
+        assert result.count("(") == 3  # POLYGON( + 2 rings
+
+    def test_unknown_type_returns_empty(self):
+        from mapflow.functional.view.sam_view import _geojson_to_wkt
+        assert _geojson_to_wkt({"type": "LineString", "coordinates": [[0, 0], [1, 1]]}) == ""
+        assert _geojson_to_wkt({}) == ""

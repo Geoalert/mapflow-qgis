@@ -260,6 +260,7 @@ class SamService(QObject):
         self.view.display_inference_status(inference)
         self.view.append_debug("Create Inference", data)
         self._current_inference_id = inference.id
+        self.view.set_inference_refresh_enabled(True)
 
     def get_inference_status(self, inference_id: str):
         self.api.get_inference(

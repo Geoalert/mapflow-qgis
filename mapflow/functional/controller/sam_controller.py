@@ -32,6 +32,7 @@ class SamController(QObject):
         self.dlg.samProcessingsTable.selectionModel().selectionChanged.connect(
             self._on_processing_selected)
         self.dlg.samViewWorkflows.clicked.connect(self._view_workflows)
+        self.dlg.samViewSessions.clicked.connect(self._refresh_sessions)
 
         # Prompts
         self.dlg.samCreatePrompt.clicked.connect(self._create_prompt)
@@ -40,11 +41,17 @@ class SamController(QObject):
         self.dlg.samAddPointPrompt.clicked.connect(self._activate_point_tool)
         self.dlg.samAddBboxPrompt.clicked.connect(self._activate_bbox_tool)
 
+        # Prompts table selection
+        self.dlg.samPromptsTable.selectionModel().selectionChanged.connect(
+            self._on_prompt_selected)
+
         # Sessions
         self.dlg.samCreateSession.clicked.connect(self._create_session)
         self.dlg.samRefreshSessions.clicked.connect(self._refresh_sessions)
         self.dlg.samViewSessionDetail.clicked.connect(self._view_session_detail)
         self.dlg.samCopySession.clicked.connect(self._copy_session)
+        self.dlg.samSessionsTable.selectionModel().selectionChanged.connect(
+            self._on_session_selected)
 
         # Inference
         self.dlg.samDrawAoi.clicked.connect(self._activate_aoi_tool)
@@ -68,6 +75,8 @@ class SamController(QObject):
 
     def _on_processing_selected(self):
         processing_id = self.view.selected_processing_id()
+        self.view.set_processing_buttons_enabled(bool(processing_id))
+        self.dlg.samRefreshSessions.setEnabled(bool(processing_id))
         if processing_id:
             self.service.get_processing(processing_id)
 
@@ -79,6 +88,10 @@ class SamController(QObject):
     # ------------------------------------------------------------------
     # Prompts
     # ------------------------------------------------------------------
+
+    def _on_prompt_selected(self):
+        prompt_id = self.view.selected_prompt_id()
+        self.view.set_prompt_buttons_enabled(bool(prompt_id))
 
     def _create_prompt(self):
         text = self.dlg.samPromptText.text().strip() or None
@@ -158,6 +171,10 @@ class SamController(QObject):
     # ------------------------------------------------------------------
     # Sessions
     # ------------------------------------------------------------------
+
+    def _on_session_selected(self):
+        session_id = self.view.selected_session_id()
+        self.view.set_session_buttons_enabled(bool(session_id))
 
     def _create_session(self):
         processing_id = self.dlg.samSessionProcessingCombo.currentData()
