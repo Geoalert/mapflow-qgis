@@ -62,7 +62,15 @@ class SessionCreateRequest(Serializable):
 
 @dataclass
 class InferenceCreateRequest(Serializable):
-    session_id: str
+    """POST /inference — creates a new session + first inference."""
+    prompt_id: str
+    workflow_id: str
+    geometry: dict  # GeoJSON
+
+
+@dataclass
+class SessionInferenceCreateRequest(Serializable):
+    """POST /sessions/{id}/inferences — add inference to existing session."""
     workflow_id: str
     geometry: dict  # GeoJSON
 
@@ -182,20 +190,40 @@ class InferenceStatusSummary(SkipDataClass):
     id: str = ""
     status: str = ""
 
+@dataclass
+class VectorLayerJson(SkipDataClass):
+    id: str
+    tile_url: str
+    tile_json_url: str
 
 @dataclass
 class SessionResponse(SkipDataClass):
     id: str = ""
     processing_id: str = ""
-    prompt_id: str = ""
+    name: Optional[str] = None
     inferences: Optional[List[dict]] = None
-    layer_id: Optional[str] = None
-    tile_url: Optional[str] = None
+    vector_layer: Optional[VectorLayerJson] = None
 
     def __post_init__(self):
         if self.inferences is None:
             self.inferences = []
         self.inferences = [InferenceStatusSummary.from_dict(i) for i in self.inferences]
+
+
+@dataclass
+class SessionPromptsResponse(SkipDataClass):
+    """GET /sessions/{id}/prompts — frozen prompt snapshot."""
+    text_prompt: Optional[dict] = None
+    point_prompts: Optional[List[dict]] = None
+    bbox_prompts: Optional[List[dict]] = None
+
+    def __post_init__(self):
+        if self.point_prompts is None:
+            self.point_prompts = []
+        if self.bbox_prompts is None:
+            self.bbox_prompts = []
+        self.point_prompts = [SpatialPromptResponse.from_dict(p) for p in self.point_prompts]
+        self.bbox_prompts = [SpatialPromptResponse.from_dict(p) for p in self.bbox_prompts]
 
 
 @dataclass

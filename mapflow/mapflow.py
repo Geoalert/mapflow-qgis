@@ -223,7 +223,7 @@ class Mapflow(QObject):
                                                             callback=self.get_processings_callback))
 
         self.sam_api = SamApi(self.http, self.server)
-        self.sam_service = SamService(self.dlg, self.sam_api)
+        self.sam_service = SamService(self.dlg, self.sam_api, self.http, self.server, self.result_loader)
         self.sam_controller = SamController(
             self.dlg, self.sam_service, self.iface.mapCanvas(),
             aoi_provider=lambda: self.aoi,
@@ -3448,6 +3448,7 @@ class Mapflow(QObject):
                 self.project_service.get_project(self.project_id, self.get_project_callback, self.get_project_error_handler)
             self.data_catalog_service.get_mosaics()
         self.dlg.setup_for_billing(self.billing_type)
+        self.sam_controller.initialize()
         self.dlg.show()
         self.user_status_update_timer.start()
         self.app_startup_user_update_timer.start()

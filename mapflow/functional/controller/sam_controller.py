@@ -51,6 +51,7 @@ class SamController(QObject):
             self._on_processing_selected)
         self.dlg.samViewWorkflows.clicked.connect(self._view_workflows)
         self.dlg.samViewSessions.clicked.connect(self._refresh_sessions)
+        self.dlg.samPreviewImage.clicked.connect(self._preview_image)
 
         # Prompts
         self.dlg.samCreatePrompt.clicked.connect(self._create_prompt)
@@ -63,9 +64,8 @@ class SamController(QObject):
         # Prompts table selection
         self.dlg.samPromptsTable.selectionModel().selectionChanged.connect(
             self._on_prompt_selected)
-
+        self.dlg.deleteSpatialPrompt.clicked.connect(self._unlink_spatial_prompt)
         # Sessions
-        self.dlg.samCreateSession.clicked.connect(self._create_session)
         self.dlg.samRefreshSessions.clicked.connect(self._refresh_sessions)
         self.dlg.deleteSessionButton.clicked.connect(self._delete_session)
         self.dlg.samViewSessionDetail.clicked.connect(self._view_session_detail)
@@ -75,10 +75,20 @@ class SamController(QObject):
 
         # Inference
         self.dlg.samRunInference.clicked.connect(self._run_inference)
+        self.dlg.samRunSessionInference.clicked.connect(self._run_session_inference)
         self.dlg.samRefreshInferenceStatus.clicked.connect(self._refresh_inference_status)
 
         # Results
         self.dlg.samLoadResult.clicked.connect(self._load_result)
+
+    # ------------------------------------------------------------------
+    # Initialization
+    # ------------------------------------------------------------------
+
+    def initialize(self):
+        """Load initial data for all SAM tables."""
+        self._refresh_processings()
+        self._refresh_prompts()
 
     # ------------------------------------------------------------------
     # Processings
@@ -93,6 +103,11 @@ class SamController(QObject):
         self.dlg.samRefreshSessions.setEnabled(bool(processing_id))
         if processing_id:
             self.service.get_processing(processing_id)
+
+    def _preview_image(self):
+        processing_id = self.view.selected_processing_id()
+        if processing_id:
+            self.service.preview_image(processing_id)
 
     def _view_workflows(self):
         processing_id = self.view.selected_processing_id()
@@ -121,6 +136,12 @@ class SamController(QObject):
         prompt_id = self.view.selected_prompt_id()
         if prompt_id:
             self.service.get_prompt_detail(prompt_id)
+
+    def _unlink_spatial_prompt(self):
+        spatial_prompt_id, prompt_type = self.view.selected_spatial_prompt()
+        print(spatial_prompt_id, prompt_type)
+        if spatial_prompt_id:
+            self.service.unlink_spatial_prompt(spatial_prompt_id, prompt_type)
 
     def _activate_point_tool(self):
         prompt_id = self.view.selected_prompt_id()
@@ -187,17 +208,6 @@ class SamController(QObject):
         session_id = self.view.selected_session_id()
         self.view.set_session_buttons_enabled(bool(session_id))
 
-    def _create_session(self):
-        processing_id = self.view.selected_processing_id()
-        prompt_id = self.view.selected_prompt_id()
-        if not processing_id or not prompt_id:
-            self.view.append_debug(
-                "Create Session",
-                {"error": "Select a processing and a prompt in the combo boxes"},
-            )
-            return
-        self.service.create_session(processing_id, prompt_id)
-
     def _refresh_sessions(self):
         processing_id = self.view.selected_processing_id()
         if processing_id:
@@ -220,17 +230,32 @@ class SamController(QObject):
     # ------------------------------------------------------------------
 
     def _run_inference(self):
+        """Run inference — creates a new session + first inference."""
+        prompt_id = self.view.selected_prompt_id()
+        workflow_id = self.view.selected_workflow_id()
+        aoi = self._aoi_provider()
+        if not prompt_id or not workflow_id or not aoi:
+            self.view.append_debug(
+                "Run Inference",
+                {"error": "Select prompt, workflow, and AOI first"},
+            )
+            return
+        geometry = json.loads(aoi.asJson())
+        self.service.create_inference(prompt_id, workflow_id, geometry)
+
+    def _run_session_inference(self):
+        """Add inference to an existing session."""
         session_id = self.view.selected_session_id()
         workflow_id = self.view.selected_workflow_id()
         aoi = self._aoi_provider()
         if not session_id or not workflow_id or not aoi:
             self.view.append_debug(
-                "Run Inference",
+                "Session Inference",
                 {"error": "Select session, workflow, and AOI first"},
             )
             return
         geometry = json.loads(aoi.asJson())
-        self.service.create_inference(session_id, workflow_id, geometry)
+        self.service.create_session_inference(session_id, workflow_id, geometry)
 
     def _refresh_inference_status(self):
         inference_id = getattr(self.service, '_current_inference_id', None)

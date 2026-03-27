@@ -15,6 +15,7 @@ from ...schema.sam import (
     BboxPromptRequest,
     SessionCreateRequest,
     InferenceCreateRequest,
+    SessionInferenceCreateRequest,
 )
 
 
@@ -158,6 +159,20 @@ class SamApi(QObject):
             timeout=5,
         )
 
+    def unlink_point_prompt(self, prompt_id: str, point_prompt_id: str, callback: Callable):
+        self.http.delete(
+            url=f"{self.server}/prompts/{prompt_id}/point_prompts/{point_prompt_id}",
+            callback=callback,
+            timeout=5,
+        )
+
+    def unlink_bbox_prompt(self, prompt_id: str, bbox_prompt_id: str, callback: Callable):
+        self.http.delete(
+            url=f"{self.server}/prompts/{prompt_id}/bbox_prompts/{bbox_prompt_id}",
+            callback=callback,
+            timeout=5,
+        )
+
     def delete_prompt(self, prompt_id, callback: Callable):
         self.http.delete(
             url=f"{self.server}/prompts/{prompt_id}",
@@ -197,9 +212,28 @@ class SamApi(QObject):
             timeout=5,
         )
 
+    def get_session_prompts(self, session_id: str, callback: Callable):
+        self.http.get(
+            url=f"{self.server}/sessions/{session_id}/prompts",
+            headers={},
+            callback=callback,
+            use_default_error_handler=True,
+            timeout=5,
+        )
+
+    def create_session_inference(self, session_id: str, request, callback: Callable):
+        self.http.post(
+            url=f"{self.server}/sessions/{session_id}/inferences",
+            body=request.as_json().encode(),
+            headers={},
+            callback=callback,
+            use_default_error_handler=True,
+            timeout=10,
+        )
+
     def delete_session(self, session_id, callback: Callable):
         self.http.delete(
-            url=f"{self.server}/prompts/{session_id}",
+            url=f"{self.server}/sessions/{session_id}",
             callback=callback,
             timeout=5
         )

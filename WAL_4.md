@@ -248,8 +248,6 @@ Acceptance criteria:
 
 1. **Combo population from list operations**: Processing and prompt combos for session creation are populated as a side effect of `display_processings` and `display_prompts`. This avoids separate API calls just to fill combos. Same pattern for workflow combo populated from `display_workflows`.
 
-2. **Session combos shared**: Newly created/copied sessions are added to both `samInferenceSessionCombo` and `samResultSessionCombo` via `add_session_to_combos`, auto-selecting the new entry.
-
 3. **AOI reuses SamBboxMapTool**: Inference AOI drawing uses a second `SamBboxMapTool` instance (separate from the prompt bbox tool) to avoid signal conflict. The captured AOI is stored in `_inference_aoi` until `Run Inference` is clicked.
 
 4. **Result loading via ogr**: `load_result_layer` passes the raw GeoJSON string to `QgsVectorLayer` with `ogr` provider. QGIS handles GeoJSON parsing natively this way — no manual feature creation needed.

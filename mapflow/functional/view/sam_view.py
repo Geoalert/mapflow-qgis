@@ -5,7 +5,7 @@ prompt map visualization, and debug output.
 No business logic or API calls.
 """
 import json
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import sip
 from PyQt5.QtCore import QObject, Qt
@@ -26,6 +26,8 @@ from qgis.core import (
 )
 
 from ...dialogs.main_dialog import MainDialog
+from ...dialogs import icons
+
 from ...schema.sam import (
     ProcessingSummaryResponse,
     ProcessingDetailResponse,
@@ -42,9 +44,15 @@ class SamView(QObject):
     def __init__(self, dlg: MainDialog):
         super().__init__()
         self.dlg = dlg
+        self.dlg.samRefreshProcessings.setIcon(icons.refresh_icon)
+        self.dlg.samRefreshPrompts.setIcon(icons.refresh_icon)
+        self.dlg.samRefreshSessions.setIcon(icons.refresh_icon)
+        self.dlg.samRefreshInferenceStatus.setIcon(icons.refresh_icon)
+
         self._setup_processings_table()
         self._setup_prompts_table()
         self._setup_sessions_table()
+        self._setup_spatial_prompts_table()
         self._setup_initial_button_states()
         self._point_prompts_layer = None
         self._bbox_prompts_layer = None
@@ -77,9 +85,19 @@ class SamView(QObject):
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setSelectionMode(QTableWidget.SingleSelection)
         table.setColumnCount(3)
-        table.setHorizontalHeaderLabels(["ID", "Processing ID", "Prompt ID"])
+        table.setHorizontalHeaderLabels(["ID", "Name", "Processing ID"])
         table.setColumnHidden(0, True)
         table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+
+    def _setup_spatial_prompts_table(self):
+        table = self.dlg.spatialPromptsTable
+        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        table.setSelectionBehavior(QTableWidget.SelectRows)
+        table.setSelectionMode(QTableWidget.SingleSelection)
+        table.setColumnCount(4)
+        table.setHorizontalHeaderLabels(["ID", "Type", "Positive", "Geometry"])
+        table.setColumnHidden(0, True)
+        table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
 
     def _setup_initial_button_states(self):
         """Disable buttons that require a selection or prior action."""
@@ -93,6 +111,7 @@ class SamView(QObject):
         # Require session selection
         self.dlg.samViewSessionDetail.setEnabled(False)
         self.dlg.samCopySession.setEnabled(False)
+        self.dlg.samRunSessionInference.setEnabled(False)
         self.dlg.samRefreshSessions.setEnabled(False)
         # Require prior inference
         self.dlg.samRefreshInferenceStatus.setEnabled(False)
@@ -109,6 +128,7 @@ class SamView(QObject):
     def set_session_buttons_enabled(self, enabled: bool):
         self.dlg.samViewSessionDetail.setEnabled(enabled)
         self.dlg.samCopySession.setEnabled(enabled)
+        self.dlg.samRunSessionInference.setEnabled(enabled)
 
     def set_inference_refresh_enabled(self, enabled: bool):
         self.dlg.samRefreshInferenceStatus.setEnabled(enabled)
@@ -272,6 +292,59 @@ class SamView(QObject):
         for bx in detail.bbox_prompts:
             self._add_spatial_prompt_feature(bx, "Polygon")
 
+    def display_spatial_prompts(self, point_prompts: List[SpatialPromptResponse],
+                                bbox_prompts: List[SpatialPromptResponse]):
+        """Populate spatialPromptsTable table and add features to map layers."""
+        table = self.dlg.spatialPromptsTable
+        total = len(point_prompts) + len(bbox_prompts)
+        table.setRowCount(total)
+        self._clear_prompts_layers()
+        row = 0
+        for pt in point_prompts:
+            self._set_spatial_prompt_row(table, row, pt, "Point")
+            self._add_spatial_prompt_feature(pt, "Point")
+            row += 1
+        for bx in bbox_prompts:
+            self._set_spatial_prompt_row(table, row, bx, "Bbox")
+            self._add_spatial_prompt_feature(bx, "Polygon")
+            row += 1
+
+    @staticmethod
+    def _set_spatial_prompt_row(table, row: int, prompt: SpatialPromptResponse, type_label: str):
+        id_item = QTableWidgetItem()
+        id_item.setData(Qt.DisplayRole, prompt.id)
+        table.setItem(row, 0, id_item)
+
+        type_item = QTableWidgetItem()
+        type_item.setData(Qt.DisplayRole, type_label)
+        table.setItem(row, 1, type_item)
+
+        pos_item = QTableWidgetItem()
+        pos_item.setData(Qt.DisplayRole, "+" if prompt.positive else "-")
+        table.setItem(row, 2, pos_item)
+
+        geom_item = QTableWidgetItem()
+        geom_summary = ""
+        if prompt.geometry:
+            coords = prompt.geometry.get("coordinates", [])
+            geom_type = prompt.geometry.get("type", "")
+            if geom_type == "Point" and len(coords) >= 2:
+                geom_summary = f"{coords[0]:.5f}, {coords[1]:.5f}"
+            elif geom_type == "Polygon" and coords:
+                geom_summary = f"Polygon ({len(coords[0])} pts)"
+        geom_item.setData(Qt.DisplayRole, geom_summary)
+        table.setItem(row, 3, geom_item)
+
+    def selected_spatial_prompt(self) -> Tuple[Optional[str], Optional[str]]:
+        table = self.dlg.spatialPromptsTable
+        selected = table.selectionModel().selectedRows()
+        if not selected:
+            return None, None
+        row = selected[0].row()
+        prompt_type = str(table.item(row, 1).data(Qt.DisplayRole)).lower()
+        spatial_prompt_id = str(table.item(row, 0).data(Qt.DisplayRole)).lower()
+        return spatial_prompt_id, prompt_type
+
     def add_prompt_to_map(self, prompt: SpatialPromptResponse):
         if prompt.geometry is None:
             return
@@ -357,37 +430,28 @@ class SamView(QObject):
         table = self.dlg.samSessionsTable
         table.setRowCount(len(sessions))
         for row, sess in enumerate(sessions):
-            id_item = QTableWidgetItem()
-            id_item.setData(Qt.DisplayRole, sess.id)
-            table.setItem(row, 0, id_item)
-
-            proc_item = QTableWidgetItem()
-            proc_item.setData(Qt.DisplayRole, sess.processing_id)
-            table.setItem(row, 1, proc_item)
-
-            prompt_item = QTableWidgetItem()
-            prompt_item.setData(Qt.DisplayRole, sess.prompt_id)
-            table.setItem(row, 2, prompt_item)
-
+            self._set_session_row(table, row, sess)
 
     def add_session_to_table(self, session: SessionResponse):
         table = self.dlg.samSessionsTable
         row = table.rowCount()
         table.insertRow(row)
+        self._set_session_row(table, row, session)
+        table.selectRow(row)
 
+    @staticmethod
+    def _set_session_row(table, row: int, sess: SessionResponse):
         id_item = QTableWidgetItem()
-        id_item.setData(Qt.DisplayRole, session.id)
+        id_item.setData(Qt.DisplayRole, sess.id)
         table.setItem(row, 0, id_item)
 
+        name_item = QTableWidgetItem()
+        name_item.setData(Qt.DisplayRole, sess.name or sess.id[:12])
+        table.setItem(row, 1, name_item)
+
         proc_item = QTableWidgetItem()
-        proc_item.setData(Qt.DisplayRole, session.processing_id)
-        table.setItem(row, 1, proc_item)
-
-        prompt_item = QTableWidgetItem()
-        prompt_item.setData(Qt.DisplayRole, session.prompt_id)
-        table.setItem(row, 2, prompt_item)
-
-        table.selectRow(row)
+        proc_item.setData(Qt.DisplayRole, sess.processing_id)
+        table.setItem(row, 2, proc_item)
 
     def selected_session_id(self) -> Optional[str]:
         table = self.dlg.samSessionsTable
@@ -409,7 +473,6 @@ class SamView(QObject):
     def display_inference_status(self, inference: InferenceResponse):
         self.dlg.samInferenceIdValue.setText(inference.id or "-")
         self.dlg.samInferenceStatusValue.setText(inference.status or "-")
-        self.dlg.samWorkflowStatusValue.setText(inference.we_workflow_status or "-")
 
     # ------------------------------------------------------------------
     # Results
