@@ -178,6 +178,7 @@ class SamService(QObject):
     def list_prompts(self):
         self.api.list_prompts(
             callback=self.list_prompts_callback,
+            limit=100
         )
 
     def list_prompts_callback(self, response: QNetworkReply):
