@@ -110,7 +110,6 @@ class SamView(QObject):
         self.dlg.samAddBboxPrompt.setEnabled(False)
         # Require session selection
         self.dlg.samViewSessionDetail.setEnabled(False)
-        self.dlg.samCopySession.setEnabled(False)
         self.dlg.samRunSessionInference.setEnabled(False)
         self.dlg.samRefreshSessions.setEnabled(False)
         # Require prior inference
@@ -127,7 +126,6 @@ class SamView(QObject):
 
     def set_session_buttons_enabled(self, enabled: bool):
         self.dlg.samViewSessionDetail.setEnabled(enabled)
-        self.dlg.samCopySession.setEnabled(enabled)
         self.dlg.samRunSessionInference.setEnabled(enabled)
 
     def set_inference_refresh_enabled(self, enabled: bool):

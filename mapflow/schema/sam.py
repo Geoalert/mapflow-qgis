@@ -208,7 +208,8 @@ class SessionResponse(SkipDataClass):
         if self.inferences is None:
             self.inferences = []
         self.inferences = [InferenceStatusSummary.from_dict(i) for i in self.inferences]
-
+        if self.vector_layer:
+            self.vector_layer = VectorLayerJson.from_dict(self.vector_layer)
 
 @dataclass
 class SessionPromptsResponse(SkipDataClass):

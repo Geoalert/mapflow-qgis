@@ -69,7 +69,6 @@ class SamController(QObject):
         self.dlg.samRefreshSessions.clicked.connect(self._refresh_sessions)
         self.dlg.deleteSessionButton.clicked.connect(self._delete_session)
         self.dlg.samViewSessionDetail.clicked.connect(self._view_session_detail)
-        self.dlg.samCopySession.clicked.connect(self._copy_session)
         self.dlg.samSessionsTable.selectionModel().selectionChanged.connect(
             self._on_session_selected)
 
