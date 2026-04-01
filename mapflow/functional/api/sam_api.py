@@ -145,7 +145,7 @@ class SamApi(QObject):
             headers={},
             callback=callback,
             use_default_error_handler=True,
-            timeout=5,
+            timeout=15,
         )
 
     def add_bbox_prompt(self, prompt_id: str, request: BboxPromptRequest,
@@ -156,7 +156,7 @@ class SamApi(QObject):
             headers={},
             callback=callback,
             use_default_error_handler=True,
-            timeout=5,
+            timeout=15,
         )
 
     def unlink_point_prompt(self, prompt_id: str, point_prompt_id: str, callback: Callable):
