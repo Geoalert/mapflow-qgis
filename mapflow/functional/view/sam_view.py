@@ -29,6 +29,7 @@ from ...dialogs.main_dialog import MainDialog
 from ...dialogs import icons
 
 from ...schema.sam import (
+    GeometryType,
     ProcessingSummaryResponse,
     ProcessingDetailResponse,
     WorkflowSummaryResponse,
@@ -85,7 +86,7 @@ class SamView(QObject):
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setSelectionMode(QTableWidget.SingleSelection)
         table.setColumnCount(3)
-        table.setHorizontalHeaderLabels(["ID", "Name", "Processing ID"])
+        table.setHorizontalHeaderLabels(["ID", "Name", "Text Prompt"])
         table.setColumnHidden(0, True)
         table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
 
@@ -101,32 +102,23 @@ class SamView(QObject):
 
     def _setup_initial_button_states(self):
         """Disable buttons that require a selection or prior action."""
-        # Require processing selection
-        self.dlg.samViewWorkflows.setEnabled(False)
-        self.dlg.samViewSessions.setEnabled(False)
         # Require prompt selection
-        self.dlg.samViewPromptDetail.setEnabled(False)
         self.dlg.samAddPointPrompt.setEnabled(False)
         self.dlg.samAddBboxPrompt.setEnabled(False)
         # Require session selection
-        self.dlg.samViewSessionDetail.setEnabled(False)
         self.dlg.samRunSessionInference.setEnabled(False)
         self.dlg.samRefreshSessions.setEnabled(False)
         # Require prior inference
         self.dlg.samRefreshInferenceStatus.setEnabled(False)
 
-    def set_processing_buttons_enabled(self, enabled: bool):
-        self.dlg.samViewWorkflows.setEnabled(enabled)
-        self.dlg.samViewSessions.setEnabled(enabled)
-
     def set_prompt_buttons_enabled(self, enabled: bool):
-        self.dlg.samViewPromptDetail.setEnabled(enabled)
         self.dlg.samAddPointPrompt.setEnabled(enabled)
         self.dlg.samAddBboxPrompt.setEnabled(enabled)
+        self.dlg.deletePromptButton.setEnabled(enabled)
 
     def set_session_buttons_enabled(self, enabled: bool):
-        self.dlg.samViewSessionDetail.setEnabled(enabled)
         self.dlg.samRunSessionInference.setEnabled(enabled)
+        self.dlg.deleteSessionButton.setEnabled(enabled)
 
     def set_inference_refresh_enabled(self, enabled: bool):
         self.dlg.samRefreshInferenceStatus.setEnabled(enabled)
@@ -167,11 +159,15 @@ class SamView(QObject):
     def display_processing_detail(self, detail: ProcessingDetailResponse):
         pass
 
-    def display_workflows(self, workflows: List[WorkflowSummaryResponse]):
+    def populate_workflow_combo(self, workflows: List[WorkflowSummaryResponse]):
+        """Populate the workflow combo box without adding map layers."""
         self.dlg.samInferenceWorkflowCombo.clear()
         for wf in workflows:
             label = f"{wf.id[:8]}... ({wf.status})"
             self.dlg.samInferenceWorkflowCombo.addItem(label, wf.id)
+
+    def show_workflow_layers(self, workflows: List[WorkflowSummaryResponse]):
+        """Add workflow geometry layers to the map."""
         self._display_workflow_geometries(workflows)
         # Highlight selected workflow when combo changes
         try:
@@ -283,29 +279,21 @@ class SamView(QObject):
         item = table.item(row, 0)
         return item.data(Qt.DisplayRole) if item else None
 
-    def display_prompt_detail(self, detail: PromptDetailResponse):
-        self._clear_prompts_layers()
-        for pt in detail.point_prompts:
-            self._add_spatial_prompt_feature(pt, "Point")
-        for bx in detail.bbox_prompts:
-            self._add_spatial_prompt_feature(bx, "Polygon")
-
-    def display_spatial_prompts(self, point_prompts: List[SpatialPromptResponse],
-                                bbox_prompts: List[SpatialPromptResponse]):
-        """Populate spatialPromptsTable table and add features to map layers."""
+    def populate_spatial_prompts_table(self, spatial_prompts: List[SpatialPromptResponse]):
+        """Populate spatialPromptsTable without adding map layers."""
         table = self.dlg.spatialPromptsTable
-        total = len(point_prompts) + len(bbox_prompts)
-        table.setRowCount(total)
+        table.setRowCount(len(spatial_prompts))
+        for row, sp in enumerate(spatial_prompts):
+            type_label = sp.geometry_type.capitalize()  # "point" -> "Point", "bbox" -> "Bbox"
+            self._set_spatial_prompt_row(table, row, sp, type_label)
+        self.dlg.deleteSpatialPrompt.setEnabled(len(spatial_prompts) > 0)
+
+    def show_spatial_prompt_layers(self, spatial_prompts: List[SpatialPromptResponse]):
+        """Add spatial prompt features to map layers."""
         self._clear_prompts_layers()
-        row = 0
-        for pt in point_prompts:
-            self._set_spatial_prompt_row(table, row, pt, "Point")
-            self._add_spatial_prompt_feature(pt, "Point")
-            row += 1
-        for bx in bbox_prompts:
-            self._set_spatial_prompt_row(table, row, bx, "Bbox")
-            self._add_spatial_prompt_feature(bx, "Polygon")
-            row += 1
+        for sp in spatial_prompts:
+            geom_type = "Point" if sp.geometry_type == GeometryType.POINT.value else "Polygon"
+            self._add_spatial_prompt_feature(sp, geom_type)
 
     @staticmethod
     def _set_spatial_prompt_row(table, row: int, prompt: SpatialPromptResponse, type_label: str):
@@ -447,9 +435,9 @@ class SamView(QObject):
         name_item.setData(Qt.DisplayRole, sess.name or sess.id[:12])
         table.setItem(row, 1, name_item)
 
-        proc_item = QTableWidgetItem()
-        proc_item.setData(Qt.DisplayRole, sess.processing_id)
-        table.setItem(row, 2, proc_item)
+        text_item = QTableWidgetItem()
+        text_item.setData(Qt.DisplayRole, sess.text_prompt or "")
+        table.setItem(row, 2, text_item)
 
     def selected_session_id(self) -> Optional[str]:
         table = self.dlg.samSessionsTable

@@ -5,6 +5,7 @@ Follows existing conventions:
 - Response schemas inherit SkipDataClass (from_dict, tolerates unknown fields)
 """
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Optional, List, Union, Mapping, Any
 
 from ..schema.processing import PostSourceSchema, PostProviderSchema
@@ -73,6 +74,15 @@ class SessionInferenceCreateRequest(Serializable):
     """POST /sessions/{id}/inferences — add inference to existing session."""
     workflow_id: str
     geometry: dict  # GeoJSON
+
+
+# ---------------------------------------------------------------------------
+# Enums
+# ---------------------------------------------------------------------------
+
+class GeometryType(Enum):
+    POINT = "point"
+    BBOX = "bbox"
 
 
 # ---------------------------------------------------------------------------
@@ -147,10 +157,12 @@ class PromptResponse(SkipDataClass):
 
 @dataclass
 class SpatialPromptResponse(SkipDataClass):
-    """Shared schema for both point_prompts and bbox_prompts."""
+    """Unified spatial prompt — distinguished by geometry_type."""
     id: str = ""
+    geometry_type: str = ""  # "point" or "bbox", see GeometryType enum
     processing_id: str = ""
     embedding_uri: Optional[str] = None
+    raw_raster_uri: Optional[str] = None
     geometry: Optional[dict] = None
     positive: bool = True
 
@@ -160,16 +172,12 @@ class PromptDetailResponse(SkipDataClass):
     id: str = ""
     text_prompt_id: Optional[str] = None
     text_prompt: Optional[str] = None
-    point_prompts: Optional[List[dict]] = None
-    bbox_prompts: Optional[List[dict]] = None
+    spatial_prompts: Optional[List[dict]] = None
 
     def __post_init__(self):
-        if self.point_prompts is None:
-            self.point_prompts = []
-        if self.bbox_prompts is None:
-            self.bbox_prompts = []
-        self.point_prompts = [SpatialPromptResponse.from_dict(p) for p in self.point_prompts]
-        self.bbox_prompts = [SpatialPromptResponse.from_dict(p) for p in self.bbox_prompts]
+        if self.spatial_prompts is None:
+            self.spatial_prompts = []
+        self.spatial_prompts = [SpatialPromptResponse.from_dict(p) for p in self.spatial_prompts]
 
 
 @dataclass
@@ -201,6 +209,7 @@ class SessionResponse(SkipDataClass):
     id: str = ""
     processing_id: str = ""
     name: Optional[str] = None
+    text_prompt: Optional[str] = None
     inferences: Optional[List[dict]] = None
     vector_layer: Optional[VectorLayerJson] = None
 
@@ -215,16 +224,12 @@ class SessionResponse(SkipDataClass):
 class SessionPromptsResponse(SkipDataClass):
     """GET /sessions/{id}/prompts — frozen prompt snapshot."""
     text_prompt: Optional[dict] = None
-    point_prompts: Optional[List[dict]] = None
-    bbox_prompts: Optional[List[dict]] = None
+    spatial_prompts: Optional[List[dict]] = None
 
     def __post_init__(self):
-        if self.point_prompts is None:
-            self.point_prompts = []
-        if self.bbox_prompts is None:
-            self.bbox_prompts = []
-        self.point_prompts = [SpatialPromptResponse.from_dict(p) for p in self.point_prompts]
-        self.bbox_prompts = [SpatialPromptResponse.from_dict(p) for p in self.bbox_prompts]
+        if self.spatial_prompts is None:
+            self.spatial_prompts = []
+        self.spatial_prompts = [SpatialPromptResponse.from_dict(p) for p in self.spatial_prompts]
 
 
 @dataclass

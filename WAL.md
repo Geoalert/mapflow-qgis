@@ -20,7 +20,7 @@ All 5 specs populated from codebase analysis: goal (plugin purpose/constraints),
 All tests require QGIS runtime — no value in partial testing without it. Tools: pytest + pytest-qt + unittest.mock (stdlib). QgsApplication bootstrapped via qgis.testing.start_app() in pytest_configure hook (must run before collection because plugin modules create QIcon at import time). conftest.py provides iface mock and http_mock fixtures. pytest-qt chosen over raw PyQt5.QtTest for signal-heavy architecture (waitSignal, auto widget cleanup via qtbot).
 
 ## 4. Feature: debug interface for sam-interactive-backend
-[ ]
+[v]
 We are stabilizing the new backend API, so we need a debug interface to interact with it.
 
 - inspect sam-interactive-backend app spec and (if necessary) code
@@ -36,18 +36,31 @@ We are stabilizing the new backend API, so we need a debug interface to interact
 Use WAL_4.md for particular implementation steps, mark steps as finished after completion.
 Use WAL_4_exploration.md for architecture and code insights.
 
+### 4.1 sam-interactive-backend stabilization
+
+#### Fix textPrompt display
+- Currently sessions table in `text prompt` column dislpays empty text. Change Session return schema, add optional field `text_prompt`, display it in this column. 
+- Prompts table lacks name: add `name` to the response model (optional, default to text prompt for backwards compatibility)
+#### Incorporate SAM3 processings into existing processing table
+- Processings listed under SAM3-interactive API now have "project_id" + can be filtered by project id. 
+/processings/page?project_id=<UUID>&...
+- For the open project in the main project/processings tab:
+-- request this api, mark "sam3-interactive" processings with "SAM3-interactive" in "Model" column instead of model name
+-- add a checkbox "show only sam3-interactive" to hide other 
+- remove processings table from Sam3-interactive tab; replace it with a Label with processings' name 
+-- take current processing from Processing tab/ProcessingsTable if it is from SAM3 list, select/fetch corresponding sessions and worklfows on selection immediately
+-- No need for refresh/preview/delete buttons here as well, remove dangling code.
+
+
+#### Incorporate runnning SAM3 inference with the standard "Start processing" button
+- On startup, request `/rest/sam-interactive/wdid` API -> returns a single UUID, save it.
+- If there is WorkflowDef with this ID available in the current project, on start of the processing with this workflow_id, use not Maplfow API /rest/processings/V2, but /rest/sam-interactive/processings instead
+-- Use TextPrompt from corresponging field
+-- Do not allow starat with empty text prompt
+
+#### 
+
 ### Manual testing findings — prompt map tools
-
-**Bugs found:**
-1. Point prompt: positive/negative determined by checkbox; should be left-click = positive, right-click = negative
-2. Bbox prompt: tries to add polygon features to the same memory layer created with Point geometry type → fails silently; needs a separate Polygon layer
-3. Bbox prompt: same checkbox issue as point — should use left/right click
-
-**Fix plan:**
-1. `map_tools.py`: change signal signatures from `pyqtSignal(dict)` to `pyqtSignal(dict, bool)` — emit `(geojson, positive)`. `SamPointMapTool.canvasReleaseEvent`: detect `Qt.LeftButton` → positive=True, `Qt.RightButton` → positive=False. `SamBboxMapTool`: track button from `canvasPressEvent`, pass to `_on_extent`.
-2. `sam_view.py`: split single `_prompts_layer` into `_point_prompts_layer` (Point geometry) and `_bbox_prompts_layer` (Polygon geometry), each with green/red categorized renderer. Update `_add_spatial_prompt_feature` and `_clear_prompts_layer` accordingly.
-3. `sam_controller.py`: update `_on_point_captured(geojson, positive)` and `_on_bbox_captured(geojson, positive)` to use `positive` from signal instead of `samPositivePrompt` checkbox. Remove checkbox reads.
-4. Consider removing `samPositivePrompt` checkbox from UI if no longer needed.
 
 ## 5. Feature: download image from data-catalog
 [ ]

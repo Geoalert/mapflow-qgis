@@ -3465,13 +3465,6 @@
                      </widget>
                     </item>
                     <item>
-                     <widget class="QPushButton" name="samViewWorkflows">
-                      <property name="text">
-                       <string>View Workflows</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
                      <widget class="QPushButton" name="samPreviewImage">
                       <property name="text">
                        <string>Preview</string>
@@ -3479,9 +3472,12 @@
                      </widget>
                     </item>
                     <item>
-                     <widget class="QPushButton" name="samViewSessions">
+                     <widget class="QPushButton" name="deleteProcessingButton">
+                      <property name="enabled">
+                       <bool>false</bool>
+                      </property>
                       <property name="text">
-                       <string>View Sessions</string>
+                       <string>Delete</string>
                       </property>
                      </widget>
                     </item>
@@ -3560,13 +3556,6 @@
                       </property>
                       <property name="text">
                        <string>Delete prompt</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QPushButton" name="samViewPromptDetail">
-                      <property name="text">
-                       <string>View Detail</string>
                       </property>
                      </widget>
                     </item>
@@ -3689,13 +3678,6 @@
                          </widget>
                         </item>
                         <item>
-                         <widget class="QPushButton" name="samViewSessionDetail">
-                          <property name="text">
-                           <string>View</string>
-                          </property>
-                         </widget>
-                        </item>
-                        <item>
                          <widget class="QPushButton" name="samLoadResult">
                           <property name="text">
                            <string>Result</string>
@@ -3781,6 +3763,9 @@
                       </item>
                       <item>
                        <widget class="QPushButton" name="deleteSpatialPrompt">
+                        <property name="enabled">
+                         <bool>false</bool>
+                        </property>
                         <property name="text">
                          <string>Delete</string>
                         </property>

@@ -91,6 +91,13 @@ class SamApi(QObject):
             timeout=5,
         )
 
+    def delete_processing(self, processing_id: str, callback: Callable):
+        self.http.delete(
+            url=f"{self.server}/processings/{processing_id}",
+            callback=callback,
+            timeout=5,
+        )
+
     def get_workflow(self, workflow_id: str, callback: Callable):
         self.http.get(
             url=f"{self.server}/workflows/{workflow_id}",

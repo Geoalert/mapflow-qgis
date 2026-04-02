@@ -38,6 +38,7 @@ class SamController(QObject):
         self._canvas = canvas
         self._aoi_provider = aoi_provider
         self._prev_map_tool = None
+        self._updating_selection = False
 
         # Map tools
         self._point_tool = SamPointMapTool(canvas)
@@ -49,28 +50,27 @@ class SamController(QObject):
         self.dlg.samRefreshProcessings.clicked.connect(self._refresh_processings)
         self.dlg.samProcessingsTable.selectionModel().selectionChanged.connect(
             self._on_processing_selected)
-        self.dlg.samViewWorkflows.clicked.connect(self._view_workflows)
-        self.dlg.samViewSessions.clicked.connect(self._refresh_sessions)
-        self.dlg.samPreviewImage.clicked.connect(self._preview_image)
+        self.dlg.samProcessingsTable.doubleClicked.connect(self._on_processing_double_clicked)
+        self.dlg.samPreviewImage.clicked.connect(self._on_processing_double_clicked)
+        self.dlg.deleteProcessingButton.clicked.connect(self._delete_processing)
 
         # Prompts
         self.dlg.samCreatePrompt.clicked.connect(self._create_prompt)
         self.dlg.samRefreshPrompts.clicked.connect(self._refresh_prompts)
         self.dlg.deletePromptButton.clicked.connect(self._delete_prompt)
-        self.dlg.samViewPromptDetail.clicked.connect(self._view_prompt_detail)
         self.dlg.samAddPointPrompt.clicked.connect(self._activate_point_tool)
         self.dlg.samAddBboxPrompt.clicked.connect(self._activate_bbox_tool)
-
-        # Prompts table selection
         self.dlg.samPromptsTable.selectionModel().selectionChanged.connect(
             self._on_prompt_selected)
+        self.dlg.samPromptsTable.doubleClicked.connect(self._on_prompt_double_clicked)
         self.dlg.deleteSpatialPrompt.clicked.connect(self._unlink_spatial_prompt)
+
         # Sessions
         self.dlg.samRefreshSessions.clicked.connect(self._refresh_sessions)
         self.dlg.deleteSessionButton.clicked.connect(self._delete_session)
-        self.dlg.samViewSessionDetail.clicked.connect(self._view_session_detail)
         self.dlg.samSessionsTable.selectionModel().selectionChanged.connect(
             self._on_session_selected)
+        self.dlg.samSessionsTable.doubleClicked.connect(self._on_session_double_clicked)
 
         # Inference
         self.dlg.samRunInference.clicked.connect(self._run_inference)
@@ -98,28 +98,39 @@ class SamController(QObject):
 
     def _on_processing_selected(self):
         processing_id = self.view.selected_processing_id()
-        self.view.set_processing_buttons_enabled(bool(processing_id))
-        self.dlg.samRefreshSessions.setEnabled(bool(processing_id))
+        has_selection = bool(processing_id)
+        self.dlg.samRefreshSessions.setEnabled(has_selection)
+        self.dlg.deleteProcessingButton.setEnabled(has_selection)
         if processing_id:
             self.service.get_processing(processing_id)
-
-    def _preview_image(self):
-        processing_id = self.view.selected_processing_id()
-        if processing_id:
-            self.service.preview_image(processing_id)
-
-    def _view_workflows(self):
-        processing_id = self.view.selected_processing_id()
-        if processing_id:
             self.service.list_workflows(processing_id)
+            self.service.list_sessions(processing_id)
+
+    def _on_processing_double_clicked(self):
+        processing_id = self.view.selected_processing_id()
+        if processing_id:
+            self.service.show_processing_layers(processing_id)
+
+    def _delete_processing(self):
+        self.service.delete_processing()
 
     # ------------------------------------------------------------------
     # Prompts
     # ------------------------------------------------------------------
 
     def _on_prompt_selected(self):
+        if self._updating_selection:
+            return
         prompt_id = self.view.selected_prompt_id()
         self.view.set_prompt_buttons_enabled(bool(prompt_id))
+        if prompt_id:
+            self._updating_selection = True
+            self.dlg.samSessionsTable.clearSelection()
+            self._updating_selection = False
+            self.service.get_prompt_detail(prompt_id)
+
+    def _on_prompt_double_clicked(self):
+        self.service.show_prompt_layers()
 
     def _create_prompt(self):
         text = self.dlg.samPromptText.text().strip() or None
@@ -130,11 +141,6 @@ class SamController(QObject):
 
     def _delete_prompt(self):
         self.service.delete_prompt()
-
-    def _view_prompt_detail(self):
-        prompt_id = self.view.selected_prompt_id()
-        if prompt_id:
-            self.service.get_prompt_detail(prompt_id)
 
     def _unlink_spatial_prompt(self):
         spatial_prompt_id, prompt_type = self.view.selected_spatial_prompt()
@@ -204,18 +210,23 @@ class SamController(QObject):
     # ------------------------------------------------------------------
 
     def _on_session_selected(self):
+        if self._updating_selection:
+            return
         session_id = self.view.selected_session_id()
         self.view.set_session_buttons_enabled(bool(session_id))
+        if session_id:
+            self._updating_selection = True
+            self.dlg.samPromptsTable.clearSelection()
+            self._updating_selection = False
+            self.service.get_session_detail(session_id)
+
+    def _on_session_double_clicked(self):
+        self.service.show_session_layers()
 
     def _refresh_sessions(self):
         processing_id = self.view.selected_processing_id()
         if processing_id:
             self.service.list_sessions(processing_id)
-
-    def _view_session_detail(self):
-        session_id = self.view.selected_session_id()
-        if session_id:
-            self.service.get_session_detail(session_id)
 
     def _copy_session(self):
         session_id = self.view.selected_session_id()

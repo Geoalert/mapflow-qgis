@@ -31,7 +31,6 @@ from ...schema.sam import (
     InferenceCreateRequest,
     SessionInferenceCreateRequest,
     InferenceResponse,
-    ResultResponse,
 )
 
 
@@ -53,6 +52,12 @@ class SamService(QObject):
         self._offset = 0
         self._limit = 20
         self._total = 0
+
+        # Cached data for double-click layer display
+        self._workflows = []
+        self._last_prompt_detail = None
+        self._last_session = None
+        self._last_session_prompts = []
 
     # ------------------------------------------------------------------
     # Processings
@@ -76,6 +81,18 @@ class SamService(QObject):
             self.has_prev_page, self.has_next_page,
             self._offset, self._limit, self._total,
         )
+
+    def delete_processing(self):
+        processing_id = self.view.selected_processing_id()
+        if not processing_id:
+            return
+        self.api.delete_processing(
+            processing_id=processing_id,
+            callback=self._delete_processing_callback,
+        )
+
+    def _delete_processing_callback(self, response: QNetworkReply):
+        self.list_processings()
 
     def get_processing(self, processing_id: str):
         self.api.get_processing(
@@ -145,9 +162,15 @@ class SamService(QObject):
 
     def list_workflows_callback(self, response: QNetworkReply):
         data = json.loads(response.readAll().data().decode())
-        workflows = [WorkflowSummaryResponse.from_dict(w) for w in data.get('items', [])]
-        self.view.display_workflows(workflows)
+        self._workflows = [WorkflowSummaryResponse.from_dict(w) for w in data.get('items', [])]
+        self.view.populate_workflow_combo(self._workflows)
         self.view.append_debug("Workflows", data)
+
+    def show_processing_layers(self, processing_id: str):
+        """Double-click action: show preview image + workflow AOI layers."""
+        self.preview_image(processing_id)
+        if self._workflows:
+            self.view.show_workflow_layers(self._workflows)
 
     def get_workflow(self, workflow_id: str):
         self.api.get_workflow(
@@ -196,9 +219,14 @@ class SamService(QObject):
     def get_prompt_detail_callback(self, response: QNetworkReply):
         data = json.loads(response.readAll().data().decode())
         detail = PromptDetailResponse.from_dict(data)
-        self.view.display_prompt_detail(detail)
-        self.view.display_spatial_prompts(detail.point_prompts, detail.bbox_prompts)
+        self._last_prompt_detail = detail
+        self.view.populate_spatial_prompts_table(detail.spatial_prompts)
         self.view.append_debug("Prompt Detail", data)
+
+    def show_prompt_layers(self):
+        """Double-click action: show spatial prompt layers on map."""
+        if self._last_prompt_detail:
+            self.view.show_spatial_prompt_layers(self._last_prompt_detail.spatial_prompts)
 
     def add_point_prompt(self, prompt_id: str, processing_id: str,
                          geometry: dict, positive: bool = True):
@@ -312,14 +340,11 @@ class SamService(QObject):
 
     def get_session_detail_callback(self, response: QNetworkReply):
         data = json.loads(response.readAll().data().decode())
-        session = SessionResponse.from_dict(data)
-        self.view.display_session_detail(session)
+        self._last_session = SessionResponse.from_dict(data)
+        self.view.display_session_detail(self._last_session)
         self.view.append_debug("Session Detail", data)
-        # Also fetch and display session's frozen prompt snapshot
-        self.get_session_prompts(session.id)
-        # Also add vector layer with results
-        self.add_tile_vector_layer(name = f"Results {session.id}",
-                                   tile_url = session.vector_layer.tile_url)
+        # Fetch frozen prompt snapshot for spatial prompts table
+        self.get_session_prompts(self._last_session.id)
 
     def get_session_prompts(self, session_id: str):
         self.api.get_session_prompts(
@@ -330,8 +355,20 @@ class SamService(QObject):
     def get_session_prompts_callback(self, response: QNetworkReply):
         data = json.loads(response.readAll().data().decode())
         prompts = SessionPromptsResponse.from_dict(data)
-        self.view.display_spatial_prompts(prompts.point_prompts, prompts.bbox_prompts)
+        self._last_session_prompts = prompts.spatial_prompts
+        self.view.populate_spatial_prompts_table(prompts.spatial_prompts)
         self.view.append_debug("Session Prompts", data)
+
+    def show_session_layers(self):
+        """Double-click action: show result layer + spatial prompt layers on map."""
+        session = getattr(self, '_last_session', None)
+        if session and session.vector_layer:
+            self.add_tile_vector_layer(
+                name=f"Results {session.id}",
+                tile_url=session.vector_layer.tile_url,
+            )
+        if self._last_session_prompts:
+            self.view.show_spatial_prompt_layers(self._last_session_prompts)
 
     def copy_session(self, session_id: str):
         self.api.copy_session(
