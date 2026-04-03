@@ -1,0 +1,293 @@
+import json
+from typing import Optional, Callable, List
+
+from PyQt5.QtCore import QObject, pyqtSignal, Qt
+from PyQt5.QtNetwork import QNetworkReply
+from PyQt5.QtWidgets import QAbstractItemView
+from qgis.core import QgsSettings
+from .. import helpers
+from ..app_context import AppContext
+from ...dialogs import MainDialog
+from ...config import Config
+from ...schema.project import CreateProjectSchema, UpdateProjectSchema, MapflowProject, ProjectsRequest, ProjectsResult, \
+    ProjectSortBy, ProjectSortOrder, UserRole
+from ..api.project_api import ProjectApi
+from ..view.project_view import ProjectView
+
+
+class ProjectService(QObject):
+    projectsUpdated = pyqtSignal()
+    projectsFiltered = pyqtSignal()
+
+    def __init__(self, http, app_context: AppContext, dlg: MainDialog, config: Config):
+        super().__init__()
+        self.http = http
+        self.app_context = app_context
+        self.dlg = dlg
+        self.config = config
+        self.api = ProjectApi(self.http)
+        self.view = ProjectView(self.dlg)
+        self.projects_data = None
+        self.projects = {}
+        self.app_context.project_id = self.app_context.project_id
+        self.projects_page_limit = Config.PROJECTS_PAGE_LIMIT
+        self.projects_page_offset = 0
+        # Connections
+        self.dlg.projectsNextPageButton.clicked.connect(self.show_projects_next_page)
+        self.dlg.projectsPreviousPageButton.clicked.connect(self.show_projects_previous_page)
+        self.dlg.filterProjects.textEdited.connect(self.get_filtered_projects)
+        self.dlg.sortProjectsCombo.activated.connect(self.get_projects)
+        self.area_calculator_service = None # will be set later to avoid circular import
+    
+    def set_current_project(self, project: MapflowProject):
+        self.app_context.project_id = project.id
+        self.app_context.current_project = project
+        if project.shareProject:
+            self.app_context.user_role = project.shareProject.get_user_role(self.app_context.username)
+        else:
+            self.app_context.user_role = UserRole.owner
+
+    def create_project(self, project: CreateProjectSchema):
+        self.api.create_project(project, self.create_project_callback)
+
+    def create_project_callback(self, response: QNetworkReply):
+        project = MapflowProject.from_dict(json.loads(response.readAll().data()))
+        self.set_current_project(project)
+        self.get_projects()
+    
+    def delete_project(self, project_id):
+        # Remove and temporary forbid selection (until get_projects_callback)
+        self.dlg.projectsTable.setSelectionMode(QAbstractItemView.NoSelection)
+        self.dlg.projectsTable.clearSelection()
+        self.api.delete_project(project_id, self.delete_project_callback)
+    
+    def delete_project_callback(self, response: QNetworkReply):
+        self.projects_data.total += -1
+        self.get_projects()
+    
+    def update_project(self, project_id, project: UpdateProjectSchema):
+        self.api.update_project(project_id, project, self.update_project_callback)
+    
+    def update_project_callback(self, response: QNetworkReply):
+        project = MapflowProject.from_dict(json.loads(response.readAll().data()))
+        self.set_current_project(project)
+        self.get_projects()
+    
+    def get_project(self, project_id, callback: Callable, error_handler: Callable, error_handler_kwargs: dict):
+        self.api.get_project(project_id, callback, error_handler, error_handler_kwargs)
+
+    def get_project_callback(self, response: QNetworkReply):
+        self.app_context.current_project = MapflowProject.from_dict(json.loads(response.readAll().data()))
+        if self.app_context.current_project:
+            self.app_context.project_id = self.app_context.current_project.id
+            elided_name = self.dlg.currentProjectLabel.fontMetrics().elidedText(
+                self.app_context.current_project.name,
+                Qt.ElideRight,
+                self.dlg.currentProjectLabel.width() - 50)
+            self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(elided_name))
+            self.dlg.currentProjectLabel.adjustSize()
+        self.get_project_sharing()
+        self.setup_project_change_rights()
+        self.app_context.settings.setValue("project_id", self.app_context.project_id)
+        self.view.setup_workflow_defs(self.app_context.current_project.workflowDefs, 
+                                      self.config.DEFAULT_MODEL)
+        # Manually toggle function to avoid race condition
+        # TODO: Can we avoid this? Calling the function from here is ugly
+        self.area_calculator_service.calculate_aoi_area_use_image_extent()
+
+    def get_project_error_handler(self, response: QNetworkReply, **kwargs):
+        pass
+
+    def get_projects(self, open_saved_page: Optional[bool] = False):
+        """Get projects depending on page parameters (offset, sorting, filtering).
+
+        Either get saved projects page (e.g. we load plugin with processings of project from 2nd page, 
+        and when going back to projects table, 2nd page should be shown).
+        Or load projects based on current offset and UI (sorting index and filtering text).
+
+        :param open_saved_page: A boolean that determines if we should get projects page from the settings or not.
+        """
+        try: # if something changed and offset is now >= projects count
+            if self.projects_page_offset >= self.projects_data.total:
+                self.projects_page_offset = 0 # show first page
+        except AttributeError:
+            pass # if projects is an empty dict
+        # Open the page containing current project
+        if open_saved_page is True:
+            # Get each page parameter from dict in settings (if no dict - create one with default values)
+            projects_page = self.app_context.settings.value('projectsPage', {'offset' : self.projects_page_offset,
+                                                                 'sort_by' : ProjectSortBy.updated,
+                                                                 'sort_order' : ProjectSortOrder.descending,
+                                                                 'filter': ""})
+            self.projects_page_offset = int(projects_page['offset'])
+            sort_by = projects_page['sort_by']
+            sort_order = projects_page['sort_order']
+            projects_filter = projects_page['filter']
+            # Set saved filtering and sorting in UI
+            if projects_filter:
+                self.dlg.filterProjects.setText(projects_filter)
+            # Find pairs of sorting combo indecies from sort_by (not knowing sort_order)
+            if sort_by == ProjectSortBy.name:
+                by = (0, 1)
+            elif sort_by == ProjectSortBy.created:
+                by = (2, 3)
+            else: # sort_by == ProjectSortBy.updated
+                by = (4, 5)
+            # Find triples of sorting combo indecies from sort_order (not knowing sort_by)
+            if sort_order == ProjectSortOrder.ascending: # A-Z, Oldest first, Updated long ago
+                order = (0, 3, 5)
+            else: # ProjectSortOrder.descending: Z-A, Newest first, Updated recently
+                order = (1, 2, 4)
+            # Get and set the only element of the intersection of sort_by and sort_order indecies
+            index = set(by).intersection(set(order)).pop()
+            self.dlg.sortProjectsCombo.setCurrentIndex(index)
+        # Load page getting params from UI and don't change self.projects_page_offset
+        else:
+            sort_by, sort_order = self.view.sort_projects()
+            projects_filter = self.dlg.filterProjects.text()
+        # Send request with defined parameters
+        request_body = ProjectsRequest(self.projects_page_limit, 
+                                       self.projects_page_offset,
+                                       projects_filter,
+                                       sort_by, sort_order)
+        self.api.get_projects(request_body, self.get_projects_callback)
+        # Forbid clicking on pages controls before getting a response
+        self.view.enable_projects_pages(False)
+        self.dlg.projectsTable.clearSelection()
+    
+    def get_projects_callback(self, response: QNetworkReply):
+        self.projects_data = ProjectsResult.from_dict(json.loads(response.readAll().data()))
+        self.projects = {project.id: project for project in self.projects_data.results}
+        self.dlg.projectsTable.setSortingEnabled(False) # temporary disable sorting by clicking the header
+        self.view.setup_projects_table(self.projects_data.results)
+        # En(dis)able page controls based on total, limit and offset
+        if self.projects_data.total > self.projects_page_limit:
+            quotient, remainder = divmod(self.projects_data.total, self.projects_page_limit)
+            projects_total_pages = quotient + (remainder > 0)
+            projects_page_number = int(self.projects_page_offset/self.projects_page_limit) + 1
+            self.view.show_projects_pages(True, projects_page_number, projects_total_pages)
+        else:
+            # When no projects found, but no filter specified (should be at lest 'Default')
+            if not self.projects_data.total and len(self.dlg.filterProjects.text()) <= 1:
+                self.get_projects() # request first page without any parameters
+            else: # when total is just less than the limit
+                self.view.show_projects_pages(False) # show first page and no controls
+        self.projectsUpdated.emit()
+        self.dlg.projectsTable.clearSelection()
+        self.dlg.projectsTable.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.select_project(self.app_context.project_id)
+    
+    def select_project(self, project_id):
+        self.view.select_project(project_id)
+    
+    def show_projects_next_page(self):
+        self.projects_page_offset += self.projects_page_limit
+        self.get_projects()
+
+    def show_projects_previous_page(self):
+        self.projects_page_offset += -self.projects_page_limit
+        self.get_projects()
+
+    def get_filtered_projects(self):
+        """Get projects, resetting filtered offset value.
+
+        Is called when texted is edited by user (not just changed programmatically).
+        So each time offset resets to 0 to show 1st page of newly filtered response.
+        """
+        self.projects_page_offset = 0
+        self.app_context.project_id = None
+        self.get_projects()
+
+    # ========== Projects ========== #
+
+    def on_project_change(self):
+        selected_id = self.dlg.selected_project_id()
+        if selected_id is not None and selected_id == self.app_context.project_id and self.app_context.workflow_defs:
+            # we look at workflow defs because if they are NOT initialized, it means that the project
+            # is not initialized yet (at plugin's startup) and we still need to set it up
+            # otherwise, if the WDs are set, we assume that the project hasn't changed and skip further setup
+            return
+        if selected_id is None:
+            self.app_context.current_project = self.app_context.project_id = None
+            self.app_context.settings.setValue("project_id", None)
+            self.setup_project_change_rights()
+            self.dlg.setWindowTitle(helpers.generate_plugin_header(self.app_context.plugin_name,
+                                                                   env=self.config.MAPFLOW_ENV))
+            self.dlg.switchProcessingsButton.setEnabled(False)
+        else:
+            self.dlg.switchProcessingsButton.setEnabled(True)
+            # Find project in projects/page and set as current
+            self.app_context.project_id = selected_id
+            for pid, project in self.projects.items():
+                if selected_id == pid:
+                    self.app_context.current_project = project
+                    elided_name = self.dlg.currentProjectLabel.fontMetrics().elidedText(
+                        self.app_context.current_project.name,
+                        Qt.ElideRight,
+                        self.dlg.currentProjectLabel.width() - 50)
+                    self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(elided_name))
+            if self.app_context.current_project:
+                self.get_project_sharing()
+                self.view.setup_workflow_defs(self.app_context.current_project.workflowDefs, 
+                                              self.config.DEFAULT_MODEL)
+            self.setup_project_change_rights()
+            self.app_context.settings.setValue("project_id", self.app_context.project_id)
+
+            # Manually toggle function to avoid race condition
+            # TODO: Can we avoid this? Calling the function from here is ugly
+            self.area_calculator_service.calculate_aoi_area_use_image_extent()
+
+
+    def setup_project_change_rights(self):
+        project_editable = True
+        if not self.app_context.current_project:
+            project_editable = False
+            reason = self.tr("No project selected")
+        elif self.app_context.current_project.isDefault:
+            reason = self.tr("You can't remove or modify default project")
+            project_editable = False
+        elif not self.app_context.user_role.can_delete_rename_project:
+            reason = self.tr('Not enough rights to delete or update shared project ({})').format(
+                self.app_context.user_role.value)
+        else:
+            reason = ""
+        self.dlg.enable_project_change(reason,
+                                       project_editable and self.app_context.user_role.can_delete_rename_project)
+
+    def update_projects(self):
+        if not self.projects:
+            self.view.clear_projects_table()
+        self.filter_projects(self.view.projects_filter)
+        if self.app_context.project_id:
+            self.select_project(self.app_context.project_id)
+
+    def filter_projects(self, name_filter):
+        if not name_filter:
+            filtered_projects = self.projects
+        else:
+            filtered_projects = {pid: p for pid, p in self.projects.items() if name_filter.lower() in p.name.lower()}
+        if self.app_context.project_id in self.projects \
+                and self.app_context.project_id not in filtered_projects:
+            # We maintain the current project in the combo even if it not found to prevent over-requesting
+            # until it is changed explicitly
+            filtered_projects.update({self.app_context.project_id: self.projects[self.app_context.project_id]})
+        self.projectsFiltered.emit()
+
+    def get_project_sharing(self):
+        if not self.app_context.current_project:
+            return
+        if self.app_context.current_project.shareProject:
+            # Get user role, if project is shared
+            self.app_context.user_role = self.app_context.current_project.shareProject.get_user_role(self.app_context.username)
+            project_owner = self.app_context.current_project.shareProject.owners[0].email
+            # Disable buttons
+            self.dlg.enable_shared_project(self.app_context.user_role)
+        else:
+            self.app_context.user_role = UserRole.owner
+            project_owner = self.app_context.username
+        # Specify new main window header
+        self.dlg.setWindowTitle(helpers.generate_plugin_header(self.app_context.plugin_name,
+                                                               env=self.config.MAPFLOW_ENV,
+                                                               project_name=self.app_context.current_project.name,
+                                                               user_role=self.app_context.user_role,
+                                                               project_owner=project_owner))

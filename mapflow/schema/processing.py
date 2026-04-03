@@ -1,8 +1,17 @@
+from enum import Enum
+
+from qgis.core import QgsVectorLayer
 from dataclasses import dataclass, fields
+from datetime import datetime, timedelta
 from typing import Optional, Mapping, Any, Union, Iterable, List
+from uuid import UUID
 
 from .base import SkipDataClass, Serializable
+from .status import ProcessingStatus, ProcessingReviewStatus
+from .layer import RasterLayer, VectorLayer
+from .workflow_def import WorkflowDef
 from ..entity.provider.provider import SourceType
+from ..errors import ErrorMessage
 
 @dataclass
 class PostSourceSchema(Serializable, SkipDataClass):
@@ -109,12 +118,13 @@ class ProcessingParams(Serializable, SkipDataClass):
                         UserDefinedParams]
     
     @classmethod
-    def from_dict(cls, params_dict: dict):
+    def from_dict(cls, params_dict: Optional[dict]):
         if not params_dict:
             return None
         clsf = [f.name for f in fields(cls)]
         processing_params = cls(**{k: v for k, v in params_dict.items() if k in clsf})
         source_params = processing_params.sourceParams
+
         if source_params.get("dataProvider"):
             source_params = DataProviderParams(DataProviderSchema(**source_params.get("dataProvider")))
         elif source_params.get("myImagery"):
@@ -138,3 +148,131 @@ class PostProcessingSchemaV2(Serializable):
     params: ProcessingParams
     meta: Optional[Mapping[str, Any]]
     blocks: Optional[Iterable[BlockOption]]
+
+
+@dataclass
+class ProcessingUIParams(Serializable, SkipDataClass):
+    name: Optional[str]
+    data_source_index: int
+    zoom: Optional[int]
+    wd_name: str
+    model_options: list[BlockOption]
+
+
+@dataclass
+class ProcessingDTO(Serializable, SkipDataClass):
+    id: UUID
+    name: str
+    projectId: UUID
+    status: ProcessingStatus
+    description: Optional[str]
+    workflowDef: WorkflowDef
+    aoiArea: int
+    cost: int
+    created: datetime
+    rasterLayer: RasterLayer
+    vectorLayer: VectorLayer
+    messages: list[ErrorMessage]
+    params: ProcessingParams
+    blocks: List[BlockOption]
+
+    percentCompleted: Optional[int] = None
+    reviewStatus: Optional[ProcessingReviewStatus] = None
+
+    def __post_init__(self):
+        self.status = ProcessingStatus(self.status)
+        self.created = datetime.strptime(self.created, '%Y-%m-%dT%H:%M:%S.%f%z').astimezone()
+        self.params = ProcessingParams.from_dict(self.params)
+        self.blocks = [BlockOption.from_dict(block) for block in self.blocks]
+        self.workflowDef = WorkflowDef.from_dict(self.workflowDef)
+        self.messages = [ErrorMessage.from_response(message) for message in self.messages]
+        self.rasterLayer = RasterLayer.from_dict(self.rasterLayer)
+        self.vectorLayer = VectorLayer.from_dict(self.vectorLayer)
+        if self.reviewStatus is None:
+            self.reviewStatus = ProcessingReviewStatus()
+        else:
+            self.reviewStatus = ProcessingReviewStatus.from_dict(self.reviewStatus)
+
+    @property
+    def review_expires(self):
+        if not isinstance(self.reviewStatus.inReviewUntil, datetime)\
+                or not self.reviewStatus.is_in_review:
+            return False
+        now = datetime.now().astimezone()
+        one_day = timedelta(1)
+        return self.reviewStatus.inReviewUntil - now < one_day
+
+    @property
+    def reviewUntil(self):
+        """
+        backwards compatibility
+        """
+        return self.reviewStatus.inReviewUntil
+
+    @property
+    def is_final_state(self):
+        """
+        means that the processing is reached final state and can't change it without user interaction
+        """
+        return  self.status.is_terminal and not self.reviewStatus.is_not_accepted
+
+    def error_message(self, raw=False):
+        if not self.messages:
+            return ""
+        return "\n".join([error.to_str(raw=raw) for error in self.messages])
+
+    def as_processing_table_dict(self):
+        return {
+            "name": self.name,
+            "workflowDef": self.workflowDef.name,
+            "status": self.reviewStatus.reviewStatus.display_value 
+                      if (self.reviewStatus and not self.reviewStatus.is_none) 
+                      else self.status.display_value,
+            "percentCompleted": self.percentCompleted,
+            "aoiArea": self.aoiArea/1000000,
+            "cost": self.cost,
+            "created": self.created.strftime('%Y-%m-%d %H:%M'),
+            "reviewUntil": self.reviewUntil,
+            "id": self.id
+        }
+
+
+class ProcessingSortBy(str, Enum):
+    scenario = "SCENARIO"
+    name = "NAME"
+    project = "PROJECT"
+    email = "EMAIL"
+    created = "CREATED"
+    status = "STATUS"
+    progress = "PROGRESS"
+    completed = "COMPLETED"
+    cost = "COST"
+    area = "AREA"
+    provider = "PROVIDER"
+
+
+class ProcessingSortOrder(str, Enum):
+    ascending = "ASC"
+    descending = "DESC"
+
+
+@dataclass
+class ProcessingsRequest(Serializable):
+    limit: int = 30
+    offset: int = 0
+    terms: Optional[str] = None
+    sortBy: Optional[str] = None
+    sortOrder: Optional[str] = None
+
+
+@dataclass
+class ProcessingsResult(SkipDataClass):
+    results: Optional[List] = None
+    total: int = 0
+    count: int = 0
+
+    def __post_init__(self):
+        if self.results:
+            self.results = [ProcessingDTO.from_dict(p) for p in self.results]
+        else:
+            self.results = []

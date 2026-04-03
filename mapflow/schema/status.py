@@ -5,7 +5,7 @@ from typing import Optional
 
 from PyQt5.QtCore import QObject
 
-from ..schema.base import Serializable, SkipDataClass
+from .base import Serializable, SkipDataClass
 
 
 class ProcessingStatusDict(QObject):
@@ -82,10 +82,6 @@ class ProcessingStatus(NamedEnum):
     @property
     def is_unprocessed(self):
         return self == ProcessingStatus.unprocessed
-
-    @property
-    def is_terminal(self):
-        return self.is_ok or self.is_failed or self.is_refunded or self.is_cancelled
 
     @property
     def is_terminal(self):

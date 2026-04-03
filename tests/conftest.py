@@ -4,6 +4,7 @@ All tests run inside the QGIS Python environment.
 QgsApplication is bootstrapped before test collection via pytest_configure
 so that module-level Qt objects (QIcon etc.) can be created during import.
 """
+import importlib
 import pytest
 from unittest.mock import MagicMock
 
@@ -17,6 +18,17 @@ def pytest_configure(config):
     """
     from qgis.testing import start_app
     start_app()
+
+    # Pre-warm the mapflow module tree to survive the circular import on first load.
+    # The chain mapflow.schema.processing -> entity.provider -> functional.layer_utils
+    # -> dialogs -> mapflow.schema creates a circular dependency that fails on the
+    # first attempt but succeeds on retry because partial modules are cached.
+    for _ in range(2):
+        try:
+            importlib.import_module("mapflow.schema.processing")
+            break
+        except ImportError:
+            pass
 
 
 @pytest.fixture()

@@ -22,6 +22,7 @@ from ..api.data_catalog_api import DataCatalogApi
 from ..view.data_catalog_view import DataCatalogView
 from ...http import Http
 from ...functional import layer_utils, helpers
+from ...functional.app_context import AppContext
 from ...config import Config
 from ...entity.provider import MyImageryProvider
 
@@ -44,18 +45,15 @@ class DataCatalogService(QObject):
                  iface,
                  result_loader,
                  plugin_version,
-                 temp_dir,
-                 allow_enable_processing):
+                 app_context: AppContext):
         super().__init__()
         self.dlg = dlg
         self.iface = iface
-        self.temp_dir = temp_dir
-        self.project = QgsProject.instance()
+        self.app_context = app_context
         self.result_loader = result_loader
         self.plugin_version = plugin_version
-        self.allow_enable_processing = allow_enable_processing
         self.api = DataCatalogApi(http=http, server=server, dlg=dlg, iface=iface, result_loader=self.result_loader, plugin_version=self.plugin_version)
-        self.view = DataCatalogView(dlg=dlg, allow_enable_processing=self.allow_enable_processing)
+        self.view = DataCatalogView(dlg=dlg, app_context=self.app_context)
         self.mosaics = {}
         self.images = []
         self.image_max_size_pixels = Config.MAX_FILE_SIZE_PIXELS
@@ -89,7 +87,7 @@ class DataCatalogService(QObject):
                 dialog.accepted.connect(get_paths)
                 # Show all acceptable raster layers in dialog
                 layers = []
-                for layer in self.project.mapLayers().values():
+                for layer in self.app_context.project.mapLayers().values():
                     if Path(layer.source()).suffix.lower() in ['.tif', '.tiff']:
                         layers.append(layer)
                 dialog.setup(layers)
@@ -136,6 +134,7 @@ class DataCatalogService(QObject):
         self.view.display_mosaics(list(self.mosaics.values()))
         self.mosaicsUpdated.emit()
         self.dlg.mosaicTable.clearSelection()
+        self.app_context.mosaics = self.mosaics
 
     def get_mosaic(self, mosaic_id: UUID):
         self.api.get_mosaic(mosaic_id=mosaic_id,
@@ -149,8 +148,9 @@ class DataCatalogService(QObject):
         self.mosaicsUpdated.emit()
         self.view.display_mosaics(list(self.mosaics.values()))
         # Allow selection back
-        self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.SingleSelection) 
+        self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.ExtendedSelection) 
         self.view.select_mosaic_cell(mosaic.id)
+        self.app_context.mosaics = self.mosaics
 
     def update_mosaic(self):
         mosaic = self.selected_mosaic()
@@ -263,7 +263,7 @@ class DataCatalogService(QObject):
         dialog.accepted.connect(lambda: dialog.get_selected_rasters_list(callback=self.upload_raster_layers_to_mosaic))
         # Show all acceptable (TIFF) raster layers
         layers = []
-        for layer in self.project.mapLayers().values():
+        for layer in self.app_context.project.mapLayers().values():
             if Path(layer.source()).suffix.lower() in ['.tif', '.tiff']:
                 layers.append(layer)
         dialog.setup(layers)
@@ -345,6 +345,7 @@ class DataCatalogService(QObject):
                 self.get_image_preview_s(self.images[self.preview_idx])
             else:
                 self.view.enable_mosaic_images_preview(len(self.images), self.preview_idx)
+        self.app_context.images = self.images
     
     def get_next_preview(self):
         try:
@@ -422,6 +423,7 @@ class DataCatalogService(QObject):
             self.get_image_preview_s(image)
         self.view.show_image_info(image)
         self.view.add_image_cell_buttons()
+        self.app_context.selected_image = image
         return image
 
     def image_info(self):
@@ -584,7 +586,7 @@ class DataCatalogService(QObject):
             self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.NoSelection) 
             self.get_mosaics()
             self.dlg.mosaicTable.clearSelection()
-            self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.SingleSelection)
+            self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
         else:
             if self.selected_mosaic():
                 self.get_mosaic_images(self.selected_mosaic().id)
@@ -616,6 +618,7 @@ class DataCatalogService(QObject):
         first = self.selected_mosaics(limit=1)
         if not first:
             return None
+        self.app_context.selected_mosaic = first[0]
         return first[0]
         
     def selected_images(self, limit=None) -> List[MosaicReturnSchema]:
@@ -669,8 +672,8 @@ class DataCatalogService(QObject):
         ErrorMessageWidget(parent=QApplication.activeWindow(),
                            text=error_summary).show()
         self.dlg.stackedLayout.setCurrentIndex(0)
-        for key in self.allow_enable_processing:
-            self.allow_enable_processing[key] = True
+        for key in self.app_context.allow_enable_processing:
+            self.app_context.allow_enable_processing[key] = True
 
 
     # Other

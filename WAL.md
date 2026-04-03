@@ -28,7 +28,32 @@ All tests require QGIS runtime — no value in partial testing without it. Tools
 - Download button placed first in image cell layout for discoverability; disabled with tooltip change when `available_for_download=False`
 - 6 tests added (schema parsing, default values, API URL construction); all pass on QGIS 3.28 Python 3.9
 
-## 5. Add new zoom-selector feature
+## 5. Feature: processings pagination
+[v]
+- Add arrow buttons (like projectsPreviousPageButton and projectsNextPageButton) to be able to show in processings table only 30 processings per page;
+- Add 'sort by' combo box, filtering line edit already exists;
+- Change get_processings function, use the following description for new api:
+#### `POST /projects/{projectId}/processings/v2/page`
+    Returns paginated processings of project with filtering and sorting.
+    
+    Parameters:
+    - 'terms' (string) - Search term to filter by name, project name, workflow name, or email;
+    - 'limit' (integer) - Maximum number of results to return
+    - 'offset' (integer) - Number of results to skip
+    - sortBy	(string) - Field to sort by: [ scenario, name, project, email, created, status, progress, completed, cost, area, provider ]
+    - sortOrder	(string) - Sort direction [ ASC, DESC ]
+    
+    Response shape:
+    ```json
+    {
+        "results": List[Processing],
+        "total": integer,
+        "count": integer
+    }
+    ```;
+- Implement pagination, sorting and new filtering (troug the request on text change, not though the table filtering).
+
+## 6. Add new zoom-selector feature
 [ ]
 Use 002_E_zoom_selector_api.md
 - Add small button near zoom selector comboBox to call for zoom selector api, active if selected source is Mapflow data provider
