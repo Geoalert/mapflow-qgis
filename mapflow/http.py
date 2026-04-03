@@ -81,6 +81,11 @@ class Http(QObject):
         """Send a PUT request"""
         return self.send_request(self.nam.put, **kwargs)
 
+    def patch(self, **kwargs) -> QNetworkReply:
+        """Send a PATCH request."""
+        patch_method = lambda request, body: self.nam.sendCustomRequest(request, b'PATCH', body)
+        return self.send_request(patch_method, **kwargs)
+
     def delete(self, **kwargs) -> QNetworkReply:
         """Send a DELETE request."""
         return self.send_request(self.nam.deleteResource, **kwargs)
@@ -145,7 +150,13 @@ class Http(QObject):
             # We skip the exception handling, then the request goes out unauthorized and the error response is handled
             pass
 
-        response = method(request, body) if (method == self.nam.post or method == self.nam.put) else method(request)
+        if body is not None:
+            try:
+                response = method(request, body)
+            except TypeError:
+                response = method(request)
+        else:
+            response = method(request)
 
         response.finished.connect(lambda response=response,
                                          callback=callback,

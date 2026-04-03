@@ -9,9 +9,11 @@ from mapflow.functional.api.sam_api import SamApi
 from mapflow.schema.sam import (
     ProcessingCreateRequest,
     PromptCreateRequest,
+    PromptUpdateRequest,
     PointPromptRequest,
     BboxPromptRequest,
     SessionCreateRequest,
+    SessionNameUpdateRequest,
     InferenceCreateRequest,
 )
 
@@ -21,6 +23,20 @@ SERVER = "https://whitemaps-test.mapflow.ai/rest"
 def _noop(*args, **kwargs):
     """Dummy callback."""
     pass
+
+
+# ---------------------------------------------------------------------------
+# WDID endpoint
+# ---------------------------------------------------------------------------
+
+class TestGetWdid:
+    def test_calls_get_with_correct_url(self, http_mock):
+        api = SamApi(http=http_mock, server=SERVER)
+        api.get_wdid(callback=_noop)
+
+        http_mock.get.assert_called_once()
+        url = http_mock.get.call_args[1]["url"]
+        assert url == f"{SERVER}/sam-interactive/wdid"
 
 
 # ---------------------------------------------------------------------------
@@ -227,6 +243,33 @@ class TestCopySession:
         assert call_kwargs["url"] == f"{SERVER}/sessions/sess-1/copy"
 
 
+class TestUpdateSessionName:
+    def test_calls_patch(self, http_mock):
+        api = SamApi(http=http_mock, server=SERVER)
+        request = SessionNameUpdateRequest(name="Session A")
+        api.update_session_name("sess-1", request, callback=_noop)
+
+        http_mock.patch.assert_called_once()
+        call_kwargs = http_mock.patch.call_args[1]
+        assert call_kwargs["url"] == f"{SERVER}/sessions/sess-1"
+        body = json.loads(call_kwargs["body"].decode())
+        assert body["name"] == "Session A"
+
+
+class TestUpdatePrompt:
+    def test_calls_patch_with_name_and_text_prompt(self, http_mock):
+        api = SamApi(http=http_mock, server=SERVER)
+        request = PromptUpdateRequest(name="Prompt A", text_prompt="find roads")
+        api.update_prompt("prompt-1", request, callback=_noop)
+
+        http_mock.patch.assert_called_once()
+        call_kwargs = http_mock.patch.call_args[1]
+        assert call_kwargs["url"] == f"{SERVER}/prompts/prompt-1"
+        body = json.loads(call_kwargs["body"].decode())
+        assert body["name"] == "Prompt A"
+        assert body["text_prompt"] == "find roads"
+
+
 # ---------------------------------------------------------------------------
 # Inference endpoints
 # ---------------------------------------------------------------------------
@@ -361,6 +404,43 @@ class TestSchemas:
         resp = ResultResponse.from_dict(data)
         assert resp.id == "r1"
         assert resp.layer_id == "l1"
+
+    def test_session_response_accepts_camelcase_text_prompt(self):
+        from mapflow.schema.sam import SessionResponse
+
+        data = {
+            "id": "s1",
+            "processing_id": "p1",
+            "name": "session-name",
+            "textPrompt": "detect roads",
+            "inferences": [],
+        }
+        resp = SessionResponse.from_dict(data)
+
+        assert resp.text_prompt == "detect roads"
+
+    def test_prompt_response_name_defaults_to_text_prompt(self):
+        from mapflow.schema.sam import PromptResponse
+
+        data = {
+            "id": "pr1",
+            "text_prompt": "find trees",
+        }
+        resp = PromptResponse.from_dict(data)
+
+        assert resp.name == "find trees"
+
+    def test_prompt_response_name_preserved_when_present(self):
+        from mapflow.schema.sam import PromptResponse
+
+        data = {
+            "id": "pr1",
+            "name": "Prompt A",
+            "text_prompt": "find trees",
+        }
+        resp = PromptResponse.from_dict(data)
+
+        assert resp.name == "Prompt A"
 
     def test_result_response_defaults(self):
         from mapflow.schema.sam import ResultResponse

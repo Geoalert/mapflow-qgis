@@ -22,10 +22,12 @@ from ...schema.sam import (
     PromptListResponse,
     PromptDetailResponse,
     PromptCreateRequest,
+    PromptUpdateRequest,
     PointPromptRequest,
     BboxPromptRequest,
     SpatialPromptResponse,
     SessionCreateRequest,
+    SessionNameUpdateRequest,
     SessionResponse,
     SessionPromptsResponse,
     InferenceCreateRequest,
@@ -304,6 +306,25 @@ class SamService(QObject):
     def delete_prompt_callback(self, response: QNetworkReply):
         self.list_prompts()
 
+    def update_prompt(self,
+                      prompt_id: str,
+                      name: Optional[str],
+                      text_prompt: Optional[str]):
+        request = PromptUpdateRequest(name=name, text_prompt=text_prompt)
+        self.api.update_prompt(
+            prompt_id=prompt_id,
+            request=request,
+            callback=self.update_prompt_callback,
+            callback_kwargs={"prompt_id": prompt_id},
+        )
+
+    def update_prompt_callback(self, response: QNetworkReply, prompt_id: str):
+        data = json.loads(response.readAll().data().decode())
+        self.view.append_debug("Update Prompt", data)
+        self.list_prompts()
+        if prompt_id:
+            self.get_prompt_detail(prompt_id)
+
     # ------------------------------------------------------------------
     # Sessions
     # ------------------------------------------------------------------
@@ -331,6 +352,24 @@ class SamService(QObject):
 
     def delete_session_callback(self, response: QNetworkReply):
         self.list_sessions(self.view.selected_processing_id())
+
+    def update_session_name(self, session_id: str, name: str):
+        request = SessionNameUpdateRequest(name=name)
+        self.api.update_session_name(
+            session_id=session_id,
+            request=request,
+            callback=self.update_session_name_callback,
+            callback_kwargs={"session_id": session_id},
+        )
+
+    def update_session_name_callback(self, response: QNetworkReply, session_id: str):
+        data = json.loads(response.readAll().data().decode())
+        self.view.append_debug("Update Session Name", data)
+        processing_id = self.view.selected_processing_id()
+        if processing_id:
+            self.list_sessions(processing_id)
+        if session_id:
+            self.get_session_detail(session_id)
 
     def get_session_detail(self, session_id: str):
         self.api.get_session(

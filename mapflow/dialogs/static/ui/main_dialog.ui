@@ -639,7 +639,7 @@
             <item>
              <widget class="QLineEdit" name="samTextPromptInput">
               <property name="placeholderText">
-               <string>Optional text prompt for SAM processing</string>
+               <string>Text prompt for SAM processing</string>
               </property>
              </widget>
             </item>

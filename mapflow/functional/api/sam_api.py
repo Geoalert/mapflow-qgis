@@ -11,9 +11,11 @@ from ...http import Http
 from ...schema.sam import (
     ProcessingCreateRequest,
     PromptCreateRequest,
+    PromptUpdateRequest,
     PointPromptRequest,
     BboxPromptRequest,
     SessionCreateRequest,
+    SessionNameUpdateRequest,
     InferenceCreateRequest,
     SessionInferenceCreateRequest,
 )
@@ -26,6 +28,19 @@ class SamApi(QObject):
         self.server = f"{server}/sam-interactive"
         self.http = http
 
+
+    # ------------------------------------------------------------------
+    # Configuration endpoints
+    # ------------------------------------------------------------------
+
+    def get_wdid(self, callback: Callable):
+        self.http.get(
+            url=f"{self.server}/wdid",
+            headers={},
+            callback=callback,
+            use_default_error_handler=False,
+            timeout=5,
+        )
 
     # ------------------------------------------------------------------
     # Processing endpoints
@@ -186,6 +201,19 @@ class SamApi(QObject):
             callback=callback,
             timeout=5
         )
+
+    def update_prompt(self, prompt_id: str, request: PromptUpdateRequest,
+                      callback: Callable, callback_kwargs: Optional[dict] = None):
+        self.http.patch(
+            url=f"{self.server}/prompts/{prompt_id}",
+            body=request.as_json().encode(),
+            headers={},
+            callback=callback,
+            callback_kwargs=callback_kwargs,
+            use_default_error_handler=True,
+            timeout=5,
+        )
+
     # ------------------------------------------------------------------
     # Session endpoints
     # ------------------------------------------------------------------
@@ -243,6 +271,21 @@ class SamApi(QObject):
             url=f"{self.server}/sessions/{session_id}",
             callback=callback,
             timeout=5
+        )
+
+    def update_session_name(self, session_id: str,
+                            request: SessionNameUpdateRequest,
+                            callback: Callable,
+                            callback_kwargs: Optional[dict] = None):
+        body=request.as_json().encode()
+        self.http.patch(
+            url=f"{self.server}/sessions/{session_id}",
+            body=body,
+            headers={},
+            callback=callback,
+            callback_kwargs=callback_kwargs,
+            use_default_error_handler=True,
+            timeout=5,
         )
 
     # ------------------------------------------------------------------

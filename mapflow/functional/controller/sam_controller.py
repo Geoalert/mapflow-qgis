@@ -6,7 +6,7 @@ No business logic here.
 import json
 from typing import Callable, Optional
 
-from PyQt5.QtCore import QObject
+from PyQt5.QtCore import QObject, Qt
 
 from qgis.core import QgsGeometry
 from qgis.gui import QgsMapCanvas
@@ -63,6 +63,7 @@ class SamController(QObject):
         self.dlg.samPromptsTable.selectionModel().selectionChanged.connect(
             self._on_prompt_selected)
         self.dlg.samPromptsTable.doubleClicked.connect(self._on_prompt_double_clicked)
+        self.dlg.samPromptsTable.itemChanged.connect(self._on_prompt_item_changed)
         self.dlg.deleteSpatialPrompt.clicked.connect(self._unlink_spatial_prompt)
 
         # Sessions
@@ -71,6 +72,7 @@ class SamController(QObject):
         self.dlg.samSessionsTable.selectionModel().selectionChanged.connect(
             self._on_session_selected)
         self.dlg.samSessionsTable.doubleClicked.connect(self._on_session_double_clicked)
+        self.dlg.samSessionsTable.itemChanged.connect(self._on_session_item_changed)
 
         # Inference
         self.dlg.samRunInference.clicked.connect(self._run_inference)
@@ -147,6 +149,28 @@ class SamController(QObject):
         print(spatial_prompt_id, prompt_type)
         if spatial_prompt_id:
             self.service.unlink_spatial_prompt(spatial_prompt_id, prompt_type)
+
+    def _on_prompt_item_changed(self, item):
+        if item.column() not in (1, 2):
+            return
+        previous_value = item.data(Qt.UserRole) or ""
+        current_value = item.data(Qt.DisplayRole) or ""
+        if previous_value == current_value:
+            return
+
+        row = item.row()
+        prompt_id_item = self.dlg.samPromptsTable.item(row, 0)
+        if prompt_id_item is None:
+            return
+        prompt_id = prompt_id_item.data(Qt.DisplayRole)
+        name_value = self.dlg.samPromptsTable.item(row, 1).data(Qt.DisplayRole) or ""
+        text_prompt_value = self.dlg.samPromptsTable.item(row, 2).data(Qt.DisplayRole) or ""
+        self.service.update_prompt(
+            prompt_id=prompt_id,
+            name=name_value.strip() or None,
+            text_prompt=text_prompt_value.strip() or None,
+        )
+        item.setData(Qt.UserRole, current_value)
 
     def _activate_point_tool(self):
         prompt_id = self.view.selected_prompt_id()
@@ -235,6 +259,27 @@ class SamController(QObject):
 
     def _delete_session(self):
         self.service.delete_session()
+
+    def _on_session_item_changed(self, item):
+        if item.column() != 1:
+            return
+        previous_value = item.data(Qt.UserRole) or ""
+        current_value = item.data(Qt.DisplayRole) or ""
+        if previous_value == current_value:
+            return
+
+        row = item.row()
+        session_id_item = self.dlg.samSessionsTable.item(row, 0)
+        if session_id_item is None:
+            return
+        session_id = session_id_item.data(Qt.DisplayRole)
+        new_name = (current_value or "").strip()
+        if not new_name:
+            item.setData(Qt.DisplayRole, previous_value)
+            self.view.append_debug("Rename Session", {"error": "Name must not be empty"})
+            return
+        self.service.update_session_name(session_id=session_id, name=new_name)
+        item.setData(Qt.UserRole, new_name)
     # ------------------------------------------------------------------
     # Inference
     # ------------------------------------------------------------------

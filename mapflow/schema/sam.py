@@ -76,6 +76,17 @@ class SessionInferenceCreateRequest(Serializable):
     geometry: dict  # GeoJSON
 
 
+@dataclass
+class SessionNameUpdateRequest(Serializable):
+    name: str
+
+
+@dataclass
+class PromptUpdateRequest(Serializable):
+    name: Optional[str] = None
+    text_prompt: Optional[str] = None
+
+
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
@@ -151,8 +162,13 @@ class WorkflowSummaryResponse(SkipDataClass):
 @dataclass
 class PromptResponse(SkipDataClass):
     id: str = ""
+    name: Optional[str] = None
     text_prompt_id: Optional[str] = None
     text_prompt: Optional[str] = None
+
+    def __post_init__(self):
+        if self.name is None:
+            self.name = self.text_prompt
 
 
 @dataclass
@@ -219,6 +235,14 @@ class SessionResponse(SkipDataClass):
         self.inferences = [InferenceStatusSummary.from_dict(i) for i in self.inferences]
         if self.vector_layer:
             self.vector_layer = VectorLayerJson.from_dict(self.vector_layer)
+
+    @classmethod
+    def from_dict(cls, params_dict: dict):
+        # Backend may return either text_prompt or textPrompt; normalize for UI.
+        normalized = dict(params_dict)
+        if "text_prompt" not in normalized and "textPrompt" in normalized:
+            normalized["text_prompt"] = normalized.get("textPrompt")
+        return super().from_dict(normalized)
 
 @dataclass
 class SessionPromptsResponse(SkipDataClass):

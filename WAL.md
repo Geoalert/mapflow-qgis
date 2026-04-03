@@ -38,10 +38,32 @@ Use WAL_4_exploration.md for architecture and code insights.
 
 ### 4.1 sam-interactive-backend stabilization
 
-#### Fix textPrompt display
+#### Fix textPrompt/name display
+[v]
 - Currently sessions table in `text prompt` column dislpays empty text. Change Session return schema, add optional field `text_prompt`, display it in this column. 
 - Prompts table lacks name: add `name` to the response model (optional, default to text prompt for backwards compatibility)
+
+#### Add session/prompt renaming
+[v]
+- Request `patch("/sessions/{session_id}"`, 
+payload 
+```
+class SessionNameUpdateRequest(BaseModel):
+    name: str
+```
+Invoke by editing value right in the table (single click on selected cell, name column only)
+
+Same for prompt, but allow changing both text_prompt and name
+`patch("/prompts/{prompt_id})`
+payload 
+```
+class SessionNameUpdateRequest(BaseModel):
+    name: Optional[str]
+    text_prompt: Optional[str]
+```
+
 #### Incorporate SAM3 processings into existing processing table
+[v]
 - Processings listed under SAM3-interactive API now have "project_id" + can be filtered by project id. 
 /processings/page?project_id=<UUID>&...
 - For the open project in the main project/processings tab:
@@ -52,11 +74,12 @@ Use WAL_4_exploration.md for architecture and code insights.
 -- No need for refresh/preview/delete buttons here as well, remove dangling code.
 
 
-#### Incorporate runnning SAM3 inference with the standard "Start processing" button
+#### Incorporate runnning SAM3 processings with the standard "Start processing" button
 - On startup, request `/rest/sam-interactive/wdid` API -> returns a single UUID, save it.
-- If there is WorkflowDef with this ID available in the current project, on start of the processing with this workflow_id, use not Maplfow API /rest/processings/V2, but /rest/sam-interactive/processings instead
+- If there is WorkflowDef with this ID available in the current project, on start of the processing with this workflow_id, 
+use not Maplfow API /rest/processings/V2, but /rest/sam-interactive/processings instead
 -- Use TextPrompt from corresponging field
--- Do not allow starat with empty text prompt
+-- Do not allow start with empty text prompt
 
 #### 
 

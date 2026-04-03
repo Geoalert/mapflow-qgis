@@ -72,17 +72,18 @@ class SamView(QObject):
 
     def _setup_prompts_table(self):
         table = self.dlg.samPromptsTable
-        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        table.setEditTriggers(QTableWidget.EditTrigger.SelectedClicked)
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setSelectionMode(QTableWidget.SingleSelection)
-        table.setColumnCount(2)
-        table.setHorizontalHeaderLabels(["ID", "Text Prompt"])
+        table.setColumnCount(3)
+        table.setHorizontalHeaderLabels(["ID", "Name", "Text Prompt"])
         table.setColumnHidden(0, True)
         table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
 
     def _setup_sessions_table(self):
         table = self.dlg.samSessionsTable
-        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        table.setEditTriggers(QTableWidget.EditTrigger.SelectedClicked)
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setSelectionMode(QTableWidget.SingleSelection)
         table.setColumnCount(3)
@@ -259,15 +260,26 @@ class SamView(QObject):
 
     def display_prompts(self, items: List[PromptResponse]):
         table = self.dlg.samPromptsTable
+        table.blockSignals(True)
         table.setRowCount(len(items))
         for row, prompt in enumerate(items):
             id_item = QTableWidgetItem()
             id_item.setData(Qt.DisplayRole, prompt.id)
+            id_item.setFlags(id_item.flags() & ~Qt.ItemIsEditable)
             table.setItem(row, 0, id_item)
+
+            name_item = QTableWidgetItem()
+            name_item.setData(Qt.DisplayRole, prompt.name or "")
+            name_item.setData(Qt.UserRole, prompt.name or "")
+            name_item.setFlags(name_item.flags() | Qt.ItemIsEditable)
+            table.setItem(row, 1, name_item)
 
             text_item = QTableWidgetItem()
             text_item.setData(Qt.DisplayRole, prompt.text_prompt or "")
-            table.setItem(row, 1, text_item)
+            text_item.setData(Qt.UserRole, prompt.text_prompt or "")
+            text_item.setFlags(text_item.flags() | Qt.ItemIsEditable)
+            table.setItem(row, 2, text_item)
+        table.blockSignals(False)
 
 
     def selected_prompt_id(self) -> Optional[str]:
@@ -414,29 +426,37 @@ class SamView(QObject):
 
     def display_sessions(self, sessions: List[SessionResponse]):
         table = self.dlg.samSessionsTable
+        table.blockSignals(True)
         table.setRowCount(len(sessions))
         for row, sess in enumerate(sessions):
             self._set_session_row(table, row, sess)
+        table.blockSignals(False)
 
     def add_session_to_table(self, session: SessionResponse):
         table = self.dlg.samSessionsTable
+        table.blockSignals(True)
         row = table.rowCount()
         table.insertRow(row)
         self._set_session_row(table, row, session)
         table.selectRow(row)
+        table.blockSignals(False)
 
     @staticmethod
     def _set_session_row(table, row: int, sess: SessionResponse):
         id_item = QTableWidgetItem()
         id_item.setData(Qt.DisplayRole, sess.id)
+        id_item.setFlags(id_item.flags() & ~Qt.ItemIsEditable)
         table.setItem(row, 0, id_item)
 
         name_item = QTableWidgetItem()
         name_item.setData(Qt.DisplayRole, sess.name or sess.id[:12])
+        name_item.setData(Qt.UserRole, sess.name or sess.id[:12])
+        name_item.setFlags(name_item.flags() | Qt.ItemIsEditable)
         table.setItem(row, 1, name_item)
 
         text_item = QTableWidgetItem()
         text_item.setData(Qt.DisplayRole, sess.text_prompt or "")
+        text_item.setFlags(text_item.flags() & ~Qt.ItemIsEditable)
         table.setItem(row, 2, text_item)
 
     def selected_session_id(self) -> Optional[str]:

@@ -118,6 +118,7 @@ class Mapflow(QObject):
         self.iface = iface
         self.main_window = self.iface.mainWindow()
         self.workflow_defs = {}
+        self.sam_wdid = None
         self.current_project = None
         self.user_role = UserRole.owner
         self.aoi_layers = []
@@ -542,6 +543,10 @@ class Mapflow(QObject):
         self.set_available_imagery_sources(wd_name)
         if not wd:
             return
+        # Show SAM text prompt group when SAM model is selected
+        is_sam = self.sam_wdid is not None and wd.id == self.sam_wdid
+        self.dlg.samProcessingGroup.setVisible(is_sam)
+        self.dlg.startSamProcessing.setVisible(False)
         self.show_wd_options(wd)
         self.dlg.show_wd_price(wd_price=wd.get_price(enable_blocks=self.dlg.enabled_blocks()),
                                wd_description=wd.description,
@@ -2133,12 +2138,22 @@ class Mapflow(QObject):
                                'to top up your balance'),
                        icon=QMessageBox.Warning)
             return
+        # Validate SAM text prompt early (before confirmation dialog)
+        if self._is_sam_processing(processing_params):
+            text_prompt = self.dlg.samTextPromptInput.text().strip()
+            if not text_prompt:
+                self.alert(self.tr("Text prompt is required for SAM processing."),
+                           icon=QMessageBox.Warning)
+                return
         # Define starting to use later after confirmation or without it
         def start_processing():
             self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
             try:
                 self.dlg.startProcessing.setEnabled(False)
-                self.post_processing(processing_params)
+                if self._is_sam_processing(processing_params):
+                    self._post_sam_processing(processing_params)
+                else:
+                    self.post_processing(processing_params)
             except Exception as e:
                 self.alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
         # Show processing start confirmation dialog if checkbox is checked
@@ -2204,6 +2219,48 @@ class Mapflow(QObject):
     # ------------------------------------------------------------------
     # SAM Interactive processing creation
     # ------------------------------------------------------------------
+
+    def _on_sam_wdid_received(self, response: QNetworkReply) -> None:
+        """Store the SAM workflow definition ID returned by the backend."""
+        try:
+            data = json.loads(response.readAll().data())
+            self.sam_wdid = data.get("wdid") or None
+        except (json.JSONDecodeError, ValueError):
+            self.sam_wdid = None
+
+    def _is_sam_processing(self, processing_params: PostProcessingSchemaV2) -> bool:
+        """Check if the processing should be routed to SAM API."""
+        return self.sam_wdid is not None and processing_params.wdId == self.sam_wdid
+
+    def _post_sam_processing(self, base_request: PostProcessingSchemaV2) -> None:
+        """Route processing creation through SAM Interactive API."""
+        text_prompt = self.dlg.samTextPromptInput.text().strip()
+        request = ProcessingCreateRequest(
+            name=base_request.name,
+            projectId=base_request.projectId,
+            geometry=base_request.geometry,
+            params=base_request.params,
+            text_prompt=text_prompt,
+            meta=base_request.meta,
+        )
+        self.sam_api.create_processing(request, callback=self._post_sam_processing_callback)
+
+    def _post_sam_processing_callback(self, response: QNetworkReply) -> None:
+        """Handle SAM processing creation via standard button — use standard UX."""
+        self.alert(
+            self.tr("Success! We'll notify you when the processing has finished."),
+            QMessageBox.Information,
+        )
+        processing_name = self.dlg.processingName.text()
+        if self.dlg.processingName.text() == processing_name:
+            self.dlg.processingName.clear()
+        self.processing_fetch_timer.start()
+        self.processing_service.get_processings(
+            project_id=self.project_id,
+            callback=self.get_processings_callback,
+        )
+        if not False in self.allow_enable_processing.values():
+            self.dlg.startProcessing.setEnabled(True)
 
     def create_sam_processing(self) -> None:
         """Create a SAM Interactive processing using the current form data.
@@ -3437,6 +3494,10 @@ class Mapflow(QObject):
         # Authenticate and keep user logged in
         self.logged_in = True
         self.dlg_login.close()
+
+        # Fetch SAM workflow def ID early, before project/workflow loading
+        self.dlg.samProcessingGroup.setVisible(False)
+        self.sam_api.get_wdid(callback=self._on_sam_wdid_received)
 
         # Get all projects & setup processings table (see callback)
         if self.is_admin:
