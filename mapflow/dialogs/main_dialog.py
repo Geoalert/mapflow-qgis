@@ -110,8 +110,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.previewImageButton = QPushButton()
         self.imageInfoButton = QPushButton()
         self.renameImageButton = QPushButton()
+        self.downloadImageButton = QPushButton()
         # Create colored spacers for tables' cell widgets (so long names won't be seen inbetween buttons)
-        self.imageSpacers = [QLabel(), QLabel()]
+        self.imageSpacers = [QLabel(), QLabel(), QLabel()]
         self.mosaicSpacers = [QLabel(), QLabel(), QLabel()]
         for spacer in self.mosaicSpacers+self.imageSpacers:
             spacer.setFixedSize(3,26)

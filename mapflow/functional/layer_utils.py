@@ -162,10 +162,15 @@ def count_polygons_in_layer(features: list) -> int:
     """ Count polygon geometries in a multipolygon layer (instead of counting features).
     :param features: A list of fetures, obtained by "list(layer.getFeatures())"
     """
+    count = 0
     for feature in features:
-        if not feature.geometry():
-            features.remove(feature)
-    count = sum(len(feature.geometry().asMultiPolygon()) for feature in features)
+        geom = feature.geometry()
+        if geom is None or geom.isEmpty():
+            continue
+        if geom.isMultipart():
+            count += len(geom.asMultiPolygon())
+        else:
+            count += 1
     return count
 
 def collect_geometry_from_layer(layer: QgsMapLayer) -> QgsGeometry:

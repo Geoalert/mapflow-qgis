@@ -5,9 +5,9 @@ import json
 import os.path
 from osgeo import gdal
 
-from PyQt5.QtCore import QObject, pyqtSignal, Qt
+from PyQt5.QtCore import QObject, QUrl, pyqtSignal, Qt
 from PyQt5.QtGui import QImage
-from PyQt5.QtNetwork import QNetworkReply
+from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
 from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog, QAbstractItemView, QWidget
 from qgis.core import QgsCoordinateReferenceSystem, QgsGeometry, QgsProject, QgsRasterLayer
 
@@ -500,6 +500,51 @@ class DataCatalogService(QObject):
         self.api.update_image_name(image_id=image_id,
                                    name=new_name,
                                    callback=self.rename_image_callback)
+
+    def download_image(self):
+        image = self.selected_image()
+        if not image:
+            return
+        self.api.download_image(image_id=image.id,
+                                callback=self.download_image_callback,
+                                error_handler=self.api.download_image_error_handler)
+
+    def download_image_callback(self, response: QNetworkReply):
+        data = json.loads(response.readAll().data())
+        download_url = data.get("download_url")
+        suggested_filename = data.get("filename", "image.tif")
+        if not download_url:
+            self.view.alert(self.tr("Download URL not available"))
+            return
+        save_path, _ = QFileDialog.getSaveFileName(
+            QApplication.activeWindow(),
+            self.tr("Save image as"),
+            suggested_filename,
+            "TIF files (*.tif *.tiff);;All files (*)"
+        )
+        if not save_path:
+            return
+        self._download_file_from_url(download_url, save_path)
+
+    def _download_file_from_url(self, url: str, save_path: str):
+        request = QNetworkRequest(QUrl(url))
+        nam = self.api.http.nam
+        reply = nam.get(request)
+        reply.finished.connect(lambda: self._save_downloaded_file(reply, save_path))
+
+    def _save_downloaded_file(self, reply: QNetworkReply, save_path: str):
+        if reply.error() != QNetworkReply.NoError:
+            self.view.alert(self.tr("Failed to download image: {}").format(reply.errorString()))
+            reply.deleteLater()
+            return
+        data = reply.readAll().data()
+        try:
+            with open(save_path, 'wb') as f:
+                f.write(data)
+            self.iface.messageBar().pushMessage("Mapflow", self.tr("Image saved to {}").format(save_path))
+        except OSError as e:
+            self.view.alert(self.tr("Failed to save file: {}").format(str(e)))
+        reply.deleteLater()
 
     # Functions that depend on mosaic or image selection
     def add_mosaic_or_image(self):

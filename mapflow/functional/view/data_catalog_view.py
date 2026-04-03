@@ -41,6 +41,7 @@ class DataCatalogView(QObject):
         self.dlg.previewImageButton.setIcon(icons.lens_icon)
         self.dlg.imageInfoButton.setIcon(icons.info_icon)
         self.dlg.renameImageButton.setIcon(icons.edit_icon)
+        self.dlg.downloadImageButton.setIcon(icons.download_icon)
         # Add tooltips to mosaic and image cell widgets
         self.dlg.addImageButton.setToolTip(self.tr("Add images"))
         self.dlg.showImagesButton.setToolTip(self.tr("Show images"))
@@ -49,6 +50,7 @@ class DataCatalogView(QObject):
         self.dlg.previewImageButton.setToolTip(self.tr("Preview"))
         self.dlg.imageInfoButton.setToolTip(self.tr("Info"))
         self.dlg.renameImageButton.setToolTip(self.tr("Rename"))
+        self.dlg.downloadImageButton.setToolTip(self.tr("Download"))
         # Set size for mosaic and image cell widgets
         buttons_width = 30
         self.dlg.addImageButton.setFixedWidth(buttons_width)
@@ -58,6 +60,7 @@ class DataCatalogView(QObject):
         self.dlg.previewImageButton.setFixedWidth(buttons_width)
         self.dlg.imageInfoButton.setFixedWidth(buttons_width)
         self.dlg.renameImageButton.setFixedWidth(buttons_width)
+        self.dlg.downloadImageButton.setFixedWidth(buttons_width)
         
         # Transfer labels' long text to a new line
         self.dlg.catalogSelectionLabel.setWordWrap(True)
@@ -439,6 +442,11 @@ class DataCatalogView(QObject):
                                                           self.dlg.catalogSelectionLabel.width() - 10)))
         # Show widgets
         self.dlg.deleteCatalogButton.setEnabled(True)
+        self.dlg.downloadImageButton.setEnabled(image.available_for_download)
+        if not image.available_for_download:
+            self.dlg.downloadImageButton.setToolTip(self.tr("Image is not available for download"))
+        else:
+            self.dlg.downloadImageButton.setToolTip(self.tr("Download"))
         self.set_table_tooltip(self.dlg.imageTable)
 
     def clear_image_info(self):
@@ -523,10 +531,12 @@ class DataCatalogView(QObject):
     def create_image_cell_buttons_layout(self):
         self.image_cell_layout.setContentsMargins(0,0,3,0)
         self.image_cell_layout.setSpacing(0)
-        self.image_cell_layout.addWidget(self.dlg.previewImageButton)
+        self.image_cell_layout.addWidget(self.dlg.downloadImageButton)
         self.image_cell_layout.addWidget(self.dlg.imageSpacers[0])
-        self.image_cell_layout.addWidget(self.dlg.imageInfoButton)
+        self.image_cell_layout.addWidget(self.dlg.previewImageButton)
         self.image_cell_layout.addWidget(self.dlg.imageSpacers[1])
+        self.image_cell_layout.addWidget(self.dlg.imageInfoButton)
+        self.image_cell_layout.addWidget(self.dlg.imageSpacers[2])
         self.image_cell_layout.addWidget(self.dlg.renameImageButton)
         self.image_cell_layout.setAlignment(Qt.AlignRight)
 
