@@ -20,47 +20,13 @@ All 5 specs populated from codebase analysis: goal (plugin purpose/constraints),
 All tests require QGIS runtime — no value in partial testing without it. Tools: pytest + pytest-qt + unittest.mock (stdlib). QgsApplication bootstrapped via qgis.testing.start_app() in pytest_configure hook (must run before collection because plugin modules create QIcon at import time). conftest.py provides iface mock and http_mock fixtures. pytest-qt chosen over raw PyQt5.QtTest for signal-heavy architecture (waitSignal, auto widget cleanup via qtbot).
 
 ## 4. Feature: download image from data-catalog
-[ ]
-- Add button "Donwload image" in My Imagery tab when mosaic is opened (images table active, image is selected)
-- Refactor 002_api.md: divide into A)project/b)processing/c)myimagery/d)search API docs in separate files; keep endpoints index in spec/002,
-- add more details to separate files. 
-- Use the following description for new api:
-#### `GET /rest/rasters/image/{image_id}/download`
-    Returns a presigned S3 download URL for the requested image.
-    
-    Parameters:
-    - `image_id`: UUID
-    
-    Access rules:
-    - Requires `StandardHTTPSecurity` (authenticated user)
-      - User must own the mosaic containing the image (returns `404` otherwise, to not reveal existence)
-      - Image must have been ingested via the `load_data` workflow (returns `403` otherwise)
-      - `data_available` must be `true` (returns `409` otherwise)
-    
-    Response shape:
-    ```json
-    {
-        "download_url": "https://...",
-        "filename": "image.tif",
-        "expires_in": 3600
-    }
-    ```
-    
-    Errors:
-    - `404`: image not found or user has no access
-      - `403`: image is not downloadable (not ingested via `load_data`)
-      - `409`: image data is not yet available
-    
-    Notes:
-    - The presigned URL allows direct download from S3 without credentials; no data transfer through the service.
-      - URL expiry is configurable via `DOWNLOAD_URL_EXPIRY` (default 3600 seconds).
-      - The download restriction to `load_data` images prevents misuse of the service as a general file exchange.
-
-#### Change to `GET /rest/rasters/mosaic/images` API response:
-    Add "avaliable_for_download" field to ImageReturnSchema, default if not present in API `True`
-
-- Implement image download API, add file save path dialog
-- Disable button if the selected image has `avaliable_for_download=False`
+[v]
+- Refactored 002_api.md into index + 4 sub-files (A: project, B: processing, C: my imagery, D: search) for maintainability
+- Added `GET /rest/rasters/image/{image_id}/download` spec with presigned URL response model and error codes (404/403/409)
+- Added `available_for_download` boolean to ImageReturnSchema (defaults True for backward compat via SkipDataClass.from_dict)
+- Download uses two-step flow: authenticated GET for presigned URL, then unauthenticated direct S3 download — avoids routing large files through the backend
+- Download button placed first in image cell layout for discoverability; disabled with tooltip change when `available_for_download=False`
+- 6 tests added (schema parsing, default values, API URL construction); all pass on QGIS 3.28 Python 3.9
 
 ## 5. Add new zoom-selector feature
 [ ]
