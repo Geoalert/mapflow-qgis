@@ -1,7 +1,7 @@
 import json
 from typing import Optional, Callable, List
 
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtCore import QObject, pyqtSignal, Qt
 from PyQt5.QtNetwork import QNetworkReply
 from PyQt5.QtWidgets import QAbstractItemView
 from qgis.core import QgsSettings
@@ -80,8 +80,12 @@ class ProjectService(QObject):
         self.app_context.current_project = MapflowProject.from_dict(json.loads(response.readAll().data()))
         if self.app_context.current_project:
             self.app_context.project_id = self.app_context.current_project.id
-            self.dlg.currentProjectLabel.setProperty("fullProjectName", self.app_context.current_project.name)
-            self.dlg.update_project_label()
+            elided_name = self.dlg.currentProjectLabel.fontMetrics().elidedText(
+                self.app_context.current_project.name,
+                Qt.ElideRight,
+                self.dlg.currentProjectLabel.width() - 50)
+            self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(elided_name))
+            self.dlg.currentProjectLabel.adjustSize()
         self.get_project_sharing()
         self.setup_project_change_rights()
         self.app_context.settings.setValue("project_id", self.app_context.project_id)
@@ -217,8 +221,11 @@ class ProjectService(QObject):
             for pid, project in self.projects.items():
                 if selected_id == pid:
                     self.app_context.current_project = project
-                    self.dlg.currentProjectLabel.setProperty("fullProjectName", self.app_context.current_project.name)
-                    self.dlg.update_project_label()
+                    elided_name = self.dlg.currentProjectLabel.fontMetrics().elidedText(
+                        self.app_context.current_project.name,
+                        Qt.ElideRight,
+                        self.dlg.currentProjectLabel.width() - 50)
+                    self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(elided_name))
             if self.app_context.current_project:
                 self.get_project_sharing()
                 self.view.setup_workflow_defs(self.app_context.current_project.workflowDefs, 
