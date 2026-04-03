@@ -1,3 +1,5 @@
+from enum import Enum
+
 from qgis.core import QgsVectorLayer
 from dataclasses import dataclass, fields
 from datetime import datetime, timedelta
@@ -233,3 +235,44 @@ class ProcessingDTO(Serializable, SkipDataClass):
             "reviewUntil": self.reviewUntil,
             "id": self.id
         }
+
+
+class ProcessingSortBy(str, Enum):
+    scenario = "SCENARIO"
+    name = "NAME"
+    project = "PROJECT"
+    email = "EMAIL"
+    created = "CREATED"
+    status = "STATUS"
+    progress = "PROGRESS"
+    completed = "COMPLETED"
+    cost = "COST"
+    area = "AREA"
+    provider = "PROVIDER"
+
+
+class ProcessingSortOrder(str, Enum):
+    ascending = "ASC"
+    descending = "DESC"
+
+
+@dataclass
+class ProcessingsRequest(Serializable):
+    limit: int = 30
+    offset: int = 0
+    terms: Optional[str] = None
+    sortBy: Optional[str] = None
+    sortOrder: Optional[str] = None
+
+
+@dataclass
+class ProcessingsResult(SkipDataClass):
+    results: Optional[List] = None
+    total: int = 0
+    count: int = 0
+
+    def __post_init__(self):
+        if self.results:
+            self.results = [ProcessingDTO.from_dict(p) for p in self.results]
+        else:
+            self.results = []

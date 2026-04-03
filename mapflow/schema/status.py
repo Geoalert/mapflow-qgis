@@ -17,7 +17,8 @@ class ProcessingStatusDict(QObject):
                           'FAILED': self.tr("Failed"),
                           'REFUNDED': self.tr("Refunded"),
                           'CANCELLED': self.tr("Cancelled"),
-                          'AWAITING': self.tr("Awaiting")}
+                          'AWAITING': self.tr("Awaiting"),
+                          'UNPROCESSED': self.tr("Unprocessed")}
 
 
 class ProcessingReviewStatusDict(QObject):
@@ -48,6 +49,7 @@ class ProcessingStatus(NamedEnum):
     refunded = 'REFUNDED'
     cancelled = 'CANCELLED'
     awaiting = 'AWAITING'
+    unprocessed = 'UNPROCESSED'
 
     def __init__(self, value):
         super().__init__(value)
@@ -76,6 +78,10 @@ class ProcessingStatus(NamedEnum):
     @property
     def is_awaiting(self):
         return self == ProcessingStatus.awaiting
+    
+    @property
+    def is_unprocessed(self):
+        return self == ProcessingStatus.unprocessed
 
     @property
     def is_terminal(self):

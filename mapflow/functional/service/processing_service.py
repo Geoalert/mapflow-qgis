@@ -22,9 +22,10 @@ from ...http import Http, api_message_parser
 from ..view.processing_view import ProcessingView
 from ..api.processing_api import ProcessingApi
 from ...schema import ProcessingDTO, UpdateProcessingSchema, ProcessingStatus, BillingType, ProcessingHistory, PostProcessingSchemaV2
-from ...schema.processing import ProcessingUIParams
+from ...schema.processing import ProcessingUIParams, ProcessingsRequest, ProcessingsResult
 from ..service.alert_service import alert, AlertService
 from ..app_context import AppContext
+from ...config import Config
 from ...functional.layer_utils import ResultsLoader
 from ...http import Http, get_error_report_body
 from ...dialogs.error_message_widget import ErrorMessageWidget
@@ -53,6 +54,9 @@ class ProcessingService(QObject):
                                  iface=iface,
                                  result_loader=self.result_loader)
         self.processings = {}
+        self.processings_data = None  # ProcessingsResult
+        self.processings_page_limit = Config.PROCESSINGS_PAGE_LIMIT
+        self.processings_page_offset = 0
         self.processings_history = None # ProcessingHistory() - local storage for active processings list
         self.processing_fetch_timer = QTimer(dlg)
         self.processing_fetch_timer.setInterval(timer_interval)
@@ -298,14 +302,42 @@ class ProcessingService(QObject):
     def setup_processings_table(self):
         if not self.app_context.current_project:
             return
+        self.processings_page_offset = 0
         self.view.set_table_loading()
         self.get_processings()
         self.processing_fetch_timer.start()
 
+    def connect_processings_pagination(self):
+        """Connect pagination, sorting and filtering signals. Called once during plugin init."""
+        self.dlg.processingsNextPageButton.clicked.connect(self.show_processings_next_page)
+        self.dlg.processingsPreviousPageButton.clicked.connect(self.show_processings_previous_page)
+        self.dlg.filterProcessings.textEdited.connect(self.get_filtered_processings)
+        self.dlg.sortProcessingsCombo.activated.connect(lambda: self.get_processings())
+
     def get_processings(self):
-        # Fetch processings at startup and start the timer to keep fetching them afterwards
-        self.api.get_processings(project_id=self.app_context.current_project.id,
-                                 callback=self.get_processings_callback)
+        if not self.app_context.current_project:
+            return
+        # Clamp offset if it exceeds total
+        try:
+            if self.processings_data and self.processings_page_offset >= self.processings_data.total:
+                self.processings_page_offset = 0
+        except (AttributeError, TypeError):
+            pass
+        sort_by, sort_order = self.view.sort_processings()
+        terms = self.dlg.filterProcessings.text() or None
+        request_body = ProcessingsRequest(
+            limit=self.processings_page_limit,
+            offset=self.processings_page_offset,
+            terms=terms,
+            sortBy=sort_by,
+            sortOrder=sort_order,
+        )
+        self.api.get_processings(
+            project_id=self.app_context.current_project.id,
+            request_body=request_body,
+            callback=self.get_processings_callback,
+        )
+        self.view.enable_processings_pages(False)
 
     def get_processings_callback(self, response: QNetworkReply):
         """Update the processing table and user limit.
@@ -313,15 +345,35 @@ class ProcessingService(QObject):
         :param response: The HTTP response.
         """
         response_data = json.loads(response.readAll().data())
-        processings = [ProcessingDTO.from_dict(entry) for entry in response_data]
+        self.processings_data = ProcessingsResult.from_dict(response_data)
+        processings = self.processings_data.results
         if all(p.is_final_state for p in processings):
-            # We do not re-fetch the processings, if nothing is going to change.
-            # What can change from server-side: processing can finish if IN_PROGRESS or AWAITING
-            # or review can be accepted if NOT_ACCEPTED.
-            # Any other processings can change only from client-side
             self.processing_fetch_timer.stop()
         self.processings = {processing.id: processing for processing in processings}
+        # Update pagination UI
+        if self.processings_data.total > self.processings_page_limit:
+            quotient, remainder = divmod(self.processings_data.total, self.processings_page_limit)
+            total_pages = quotient + (remainder > 0)
+            page_number = int(self.processings_page_offset / self.processings_page_limit) + 1
+            self.view.show_processings_pages(True, page_number, total_pages)
+        else:
+            self.view.show_processings_pages(False)
         self.update_local_processings(processings)
+
+    def show_processings_next_page(self):
+        self.processings_page_offset += self.processings_page_limit
+        self.get_processings()
+
+    def show_processings_previous_page(self):
+        self.processings_page_offset -= self.processings_page_limit
+        if self.processings_page_offset < 0:
+            self.processings_page_offset = 0
+        self.get_processings()
+
+    def get_filtered_processings(self):
+        """Reset to first page when filter text changes."""
+        self.processings_page_offset = 0
+        self.get_processings()
 
     def update_local_processings(self, processings: List[ProcessingDTO]):
         """
