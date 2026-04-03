@@ -121,7 +121,6 @@ class ProcessingView:
         self.dlg.processingsTable.setSortingEnabled(True)
         # Restore extended selection and filtering
         self.dlg.processingsTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.dlg.filter_processings_table(self.dlg.filterProcessings.text())
 
     def add_new_processing(self, processing: ProcessingDTO):
         self.dlg.processingsTable.insertRow(0)
