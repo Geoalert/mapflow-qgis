@@ -224,6 +224,10 @@ class DataCatalogApi(QObject):
                                                           response_body=response_body,
                                                           plugin_version=self.plugin_version,
                                                           error_message_parser=data_catalog_message_parser)
+        if response.error() == 5: # OperationCanceledError
+            error_summary = self.tr("Request timed out or was canceled. \n" \
+                                    "Try increasing QGIS global timeout setting: \n" \
+                                    "Settings -> Options -> Network -> Timeout")
         if response.error() == 201: # ContentAccessDenied (like 403)
             error_summary = self.tr("This operation is forbidden for your account, contact us")
         if response.error() == 203: # ContentNotFoundError (like 404)
