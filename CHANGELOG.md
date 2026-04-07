@@ -1,3 +1,9 @@
+## 3.5.1
+    - Processing refactoring
+    - Processing improvements: pagination, sorting and filtering
+    - Image downloading from My imagery (if it was added not by user)
+    - Null-polygon fixes
+    - Instructions to increase timeout in QGIS network settings for failed image posting requests
 ## 3.5.0
     - Translations to Chinese, Spanish and Portuguese
     - Save results as GeoPackage, converting JSON fields to str

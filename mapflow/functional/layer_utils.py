@@ -278,6 +278,7 @@ class ResultsLoader(QObject):
         # By default, plugin adds layers to a group unless user explicitly deletes it
         self.add_layers_to_group = True
         self.layer_group = None
+        self.check_tempdir_func = None # will be set after initialization from the main file
 
     # ======= General layer management  ====== #
 
@@ -385,6 +386,9 @@ class ResultsLoader(QObject):
         :param add_aoi: Whether to add AOI overlay on top of the preview
         :return: The created raster layer, or None if failed
         """
+        if not self.check_tempdir_func():
+            return
+
         corners = self.get_footprint_corners(footprint)
         if not corners:
             return None

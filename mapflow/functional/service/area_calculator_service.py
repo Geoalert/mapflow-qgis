@@ -17,6 +17,7 @@ from ..geometry import clip_aoi_to_image_extent
 
 class AreaCalculatorService(QObject):
     def __init__(self,
+                 iface,
                  app_context: AppContext,
                  dlg: MainDialog,
                  config,
@@ -26,6 +27,7 @@ class AreaCalculatorService(QObject):
                  use_imagery_extent
                  ):
         super().__init__()
+        self.iface = iface
         self.app_context = app_context
         self.dlg = dlg
         self.config = config

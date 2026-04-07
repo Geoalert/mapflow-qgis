@@ -199,6 +199,7 @@ class Mapflow(QObject):
                                                     settings=self.app_context.settings,
                                                     context=self.app_context
                                                     )
+        self.result_loader.check_tempdir_func = self.check_if_output_directory_is_selected
 
         self.data_catalog_service = DataCatalogService(self.http,
                                                     self.server,
@@ -271,7 +272,8 @@ class Mapflow(QObject):
         self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
 
         # ========== 10. INITIALIZE AREA CALCULATOR SERVICE ==========
-        self.area_calculator_service = AreaCalculatorService(app_context=self.app_context,
+        self.area_calculator_service = AreaCalculatorService(iface=self.iface,
+                                                             app_context=self.app_context,
                                                              dlg=self.dlg,
                                                              config=self.config,
                                                              data_catalog_service=self.data_catalog_service,
