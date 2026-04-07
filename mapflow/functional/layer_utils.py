@@ -411,8 +411,12 @@ class ResultsLoader(QObject):
 
         preview.SetGCPs(gcp_list, crs.toWkt())
         preview.FlushCache()
+        preview = None
 
-        layer = QgsRasterLayer(f.name, f"{image_name} preview", 'gdal')
+        warped_path = str(self.context.temp_dir / os.urandom(32).hex()) + ".tif"
+        gdal.Warp(warped_path, f.name, format='GTiff', tps=True, dstSRS=crs.toWkt(), dstNodata=0)
+
+        layer = QgsRasterLayer(warped_path, f"{image_name} preview", 'gdal')
 
         # Handle transparency
         if layer.bandCount() == 4:
