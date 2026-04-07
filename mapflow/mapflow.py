@@ -194,10 +194,10 @@ class Mapflow(QObject):
         # Initialize AlertService singleton
         AlertService(self.plugin_name)
         self.result_loader = layer_utils.ResultsLoader(iface=self.iface,
-                                                    maindialog=self.dlg,
-                                                    http=self.http,
-                                                    settings=self.app_context.settings,
-                                                    context=self.app_context
+                                                       maindialog=self.dlg,
+                                                       http=self.http,
+                                                       settings=self.app_context.settings,
+                                                       context=self.app_context
                                                     )
         self.result_loader.check_tempdir_func = self.check_if_output_directory_is_selected
 

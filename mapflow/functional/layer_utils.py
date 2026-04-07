@@ -269,12 +269,12 @@ def footprint_to_extent(footprint: dict) -> QgsRectangle:
 class ResultsLoader(QObject):
     def __init__(self, iface, maindialog, http, settings, context: AppContext):
         super().__init__()
-        self.context = context
         self.iface = iface
         self.message_bar = iface.messageBar()
         self.dlg = maindialog
         self.http = http
         self.settings = settings
+        self.context = context
         # By default, plugin adds layers to a group unless user explicitly deletes it
         self.add_layers_to_group = True
         self.layer_group = None
@@ -360,7 +360,7 @@ class ResultsLoader(QObject):
         """
         footprint_poly = footprint.asGeometryCollection()[0].asPolygon()  # in case it's a MultiPolygon
         if len(footprint_poly[0]) != 5:
-            self.message_bar.pushInfo(self.plugin_name, self.tr('Preview is unavailable'))
+            self.message_bar.pushInfo(self.context.plugin_name, self.tr('Preview is unavailable'))
             return None
         
         # Get all 4 corners (ignore the 5th closing point)
@@ -449,7 +449,7 @@ class ResultsLoader(QObject):
         corners = []
         footprint = footprint.asGeometryCollection()[0].asPolygon() # in case it's a MultiPolygon with only one polygon
         if len(footprint[0]) != 5:
-            self.message_bar.pushInfo(self.plugin_name, self.tr('Preview is unavailable'))
+            self.message_bar.pushInfo(self.context.plugin_name, self.tr('Preview is unavailable'))
             return
         for point in range(4):
             pt = footprint[0][point]
