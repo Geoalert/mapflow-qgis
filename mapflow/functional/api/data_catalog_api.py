@@ -224,6 +224,10 @@ class DataCatalogApi(QObject):
                                                           response_body=response_body,
                                                           plugin_version=self.plugin_version,
                                                           error_message_parser=data_catalog_message_parser)
+        if response.error() == 5: # OperationCanceledError
+            error_summary = self.tr("Request timed out or was canceled. \n" \
+                                    "Try increasing QGIS global timeout setting: \n" \
+                                    "Settings -> Options -> Network -> Timeout")
         if response.error() == 201: # ContentAccessDenied (like 403)
             error_summary = self.tr("This operation is forbidden for your account, contact us")
         if response.error() == 203: # ContentNotFoundError (like 404)
@@ -341,6 +345,37 @@ class DataCatalogApi(QObject):
         self.http.put(url=f"{self.server}/rasters/image/{image_id}?name={name}",
                       callback=callback,
                       use_default_error_handler=True)
+
+    def download_image(self,
+                       image_id: UUID,
+                       callback: Callable,
+                       error_handler: Optional[Callable] = None,
+                       error_handler_kwargs: Optional[dict] = None):
+        self.http.get(url=f"{self.server}/rasters/image/{image_id}/download",
+                      callback=callback,
+                      use_default_error_handler=error_handler is None,
+                      error_handler=error_handler,
+                      error_handler_kwargs=error_handler_kwargs or {}
+                     )
+
+    def download_image_error_handler(self, response: QNetworkReply):
+        response_body = response.readAll().data().decode()
+        error_code = response.attribute(QNetworkRequest.HttpStatusCodeAttribute)
+        if error_code == 404:
+            error_summary = self.tr("Image not found or you don't have access to it")
+        elif error_code == 403:
+            error_summary = self.tr("This image is not available for download")
+        elif error_code == 409:
+            error_summary = self.tr("Image data is not yet available. Please try again later")
+        else:
+            error_summary, _ = get_error_report_body(response=response,
+                                                     response_body=response_body,
+                                                     plugin_version=self.plugin_version,
+                                                     error_message_parser=data_catalog_message_parser)
+        ErrorMessageWidget(parent=QApplication.activeWindow(),
+                           text=error_summary,
+                           title=self.tr("Download error"),
+                           email_body='').show()
 
     @staticmethod
     def create_upload_image_body(image_path):

@@ -56,11 +56,21 @@ def clip_aoi_to_catalog_extent(catalog_aoi: QgsGeometry,
     return intersection.getFeatures()
 
 def fix_geoms(layer: QgsVectorLayer) -> QgsVectorLayer:
-    fixed_layer = qgis_processing.run(
-        'native:fixgeometries', 
-        {'INPUT':layer, 'METHOD':1, 'OUTPUT':'memory:'}
-    )['OUTPUT']
-    return fixed_layer
+    try:
+        fixed_layer = qgis_processing.run(
+            'native:fixgeometries', 
+            {'INPUT':layer, 'METHOD':1, 'OUTPUT':'memory:'}
+        )['OUTPUT']
+        return fixed_layer
+    except: # if structure repair (union) fails, try linework repair (keeps areas that don't overlap)
+        try:
+            fixed_layer = qgis_processing.run(
+            'native:fixgeometries', 
+            {'INPUT':layer, 'METHOD':0, 'OUTPUT':'memory:'}
+            )['OUTPUT']
+            return fixed_layer
+        except: # if that also fails, just return original
+            return layer
 
 def intersect_geoms(input_layer: QgsVectorLayer, 
                     overlay_layer: QgsVectorLayer) -> QgsVectorLayer:

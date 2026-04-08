@@ -2,7 +2,7 @@ import json
 import os
 from osgeo import gdal
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Callable
 
 from PyQt5.QtCore import QObject
 from PyQt5.QtNetwork import QNetworkReply
@@ -26,12 +26,14 @@ from qgis.core import (QgsRectangle,
                        QgsCoordinateTransform
                        )
 
+from .app_context import AppContext
 from ..config import Config
 from ..dialogs.error_message_widget import ErrorMessageWidget
 from ..entity.processing import Processing
 from .geometry import clip_aoi_to_image_extent, clip_aoi_to_catalog_extent
 from .helpers import WGS84, to_wgs84, WGS84_ELLIPSOID
 from ..schema.catalog import AoiResponseSchema, PreviewType
+from ..schema.processing import ProcessingDTO
 from ..styles import get_style_name
 
 
@@ -160,10 +162,15 @@ def count_polygons_in_layer(features: list) -> int:
     """ Count polygon geometries in a multipolygon layer (instead of counting features).
     :param features: A list of fetures, obtained by "list(layer.getFeatures())"
     """
+    count = 0
     for feature in features:
-        if not feature.geometry():
-            features.remove(feature)
-    count = sum(len(feature.geometry().asMultiPolygon()) for feature in features)
+        geom = feature.geometry()
+        if geom is None or geom.isEmpty():
+            continue
+        if geom.isMultipart():
+            count += len(geom.asMultiPolygon())
+        else:
+            count += 1
     return count
 
 def collect_geometry_from_layer(layer: QgsMapLayer) -> QgsGeometry:
@@ -260,22 +267,18 @@ def footprint_to_extent(footprint: dict) -> QgsRectangle:
 
 # Layer management for results
 class ResultsLoader(QObject):
-    def __init__(self, iface, maindialog, http, server, project, settings, plugin_name, temp_dir):
+    def __init__(self, iface, maindialog, http, settings, context: AppContext):
         super().__init__()
+        self.iface = iface
         self.message_bar = iface.messageBar()
         self.dlg = maindialog
         self.http = http
-        self.iface = iface
-        self.server = server
-        self.project = project
-        self.layer_tree_root = self.project.layerTreeRoot()
+        self.settings = settings
+        self.context = context
         # By default, plugin adds layers to a group unless user explicitly deletes it
         self.add_layers_to_group = True
         self.layer_group = None
-        self.settings = settings
-        self.plugin_name = plugin_name
-        self.temp_dir = temp_dir
-        self.preview_dict = {}
+        self.check_tempdir_func = None # will be set after initialization from the main file
 
     # ======= General layer management  ====== #
 
@@ -290,47 +293,50 @@ class ResultsLoader(QObject):
         """
         if not layer:
             return
-        self.layer_group = self.layer_tree_root.findGroup(self.settings.value('layerGroup'))
+        self.layer_group = self.context.project.layerTreeRoot().findGroup(self.settings.value('layerGroup'))
         if self.add_layers_to_group:
             if not self.layer_group:  # сreate a layer group
-                self.layer_group = self.layer_tree_root.insertGroup(0, self.plugin_name)
+                self.layer_group = self.context.project.layerTreeRoot().insertGroup(0, self.context.plugin_name)
                 # A bug fix, - gotta collapse first to be able to expand it
                 # Or else it'll ignore the setExpanded(True) calls
                 self.layer_group.setExpanded(False)
-                self.settings.setValue('layerGroup', self.plugin_name)
+                self.settings.setValue('layerGroup', self.context.plugin_name)
                 # If the group has been deleted, assume user wants to add layers to root, memorize it
                 self.layer_group.destroyed.connect(lambda: setattr(self, 'add_layers_to_group', False))
                 # Let user rename the group, memorize the new name
                 self.layer_group.nameChanged.connect(lambda _, name: self.settings.setValue('layerGroup', name))
             # To be added to group, layer has to be added to project first
-            self.project.addMapLayer(layer, addToLegend=False)
+            self.context.project.addMapLayer(layer, addToLegend=False)
             # Explcitly add layer to the position 0 (default value) or else it adds it to bottom
             self.layer_group.insertLayer(order, layer)
             self.layer_group.setExpanded(True)
         else:  # assume user opted to not use a group, add layers as usual
-            self.project.addMapLayer(layer)
+            self.context.project.addMapLayer(layer)
 
-    def add_preview_layer(self, preview_layer: QgsRasterLayer):
+    def add_preview_layer(self, preview_layer):
+        """Add a preview layer, using preview_dict from context to track layers."""
         # Delete layer from dictionary if it was deleted from layer tree
-        self.preview_dict = {url: id for url, id in self.preview_dict.items() if id in self.project.mapLayers()}
-        # Revove the old layer from layer tree if its url matches current one and its in the dictionary
+        for url, id in self.context.preview_dict.copy().items():
+            if id not in self.context.project.mapLayers() and id != preview_layer.id():
+                del self.context.preview_dict[url]
+        # Revove the old layer if its url matches current one and its in the dictionary
         url = preview_layer.dataProvider().dataSourceUri()
-        if url in self.preview_dict.keys():
-            current_preview_id = self.preview_dict[url]
-            self.project.removeMapLayer(current_preview_id)
+        if url in self.context.preview_dict.keys():
+            current_preview_id = self.context.preview_dict[url]
+            self.context.project.removeMapLayer(current_preview_id)
             # And delete old item from dictionary to rewrite it to a new position
-            del self.preview_dict[url] 
+            del self.context.preview_dict[url] 
         # For the first added preview, just add it to the bottom
-        if len(self.preview_dict) == 0:
+        if len(self.context.preview_dict) == 0:
             order = -1
         # In other cases - add it to the top of plugin added previews
         else:
-            top_preview_id = list(self.preview_dict.values())[-1]
-            top_preview_layer = self.project.layerTreeRoot().findLayer(top_preview_id)
+            top_preview_id = list(self.context.preview_dict.values())[-1]
+            top_preview_layer = self.context.project.layerTreeRoot().findLayer(top_preview_id)
             order = top_preview_layer.parent().children().index(top_preview_layer)
         self.add_layer(layer=preview_layer, order=order)
         # Add preview url and id to the dictionary
-        self.preview_dict[url] = preview_layer.id()
+        self.context.preview_dict[url] = preview_layer.id()
 
     def add_aoi_to_preview(self):
         """Place AOI copy on top of every preview (and delete the old copy)."""
@@ -339,9 +345,9 @@ class ResultsLoader(QObject):
             return
         cloned_aoi = aoi_layer.clone()
         cloned_aoi_name = self.tr('Search area "{name}"').format(name=aoi_layer.name())
-        layers_to_remove = self.project.mapLayersByName(cloned_aoi_name)
+        layers_to_remove = self.context.project.mapLayersByName(cloned_aoi_name)
         for layer in layers_to_remove:
-            self.project.removeMapLayer(layer.id())
+            self.context.project.removeMapLayer(layer.id())
         cloned_aoi.setName(cloned_aoi_name)
         cloned_aoi.loadNamedStyle(os.path.join(str(Path(__file__).parents[1]), 'static', 'styles', 'aoi.qml'))
         self.add_layer(cloned_aoi, 0)
@@ -354,7 +360,7 @@ class ResultsLoader(QObject):
         """
         footprint_poly = footprint.asGeometryCollection()[0].asPolygon()  # in case it's a MultiPolygon
         if len(footprint_poly[0]) != 5:
-            self.message_bar.pushInfo(self.plugin_name, self.tr('Preview is unavailable'))
+            self.message_bar.pushInfo(self.context.plugin_name, self.tr('Preview is unavailable'))
             return None
         
         # Get all 4 corners (ignore the 5th closing point)
@@ -380,11 +386,14 @@ class ResultsLoader(QObject):
         :param add_aoi: Whether to add AOI overlay on top of the preview
         :return: The created raster layer, or None if failed
         """
+        if not self.check_tempdir_func():
+            return
+
         corners = self.get_footprint_corners(footprint)
         if not corners:
             return None
 
-        with open(self.temp_dir / os.urandom(32).hex(), mode='wb') as f:
+        with open(self.context.temp_dir / os.urandom(32).hex(), mode='wb') as f:
             f.write(response.readAll().data())
 
         preview = gdal.Open(f.name)
@@ -402,8 +411,12 @@ class ResultsLoader(QObject):
 
         preview.SetGCPs(gcp_list, crs.toWkt())
         preview.FlushCache()
+        preview = None
 
-        layer = QgsRasterLayer(f.name, f"{image_name} preview", 'gdal')
+        warped_path = str(self.context.temp_dir / os.urandom(32).hex()) + ".tif"
+        gdal.Warp(warped_path, f.name, format='GTiff', tps=True, dstSRS=crs.toWkt(), dstNodata=0)
+
+        layer = QgsRasterLayer(warped_path, f"{image_name} preview", 'gdal')
 
         # Handle transparency
         if layer.bandCount() == 4:
@@ -428,7 +441,7 @@ class ResultsLoader(QObject):
         # Get a list of coordinate pairs
         corners = self.get_footprint_corners(footprint)
         # Get non-referenced raster and set its projection
-        with open(self.temp_dir/os.urandom(32).hex(), mode='wb') as f:
+        with open(self.context.temp_dir/os.urandom(32).hex(), mode='wb') as f:
             f.write(response.readAll().data())
         preview = gdal.Open(f.name)
         preview.SetProjection(crs.toWkt())
@@ -436,7 +449,7 @@ class ResultsLoader(QObject):
         corners = []
         footprint = footprint.asGeometryCollection()[0].asPolygon() # in case it's a MultiPolygon with only one polygon
         if len(footprint[0]) != 5:
-            self.message_bar.pushInfo(self.plugin_name, self.tr('Preview is unavailable'))
+            self.message_bar.pushInfo(self.context.plugin_name, self.tr('Preview is unavailable'))
             return
         for point in range(4):
             pt = footprint[0][point]
@@ -470,19 +483,19 @@ class ResultsLoader(QObject):
 
     # ======= Load as tile layers ====== #
 
-    def load_result_tiles(self, processing: Processing):
-        raster_tilejson = processing.raster_layer.get("tileJsonUrl", None)
-        vector_tilejson = processing.vector_layer.get("tileJsonUrl", None)
-        raster_layer = generate_raster_layer(processing.raster_layer.get("tileUrl", None),
+    def load_result_tiles(self, processing):
+        raster_tilejson = processing.rasterLayer.tileJsonUrl
+        vector_tilejson = processing.vectorLayer.tileJsonUrl
+        raster_layer = generate_raster_layer(processing.rasterLayer.tileUrl,
                                              name=f"{processing.name} raster")
-        vector_layer = generate_vector_layer(processing.vector_layer.get("tileUrl", None),
+        vector_layer = generate_vector_layer(processing.vectorLayer.tileUrl,
                                              name=processing.name)
-        vector_layer.loadNamedStyle(get_style_name(processing.workflow_def, vector_layer, processing.style_name))
+        vector_layer.loadNamedStyle(get_style_name(processing.workflowDef, vector_layer))
         self.request_layer_extent(tilejson_uri=raster_tilejson,
                                   layer=raster_layer,
                                   next_layers = [vector_layer],
                                   next_tilejson_uris = [vector_tilejson],
-                                  processing_id = processing.id_
+                                  processing_id = processing.id
                                   )
 
     def request_layer_extent(self,
@@ -573,7 +586,7 @@ class ResultsLoader(QObject):
             return
         self.dlg.saveOptionsButton.setEnabled(False)
         self.http.get(
-            url=f'{self.server}/processings/{pid}/result',
+            url=f'{self.context.server}/processings/{pid}/result',
             callback=self.download_results_file_callback,
             callback_kwargs={'path': path},
             use_default_error_handler=False,
@@ -581,15 +594,15 @@ class ResultsLoader(QObject):
             timeout=300
         )
 
-    def download_aoi_file(self, pid, callback) -> None:
+    def download_aoi_file(self, pid, callback: Optional[Callable] = None) -> None:
         """
         Download area of interest and save to a geojson file
         """ 
-        path = Path(self.temp_dir)/f'{pid}_aoi.geojson'                         
+        path = Path(self.context.temp_dir)/f'{pid}_aoi.geojson'                         
         self.dlg.saveOptionsButton.setEnabled(False)
         self.http.get(
-            url=f'{self.server}/processings/{pid}/aois',
-            callback=callback,
+            url=f'{self.context.server}/processings/{pid}/aois',
+            callback=callback if callback else self.download_aoi_file_callback,
             callback_kwargs={'path': path},
             use_default_error_handler=True,
             timeout=30
@@ -644,7 +657,7 @@ class ResultsLoader(QObject):
         """
         self.dlg.processingsTable.setEnabled(False)
         self.http.get(
-            url=f'{self.server}/processings/{processing.id_}/result',
+            url=f'{self.context.server}/processings/{processing.id}/result',
             callback=self.download_results_callback,
             callback_kwargs={'processing': processing},
             use_default_error_handler=False,
@@ -652,7 +665,7 @@ class ResultsLoader(QObject):
             timeout=300
         )
 
-    def download_results_callback(self, response: QNetworkReply, processing) -> None:
+    def download_results_callback(self, response: QNetworkReply, processing: ProcessingDTO) -> None:
         """Display processing results upon their successful fetch.
 
         :param response: The HTTP response.
@@ -660,14 +673,19 @@ class ResultsLoader(QObject):
         """
         self.dlg.processingsTable.setEnabled(True)
         # Read and decode response data
-        response_data = response.readAll().data()
-        data = json.loads(response_data)
+        try:
+            response_data = response.readAll().data()
+            data = json.loads(response_data)
+        except:
+            self.message_bar.pushWarning(self.tr("Mapflow error"),
+                                         self.tr("Invalid response from the server"))
+            return
         # Check geometry types in the data
         geom_types_dict = self.collect_geometry_types(data)
         # Change JSON fields to str
         data = self.normalize_json_properties(data)
         # TEMP: Save the modified data to a temporary file
-        with open(self.temp_dir/os.urandom(32).hex(), mode='wb') as f:
+        with open(self.context.temp_dir/os.urandom(32).hex(), mode='wb') as f:
             f.write(json.dumps(data).encode('utf-8'))
             temp_file_path = f.name
         # GEOPACKAGE: Try saving first
@@ -697,8 +715,8 @@ class ResultsLoader(QObject):
                 self.message_bar.pushMessage(self.tr("Error"), text)
                 return
         # COG: Add the source raster if it has been created
-        raster_url = processing.raster_layer.get('tileUrl')
-        tile_json_url = processing.raster_layer.get("tileJsonUrl")
+        raster_url = processing.rasterLayer.tileUrl
+        tile_json_url = processing.rasterLayer.tileJsonUrl
         if raster_url:
             params = {
                 'type': 'xyz',
@@ -820,49 +838,62 @@ class ResultsLoader(QObject):
                     geom_types_dict: Dict[str, bool],
                     driver: str):
         """Try saving available geometry layers into GPKG or GeoJSON."""
-        transform = self.project.transformContext()
+        transform = self.context.project.transformContext()
+        suffix = "." + driver.lower() # pick suffix based on driver
+        output_path = self.ensure_unique_path(Path(self.dlg.outputDirectory.text()), processing.id, suffix)
         write_options = QgsVectorFileWriter.SaveVectorOptions()
         write_options.driverName = driver
-        suffix = "." + driver.lower() # pick suffix based on driver
-        output_path = self.ensure_unique_path(Path(self.dlg.outputDirectory.text()), processing.id_, suffix)
+        # Specify parameters that will change
         written_layers = []
         error = None
         msg = None
+        first_layer = True
         # Go through possible geometry types and create layers only for present
-        for i, (geom_key, present) in enumerate(geom_types_dict.items()):
+        for geom_key, present in geom_types_dict.items():
             if not present:
                 continue
-            suffix_name = "_" + str(geom_key).lower() # suffix for layer name based on geometry type
+            # Define layer name
+            suffix_name = f"_{str(geom_key).lower()}"
             layer_name = f"{processing.name}{suffix_name}"
-            uri = f"{temp_path}|geometrytype={geom_key}" # uri based on geometry type
-            layer = QgsVectorLayer(uri, layer_name, "ogr")
-            layer.loadNamedStyle(get_style_name(processing.workflow_def, layer, processing.style_name))
+            uri = f"{temp_path}|geometrytype={geom_key}"
             write_options.layerName = layer_name
-            # For gpkg: use QgsVectorFileWriter
+            # Define layer
+            temp_layer = QgsVectorLayer(uri, layer_name, "ogr")
+            if not temp_layer.isValid():
+                continue
+            # For GPKG: use QgsVectorFileWriter
             if driver == "GPKG":
-                # Use 'action on existing file' for every layer except first to add them to one file
-                if i > 0:
-                    write_options.actionOnExistingFile = QgsVectorFileWriter.CreateOrOverwriteLayer
-                error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(layer, 
-                                                                           str(output_path), 
-                                                                           transform, 
+                write_options.actionOnExistingFile = (QgsVectorFileWriter.CreateOrOverwriteFile
+                                if first_layer else QgsVectorFileWriter.CreateOrOverwriteLayer)
+                error, msg, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(temp_layer,
+                                                                           str(output_path),
+                                                                           transform,
                                                                            write_options)
-            # For geojson: read tempfile and dump it to output file
-            else:
-                with open(temp_path, 'r', encoding='utf-8') as file:
-                    data = json.load(file)
-                with open(str(output_path), 'w', encoding='utf-8') as f:
-                    json.dump(data, f)
-            # Collect added layers to later preview them
-            written_layers.append(layer)
-            if error:
-                # GPKG is a first try, if it fails - clear everything and try GeoJSON
-                if driver == "GPKG":
-                    written_layers = []
+                if error:
+                    # Cleanup on failure
                     try:
-                        os.remove(output_path)
-                    except:
+                        output_path.unlink()
+                    except OSError:
                         pass
+                    written_layers.clear()
+                    break
+                # Load the output layer
+                out_uri = f"{output_path}|layername={layer_name}"
+                out_layer = QgsVectorLayer(out_uri, layer_name, "ogr")
+                if out_layer.isValid():
+                    written_layers.append(out_layer)
+                first_layer = False
+            # For GeoJSON: write with json
+            else:
+                if not output_path.exists():
+                    with Path(temp_path).open("rb") as src, output_path.open("wb") as dst:
+                        dst.write(src.read())
+                out_layer = QgsVectorLayer(f"{output_path}|geometrytype={geom_key}", layer_name, "ogr")
+                if out_layer.isValid():
+                    written_layers.append(out_layer)
+            # Add layer style
+            out_layer.loadNamedStyle(get_style_name(processing.workflowDef,
+                                                    out_layer))
         return written_layers, error, msg
 
     def ensure_unique_path(self,

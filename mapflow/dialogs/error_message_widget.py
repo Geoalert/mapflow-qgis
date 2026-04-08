@@ -12,8 +12,11 @@ class ErrorMessageWidget(*uic.loadUiType(ui_path / 'error_message.ui')):
         """A message box notifying user about a plugin error, with a 'Send a report' button."""
         super().__init__(parent)
         self.setupUi(self)
-        self.setWindowIcon(QApplication.activeWindow().windowIcon())
-        self.setWindowTitle(QApplication.activeWindow().windowTitle())
+        try:
+            self.setWindowIcon(QApplication.activeWindow().windowIcon())
+            self.setWindowTitle(QApplication.activeWindow().windowTitle())
+        except:
+            pass
         self.text.setText(text)
         if title:
             self.title.setText(title)

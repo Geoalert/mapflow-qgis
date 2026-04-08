@@ -1,6 +1,11 @@
+from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
+from typing import Optional
 
 from PyQt5.QtCore import QObject
+
+from ..schema.base import Serializable, SkipDataClass
 
 
 class ProcessingStatusDict(QObject):
@@ -12,7 +17,8 @@ class ProcessingStatusDict(QObject):
                           'FAILED': self.tr("Failed"),
                           'REFUNDED': self.tr("Refunded"),
                           'CANCELLED': self.tr("Cancelled"),
-                          'AWAITING': self.tr("Awaiting")}
+                          'AWAITING': self.tr("Awaiting"),
+                          'UNPROCESSED': self.tr("Unprocessed")}
 
 
 class ProcessingReviewStatusDict(QObject):
@@ -43,6 +49,7 @@ class ProcessingStatus(NamedEnum):
     refunded = 'REFUNDED'
     cancelled = 'CANCELLED'
     awaiting = 'AWAITING'
+    unprocessed = 'UNPROCESSED'
 
     def __init__(self, value):
         super().__init__(value)
@@ -71,9 +78,21 @@ class ProcessingStatus(NamedEnum):
     @property
     def is_awaiting(self):
         return self == ProcessingStatus.awaiting
+    
+    @property
+    def is_unprocessed(self):
+        return self == ProcessingStatus.unprocessed
+
+    @property
+    def is_terminal(self):
+        return self.is_ok or self.is_failed or self.is_refunded or self.is_cancelled
+
+    @property
+    def is_terminal(self):
+        return self.is_ok or self.is_failed or self.is_refunded or self.is_cancelled
 
 
-class ProcessingReviewStatus(NamedEnum):
+class ProcessingReviewStatusEnum(NamedEnum):
     none = None
     in_review = 'IN_REVIEW'
     not_accepted = 'NOT_ACCEPTED'
@@ -84,14 +103,36 @@ class ProcessingReviewStatus(NamedEnum):
         super().__init__(value)
         self.value_map = ProcessingReviewStatusDict().value_map
 
+
+@dataclass
+class ProcessingReviewStatus(Serializable, SkipDataClass):
+    reviewStatus: Optional[ProcessingReviewStatusEnum] = None
+    inReviewUntil: Optional[datetime] = None
+
+    @classmethod
+    def from_dict(cls, data: Optional[dict]):
+        """Handle None input by returning instance with defaults."""
+        if data is None:
+            return cls()
+        return super().from_dict(data)
+
+    def __post_init__(self):
+        if self.inReviewUntil:
+            self.inReviewUntil = datetime.strptime(self.inReviewUntil, '%Y-%m-%dT%H:%M:%S.%f%z').astimezone()
+        self.reviewStatus = ProcessingReviewStatusEnum(self.reviewStatus)
+
     @property
     def is_in_review(self):
-        return self == ProcessingReviewStatus.in_review
+        return self.reviewStatus == ProcessingReviewStatusEnum.in_review
 
     @property
     def is_not_accepted(self):
-        return self == ProcessingReviewStatus.not_accepted
+        return self.reviewStatus == ProcessingReviewStatusEnum.not_accepted
 
     @property
     def is_none(self):
-        return self == ProcessingReviewStatus.none
+        return self.reviewStatus == ProcessingReviewStatusEnum.none
+
+    @property
+    def is_accepted(self):
+        return self.reviewStatus == ProcessingReviewStatusEnum.accepted

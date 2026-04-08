@@ -31,6 +31,7 @@ class DataCatalogController(QObject):
         self.dlg.imageInfoButton.clicked.connect(self.service.image_info)
         self.dlg.renameImageButton.clicked.connect(self.service.show_rename_image_dialog)
         self.dlg.previewImageButton.clicked.connect(self.service.get_image_preview_l)
+        self.dlg.downloadImageButton.clicked.connect(self.service.download_image)
         self.dlg.imageTable.selectionModel().selectionChanged.connect(self.service.check_image_selection)
         self.dlg.seeMosaicsButton.clicked.connect(self.service.switch_to_mosaics_table)
 
