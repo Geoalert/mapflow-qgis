@@ -12,6 +12,7 @@ about=Mapflow provides AI models for automatic feature extraction from satellite
 version=3.5.1
 experimental=False
 deprecated=False
+author=Geoalert
 email=hello@geoalert.io
 changelog:
     3.5.1
