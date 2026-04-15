@@ -20,6 +20,9 @@ Data Catalog (My Imagery): mosaics, images, upload, download, storage limits. In
 ### 002_D_search_api.md
 Imagery Search: catalog search, external APIs (Maxar, Sentinel — legacy).
 
+## 002_F_plan_processing_api.md
+Planned processing templates: create/list/update/delete, run from template, and template status/actions.
+
 ## 002_E_zoom_selector_api.md
 Zoom selector API for automatic zoom detection based on imagery source resolution.
 
