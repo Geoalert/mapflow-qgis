@@ -130,6 +130,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.save_result_action = QAction(self.tr("Save results"))
         self.download_aoi_action = QAction(self.tr("Download AOI"))
         self.see_details_action = QAction(self.tr("See details"))
+        self.see_processings_action = QAction(self.tr("See processings"))
+        self.see_search_results_action = QAction(self.tr("See search results"))
         self.processing_update_action = QAction(self.tr("Rename"))
         self.processing_restart_action = QAction(self.tr("Restart"))
         self.processing_duplicate_action = QAction(self.tr("Duplicate"))
