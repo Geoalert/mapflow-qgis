@@ -646,6 +646,27 @@
            </layout>
           </item>
           <item>
+           <layout class="QHBoxLayout" name="samConfidenceThresholdLayout">
+            <item>
+             <widget class="QLabel" name="samConfidenceThresholdLabel">
+              <property name="text">
+               <string>Confidence threshold:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="samConfidenceThresholdInput">
+              <property name="placeholderText">
+               <string>Optional SAM confidence threshold (0-1)</string>
+              </property>
+              <property name="clearButtonEnabled">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
            <widget class="QPushButton" name="startSamProcessing">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Expanding" vsizetype="Fixed">

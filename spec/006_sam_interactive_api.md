@@ -37,13 +37,15 @@ It shares the same base URL and authentication as the main Mapflow API (`config.
 |--------|------|-------------|
 | POST | `/sessions` | Create a session (processing + prompt) |
 | GET | `/sessions/{id}` | Get session detail (includes inferences) |
+| GET | `/sessions/{id}/prompts` | Get frozen prompt snapshot for a session |
 | POST | `/sessions/{id}/copy` | Copy a session |
+| POST | `/sessions/{id}/inferences` | Create an inference for an existing session |
 
 ### Inference Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/inference` | Create an inference run |
+| POST | `/inference` | Create a new session and the first inference |
 | GET | `/inference/{id}` | Get inference status |
 
 ### Result Endpoints
@@ -61,6 +63,7 @@ It shares the same base URL and authentication as the main Mapflow API (`config.
   "projectId": "string",
   "promptId": "UUID | null",
   "text_prompt": "string | null",
+  "confidence_threshold": "float | null",
   "geometry": "GeoJSON",
   "params": {"sourceParams": {}, "inferenceParams": {}},
   "description": "string | null",
@@ -68,6 +71,28 @@ It shares the same base URL and authentication as the main Mapflow API (`config.
 }
 ```
 - `promptId` and `text_prompt` are mutually exclusive.
+- `confidence_threshold` is optional and SAM-specific; when provided it must be a float in the `[0, 1]` range.
+
+### InferenceCreateRequest
+```json
+{
+  "prompt_id": "UUID",
+  "workflow_id": "UUID",
+  "geometry": "GeoJSON",
+  "confidence_threshold": "float | null"
+}
+```
+- `confidence_threshold` is optional and SAM-specific; when provided it must be a float in the `[0, 1]` range.
+
+### SessionInferenceCreateRequest
+```json
+{
+  "workflow_id": "UUID",
+  "geometry": "GeoJSON",
+  "confidence_threshold": "float | null"
+}
+```
+- `confidence_threshold` is optional and SAM-specific; when provided it must be a float in the `[0, 1]` range.
 
 ### ProcessingSummaryResponse
 ```json

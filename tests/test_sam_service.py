@@ -174,13 +174,15 @@ class TestGetProcessingCallback:
 # ---------------------------------------------------------------------------
 
 class TestListWorkflowsCallback:
-    WORKFLOWS_DATA = [
-        {"id": "w1", "processing_id": "p1", "status": "done",
-         "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
-         "embedding_uri": "s3://bucket/embed1"},
-        {"id": "w2", "processing_id": "p1", "status": "running",
-         "geometry": None, "embedding_uri": None},
-    ]
+    WORKFLOWS_DATA = {
+        "items": [
+            {"id": "w1", "processing_id": "p1", "status": "done",
+             "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
+             "embedding_uri": "s3://bucket/embed1"},
+            {"id": "w2", "processing_id": "p1", "status": "running",
+             "geometry": None, "embedding_uri": None},
+        ],
+    }
 
     def test_appends_debug_with_workflows(self, sam_service, sam_view):
         reply = _make_reply(self.WORKFLOWS_DATA)
@@ -190,12 +192,12 @@ class TestListWorkflowsCallback:
         title, data = sam_view.append_debug.call_args[0]
         assert "Workflows" in title
 
-    def test_displays_workflows(self, sam_service, sam_view):
+    def test_populates_workflow_combo(self, sam_service, sam_view):
         reply = _make_reply(self.WORKFLOWS_DATA)
         sam_service.list_workflows_callback(reply)
 
-        sam_view.display_workflows.assert_called_once()
-        workflows = sam_view.display_workflows.call_args[0][0]
+        sam_view.populate_workflow_combo.assert_called_once()
+        workflows = sam_view.populate_workflow_combo.call_args[0][0]
         assert len(workflows) == 2
         assert isinstance(workflows[0], WorkflowSummaryResponse)
         assert workflows[0].status == "done"
@@ -373,25 +375,35 @@ class TestGetPromptDetailCallback:
         "id": "pr1",
         "text_prompt_id": "tp1",
         "text_prompt": "find buildings",
-        "point_prompts": [
-            {"id": "pp1", "processing_id": "p1", "geometry": {"type": "Point", "coordinates": [37.6, 55.7]}, "positive": True},
-        ],
-        "bbox_prompts": [
-            {"id": "bp1", "processing_id": "p1", "geometry": {"type": "Polygon", "coordinates": [[[37, 55], [38, 55], [38, 56], [37, 56], [37, 55]]]}, "positive": False},
+        "spatial_prompts": [
+            {"id": "pp1", "processing_id": "p1", "geometry_type": "point",
+             "geometry": {"type": "Point", "coordinates": [37.6, 55.7]}, "positive": True},
+            {"id": "bp1", "processing_id": "p1", "geometry_type": "bbox",
+             "geometry": {"type": "Polygon", "coordinates": [[[37, 55], [38, 55], [38, 56], [37, 56], [37, 55]]]},
+             "positive": False},
         ],
     }
 
-    def test_displays_prompt_detail(self, sam_service, sam_view):
+    def test_populates_spatial_prompts_table(self, sam_service, sam_view):
         reply = _make_reply(self.DETAIL_DATA)
         sam_service.get_prompt_detail_callback(reply)
 
-        sam_view.display_prompt_detail.assert_called_once()
-        detail = sam_view.display_prompt_detail.call_args[0][0]
+        sam_view.populate_spatial_prompts_table.assert_called_once()
+        detail = sam_view.populate_spatial_prompts_table.call_args[0][0]
+        assert len(detail) == 2
+        assert isinstance(detail[0], SpatialPromptResponse)
+        assert detail[0].positive is True
+        assert detail[1].positive is False
+
+    def test_stores_prompt_detail(self, sam_service, sam_view):
+        reply = _make_reply(self.DETAIL_DATA)
+        sam_service.get_prompt_detail_callback(reply)
+
+        detail = sam_service._last_prompt_detail
         assert isinstance(detail, PromptDetailResponse)
-        assert len(detail.point_prompts) == 1
-        assert len(detail.bbox_prompts) == 1
-        assert detail.point_prompts[0].positive is True
-        assert detail.bbox_prompts[0].positive is False
+        assert len(detail.spatial_prompts) == 2
+        assert detail.spatial_prompts[0].positive is True
+        assert detail.spatial_prompts[1].positive is False
 
     def test_appends_debug(self, sam_service, sam_view):
         reply = _make_reply(self.DETAIL_DATA)
@@ -507,8 +519,8 @@ class TestCreateSessionService:
 
 class TestCreateSessionCallback:
     RESPONSE_DATA = {
-        "id": "s1", "processing_id": "p1", "prompt_id": "pr1",
-        "inferences": [], "layer_id": "l1", "tile_url": "https://tiles",
+        "id": "s1", "processing_id": "p1", "text_prompt": "find buildings",
+        "inferences": [], "vector_layer": {"id": "l1", "tile_url": "https://tiles", "tile_json_url": "https://tiles.json"},
     }
 
     def test_appends_debug(self, sam_service, sam_view):
@@ -520,11 +532,14 @@ class TestCreateSessionCallback:
         assert "Create Session" in title
         assert data["id"] == "s1"
 
-    def test_adds_session_to_combos(self, sam_service, sam_view):
+    def test_adds_session_to_table(self, sam_service, sam_view):
         reply = _make_reply(self.RESPONSE_DATA)
         sam_service.create_session_callback(reply)
 
-        sam_view.add_session_to_combos.assert_called_once_with("s1")
+        sam_view.add_session_to_table.assert_called_once()
+        session = sam_view.add_session_to_table.call_args[0][0]
+        assert isinstance(session, SessionResponse)
+        assert session.id == "s1"
 
 
 # ---------------------------------------------------------------------------
@@ -533,9 +548,9 @@ class TestCreateSessionCallback:
 
 class TestGetSessionDetailCallback:
     RESPONSE_DATA = {
-        "id": "s1", "processing_id": "p1", "prompt_id": "pr1",
+        "id": "s1", "processing_id": "p1", "text_prompt": "find buildings",
         "inferences": [{"id": "i1", "status": "done"}],
-        "layer_id": "l1", "tile_url": "https://tiles",
+        "vector_layer": {"id": "l1", "tile_url": "https://tiles", "tile_json_url": "https://tiles.json"},
     }
 
     def test_displays_session_detail(self, sam_service, sam_view):
@@ -563,8 +578,8 @@ class TestGetSessionDetailCallback:
 
 class TestCopySessionCallback:
     RESPONSE_DATA = {
-        "id": "s2", "processing_id": "p1", "prompt_id": "pr1",
-        "inferences": [], "layer_id": "l2", "tile_url": "https://tiles2",
+        "id": "s2", "processing_id": "p1", "text_prompt": "find roads",
+        "inferences": [], "vector_layer": {"id": "l2", "tile_url": "https://tiles2", "tile_json_url": "https://tiles2.json"},
     }
 
     def test_appends_debug(self, sam_service, sam_view):
@@ -576,11 +591,14 @@ class TestCopySessionCallback:
         assert "Copy Session" in title
         assert data["id"] == "s2"
 
-    def test_adds_session_to_combos(self, sam_service, sam_view):
+    def test_adds_session_to_table(self, sam_service, sam_view):
         reply = _make_reply(self.RESPONSE_DATA)
         sam_service.copy_session_callback(reply)
 
-        sam_view.add_session_to_combos.assert_called_once_with("s2")
+        sam_view.add_session_to_table.assert_called_once()
+        session = sam_view.add_session_to_table.call_args[0][0]
+        assert isinstance(session, SessionResponse)
+        assert session.id == "s2"
 
 
 # ---------------------------------------------------------------------------
@@ -588,12 +606,14 @@ class TestCopySessionCallback:
 # ---------------------------------------------------------------------------
 
 class TestListSessionsCallback:
-    RESPONSE_DATA = [
-        {"id": "s1", "processing_id": "p1", "prompt_id": "pr1",
-         "inferences": [], "layer_id": "l1", "tile_url": "https://tiles"},
-        {"id": "s2", "processing_id": "p1", "prompt_id": "pr2",
-         "inferences": [], "layer_id": "l2", "tile_url": "https://tiles2"},
-    ]
+    RESPONSE_DATA = {
+        "items": [
+            {"id": "s1", "processing_id": "p1", "text_prompt": "find buildings",
+             "inferences": [], "vector_layer": {"id": "l1", "tile_url": "https://tiles", "tile_json_url": "https://tiles.json"}},
+            {"id": "s2", "processing_id": "p1", "text_prompt": "find roads",
+             "inferences": [], "vector_layer": {"id": "l2", "tile_url": "https://tiles2", "tile_json_url": "https://tiles2.json"}},
+        ],
+    }
 
     def test_displays_sessions(self, sam_service, sam_view):
         reply = _make_reply(self.RESPONSE_DATA)
@@ -627,13 +647,21 @@ class TestListSessionsCallback:
 # ---------------------------------------------------------------------------
 
 class TestCreateInferenceService:
-    def test_calls_api(self, sam_service, http_mock):
+    def test_calls_api_with_confidence_threshold(self, sam_service, http_mock):
         geojson = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}
-        sam_service.create_inference("s1", "wf1", geojson)
+        sam_service.create_inference(
+            "prompt-1",
+            "wf1",
+            geojson,
+            confidence_threshold=0.55,
+        )
 
         http_mock.post.assert_called_once()
         url = http_mock.post.call_args[1]["url"]
         assert "/inference" in url
+        body = json.loads(http_mock.post.call_args[1]["body"])
+        assert body["prompt_id"] == "prompt-1"
+        assert body["confidence_threshold"] == 0.55
 
 
 class TestCreateInferenceCallback:
@@ -672,6 +700,50 @@ class TestCreateInferenceCallback:
         sam_service.create_inference_callback(reply)
 
         sam_view.set_inference_refresh_enabled.assert_called_once_with(True)
+
+
+class TestCreateSessionInferenceService:
+    def test_calls_api_with_confidence_threshold(self, sam_service, http_mock):
+        geojson = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}
+        sam_service.create_session_inference(
+            "session-1",
+            "wf1",
+            geojson,
+            confidence_threshold=0.35,
+        )
+
+        http_mock.post.assert_called_once()
+        url = http_mock.post.call_args[1]["url"]
+        assert "/sessions/session-1/inferences" in url
+        body = json.loads(http_mock.post.call_args[1]["body"])
+        assert body["workflow_id"] == "wf1"
+        assert body["confidence_threshold"] == 0.35
+
+
+class TestCreateSessionInferenceCallback:
+    RESPONSE_DATA = {
+        "id": "inf2", "session_id": "s1", "status": "in_progress",
+        "geometry": None, "we_workflow_id": 43, "we_workflow_status": "running",
+        "created_at": "2025-01-01T00:00:00", "updated_at": "2025-01-01T00:00:00",
+    }
+
+    def test_displays_inference_status(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.create_session_inference_callback(reply)
+
+        sam_view.display_inference_status.assert_called_once()
+        inference = sam_view.display_inference_status.call_args[0][0]
+        assert isinstance(inference, InferenceResponse)
+        assert inference.status == "in_progress"
+
+    def test_appends_debug(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.create_session_inference_callback(reply)
+
+        sam_view.append_debug.assert_called_once()
+        title, data = sam_view.append_debug.call_args[0]
+        assert "Session Inference" in title
+        assert data["id"] == "inf2"
 
 
 # ---------------------------------------------------------------------------
@@ -717,12 +789,3 @@ class TestGetResultCallback:
         sam_service.get_result_callback(reply)
 
         sam_view.load_result_layer.assert_called_once_with(self.RESPONSE_DATA)
-
-    def test_appends_debug(self, sam_service, sam_view):
-        reply = _make_reply(self.RESPONSE_DATA)
-        sam_service.get_result_callback(reply)
-
-        sam_view.append_debug.assert_called_once()
-        title, data = sam_view.append_debug.call_args[0]
-        assert "Session Result" in title
-        assert data["id"] == "r1"

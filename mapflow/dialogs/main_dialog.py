@@ -5,7 +5,7 @@ from datetime import datetime
 
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QPalette
+from PyQt5.QtGui import QPalette, QDoubleValidator
 from PyQt5.QtWidgets import (QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton, 
                              QAction, QMenu, QAbstractItemView, QHeaderView, QVBoxLayout, QButtonGroup, QTableWidget)
 from qgis.core import QgsMapLayerProxyModel, QgsSettings
@@ -40,6 +40,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.polygonCombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
         # Don't allow to change path directly (without ... and selection in file dialog) to avoid errors
         self.outputDirectory.setReadOnly(True)
+        sam_confidence_validator = QDoubleValidator(0.0, 1.0, 6, self)
+        sam_confidence_validator.setNotation(QDoubleValidator.StandardNotation)
+        self.samConfidenceThresholdInput.setValidator(sam_confidence_validator)
         # Set icons (can be done in .ui but brings about the resources_rc import bug)
         self.setWindowIcon(icons.plugin_icon)
         self.addProvider.setIcon(icons.plus_icon)

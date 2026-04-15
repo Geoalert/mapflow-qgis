@@ -23,6 +23,12 @@ Reference: `WAL_4_exploration.md` for full API docs and architecture findings.
 - Tests not runnable locally (QGIS runtime required by `conftest.py`)
 - Branch not pushed — needs `agent-git` auth or manual `git push -u origin feature/sam-interactive-api`
 
+### Follow-up: SAM confidence threshold
+- Add SAM-only `confidence_threshold` input below the existing SAM `text_prompt` field in `processingsTab`
+- Validate optional values as floats in the `[0, 1]` range
+- Pass `confidence_threshold` to both `POST /sam-interactive/processings` and SAM inference creation endpoints
+- Update `spec/006_sam_interactive_api.md` to document the request field on processing and inference APIs
+
 ## Design Decisions
 
 1. **Base URL**: Same as existing Mapflow API (`config.SERVER`)

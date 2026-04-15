@@ -14,6 +14,7 @@ from qgis.gui import QgsMapCanvas
 from ..map_tools import SamPointMapTool, SamBboxMapTool
 from ..service.sam import SamService
 from ...dialogs.main_dialog import MainDialog
+from ...schema.sam import parse_confidence_threshold
 
 
 class SamController(QObject):
@@ -229,6 +230,11 @@ class SamController(QObject):
             self._canvas.setMapTool(self._prev_map_tool)
             self._prev_map_tool = None
 
+    def _confidence_threshold(self):
+        return parse_confidence_threshold(
+            self.dlg.samConfidenceThresholdInput.text()
+        )
+
     # ------------------------------------------------------------------
     # Sessions
     # ------------------------------------------------------------------
@@ -295,8 +301,17 @@ class SamController(QObject):
                 {"error": "Select prompt, workflow, and AOI first"},
             )
             return
+        confidence_threshold, threshold_error = self._confidence_threshold()
+        if threshold_error:
+            self.view.append_debug("Run Inference", {"error": threshold_error})
+            return
         geometry = json.loads(aoi.asJson())
-        self.service.create_inference(prompt_id, workflow_id, geometry)
+        self.service.create_inference(
+            prompt_id,
+            workflow_id,
+            geometry,
+            confidence_threshold=confidence_threshold,
+        )
 
     def _run_session_inference(self):
         """Add inference to an existing session."""
@@ -309,8 +324,17 @@ class SamController(QObject):
                 {"error": "Select session, workflow, and AOI first"},
             )
             return
+        confidence_threshold, threshold_error = self._confidence_threshold()
+        if threshold_error:
+            self.view.append_debug("Session Inference", {"error": threshold_error})
+            return
         geometry = json.loads(aoi.asJson())
-        self.service.create_session_inference(session_id, workflow_id, geometry)
+        self.service.create_session_inference(
+            session_id,
+            workflow_id,
+            geometry,
+            confidence_threshold=confidence_threshold,
+        )
 
     def _refresh_inference_status(self):
         inference_id = getattr(self.service, '_current_inference_id', None)

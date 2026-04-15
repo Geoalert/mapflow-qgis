@@ -6,7 +6,7 @@ Follows existing conventions:
 """
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, List, Union, Mapping, Any
+from typing import Optional, List, Union, Mapping, Any, Tuple
 
 from ..schema.processing import PostSourceSchema, PostProviderSchema
 from .base import Serializable, SkipDataClass
@@ -16,6 +16,29 @@ from .base import Serializable, SkipDataClass
 # Request schemas
 # ---------------------------------------------------------------------------
 
+
+def parse_confidence_threshold(
+    raw_value: Optional[Union[str, float, int]]
+) -> Tuple[Optional[float], Optional[str]]:
+    """Parse an optional SAM confidence threshold from UI or request input."""
+    if raw_value is None:
+        return None, None
+
+    if isinstance(raw_value, str):
+        raw_value = raw_value.strip()
+        if not raw_value:
+            return None, None
+
+    try:
+        confidence_threshold = float(raw_value)
+    except (TypeError, ValueError):
+        return None, "Confidence threshold must be a number between 0 and 1."
+
+    if confidence_threshold < 0 or confidence_threshold > 1:
+        return None, "Confidence threshold must be between 0 and 1."
+
+    return confidence_threshold, None
+
 @dataclass
 class ProcessingCreateRequest(Serializable):
     name: str
@@ -24,6 +47,7 @@ class ProcessingCreateRequest(Serializable):
     params: Union[PostSourceSchema, PostProviderSchema]
     promptId: Optional[str] = None
     text_prompt: Optional[str] = None
+    confidence_threshold: Optional[float] = None
     description: Optional[str] = None
     meta: Optional[dict] = None
 
@@ -67,6 +91,7 @@ class InferenceCreateRequest(Serializable):
     prompt_id: str
     workflow_id: str
     geometry: dict  # GeoJSON
+    confidence_threshold: Optional[float] = None
 
 
 @dataclass
@@ -74,6 +99,7 @@ class SessionInferenceCreateRequest(Serializable):
     """POST /sessions/{id}/inferences — add inference to existing session."""
     workflow_id: str
     geometry: dict  # GeoJSON
+    confidence_threshold: Optional[float] = None
 
 
 @dataclass

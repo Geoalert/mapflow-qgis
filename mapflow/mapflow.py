@@ -66,7 +66,11 @@ from .functional.service.data_catalog import DataCatalogService
 from .functional.api.sam_api import SamApi
 from .functional.service.sam import SamService
 from .functional.controller.sam_controller import SamController
-from .schema.sam import ProcessingCreateRequest, MapflowProcessingResponse
+from .schema.sam import (
+    ProcessingCreateRequest,
+    MapflowProcessingResponse,
+    parse_confidence_threshold,
+)
 from .http import (Http,
                    get_error_report_body,
                    data_catalog_message_parser,
@@ -2138,12 +2142,17 @@ class Mapflow(QObject):
                                'to top up your balance'),
                        icon=QMessageBox.Warning)
             return
-        # Validate SAM text prompt early (before confirmation dialog)
+        sam_confidence_threshold = None
+        # Validate SAM-specific inputs early (before confirmation dialog)
         if self._is_sam_processing(processing_params):
             text_prompt = self.dlg.samTextPromptInput.text().strip()
             if not text_prompt:
                 self.alert(self.tr("Text prompt is required for SAM processing."),
                            icon=QMessageBox.Warning)
+                return
+            sam_confidence_threshold, threshold_error = self._parse_sam_confidence_threshold()
+            if threshold_error:
+                self.alert(self.tr(threshold_error), icon=QMessageBox.Warning)
                 return
         # Define starting to use later after confirmation or without it
         def start_processing():
@@ -2151,7 +2160,10 @@ class Mapflow(QObject):
             try:
                 self.dlg.startProcessing.setEnabled(False)
                 if self._is_sam_processing(processing_params):
-                    self._post_sam_processing(processing_params)
+                    self._post_sam_processing(
+                        processing_params,
+                        confidence_threshold=sam_confidence_threshold,
+                    )
                 else:
                     self.post_processing(processing_params)
             except Exception as e:
@@ -2232,7 +2244,16 @@ class Mapflow(QObject):
         """Check if the processing should be routed to SAM API."""
         return self.sam_wdid is not None and processing_params.wdId == self.sam_wdid
 
-    def _post_sam_processing(self, base_request: PostProcessingSchemaV2) -> None:
+    def _parse_sam_confidence_threshold(self) -> Tuple[Optional[float], Optional[str]]:
+        return parse_confidence_threshold(
+            self.dlg.samConfidenceThresholdInput.text()
+        )
+
+    def _post_sam_processing(
+        self,
+        base_request: PostProcessingSchemaV2,
+        confidence_threshold: Optional[float] = None,
+    ) -> None:
         """Route processing creation through SAM Interactive API."""
         text_prompt = self.dlg.samTextPromptInput.text().strip()
         request = ProcessingCreateRequest(
@@ -2241,6 +2262,7 @@ class Mapflow(QObject):
             geometry=base_request.geometry,
             params=base_request.params,
             text_prompt=text_prompt,
+            confidence_threshold=confidence_threshold,
             meta=base_request.meta,
         )
         self.sam_api.create_processing(request, callback=self._post_sam_processing_callback)
@@ -2275,6 +2297,10 @@ class Mapflow(QObject):
             return
 
         text_prompt = self.dlg.samTextPromptInput.text().strip() or None
+        confidence_threshold, threshold_error = self._parse_sam_confidence_threshold()
+        if threshold_error:
+            self.alert(self.tr(threshold_error), icon=QMessageBox.Warning)
+            return
 
         request = ProcessingCreateRequest(
             name=base_request.name,
@@ -2282,6 +2308,7 @@ class Mapflow(QObject):
             geometry=base_request.geometry,
             params=base_request.params,
             text_prompt=text_prompt,
+            confidence_threshold=confidence_threshold,
             meta=base_request.meta,
         )
 

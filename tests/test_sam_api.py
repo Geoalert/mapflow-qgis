@@ -13,8 +13,10 @@ from mapflow.schema.sam import (
     PointPromptRequest,
     BboxPromptRequest,
     SessionCreateRequest,
+    SessionInferenceCreateRequest,
     SessionNameUpdateRequest,
     InferenceCreateRequest,
+    parse_confidence_threshold,
 )
 
 SERVER = "https://whitemaps-test.mapflow.ai/rest"
@@ -50,7 +52,9 @@ class TestCreateProcessing:
             name="test-proc",
             projectId="proj-1",
             geometry={"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
+            params={"sourceParams": {}},
             text_prompt="detect buildings",
+            confidence_threshold=0.65,
         )
         api.create_processing(request, callback=_noop)
 
@@ -59,7 +63,9 @@ class TestCreateProcessing:
         assert call_kwargs["url"] == f"{SERVER}/processings"
         body = json.loads(call_kwargs["body"].decode())
         assert body["name"] == "test-proc"
-        assert body["prompt"] == "detect buildings"
+        assert body["text_prompt"] == "detect buildings"
+        assert body["confidence_threshold"] == 0.65
+        assert body["params"] == {"sourceParams": {}}
         assert "geometry" in body
 
 
@@ -278,17 +284,36 @@ class TestCreateInference:
     def test_calls_post(self, http_mock):
         api = SamApi(http=http_mock, server=SERVER)
         request = InferenceCreateRequest(
-            session_id="sess-1",
+            prompt_id="prompt-1",
             workflow_id="wf-1",
             geometry={"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
+            confidence_threshold=0.8,
         )
         api.create_inference(request, callback=_noop)
 
         call_kwargs = http_mock.post.call_args[1]
         assert call_kwargs["url"] == f"{SERVER}/inference"
         body = json.loads(call_kwargs["body"].decode())
-        assert body["session_id"] == "sess-1"
+        assert body["prompt_id"] == "prompt-1"
         assert body["workflow_id"] == "wf-1"
+        assert body["confidence_threshold"] == 0.8
+
+
+class TestCreateSessionInference:
+    def test_calls_post(self, http_mock):
+        api = SamApi(http=http_mock, server=SERVER)
+        request = SessionInferenceCreateRequest(
+            workflow_id="wf-1",
+            geometry={"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
+            confidence_threshold=0.25,
+        )
+        api.create_session_inference("sess-1", request, callback=_noop)
+
+        call_kwargs = http_mock.post.call_args[1]
+        assert call_kwargs["url"] == f"{SERVER}/sessions/sess-1/inferences"
+        body = json.loads(call_kwargs["body"].decode())
+        assert body["workflow_id"] == "wf-1"
+        assert body["confidence_threshold"] == 0.25
 
 
 class TestGetInference:
@@ -338,15 +363,15 @@ class TestSchemas:
         data = {
             "id": "p1",
             "text_prompt": "find trees",
-            "point_prompts": [
-                {"id": "pp1", "processing_id": "proc-1", "positive": True,
+            "spatial_prompts": [
+                {"id": "pp1", "processing_id": "proc-1", "geometry_type": "point", "positive": True,
                  "geometry": {"type": "Point", "coordinates": [0, 0]}},
             ],
-            "bbox_prompts": [],
         }
         resp = PromptDetailResponse.from_dict(data)
-        assert len(resp.point_prompts) == 1
-        assert resp.point_prompts[0].positive is True
+        assert len(resp.spatial_prompts) == 1
+        assert resp.spatial_prompts[0].positive is True
+        assert resp.spatial_prompts[0].geometry_type == "point"
 
     def test_session_response_parses_inferences(self):
         from mapflow.schema.sam import SessionResponse
@@ -373,6 +398,24 @@ class TestSchemas:
         body = request.as_dict()
         assert body["processing_id"] == "p1"
         assert body["positive"] is True
+
+    def test_parse_confidence_threshold_accepts_blank(self):
+        value, error = parse_confidence_threshold("")
+
+        assert value is None
+        assert error is None
+
+    def test_parse_confidence_threshold_accepts_value(self):
+        value, error = parse_confidence_threshold("0.4")
+
+        assert value == 0.4
+        assert error is None
+
+    def test_parse_confidence_threshold_rejects_out_of_range_value(self):
+        value, error = parse_confidence_threshold("1.5")
+
+        assert value is None
+        assert error == "Confidence threshold must be between 0 and 1."
 
     def test_inference_response_parses_all_fields(self):
         from mapflow.schema.sam import InferenceResponse
