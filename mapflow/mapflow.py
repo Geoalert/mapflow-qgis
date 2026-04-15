@@ -314,6 +314,7 @@ class Mapflow(QObject):
         self.processing_service.connect_processings_pagination()
         # Processings ratings
         self.dlg.processingsTable.itemSelectionChanged.connect(self.enable_feedback)
+        self.dlg.processingsTable.itemSelectionChanged.connect(self.on_processings_selection_changed)
         self.dlg.ratingSubmitButton.clicked.connect(self.submit_processing_rating)
         self.dlg.enable_rating(False, False)  # by default disabled
         self.dlg.enable_review(False)
@@ -337,6 +338,7 @@ class Mapflow(QObject):
         self.dlg.removeProvider.clicked.connect(self.remove_provider)
 
         self.config_search_columns = ConfigColumns()
+        self.active_template_id = None
         self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
             self.sync_table_selection_with_image_id_and_layer)
         self.app_context.meta_layer_table_connection = None
@@ -420,11 +422,186 @@ class Mapflow(QObject):
     def setup_options_menu_connections(self):
         self.dlg.save_result_action.triggered.connect(self.download_results_file)
         self.dlg.download_aoi_action.triggered.connect(self.download_aoi_file)
-        self.dlg.see_details_action.triggered.connect(self.show_details)
+        self.dlg.see_details_action.triggered.connect(self.show_selected_details)
+        self.dlg.see_processings_action.triggered.connect(self.select_template_processings)
+        self.dlg.see_search_results_action.triggered.connect(self.show_template_search_results)
         self.dlg.processing_update_action.triggered.connect(self.processing_service.update_processing)
         self.dlg.processing_restart_action.triggered.connect(self.processing_service.restart_processing)
         self.dlg.processing_duplicate_action.triggered.connect(self.check_dir_and_duplicate_processing)
+        self.dlg.options_menu.aboutToShow.connect(self.update_processing_options_menu)
         self.dlg.saveOptionsButton.setMenu(self.dlg.options_menu)
+
+    def update_processing_options_menu(self):
+        """Render processing options menu depending on selected row type."""
+        menu = self.dlg.options_menu
+        menu.clear()
+
+        selected_template = self.processing_service.selected_template()
+        selected_processing = self.processing_service.selected_processing()
+
+        # Template selection: only template details action.
+        if selected_template and not selected_processing:
+            menu.addAction(self.dlg.see_details_action)
+            menu.addAction(self.dlg.see_search_results_action)
+            menu.addAction(self.dlg.see_processings_action)
+            return
+
+        # Processing selection: show processing-related actions.
+        if not selected_processing:
+            return
+
+        menu.addAction(self.dlg.save_result_action)
+        menu.addAction(self.dlg.download_aoi_action)
+        menu.addAction(self.dlg.see_details_action)
+
+        if self.app_context.user_role.can_delete_rename_review_processing:
+            menu.addAction(self.dlg.processing_update_action)
+
+        if self.app_context.user_role.can_start_processing:
+            menu.addAction(self.dlg.processing_restart_action)
+            menu.addAction(self.dlg.processing_duplicate_action)
+
+    def show_selected_details(self):
+        """Open details based on selected entity type."""
+        template = self.processing_service.selected_template()
+        if template and not self.processing_service.selected_processing():
+            self.show_template_details_and_navigation(template)
+            return
+        self.show_details()
+
+    def on_processings_selection_changed(self):
+        """Load template details into search UI when a template row is selected."""
+        selected_template = self.processing_service.selected_template()
+        selected_processing = self.processing_service.selected_processing()
+
+        if not selected_template or selected_processing:
+            self.active_template_id = None
+            return
+
+        template_id = str(selected_template.id)
+        if self.active_template_id == template_id:
+            return
+
+        self.active_template_id = template_id
+        self.processing_service.api.get_template(
+            template_id=selected_template.id,
+            callback=self.get_selected_template_callback,
+        )
+
+    def get_selected_template_callback(self, response: QNetworkReply):
+        """Render selected template search results in the search table."""
+        response_data = json.loads(response.readAll().data())
+        template_data = response_data.get("template") or response_data
+        search_results = response_data.get("searchResults") or template_data.get("searchResults") or []
+        self.populate_search_table_from_template(search_results)
+
+    def populate_search_table_from_template(self, search_results: List[dict]):
+        """Populate search table with search results returned for a selected template."""
+        self.dlg.metadataTable.clearSelection()
+        self.dlg.metadataTable.setSortingEnabled(False)
+        self.dlg.metadataTable.setRowCount(len(search_results))
+
+        for row, result in enumerate(search_results):
+            metadata = result.get("metadata") or {}
+            if metadata.get("id") is None:
+                metadata["id"] = result.get("id")
+            metadata["local_index"] = row
+
+            for col, attr in enumerate(self.config_search_columns.METADATA_TABLE_ATTRIBUTES.values()):
+                item = QTableWidgetItem()
+                item.setData(Qt.DisplayRole, metadata.get(attr))
+                self.dlg.metadataTable.setItem(row, col, item)
+
+        self.dlg.metadataTable.setSortingEnabled(True)
+        self.dlg.metadataTable.resizeColumnsToContents()
+
+    def _linked_processings_from_template(self, template) -> List[dict]:
+        """Extract processing links from template AOI details."""
+        links = []
+        search_params = template.searchParams or {}
+        if isinstance(search_params, dict):
+            aoi_details = search_params.get("aoiDetails", {})
+        else:
+            aoi_details = search_params.aoiDetails
+        for feature in aoi_details.get("features", []):
+            feature_processings = feature.get("properties", {}).get("processings", [])
+            links.extend(feature_processings)
+        return links
+
+    def show_template_details_and_navigation(self, template):
+        """Show template summary."""
+        linked_processings = self._linked_processings_from_template(template)
+        linked_count = len(linked_processings)
+        new_images = template.newImagesCount or 0
+
+        details = (
+            f"<b>{template.name}</b><br/>"
+            f"<b>Status:</b> {template.status}<br/>"
+            f"<b>Created:</b> {template.createdAt.strftime('%Y-%m-%d %H:%M')}<br/>"
+            f"<b>Active Until:</b> {template.activeUntil.strftime('%Y-%m-%d %H:%M')}<br/>"
+            f"<b>Linked processings:</b> {linked_count}<br/>"
+            f"<b>New images:</b> {new_images}"
+        )
+
+        alert(details, QMessageBox.Information)
+
+    def select_template_processings(self):
+        """Select all processings in the table that were launched from selected template."""
+        template = self.processing_service.selected_template()
+        if not template or self.processing_service.selected_processing():
+            return
+
+        links = self._linked_processings_from_template(template)
+        linked_ids = [str(item.get("processingId")) for item in links if item.get("processingId")]
+        if not linked_ids:
+            alert(self.tr("No linked processings found for this template"), QMessageBox.Information)
+            return
+
+        table = self.dlg.processingsTable
+        id_column_index = self.config.PROCESSING_TABLE_ID_COLUMN_INDEX
+        table.clearSelection()
+
+        selected_count = 0
+        for processing_id in linked_ids:
+            id_items = table.findItems(processing_id, Qt.MatchExactly)
+            for item in id_items:
+                if item.column() == id_column_index:
+                    table.selectRow(item.row())
+                    selected_count += 1
+                    break
+
+        if selected_count == 0:
+            alert(self.tr("Linked processings are not visible on the current page"), QMessageBox.Information)
+
+    def show_template_search_results(self):
+        """Open imagery search tab and fill it with selected template search results."""
+        template = self.processing_service.selected_template()
+        if not template or self.processing_service.selected_processing():
+            return
+
+        imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
+        if imagery_search_tab:
+            self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
+
+        self.processing_service.api.get_template(
+            template_id=template.id,
+            callback=self.get_selected_template_callback,
+        )
+
+    def select_processing_in_table(self, processing_id: str):
+        """Select processing row by ID and open processing details."""
+        id_column_index = self.config.PROCESSING_TABLE_ID_COLUMN_INDEX
+        id_items = self.dlg.processingsTable.findItems(str(processing_id), Qt.MatchExactly)
+
+        for item in id_items:
+            if item.column() != id_column_index:
+                continue
+            row = item.row()
+            self.dlg.processingsTable.clearSelection()
+            self.dlg.processingsTable.selectRow(row)
+            self.dlg.processingsTable.scrollToItem(item)
+            self.show_details()
+            return
 
     def create_aoi_layer_from_map(self, action: QAction):
         aoi_geometry = helpers.to_wgs84(
@@ -2175,6 +2352,12 @@ class Mapflow(QObject):
 
     # =================== Results management ==================== #
     def load_results(self):
+        # Check if it's a template first
+        template = self.processing_service.selected_template()
+        if template:
+            return
+        
+        # Otherwise, it's a processing
         processing = self.processing_service.selected_processing()
         if not processing:
             return

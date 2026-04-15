@@ -88,6 +88,7 @@ class ImagerySearchSchema(Serializable):
     dataProvider: str
     imageIds: List[str]
     zoom: int
+    searchId: Optional[str] = None
 
 
 @dataclass
@@ -130,6 +131,7 @@ class ProcessingParams(Serializable, SkipDataClass):
         elif source_params.get("myImagery"):
             source_params = MyImageryParams(MyImagerySchema(**source_params.get("myImagery")))
         elif source_params.get("imagerySearch"):
+            print (str(source_params))
             source_params = ImagerySearchParams(ImagerySearchSchema(**source_params.get("imagerySearch")))
         elif source_params.get("userDefined"):
             source_params = UserDefinedParams(UserDefinedSchema(**source_params.get("userDefined")))
@@ -148,6 +150,122 @@ class PostProcessingSchemaV2(Serializable):
     params: ProcessingParams
     meta: Optional[Mapping[str, Any]]
     blocks: Optional[Iterable[BlockOption]]
+
+
+def _parse_iso_datetime(dt_str: str) -> datetime:
+    """Parse ISO 8601 datetime strings with or without microseconds."""
+    if not dt_str:
+        return None
+    # Handle both formats: with and without microseconds
+    # e.g., "2025-09-26T06:25:55.820336Z" or "2026-03-15T17:00:00Z"
+    try:
+        # Try format with microseconds first
+        return datetime.strptime(dt_str, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=None).astimezone()
+    except ValueError:
+        # Fall back to format without microseconds
+        return datetime.strptime(dt_str, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=None).astimezone()
+
+
+@dataclass
+class SearchParams(Serializable, SkipDataClass):
+    aoiDetails: Mapping[str, Any]
+    acquisitionDateFrom: Optional[str] = None
+    acquisitionDateTo: Optional[str] = None
+    minResolution: Optional[float] = None
+    maxResolution: Optional[float] = None
+    maxCloudCover: Optional[float] = None
+    minOffNadirAngle: Optional[float] = None
+    maxOffNadirAngle: Optional[float] = None
+    minAoiIntersectionPercent: Optional[float] = None
+    maxAoiIntersectionPercent: Optional[float] = None
+    returnErrors: Optional[bool] = None
+    limit: Optional[int] = None
+    offset: Optional[int] = None
+    hideUnavailable: Optional[bool] = None
+    dataProviders: Optional[List[str]] = None
+    productTypes: Optional[List[str]] = None
+
+
+@dataclass
+class ProcessingTemplateDTO(Serializable, SkipDataClass):
+    id: UUID
+    name: str
+    status: str
+    createdAt: datetime
+    userId: UUID
+    searchParams: SearchParams
+    projectId: UUID
+    activeUntil: datetime
+    processingParams: Optional[Mapping[str, Any]] = None
+    lastCheckedAt: Optional[datetime] = None
+    newImagesCount: Optional[int] = None
+    isActive: bool = False
+    isArchived: bool = False
+    maxAoiIntersectionPercent: Optional[float] = None
+
+    def __post_init__(self):
+        self.createdAt = _parse_iso_datetime(self.createdAt)
+        if self.lastCheckedAt:
+            self.lastCheckedAt = _parse_iso_datetime(self.lastCheckedAt)
+        self.activeUntil = _parse_iso_datetime(self.activeUntil)
+        if isinstance(self.searchParams, dict):
+            self.searchParams = SearchParams.from_dict(self.searchParams)
+
+    @property
+    def is_template(self) -> bool:
+        return True
+
+    def as_processing_table_dict(self):
+        return {
+            "name": self.name,
+            "workflowDef": "Template",
+            "status": self.status,
+            "percentCompleted": None,
+            "aoiArea": None,
+            "cost": None,
+            "created": self.createdAt.strftime('%Y-%m-%d %H:%M'),
+            "reviewUntil": None,
+            "id": self.id,
+        }
+
+
+@dataclass
+class ProcessingTemplateDetails(Serializable, SkipDataClass):
+    template: ProcessingTemplateDTO
+
+    def __post_init__(self):
+        if isinstance(self.template, dict):
+            self.template = ProcessingTemplateDTO.from_dict(self.template)
+
+
+@dataclass
+class CreateProcessingTemplateSchema(Serializable, SkipDataClass):
+    name: str
+    searchParams: Mapping[str, Any]
+    processingParams: Mapping[str, Any]
+    projectId: str
+    activeUntil: str
+
+
+@dataclass
+class UpdateProcessingTemplateSchema(Serializable, SkipDataClass):
+    name: str
+    searchParams: Mapping[str, Any]
+    processingParams: Mapping[str, Any]
+    activeUntil: str
+
+
+@dataclass
+class RunTemplateProcessingSchema(Serializable, SkipDataClass):
+    name: str
+    description: Optional[str]
+    wdName: str
+    wdId: str
+    geometry: Mapping[str, Any]
+    params: Mapping[str, Any]
+    meta: Mapping[str, Any]
+    blocks: List[Mapping[str, Any]]
+    updateTemplateGeometry: bool
 
 
 @dataclass
@@ -181,7 +299,7 @@ class ProcessingDTO(Serializable, SkipDataClass):
 
     def __post_init__(self):
         self.status = ProcessingStatus(self.status)
-        self.created = datetime.strptime(self.created, '%Y-%m-%dT%H:%M:%S.%f%z').astimezone()
+        self.created = _parse_iso_datetime(self.created)
         self.params = ProcessingParams.from_dict(self.params)
         self.blocks = [BlockOption.from_dict(block) for block in self.blocks]
         self.workflowDef = WorkflowDef.from_dict(self.workflowDef)

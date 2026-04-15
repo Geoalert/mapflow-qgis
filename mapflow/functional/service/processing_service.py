@@ -23,6 +23,7 @@ from ..view.processing_view import ProcessingView
 from ..api.processing_api import ProcessingApi
 from ...schema import ProcessingDTO, UpdateProcessingSchema, ProcessingStatus, BillingType, ProcessingHistory, PostProcessingSchemaV2
 from ...schema.processing import ProcessingUIParams, ProcessingsRequest, ProcessingsResult
+from ...schema.processing import ProcessingTemplateDTO
 from ..service.alert_service import alert, AlertService
 from ..app_context import AppContext
 from ...config import Config
@@ -54,6 +55,7 @@ class ProcessingService(QObject):
                                  iface=iface,
                                  result_loader=self.result_loader)
         self.processings = {}
+        self.templates = {}
         self.processings_data = None  # ProcessingsResult
         self.processings_page_limit = Config.PROCESSINGS_PAGE_LIMIT
         self.processings_page_offset = 0
@@ -359,6 +361,22 @@ class ProcessingService(QObject):
         else:
             self.view.show_processings_pages(False)
         self.update_local_processings(processings)
+        self.api.get_templates(callback=self.get_templates_callback)
+
+    def get_templates_callback(self, response: QNetworkReply):
+        response_data = json.loads(response.readAll().data())
+        print (response_data)
+        templates = [ProcessingTemplateDTO.from_dict(item) for item in response_data]
+        self.templates = {template.id: template for template in templates}
+        self.view.update_processing_table(self.combined_processing_rows())
+
+    def combined_processing_rows(self):
+        rows = list(self.processings.values()) + list(self.templates.values())
+        rows.sort(
+            key=lambda item: item.created if isinstance(item, ProcessingDTO) else item.createdAt,
+            reverse=True,
+        )
+        return rows
 
     def show_processings_next_page(self):
         self.processings_page_offset += self.processings_page_limit
@@ -492,6 +510,7 @@ class ProcessingService(QObject):
         # Pause refreshing processings table to avoid conflicts
         self.processing_fetch_timer.stop()
         selected_ids = self.view.selected_processing_ids()
+        selected_ids = [pid for pid in selected_ids if pid in self.processings]
         # Ask for confirmation if there are selected rows
         if selected_ids and alert(
                 self.tr('Delete selected processings?'), QMessageBox.Question
@@ -523,6 +542,111 @@ class ProcessingService(QObject):
                                                              'deleted': deleted,
                                                              'failed': list(failed) + [processing_to_delete]})
 
+    # ============ TEMPLATE ACTIONS ============ #
+    
+    def pause_template(self):
+        """Pause the selected template."""
+        template = self.selected_template()
+        if not template:
+            return
+        if template.isActive:
+            template_id = template.id
+            self.api.stop_template(template_id=template_id,
+                                  callback=self.pause_template_callback,
+                                  error_handler=self.pause_template_error_handler)
+        else:
+            alert(self.tr("Template is not active"), QMessageBox.Information)
+    
+    def pause_template_callback(self, response: QNetworkReply):
+        """Handle pause template response."""
+        try:
+            self.get_processings()  # Refresh to get updated template status
+            alert(self.tr("Template paused successfully"), QMessageBox.Information)
+        except Exception as e:
+            alert(self.tr("Failed to pause template: {}").format(str(e)), QMessageBox.Critical)
+    
+    def pause_template_error_handler(self, error: str):
+        """Handle pause template error."""
+        alert(self.tr("Error pausing template: {}").format(error), QMessageBox.Critical)
+    
+    def resume_template(self):
+        """Resume the selected template."""
+        template = self.selected_template()
+        if not template:
+            return
+        if not template.isActive:
+            template_id = template.id
+            self.api.resume_template(template_id=template_id,
+                                    callback=self.resume_template_callback,
+                                    error_handler=self.resume_template_error_handler)
+        else:
+            alert(self.tr("Template is already active"), QMessageBox.Information)
+    
+    def resume_template_callback(self, response: QNetworkReply):
+        """Handle resume template response."""
+        try:
+            self.get_processings()  # Refresh to get updated template status
+            alert(self.tr("Template resumed successfully"), QMessageBox.Information)
+        except Exception as e:
+            alert(self.tr("Failed to resume template: {}").format(str(e)), QMessageBox.Critical)
+    
+    def resume_template_error_handler(self, error: str):
+        """Handle resume template error."""
+        alert(self.tr("Error resuming template: {}").format(error), QMessageBox.Critical)
+    
+    def delete_template(self):
+        """Delete the selected template after confirmation."""
+        template = self.selected_template()
+        if not template:
+            return
+        
+        reply = QMessageBox.question(
+            self.dlg,
+            self.tr("Delete Template"),
+            self.tr("Are you sure you want to delete the template '{}'?").format(template.name),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            template_id = template.id
+            self.api.delete_template(template_id=template_id,
+                                    callback=self.delete_template_callback,
+                                    error_handler=self.delete_template_error_handler)
+    
+    def delete_template_callback(self, response: QNetworkReply):
+        """Handle delete template response."""
+        try:
+            self.get_processings()  # Refresh to remove deleted template from table
+            alert(self.tr("Template deleted successfully"), QMessageBox.Information)
+        except Exception as e:
+            alert(self.tr("Failed to delete template: {}").format(str(e)), QMessageBox.Critical)
+    
+    def delete_template_error_handler(self, error: str):
+        """Handle delete template error."""
+        alert(self.tr("Error deleting template: {}").format(error), QMessageBox.Critical)
+    
+    def open_template_details(self):
+        """Open a dialog showing template details."""
+        template = self.selected_template()
+        if not template:
+            return
+        
+        # Show template details in a message box for now
+        # TODO: Create a proper template details dialog
+        details = (
+            f"<b>{template.name}</b><br/>"
+            f"<b>Status:</b> {template.status}<br/>"
+            f"<b>Created:</b> {template.createdAt.strftime('%Y-%m-%d %H:%M')}<br/>"
+            f"<b>Active Until:</b> {template.activeUntil.strftime('%Y-%m-%d %H:%M')}<br/>"
+            f"<b>Active:</b> {'Yes' if template.isActive else 'No'}<br/>"
+            f"<b>Archived:</b> {'Yes' if template.isArchived else 'No'}<br/>"
+            f"<b>New Images:</b> {template.newImagesCount or 0}<br/>"
+            f"<b>AOI Intersection:</b> {template.maxAoiIntersectionPercent or 'N/A'}%"
+        )
+        
+        alert(details, QMessageBox.Information)
+
     def stop(self):
         self.processing_fetch_timer.stop()
         self.processing_fetch_timer.deleteLater()
@@ -538,6 +662,37 @@ class ProcessingService(QObject):
         if not first:
             return None
         return first[0]
+    
+    def selected_templates(self, limit=None) -> List[ProcessingTemplateDTO]:
+        """Get selected templates from the table."""
+        pids = self.view.selected_processing_ids(limit=limit)
+        # Filter to get only templates (not processings)
+        selected_templates = [self.templates[pid] for pid in filter(lambda pid: pid in self.templates, pids)]
+        return selected_templates
+    
+    def selected_template(self) -> Optional[ProcessingTemplateDTO]:
+        """Get the first selected template, if any."""
+        first = self.selected_templates(limit=1)
+        if not first:
+            return None
+        return first[0]
+    
+    def is_processing_selected(self) -> bool:
+        """Check if selected item is a processing (not a template)."""
+        selected = self.selected_processing()
+        return selected is not None
+    
+    def is_template_selected(self) -> bool:
+        """Check if selected item is a template."""
+        selected = self.selected_template()
+        return selected is not None
+
+    def is_only_templates_selected(self) -> bool:
+        """True only when current table selection contains templates and no processings."""
+        pids = self.view.selected_processing_ids()
+        if not pids:
+            return False
+        return all(pid in self.templates for pid in pids)
     
     def restart_processing(self):
         processing = self.selected_processing()
