@@ -324,16 +324,11 @@ class SamController(QObject):
                 {"error": "Select session, workflow, and AOI first"},
             )
             return
-        confidence_threshold, threshold_error = self._confidence_threshold()
-        if threshold_error:
-            self.view.append_debug("Session Inference", {"error": threshold_error})
-            return
         geometry = json.loads(aoi.asJson())
         self.service.create_session_inference(
             session_id,
             workflow_id,
             geometry,
-            confidence_threshold=confidence_threshold,
         )
 
     def _refresh_inference_status(self):

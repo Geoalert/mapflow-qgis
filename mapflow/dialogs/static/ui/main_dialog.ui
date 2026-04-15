@@ -656,8 +656,11 @@
             </item>
             <item>
              <widget class="QLineEdit" name="samConfidenceThresholdInput">
+              <property name="toolTip">
+               <string>Used for SAM processing creation and POST /inference only. Adding inference to an existing session reuses that session's saved threshold.</string>
+              </property>
               <property name="placeholderText">
-               <string>Optional SAM confidence threshold (0-1)</string>
+               <string>Optional threshold for SAM processing or POST /inference (0-1)</string>
               </property>
               <property name="clearButtonEnabled">
                <bool>true</bool>

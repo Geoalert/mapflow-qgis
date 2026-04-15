@@ -300,12 +300,11 @@ class TestCreateInference:
 
 
 class TestCreateSessionInference:
-    def test_calls_post(self, http_mock):
+    def test_calls_post_without_confidence_threshold(self, http_mock):
         api = SamApi(http=http_mock, server=SERVER)
         request = SessionInferenceCreateRequest(
             workflow_id="wf-1",
             geometry={"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
-            confidence_threshold=0.25,
         )
         api.create_session_inference("sess-1", request, callback=_noop)
 
@@ -313,7 +312,7 @@ class TestCreateSessionInference:
         assert call_kwargs["url"] == f"{SERVER}/sessions/sess-1/inferences"
         body = json.loads(call_kwargs["body"].decode())
         assert body["workflow_id"] == "wf-1"
-        assert body["confidence_threshold"] == 0.25
+        assert "confidence_threshold" not in body
 
 
 class TestGetInference:
@@ -377,12 +376,14 @@ class TestSchemas:
         from mapflow.schema.sam import SessionResponse
         data = {
             "id": "s1", "processing_id": "p1", "prompt_id": "pr1",
+            "confidence_threshold": 0.65,
             "inferences": [{"id": "i1", "status": "done"}],
             "layer_id": "l1", "tile_url": "https://tiles",
         }
         resp = SessionResponse.from_dict(data)
         assert len(resp.inferences) == 1
         assert resp.inferences[0].status == "done"
+        assert resp.confidence_threshold == 0.65
 
     def test_serializable_skips_none(self):
         request = PromptCreateRequest()

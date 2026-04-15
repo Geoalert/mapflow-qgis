@@ -474,13 +474,11 @@ class SamService(QObject):
         session_id: str,
         workflow_id: str,
         geometry: dict,
-        confidence_threshold: Optional[float] = None,
     ):
         """POST /sessions/{id}/inferences — add inference to existing session."""
         request = SessionInferenceCreateRequest(
             workflow_id=workflow_id,
             geometry=geometry,
-            confidence_threshold=confidence_threshold,
         )
         self.api.create_session_inference(
             session_id=session_id,

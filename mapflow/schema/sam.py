@@ -99,7 +99,6 @@ class SessionInferenceCreateRequest(Serializable):
     """POST /sessions/{id}/inferences — add inference to existing session."""
     workflow_id: str
     geometry: dict  # GeoJSON
-    confidence_threshold: Optional[float] = None
 
 
 @dataclass
@@ -252,6 +251,7 @@ class SessionResponse(SkipDataClass):
     processing_id: str = ""
     name: Optional[str] = None
     text_prompt: Optional[str] = None
+    confidence_threshold: Optional[float] = None
     inferences: Optional[List[dict]] = None
     vector_layer: Optional[VectorLayerJson] = None
 

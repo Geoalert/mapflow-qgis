@@ -39,7 +39,7 @@ It shares the same base URL and authentication as the main Mapflow API (`config.
 | GET | `/sessions/{id}` | Get session detail (includes inferences) |
 | GET | `/sessions/{id}/prompts` | Get frozen prompt snapshot for a session |
 | POST | `/sessions/{id}/copy` | Copy a session |
-| POST | `/sessions/{id}/inferences` | Create an inference for an existing session |
+| POST | `/sessions/{id}/inferences` | Create an inference for an existing session using the session's stored confidence threshold |
 
 ### Inference Endpoints
 
@@ -83,16 +83,16 @@ It shares the same base URL and authentication as the main Mapflow API (`config.
 }
 ```
 - `confidence_threshold` is optional and SAM-specific; when provided it must be a float in the `[0, 1]` range.
+- When provided, `confidence_threshold` is stored on the newly created session and reused by later `POST /sessions/{session_id}/inferences` requests for that session.
 
 ### SessionInferenceCreateRequest
 ```json
 {
   "workflow_id": "UUID",
-  "geometry": "GeoJSON",
-  "confidence_threshold": "float | null"
+  "geometry": "GeoJSON"
 }
 ```
-- `confidence_threshold` is optional and SAM-specific; when provided it must be a float in the `[0, 1]` range.
+- This endpoint does not accept `confidence_threshold`; it reuses the selected session's stored threshold.
 
 ### ProcessingSummaryResponse
 ```json
@@ -132,7 +132,7 @@ Extends PromptResponse with `"point_prompts": [PointPromptResponse]`, `"bbox_pro
 
 ### SessionResponse
 ```json
-{"id": "UUID", "processing_id": "UUID", "prompt_id": "UUID", "inferences": [InferenceStatusSummary], "layer_id": "UUID", "tile_url": "string"}
+{"id": "UUID", "processing_id": "UUID", "prompt_id": "UUID", "confidence_threshold": "float|null", "inferences": [InferenceStatusSummary], "layer_id": "UUID", "tile_url": "string"}
 ```
 
 ### InferenceResponse
