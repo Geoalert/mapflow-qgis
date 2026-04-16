@@ -80,6 +80,10 @@ class SamController(QObject):
         self.dlg.samRunSessionInference.clicked.connect(self._run_session_inference)
         self.dlg.samRefreshInferenceStatus.clicked.connect(self._refresh_inference_status)
 
+        # Workflow debug
+        self.dlg.samInferenceWorkflowCombo.currentIndexChanged.connect(
+            self._on_workflow_combo_changed)
+
         # Results
         self.dlg.samLoadResult.clicked.connect(self._load_result)
 
@@ -292,13 +296,13 @@ class SamController(QObject):
 
     def _run_inference(self):
         """Run inference — creates a new session + first inference."""
+        processing_id = self.view.selected_processing_id()
         prompt_id = self.view.selected_prompt_id()
-        workflow_id = self.view.selected_workflow_id()
         aoi = self._aoi_provider()
-        if not prompt_id or not workflow_id or not aoi:
+        if not processing_id or not prompt_id or not aoi:
             self.view.append_debug(
                 "Run Inference",
-                {"error": "Select prompt, workflow, and AOI first"},
+                {"error": "Select processing, prompt, and AOI first"},
             )
             return
         confidence_threshold, threshold_error = self._confidence_threshold()
@@ -307,8 +311,8 @@ class SamController(QObject):
             return
         geometry = json.loads(aoi.asJson())
         self.service.create_inference(
+            processing_id,
             prompt_id,
-            workflow_id,
             geometry,
             confidence_threshold=confidence_threshold,
         )
@@ -316,20 +320,24 @@ class SamController(QObject):
     def _run_session_inference(self):
         """Add inference to an existing session."""
         session_id = self.view.selected_session_id()
-        workflow_id = self.view.selected_workflow_id()
         aoi = self._aoi_provider()
-        if not session_id or not workflow_id or not aoi:
+        if not session_id or not aoi:
             self.view.append_debug(
                 "Session Inference",
-                {"error": "Select session, workflow, and AOI first"},
+                {"error": "Select session and AOI first"},
             )
             return
         geometry = json.loads(aoi.asJson())
         self.service.create_session_inference(
             session_id,
-            workflow_id,
             geometry,
         )
+
+    def _on_workflow_combo_changed(self):
+        """Debug: fetch and display workflow detail when combo selection changes."""
+        workflow_id = self.view.selected_workflow_id()
+        if workflow_id:
+            self.service.get_workflow(workflow_id)
 
     def _refresh_inference_status(self):
         inference_id = getattr(self.service, '_current_inference_id', None)

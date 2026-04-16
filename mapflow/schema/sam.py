@@ -88,8 +88,8 @@ class SessionCreateRequest(Serializable):
 @dataclass
 class InferenceCreateRequest(Serializable):
     """POST /inference — creates a new session + first inference."""
+    processing_id: str
     prompt_id: str
-    workflow_id: str
     geometry: dict  # GeoJSON
     confidence_threshold: Optional[float] = None
 
@@ -97,7 +97,6 @@ class InferenceCreateRequest(Serializable):
 @dataclass
 class SessionInferenceCreateRequest(Serializable):
     """POST /sessions/{id}/inferences — add inference to existing session."""
-    workflow_id: str
     geometry: dict  # GeoJSON
 
 

@@ -650,8 +650,8 @@ class TestCreateInferenceService:
     def test_calls_api_with_confidence_threshold(self, sam_service, http_mock):
         geojson = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}
         sam_service.create_inference(
+            "proc-1",
             "prompt-1",
-            "wf1",
             geojson,
             confidence_threshold=0.55,
         )
@@ -660,6 +660,7 @@ class TestCreateInferenceService:
         url = http_mock.post.call_args[1]["url"]
         assert "/inference" in url
         body = json.loads(http_mock.post.call_args[1]["body"])
+        assert body["processing_id"] == "proc-1"
         assert body["prompt_id"] == "prompt-1"
         assert body["confidence_threshold"] == 0.55
 
@@ -707,7 +708,6 @@ class TestCreateSessionInferenceService:
         geojson = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}
         sam_service.create_session_inference(
             "session-1",
-            "wf1",
             geojson,
         )
 
@@ -715,7 +715,7 @@ class TestCreateSessionInferenceService:
         url = http_mock.post.call_args[1]["url"]
         assert "/sessions/session-1/inferences" in url
         body = json.loads(http_mock.post.call_args[1]["body"])
-        assert body["workflow_id"] == "wf1"
+        assert "workflow_id" not in body
         assert "confidence_threshold" not in body
 
 

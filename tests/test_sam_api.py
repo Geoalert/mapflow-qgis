@@ -284,8 +284,8 @@ class TestCreateInference:
     def test_calls_post(self, http_mock):
         api = SamApi(http=http_mock, server=SERVER)
         request = InferenceCreateRequest(
+            processing_id="proc-1",
             prompt_id="prompt-1",
-            workflow_id="wf-1",
             geometry={"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
             confidence_threshold=0.8,
         )
@@ -294,8 +294,9 @@ class TestCreateInference:
         call_kwargs = http_mock.post.call_args[1]
         assert call_kwargs["url"] == f"{SERVER}/inference"
         body = json.loads(call_kwargs["body"].decode())
+        assert body["processing_id"] == "proc-1"
         assert body["prompt_id"] == "prompt-1"
-        assert body["workflow_id"] == "wf-1"
+        assert "workflow_id" not in body
         assert body["confidence_threshold"] == 0.8
 
 
@@ -303,7 +304,6 @@ class TestCreateSessionInference:
     def test_calls_post_without_confidence_threshold(self, http_mock):
         api = SamApi(http=http_mock, server=SERVER)
         request = SessionInferenceCreateRequest(
-            workflow_id="wf-1",
             geometry={"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
         )
         api.create_session_inference("sess-1", request, callback=_noop)
@@ -311,7 +311,7 @@ class TestCreateSessionInference:
         call_kwargs = http_mock.post.call_args[1]
         assert call_kwargs["url"] == f"{SERVER}/sessions/sess-1/inferences"
         body = json.loads(call_kwargs["body"].decode())
-        assert body["workflow_id"] == "wf-1"
+        assert "workflow_id" not in body
         assert "confidence_threshold" not in body
 
 

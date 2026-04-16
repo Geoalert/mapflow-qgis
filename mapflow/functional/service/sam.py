@@ -439,15 +439,15 @@ class SamService(QObject):
 
     def create_inference(
         self,
+        processing_id: str,
         prompt_id: str,
-        workflow_id: str,
         geometry: dict,
         confidence_threshold: Optional[float] = None,
     ):
         """POST /inference — creates new session + first inference."""
         request = InferenceCreateRequest(
+            processing_id=processing_id,
             prompt_id=prompt_id,
-            workflow_id=workflow_id,
             geometry=geometry,
             confidence_threshold=confidence_threshold,
         )
@@ -472,12 +472,10 @@ class SamService(QObject):
     def create_session_inference(
         self,
         session_id: str,
-        workflow_id: str,
         geometry: dict,
     ):
         """POST /sessions/{id}/inferences — add inference to existing session."""
         request = SessionInferenceCreateRequest(
-            workflow_id=workflow_id,
             geometry=geometry,
         )
         self.api.create_session_inference(

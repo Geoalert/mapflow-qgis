@@ -76,22 +76,24 @@ It shares the same base URL and authentication as the main Mapflow API (`config.
 ### InferenceCreateRequest
 ```json
 {
+  "processing_id": "UUID",
   "prompt_id": "UUID",
-  "workflow_id": "UUID",
   "geometry": "GeoJSON",
   "confidence_threshold": "float | null"
 }
 ```
+- `workflow_id` is no longer required; the backend auto-selects all processing workflows whose geometry intersects the inference AOI.
+- `processing_id` identifies the processing whose workflows will be used.
 - `confidence_threshold` is optional and SAM-specific; when provided it must be a float in the `[0, 1]` range.
 - When provided, `confidence_threshold` is stored on the newly created session and reused by later `POST /sessions/{session_id}/inferences` requests for that session.
 
 ### SessionInferenceCreateRequest
 ```json
 {
-  "workflow_id": "UUID",
   "geometry": "GeoJSON"
 }
 ```
+- `workflow_id` is no longer required; the backend auto-selects intersecting workflows from the session's processing.
 - This endpoint does not accept `confidence_threshold`; it reuses the selected session's stored threshold.
 
 ### ProcessingSummaryResponse
