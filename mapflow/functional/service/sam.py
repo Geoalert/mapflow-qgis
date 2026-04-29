@@ -18,7 +18,6 @@ from ...http import Http
 from ...schema.sam import (
     ProcessingListResponse,
     ProcessingDetailResponse,
-    WorkflowSummaryResponse,
     PromptListResponse,
     PromptDetailResponse,
     PromptCreateRequest,
@@ -26,13 +25,10 @@ from ...schema.sam import (
     PointPromptRequest,
     BboxPromptRequest,
     SpatialPromptResponse,
-    SessionCreateRequest,
     SessionNameUpdateRequest,
     SessionResponse,
-    SessionPromptsResponse,
     InferenceCreateRequest,
     SessionInferenceCreateRequest,
-    InferenceResponse,
 )
 
 
@@ -56,7 +52,6 @@ class SamService(QObject):
         self._total = 0
 
         # Cached data for double-click layer display
-        self._workflows = []
         self._last_prompt_detail = None
         self._last_session = None
         self._last_session_prompts = []
@@ -155,41 +150,22 @@ class SamService(QObject):
     # ------------------------------------------------------------------
     # Workflows
     # ------------------------------------------------------------------
-
-    def list_workflows(self, processing_id: str):
-        self.api.get_processing_workflows(
-            processing_id=processing_id,
-            callback=self.list_workflows_callback,
-        )
-
-    def list_workflows_callback(self, response: QNetworkReply):
-        data = json.loads(response.readAll().data().decode())
-        self._workflows = [WorkflowSummaryResponse.from_dict(w) for w in data.get('items', [])]
-        self.view.populate_workflow_combo(self._workflows)
-        self.view.append_debug("Workflows", data)
+    #
+    # Workflows are no longer user-facing — the backend auto-selects them
+    # from AOI intersection. The processing-level workflows endpoint
+    # (GET /processings/{id}/workflows) and GET /workflows/{id} remain on
+    # SamApi for future debug needs but are not driven from the UI.
 
     def show_processing_layers(self, processing_id: str):
-        """Double-click action: show preview image + workflow AOI layers."""
+        """Double-click action: show the processing's preview raster only."""
         self.preview_image(processing_id)
-        if self._workflows:
-            self.view.show_workflow_layers(self._workflows)
-
-    def get_workflow(self, workflow_id: str):
-        self.api.get_workflow(
-            workflow_id=workflow_id,
-            callback=self.get_workflow_callback,
-        )
-
-    def get_workflow_callback(self, response: QNetworkReply):
-        data = json.loads(response.readAll().data().decode())
-        self.view.append_debug("Workflow Detail", data)
 
     # ------------------------------------------------------------------
     # Prompts
     # ------------------------------------------------------------------
 
-    def create_prompt(self, text_prompt: Optional[str] = None):
-        request = PromptCreateRequest(text_prompt=text_prompt)
+    def create_prompt(self, name: Optional[str] = None, text_prompt: Optional[str] = None):
+        request = PromptCreateRequest(name=name, text_prompt=text_prompt)
         self.api.create_prompt(
             request=request,
             callback=self.create_prompt_callback,
@@ -328,22 +304,10 @@ class SamService(QObject):
     # ------------------------------------------------------------------
     # Sessions
     # ------------------------------------------------------------------
-
-    def create_session(self, processing_id: str, prompt_id: str):
-        request = SessionCreateRequest(
-            processing_id=processing_id,
-            prompt_id=prompt_id,
-        )
-        self.api.create_session(
-            request=request,
-            callback=self.create_session_callback,
-        )
-
-    def create_session_callback(self, response: QNetworkReply):
-        data = json.loads(response.readAll().data().decode())
-        session = SessionResponse.from_dict(data)
-        self.view.append_debug("Create Session", data)
-        self.view.add_session_to_table(session)
+    #
+    # Sessions are not created standalone — POST /inference creates the
+    # session implicitly. POST /sessions/{id}/copy was removed from the
+    # backend along with the workflow-visibility refactor.
 
     def delete_session(self):
         session_id = self.view.selected_session_id()
@@ -378,25 +342,34 @@ class SamService(QObject):
         )
 
     def get_session_detail_callback(self, response: QNetworkReply):
+        """Render the entire session at once.
+
+        `GET /sessions/{id}` is the freshest view in the system: backend
+        bulk-refreshes WE statuses for non-terminal inferences before
+        responding, and embeds the frozen prompt snapshot directly. So one
+        call drives every panel in the session view; only the merged
+        result GeoJSON is fetched as a follow-up (and only when at least
+        one inference has actually produced output).
+        """
         data = json.loads(response.readAll().data().decode())
-        self._last_session = SessionResponse.from_dict(data)
-        self.view.display_session_detail(self._last_session)
+        session = SessionResponse.from_dict(data)
+        self._last_session = session
+        self._last_session_prompts = session.spatial_prompts or []
+
+        self.view.display_session(session)
         self.view.append_debug("Session Detail", data)
-        # Fetch frozen prompt snapshot for spatial prompts table
-        self.get_session_prompts(self._last_session.id)
 
-    def get_session_prompts(self, session_id: str):
-        self.api.get_session_prompts(
-            session_id=session_id,
-            callback=self.get_session_prompts_callback,
-        )
+        if any((inf.status or "").lower() == "done"
+               for inf in (session.inferences or [])):
+            self.get_result(session.id)
 
-    def get_session_prompts_callback(self, response: QNetworkReply):
-        data = json.loads(response.readAll().data().decode())
-        prompts = SessionPromptsResponse.from_dict(data)
-        self._last_session_prompts = prompts.spatial_prompts
-        self.view.populate_spatial_prompts_table(prompts.spatial_prompts)
-        self.view.append_debug("Session Prompts", data)
+    def refresh_session_status(self, session_id: str):
+        """Manual session-level status poll triggered by the Refresh button.
+
+        Repaints the whole session view in one shot: status table, prompt
+        snapshot, text prompt, and (if applicable) the merged result layer.
+        """
+        self.get_session_detail(session_id)
 
     def show_session_layers(self):
         """Double-click action: show result layer + spatial prompt layers on map."""
@@ -409,18 +382,6 @@ class SamService(QObject):
         if self._last_session_prompts:
             self.view.show_spatial_prompt_layers(self._last_session_prompts)
 
-    def copy_session(self, session_id: str):
-        self.api.copy_session(
-            session_id=session_id,
-            callback=self.copy_session_callback,
-        )
-
-    def copy_session_callback(self, response: QNetworkReply):
-        data = json.loads(response.readAll().data().decode())
-        session = SessionResponse.from_dict(data)
-        self.view.append_debug("Copy Session", data)
-        self.view.add_session_to_table(session)
-
     def list_sessions(self, processing_id: str):
         self.api.get_processing_sessions(
             processing_id=processing_id,
@@ -432,6 +393,11 @@ class SamService(QObject):
         sessions = [SessionResponse.from_dict(s) for s in data.get('items', [])]
         self.view.display_sessions(sessions)
         self.view.append_debug("List Sessions", data)
+        session_id = self.view.selected_session_id()
+        if session_id:
+            self.get_session_detail(session_id)
+        else:
+            self.view.clear_session_display()
 
     # ------------------------------------------------------------------
     # Inference
@@ -444,7 +410,8 @@ class SamService(QObject):
         geometry: dict,
         confidence_threshold: Optional[float] = None,
     ):
-        """POST /inference — creates new session + first inference."""
+        """POST /inference — creates a new session and dispatches the first
+        batch of inferences (one per workflow intersecting the AOI)."""
         request = InferenceCreateRequest(
             processing_id=processing_id,
             prompt_id=prompt_id,
@@ -458,15 +425,12 @@ class SamService(QObject):
 
     def create_inference_callback(self, response: QNetworkReply):
         data = json.loads(response.readAll().data().decode())
-        # Response contains session info — update sessions table
-        session_data = data.get("session")
-        if session_data:
-            session = SessionResponse.from_dict(session_data)
-            self.view.add_session_to_table(session)
-        inference = InferenceResponse.from_dict(data)
-        self.view.display_inference_status(inference)
+        session = SessionResponse.from_dict(data)
+        self._last_session = session
+        self._last_session_prompts = session.spatial_prompts or []
         self.view.append_debug("Create Inference", data)
-        self._current_inference_id = inference.id
+        self.view.add_session_to_table(session)
+        self.view.display_session(session)
         self.view.set_inference_refresh_enabled(True)
 
     def create_session_inference(
@@ -474,7 +438,8 @@ class SamService(QObject):
         session_id: str,
         geometry: dict,
     ):
-        """POST /sessions/{id}/inferences — add inference to existing session."""
+        """POST /sessions/{id}/inferences — add a new inference batch (one per
+        intersecting workflow) to an existing session."""
         request = SessionInferenceCreateRequest(
             geometry=geometry,
         )
@@ -486,23 +451,12 @@ class SamService(QObject):
 
     def create_session_inference_callback(self, response: QNetworkReply):
         data = json.loads(response.readAll().data().decode())
-        inference = InferenceResponse.from_dict(data)
-        self.view.display_inference_status(inference)
+        session = SessionResponse.from_dict(data)
+        self._last_session = session
+        self._last_session_prompts = session.spatial_prompts or []
         self.view.append_debug("Session Inference", data)
-        self._current_inference_id = inference.id
+        self.view.display_session(session)
         self.view.set_inference_refresh_enabled(True)
-
-    def get_inference_status(self, inference_id: str):
-        self.api.get_inference(
-            inference_id=inference_id,
-            callback=self.get_inference_status_callback,
-        )
-
-    def get_inference_status_callback(self, response: QNetworkReply):
-        data = json.loads(response.readAll().data().decode())
-        inference = InferenceResponse.from_dict(data)
-        self.view.display_inference_status(inference)
-        self.view.append_debug("Inference Status", data)
 
     # ------------------------------------------------------------------
     # Results
@@ -512,12 +466,23 @@ class SamService(QObject):
         self.api.get_result(
             session_id=session_id,
             callback=self.get_result_callback,
+            callback_kwargs={"session_id": session_id},
         )
 
-    def get_result_callback(self, response: QNetworkReply):
-        data = json.loads(response.readAll().data().decode())
-        self.view.load_result_layer(data)
-        # self.view.append_debug("Session Result", data)
+    def get_result_callback(self, response: QNetworkReply, session_id: str):
+        # GET /result/{session_id} returns the merged session GeoJSON
+        # FeatureCollection directly, or HTTP 204 when no result exists yet.
+        # We treat empty body as "no partial result available" silently —
+        # this is expected during the in-progress phase.
+        raw = response.readAll().data()
+        if not raw:
+            return
+        try:
+            data = json.loads(raw.decode())
+        except ValueError:
+            self.view.append_debug("Session Result", {"error": "non-JSON response"})
+            return
+        self.view.load_result_layer(data, session_id=session_id)
 
     # ------------------------------------------------------------------
     # Pagination

@@ -76,18 +76,14 @@ class BboxPromptRequest(Serializable):
 
 @dataclass
 class PromptCreateRequest(Serializable):
+    name: Optional[str] = None
     text_prompt: Optional[str] = None
 
 
 @dataclass
-class SessionCreateRequest(Serializable):
-    processing_id: str
-    prompt_id: str
-
-
-@dataclass
 class InferenceCreateRequest(Serializable):
-    """POST /inference — creates a new session + first inference."""
+    """POST /inference — creates a new session and dispatches the first
+    inference batch (one Inference per workflow intersecting the AOI)."""
     processing_id: str
     prompt_id: str
     geometry: dict  # GeoJSON
@@ -96,7 +92,8 @@ class InferenceCreateRequest(Serializable):
 
 @dataclass
 class SessionInferenceCreateRequest(Serializable):
-    """POST /sessions/{id}/inferences — add inference to existing session."""
+    """POST /sessions/{id}/inferences — adds a new inference batch to an
+    existing session (one Inference per workflow intersecting the AOI)."""
     geometry: dict  # GeoJSON
 
 
@@ -235,8 +232,16 @@ class PromptListResponse(SkipDataClass):
 
 @dataclass
 class InferenceStatusSummary(SkipDataClass):
+    """Lightweight per-inference summary inside SessionResponse.inferences.
+
+    Returned by POST/GET /sessions/* and POST /inference. WE workflow id/
+    status are deliberately not exposed — the abstract `status` is all the
+    user-facing UI cares about.
+    """
     id: str = ""
     status: str = ""
+    geometry: Optional[dict] = None  # per-workflow clipped AOI
+    created_at: Optional[str] = None
 
 @dataclass
 class VectorLayerJson(SkipDataClass):
@@ -244,41 +249,46 @@ class VectorLayerJson(SkipDataClass):
     tile_url: str
     tile_json_url: str
 
+
+@dataclass
+class TextPromptSummary(SkipDataClass):
+    """Minimal text prompt info embedded in the frozen session snapshot."""
+    id: str = ""
+    text: str = ""
+
+
 @dataclass
 class SessionResponse(SkipDataClass):
+    """Full session detail: metadata + frozen prompt snapshot + inferences.
+
+    The frozen prompt snapshot (`text_prompt` + `spatial_prompts`) is
+    embedded directly here — `GET /sessions/{id}/prompts` was retired.
+    Backend bulk-refreshes WE statuses for non-terminal inferences before
+    responding, so a single GET is always the freshest view.
+    """
     id: str = ""
     processing_id: str = ""
     name: Optional[str] = None
-    text_prompt: Optional[str] = None
     confidence_threshold: Optional[float] = None
-    inferences: Optional[List[dict]] = None
+    text_prompt: Optional[TextPromptSummary] = None
+    spatial_prompts: Optional[List[SpatialPromptResponse]] = None
+    inferences: Optional[List[InferenceStatusSummary]] = None
     vector_layer: Optional[VectorLayerJson] = None
+    # Aggregates exposed by the sessions list endpoint (SessionListItem).
+    # Defaulted None on the detail endpoint, where they're not meaningful.
+    inferences_total: Optional[int] = None
+    inferences_done: Optional[int] = None
 
     def __post_init__(self):
         if self.inferences is None:
             self.inferences = []
         self.inferences = [InferenceStatusSummary.from_dict(i) for i in self.inferences]
+        if self.spatial_prompts:
+            self.spatial_prompts = [SpatialPromptResponse.from_dict(p) for p in self.spatial_prompts]
         if self.vector_layer:
             self.vector_layer = VectorLayerJson.from_dict(self.vector_layer)
-
-    @classmethod
-    def from_dict(cls, params_dict: dict):
-        # Backend may return either text_prompt or textPrompt; normalize for UI.
-        normalized = dict(params_dict)
-        if "text_prompt" not in normalized and "textPrompt" in normalized:
-            normalized["text_prompt"] = normalized.get("textPrompt")
-        return super().from_dict(normalized)
-
-@dataclass
-class SessionPromptsResponse(SkipDataClass):
-    """GET /sessions/{id}/prompts — frozen prompt snapshot."""
-    text_prompt: Optional[dict] = None
-    spatial_prompts: Optional[List[dict]] = None
-
-    def __post_init__(self):
-        if self.spatial_prompts is None:
-            self.spatial_prompts = []
-        self.spatial_prompts = [SpatialPromptResponse.from_dict(p) for p in self.spatial_prompts]
+        if self.text_prompt and isinstance(self.text_prompt, dict):
+            self.text_prompt = TextPromptSummary.from_dict(self.text_prompt)
 
 
 @dataclass
@@ -296,6 +306,12 @@ class SessionListResponse(SkipDataClass):
 
 @dataclass
 class InferenceResponse(SkipDataClass):
+    """Full inference detail, returned by GET /inference/{id}.
+
+    Note: POST /inference and POST /sessions/{id}/inferences return
+    SessionResponse, not InferenceResponse — a single user request now
+    yields N inferences, all bundled inside the session payload.
+    """
     id: str = ""
     session_id: str = ""
     status: str = ""
@@ -304,12 +320,3 @@ class InferenceResponse(SkipDataClass):
     we_workflow_status: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
-
-
-@dataclass
-class ResultResponse(SkipDataClass):
-    id: str = ""
-    geometry: Optional[dict] = None
-    layer_id: Optional[str] = None
-    processing_id: Optional[str] = None
-    session_id: Optional[str] = None

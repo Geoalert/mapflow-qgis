@@ -40,9 +40,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.polygonCombo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
         # Don't allow to change path directly (without ... and selection in file dialog) to avoid errors
         self.outputDirectory.setReadOnly(True)
-        sam_confidence_validator = QDoubleValidator(0.0, 1.0, 6, self)
-        sam_confidence_validator.setNotation(QDoubleValidator.StandardNotation)
-        self.samConfidenceThresholdInput.setValidator(sam_confidence_validator)
         # Set icons (can be done in .ui but brings about the resources_rc import bug)
         self.setWindowIcon(icons.plugin_icon)
         self.addProvider.setIcon(icons.plus_icon)
@@ -62,6 +59,11 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.createProject.setIcon(icons.plus_icon)
         self.deleteProject.setIcon(icons.minus_icon)
         self.updateProject.setIcon(icons.edit_icon)
+        self.samOnlyFilter.toggled.connect(
+            lambda _: self.filter_processings_table(self.filterProcessings.text())
+        )
+        self.samDebugGroup.toggled.connect(self.samDebugOutput.setVisible)
+        self.samDebugOutput.setVisible(self.samDebugGroup.isChecked())
 
         coin_pixmap = icons.coins_icon.pixmap(16, 16)
         self.labelCoins_1.setPixmap(coin_pixmap)
@@ -274,7 +276,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     def setup_imagery_search(self,
                              provider: ProviderInterface,
                              columns: Iterable,
-                             hidden_columns: [Iterable[int]],
+                             hidden_columns: Iterable[int],
                              sort_by: str,
                              preview_zoom: int,
                              max_preview_zoom: int,
@@ -610,9 +612,18 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.settings.setValue("visibleSearchColumns", new_visible_columns)
 
     def filter_processings_table(self, name_filter: str = None):
+        model_column = config.PROCESSING_TABLE_COLUMNS.index('workflowDef')
+        normalized_filter = (name_filter or "").strip().lower()
+        show_only_sam = self.samOnlyFilter.isChecked()
         for row in range(self.processingsTable.rowCount()):
-            processing_name = self.processingsTable.item(row, 0).data(Qt.DisplayRole)
-            hide = bool(name_filter) and (name_filter.lower() not in processing_name.lower())
+            name_item = self.processingsTable.item(row, 0)
+            model_item = self.processingsTable.item(row, model_column)
+            processing_name = ""
+            if name_item is not None:
+                processing_name = str(name_item.data(Qt.DisplayRole) or "")
+            matches_name = not normalized_filter or normalized_filter in processing_name.lower()
+            is_sam_processing = bool(model_item and model_item.data(Qt.UserRole))
+            hide = (not matches_name) or (show_only_sam and not is_sam_processing)
             self.processingsTable.setRowHidden(row, hide)
     
     def add_preview_cell(self):

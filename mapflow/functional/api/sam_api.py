@@ -14,7 +14,6 @@ from ...schema.sam import (
     PromptUpdateRequest,
     PointPromptRequest,
     BboxPromptRequest,
-    SessionCreateRequest,
     SessionNameUpdateRequest,
     InferenceCreateRequest,
     SessionInferenceCreateRequest,
@@ -217,39 +216,16 @@ class SamApi(QObject):
     # ------------------------------------------------------------------
     # Session endpoints
     # ------------------------------------------------------------------
-
-    def create_session(self, request: SessionCreateRequest, callback: Callable):
-        self.http.post(
-            url=f"{self.server}/sessions",
-            body=request.as_json().encode(),
-            headers={},
-            callback=callback,
-            use_default_error_handler=True,
-            timeout=5,
-        )
+    #
+    # Sessions are not created via a dedicated POST /sessions endpoint;
+    # they are created implicitly by POST /inference. POST /sessions/{id}/copy
+    # was removed from the backend along with the workflow-visibility refactor.
+    # GET /sessions/{id}/prompts was retired — the frozen prompt snapshot is
+    # embedded in SessionResponse.
 
     def get_session(self, session_id: str, callback: Callable):
         self.http.get(
             url=f"{self.server}/sessions/{session_id}",
-            headers={},
-            callback=callback,
-            use_default_error_handler=True,
-            timeout=5,
-        )
-
-    def copy_session(self, session_id: str, callback: Callable):
-        self.http.post(
-            url=f"{self.server}/sessions/{session_id}/copy",
-            body=b"",
-            headers={},
-            callback=callback,
-            use_default_error_handler=True,
-            timeout=5,
-        )
-
-    def get_session_prompts(self, session_id: str, callback: Callable):
-        self.http.get(
-            url=f"{self.server}/sessions/{session_id}/prompts",
             headers={},
             callback=callback,
             use_default_error_handler=True,
@@ -315,11 +291,13 @@ class SamApi(QObject):
     # Result endpoints
     # ------------------------------------------------------------------
 
-    def get_result(self, session_id: str, callback: Callable):
+    def get_result(self, session_id: str, callback: Callable,
+                   callback_kwargs: Optional[dict] = None):
         self.http.get(
             url=f"{self.server}/result/{session_id}",
             headers={},
             callback=callback,
+            callback_kwargs=callback_kwargs,
             use_default_error_handler=True,
             timeout=10,
         )

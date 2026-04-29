@@ -2150,10 +2150,7 @@ class Mapflow(QObject):
                 self.alert(self.tr("Text prompt is required for SAM processing."),
                            icon=QMessageBox.Warning)
                 return
-            sam_confidence_threshold, threshold_error = self._parse_sam_confidence_threshold()
-            if threshold_error:
-                self.alert(self.tr(threshold_error), icon=QMessageBox.Warning)
-                return
+            sam_confidence_threshold = self.dlg.samProcessingConfidenceThresholdInput.value()
         # Define starting to use later after confirmation or without it
         def start_processing():
             self.message_bar.pushInfo(self.plugin_name, self.tr('Starting the processing...'))
@@ -2239,15 +2236,12 @@ class Mapflow(QObject):
             self.sam_wdid = data.get("wdid") or None
         except (json.JSONDecodeError, ValueError):
             self.sam_wdid = None
+        if self.processings:
+            self.update_processing_table(self.processings)
 
     def _is_sam_processing(self, processing_params: PostProcessingSchemaV2) -> bool:
         """Check if the processing should be routed to SAM API."""
         return self.sam_wdid is not None and processing_params.wdId == self.sam_wdid
-
-    def _parse_sam_confidence_threshold(self) -> Tuple[Optional[float], Optional[str]]:
-        return parse_confidence_threshold(
-            self.dlg.samConfidenceThresholdInput.text()
-        )
 
     def _post_sam_processing(
         self,
@@ -2297,10 +2291,7 @@ class Mapflow(QObject):
             return
 
         text_prompt = self.dlg.samTextPromptInput.text().strip() or None
-        confidence_threshold, threshold_error = self._parse_sam_confidence_threshold()
-        if threshold_error:
-            self.alert(self.tr(threshold_error), icon=QMessageBox.Warning)
-            return
+        confidence_threshold = self.dlg.samProcessingConfidenceThresholdInput.value()
 
         request = ProcessingCreateRequest(
             name=base_request.name,
@@ -3226,6 +3217,7 @@ class Mapflow(QObject):
         # Fill out the table
         for row, proc in enumerate(processings):
             processing_dict = proc.asdict()
+            is_sam_processing = bool(self.sam_wdid and proc.wd_id == self.sam_wdid)
             set_color = False
             if proc.status.is_ok and proc.review_expires:
                 # setting color for close review
@@ -3233,7 +3225,11 @@ class Mapflow(QObject):
                 color = QColor(255, 220, 200)
             for col, attr in enumerate(self.config.PROCESSING_TABLE_COLUMNS):
                 table_item = QTableWidgetItem()
-                table_item.setData(Qt.DisplayRole, processing_dict[attr])
+                display_value = processing_dict[attr]
+                if attr == 'workflowDef' and is_sam_processing:
+                    display_value = 'SAM3-interactive'
+                    table_item.setData(Qt.UserRole, True)
+                table_item.setData(Qt.DisplayRole, display_value)
                 if proc.status.is_failed:
                     table_item.setToolTip(proc.error_message(raw=self.config.SHOW_RAW_ERROR))
                 elif proc.in_review_until:

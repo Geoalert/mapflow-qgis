@@ -771,7 +771,10 @@ class ResultsLoader(QObject):
         # If raster is available, we zoom to the raster to fit the whole processing, not only the detected objects
         self.iface.setActiveLayer(raster)
         self.iface.zoomToActiveLayer()
-        self.iface.setActiveLayer(vectors[0])
+        # Empty processing result: no vector layers were produced. Leave the
+        # raster active rather than crashing on vectors[0].
+        if vectors:
+            self.iface.setActiveLayer(vectors[0])
 
     def set_raster_extent_error_handler(self,
                                         response: QNetworkReply,
@@ -779,10 +782,14 @@ class ResultsLoader(QObject):
 
         """Error handler for processing AOI requests. If tilejson can't be loaded, we do not add raster layer, and
         """
+        vectors = vectors or []
         for vector in vectors:
             self.add_layer(vector)
-        self.iface.setActiveLayer(vectors[0])
-        self.iface.zoomToActiveLayer()
+        # Empty processing result: nothing to focus on; skip the active-layer
+        # / zoom-to dance entirely.
+        if vectors:
+            self.iface.setActiveLayer(vectors[0])
+            self.iface.zoomToActiveLayer()
     
     def collect_geometry_types(self, data: dict):
         """Collect unique geometry types from original data to save all needed layers later."""

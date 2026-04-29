@@ -13,6 +13,7 @@ class Processing:
                  name,
                  status,
                  workflow_def,
+                 wd_id,
                  aoi_area,
                  cost,
                  created,
@@ -32,6 +33,7 @@ class Processing:
         self.name = name
         self.status = ProcessingStatus(status)
         self.workflow_def = workflow_def
+        self.wd_id = wd_id
         self.aoi_area = aoi_area
         self.cost = int(cost)
         self.created = created.astimezone()
@@ -54,6 +56,7 @@ class Processing:
         status = processing['status']
         description = processing.get("description") or None
         workflow_def = processing['workflowDef']['name']
+        wd_id = processing['workflowDef'].get('id')
         aoi_area = round(processing['aoiArea'] / 10 ** 6, 2)
         meta = processing.get("meta") or None
         style_name = processing['workflowDef'].get("styleName") or None
@@ -83,6 +86,7 @@ class Processing:
                    name,
                    status,
                    workflow_def,
+                   wd_id,
                    aoi_area,
                    cost,
                    created,

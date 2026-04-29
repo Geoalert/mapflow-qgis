@@ -12,7 +12,6 @@ from mapflow.schema.sam import (
     PromptUpdateRequest,
     PointPromptRequest,
     BboxPromptRequest,
-    SessionCreateRequest,
     SessionInferenceCreateRequest,
     SessionNameUpdateRequest,
     InferenceCreateRequest,
@@ -218,19 +217,6 @@ class TestAddBboxPrompt:
 # Session endpoints
 # ---------------------------------------------------------------------------
 
-class TestCreateSession:
-    def test_calls_post(self, http_mock):
-        api = SamApi(http=http_mock, server=SERVER)
-        request = SessionCreateRequest(processing_id="proc-1", prompt_id="prompt-1")
-        api.create_session(request, callback=_noop)
-
-        call_kwargs = http_mock.post.call_args[1]
-        assert call_kwargs["url"] == f"{SERVER}/sessions"
-        body = json.loads(call_kwargs["body"].decode())
-        assert body["processing_id"] == "proc-1"
-        assert body["prompt_id"] == "prompt-1"
-
-
 class TestGetSession:
     def test_calls_get(self, http_mock):
         api = SamApi(http=http_mock, server=SERVER)
@@ -238,15 +224,6 @@ class TestGetSession:
 
         url = http_mock.get.call_args[1]["url"]
         assert url == f"{SERVER}/sessions/sess-1"
-
-
-class TestCopySession:
-    def test_calls_post(self, http_mock):
-        api = SamApi(http=http_mock, server=SERVER)
-        api.copy_session("sess-1", callback=_noop)
-
-        call_kwargs = http_mock.post.call_args[1]
-        assert call_kwargs["url"] == f"{SERVER}/sessions/sess-1/copy"
 
 
 class TestUpdateSessionName:
@@ -439,29 +416,80 @@ class TestSchemas:
         assert resp.we_workflow_id is None
         assert resp.we_workflow_status is None
 
-    def test_result_response_parses(self):
-        from mapflow.schema.sam import ResultResponse
-        data = {
-            "id": "r1", "geometry": {"type": "Point", "coordinates": [1, 2]},
-            "layer_id": "l1", "processing_id": "p1", "session_id": "s1",
-        }
-        resp = ResultResponse.from_dict(data)
-        assert resp.id == "r1"
-        assert resp.layer_id == "l1"
-
-    def test_session_response_accepts_camelcase_text_prompt(self):
-        from mapflow.schema.sam import SessionResponse
+    def test_session_response_parses_inference_summaries(self):
+        from mapflow.schema.sam import SessionResponse, InferenceStatusSummary
 
         data = {
             "id": "s1",
             "processing_id": "p1",
             "name": "session-name",
-            "textPrompt": "detect roads",
+            "confidence_threshold": 0.5,
+            "inferences": [
+                {"id": "inf1", "status": "in_progress",
+                 "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
+                 "created_at": "2026-04-01T10:00:00"},
+                {"id": "inf2", "status": "done", "created_at": "2026-04-01T10:01:00"},
+            ],
+            "vector_layer": {
+                "id": "vl1",
+                "tile_url": "https://tiles/{z}/{x}/{y}",
+                "tile_json_url": "https://tiles/tile.json",
+            },
+        }
+        resp = SessionResponse.from_dict(data)
+
+        assert len(resp.inferences) == 2
+        assert all(isinstance(i, InferenceStatusSummary) for i in resp.inferences)
+        assert resp.inferences[0].id == "inf1"
+        assert resp.inferences[0].status == "in_progress"
+        assert resp.inferences[0].geometry is not None
+        assert resp.inferences[0].created_at == "2026-04-01T10:00:00"
+        assert resp.inferences[1].geometry is None
+        assert resp.vector_layer is not None
+        assert resp.vector_layer.tile_url == "https://tiles/{z}/{x}/{y}"
+
+    def test_session_response_parses_embedded_prompt_snapshot(self):
+        # Post-A4 shape: text_prompt + spatial_prompts ride directly on the
+        # session response, retiring the separate /sessions/{id}/prompts call.
+        from mapflow.schema.sam import (
+            SessionResponse, TextPromptSummary, SpatialPromptResponse,
+        )
+
+        data = {
+            "id": "s1",
+            "processing_id": "p1",
+            "text_prompt": {"id": "tp1", "text": "find trees"},
+            "spatial_prompts": [
+                {"id": "sp1", "geometry_type": "point", "processing_id": "p1",
+                 "geometry": {"type": "Point", "coordinates": [37.6, 55.7]},
+                 "positive": True},
+            ],
             "inferences": [],
         }
         resp = SessionResponse.from_dict(data)
 
-        assert resp.text_prompt == "detect roads"
+        assert isinstance(resp.text_prompt, TextPromptSummary)
+        assert resp.text_prompt.text == "find trees"
+        assert len(resp.spatial_prompts) == 1
+        assert isinstance(resp.spatial_prompts[0], SpatialPromptResponse)
+        assert resp.spatial_prompts[0].geometry_type == "point"
+
+    def test_session_list_item_carries_progress_aggregates(self):
+        # Post-A2 shape: SessionListItem exposes inferences_total / done so
+        # the sessions list table can show progress without per-row drill-in.
+        from mapflow.schema.sam import SessionListResponse
+
+        data = {
+            "total": 1, "limit": 20, "offset": 0,
+            "items": [
+                {"id": "s1", "processing_id": "p1", "name": "sess",
+                 "inferences_total": 5, "inferences_done": 2},
+            ],
+        }
+        resp = SessionListResponse.from_dict(data)
+
+        assert resp.items[0].inferences_total == 5
+        assert resp.items[0].inferences_done == 2
 
     def test_prompt_response_name_defaults_to_text_prompt(self):
         from mapflow.schema.sam import PromptResponse
@@ -486,19 +514,12 @@ class TestSchemas:
 
         assert resp.name == "Prompt A"
 
-    def test_result_response_defaults(self):
-        from mapflow.schema.sam import ResultResponse
-        resp = ResultResponse.from_dict({"id": "r1"})
-        assert resp.geometry is None
-        assert resp.layer_id is None
-
     def test_session_list_response_parses(self):
         from mapflow.schema.sam import SessionListResponse
         data = {
             "total": 1, "limit": 20, "offset": 0,
             "items": [
-                {"id": "s1", "processing_id": "p1", "prompt_id": "pr1",
-                 "inferences": [], "layer_id": "l1", "tile_url": "https://tiles"},
+                {"id": "s1", "processing_id": "p1", "inferences": []},
             ],
         }
         resp = SessionListResponse.from_dict(data)
@@ -508,8 +529,9 @@ class TestSchemas:
 
     def test_session_response_empty_inferences(self):
         from mapflow.schema.sam import SessionResponse
-        resp = SessionResponse.from_dict({"id": "s1", "processing_id": "p1", "prompt_id": "pr1"})
+        resp = SessionResponse.from_dict({"id": "s1", "processing_id": "p1"})
         assert resp.inferences == []
+        assert resp.vector_layer is None
 
 
 # ---------------------------------------------------------------------------

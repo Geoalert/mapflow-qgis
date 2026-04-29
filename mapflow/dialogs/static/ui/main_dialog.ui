@@ -646,24 +646,30 @@
            </layout>
           </item>
           <item>
-           <layout class="QHBoxLayout" name="samConfidenceThresholdLayout">
+           <layout class="QHBoxLayout" name="samProcessingConfidenceThresholdLayout">
             <item>
-             <widget class="QLabel" name="samConfidenceThresholdLabel">
+             <widget class="QLabel" name="samProcessingConfidenceThresholdLabel">
               <property name="text">
-               <string>Confidence threshold:</string>
+               <string>Confidence:</string>
               </property>
              </widget>
             </item>
             <item>
-             <widget class="QLineEdit" name="samConfidenceThresholdInput">
+             <widget class="QDoubleSpinBox" name="samProcessingConfidenceThresholdInput">
               <property name="toolTip">
-               <string>Used for SAM processing creation and POST /inference only. Adding inference to an existing session reuses that session's saved threshold.</string>
+               <string>Confidence threshold used when starting a SAM Interactive processing.</string>
               </property>
-              <property name="placeholderText">
-               <string>Optional threshold for SAM processing or POST /inference (0-1)</string>
+              <property name="minimum">
+               <double>0.250000000000000</double>
               </property>
-              <property name="clearButtonEnabled">
-               <bool>true</bool>
+              <property name="maximum">
+               <double>0.750000000000000</double>
+              </property>
+              <property name="singleStep">
+               <double>0.050000000000000</double>
+              </property>
+              <property name="value">
+               <double>0.500000000000000</double>
               </property>
              </widget>
             </item>
@@ -1415,6 +1421,16 @@
                    </property>
                    <property name="placeholderText">
                     <string>Filter processings by name</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="0" column="6">
+                  <widget class="QCheckBox" name="samOnlyFilter">
+                   <property name="text">
+                    <string>Show only SAM</string>
+                   </property>
+                   <property name="toolTip">
+                    <string>Show only SAM Interactive processings (matches by workflow definition ID).</string>
                    </property>
                   </widget>
                  </item>
@@ -3455,7 +3471,7 @@
                      <enum>QAbstractItemView::SelectRows</enum>
                     </property>
                     <property name="columnCount">
-                     <number>4</number>
+                     <number>3</number>
                     </property>
                     <column>
                      <property name="text">
@@ -3465,11 +3481,6 @@
                     <column>
                      <property name="text">
                       <string>Name</string>
-                     </property>
-                    </column>
-                    <column>
-                     <property name="text">
-                      <string>Status</string>
                      </property>
                     </column>
                     <column>
@@ -3517,29 +3528,11 @@
                  </property>
                  <layout class="QVBoxLayout" name="samPromptsLayout">
                   <item>
-                   <layout class="QHBoxLayout" name="samPromptCreateLayout">
-                    <item>
-                     <widget class="QLabel" name="samPromptLabel">
-                      <property name="text">
-                       <string>Text prompt:</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QLineEdit" name="samPromptText">
-                      <property name="placeholderText">
-                       <string>Enter text prompt (optional)</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QPushButton" name="samCreatePrompt">
-                      <property name="text">
-                       <string>Create</string>
-                      </property>
-                     </widget>
-                    </item>
-                   </layout>
+                   <widget class="QPushButton" name="samCreatePrompt">
+                    <property name="text">
+                     <string>Create new prompt...</string>
+                    </property>
+                   </widget>
                   </item>
                   <item>
                    <widget class="QTableWidget" name="samPromptsTable">
@@ -3617,7 +3610,7 @@
                 <x>0</x>
                 <y>0</y>
                 <width>1172</width>
-                <height>458</height>
+                <height>584</height>
                </rect>
               </property>
               <layout class="QVBoxLayout" name="samScrollLayout">
@@ -3678,6 +3671,32 @@
                          </widget>
                         </item>
                         <item>
+                         <widget class="QLabel" name="samConfidenceThresholdLabel">
+                          <property name="text">
+                           <string>Confidence:</string>
+                          </property>
+                         </widget>
+                        </item>
+                        <item>
+                         <widget class="QDoubleSpinBox" name="samConfidenceThresholdInput">
+                          <property name="toolTip">
+                           <string>Confidence threshold for the next inference. Frozen on the resulting session.</string>
+                          </property>
+                          <property name="minimum">
+                           <double>0.250000000000000</double>
+                          </property>
+                          <property name="maximum">
+                           <double>0.750000000000000</double>
+                          </property>
+                          <property name="singleStep">
+                           <double>0.050000000000000</double>
+                          </property>
+                          <property name="value">
+                           <double>0.500000000000000</double>
+                          </property>
+                         </widget>
+                        </item>
+                        <item>
                          <widget class="QPushButton" name="samRunInference">
                           <property name="text">
                            <string>Run Inference</string>
@@ -3716,26 +3735,25 @@
                          <number>22</number>
                         </property>
                         <item>
-                         <widget class="QLabel" name="samInferenceWorkflowLabel">
+                         <widget class="QLabel" name="samInferencesLabel">
                           <property name="text">
-                           <string>Workflow:</string>
+                           <string>Inferences:</string>
                           </property>
                          </widget>
                         </item>
                         <item>
-                         <widget class="QComboBox" name="samInferenceWorkflowCombo">
+                         <widget class="QLabel" name="samSessionTextPromptLabel">
                           <property name="sizePolicy">
-                           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-                            <horstretch>0</horstretch>
+                           <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                            <horstretch>1</horstretch>
                             <verstretch>0</verstretch>
                            </sizepolicy>
                           </property>
-                         </widget>
-                        </item>
-                        <item>
-                         <widget class="QLabel" name="samInferenceIdValue">
                           <property name="text">
-                           <string>-</string>
+                           <string/>
+                          </property>
+                          <property name="textInteractionFlags">
+                           <set>Qt::TextSelectableByMouse</set>
                           </property>
                          </widget>
                         </item>
@@ -3746,27 +3764,35 @@
                           </property>
                          </widget>
                         </item>
-                        <item>
-                         <widget class="QLabel" name="samInferenceStatusLabel">
-                          <property name="text">
-                           <string>Status:</string>
-                          </property>
-                         </widget>
-                        </item>
-                        <item>
-                         <widget class="QLabel" name="samInferenceStatusValue">
-                          <property name="minimumSize">
-                           <size>
-                            <width>35</width>
-                            <height>0</height>
-                           </size>
-                          </property>
-                          <property name="text">
-                           <string>-</string>
-                          </property>
-                         </widget>
-                        </item>
                        </layout>
+                      </item>
+                      <item>
+                       <widget class="QTableWidget" name="samInferencesTable">
+                        <property name="minimumSize">
+                         <size>
+                          <width>0</width>
+                          <height>120</height>
+                         </size>
+                        </property>
+                        <property name="columnCount">
+                         <number>3</number>
+                        </property>
+                        <column>
+                         <property name="text">
+                          <string>ID</string>
+                         </property>
+                        </column>
+                        <column>
+                         <property name="text">
+                          <string>Status</string>
+                         </property>
+                        </column>
+                        <column>
+                         <property name="text">
+                          <string>Created</string>
+                         </property>
+                        </column>
+                       </widget>
                       </item>
                      </layout>
                     </item>
@@ -3816,6 +3842,12 @@
                 <widget class="QGroupBox" name="samDebugGroup">
                  <property name="title">
                   <string>Debug Output</string>
+                 </property>
+                 <property name="checkable">
+                  <bool>true</bool>
+                 </property>
+                 <property name="checked">
+                  <bool>false</bool>
                  </property>
                  <layout class="QVBoxLayout" name="samDebugLayout">
                   <item>

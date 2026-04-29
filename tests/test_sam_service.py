@@ -18,13 +18,11 @@ from mapflow.schema.sam import (
     ProcessingListResponse,
     ProcessingSummaryResponse,
     ProcessingDetailResponse,
-    WorkflowSummaryResponse,
     PromptResponse,
     PromptDetailResponse,
     PromptListResponse,
     SpatialPromptResponse,
     SessionResponse,
-    InferenceResponse,
 )
 
 
@@ -51,6 +49,7 @@ def sam_api(http_mock):
 @pytest.fixture()
 def sam_view():
     view = MagicMock()
+    view.selected_session_id.return_value = None
     return view
 
 
@@ -170,65 +169,10 @@ class TestGetProcessingCallback:
 
 
 # ---------------------------------------------------------------------------
-# list_workflows
-# ---------------------------------------------------------------------------
-
-class TestListWorkflowsCallback:
-    WORKFLOWS_DATA = {
-        "items": [
-            {"id": "w1", "processing_id": "p1", "status": "done",
-             "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
-             "embedding_uri": "s3://bucket/embed1"},
-            {"id": "w2", "processing_id": "p1", "status": "running",
-             "geometry": None, "embedding_uri": None},
-        ],
-    }
-
-    def test_appends_debug_with_workflows(self, sam_service, sam_view):
-        reply = _make_reply(self.WORKFLOWS_DATA)
-        sam_service.list_workflows_callback(reply)
-
-        sam_view.append_debug.assert_called_once()
-        title, data = sam_view.append_debug.call_args[0]
-        assert "Workflows" in title
-
-    def test_populates_workflow_combo(self, sam_service, sam_view):
-        reply = _make_reply(self.WORKFLOWS_DATA)
-        sam_service.list_workflows_callback(reply)
-
-        sam_view.populate_workflow_combo.assert_called_once()
-        workflows = sam_view.populate_workflow_combo.call_args[0][0]
-        assert len(workflows) == 2
-        assert isinstance(workflows[0], WorkflowSummaryResponse)
-        assert workflows[0].status == "done"
-        assert workflows[1].embedding_uri is None
-
-
-# ---------------------------------------------------------------------------
-# get_workflow (detail)
-# ---------------------------------------------------------------------------
-
-class TestGetWorkflowCallback:
-    WORKFLOW_DATA = {
-        "id": "w1",
-        "processing_id": "p1",
-        "status": "done",
-        "external_id": 42,
-        "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
-        "raw_raster_uri": "s3://bucket/raster",
-        "embedding_uri": "s3://bucket/embed",
-    }
-
-    def test_appends_debug_with_workflow_detail(self, sam_service, sam_view):
-        reply = _make_reply(self.WORKFLOW_DATA)
-        sam_service.get_workflow_callback(reply)
-
-        sam_view.append_debug.assert_called_once()
-        title, data = sam_view.append_debug.call_args[0]
-        assert "Workflow Detail" in title
-        assert data["id"] == "w1"
-
-
+# Workflows are no longer user-facing — they were removed from SamService
+# along with the workflow combo and per-workflow drill-down. Tests for those
+# helpers were dropped; the underlying API endpoints (still on SamApi) are
+# covered by tests/test_sam_api.py.
 # ---------------------------------------------------------------------------
 # Pagination helpers
 # ---------------------------------------------------------------------------
@@ -505,60 +449,34 @@ class TestAddBboxPromptCallback:
 
 
 # ---------------------------------------------------------------------------
-# create_session
+# Session creation has no dedicated endpoint anymore — sessions are created
+# implicitly by POST /inference. POST /sessions/{id}/copy was also removed.
 # ---------------------------------------------------------------------------
-
-class TestCreateSessionService:
-    def test_calls_api(self, sam_service, http_mock):
-        sam_service.create_session("proc-1", "prompt-1")
-
-        http_mock.post.assert_called_once()
-        url = http_mock.post.call_args[1]["url"]
-        assert "/sessions" in url
-
-
-class TestCreateSessionCallback:
-    RESPONSE_DATA = {
-        "id": "s1", "processing_id": "p1", "text_prompt": "find buildings",
-        "inferences": [], "vector_layer": {"id": "l1", "tile_url": "https://tiles", "tile_json_url": "https://tiles.json"},
-    }
-
-    def test_appends_debug(self, sam_service, sam_view):
-        reply = _make_reply(self.RESPONSE_DATA)
-        sam_service.create_session_callback(reply)
-
-        sam_view.append_debug.assert_called_once()
-        title, data = sam_view.append_debug.call_args[0]
-        assert "Create Session" in title
-        assert data["id"] == "s1"
-
-    def test_adds_session_to_table(self, sam_service, sam_view):
-        reply = _make_reply(self.RESPONSE_DATA)
-        sam_service.create_session_callback(reply)
-
-        sam_view.add_session_to_table.assert_called_once()
-        session = sam_view.add_session_to_table.call_args[0][0]
-        assert isinstance(session, SessionResponse)
-        assert session.id == "s1"
 
 
 # ---------------------------------------------------------------------------
-# get_session_detail
+# get_session_detail — drives both the per-inference status table and the
+# partial result fetch (when at least one inference is done).
 # ---------------------------------------------------------------------------
 
 class TestGetSessionDetailCallback:
     RESPONSE_DATA = {
-        "id": "s1", "processing_id": "p1", "text_prompt": "find buildings",
+        "id": "s1", "processing_id": "p1",
         "inferences": [{"id": "i1", "status": "done"}],
         "vector_layer": {"id": "l1", "tile_url": "https://tiles", "tile_json_url": "https://tiles.json"},
     }
+    IN_PROGRESS_DATA = {
+        "id": "s1", "processing_id": "p1",
+        "inferences": [{"id": "i1", "status": "in_progress"}],
+        "vector_layer": None,
+    }
 
-    def test_displays_session_detail(self, sam_service, sam_view):
+    def test_displays_session(self, sam_service, sam_view):
         reply = _make_reply(self.RESPONSE_DATA)
         sam_service.get_session_detail_callback(reply)
 
-        sam_view.display_session_detail.assert_called_once()
-        session = sam_view.display_session_detail.call_args[0][0]
+        sam_view.display_session.assert_called_once()
+        session = sam_view.display_session.call_args[0][0]
         assert isinstance(session, SessionResponse)
         assert session.id == "s1"
         assert len(session.inferences) == 1
@@ -567,38 +485,50 @@ class TestGetSessionDetailCallback:
         reply = _make_reply(self.RESPONSE_DATA)
         sam_service.get_session_detail_callback(reply)
 
-        sam_view.append_debug.assert_called_once()
-        title, _ = sam_view.append_debug.call_args[0]
+        title, _ = sam_view.append_debug.call_args_list[0][0]
         assert "Session Detail" in title
 
+    def test_fetches_partial_result_when_any_inference_done(self, sam_service, http_mock):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.get_session_detail_callback(reply)
+
+        # /result/s1 should be the only follow-up GET issued — the prompt
+        # snapshot now ships embedded in the session response (post-A4),
+        # so /sessions/s1/prompts is no longer called.
+        result_calls = [c for c in http_mock.get.call_args_list
+                        if "/result/s1" in c[1]["url"]]
+        assert len(result_calls) == 1
+
+    def test_skips_partial_result_when_all_in_progress(self, sam_service, http_mock):
+        reply = _make_reply(self.IN_PROGRESS_DATA)
+        sam_service.get_session_detail_callback(reply)
+
+        result_calls = [c for c in http_mock.get.call_args_list
+                        if "/result/s1" in c[1]["url"]]
+        assert len(result_calls) == 0
+
+    def test_no_separate_prompts_call(self, sam_service, http_mock):
+        # The frozen prompt snapshot is embedded in SessionResponse, so the
+        # session detail flow no longer issues GET /sessions/{id}/prompts.
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.get_session_detail_callback(reply)
+
+        prompt_calls = [c for c in http_mock.get.call_args_list
+                        if "/sessions/s1/prompts" in c[1]["url"]]
+        assert len(prompt_calls) == 0
+
 
 # ---------------------------------------------------------------------------
-# copy_session
+# refresh_session_status — manual session-level polling entry point.
 # ---------------------------------------------------------------------------
 
-class TestCopySessionCallback:
-    RESPONSE_DATA = {
-        "id": "s2", "processing_id": "p1", "text_prompt": "find roads",
-        "inferences": [], "vector_layer": {"id": "l2", "tile_url": "https://tiles2", "tile_json_url": "https://tiles2.json"},
-    }
+class TestRefreshSessionStatus:
+    def test_calls_get_session(self, sam_service, http_mock):
+        sam_service.refresh_session_status("s1")
 
-    def test_appends_debug(self, sam_service, sam_view):
-        reply = _make_reply(self.RESPONSE_DATA)
-        sam_service.copy_session_callback(reply)
-
-        sam_view.append_debug.assert_called_once()
-        title, data = sam_view.append_debug.call_args[0]
-        assert "Copy Session" in title
-        assert data["id"] == "s2"
-
-    def test_adds_session_to_table(self, sam_service, sam_view):
-        reply = _make_reply(self.RESPONSE_DATA)
-        sam_service.copy_session_callback(reply)
-
-        sam_view.add_session_to_table.assert_called_once()
-        session = sam_view.add_session_to_table.call_args[0][0]
-        assert isinstance(session, SessionResponse)
-        assert session.id == "s2"
+        session_calls = [c for c in http_mock.get.call_args_list
+                         if c[1]["url"].endswith("/sessions/s1")]
+        assert len(session_calls) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -608,9 +538,9 @@ class TestCopySessionCallback:
 class TestListSessionsCallback:
     RESPONSE_DATA = {
         "items": [
-            {"id": "s1", "processing_id": "p1", "text_prompt": "find buildings",
+            {"id": "s1", "processing_id": "p1",
              "inferences": [], "vector_layer": {"id": "l1", "tile_url": "https://tiles", "tile_json_url": "https://tiles.json"}},
-            {"id": "s2", "processing_id": "p1", "text_prompt": "find roads",
+            {"id": "s2", "processing_id": "p1",
              "inferences": [], "vector_layer": {"id": "l2", "tile_url": "https://tiles2", "tile_json_url": "https://tiles2.json"}},
         ],
     }
@@ -641,6 +571,21 @@ class TestListSessionsCallback:
         sessions = sam_view.display_sessions.call_args[0][0]
         assert len(sessions) == 0
 
+    def test_fetches_selected_session_detail_after_list_refresh(self, sam_service, sam_view):
+        sam_view.selected_session_id.return_value = "s2"
+        sam_service.get_session_detail = MagicMock()
+
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.list_sessions_callback(reply)
+
+        sam_service.get_session_detail.assert_called_once_with("s2")
+
+    def test_clears_session_display_when_no_session_selected(self, sam_service, sam_view):
+        reply = _make_reply({"items": []})
+        sam_service.list_sessions_callback(reply)
+
+        sam_view.clear_session_display.assert_called_once()
+
 
 # ---------------------------------------------------------------------------
 # create_inference
@@ -666,20 +611,35 @@ class TestCreateInferenceService:
 
 
 class TestCreateInferenceCallback:
+    # POST /inference now returns SessionResponse with the N inferences
+    # just dispatched (one per workflow whose AOI intersects the request).
     RESPONSE_DATA = {
-        "id": "inf1", "session_id": "s1", "status": "in_progress",
-        "geometry": None, "we_workflow_id": 42, "we_workflow_status": "running",
-        "created_at": "2025-01-01T00:00:00", "updated_at": "2025-01-01T00:00:00",
+        "id": "s1", "processing_id": "p1",
+        "inferences": [
+            {"id": "inf1", "status": "in_progress"},
+            {"id": "inf2", "status": "in_progress"},
+        ],
+        "vector_layer": {"id": "l1", "tile_url": "https://tiles",
+                          "tile_json_url": "https://tiles.json"},
     }
 
-    def test_displays_inference_status(self, sam_service, sam_view):
+    def test_renders_session(self, sam_service, sam_view):
         reply = _make_reply(self.RESPONSE_DATA)
         sam_service.create_inference_callback(reply)
 
-        sam_view.display_inference_status.assert_called_once()
-        inference = sam_view.display_inference_status.call_args[0][0]
-        assert isinstance(inference, InferenceResponse)
-        assert inference.status == "in_progress"
+        sam_view.display_session.assert_called_once()
+        session = sam_view.display_session.call_args[0][0]
+        assert isinstance(session, SessionResponse)
+        assert len(session.inferences) == 2
+
+    def test_adds_session_to_table(self, sam_service, sam_view):
+        reply = _make_reply(self.RESPONSE_DATA)
+        sam_service.create_inference_callback(reply)
+
+        sam_view.add_session_to_table.assert_called_once()
+        session = sam_view.add_session_to_table.call_args[0][0]
+        assert isinstance(session, SessionResponse)
+        assert session.id == "s1"
 
     def test_appends_debug(self, sam_service, sam_view):
         reply = _make_reply(self.RESPONSE_DATA)
@@ -688,13 +648,7 @@ class TestCreateInferenceCallback:
         sam_view.append_debug.assert_called_once()
         title, data = sam_view.append_debug.call_args[0]
         assert "Create Inference" in title
-        assert data["id"] == "inf1"
-
-    def test_stores_current_inference_id(self, sam_service, sam_view):
-        reply = _make_reply(self.RESPONSE_DATA)
-        sam_service.create_inference_callback(reply)
-
-        assert sam_service._current_inference_id == "inf1"
+        assert data["id"] == "s1"
 
     def test_enables_inference_refresh(self, sam_service, sam_view):
         reply = _make_reply(self.RESPONSE_DATA)
@@ -720,20 +674,25 @@ class TestCreateSessionInferenceService:
 
 
 class TestCreateSessionInferenceCallback:
+    # POST /sessions/{id}/inferences also returns the updated SessionResponse.
     RESPONSE_DATA = {
-        "id": "inf2", "session_id": "s1", "status": "in_progress",
-        "geometry": None, "we_workflow_id": 43, "we_workflow_status": "running",
-        "created_at": "2025-01-01T00:00:00", "updated_at": "2025-01-01T00:00:00",
+        "id": "s1", "processing_id": "p1",
+        "inferences": [
+            {"id": "inf1", "status": "done"},
+            {"id": "inf3", "status": "in_progress"},
+        ],
+        "vector_layer": {"id": "l1", "tile_url": "https://tiles",
+                          "tile_json_url": "https://tiles.json"},
     }
 
-    def test_displays_inference_status(self, sam_service, sam_view):
+    def test_renders_session(self, sam_service, sam_view):
         reply = _make_reply(self.RESPONSE_DATA)
         sam_service.create_session_inference_callback(reply)
 
-        sam_view.display_inference_status.assert_called_once()
-        inference = sam_view.display_inference_status.call_args[0][0]
-        assert isinstance(inference, InferenceResponse)
-        assert inference.status == "in_progress"
+        sam_view.display_session.assert_called_once()
+        session = sam_view.display_session.call_args[0][0]
+        assert isinstance(session, SessionResponse)
+        assert len(session.inferences) == 2
 
     def test_appends_debug(self, sam_service, sam_view):
         reply = _make_reply(self.RESPONSE_DATA)
@@ -742,49 +701,38 @@ class TestCreateSessionInferenceCallback:
         sam_view.append_debug.assert_called_once()
         title, data = sam_view.append_debug.call_args[0]
         assert "Session Inference" in title
-        assert data["id"] == "inf2"
+        assert data["id"] == "s1"
 
 
 # ---------------------------------------------------------------------------
-# get_inference_status
+# Per-inference WE drill-down was removed — the abstract status from the
+# session-level call is the only signal the user-facing UI exposes.
+# GET /inference/{id} stays available on SamApi for debug, but the service
+# no longer wires it to a click handler.
 # ---------------------------------------------------------------------------
-
-class TestGetInferenceStatusCallback:
-    RESPONSE_DATA = {
-        "id": "inf1", "session_id": "s1", "status": "done",
-        "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
-    }
-
-    def test_displays_inference_status(self, sam_service, sam_view):
-        reply = _make_reply(self.RESPONSE_DATA)
-        sam_service.get_inference_status_callback(reply)
-
-        sam_view.display_inference_status.assert_called_once()
-        inference = sam_view.display_inference_status.call_args[0][0]
-        assert isinstance(inference, InferenceResponse)
-        assert inference.status == "done"
-
-    def test_appends_debug(self, sam_service, sam_view):
-        reply = _make_reply(self.RESPONSE_DATA)
-        sam_service.get_inference_status_callback(reply)
-
-        sam_view.append_debug.assert_called_once()
-        title, _ = sam_view.append_debug.call_args[0]
-        assert "Inference Status" in title
-
-
-# ---------------------------------------------------------------------------
-# get_result
+# get_result — backend now returns a raw GeoJSON FeatureCollection (or 204).
 # ---------------------------------------------------------------------------
 
 class TestGetResultCallback:
-    RESPONSE_DATA = {
-        "id": "r1", "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
-        "layer_id": "l1", "processing_id": "p1", "session_id": "s1",
+    GEOJSON = {
+        "type": "FeatureCollection",
+        "features": [
+            {"type": "Feature", "geometry": {"type": "Polygon",
+                                              "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
+             "properties": {}},
+        ],
     }
 
-    def test_loads_result_layer(self, sam_service, sam_view):
-        reply = _make_reply(self.RESPONSE_DATA)
-        sam_service.get_result_callback(reply)
+    def test_loads_result_layer_with_session_id(self, sam_service, sam_view):
+        reply = _make_reply(self.GEOJSON)
+        sam_service.get_result_callback(reply, session_id="s1")
 
-        sam_view.load_result_layer.assert_called_once_with(self.RESPONSE_DATA)
+        sam_view.load_result_layer.assert_called_once_with(self.GEOJSON, session_id="s1")
+
+    def test_silently_skips_empty_response(self, sam_service, sam_view):
+        # 204 No Content — backend returns no body when no result is ready.
+        reply = MagicMock()
+        reply.readAll.return_value.data.return_value = b""
+        sam_service.get_result_callback(reply, session_id="s1")
+
+        sam_view.load_result_layer.assert_not_called()

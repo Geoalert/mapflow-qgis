@@ -14,7 +14,7 @@ from qgis.gui import QgsMapCanvas
 from ..map_tools import SamPointMapTool, SamBboxMapTool
 from ..service.sam import SamService
 from ...dialogs.main_dialog import MainDialog
-from ...schema.sam import parse_confidence_threshold
+from ...dialogs.sam_prompt_dialog import SamPromptCreateDialog
 
 
 class SamController(QObject):
@@ -78,11 +78,10 @@ class SamController(QObject):
         # Inference
         self.dlg.samRunInference.clicked.connect(self._run_inference)
         self.dlg.samRunSessionInference.clicked.connect(self._run_session_inference)
-        self.dlg.samRefreshInferenceStatus.clicked.connect(self._refresh_inference_status)
-
-        # Workflow debug
-        self.dlg.samInferenceWorkflowCombo.currentIndexChanged.connect(
-            self._on_workflow_combo_changed)
+        # One button = full session repaint (status table + prompt snapshot
+        # + merged result if any inference is done). No per-row drill-down:
+        # the abstract per-inference status is the only signal the user sees.
+        self.dlg.samRefreshInferenceStatus.clicked.connect(self._refresh_session_status)
 
         # Results
         self.dlg.samLoadResult.clicked.connect(self._load_result)
@@ -108,9 +107,10 @@ class SamController(QObject):
         has_selection = bool(processing_id)
         self.dlg.samRefreshSessions.setEnabled(has_selection)
         self.dlg.deleteProcessingButton.setEnabled(has_selection)
+        self.view.set_session_buttons_enabled(False)
+        self.view.clear_session_display()
         if processing_id:
             self.service.get_processing(processing_id)
-            self.service.list_workflows(processing_id)
             self.service.list_sessions(processing_id)
 
     def _on_processing_double_clicked(self):
@@ -134,14 +134,21 @@ class SamController(QObject):
             self._updating_selection = True
             self.dlg.samSessionsTable.clearSelection()
             self._updating_selection = False
+            self.view.set_session_buttons_enabled(False)
+            self.view.clear_session_display()
             self.service.get_prompt_detail(prompt_id)
 
     def _on_prompt_double_clicked(self):
         self.service.show_prompt_layers()
 
     def _create_prompt(self):
-        text = self.dlg.samPromptText.text().strip() or None
-        self.service.create_prompt(text_prompt=text)
+        # Modal dialog replaces the previous inline samPromptText field. The
+        # user can leave the text prompt empty (the placeholder reads
+        # "visual"); a None text prompt is valid for visual-only prompts.
+        dialog = SamPromptCreateDialog(parent=self.dlg)
+        if dialog.exec_() != dialog.Accepted:
+            return
+        self.service.create_prompt(name=dialog.name, text_prompt=dialog.text_prompt)
 
     def _refresh_prompts(self):
         self.service.list_prompts()
@@ -235,9 +242,7 @@ class SamController(QObject):
             self._prev_map_tool = None
 
     def _confidence_threshold(self):
-        return parse_confidence_threshold(
-            self.dlg.samConfidenceThresholdInput.text()
-        )
+        return self.dlg.samConfidenceThresholdInput.value()
 
     # ------------------------------------------------------------------
     # Sessions
@@ -253,6 +258,8 @@ class SamController(QObject):
             self.dlg.samPromptsTable.clearSelection()
             self._updating_selection = False
             self.service.get_session_detail(session_id)
+        else:
+            self.view.clear_session_display()
 
     def _on_session_double_clicked(self):
         self.service.show_session_layers()
@@ -261,11 +268,6 @@ class SamController(QObject):
         processing_id = self.view.selected_processing_id()
         if processing_id:
             self.service.list_sessions(processing_id)
-
-    def _copy_session(self):
-        session_id = self.view.selected_session_id()
-        if session_id:
-            self.service.copy_session(session_id)
 
     def _delete_session(self):
         self.service.delete_session()
@@ -305,16 +307,12 @@ class SamController(QObject):
                 {"error": "Select processing, prompt, and AOI first"},
             )
             return
-        confidence_threshold, threshold_error = self._confidence_threshold()
-        if threshold_error:
-            self.view.append_debug("Run Inference", {"error": threshold_error})
-            return
         geometry = json.loads(aoi.asJson())
         self.service.create_inference(
             processing_id,
             prompt_id,
             geometry,
-            confidence_threshold=confidence_threshold,
+            confidence_threshold=self._confidence_threshold(),
         )
 
     def _run_session_inference(self):
@@ -333,16 +331,15 @@ class SamController(QObject):
             geometry,
         )
 
-    def _on_workflow_combo_changed(self):
-        """Debug: fetch and display workflow detail when combo selection changes."""
-        workflow_id = self.view.selected_workflow_id()
-        if workflow_id:
-            self.service.get_workflow(workflow_id)
+    def _refresh_session_status(self):
+        """Manual session-level status poll triggered by the Refresh button.
 
-    def _refresh_inference_status(self):
-        inference_id = getattr(self.service, '_current_inference_id', None)
-        if inference_id:
-            self.service.get_inference_status(inference_id)
+        Re-fetches the selected session and repaints the whole session view
+        (inferences table, prompt snapshot, text prompt, partial result).
+        """
+        session_id = self.view.selected_session_id()
+        if session_id:
+            self.service.refresh_session_status(session_id)
 
     # ------------------------------------------------------------------
     # Results

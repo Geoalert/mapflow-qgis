@@ -8,8 +8,8 @@ import json
 from typing import List, Optional, Tuple
 
 import sip
-from PyQt5.QtCore import QObject, Qt
-from PyQt5.QtGui import QColor
+from PyQt5.QtCore import QObject, QPointF, Qt
+from PyQt5.QtGui import QColor, QBrush, QPainter, QPen, QPixmap, QPolygonF
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView
 
 from qgis.core import (
@@ -19,10 +19,8 @@ from qgis.core import (
     QgsGeometry,
     QgsField,
     QgsSymbol,
-    QgsFillSymbol,
     QgsRendererCategory,
     QgsCategorizedSymbolRenderer,
-    QgsPointXY,
 )
 
 from ...dialogs.main_dialog import MainDialog
@@ -32,12 +30,11 @@ from ...schema.sam import (
     GeometryType,
     ProcessingSummaryResponse,
     ProcessingDetailResponse,
-    WorkflowSummaryResponse,
     PromptResponse,
     PromptDetailResponse,
     SpatialPromptResponse,
     SessionResponse,
-    InferenceResponse,
+    InferenceStatusSummary,
 )
 
 
@@ -54,21 +51,28 @@ class SamView(QObject):
         self._setup_prompts_table()
         self._setup_sessions_table()
         self._setup_spatial_prompts_table()
+        self._setup_inferences_table()
         self._setup_initial_button_states()
         self._point_prompts_layer = None
         self._bbox_prompts_layer = None
-        self._workflows_layer = None
-        self._result_layer = None
+        # One result vector layer per session, keyed by session_id, so we
+        # can refresh partial results in place rather than spawn duplicates.
+        self._result_layers = {}
 
     def _setup_processings_table(self):
+        # SAM tab only ever shows OK (interactive-ready) processings — non-OK
+        # rows are filtered out at populate time. The Status column is gone
+        # because every visible row carries the same value.
         table = self.dlg.samProcessingsTable
         table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setSelectionMode(QTableWidget.SingleSelection)
-        table.setColumnCount(4)
-        table.setHorizontalHeaderLabels(["ID", "Name", "Status", "Created"])
+        table.setColumnCount(3)
+        table.setHorizontalHeaderLabels(["ID", "Name", "Created"])
         table.setColumnHidden(0, True)
-        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+        table.horizontalHeader().resizeSection(1, 260)
+        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
 
     def _setup_prompts_table(self):
         table = self.dlg.samPromptsTable
@@ -82,24 +86,47 @@ class SamView(QObject):
         table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
 
     def _setup_sessions_table(self):
+        # Progress + Confidence are sourced from SessionListItem aggregates
+        # (inferences_total / inferences_done / confidence_threshold). The
+        # Confidence value is immutable — fixed when the session was first
+        # created — so the column is read-only.
         table = self.dlg.samSessionsTable
         table.setEditTriggers(QTableWidget.EditTrigger.SelectedClicked)
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setSelectionMode(QTableWidget.SingleSelection)
-        table.setColumnCount(3)
-        table.setHorizontalHeaderLabels(["ID", "Name", "Text Prompt"])
+        table.setColumnCount(4)
+        table.setHorizontalHeaderLabels(["ID", "Name", "Progress", "Confidence"])
         table.setColumnHidden(0, True)
         table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
 
     def _setup_spatial_prompts_table(self):
         table = self.dlg.spatialPromptsTable
         table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setSelectionMode(QTableWidget.SingleSelection)
-        table.setColumnCount(4)
-        table.setHorizontalHeaderLabels(["ID", "Type", "Positive", "Geometry"])
+        table.setColumnCount(3)
+        table.setHorizontalHeaderLabels(["ID", "Icon", "Geometry"])
         table.setColumnHidden(0, True)
-        table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+
+    def _setup_inferences_table(self):
+        # One row per Inference belonging to the currently selected session.
+        # Backend creates N inferences per user request (one per workflow
+        # whose AOI intersects the request). A short ID prefix is shown for
+        # human-readable identification; the row carries no click action —
+        # session-level refresh is the only interaction.
+        table = self.dlg.samInferencesTable
+        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        table.setSelectionBehavior(QTableWidget.SelectRows)
+        table.setSelectionMode(QTableWidget.SingleSelection)
+        table.setColumnCount(3)
+        table.setHorizontalHeaderLabels(["ID", "Status", "Created"])
+        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
 
     def _setup_initial_button_states(self):
         """Disable buttons that require a selection or prior action."""
@@ -118,10 +145,16 @@ class SamView(QObject):
         self.dlg.deletePromptButton.setEnabled(enabled)
 
     def set_session_buttons_enabled(self, enabled: bool):
+        # Refresh-status now polls the selected session, so it tracks
+        # session selection rather than the existence of a single inference.
         self.dlg.samRunSessionInference.setEnabled(enabled)
         self.dlg.deleteSessionButton.setEnabled(enabled)
+        self.dlg.samRefreshInferenceStatus.setEnabled(enabled)
 
     def set_inference_refresh_enabled(self, enabled: bool):
+        # Kept for service callers that flip the button after creating an
+        # inference (the new session row gets selected immediately, so the
+        # button would normally already be enabled by set_session_buttons_enabled).
         self.dlg.samRefreshInferenceStatus.setEnabled(enabled)
 
     # ------------------------------------------------------------------
@@ -129,9 +162,13 @@ class SamView(QObject):
     # ------------------------------------------------------------------
 
     def display_processings(self, items: List[ProcessingSummaryResponse]):
+        # Only OK-status processings are interactive. Non-OK rows would just
+        # error out on session creation, so they're filtered here at the
+        # display boundary (cheap and the whole list fits in memory).
+        visible = [p for p in items if (p.status or "").upper() == "OK"]
         table = self.dlg.samProcessingsTable
-        table.setRowCount(len(items))
-        for row, proc in enumerate(items):
+        table.setRowCount(len(visible))
+        for row, proc in enumerate(visible):
             id_item = QTableWidgetItem()
             id_item.setData(Qt.DisplayRole, proc.id)
             table.setItem(row, 0, id_item)
@@ -140,13 +177,9 @@ class SamView(QObject):
             name_item.setData(Qt.DisplayRole, proc.name)
             table.setItem(row, 1, name_item)
 
-            status_item = QTableWidgetItem()
-            status_item.setData(Qt.DisplayRole, proc.status)
-            table.setItem(row, 2, status_item)
-
             created_item = QTableWidgetItem()
             created_item.setData(Qt.DisplayRole, proc.created_at or "")
-            table.setItem(row, 3, created_item)
+            table.setItem(row, 2, created_item)
 
     def selected_processing_id(self) -> Optional[str]:
         table = self.dlg.samProcessingsTable
@@ -159,100 +192,6 @@ class SamView(QObject):
 
     def display_processing_detail(self, detail: ProcessingDetailResponse):
         pass
-
-    def populate_workflow_combo(self, workflows: List[WorkflowSummaryResponse]):
-        """Populate the workflow combo box without adding map layers."""
-        self.dlg.samInferenceWorkflowCombo.clear()
-        for wf in workflows:
-            label = f"{wf.id[:8]}... ({wf.status})"
-            self.dlg.samInferenceWorkflowCombo.addItem(label, wf.id)
-
-    def show_workflow_layers(self, workflows: List[WorkflowSummaryResponse]):
-        """Add workflow geometry layers to the map."""
-        self._display_workflow_geometries(workflows)
-        # Highlight selected workflow when combo changes
-        try:
-            self.dlg.samInferenceWorkflowCombo.currentIndexChanged.disconnect(
-                self._highlight_selected_workflow)
-        except TypeError:
-            pass
-        self.dlg.samInferenceWorkflowCombo.currentIndexChanged.connect(
-            self._highlight_selected_workflow)
-        self._highlight_selected_workflow()
-
-    def selected_workflow_id(self) -> Optional[str]:
-        comboBox = self.dlg.samInferenceWorkflowCombo
-        data = comboBox.currentData()
-        return str(data) if data else None
-
-    # ------------------------------------------------------------------
-    # Workflow geometry layer
-    # ------------------------------------------------------------------
-
-    def _display_workflow_geometries(self, workflows: List[WorkflowSummaryResponse]):
-        """Replace existing workflows layer with a new one showing workflow polygons."""
-        self._remove_workflows_layer()
-
-        layer = QgsVectorLayer("Polygon?crs=EPSG:4326", "SAM Workflows", "memory")
-        provider = layer.dataProvider()
-        provider.addAttributes([
-            QgsField("id", QVariant_String()),
-            QgsField("selected", QVariant_String()),
-        ])
-        layer.updateFields()
-
-        for wf in workflows:
-            if wf.geometry is None:
-                continue
-            feature = QgsFeature(layer.fields())
-            feature.setAttribute("id", wf.id)
-            feature.setAttribute("selected", "false")
-            geometry = QgsGeometry.fromWkt(_geojson_to_wkt(wf.geometry))
-            if geometry and not geometry.isNull():
-                feature.setGeometry(geometry)
-                provider.addFeatures([feature])
-
-        # Normal: 90% transparent fill, thin border
-        normal_symbol = QgsFillSymbol.createSimple({
-            "color": "100,100,255,25",       # ~90% transparent blue
-            "outline_color": "100,100,255,180",
-            "outline_width": "0.3",
-        })
-        # Selected/highlighted: more visible
-        selected_symbol = QgsFillSymbol.createSimple({
-            "color": "255,200,0,80",
-            "outline_color": "255,160,0,255",
-            "outline_width": "0.8",
-        })
-        categories = [
-            QgsRendererCategory("false", normal_symbol, "Workflow"),
-            QgsRendererCategory("true", selected_symbol, "Selected"),
-        ]
-        renderer = QgsCategorizedSymbolRenderer("selected", categories)
-        layer.setRenderer(renderer)
-
-        QgsProject.instance().addMapLayer(layer)
-        self._workflows_layer = layer
-
-    def _highlight_selected_workflow(self):
-        """Update the 'selected' attribute to highlight the current combo selection."""
-        if not self._layer_alive(self._workflows_layer):
-            return
-        layer = self._workflows_layer
-        selected_id = self.selected_workflow_id()
-        layer.startEditing()
-        idx = layer.fields().indexOf("selected")
-        for feature in layer.getFeatures():
-            is_selected = "true" if feature["id"] == selected_id else "false"
-            layer.changeAttributeValue(feature.id(), idx, is_selected)
-        layer.commitChanges()
-        layer.triggerRepaint()
-
-    def _remove_workflows_layer(self):
-        """Remove existing workflows layer from the project."""
-        if self._layer_alive(self._workflows_layer):
-            QgsProject.instance().removeMapLayer(self._workflows_layer.id())
-        self._workflows_layer = None
 
     # ------------------------------------------------------------------
     # Prompts
@@ -296,8 +235,7 @@ class SamView(QObject):
         table = self.dlg.spatialPromptsTable
         table.setRowCount(len(spatial_prompts))
         for row, sp in enumerate(spatial_prompts):
-            type_label = sp.geometry_type.capitalize()  # "point" -> "Point", "bbox" -> "Bbox"
-            self._set_spatial_prompt_row(table, row, sp, type_label)
+            self._set_spatial_prompt_row(table, row, sp)
         self.dlg.deleteSpatialPrompt.setEnabled(len(spatial_prompts) > 0)
 
     def show_spatial_prompt_layers(self, spatial_prompts: List[SpatialPromptResponse]):
@@ -308,18 +246,22 @@ class SamView(QObject):
             self._add_spatial_prompt_feature(sp, geom_type)
 
     @staticmethod
-    def _set_spatial_prompt_row(table, row: int, prompt: SpatialPromptResponse, type_label: str):
+    def _set_spatial_prompt_row(table, row: int, prompt: SpatialPromptResponse):
         id_item = QTableWidgetItem()
         id_item.setData(Qt.DisplayRole, prompt.id)
         table.setItem(row, 0, id_item)
 
-        type_item = QTableWidgetItem()
-        type_item.setData(Qt.DisplayRole, type_label)
-        table.setItem(row, 1, type_item)
-
-        pos_item = QTableWidgetItem()
-        pos_item.setData(Qt.DisplayRole, "+" if prompt.positive else "-")
-        table.setItem(row, 2, pos_item)
+        icon_item = QTableWidgetItem()
+        icon_item.setData(
+            Qt.DecorationRole,
+            _build_prompt_pictogram(prompt.geometry_type, prompt.positive),
+        )
+        icon_item.setData(Qt.UserRole, prompt.geometry_type)
+        icon_item.setToolTip(
+            f"{'Positive' if prompt.positive else 'Negative'} {prompt.geometry_type}"
+        )
+        icon_item.setTextAlignment(Qt.AlignCenter)
+        table.setItem(row, 1, icon_item)
 
         geom_item = QTableWidgetItem()
         geom_summary = ""
@@ -331,7 +273,7 @@ class SamView(QObject):
             elif geom_type == "Polygon" and coords:
                 geom_summary = f"Polygon ({len(coords[0])} pts)"
         geom_item.setData(Qt.DisplayRole, geom_summary)
-        table.setItem(row, 3, geom_item)
+        table.setItem(row, 2, geom_item)
 
     def selected_spatial_prompt(self) -> Tuple[Optional[str], Optional[str]]:
         table = self.dlg.spatialPromptsTable
@@ -339,7 +281,7 @@ class SamView(QObject):
         if not selected:
             return None, None
         row = selected[0].row()
-        prompt_type = str(table.item(row, 1).data(Qt.DisplayRole)).lower()
+        prompt_type = str(table.item(row, 1).data(Qt.UserRole)).lower()
         spatial_prompt_id = str(table.item(row, 0).data(Qt.DisplayRole)).lower()
         return spatial_prompt_id, prompt_type
 
@@ -426,11 +368,20 @@ class SamView(QObject):
 
     def display_sessions(self, sessions: List[SessionResponse]):
         table = self.dlg.samSessionsTable
+        selected_session_id = self.selected_session_id()
         table.blockSignals(True)
-        table.setRowCount(len(sessions))
-        for row, sess in enumerate(sessions):
-            self._set_session_row(table, row, sess)
-        table.blockSignals(False)
+        try:
+            table.clearSelection()
+            table.setRowCount(len(sessions))
+            selected_row = 0 if sessions else None
+            for row, sess in enumerate(sessions):
+                self._set_session_row(table, row, sess)
+                if sess.id == selected_session_id:
+                    selected_row = row
+            if selected_row is not None:
+                table.selectRow(selected_row)
+        finally:
+            table.blockSignals(False)
 
     def add_session_to_table(self, session: SessionResponse):
         table = self.dlg.samSessionsTable
@@ -454,10 +405,33 @@ class SamView(QObject):
         name_item.setFlags(name_item.flags() | Qt.ItemIsEditable)
         table.setItem(row, 1, name_item)
 
-        text_item = QTableWidgetItem()
-        text_item.setData(Qt.DisplayRole, sess.text_prompt or "")
-        text_item.setFlags(text_item.flags() & ~Qt.ItemIsEditable)
-        table.setItem(row, 2, text_item)
+        # Progress aggregates land on the LIST endpoint as inferences_total /
+        # inferences_done; on the DETAIL endpoint they're absent and we fall
+        # back to counting the embedded inferences[] list. Either way, blank
+        # if neither is available.
+        progress_item = QTableWidgetItem()
+        progress_text = ""
+        total = sess.inferences_total
+        done = sess.inferences_done
+        if total is None and sess.inferences is not None:
+            total = len(sess.inferences)
+            done = sum(1 for inf in sess.inferences
+                       if (inf.status or "").lower() == "done")
+        if total:
+            progress_text = f"{done or 0}/{total}"
+        progress_item.setData(Qt.DisplayRole, progress_text)
+        progress_item.setFlags(progress_item.flags() & ~Qt.ItemIsEditable)
+        table.setItem(row, 2, progress_item)
+
+        # Confidence threshold — immutable per session. Backend ships it on
+        # SessionListItem (post-B-1); blank if the response shape is older.
+        conf_item = QTableWidgetItem()
+        conf_text = ""
+        if sess.confidence_threshold is not None:
+            conf_text = f"{sess.confidence_threshold:.2f}"
+        conf_item.setData(Qt.DisplayRole, conf_text)
+        conf_item.setFlags(conf_item.flags() & ~Qt.ItemIsEditable)
+        table.setItem(row, 3, conf_item)
 
     def selected_session_id(self) -> Optional[str]:
         table = self.dlg.samSessionsTable
@@ -468,29 +442,98 @@ class SamView(QObject):
         item = table.item(row, 0)
         return item.data(Qt.DisplayRole) if item else None
 
-    def display_session_detail(self, session: SessionResponse):
-        """Show session detail in debug; populate inference combo with inferences."""
-        pass
-
     # ------------------------------------------------------------------
     # Inference
     # ------------------------------------------------------------------
 
-    def display_inference_status(self, inference: InferenceResponse):
-        self.dlg.samInferenceIdValue.setText(inference.id or "-")
-        self.dlg.samInferenceStatusValue.setText(inference.status or "-")
+    def display_session(self, session: SessionResponse):
+        """Repaint the entire session view from a single SessionResponse.
+
+        Drives three panels at once: the text-prompt label, the spatial
+        prompts table, and the per-inference status table. Backed by the
+        post-A4 SessionResponse shape that embeds the frozen prompt
+        snapshot directly. SkipDataClass tolerance keeps the call safe
+        against an older backend that doesn't yet ship those fields.
+        """
+        # Text prompt label — embedded TextPromptSummary.
+        if session.text_prompt is not None:
+            text = getattr(session.text_prompt, "text", "") or ""
+            self.dlg.samSessionTextPromptLabel.setText(f"Prompt: {text}" if text else "")
+        else:
+            self.dlg.samSessionTextPromptLabel.setText("")
+
+        # Frozen spatial prompts.
+        self.populate_spatial_prompts_table(session.spatial_prompts or [])
+
+        # Inferences table.
+        table = self.dlg.samInferencesTable
+        table.blockSignals(True)
+        try:
+            table.setRowCount(0)
+            inferences = session.inferences or []
+            table.setRowCount(len(inferences))
+            for row, inf in enumerate(inferences):
+                self._set_inference_row(table, row, inf)
+        finally:
+            table.blockSignals(False)
+
+        self.update_session_row(session)
+
+    def update_session_row(self, session: SessionResponse):
+        table = self.dlg.samSessionsTable
+        for row in range(table.rowCount()):
+            id_item = table.item(row, 0)
+            if id_item is None or id_item.data(Qt.DisplayRole) != session.id:
+                continue
+            self._set_session_row(table, row, session)
+            return
+
+    def clear_session_display(self):
+        self.dlg.samSessionTextPromptLabel.setText("")
+        self.populate_spatial_prompts_table([])
+
+        table = self.dlg.samInferencesTable
+        table.blockSignals(True)
+        try:
+            table.setRowCount(0)
+        finally:
+            table.blockSignals(False)
+
+    @staticmethod
+    def _set_inference_row(table, row: int, inf: InferenceStatusSummary):
+        # Hide the full UUID in UserRole / tooltip; show a short prefix
+        # in the cell so the table stays readable.
+        id_item = QTableWidgetItem(inf.id[:8] if inf.id else "")
+        id_item.setData(Qt.UserRole, inf.id)
+        id_item.setToolTip(inf.id or "")
+        table.setItem(row, 0, id_item)
+
+        status_item = QTableWidgetItem(inf.status or "")
+        table.setItem(row, 1, status_item)
+
+        created_item = QTableWidgetItem(inf.created_at or "")
+        table.setItem(row, 2, created_item)
 
     # ------------------------------------------------------------------
     # Results
     # ------------------------------------------------------------------
 
-    def load_result_layer(self, data: dict):
-        """Load GeoJSON result as a vector layer on the map."""
+    def load_result_layer(self, data: dict, session_id: Optional[str] = None):
+        """Load (or refresh) the merged GeoJSON result for a session.
+
+        Re-uses one layer per session id so partial-result refreshes update
+        the existing layer in place instead of stacking duplicates.
+        """
         geojson_str = json.dumps(data)
-        layer = QgsVectorLayer(geojson_str, "SAM Result", "ogr")
+        existing = self._result_layers.get(session_id) if session_id else None
+        if self._layer_alive(existing):
+            QgsProject.instance().removeMapLayer(existing.id())
+        layer_name = f"SAM Result {session_id[:8]}" if session_id else "SAM Result"
+        layer = QgsVectorLayer(geojson_str, layer_name, "ogr")
         if layer.isValid():
             QgsProject.instance().addMapLayer(layer)
-        self._result_layer = layer
+            if session_id:
+                self._result_layers[session_id] = layer
 
     # ------------------------------------------------------------------
     # Debug output
@@ -528,3 +571,27 @@ def _geojson_to_wkt(geojson: dict) -> str:
             rings.append(f"({points})")
         return f"POLYGON({', '.join(rings)})"
     return ""
+
+
+def _build_prompt_pictogram(geometry_type: str, positive: bool) -> QPixmap:
+    """Render the SAM prompt marker used by the spatial prompts table."""
+    color = QColor(0, 170, 0) if positive else QColor(200, 0, 0)
+    pixmap = QPixmap(16, 16)
+    pixmap.fill(Qt.transparent)
+
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setPen(QPen(color, 1.5))
+    painter.setBrush(QBrush(color))
+    if geometry_type == GeometryType.POINT.value:
+        painter.drawEllipse(3, 3, 10, 10)
+    else:
+        painter.drawPolygon(
+            QPolygonF([
+                QPointF(8.0, 2.5),
+                QPointF(13.5, 13.0),
+                QPointF(2.5, 13.0),
+            ])
+        )
+    painter.end()
+    return pixmap
