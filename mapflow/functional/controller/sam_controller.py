@@ -112,6 +112,8 @@ class SamController(QObject):
         if processing_id:
             self.service.get_processing(processing_id)
             self.service.list_sessions(processing_id)
+        else:
+            self.view.clear_processing_detail()
 
     def _on_processing_double_clicked(self):
         processing_id = self.view.selected_processing_id()
@@ -335,7 +337,7 @@ class SamController(QObject):
         """Manual session-level status poll triggered by the Refresh button.
 
         Re-fetches the selected session and repaints the whole session view
-        (inferences table, prompt snapshot, text prompt, partial result).
+        (inferences table, prompt snapshot, text prompt).
         """
         session_id = self.view.selected_session_id()
         if session_id:

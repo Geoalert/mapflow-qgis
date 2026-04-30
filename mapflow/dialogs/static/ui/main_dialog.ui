@@ -3518,6 +3518,19 @@
                     </item>
                    </layout>
                   </item>
+                  <item>
+                   <widget class="QLabel" name="samProcessingDetailsLabel">
+                    <property name="text">
+                     <string/>
+                    </property>
+                    <property name="textInteractionFlags">
+                     <set>Qt::TextSelectableByMouse</set>
+                    </property>
+                    <property name="wordWrap">
+                     <bool>true</bool>
+                    </property>
+                   </widget>
+                  </item>
                  </layout>
                 </widget>
                </item>
@@ -3729,71 +3742,6 @@
                         </item>
                        </layout>
                       </item>
-                      <item>
-                       <layout class="QHBoxLayout" name="horizontalLayout_23">
-                        <property name="topMargin">
-                         <number>22</number>
-                        </property>
-                        <item>
-                         <widget class="QLabel" name="samInferencesLabel">
-                          <property name="text">
-                           <string>Inferences:</string>
-                          </property>
-                         </widget>
-                        </item>
-                        <item>
-                         <widget class="QLabel" name="samSessionTextPromptLabel">
-                          <property name="sizePolicy">
-                           <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
-                            <horstretch>1</horstretch>
-                            <verstretch>0</verstretch>
-                           </sizepolicy>
-                          </property>
-                          <property name="text">
-                           <string/>
-                          </property>
-                          <property name="textInteractionFlags">
-                           <set>Qt::TextSelectableByMouse</set>
-                          </property>
-                         </widget>
-                        </item>
-                        <item>
-                         <widget class="QPushButton" name="samRefreshInferenceStatus">
-                          <property name="text">
-                           <string>Refresh Status</string>
-                          </property>
-                         </widget>
-                        </item>
-                       </layout>
-                      </item>
-                      <item>
-                       <widget class="QTableWidget" name="samInferencesTable">
-                        <property name="minimumSize">
-                         <size>
-                          <width>0</width>
-                          <height>120</height>
-                         </size>
-                        </property>
-                        <property name="columnCount">
-                         <number>3</number>
-                        </property>
-                        <column>
-                         <property name="text">
-                          <string>ID</string>
-                         </property>
-                        </column>
-                        <column>
-                         <property name="text">
-                          <string>Status</string>
-                         </property>
-                        </column>
-                        <column>
-                         <property name="text">
-                          <string>Created</string>
-                         </property>
-                        </column>
-                       </widget>
-                      </item>
                      </layout>
                     </item>
                     <item>
@@ -3851,23 +3799,110 @@
                  </property>
                  <layout class="QVBoxLayout" name="samDebugLayout">
                   <item>
-                   <widget class="QTextEdit" name="samDebugOutput">
-                    <property name="minimumSize">
-                     <size>
-                      <width>0</width>
-                      <height>150</height>
-                     </size>
-                    </property>
-                    <property name="font">
-                     <font>
-                      <family>Courier</family>
-                      <pointsize>9</pointsize>
-                     </font>
-                    </property>
-                    <property name="readOnly">
-                     <bool>true</bool>
-                    </property>
-                   </widget>
+                  <layout class="QHBoxLayout" name="samDebugContentLayout">
+                   <item>
+                    <widget class="QWidget" name="samInferencesPane" native="true">
+                     <layout class="QVBoxLayout" name="samInferencesPaneLayout">
+                      <property name="leftMargin">
+                       <number>0</number>
+                      </property>
+                      <property name="topMargin">
+                       <number>0</number>
+                      </property>
+                      <property name="rightMargin">
+                       <number>0</number>
+                      </property>
+                      <property name="bottomMargin">
+                       <number>0</number>
+                      </property>
+                      <item>
+                       <layout class="QHBoxLayout" name="horizontalLayout_23">
+                        <property name="topMargin">
+                         <number>22</number>
+                        </property>
+                        <item>
+                         <widget class="QLabel" name="samInferencesLabel">
+                          <property name="text">
+                           <string>Inferences:</string>
+                          </property>
+                         </widget>
+                        </item>
+                        <item>
+                         <widget class="QLabel" name="samSessionTextPromptLabel">
+                          <property name="sizePolicy">
+                           <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                            <horstretch>1</horstretch>
+                            <verstretch>0</verstretch>
+                           </sizepolicy>
+                          </property>
+                          <property name="text">
+                           <string/>
+                          </property>
+                          <property name="textInteractionFlags">
+                           <set>Qt::TextSelectableByMouse</set>
+                          </property>
+                         </widget>
+                        </item>
+                        <item>
+                         <widget class="QPushButton" name="samRefreshInferenceStatus">
+                          <property name="text">
+                           <string>Refresh Status</string>
+                          </property>
+                         </widget>
+                        </item>
+                       </layout>
+                      </item>
+                      <item>
+                       <widget class="QTableWidget" name="samInferencesTable">
+                        <property name="minimumSize">
+                         <size>
+                          <width>360</width>
+                          <height>150</height>
+                         </size>
+                        </property>
+                        <property name="columnCount">
+                         <number>3</number>
+                        </property>
+                        <column>
+                         <property name="text">
+                          <string>ID</string>
+                         </property>
+                        </column>
+                        <column>
+                         <property name="text">
+                          <string>Status</string>
+                         </property>
+                        </column>
+                        <column>
+                         <property name="text">
+                          <string>Created</string>
+                         </property>
+                        </column>
+                       </widget>
+                      </item>
+                     </layout>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QTextEdit" name="samDebugOutput">
+                     <property name="minimumSize">
+                      <size>
+                       <width>360</width>
+                       <height>150</height>
+                      </size>
+                     </property>
+                     <property name="font">
+                      <font>
+                       <family>Courier</family>
+                       <pointsize>9</pointsize>
+                      </font>
+                     </property>
+                     <property name="readOnly">
+                      <bool>true</bool>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
                   </item>
                  </layout>
                 </widget>

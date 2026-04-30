@@ -4,17 +4,15 @@ Coordinates SamApi (HTTP calls) and SamView (UI state).
 Manages pagination state and response parsing.
 """
 import json
-from typing import Optional
+from typing import Callable, Optional
 
 from PyQt5.QtCore import QObject
 from PyQt5.QtNetwork import QNetworkReply
-from qgis.core import QgsProject
 
 from ..api.sam_api import SamApi
-from ..layer_utils import generate_raster_layer, get_bounding_box_from_tile_json, ResultsLoader, generate_vector_layer
+from ..layer_utils import ResultsLoader, generate_vector_layer
 from ..view.sam_view import SamView
 from ...dialogs.main_dialog import MainDialog
-from ...http import Http
 from ...schema.sam import (
     ProcessingListResponse,
     ProcessingDetailResponse,
@@ -35,16 +33,14 @@ from ...schema.sam import (
 class SamService(QObject):
     def __init__(self, dlg: MainDialog,
                  sam_api: SamApi,
-                 mapflow_http: Http,
-                 mapflow_server: str,
-                 results_loader: ResultsLoader):
+                 results_loader: ResultsLoader,
+                 load_processing_results_callback: Optional[Callable] = None):
         super().__init__()
         self.dlg = dlg
         self.api = sam_api
-        self._mapflow_http = mapflow_http
-        self._mapflow_server = mapflow_server
         self.view = SamView(dlg)
         self.results_loader = results_loader
+        self._load_processing_results_callback = load_processing_results_callback
 
         # Pagination state for processings list
         self._offset = 0
@@ -103,50 +99,6 @@ class SamService(QObject):
         self.view.display_processing_detail(detail)
         self.view.append_debug("Processing Detail", data)
 
-    def preview_image(self, processing_id: str):
-        """Fetch Mapflow processing detail to load its raster preview layer."""
-        self._mapflow_http.get(
-            url=f"{self._mapflow_server}/processings/{processing_id}",
-            callback=self._preview_image_callback,
-        )
-
-    def _preview_image_callback(self, response: QNetworkReply):
-        # TODO: rewrite to use the same processing preview function as in mapflow.py
-        # Probably via moving all the preview functions to a separate service
-        data = json.loads(response.readAll().data().decode())
-        raster_info = data.get("rasterLayer", {})
-        tile_url = raster_info.get("tileUrl")
-        tilejson_url = raster_info.get("tileJsonUrl")
-        name = data.get("name", "SAM Preview")
-
-        if not tile_url:
-            self.view.append_debug("Preview Image", {"error": "No raster layer available"})
-            return
-
-        layer = generate_raster_layer(tile_url, f"{name} preview")
-        if not layer or not layer.isValid():
-            self.view.append_debug("Preview Image", {"error": "Failed to create raster layer"})
-            return
-
-        if tilejson_url:
-            self._mapflow_http.get(
-                url=tilejson_url,
-                callback=self._preview_extent_callback,
-                callback_kwargs={"layer": layer},
-                use_default_error_handler=False,
-            )
-        else:
-            QgsProject.instance().addMapLayer(layer)
-
-    def _preview_extent_callback(self, response: QNetworkReply, layer):
-        if response.error() == QNetworkReply.NoError:
-            try:
-                bbox = get_bounding_box_from_tile_json(response)
-                layer.setExtent(bbox)
-            except Exception:
-                pass
-        QgsProject.instance().addMapLayer(layer)
-
     # ------------------------------------------------------------------
     # Workflows
     # ------------------------------------------------------------------
@@ -157,8 +109,9 @@ class SamService(QObject):
     # SamApi for future debug needs but are not driven from the UI.
 
     def show_processing_layers(self, processing_id: str):
-        """Double-click action: show the processing's preview raster only."""
-        self.preview_image(processing_id)
+        """Double-click action: use the main-tab "see results" flow only."""
+        if self._load_processing_results_callback:
+            self._load_processing_results_callback(processing_id=processing_id)
 
     # ------------------------------------------------------------------
     # Prompts
@@ -347,9 +300,11 @@ class SamService(QObject):
         `GET /sessions/{id}` is the freshest view in the system: backend
         bulk-refreshes WE statuses for non-terminal inferences before
         responding, and embeds the frozen prompt snapshot directly. So one
-        call drives every panel in the session view; only the merged
-        result GeoJSON is fetched as a follow-up (and only when at least
-        one inference has actually produced output).
+        call drives every panel in the session view.
+
+        Important UX rule: this path must not mutate map layers. Result
+        loading is explicit (Result button) or deliberate (double-click),
+        never a side effect of row selection.
         """
         data = json.loads(response.readAll().data().decode())
         session = SessionResponse.from_dict(data)
@@ -359,15 +314,11 @@ class SamService(QObject):
         self.view.display_session(session)
         self.view.append_debug("Session Detail", data)
 
-        if any((inf.status or "").lower() == "done"
-               for inf in (session.inferences or [])):
-            self.get_result(session.id)
-
     def refresh_session_status(self, session_id: str):
         """Manual session-level status poll triggered by the Refresh button.
 
         Repaints the whole session view in one shot: status table, prompt
-        snapshot, text prompt, and (if applicable) the merged result layer.
+        snapshot, and text prompt. No map/layer side effects.
         """
         self.get_session_detail(session_id)
 

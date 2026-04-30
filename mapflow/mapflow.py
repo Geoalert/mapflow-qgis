@@ -228,7 +228,12 @@ class Mapflow(QObject):
                                                             callback=self.get_processings_callback))
 
         self.sam_api = SamApi(self.http, self.server)
-        self.sam_service = SamService(self.dlg, self.sam_api, self.http, self.server, self.result_loader)
+        self.sam_service = SamService(
+            self.dlg,
+            self.sam_api,
+            self.result_loader,
+            load_processing_results_callback=self.load_results,
+        )
         self.sam_controller = SamController(
             self.dlg, self.sam_service, self.iface.mapCanvas(),
             aoi_provider=lambda: self.aoi,
@@ -3022,8 +3027,12 @@ class Mapflow(QObject):
             
 
     # =================== Results management ==================== #
-    def load_results(self):
-        processing = self.selected_processing()
+    def load_results(self, *_args, processing_id: Optional[str] = None):
+        processing = None
+        if processing_id:
+            processing = next((p for p in self.processings if p.id_ == processing_id), None)
+        if not processing:
+            processing = self.selected_processing()
         if not processing:
             return
         if processing.id_ not in self.processing_history.finished:

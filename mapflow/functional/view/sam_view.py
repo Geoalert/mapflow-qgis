@@ -53,6 +53,7 @@ class SamView(QObject):
         self._setup_spatial_prompts_table()
         self._setup_inferences_table()
         self._setup_initial_button_states()
+        self.clear_processing_detail()
         self._point_prompts_layer = None
         self._bbox_prompts_layer = None
         # One result vector layer per session, keyed by session_id, so we
@@ -191,7 +192,46 @@ class SamView(QObject):
         return item.data(Qt.DisplayRole) if item else None
 
     def display_processing_detail(self, detail: ProcessingDetailResponse):
-        pass
+        params = detail.params or {}
+        text_prompt = detail.text_prompt or self._extract_param_value(
+            params, ("text_prompt", "textPrompt", "prompt")
+        )
+        confidence = detail.confidence_threshold
+        if confidence is None:
+            confidence = self._extract_param_value(
+                params, ("confidence_threshold", "confidenceThreshold")
+            )
+        confidence_text = "-"
+        if confidence not in (None, ""):
+            try:
+                confidence_text = f"{float(confidence):.2f}"
+            except (TypeError, ValueError):
+                confidence_text = str(confidence)
+        prompt_text = text_prompt if text_prompt not in (None, "") else "-"
+        self.dlg.samProcessingDetailsLabel.setText(
+            f"Prompt: {prompt_text}    Confidence: {confidence_text}"
+        )
+
+    def clear_processing_detail(self):
+        self.dlg.samProcessingDetailsLabel.setText("")
+
+    @staticmethod
+    def _extract_param_value(params: dict, keys: tuple):
+        if not isinstance(params, dict):
+            return None
+        for key in keys:
+            value = params.get(key)
+            if value not in (None, ""):
+                return value
+        for nested_key in ("inferenceParams", "sourceParams", "meta"):
+            nested = params.get(nested_key)
+            if not isinstance(nested, dict):
+                continue
+            for key in keys:
+                value = nested.get(key)
+                if value not in (None, ""):
+                    return value
+        return None
 
     # ------------------------------------------------------------------
     # Prompts
@@ -244,6 +284,7 @@ class SamView(QObject):
         for sp in spatial_prompts:
             geom_type = "Point" if sp.geometry_type == GeometryType.POINT.value else "Polygon"
             self._add_spatial_prompt_feature(sp, geom_type)
+        self._refresh_prompt_layer_extents()
 
     @staticmethod
     def _set_spatial_prompt_row(table, row: int, prompt: SpatialPromptResponse):
@@ -354,12 +395,20 @@ class SamView(QObject):
         if geometry and not geometry.isNull():
             feature.setGeometry(geometry)
             layer.dataProvider().addFeatures([feature])
+            layer.updateExtents()
             layer.triggerRepaint()
 
     def _clear_prompts_layers(self):
         for layer in (self._point_prompts_layer, self._bbox_prompts_layer):
             if self._layer_alive(layer):
                 layer.dataProvider().truncate()
+                layer.updateExtents()
+                layer.triggerRepaint()
+
+    def _refresh_prompt_layer_extents(self):
+        for layer in (self._point_prompts_layer, self._bbox_prompts_layer):
+            if self._layer_alive(layer):
+                layer.updateExtents()
                 layer.triggerRepaint()
 
     # ------------------------------------------------------------------
@@ -531,6 +580,7 @@ class SamView(QObject):
         layer_name = f"SAM Result {session_id[:8]}" if session_id else "SAM Result"
         layer = QgsVectorLayer(geojson_str, layer_name, "ogr")
         if layer.isValid():
+            layer.updateExtents()
             QgsProject.instance().addMapLayer(layer)
             if session_id:
                 self._result_layers[session_id] = layer

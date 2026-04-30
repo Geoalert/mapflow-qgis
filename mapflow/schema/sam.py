@@ -147,6 +147,9 @@ class ProcessingDetailResponse(SkipDataClass):
     name: str = ""
     status: str = ""
     embedding_uri: Optional[str] = None
+    params: Optional[dict] = None
+    text_prompt: Optional[str] = None
+    confidence_threshold: Optional[float] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     sessions: Optional[List[str]] = None

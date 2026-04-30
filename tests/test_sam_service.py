@@ -168,6 +168,15 @@ class TestGetProcessingCallback:
         assert len(detail.sessions) == 2
 
 
+class TestShowProcessingLayers:
+    def test_calls_main_results_loader_only(self, sam_service):
+        sam_service._load_processing_results_callback = MagicMock()
+
+        sam_service.show_processing_layers("p1")
+
+        sam_service._load_processing_results_callback.assert_called_once_with(processing_id="p1")
+
+
 # ---------------------------------------------------------------------------
 # Workflows are no longer user-facing — they were removed from SamService
 # along with the workflow combo and per-workflow drill-down. Tests for those
@@ -455,8 +464,8 @@ class TestAddBboxPromptCallback:
 
 
 # ---------------------------------------------------------------------------
-# get_session_detail — drives both the per-inference status table and the
-# partial result fetch (when at least one inference is done).
+# get_session_detail — drives session panels only; map/layer changes must
+# be explicit (Result button) or deliberate (double-click), not single-click.
 # ---------------------------------------------------------------------------
 
 class TestGetSessionDetailCallback:
@@ -488,16 +497,15 @@ class TestGetSessionDetailCallback:
         title, _ = sam_view.append_debug.call_args_list[0][0]
         assert "Session Detail" in title
 
-    def test_fetches_partial_result_when_any_inference_done(self, sam_service, http_mock):
+    def test_does_not_fetch_partial_result_automatically(self, sam_service, http_mock):
         reply = _make_reply(self.RESPONSE_DATA)
         sam_service.get_session_detail_callback(reply)
 
-        # /result/s1 should be the only follow-up GET issued — the prompt
-        # snapshot now ships embedded in the session response (post-A4),
-        # so /sessions/s1/prompts is no longer called.
+        # Session detail updates view state only. Result fetching stays
+        # explicit via get_result() / Result button.
         result_calls = [c for c in http_mock.get.call_args_list
                         if "/result/s1" in c[1]["url"]]
-        assert len(result_calls) == 1
+        assert len(result_calls) == 0
 
     def test_skips_partial_result_when_all_in_progress(self, sam_service, http_mock):
         reply = _make_reply(self.IN_PROGRESS_DATA)

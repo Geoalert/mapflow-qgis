@@ -62,8 +62,11 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.samOnlyFilter.toggled.connect(
             lambda _: self.filter_processings_table(self.filterProcessings.text())
         )
+        self.samDebugGroup.toggled.connect(self.samInferencesPane.setVisible)
         self.samDebugGroup.toggled.connect(self.samDebugOutput.setVisible)
-        self.samDebugOutput.setVisible(self.samDebugGroup.isChecked())
+        debug_visible = self.samDebugGroup.isChecked()
+        self.samInferencesPane.setVisible(debug_visible)
+        self.samDebugOutput.setVisible(debug_visible)
 
         coin_pixmap = icons.coins_icon.pixmap(16, 16)
         self.labelCoins_1.setPixmap(coin_pixmap)
