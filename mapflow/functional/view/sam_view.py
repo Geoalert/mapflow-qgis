@@ -19,6 +19,9 @@ from qgis.core import (
     QgsGeometry,
     QgsField,
     QgsSymbol,
+    QgsSingleSymbolRenderer,
+    QgsSimpleFillSymbolLayer,
+    QgsSimpleMarkerSymbolLayer,
     QgsRendererCategory,
     QgsCategorizedSymbolRenderer,
 )
@@ -56,6 +59,8 @@ class SamView(QObject):
         self.clear_processing_detail()
         self._point_prompts_layer = None
         self._bbox_prompts_layer = None
+        self._point_highlight_layer = None
+        self._bbox_highlight_layer = None
         # One result vector layer per session, keyed by session_id, so we
         # can refresh partial results in place rather than spawn duplicates.
         self._result_layers = {}
@@ -273,6 +278,7 @@ class SamView(QObject):
     def populate_spatial_prompts_table(self, spatial_prompts: List[SpatialPromptResponse]):
         """Populate spatialPromptsTable without adding map layers."""
         table = self.dlg.spatialPromptsTable
+        self.clear_spatial_prompt_highlight()
         table.setRowCount(len(spatial_prompts))
         for row, sp in enumerate(spatial_prompts):
             self._set_spatial_prompt_row(table, row, sp)
@@ -285,6 +291,50 @@ class SamView(QObject):
             geom_type = "Point" if sp.geometry_type == GeometryType.POINT.value else "Polygon"
             self._add_spatial_prompt_feature(sp, geom_type)
         self._refresh_prompt_layer_extents()
+        selected_prompt_id, prompt_type = self.selected_spatial_prompt()
+        self.highlight_spatial_prompt(selected_prompt_id, prompt_type)
+
+    def clear_spatial_prompt_highlight(self):
+        for layer in (self._point_highlight_layer, self._bbox_highlight_layer):
+            if self._layer_alive(layer):
+                layer.dataProvider().truncate()
+                layer.updateExtents()
+                layer.triggerRepaint()
+
+    def highlight_spatial_prompt(self, spatial_prompt_id: Optional[str],
+                                 prompt_type: Optional[str] = None):
+        """Highlight one spatial prompt feature in map layers by prompt id."""
+        self.clear_spatial_prompt_highlight()
+        if not spatial_prompt_id:
+            return
+
+        normalized_type = (prompt_type or "").lower()
+        if normalized_type == GeometryType.POINT.value:
+            candidate_layers = [self._point_prompts_layer]
+        elif normalized_type == GeometryType.BBOX.value:
+            candidate_layers = [self._bbox_prompts_layer]
+        else:
+            candidate_layers = [self._point_prompts_layer, self._bbox_prompts_layer]
+
+        prompt_id = str(spatial_prompt_id).lower()
+        for base_layer in candidate_layers:
+            if not self._layer_alive(base_layer):
+                continue
+            for feature in base_layer.getFeatures():
+                feature_id = str(feature["id"]).lower() if feature["id"] is not None else ""
+                if feature_id == prompt_id:
+                    highlight_layer = (
+                        self._get_or_create_point_highlight_layer()
+                        if base_layer is self._point_prompts_layer
+                        else self._get_or_create_bbox_highlight_layer()
+                    )
+                    highlight_feature = QgsFeature(highlight_layer.fields())
+                    highlight_feature.setAttribute("id", feature["id"])
+                    highlight_feature.setGeometry(feature.geometry())
+                    highlight_layer.dataProvider().addFeatures([highlight_feature])
+                    highlight_layer.updateExtents()
+                    highlight_layer.triggerRepaint()
+                    return
 
     @staticmethod
     def _set_spatial_prompt_row(table, row: int, prompt: SpatialPromptResponse):
@@ -364,6 +414,41 @@ class SamView(QObject):
         QgsProject.instance().addMapLayer(layer)
         return layer
 
+    def _create_highlight_layer(self, geom_type: str, name: str) -> QgsVectorLayer:
+        layer = QgsVectorLayer(
+            f"{geom_type}?crs=EPSG:4326",
+            name,
+            "memory",
+        )
+        provider = layer.dataProvider()
+        provider.addAttributes([QgsField("id", QVariant_String())])
+        layer.updateFields()
+
+        symbol = QgsSymbol.defaultSymbol(layer.geometryType())
+        if geom_type == "Point":
+            symbol_layer = QgsSimpleMarkerSymbolLayer.create(
+                {
+                    "name": "circle",
+                    "color": "255,255,0,0",
+                    "outline_color": "255,255,0,255",
+                    "outline_width": "0.6",
+                }
+            )
+        else:
+            symbol_layer = QgsSimpleFillSymbolLayer.create(
+                {
+                    "color": "255,255,0,0",
+                    "outline_color": "255,255,0,255",
+                    "outline_width": "0.6",
+                }
+            )
+        if symbol_layer is not None:
+            symbol.changeSymbolLayer(0, symbol_layer)
+        layer.setRenderer(QgsSingleSymbolRenderer(symbol))
+
+        QgsProject.instance().addMapLayer(layer)
+        return layer
+
     @staticmethod
     def _layer_alive(layer) -> bool:
         return layer is not None and not sip.isdeleted(layer) and layer.isValid()
@@ -377,6 +462,20 @@ class SamView(QObject):
         if not self._layer_alive(self._bbox_prompts_layer):
             self._bbox_prompts_layer = self._create_prompts_layer("Polygon", "SAM Bbox Prompts")
         return self._bbox_prompts_layer
+
+    def _get_or_create_point_highlight_layer(self) -> QgsVectorLayer:
+        if not self._layer_alive(self._point_highlight_layer):
+            self._point_highlight_layer = self._create_highlight_layer(
+                "Point", "SAM Point Prompts Highlight"
+            )
+        return self._point_highlight_layer
+
+    def _get_or_create_bbox_highlight_layer(self) -> QgsVectorLayer:
+        if not self._layer_alive(self._bbox_highlight_layer):
+            self._bbox_highlight_layer = self._create_highlight_layer(
+                "Polygon", "SAM Bbox Prompts Highlight"
+            )
+        return self._bbox_highlight_layer
 
     def _add_spatial_prompt_feature(self, prompt: SpatialPromptResponse, geom_type: str):
         if prompt.geometry is None:
@@ -399,6 +498,7 @@ class SamView(QObject):
             layer.triggerRepaint()
 
     def _clear_prompts_layers(self):
+        self.clear_spatial_prompt_highlight()
         for layer in (self._point_prompts_layer, self._bbox_prompts_layer):
             if self._layer_alive(layer):
                 layer.dataProvider().truncate()

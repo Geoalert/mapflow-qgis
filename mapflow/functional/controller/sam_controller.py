@@ -65,6 +65,8 @@ class SamController(QObject):
             self._on_prompt_selected)
         self.dlg.samPromptsTable.doubleClicked.connect(self._on_prompt_double_clicked)
         self.dlg.samPromptsTable.itemChanged.connect(self._on_prompt_item_changed)
+        self.dlg.spatialPromptsTable.selectionModel().selectionChanged.connect(
+            self._on_spatial_prompt_selected)
         self.dlg.deleteSpatialPrompt.clicked.connect(self._unlink_spatial_prompt)
 
         # Sessions
@@ -163,6 +165,10 @@ class SamController(QObject):
         print(spatial_prompt_id, prompt_type)
         if spatial_prompt_id:
             self.service.unlink_spatial_prompt(spatial_prompt_id, prompt_type)
+
+    def _on_spatial_prompt_selected(self):
+        spatial_prompt_id, prompt_type = self.view.selected_spatial_prompt()
+        self.view.highlight_spatial_prompt(spatial_prompt_id, prompt_type)
 
     def _on_prompt_item_changed(self, item):
         if item.column() not in (1, 2):

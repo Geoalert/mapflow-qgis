@@ -1,6 +1,7 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QTableWidgetItem
 from PyQt5.QtWidgets import QHeaderView
+import pytest
 from qgis.core import QgsSettings
 
 from mapflow.dialogs.main_dialog import MainDialog
@@ -126,3 +127,72 @@ def test_display_session_updates_session_progress_from_detail_inferences():
     sam_view.display_session(detail_session)
 
     assert sam_view.dlg.samSessionsTable.item(0, 2).data(Qt.DisplayRole) == "1/2"
+
+
+def test_highlight_spatial_prompt_selects_feature_in_point_layer():
+    sam_view = _create_view()
+    point_prompt = SpatialPromptResponse.from_dict({
+        "id": "sp1",
+        "geometry_type": "point",
+        "processing_id": "proc-1",
+        "geometry": {"type": "Point", "coordinates": [12.3, 54.3]},
+        "positive": True,
+    })
+    sam_view.show_spatial_prompt_layers([point_prompt])
+
+    sam_view.highlight_spatial_prompt("sp1", "point")
+
+    assert sam_view._point_prompts_layer is not None
+    assert sam_view._point_highlight_layer is not None
+    assert sam_view._point_highlight_layer.featureCount() == 1
+    assert len(sam_view._point_prompts_layer.selectedFeatureIds()) == 0
+
+
+def test_highlight_spatial_prompt_clears_previous_selection():
+    sam_view = _create_view()
+    point_prompts = [
+        SpatialPromptResponse.from_dict({
+            "id": "sp1",
+            "geometry_type": "point",
+            "processing_id": "proc-1",
+            "geometry": {"type": "Point", "coordinates": [12.3, 54.3]},
+            "positive": True,
+        }),
+        SpatialPromptResponse.from_dict({
+            "id": "sp2",
+            "geometry_type": "point",
+            "processing_id": "proc-1",
+            "geometry": {"type": "Point", "coordinates": [12.4, 54.4]},
+            "positive": False,
+        }),
+    ]
+    sam_view.show_spatial_prompt_layers(point_prompts)
+
+    sam_view.highlight_spatial_prompt("sp1", "point")
+    first_feature = next(sam_view._point_highlight_layer.getFeatures())
+    first_wkt = first_feature.geometry().asWkt()
+    sam_view.highlight_spatial_prompt("sp2", "point")
+    second_feature = next(sam_view._point_highlight_layer.getFeatures())
+    second_wkt = second_feature.geometry().asWkt()
+
+    assert sam_view._point_highlight_layer.featureCount() == 1
+    assert first_wkt != second_wkt
+
+
+def test_highlight_overlay_uses_yellow_stroke_with_width_0_6():
+    sam_view = _create_view()
+    point_prompt = SpatialPromptResponse.from_dict({
+        "id": "sp1",
+        "geometry_type": "point",
+        "processing_id": "proc-1",
+        "geometry": {"type": "Point", "coordinates": [12.3, 54.3]},
+        "positive": True,
+    })
+    sam_view.show_spatial_prompt_layers([point_prompt])
+    sam_view.highlight_spatial_prompt("sp1", "point")
+
+    symbol = sam_view._point_highlight_layer.renderer().symbol()
+    symbol_props = symbol.symbolLayer(0).properties()
+
+    assert float(symbol_props.get("outline_width", 0.0)) == pytest.approx(0.6)
+    assert symbol_props.get("outline_color") == "255,255,0,255"
