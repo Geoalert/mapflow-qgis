@@ -1,15 +1,13 @@
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any
 
 from qgis.core import QgsGeometry, QgsVectorLayer, QgsProject, QgsSettings
-from ..schema.project import UserRole
 from ..config import Config
-
-if TYPE_CHECKING:
-    from ..schema.project import MapflowProject
-    from ..schema.workflow_def import WorkflowDef
-    from ..entity.billing import BillingType
-    from ..entity.provider import ProviderInterface
+from ..schema.project import UserRole
+from ..schema.project import MapflowProject
+from ..schema.workflow_def import WorkflowDef
+#! from ..entity.billing import BillingType
+from ..entity.provider import ProviderInterface
 
 
 @dataclass

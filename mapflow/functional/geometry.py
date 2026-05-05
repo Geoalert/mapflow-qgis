@@ -1,7 +1,35 @@
+import json
 from typing import List
 
+from osgeo import ogr
 from qgis import processing as qgis_processing  # to avoid collisions
-from qgis.core import QgsVectorLayer, QgsFeature, QgsGeometry, QgsFeatureIterator
+from qgis.core import (
+    QgsCoordinateReferenceSystem, QgsDistanceArea,
+    QgsFeature, QgsFeatureIterator, QgsGeometry, QgsProject, QgsVectorLayer,
+)
+
+
+def make_distance_calculator() -> QgsDistanceArea:
+    """Return a QgsDistanceArea configured for WGS84 ellipsoidal measurements."""
+    calculator = QgsDistanceArea()
+    wgs84 = QgsCoordinateReferenceSystem("EPSG:4326")
+    calculator.setEllipsoid("WGS84")
+    calculator.setSourceCrs(wgs84, QgsProject.instance().transformContext())
+    return calculator
+
+
+def geojson_feature_area_sqkm(feature: dict, calculator: QgsDistanceArea) -> float:
+    """Return the area of a GeoJSON feature dict in sq km, or 0.0 on failure."""
+    geom_dict = feature.get("geometry")
+    if not geom_dict:
+        return 0.0
+    ogr_geom = ogr.CreateGeometryFromJson(json.dumps(geom_dict))
+    if ogr_geom is None:
+        return 0.0
+    geom = QgsGeometry.fromWkt(ogr_geom.ExportToWkt())
+    if not geom or geom.isEmpty():
+        return 0.0
+    return calculator.measureArea(geom) / 1e6
 
 def clip_aoi_to_image_extent(aoi_geometry: QgsGeometry,
                              extents: List[QgsFeature]) -> QgsFeatureIterator:

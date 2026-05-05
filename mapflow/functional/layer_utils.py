@@ -34,7 +34,7 @@ from .geometry import clip_aoi_to_image_extent, clip_aoi_to_catalog_extent
 from .helpers import WGS84, to_wgs84, WGS84_ELLIPSOID
 from ..schema.catalog import AoiResponseSchema, PreviewType
 from ..schema.processing import ProcessingDTO
-from ..styles import get_style_name
+from ..styles import get_style_name  
 
 
 def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
@@ -665,7 +665,7 @@ class ResultsLoader(QObject):
             timeout=300
         )
 
-    def download_results_callback(self, response: QNetworkReply, processing: ProcessingDTO) -> None:
+    def download_results_callback(self, response: QNetworkReply, processing: 'ProcessingDTO') -> None:
         """Display processing results upon their successful fetch.
 
         :param response: The HTTP response.

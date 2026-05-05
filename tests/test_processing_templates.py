@@ -1,6 +1,8 @@
 import json
 from unittest.mock import MagicMock
 
+import pytest
+
 from mapflow.functional.api.processing_api import ProcessingApi
 from mapflow.schema.processing import (
     CreateProcessingTemplateSchema,
@@ -8,6 +10,7 @@ from mapflow.schema.processing import (
     RunTemplateProcessingSchema,
     ProcessingTemplateDTO,
     ProcessingTemplateDetails,
+    SearchParams,
 )
 
 
@@ -54,23 +57,106 @@ class TestTemplateSchemas:
         assert details.template.name == "Template A"
         assert details.template.status == "READY"
 
+    def test_template_aoi_features_from_plain_aoi(self):
+        payload = _template_payload()
+        payload["searchParams"] = {
+            "aoi": {
+                "type": "Polygon",
+                "coordinates": [[[13.0, 52.0], [14.0, 52.0], [14.0, 51.0], [13.0, 51.0], [13.0, 52.0]]],
+            }
+        }
+        dto = ProcessingTemplateDTO.from_dict(payload)
+        features = dto._aoi_features()
+        assert len(features) == 1
+        assert features[0]["geometry"]["type"] == "Polygon"
+
     def test_create_template_serialization(self):
         body = CreateProcessingTemplateSchema(
             name="T1",
-            searchParams={"aoi": {"type": "Polygon"}},
-            processingParams={"wdId": "wf-1"},
+            searchParams={
+                "aoi": {
+                    "type": "Polygon",
+                    "coordinates": [[[13.0, 52.0], [14.0, 52.0], [14.0, 51.0], [13.0, 51.0], [13.0, 52.0]]],
+                },
+                "acquisitionDateFrom": "2022-09-24T17:00:00.000Z",
+                "acquisitionDateTo": "2026-09-24T17:00:00.000Z",
+                "productTypes": ["MOSAIC", "IMAGE"],
+                "hideUnavailable": True,
+                "dataProviders": ["arcgis_world_imagery"],
+                "maxCloudCover": 43,
+                "minAoiIntersectionPercent": 20,
+                "minOffNadirAngle": 0,
+                "maxOffNadirAngle": 25,
+            },
+            processingParams=None,
             projectId="3fa85f64-5717-4562-b3fc-2c963f66afa6",
             activeUntil="2026-05-06T11:03:37.743Z",
         )
         data = json.loads(body.as_json())
         assert data["name"] == "T1"
         assert data["projectId"] == "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        assert data["searchParams"]["aoi"]["type"] == "Polygon"
+        assert "aoiDetails" not in data["searchParams"]
+        assert "processingParams" not in data
 
-    def test_template_table_mapping(self):
-        dto = ProcessingTemplateDTO.from_dict(_template_payload())
+    def test_create_template_serialization_with_search_params_schema(self):
+        body = CreateProcessingTemplateSchema(
+            name="T1",
+            searchParams=SearchParams(
+                aoi={
+                    "type": "Polygon",
+                    "coordinates": [[[13.0, 52.0], [14.0, 52.0], [14.0, 51.0], [13.0, 51.0], [13.0, 52.0]]],
+                },
+                acquisitionDateFrom="2022-09-24T17:00:00.000Z",
+                acquisitionDateTo="2026-09-24T17:00:00.000Z",
+                productTypes=["MOSAIC", "IMAGE"],
+                hideUnavailable=True,
+                dataProviders=["arcgis_world_imagery"],
+                maxCloudCover=43,
+                minAoiIntersectionPercent=20,
+                minOffNadirAngle=0,
+                maxOffNadirAngle=25,
+            ),
+            processingParams=None,
+            projectId="3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            activeUntil="2026-05-06T11:03:37.743Z",
+        )
+        data = json.loads(body.as_json())
+        assert data["searchParams"]["aoi"]["type"] == "Polygon"
+        assert "aoiDetails" not in data["searchParams"]
+        assert "processingParams" not in data
+
+    @pytest.mark.parametrize(
+        ("payload_updates", "expected_status"),
+        [
+            ({"status": "FAILED", "isActive": False}, "Failed"),
+            ({"status": "READY", "isActive": False}, "Inactive"),
+            ({"status": "READY", "isActive": True, "lastCheckedAt": None, "newImagesCount": 0}, "Created"),
+            ({
+                "status": "READY",
+                "isActive": True,
+                "lastCheckedAt": None,
+                "newImagesCount": 3,
+            }, "Created (3)"),
+            ({
+                "status": "READY",
+                "isActive": True,
+                "lastCheckedAt": "2026-03-10T17:00:00Z",
+                "newImagesCount": 4,
+            }, "Updated (4)"),
+            ({
+                "status": "READY",
+                "isActive": True,
+                "lastCheckedAt": "2026-03-10T17:00:00Z",
+                "newImagesCount": 0,
+            }, "Updated"),
+        ],
+    )
+    def test_template_table_mapping(self, payload_updates, expected_status):
+        dto = ProcessingTemplateDTO.from_dict({**_template_payload(), **payload_updates})
         table_row = dto.as_processing_table_dict()
-        assert table_row["workflowDef"] == "Template"
-        assert table_row["status"] == "READY"
+        assert table_row["workflowDef"] == "Planned"
+        assert table_row["status"] == expected_status
         assert table_row["aoiArea"] is None
 
 
@@ -96,7 +182,7 @@ class TestTemplateApi:
         body = CreateProcessingTemplateSchema(
             name="T1",
             searchParams={"aoi": {}},
-            processingParams={"wdId": "wf-1"},
+            processingParams=None,
             projectId="p-1",
             activeUntil="2026-05-06T11:03:37.743Z",
         )
@@ -106,7 +192,10 @@ class TestTemplateApi:
         self.http.post.assert_called_once()
         kwargs = self.http.post.call_args.kwargs
         assert kwargs["path"] == "processings/template"
-        assert json.loads(kwargs["body"].decode())["name"] == "T1"
+        payload = json.loads(kwargs["body"].decode())
+        assert payload["name"] == "T1"
+        assert payload["searchParams"] == {"aoi": {}}
+        assert "processingParams" not in payload
 
     def test_update_template_path(self):
         callback = MagicMock()
@@ -128,7 +217,7 @@ class TestTemplateApi:
         body = RunTemplateProcessingSchema(
             name="Run 1",
             description=None,
-            wdName="Model",
+            wdName=None,
             wdId="wf-1",
             geometry={"type": "Polygon", "coordinates": []},
             params={},

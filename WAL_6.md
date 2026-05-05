@@ -1,7 +1,7 @@
 # WAL_6 implementation plan
 
 ## Scope
-- Add spec for planned processing templates API.
+- Add spec for planned processing API.
 - Add template schema models and API methods.
 - Add focused tests for new schema and API path/body behavior.
 
