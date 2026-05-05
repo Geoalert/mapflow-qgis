@@ -2,11 +2,11 @@ from enum import Enum
 
 from qgis.core import QgsVectorLayer
 from dataclasses import dataclass, fields
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Mapping, Any, Union, Iterable, List
 from uuid import UUID
 
-from .base import SkipDataClass, Serializable
+from .base import SkipDataClass, Serializable, parse_api_datetime_utc
 from .status import ProcessingStatus, ProcessingReviewStatus
 from .layer import RasterLayer, VectorLayer
 from .workflow_def import WorkflowDef
@@ -155,16 +155,7 @@ class PostProcessingSchemaV2(Serializable):
 
 def _parse_iso_datetime(dt_str: str) -> datetime:
     """Parse ISO 8601 datetime strings with or without microseconds."""
-    if not dt_str:
-        return None
-    # Handle both formats: with and without microseconds
-    # e.g., "2025-09-26T06:25:55.820336Z" or "2026-03-15T17:00:00Z"
-    try:
-        # Try format with microseconds first
-        return datetime.strptime(dt_str, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=None).astimezone()
-    except ValueError:
-        # Fall back to format without microseconds
-        return datetime.strptime(dt_str, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=None).astimezone()
+    return parse_api_datetime_utc(dt_str)
 
 
 @dataclass
@@ -281,7 +272,7 @@ class ProcessingTemplateDTO(Serializable, SkipDataClass):
             "percentCompleted": "N/A",
             "aoiArea": self.aoi_area,
             "cost": None,
-            "created": self.createdAt.strftime('%Y-%m-%d %H:%M'),
+            "created": self.createdAt.astimezone().strftime('%Y-%m-%d %H:%M'),
             "reviewUntil": None,
             "id": self.id,
         }
@@ -374,7 +365,7 @@ class ProcessingDTO(Serializable, SkipDataClass):
         if not isinstance(self.reviewStatus.inReviewUntil, datetime)\
                 or not self.reviewStatus.is_in_review:
             return False
-        now = datetime.now().astimezone()
+        now = datetime.now(timezone.utc)
         one_day = timedelta(1)
         return self.reviewStatus.inReviewUntil - now < one_day
 
@@ -407,7 +398,7 @@ class ProcessingDTO(Serializable, SkipDataClass):
             "percentCompleted": self.percentCompleted,
             "aoiArea": self.aoiArea/1000000,
             "cost": self.cost,
-            "created": self.created.strftime('%Y-%m-%d %H:%M'),
+            "created": self.created.astimezone().strftime('%Y-%m-%d %H:%M'),
             "reviewUntil": self.reviewUntil,
             "id": self.id
         }

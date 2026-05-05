@@ -730,14 +730,17 @@ class ProcessingService(QObject):
         template = self.selected_template()
         if not template:
             return
+
+        local_created_at = template.createdAt.astimezone()
+        local_active_until = template.activeUntil.astimezone()
         
         # Show template details in a message box for now
         # TODO: Create a proper template details dialog
         details = (
             f"<b>{template.name}</b><br/>"
             f"<b>Status:</b> {template.status}<br/>"
-            f"<b>Created:</b> {template.createdAt.strftime('%Y-%m-%d %H:%M')}<br/>"
-            f"<b>Active Until:</b> {template.activeUntil.strftime('%Y-%m-%d %H:%M')}<br/>"
+            f"<b>Created:</b> {local_created_at.strftime('%Y-%m-%d %H:%M')}<br/>"
+            f"<b>Active Until:</b> {local_active_until.strftime('%Y-%m-%d %H:%M')}<br/>"
             f"<b>Active:</b> {'Yes' if template.isActive else 'No'}<br/>"
             f"<b>Archived:</b> {'Yes' if template.isArchived else 'No'}<br/>"
             f"<b>New Images:</b> {template.newImagesCount or 0}<br/>"
