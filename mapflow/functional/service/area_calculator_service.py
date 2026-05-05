@@ -4,7 +4,6 @@ from qgis.core import QgsVectorLayer, QgsWkbTypes, QgsGeometry, QgsProject, QgsF
 from ..app_context import AppContext
 from .. import layer_utils
 from .. import helpers
-from ...dialogs import MainDialog
 from ...entity.provider import (MaxarProvider,
                                 SentinelProvider,
                                 ImagerySearchProvider,
@@ -14,12 +13,14 @@ from ...errors import (BadProcessingInput,
                        ImageIdRequired,
                        AoiNotIntersectsImage)
 from ..geometry import clip_aoi_to_image_extent
+from ...dialogs.main_dialog import MainDialog
+
 
 class AreaCalculatorService(QObject):
     def __init__(self,
                  iface,
                  app_context: AppContext,
-                 dlg: MainDialog,
+                 dlg: 'MainDialog',
                  config,
                  data_catalog_service,
                  processing_service,
@@ -244,3 +245,4 @@ class AreaCalculatorService(QObject):
         except StopIteration:
             raise AoiNotIntersectsImage()
         return aoi
+    

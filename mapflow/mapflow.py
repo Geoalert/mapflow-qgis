@@ -3,7 +3,7 @@ import os.path
 import shutil
 from base64 import b64encode, b64decode
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
-from datetime import datetime  # processing creation datetime formatting
+from datetime import datetime, timedelta  # processing creation datetime formatting
 from pathlib import Path
 from typing import List, Optional, Union, Callable, Tuple
 from osgeo import gdal, ogr
@@ -16,7 +16,7 @@ from PyQt5.QtGui import QColor
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
 from PyQt5.QtWidgets import (
     QAbstractItemView, QAction, QApplication, QFileDialog, QMenu, 
-    QMessageBox, QPushButton, QTableWidgetItem, QWidget
+    QMessageBox, QPushButton, QTableWidgetItem, QWidget, QToolButton
 )
 from PyQt5.QtXml import QDomDocument
 from qgis.core import (
@@ -73,6 +73,7 @@ from .schema.catalog import (AoiResponseSchema,
                              PreviewType,
                              ProductType)
 from .schema.project import MapflowProject, ProjectsRequest, UserRole
+from .schema.processing import CreateProcessingTemplateSchema, SearchParams
 from .schema.workflow_def import WorkflowDef
 # Dialogs
 from .dialogs import (ErrorMessageWidget,
@@ -341,14 +342,17 @@ class Mapflow(QObject):
         self.active_template_id = None
         self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
             self.sync_table_selection_with_image_id_and_layer)
+        self.dlg.metadataTable.itemSelectionChanged.connect(self.update_start_processing_button_state)
         self.app_context.meta_layer_table_connection = None
-        self.dlg.getMetadata.clicked.connect(self.get_metadata)
+        self.dlg.getMetadata.clicked.connect(self.handle_metadata_button_click)
         self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
+        self.dlg.metadataTable.cellClicked.connect(self.on_metadata_table_cell_clicked)
         self.dlg.rasterSourceChanged.connect(self.on_provider_change)
         self.dlg.clearSearch.clicked.connect(self.clear_metadata)
         self.dlg.metadataTableFilled.connect(self.filter_metadata)
         self.dlg.searchRightButton.clicked.connect(self.show_search_next_page)
         self.dlg.searchLeftButton.clicked.connect(self.show_search_previous_page)
+        self.setup_metadata_search_dropdown()
 
         # ========== 14. ZOOM SELECTOR CONFIGURATION ==========
         if self.app_context.zoom_selector:
@@ -470,33 +474,57 @@ class Mapflow(QObject):
         self.show_details()
 
     def on_processings_selection_changed(self):
-        """Load template details into search UI when a template row is selected."""
+        """Check if selected row is a template, not a processing."""
+        selected_template = self.processing_service.selected_template()
+        if not selected_template:
+            self.active_template_id = None
+        else:
+            self.active_template_id = str(selected_template.id)
+        self.update_start_processing_button_state()
+
+    def update_start_processing_button_text(self):
         selected_template = self.processing_service.selected_template()
         selected_processing = self.processing_service.selected_processing()
+        if selected_template and not selected_processing:
+            self.dlg.startProcessing.setText(self.tr("Start planned processing"))
+            return
+        self.dlg.startProcessing.setText(self.tr("Start processing"))
 
-        if not selected_template or selected_processing:
-            self.active_template_id = None
+    def update_start_processing_button_state(self):
+        """Render start button text and enforce planned-processing image selection gate."""
+        self.update_start_processing_button_text()
+        error = self.processing_service.planned_processing_selection_error()
+        if error:
+            self.dlg.disable_processing_start(reason=error, clear_area=False)
             return
 
-        template_id = str(selected_template.id)
-        if self.active_template_id == template_id:
-            return
-
-        self.active_template_id = template_id
-        self.processing_service.api.get_template(
-            template_id=selected_template.id,
-            callback=self.get_selected_template_callback,
-        )
+        # No gate error: re-enable the button and clear any planned-processing reason label.
+        self.dlg.startProcessing.setEnabled(True)
+        planned_reason = self.tr("Select one or more images in search results to start planned processing")
+        if self.dlg.processingProblemsLabel.text() == planned_reason:
+            self.dlg.processingProblemsLabel.clear()
 
     def get_selected_template_callback(self, response: QNetworkReply):
         """Render selected template search results in the search table."""
-        response_data = json.loads(response.readAll().data())
-        template_data = response_data.get("template") or response_data
-        search_results = response_data.get("searchResults") or template_data.get("searchResults") or []
-        self.populate_search_table_from_template(search_results)
+        response_json = json.loads(response.readAll().data())
+        if not response_json.get("images"):
+            self.dlg.metadataTable.clearContents()
+            self.dlg.metadataTable.setRowCount(0)
+            self.alert(self.tr("No images was found"), QMessageBox.Information)
+            return
+        raw_images = response_json.get("images", [])
+        response_data = ImageCatalogResponseSchema(**response_json)
+        geoms = response_data.as_geojson()
+        for position, feature in enumerate(geoms.get("features", ())):
+            feature["properties"]["local_index"] = position
+            if raw_images[position].get("isNew"):
+                feature["properties"]["productType"] = (
+                    (feature["properties"].get("productType") or "") + " (new)"
+                ).strip()
+        self.dlg.fill_metadata_table(geoms)
 
     def populate_search_table_from_template(self, search_results: List[dict]):
-        """Populate search table with search results returned for a selected template."""
+        """Populate search table with search results returned for a selected template.""" #!
         self.dlg.metadataTable.clearSelection()
         self.dlg.metadataTable.setSortingEnabled(False)
         self.dlg.metadataTable.setRowCount(len(search_results))
@@ -506,6 +534,10 @@ class Mapflow(QObject):
             if metadata.get("id") is None:
                 metadata["id"] = result.get("id")
             metadata["local_index"] = row
+            if result.get("isNew"):
+                metadata["productType"] = (
+                    (metadata.get("productType") or "") + " (new)"
+                ).strip()
 
             for col, attr in enumerate(self.config_search_columns.METADATA_TABLE_ATTRIBUTES.values()):
                 item = QTableWidgetItem()
@@ -515,6 +547,24 @@ class Mapflow(QObject):
         self.dlg.metadataTable.setSortingEnabled(True)
         self.dlg.metadataTable.resizeColumnsToContents()
 
+    def _aoi_ids_from_template(self, template) -> List[str]:
+        """Extract AOI IDs from template searchParams.aoiDetails features."""
+        search_params = template.searchParams or {}
+        if isinstance(search_params, dict):
+            aoi_details = search_params.get("aoiDetails", {})
+        else:
+            aoi_details = search_params.aoiDetails
+
+        if not aoi_details:
+            return []
+
+        ids = []
+        for feature in aoi_details.get("features", []):
+            aoi_id = feature.get("id") or feature.get("properties", {}).get("id")
+            if aoi_id:
+                ids.append(str(aoi_id))
+        return ids
+
     def _linked_processings_from_template(self, template) -> List[dict]:
         """Extract processing links from template AOI details."""
         links = []
@@ -523,6 +573,10 @@ class Mapflow(QObject):
             aoi_details = search_params.get("aoiDetails", {})
         else:
             aoi_details = search_params.aoiDetails
+
+        if not aoi_details:
+            return links
+
         for feature in aoi_details.get("features", []):
             feature_processings = feature.get("properties", {}).get("processings", [])
             links.extend(feature_processings)
@@ -551,27 +605,147 @@ class Mapflow(QObject):
         if not template or self.processing_service.selected_processing():
             return
 
+        template_group_name = str(template.name)
+        processings_subgroup_name = self.tr("Processings AOI")
+
+        template_aoi_layer = None
+        try:
+            template_aoi_layer = self._add_geojson_aoi_layer(
+                features=template._aoi_features(),
+                layer_name=self.tr("Planned AOI: {name}").format(name=template.name),
+                style_name='aoi.qml',
+                template_group_name=template_group_name,
+            )
+        except Exception:
+            template_aoi_layer = None
+
         links = self._linked_processings_from_template(template)
         linked_ids = [str(item.get("processingId")) for item in links if item.get("processingId")]
         if not linked_ids:
-            alert(self.tr("No linked processings found for this template"), QMessageBox.Information)
             return
 
-        table = self.dlg.processingsTable
-        id_column_index = self.config.PROCESSING_TABLE_ID_COLUMN_INDEX
-        table.clearSelection()
+        linked_items = []
+        seen_ids = set()
+        for item in links:
+            processing_id = item.get("processingId")
+            if not processing_id:
+                continue
+            processing_id = str(processing_id)
+            if processing_id in seen_ids:
+                continue
+            seen_ids.add(processing_id)
+            processing_name = item.get("processingName") or item.get("name") or self.tr("Unknown")
+            linked_items.append((processing_name, processing_id))
 
-        selected_count = 0
+        linked_details = "<br/>".join(
+            f"- <b>{name}</b> ({pid})" for name, pid in linked_items
+        )
+        alert(
+            self.tr("Linked processings:<br/>{details}").format(details=linked_details),
+            QMessageBox.Information,
+        )
+
+        # Add linked processings AOIs to the same group as template AOI
         for processing_id in linked_ids:
-            id_items = table.findItems(processing_id, Qt.MatchExactly)
-            for item in id_items:
-                if item.column() == id_column_index:
-                    table.selectRow(item.row())
-                    selected_count += 1
-                    break
+            self.http.get(
+                url=f'{self.server}/processings/{processing_id}/aois',
+                callback=self._add_template_processing_aoi_callback,
+                callback_kwargs={
+                    'processing_id': processing_id,
+                    'template_group_name': template_group_name,
+                    'processings_subgroup_name': processings_subgroup_name,
+                    'reference_layer_id': template_aoi_layer.id() if template_aoi_layer else None,
+                },
+                use_default_error_handler=True,
+                timeout=30,
+            )
 
-        if selected_count == 0:
-            alert(self.tr("Linked processings are not visible on the current page"), QMessageBox.Information)
+    def _add_geojson_aoi_layer(self,
+                               features: list,
+                               layer_name: str,
+                               style_name: str,
+                               template_group_name: Optional[str] = None,
+                               subgroup_name: Optional[str] = None,
+                               reference_layer_id: Optional[str] = None) -> Optional[QgsVectorLayer]:
+        if not features:
+            return None
+        aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326', layer_name, 'memory')
+        provider = aoi_layer.dataProvider()
+        qgs_features = []
+        for feature in features:
+            geom_dict = feature.get("geometry")
+            if not geom_dict:
+                continue
+            try:
+                ogr_geom = ogr.CreateGeometryFromJson(json.dumps(geom_dict))
+                if not ogr_geom:
+                    continue
+                qgs_geom = QgsGeometry.fromWkt(ogr_geom.ExportToWkt())
+                qgs_feat = QgsFeature()
+                qgs_feat.setGeometry(qgs_geom)
+                qgs_features.append(qgs_feat)
+            except Exception:
+                continue
+        if not qgs_features:
+            return None
+        provider.addFeatures(qgs_features)
+        aoi_layer.updateExtents()
+
+        root = self.app_context.project.layerTreeRoot()
+        if template_group_name:
+            mapflow_group_name = self.app_context.settings.value('layerGroup') or self.app_context.plugin_name
+            mapflow_group = root.findGroup(mapflow_group_name)
+
+            parent_group = mapflow_group if mapflow_group else root
+            template_group = parent_group.findGroup(template_group_name)
+            if not template_group:
+                template_group = parent_group.insertGroup(0, template_group_name)
+
+            target_group = template_group
+            if subgroup_name:
+                subgroup = template_group.findGroup(subgroup_name)
+                if not subgroup:
+                    subgroup = template_group.insertGroup(0, subgroup_name)
+                target_group = subgroup
+
+            self.app_context.project.addMapLayer(aoi_layer, addToLegend=False)
+            target_group.insertLayer(0, aoi_layer)
+        elif reference_layer_id:
+            root = self.app_context.project.layerTreeRoot()
+            ref_node = root.findLayer(reference_layer_id)
+            if ref_node and ref_node.parent():
+                self.app_context.project.addMapLayer(aoi_layer, addToLegend=False)
+                ref_node.parent().insertLayer(0, aoi_layer)
+            else:
+                self.app_context.project.addMapLayer(aoi_layer)
+        else:
+            self.app_context.project.addMapLayer(aoi_layer)
+
+        aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', style_name))
+        self.add_to_layers(aoi_layer)
+        self.iface.setActiveLayer(aoi_layer)
+        return aoi_layer
+
+    def _add_template_processing_aoi_callback(self,
+                                              response: QNetworkReply,
+                                              processing_id: str,
+                                              template_group_name: Optional[str] = None,
+                                              processings_subgroup_name: Optional[str] = None,
+                                              reference_layer_id: Optional[str] = None):
+        try:
+            data = json.loads(response.readAll().data())
+            geojson = AoiResponseSchema(data).aoi_as_geojson()
+            features = geojson.get('features', [])
+            self._add_geojson_aoi_layer(
+                features=features,
+                layer_name=self.tr("AOI: {id}").format(id=processing_id),
+                style_name='aoi_templates_processing.qml',
+                template_group_name=template_group_name,
+                subgroup_name=processings_subgroup_name,
+                reference_layer_id=reference_layer_id,
+            )
+        except Exception:
+            return
 
     def show_template_search_results(self):
         """Open imagery search tab and fill it with selected template search results."""
@@ -583,9 +757,13 @@ class Mapflow(QObject):
         if imagery_search_tab:
             self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
 
-        self.processing_service.api.get_template(
+        aoi_ids = self._aoi_ids_from_template(template)
+        self.processing_service.api.get_template_images(
             template_id=template.id,
             callback=self.get_selected_template_callback,
+            limit=self.search_page_limit,
+            offset=self.search_page_offset,
+            aoi_ids=aoi_ids or None,
         )
 
     def select_processing_in_table(self, processing_id: str):
@@ -704,7 +882,10 @@ class Mapflow(QObject):
         for block in wd.optional_blocks:
             self.dlg.add_model_option(block.displayName, checked=bool(self.app_context.settings.value(f"wd/{wd.id}/{block.name}", False)))
         # Other wigets are disabled before the appearence of these checkboxes, so we do it here separately after adding them
-        self.dlg.enable_model_options(self.app_context.user_role.can_start_processing)
+        can_start_processing = True
+        if self.app_context.user_role:
+            can_start_processing = self.app_context.user_role.can_start_processing
+        self.dlg.enable_model_options(can_start_processing)
 
     def save_options_settings(self, wd: WorkflowDef, enabled_blocks: List[bool]):
         enabled_blocks_dict = wd.get_enabled_blocks(enabled_blocks)
@@ -1032,6 +1213,87 @@ class Mapflow(QObject):
 
         if not provider_supports_search:
             self.dlg.setProviderIndex(self.provider_service.imagery_search_provider_index)
+
+    def setup_metadata_search_dropdown(self):
+        """Set Search button as dropdown with Search and Plan search modes."""
+        self.metadata_search_mode = "search"
+        self.metadata_search_menu = QMenu(self.dlg.getMetadata)
+        search_action = self.metadata_search_menu.addAction(self.tr("Search"))
+        plan_action = self.metadata_search_menu.addAction(self.tr("Plan search"))
+        search_action.triggered.connect(lambda: self.set_metadata_search_mode("search"))
+        plan_action.triggered.connect(lambda: self.set_metadata_search_mode("plan"))
+        self.dlg.getMetadata.setPopupMode(QToolButton.MenuButtonPopup)
+        self.dlg.getMetadata.setMenu(self.metadata_search_menu)
+        self.set_metadata_search_mode("search")
+
+    def set_metadata_search_mode(self, mode: str):
+        self.metadata_search_mode = mode
+        self.dlg.getMetadata.setText(self.tr("Plan search") if mode == "plan" else self.tr("Search"))
+
+    def handle_metadata_button_click(self):
+        if getattr(self, "metadata_search_mode", "search") == "plan":
+            self.create_search_template()
+            return
+        self.get_metadata()
+
+    def create_search_template(self):
+        """Create planned search template using current AOI and imagery-search filters."""
+        self.replace_search_provider_index()
+        if not self.app_context.aoi:
+            self.alert(self.tr('Please, select a valid area of interest'))
+            return
+
+        from_time = self.dlg.metadataFrom.dateTime().toUTC().toString("yyyy-MM-ddTHH:mm:ss.zzz'Z'")
+        to_time = self.dlg.metadataTo.dateTime().toUTC().toString("yyyy-MM-ddTHH:mm:ss.zzz'Z'")
+        max_cloud_cover = self.dlg.maxCloudCover.value()
+        min_intersection = self.dlg.minIntersection.value()
+        hide_unavailable = self.dlg.hideUnavailableResults.isChecked()
+        product_types = self.selected_search_product_types() or []
+        search_providers = self.dlg.searchProvidersCombo.checkedItemsData() or []
+
+        search_params = SearchParams(
+            aoi=json.loads(self.app_context.aoi.asJson()),
+            acquisitionDateFrom=from_time,
+            acquisitionDateTo=to_time,
+            maxCloudCover=max_cloud_cover,
+            minAoiIntersectionPercent=min_intersection,
+            minOffNadirAngle=0,
+            maxOffNadirAngle=25,
+            hideUnavailable=hide_unavailable,
+            productTypes=product_types,
+            dataProviders=search_providers,
+        )
+
+        template_name = self.dlg.processingName.text().strip() or self.tr("Planned search {date}").format(
+            date=datetime.now().strftime('%Y-%m-%d %H:%M')
+        )
+        template_payload = CreateProcessingTemplateSchema(
+            name=template_name,
+            searchParams=search_params,
+            projectId=str(self.app_context.project_id),
+            activeUntil=(datetime.utcnow() + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%S.0Z'),
+        )
+
+        self.dlg.getMetadata.setEnabled(False)
+        self.iface.messageBar().pushInfo(self.app_context.plugin_name, self.tr('Creating planned search...'))
+        self.processing_service.api.create_template(
+            data=template_payload,
+            callback=self.create_search_template_callback,
+            error_handler=self.create_search_template_error_handler,
+        )
+
+    def create_search_template_callback(self, response: QNetworkReply):
+        self.dlg.getMetadata.setEnabled(True)
+        alert(self.tr("Planned search created successfully."), QMessageBox.Information)
+        self.processing_service.get_processings()
+
+    def create_search_template_error_handler(self, response: QNetworkReply):
+        self.dlg.getMetadata.setEnabled(True)
+        self.report_http_error(
+            response,
+            self.tr("Template creation failed"),
+            error_message_parser=api_message_parser,
+        )
 
     def get_metadata(self, _: Optional[bool] = False, offset: Optional[int] = 0) -> None:
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
@@ -2179,6 +2441,62 @@ class Mapflow(QObject):
         else:  # XYZ providers
             self.preview_xyz(provider=provider, image_id=image_id)
     
+    def on_metadata_table_cell_clicked(self, row: int, column: int):
+        """Mark template image as seen when user clicks a row with the (new) badge."""
+        if not self.active_template_id:
+            return
+        product_type_col = 0  # 'productType' is the first column in METADATA_TABLE_ATTRIBUTES
+        cell = self.dlg.metadataTable.item(row, product_type_col)
+        if not cell:
+            return
+        text = cell.text()
+        if not text.endswith(" (new)"):
+            return
+        id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
+        id_item = self.dlg.metadataTable.item(row, id_column_index)
+        if not id_item:
+            return
+        image_id = id_item.text()
+        cell.setText(text[: -len(" (new)")])
+        self.processing_service.api.mark_template_image_seen(
+            template_id=self.active_template_id,
+            image_id=image_id,
+            callback=lambda _: None,
+            error_handler=lambda _: None,
+        )
+        self._decrement_template_new_images_count(self.active_template_id)
+
+    def _decrement_template_new_images_count(self, template_id: str):
+        """Decrement newImagesCount on the in-memory template DTO and update processings table status cell."""
+        from uuid import UUID
+        try:
+            key = UUID(template_id)
+        except (ValueError, AttributeError):
+            key = template_id
+        template = self.processing_service.templates.get(key)
+        if template is None:
+            return
+        if template.newImagesCount and template.newImagesCount > 0:
+            template.newImagesCount -= 1
+
+        # Update the status cell in processingsTable
+        id_col = self.config.PROCESSING_TABLE_ID_COLUMN_INDEX
+        status_col = list(self.config.PROCESSING_TABLE_COLUMNS).index('status')
+        table = self.dlg.processingsTable
+        for row in range(table.rowCount()):
+            id_item = table.item(row, id_col)
+            if id_item and id_item.text() == str(template_id):
+                status_item = table.item(row, status_col)
+                if status_item:
+                    status_item.setData(Qt.DisplayRole, template.table_status)
+                    tip = self.tr("Planned processing")
+                    if template.newImagesCount and template.newImagesCount > 0:
+                        tip = self.tr("Planned processing. New images: {count}").format(
+                            count=template.newImagesCount
+                        )
+                    status_item.setToolTip(tip)
+                break
+
     def preview_search_from_cell (self, row, column):
         if column == self.config.PPRVIEW_INDEX_COLUMN:
             id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
@@ -2355,6 +2673,8 @@ class Mapflow(QObject):
         # Check if it's a template first
         template = self.processing_service.selected_template()
         if template:
+            self.show_template_search_results()
+            self.select_template_processings()
             return
         
         # Otherwise, it's a processing

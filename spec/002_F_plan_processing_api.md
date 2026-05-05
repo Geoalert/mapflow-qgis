@@ -1,7 +1,7 @@
-# 002_F Planned Processing Templates API
+# 002_F Planned Processing API
 
 ## Purpose
-Define REST API contracts for planned processing templates consumed by the plugin.
+Define REST API contracts for planned processing consumed by the plugin.
 
 ## Endpoints
 

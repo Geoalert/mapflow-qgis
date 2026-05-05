@@ -1,6 +1,6 @@
 from .basemap_provider import XYZProvider, TMSProvider, QuadkeyProvider, MaxarProvider
+from .url_utils import add_connect_id
 from ...constants import MAXAR_BASE_URL
-from ...functional.layer_utils import add_connect_id
 
 provider_options = {XYZProvider.option_name: XYZProvider,
                     TMSProvider.option_name: TMSProvider,

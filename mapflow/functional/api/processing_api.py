@@ -1,4 +1,5 @@
-from typing import Callable, Union, Optional
+import json
+from typing import Callable, List, Optional, Union
 from uuid import UUID
 
 from PyQt5.QtCore import QObject, pyqtSignal, QFile, QIODevice
@@ -123,6 +124,58 @@ class ProcessingApi(QObject):
     def get_template(self, template_id: Union[UUID, str], callback: Callable):
         self.http.get(
             path=f"processings/template/{template_id}",
+            callback=callback,
+            use_default_error_handler=True,
+            timeout=5,
+        )
+
+    def post_template(
+        self,
+        template_id: Union[UUID, str],
+        callback: Callable,
+        limit: int = 100,
+        offset: int = 0,
+        aoi_ids: Optional[List[str]] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ):
+        body: dict = {"limit": limit, "offset": offset}
+        if aoi_ids is not None:
+            body["aoiIds"] = aoi_ids
+        if sort_by is not None:
+            body["sortBy"] = sort_by
+        if sort_order is not None:
+            body["sortOrder"] = sort_order
+        self.http.post(
+            path=f"processings/template/{template_id}/run",
+            body=json.dumps(body).encode(),
+            headers={},
+            callback=callback,
+            use_default_error_handler=True,
+            timeout=5,
+        )
+
+    def get_template_images(
+        self,
+        template_id: Union[UUID, str],
+        callback: Callable,
+        limit: int = 100,
+        offset: int = 0,
+        aoi_ids: Optional[List[str]] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ):
+        body: dict = {"limit": limit, "offset": offset}
+        if aoi_ids is not None:
+            body["aoiIds"] = aoi_ids
+        if sort_by is not None:
+            body["sortBy"] = sort_by
+        if sort_order is not None:
+            body["sortOrder"] = sort_order
+        self.http.post(
+            path=f"processings/template/{template_id}/images",
+            body=json.dumps(body).encode(),
+            headers={},
             callback=callback,
             use_default_error_handler=True,
             timeout=5,

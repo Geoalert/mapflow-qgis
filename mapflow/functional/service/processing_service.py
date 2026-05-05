@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 from uuid import UUID
 from typing import Dict, Optional, List
 from PyQt5.QtCore import QObject, QTimer
@@ -22,7 +23,7 @@ from ...http import Http, api_message_parser
 from ..view.processing_view import ProcessingView
 from ..api.processing_api import ProcessingApi
 from ...schema import ProcessingDTO, UpdateProcessingSchema, ProcessingStatus, BillingType, ProcessingHistory, PostProcessingSchemaV2
-from ...schema.processing import ProcessingUIParams, ProcessingsRequest, ProcessingsResult
+from ...schema.processing import ProcessingUIParams, ProcessingsRequest, ProcessingsResult, RunTemplateProcessingSchema
 from ...schema.processing import ProcessingTemplateDTO
 from ..service.alert_service import alert, AlertService
 from ..app_context import AppContext
@@ -115,6 +116,9 @@ class ProcessingService(QObject):
     
     def validate_context_params(self):
         error = None
+        planned_selection_error = self.planned_processing_selection_error()
+        if planned_selection_error:
+            return planned_selection_error
         if not self.app_context.aoi:
             # Here the button must already be disabled, and the warning text set
             if self.view.dlg.startProcessing.isEnabled():
@@ -130,6 +134,16 @@ class ProcessingService(QObject):
             self.view.dlg.processingProblemsLabel.clear()
             error = None
         return error
+
+    def planned_processing_selection_error(self) -> Optional[str]:
+        """Return error when template is selected but no search result images are selected."""
+        template = self.selected_template()
+        if not template or self.selected_processing():
+            return None
+        selected_rows = {item.row() for item in self.dlg.metadataTable.selectedItems()}
+        if selected_rows:
+            return None
+        return self.tr("Select one or more images in search results to start planned processing")
 
     def start_processing(self):
         self.processing_fetch_timer.stop()
@@ -174,17 +188,30 @@ class ProcessingService(QObject):
         Handle the actual processing submission, either directly or after confirmation.
         """
         def post_processing():
-            self.iface.messageBar().pushInfo(
-                self.app_context.plugin_name, 
-                self.tr('Starting the processing...')
-            )
             try:
                 self.dlg.startProcessing.setEnabled(False)
-                self.api.create_processing(
-                    processing_params, 
-                    self.start_processing_callback,
-                    self.start_processing_error_handler
-                )
+                template = self.selected_template()
+                if template:
+                    self.iface.messageBar().pushInfo(
+                        self.app_context.plugin_name,
+                        self.tr('Starting planned processing...')
+                    )
+                    self.api.run_template_processing(
+                        template_id=template.id,
+                        data=self._build_run_template_processing_schema(processing_params),
+                        callback=self.start_processing_callback,
+                        error_handler=self.start_processing_error_handler,
+                    )
+                else:
+                    self.iface.messageBar().pushInfo(
+                        self.app_context.plugin_name,
+                        self.tr('Starting the processing...')
+                    )
+                    self.api.create_processing(
+                        processing_params,
+                        self.start_processing_callback,
+                        self.start_processing_error_handler
+                    )
             except Exception as e:
                 alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
         
@@ -193,6 +220,24 @@ class ProcessingService(QObject):
             self.show_confirmation_dialog(processing_params, post_processing)
         else:
             post_processing()
+
+    def _build_run_template_processing_schema(
+        self,
+        processing_params: PostProcessingSchemaV2,
+    ) -> RunTemplateProcessingSchema:
+        wd_id = processing_params.wdId
+        wd_name = None if wd_id else self.dlg.modelCombo.currentText()
+        return RunTemplateProcessingSchema(
+            name=processing_params.name,
+            description=processing_params.description,
+            wdName=wd_name,
+            wdId=wd_id,
+            geometry=processing_params.geometry,
+            params=processing_params.params,
+            meta=processing_params.meta or {},
+            blocks=processing_params.blocks or [],
+            updateTemplateGeometry=False,
+        )
 
     def show_confirmation_dialog(self, processing_params: PostProcessingSchemaV2, callback):
         """
@@ -263,14 +308,22 @@ class ProcessingService(QObject):
             QMessageBox.Information
         )
         response_data = json.loads(response.readAll().data())
-        new_processing = ProcessingDTO.from_dict(response_data)
-        self.view.clear_processing_name(new_processing.name)
+        new_processing = None
+        # Template start responses may differ from processing-create responses.
+        # Try optimistic local update only when payload looks like a Processing DTO.
+        if isinstance(response_data, dict) and response_data.get("id") and response_data.get("name"):
+            new_processing = ProcessingDTO.from_dict(response_data)
+            self.view.clear_processing_name(new_processing.name)
         self.processing_fetch_timer.start()  # start monitoring
-        # Add to history
-        self.processings[new_processing.id] = new_processing
-        self.processings_history.add(new_processing.id, new_processing.status)
-        # display
-        self.view.add_new_processing(new_processing)
+        if new_processing is not None:
+            # Add to history
+            self.processings[new_processing.id] = new_processing
+            self.processings_history.add(new_processing.id, new_processing.status)
+            # display
+            self.view.add_new_processing(new_processing)
+        # Always refresh full list because template-started processings can affect
+        # both processings and template status/counts in table.
+        self.get_processings()
         self.dlg.startProcessing.setEnabled(True)
 
     def start_processing_error_handler(self, response: QNetworkReply) -> None:        
@@ -314,7 +367,17 @@ class ProcessingService(QObject):
         self.dlg.processingsNextPageButton.clicked.connect(self.show_processings_next_page)
         self.dlg.processingsPreviousPageButton.clicked.connect(self.show_processings_previous_page)
         self.dlg.filterProcessings.textEdited.connect(self.get_filtered_processings)
-        self.dlg.sortProcessingsCombo.activated.connect(lambda: self.get_processings())
+        self.dlg.sortProcessingsCombo.activated.connect(self._on_combo_sort_changed)
+        self.view.connect_header_sort(self._on_header_sort_changed)
+
+    def _on_combo_sort_changed(self):
+        """Combo sort resets any header-click override and re-fetches."""
+        self.view._header_sort_by = None
+        self.get_processings()
+
+    def _on_header_sort_changed(self):
+        """Re-render the table with current data using the header sort."""
+        self.view.update_processing_table(self.combined_processing_rows())
 
     def get_processings(self):
         if not self.app_context.current_project:
@@ -365,18 +428,42 @@ class ProcessingService(QObject):
 
     def get_templates_callback(self, response: QNetworkReply):
         response_data = json.loads(response.readAll().data())
-        print (response_data)
+        print ("GT", response_data)
         templates = [ProcessingTemplateDTO.from_dict(item) for item in response_data]
         self.templates = {template.id: template for template in templates}
         self.view.update_processing_table(self.combined_processing_rows())
 
+    def _sort_key(self, item, sort_by: str):
+        is_processing = isinstance(item, ProcessingDTO)
+        if sort_by == "NAME":
+            return (item.name or "").lower()
+        if sort_by == "WORKFLOW":
+            return (item.workflowDef.name if is_processing else "Planned").lower()
+        if sort_by == "STATUS":
+            if is_processing:
+                if item.reviewStatus and not item.reviewStatus.is_none:
+                    return (item.reviewStatus.reviewStatus.display_value or "").lower()
+                return (item.status.display_value or "").lower()
+            return item.table_status.lower()
+        if sort_by == "PROGRESS":
+            return (item.percentCompleted or 0) if is_processing else -1
+        if sort_by == "AREA":
+            return (item.aoiArea or 0) if is_processing else (item.aoi_area or 0)
+        if sort_by == "COST":
+            return (item.cost or 0) if is_processing else 0
+        if sort_by == "REVIEW_UNTIL":
+            if is_processing and item.reviewUntil:
+                return item.reviewUntil
+            return datetime.min.replace(tzinfo=timezone.utc)
+        # CREATED (default)
+        return item.created if is_processing else item.createdAt
+
     def combined_processing_rows(self):
-        rows = list(self.processings.values()) + list(self.templates.values())
-        rows.sort(
-            key=lambda item: item.created if isinstance(item, ProcessingDTO) else item.createdAt,
-            reverse=True,
-        )
-        return rows
+        sort_by, sort_order = self.view.sort_processings()
+        reverse = sort_order == "DESC"
+        templates = sorted(self.templates.values(), key=lambda t: self._sort_key(t, sort_by), reverse=reverse)
+        processings = sorted(self.processings.values(), key=lambda p: self._sort_key(p, sort_by), reverse=reverse)
+        return list(templates) + list(processings)
 
     def show_processings_next_page(self):
         self.processings_page_offset += self.processings_page_limit
@@ -494,7 +581,19 @@ class ProcessingService(QObject):
         """
         response_text = response.readAll().data().decode()
         if response_text is not None:
-            message = api_message_parser(response_text)
+            try:
+                message = api_message_parser(response_text)
+            except Exception:
+                message = None
+
+            if not message or str(message).strip().lower() in {"none", "null"}:
+                network_error = ""
+                try:
+                    network_error = (response.errorString() or "").strip()
+                except Exception:
+                    network_error = ""
+                message = network_error or self.tr("Unknown server error")
+
             if not self.app_context.user_role.can_start_processing:
                 reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.app_context.user_role.value)
             else:

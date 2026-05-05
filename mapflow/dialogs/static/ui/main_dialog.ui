@@ -1648,7 +1648,7 @@
                  </spacer>
                 </item>
                 <item>
-                 <widget class="QPushButton" name="getMetadata">
+                 <widget class="QToolButton" name="getMetadata">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                     <horstretch>0</horstretch>
@@ -1669,6 +1669,9 @@
                   </property>
                   <property name="toolTip">
                    <string>Click and wait for a few seconds until the table below is filled out</string>
+                  </property>
+                  <property name="popupMode">
+                   <enum>QToolButton::MenuButtonPopup</enum>
                   </property>
                   <property name="text">
                    <string>Search </string>

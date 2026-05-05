@@ -38,12 +38,14 @@ class ShareProject(SkipDataClass):
             self.users = [ShareProjectUser.from_dict(item) for item in self.users]
 
     def get_user_role(self, email):
-        for owner in self.owners:
+        for owner in self.owners or []:
             if owner.email == email:
                  return UserRole.owner
-        for user in self.users:
+        for user in self.users or []:
             if user.email == email:
                 return UserRole(user.role)
+        # Shared project payload may not include the current user; default to least privilege.
+        return UserRole.readonly
 
 
 @dataclass

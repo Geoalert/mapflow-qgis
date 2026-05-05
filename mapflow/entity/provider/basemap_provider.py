@@ -6,7 +6,7 @@ from typing import Optional,List
 from urllib.parse import urlparse, parse_qs
 
 from .provider import SourceType, CRS, UsersProvider, staticproperty
-from ...functional.layer_utils import maxar_tile_url, add_connect_id
+from .url_utils import add_connect_id, maxar_tile_url
 from ...requests.maxar_metadata_request import MAXAR_REQUEST_BODY, MAXAR_META_URL
 from ...schema.processing import PostSourceSchema, UserDefinedParams, UserDefinedSchema, ProcessingParams
 
