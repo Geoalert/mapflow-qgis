@@ -12,6 +12,7 @@ from .layer import RasterLayer, VectorLayer
 from .workflow_def import WorkflowDef
 from ..entity.provider.provider import SourceType
 from ..errors import ErrorMessage
+from ..functional.geometry import geojson_feature_area_sqkm, make_distance_calculator
 
 @dataclass
 class PostSourceSchema(Serializable, SkipDataClass):
@@ -131,7 +132,7 @@ class ProcessingParams(Serializable, SkipDataClass):
         elif source_params.get("myImagery"):
             source_params = MyImageryParams(MyImagerySchema(**source_params.get("myImagery")))
         elif source_params.get("imagerySearch"):
-            print (str(source_params))
+            #! print (str(source_params))
             source_params = ImagerySearchParams(ImagerySearchSchema(**source_params.get("imagerySearch")))
         elif source_params.get("userDefined"):
             source_params = UserDefinedParams(UserDefinedSchema(**source_params.get("userDefined")))
@@ -168,7 +169,8 @@ def _parse_iso_datetime(dt_str: str) -> datetime:
 
 @dataclass
 class SearchParams(Serializable, SkipDataClass):
-    aoiDetails: Mapping[str, Any]
+    aoiDetails: Optional[Mapping[str, Any]] = None
+    aoi: Optional[Mapping[str, Any]] = None
     acquisitionDateFrom: Optional[str] = None
     acquisitionDateTo: Optional[str] = None
     minResolution: Optional[float] = None
@@ -215,13 +217,69 @@ class ProcessingTemplateDTO(Serializable, SkipDataClass):
     def is_template(self) -> bool:
         return True
 
+    def _aoi_features(self):
+        """Return template AOI features from either aoiDetails or aoi shape."""
+        if isinstance(self.searchParams, SearchParams):
+            aoi_details = self.searchParams.aoiDetails
+            if aoi_details:
+                return (aoi_details or {}).get("features", [])
+            if self.searchParams.aoi:
+                return [{
+                    "type": "Feature",
+                    "geometry": self.searchParams.aoi,
+                    "properties": {},
+                }]
+            return []
+
+        search_params = self.searchParams or {}
+        aoi_details = search_params.get("aoiDetails", {})
+        if aoi_details:
+            return (aoi_details or {}).get("features", [])
+
+        aoi = search_params.get("aoi")
+        if aoi:
+            return [{
+                "type": "Feature",
+                "geometry": aoi,
+                "properties": {},
+            }]
+        return []
+
+    @property
+    def aoi_area(self) -> Optional[float]:
+        """Total AOI area in sq km, computed from searchParams.aoiDetails features."""
+        try:
+            features = self._aoi_features()
+            if not features:
+                return None
+            calculator = make_distance_calculator()
+            total = sum(geojson_feature_area_sqkm(f, calculator) for f in features)
+            return round(total, 4) if total else None
+        except Exception:
+            return None
+
+    @property
+    def table_status(self) -> str:
+        print (self.name, self.newImagesCount)
+        if (self.status or "").upper() == "FAILED":
+            return "Failed"
+        if not self.isActive:
+            return "Inactive"
+        if self.lastCheckedAt:
+            status = "Updated"
+        else:
+            status = "Created"
+        if self.newImagesCount and self.newImagesCount > 0:
+            return f"{status} ({self.newImagesCount})"
+        return status
+
     def as_processing_table_dict(self):
         return {
             "name": self.name,
-            "workflowDef": "Template",
-            "status": self.status,
-            "percentCompleted": None,
-            "aoiArea": None,
+            "workflowDef": "Planned", #! Translate
+            "status": self.table_status,
+            "percentCompleted": "N/A",
+            "aoiArea": self.aoi_area,
             "cost": None,
             "created": self.createdAt.strftime('%Y-%m-%d %H:%M'),
             "reviewUntil": None,
@@ -242,9 +300,9 @@ class ProcessingTemplateDetails(Serializable, SkipDataClass):
 class CreateProcessingTemplateSchema(Serializable, SkipDataClass):
     name: str
     searchParams: Mapping[str, Any]
-    processingParams: Mapping[str, Any]
     projectId: str
     activeUntil: str
+    processingParams: Optional[Mapping[str, Any]] = None
 
 
 @dataclass
@@ -259,8 +317,8 @@ class UpdateProcessingTemplateSchema(Serializable, SkipDataClass):
 class RunTemplateProcessingSchema(Serializable, SkipDataClass):
     name: str
     description: Optional[str]
-    wdName: str
-    wdId: str
+    wdName: Optional[str]
+    wdId: Optional[str]
     geometry: Mapping[str, Any]
     params: Mapping[str, Any]
     meta: Mapping[str, Any]

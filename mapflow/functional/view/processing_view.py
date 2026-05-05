@@ -20,6 +20,8 @@ class ProcessingView:
     """
     def __init__(self, dlg: MainDialog):
         self.dlg = dlg
+        self._header_sort_by = None   # column-based override; None = use combo
+        self._header_sort_desc = True
         # Setup pagination icons
         self.dlg.processingsPreviousPageButton.setIcon(icons.arrow_left_icon)
         self.dlg.processingsNextPageButton.setIcon(icons.arrow_right_icon)
@@ -38,6 +40,38 @@ class ProcessingView:
         ])
         self.dlg.sortProcessingsCombo.setCurrentIndex(0)
         self.dlg.filterProcessings.setPlaceholderText(self.tr("Filter processings"))
+
+    # Column index -> sort_by value mapping
+    _COLUMN_SORT_MAP = {
+        0: "NAME",           # name
+        1: "WORKFLOW",       # workflowDef
+        2: "STATUS",         # status
+        3: "PROGRESS",       # percentCompleted
+        4: "AREA",           # aoiArea
+        5: "COST",           # cost
+        6: "CREATED",        # created
+        7: "REVIEW_UNTIL",   # reviewUntil
+    }
+
+    def connect_header_sort(self, on_sort_changed):
+        """Connect column header clicks to a templates-first re-sort."""
+        self.dlg.processingsTable.horizontalHeader().sectionClicked.connect(
+            lambda col: self._on_header_clicked(col, on_sort_changed)
+        )
+
+    def _on_header_clicked(self, column: int, on_sort_changed):
+        sort_by = self._COLUMN_SORT_MAP.get(column)
+        if sort_by is None:
+            return  # non-sortable column
+        if self._header_sort_by == sort_by:
+            self._header_sort_desc = not self._header_sort_desc
+        else:
+            self._header_sort_by = sort_by
+            self._header_sort_desc = True
+        # Update the visual indicator on the header
+        order = Qt.DescendingOrder if self._header_sort_desc else Qt.AscendingOrder
+        self.dlg.processingsTable.horizontalHeader().setSortIndicator(column, order)
+        on_sort_changed()
 
     def setup_context_menu(
         self,
@@ -148,7 +182,10 @@ class ProcessingView:
         set_color = False
         processing_dict = processing.as_processing_table_dict()
         is_template = isinstance(processing, ProcessingTemplateDTO)
-        if not is_template and processing.status.is_ok and processing.review_expires:
+        if is_template:
+            set_color = True
+            color = QColor(207, 242, 249)  # light blue for templates    #! Dark theme?
+        elif not is_template and processing.status.is_ok and processing.review_expires:
             # setting color for close review
             set_color = True
             color = QColor(255, 220, 200)
@@ -156,9 +193,9 @@ class ProcessingView:
             table_item = QTableWidgetItem()
             table_item.setData(Qt.DisplayRole, processing_dict[attr])
             if is_template:
-                template_tip = self.tr("Planned processing template")
+                template_tip = self.tr("Planned processing")
                 if processing.newImagesCount and processing.newImagesCount > 0:
-                    template_tip = self.tr("Planned processing template. New images: {count}").format(
+                    template_tip = self.tr("Planned processing. New images: {count}").format(
                         count=processing.newImagesCount
                     )
                 table_item.setToolTip(template_tip)
@@ -195,7 +232,14 @@ class ProcessingView:
                 self.dlg.processingsTable.setItem(row, col, item)
             if proc.id in selected_processings:
                 self.dlg.processingsTable.selectRow(row)
-        self.dlg.processingsTable.setSortingEnabled(True)
+        # Keep Qt sorting disabled — row order is set by combined_processing_rows (templates first).
+        # Re-show sort indicator if a header sort is active (setSortingEnabled(False) hides it)
+        if self._header_sort_by is not None:
+            col = next(c for c, s in self._COLUMN_SORT_MAP.items() if s == self._header_sort_by)
+            order = Qt.DescendingOrder if self._header_sort_desc else Qt.AscendingOrder
+            header = self.dlg.processingsTable.horizontalHeader()
+            header.setSortIndicatorShown(True)
+            header.setSortIndicator(col, order)
         # Restore extended selection and filtering
         self.dlg.processingsTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
 
@@ -271,6 +315,11 @@ class ProcessingView:
         self.dlg.processingsPreviousPageButton.setEnabled(enable)
 
     def sort_processings(self):
+        # Header click overrides the combo if set
+        if self._header_sort_by is not None:
+            sort_by = self._header_sort_by
+            sort_order = "DESC" if self._header_sort_desc else "ASC"
+            return sort_by, sort_order
         index = self.dlg.sortProcessingsCombo.currentIndex()
         # Sort by
         if index in (0, 1):  # Newest/Oldest first
