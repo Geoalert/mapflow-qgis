@@ -53,6 +53,8 @@ class SamController(QObject):
             self._on_processing_selected)
         self.dlg.samProcessingsTable.doubleClicked.connect(self._on_processing_double_clicked)
         self.dlg.samPreviewImage.clicked.connect(self._on_processing_double_clicked)
+        self.dlg.samProcessingsPrevPage.clicked.connect(self.service.prev_page)
+        self.dlg.samProcessingsNextPage.clicked.connect(self.service.next_page)
         self.dlg.deleteProcessingButton.clicked.connect(self._delete_processing)
 
         # Prompts

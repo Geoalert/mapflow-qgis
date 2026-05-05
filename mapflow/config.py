@@ -109,6 +109,7 @@ class Config:
 
     SEARCH_RESULTS_PAGE_LIMIT = 1000 # objects per page
     PROJECTS_PAGE_LIMIT = 20
+    SAM_PROCESSINGS_PAGE_LIMIT = 100
 
     # OAuth2
     OAUTH2_URL = "https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect"

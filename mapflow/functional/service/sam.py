@@ -13,6 +13,7 @@ from ..api.sam_api import SamApi
 from ..layer_utils import ResultsLoader, generate_vector_layer
 from ..view.sam_view import SamView
 from ...dialogs.main_dialog import MainDialog
+from ...config import config
 from ...schema.sam import (
     ProcessingListResponse,
     ProcessingDetailResponse,
@@ -44,7 +45,7 @@ class SamService(QObject):
 
         # Pagination state for processings list
         self._offset = 0
-        self._limit = 20
+        self._limit = config.SAM_PROCESSINGS_PAGE_LIMIT
         self._total = 0
 
         # Cached data for double-click layer display

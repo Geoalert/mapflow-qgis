@@ -10,7 +10,7 @@ from typing import List, Optional, Tuple
 import sip
 from PyQt5.QtCore import QObject, QPointF, Qt
 from PyQt5.QtGui import QColor, QBrush, QPainter, QPen, QPixmap, QPolygonF
-from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView
+from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView, QHBoxLayout, QPushButton
 
 from qgis.core import (
     QgsProject,
@@ -50,6 +50,7 @@ class SamView(QObject):
         self.dlg.samRefreshSessions.setIcon(icons.refresh_icon)
         self.dlg.samRefreshInferenceStatus.setIcon(icons.refresh_icon)
 
+        self._setup_processings_pagination_controls()
         self._setup_processings_table()
         self._setup_prompts_table()
         self._setup_sessions_table()
@@ -64,6 +65,32 @@ class SamView(QObject):
         # One result vector layer per session, keyed by session_id, so we
         # can refresh partial results in place rather than spawn duplicates.
         self._result_layers = {}
+
+    def _setup_processings_pagination_controls(self):
+        prev_button = QPushButton("")
+        prev_button.setObjectName("samProcessingsPrevPage")
+        prev_button.setIcon(icons.arrow_left_icon)
+        prev_button.setToolTip("Previous page")
+        prev_button.setEnabled(False)
+        prev_button.setVisible(False)
+
+        next_button = QPushButton("")
+        next_button.setObjectName("samProcessingsNextPage")
+        next_button.setIcon(icons.arrow_right_icon)
+        next_button.setToolTip("Next page")
+        next_button.setEnabled(False)
+        next_button.setVisible(False)
+
+        self.dlg.samProcessingsPrevPage = prev_button
+        self.dlg.samProcessingsNextPage = next_button
+
+        buttons_layout = QHBoxLayout()
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(prev_button)
+        buttons_layout.addWidget(next_button)
+        buttons_layout.addStretch()
+
+        self.dlg.samProcessingsLayout.insertLayout(0, buttons_layout)
 
     def _setup_processings_table(self):
         # SAM tab only ever shows OK (interactive-ready) processings — non-OK
@@ -698,7 +725,13 @@ class SamView(QObject):
 
     def update_pagination_buttons(self, has_prev: bool, has_next: bool,
                                   offset: int, limit: int, total: int):
-        pass
+        has_multiple_pages = total > limit
+
+        self.dlg.samProcessingsPrevPage.setVisible(has_multiple_pages)
+        self.dlg.samProcessingsNextPage.setVisible(has_multiple_pages)
+
+        self.dlg.samProcessingsPrevPage.setEnabled(has_multiple_pages and has_prev)
+        self.dlg.samProcessingsNextPage.setEnabled(has_multiple_pages and has_next)
 
 
 def QVariant_String():
