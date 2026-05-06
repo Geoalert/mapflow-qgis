@@ -1,5 +1,6 @@
 import json
 from unittest.mock import MagicMock
+from datetime import timedelta
 
 import pytest
 
@@ -49,6 +50,11 @@ class TestTemplateSchemas:
         assert dto.newImagesCount == 4
         assert dto.isArchived is False
         assert dto.maxAoiIntersectionPercent == 85.5
+
+    def test_template_datetimes_kept_in_utc(self):
+        dto = ProcessingTemplateDTO.from_dict(_template_payload())
+        assert dto.createdAt.utcoffset() == timedelta(0)
+        assert dto.activeUntil.utcoffset() == timedelta(0)
 
     def test_template_details_from_dict(self):
         details = ProcessingTemplateDetails.from_dict({
@@ -158,6 +164,11 @@ class TestTemplateSchemas:
         assert table_row["workflowDef"] == "Planned"
         assert table_row["status"] == expected_status
         assert table_row["aoiArea"] is None
+
+    def test_template_table_created_is_localized_for_display(self):
+        dto = ProcessingTemplateDTO.from_dict(_template_payload())
+        table_row = dto.as_processing_table_dict()
+        assert table_row["created"] == dto.createdAt.astimezone().strftime("%Y-%m-%d %H:%M")
 
 
 class TestTemplateApi:

@@ -194,8 +194,9 @@ class DataCatalogView(QObject):
                                     pixel_size=pixel_size,
                                     crs=images[0].meta_data.crs,
                                     count=images[0].meta_data.count)
+            local_created_at = mosaic.created_at.astimezone()
         text += self.tr("Created: {date} at {time} \nTags: {tags}"
-                       ).format(date=mosaic.created_at.date(), time=mosaic.created_at.strftime('%H:%M'),
+                       ).format(date=local_created_at.date(), time=local_created_at.strftime('%H:%M'),
                                 tags=tags_str)
         self.dlg.catalogInfo.setText(text)
         self.display_image_number(0, len(images))
@@ -245,6 +246,7 @@ class DataCatalogView(QObject):
             # Otherwise - CRS is most likely projected
             else:
                 pixel_size = round(pixel_size, 2) # meters or other units
+            local_uploaded_at = image.uploaded_at.astimezone()
             message = self.tr('<b>Name</b>: {filename}\
                               <br><b>Uploaded</b></br>: {date} at {time}\
                               <br><b>Size</b></br>: {file_size}\
@@ -254,8 +256,8 @@ class DataCatalogView(QObject):
                               <br><b>Height</br></b>: {height} pixels\
                               <br><b>Pixel size</br></b>: {pixel_size}'\
                              ).format(filename=image.filename, 
-                                     date=image.uploaded_at.date(),
-                                     time=image.uploaded_at.strftime('%H:%M'),
+                                     date=local_uploaded_at.date(),
+                                     time=local_uploaded_at.strftime('%H:%M'),
                                      file_size=get_readable_size(image.file_size), 
                                      crs=image.meta_data.crs,
                                      bands=image.meta_data.count,
@@ -423,13 +425,14 @@ class DataCatalogView(QObject):
         # Otherwise - CRS is most likely projected
         else:
             pixel_size = round(pixel_size, 2) # meters or other units
+        local_uploaded_at = image.uploaded_at.astimezone()
         self.dlg.catalogInfo.setText(self.tr("Uploaded: {date} at {time} \n"
                                              "File size: {size} \n"
                                              "Pixel size: {pixel_size} \n"
                                              "CRS: {crs} \n"
                                              "Bands: {count}"
-                                            ).format(date=image.uploaded_at.date(),
-                                                     time=image.uploaded_at.strftime('%H:%M'),
+                                            ).format(date=local_uploaded_at.date(),
+                                                     time=local_uploaded_at.strftime('%H:%M'),
                                                      size=get_readable_size(image.file_size),
                                                      pixel_size=pixel_size,
                                                      crs=image.meta_data.crs,

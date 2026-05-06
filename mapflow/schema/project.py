@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, List, Dict
 
-from .base import Serializable, SkipDataClass
+from .base import Serializable, SkipDataClass, parse_api_datetime_utc
 from .workflow_def import WorkflowDef
 from ..config import Config
 
@@ -78,8 +78,8 @@ class MapflowProject(SkipDataClass):
         else:
             self.shareProject = None
         if self.created and self.updated:
-            self.created = datetime.fromisoformat(self.created.replace("Z", "+00:00"))
-            self.updated = datetime.fromisoformat(self.updated.replace("Z", "+00:00"))
+            self.created = parse_api_datetime_utc(self.created)
+            self.updated = parse_api_datetime_utc(self.updated)
     
 class UserRole(str, Enum):
     readonly = "readonly"

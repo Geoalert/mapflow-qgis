@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from PyQt5.QtCore import QCoreApplication
 from qgis.core import QgsSettings
 
+
+SEARCH_CAPTURE_TIMEZONE = 'UTC'
+
 @dataclass
 class ConfigColumns():
     def __init__(self):
@@ -15,7 +18,7 @@ class ConfigColumns():
             QCoreApplication.translate('Config', 'Band Order'): 'colorBandOrder',
             QCoreApplication.translate('Config', 'Cloud %'): 'cloudCover',
             QCoreApplication.translate('Config', 'Off Nadir') + f' \N{DEGREE SIGN}': 'offNadirAngle',
-            QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=time.localtime().tm_zone): 'acquisitionDate',
+            QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=SEARCH_CAPTURE_TIMEZONE): 'acquisitionDate',
             QCoreApplication.translate('Config', 'Zoom level'): 'zoom',
             QCoreApplication.translate('Config', 'Spatial Resolution, m'): 'pixelResolution',
             QCoreApplication.translate('Config', 'Image ID'): 'id',
@@ -80,7 +83,9 @@ class Config:
     PPRVIEW_INDEX_COLUMN = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()).index('preview')
     NAME_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()).index('providerName')
     ZOOM_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()).index('zoom')
-    MAXAR_DATETIME_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.keys()).index(QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=TIMEZONE))
+    MAXAR_DATETIME_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.keys()).index(
+        QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=SEARCH_CAPTURE_TIMEZONE)
+    )
     MAXAR_CLOUD_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.keys()).index(QCoreApplication.translate('Config', 'Cloud %'))
     MAXAR_MAX_FREE_ZOOM = 12
 

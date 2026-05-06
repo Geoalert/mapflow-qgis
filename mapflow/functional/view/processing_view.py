@@ -205,7 +205,7 @@ class ProcessingView:
                 table_item.setToolTip(self.tr("Please review or accept this processing until {}."
                                               " Double click to add results"
                                               " to the map").format(
-                    processing.reviewUntil.strftime('%Y-%m-%d %H:%M') if processing.reviewUntil else ""))
+                    processing.reviewUntil.astimezone().strftime('%Y-%m-%d %H:%M') if processing.reviewUntil else ""))
             elif processing.status.is_ok:
                 table_item.setToolTip(self.tr("Double click to add results to the map."
                                               ))
