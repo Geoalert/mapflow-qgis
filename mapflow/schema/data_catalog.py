@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Sequence, Union, Optional, List
 from dataclasses import dataclass
 
-from .base import Serializable,  SkipDataClass
+from .base import Serializable, SkipDataClass, parse_api_datetime_utc
 from .layer import RasterLayer
 
 
@@ -41,7 +41,7 @@ class MosaicCreateReturnSchema(SkipDataClass):
     tags: Union[Sequence[str], None] = ()
 
     def __post_init__(self):
-        self.created_at = datetime.fromisoformat(self.created_at.replace("Z", "+00:00"))
+        self.created_at = parse_api_datetime_utc(self.created_at)
 
 @dataclass
 class MosaicReturnSchema(SkipDataClass):
@@ -54,7 +54,7 @@ class MosaicReturnSchema(SkipDataClass):
     tags: Union[Sequence[str], None] = ()
 
     def __post_init__(self):
-        self.created_at = datetime.fromisoformat(self.created_at.replace("Z", "+00:00"))
+        self.created_at = parse_api_datetime_utc(self.created_at)
         self.rasterLayer = RasterLayer.from_dict(self.rasterLayer)
 
 
@@ -87,5 +87,5 @@ class ImageReturnSchema(SkipDataClass):
     available_for_download: bool = True
 
     def __post_init__(self):
-        self.uploaded_at = datetime.fromisoformat(self.uploaded_at.replace("Z", "+00:00"))
+        self.uploaded_at = parse_api_datetime_utc(self.uploaded_at)
         self.meta_data = ImageMetadataSchema.from_dict(self.meta_data)
