@@ -28,39 +28,23 @@ To learn how to use the plugin, please, follow our [guide](https://docs.mapflow.
 
 ### Running tests
 
-Tests run inside the QGIS Python environment. Use the Python bundled with your QGIS installation.
-
-**macOS** (QGIS-LTR):
-
-```bash
-# Install test dependencies (once)
-/Applications/QGIS-LTR.app/Contents/MacOS/bin/python3 -m pip install pytest-qt
-
-# Run tests
-/Applications/QGIS-LTR.app/Contents/MacOS/bin/python3 -m pytest tests/
-```
-
-**Linux** (system package, e.g. `apt install qgis`):
+Automated tests run inside the official `qgis/qgis:release-3_28` Docker
+image — no host QGIS install needed, only Docker.
 
 ```bash
-# QGIS Python is typically the system Python with QGIS packages available
-python3 -m pip install pytest-qt
-
-python3 -m pytest tests/
+make test-functional   # pure-logic tests
+make test-qgis         # tests that touch real QGIS objects
+make test-ui           # UI tests under xvfb (harness only — no tests yet)
+make test              # all three tiers
 ```
 
-If you installed QGIS from a non-standard location, use the Python binary bundled with it (e.g. `/usr/bin/qgis_python3` or similar).
+Test layout, fixtures, and the policy for adding a test live in
+[`tests/README.md`](tests/README.md).
 
-**Windows** (OSGeo4W):
-
-```cmd
-:: Open the OSGeo4W Shell, then:
-pip install pytest-qt
-
-python -m pytest tests/
-```
-
-If using the standalone QGIS installer, open the **OSGeo4W Shell** shortcut that comes with QGIS — it sets up the correct Python environment automatically.
+> **Coverage scope.** CI is pinned to **Linux + QGIS 3.28 LTR**. The
+> `qgis/qgis` Docker image is Linux-only and we do not run a CI matrix
+> across operating systems or QGIS versions. Verify macOS, Windows, and
+> non-LTR QGIS versions by manual smoke testing before release.
 
 ## License
 

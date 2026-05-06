@@ -483,3 +483,10 @@ Use 002_E_zoom_selector_api.md
 - Add small button near zoom selector comboBox to call for zoom selector api, active if selected source is Mapflow data provider
 - On press of the button, call api and select zoom automatically depending on response
 - on error, report to user with reasonable message
+
+## 8. Set up host-independent test runtime
+[ready-for-review]
+- All three tiers (functional/qgis/ui) run inside qgis/qgis:release-3_28 Docker; directory split is taxonomy, not runtime separation. Mocking PyQGIS portably broke at the first `class Foo(QObject):` because Python's metaclass machinery rejects MagicMock-as-base — real PyQGIS in a container is simpler than emulating Qt's class semantics.
+- Makefile drives `docker-build / test-functional / test-qgis / test-ui / test`; GitHub Actions tests.yml runs the same three Make targets as separate jobs.
+- Pinned to Linux + QGIS 3.28 LTR; cross-OS / non-LTR coverage is manual-smoke (documented in README + tests/README + spec/004_stack).
+- Discovered (NOT fixed — out of scope): test_xyz_no_creds passes args in wrong positional order vs. signature; test_processings_pagination expects lowercase enum values but code emits uppercase. Both are real test/code drift exposed because the suite had never actually run.
