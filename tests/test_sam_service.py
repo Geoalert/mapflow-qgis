@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch, call
 
 import pytest
 
+from mapflow.schema.project import UserRole
 from mapflow.schema.sam import (
     ProcessingListResponse,
     ProcessingSummaryResponse,
@@ -27,6 +28,7 @@ from mapflow.schema.sam import (
 
 
 SERVER = "https://whitemaps-test.mapflow.ai/rest"
+TEST_PROJECT_ID = "test-project"
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -62,6 +64,11 @@ def sam_service(sam_api, sam_view):
     service._offset = 0
     service._limit = 20
     service._total = 0
+    # Default to a project + owner role so the existing pagination/filter
+    # tests reach the HTTP layer. Tests that exercise the no-project path
+    # override _project_id explicitly.
+    service._project_id = TEST_PROJECT_ID
+    service._user_role = UserRole.owner
     return service
 
 
@@ -85,6 +92,78 @@ class TestListProcessings:
 
         url = http_mock.get.call_args[1]["url"]
         assert "filter=test-name" in url
+
+    def test_includes_project_id_in_query(self, sam_service, http_mock):
+        sam_service.list_processings()
+
+        url = http_mock.get.call_args[1]["url"]
+        assert f"projectId={TEST_PROJECT_ID}" in url
+
+    def test_skips_http_when_no_project(self, sam_service, sam_view, http_mock):
+        sam_service._project_id = None
+
+        sam_service.list_processings()
+
+        http_mock.get.assert_not_called()
+        sam_view.clear_processings_table.assert_called_once()
+
+
+class TestSetProjectContext:
+    def test_setting_project_triggers_list(self, sam_service, sam_view, http_mock):
+        sam_service._project_id = None
+
+        sam_service.set_project_context("proj-42", UserRole.contributor)
+
+        assert sam_service._project_id == "proj-42"
+        assert sam_service._user_role == UserRole.contributor
+        sam_view.set_user_role.assert_called_with(UserRole.contributor)
+        http_mock.get.assert_called_once()
+        url = http_mock.get.call_args[1]["url"]
+        assert "projectId=proj-42" in url
+
+    def test_clearing_project_clears_table_without_http(self, sam_service, sam_view, http_mock):
+        sam_service._offset = 40
+
+        sam_service.set_project_context(None, UserRole.readonly)
+
+        assert sam_service._project_id is None
+        assert sam_service._user_role == UserRole.readonly
+        assert sam_service._offset == 0  # pagination reset for next project
+        http_mock.get.assert_not_called()
+        sam_view.clear_processings_table.assert_called_once()
+        sam_view.set_user_role.assert_called_with(UserRole.readonly)
+
+    def test_resets_pagination_when_changing_project(self, sam_service, http_mock):
+        sam_service._offset = 80
+
+        sam_service.set_project_context("other-project", UserRole.owner)
+
+        assert sam_service._offset == 0
+        url = http_mock.get.call_args[1]["url"]
+        assert "offset=0" in url
+        assert "projectId=other-project" in url
+
+
+class TestRefreshProcessings:
+    def test_refresh_resets_offset_and_fetches_page_zero(self, sam_service, http_mock):
+        sam_service._offset = 80
+
+        sam_service.refresh_processings()
+
+        assert sam_service._offset == 0
+        url = http_mock.get.call_args[1]["url"]
+        assert "offset=0" in url
+        assert f"projectId={TEST_PROJECT_ID}" in url
+
+    def test_refresh_without_project_clears_view_without_http(self, sam_service, sam_view, http_mock):
+        sam_service._project_id = None
+        sam_service._offset = 80
+
+        sam_service.refresh_processings()
+
+        http_mock.get.assert_not_called()
+        sam_view.clear_processings_table.assert_called_once()
+        assert sam_service._offset == 0
 
 
 class TestListProcessingsCallback:

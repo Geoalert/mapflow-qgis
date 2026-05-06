@@ -6,6 +6,7 @@ from qgis.core import QgsSettings
 
 from mapflow.dialogs.main_dialog import MainDialog
 from mapflow.functional.view.sam_view import SamView
+from mapflow.schema.project import UserRole
 from mapflow.schema.sam import InferenceStatusSummary, SessionResponse, SpatialPromptResponse
 
 
@@ -226,6 +227,96 @@ def test_highlight_spatial_prompt_clears_previous_selection():
 
     assert sam_view._point_highlight_layer.featureCount() == 1
     assert first_wkt != second_wkt
+
+
+def test_set_user_role_readonly_disables_modify_buttons_when_selection_present():
+    sam_view = _create_view()
+    sam_view.set_user_role(UserRole.readonly)
+    # Simulate a prompt selection AND a session selection — buttons that
+    # require contributor+/maintainer+ must still be disabled because the
+    # role is too low.
+    sam_view.set_prompt_buttons_enabled(True)
+    sam_view.set_session_buttons_enabled(True)
+    sam_view.set_processing_action_buttons(True)
+
+    # Modify-class buttons → contributor+
+    assert sam_view.dlg.samAddPointPrompt.isEnabled() is False
+    assert sam_view.dlg.samAddBboxPrompt.isEnabled() is False
+    assert sam_view.dlg.samRunSessionInference.isEnabled() is False
+    assert sam_view.dlg.samRunInference.isEnabled() is False
+    # Delete-class buttons → maintainer+
+    assert sam_view.dlg.deleteSessionButton.isEnabled() is False
+    assert sam_view.dlg.deleteProcessingButton.isEnabled() is False
+    # Read-only / user-scoped buttons stay enabled
+    assert sam_view.dlg.samRefreshSessions.isEnabled() is True
+    assert sam_view.dlg.samRefreshInferenceStatus.isEnabled() is True
+    assert sam_view.dlg.deletePromptButton.isEnabled() is True
+
+
+def test_set_user_role_contributor_blocks_delete_actions_only():
+    sam_view = _create_view()
+    sam_view.set_user_role(UserRole.contributor)
+    sam_view.set_prompt_buttons_enabled(True)
+    sam_view.set_session_buttons_enabled(True)
+    sam_view.set_processing_action_buttons(True)
+
+    # Modify-class allowed
+    assert sam_view.dlg.samAddPointPrompt.isEnabled() is True
+    assert sam_view.dlg.samRunSessionInference.isEnabled() is True
+    assert sam_view.dlg.samRunInference.isEnabled() is True
+    # Delete-class still blocked
+    assert sam_view.dlg.deleteSessionButton.isEnabled() is False
+    assert sam_view.dlg.deleteProcessingButton.isEnabled() is False
+
+
+def test_set_user_role_maintainer_enables_all_action_buttons_when_selected():
+    sam_view = _create_view()
+    sam_view.set_user_role(UserRole.maintainer)
+    sam_view.set_prompt_buttons_enabled(True)
+    sam_view.set_session_buttons_enabled(True)
+    sam_view.set_processing_action_buttons(True)
+
+    assert sam_view.dlg.samAddPointPrompt.isEnabled() is True
+    assert sam_view.dlg.samRunSessionInference.isEnabled() is True
+    assert sam_view.dlg.deleteSessionButton.isEnabled() is True
+    assert sam_view.dlg.deleteProcessingButton.isEnabled() is True
+
+
+def test_session_name_cell_read_only_for_contributor():
+    sam_view = _create_view()
+    sam_view.set_user_role(UserRole.contributor)
+    sessions = [SessionResponse.from_dict({"id": "s1", "processing_id": "p1"})]
+
+    sam_view.display_sessions(sessions)
+
+    name_item = sam_view.dlg.samSessionsTable.item(0, 1)
+    assert bool(name_item.flags() & Qt.ItemIsEditable) is False
+
+
+def test_session_name_cell_editable_for_maintainer():
+    sam_view = _create_view()
+    sam_view.set_user_role(UserRole.maintainer)
+    sessions = [SessionResponse.from_dict({"id": "s1", "processing_id": "p1"})]
+
+    sam_view.display_sessions(sessions)
+
+    name_item = sam_view.dlg.samSessionsTable.item(0, 1)
+    assert bool(name_item.flags() & Qt.ItemIsEditable) is True
+
+
+def test_clear_processings_table_empties_dependent_panels():
+    sam_view = _create_view()
+    sessions = [SessionResponse.from_dict({"id": "s1", "processing_id": "p1"})]
+    sam_view.display_sessions(sessions)
+    sam_view.dlg.samProcessingsTable.setRowCount(2)
+
+    sam_view.clear_processings_table()
+
+    assert sam_view.dlg.samProcessingsTable.rowCount() == 0
+    assert sam_view.dlg.samSessionsTable.rowCount() == 0
+    assert sam_view.dlg.samInferencesTable.rowCount() == 0
+    assert sam_view.dlg.deleteProcessingButton.isEnabled() is False
+    assert sam_view.dlg.deleteSessionButton.isEnabled() is False
 
 
 def test_highlight_overlay_uses_yellow_stroke_with_width_0_6():

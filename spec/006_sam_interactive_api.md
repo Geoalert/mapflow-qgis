@@ -14,7 +14,7 @@ It shares the same base URL and authentication as the main Mapflow API (`config.
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/processings` | Create a SAM interactive processing |
-| GET | `/processings/page` | List processings (paginated) |
+| GET | `/processings/page` | List processings (paginated). Supports an optional `projectId` query param that scopes the result to a Mapflow project (any owner). When omitted, the legacy owner-scoped fallback is used. |
 | GET | `/processings/{id}` | Get processing detail |
 | GET | `/processings/{id}/workflows` | List workflows for a processing |
 | GET | `/processings/{id}/sessions` | List sessions for a processing |
@@ -198,6 +198,28 @@ Paginated endpoints accept query parameters:
 - `filter`: string filter
 - `limit`: page size (default 20)
 - `offset`: offset for pagination
+
+`GET /processings/page` additionally accepts:
+- `projectId` (optional): Mapflow project id to scope the listing. When set, the backend returns processings owned by any user as long as the caller has at least `readonly` access to the project (cross-owner visibility for shared projects). When unset, the endpoint falls back to listing processings owned by the calling user only.
+
+## Authorization & Roles
+
+Access to project-scoped resources is enforced by the backend against the Whitemaps role for the calling user on the processing's project. Role hierarchy (lowest → highest privilege):
+
+`readonly < contributor < maintainer = owner`
+
+Minimum role required per action:
+- `readonly`: read endpoints — `GET /processings/page`, `GET /processings/{id}`, `GET /processings/{id}/sessions`, `GET /processings/{id}/results`, `GET /sessions/{id}`, `GET /result/{session_id}`.
+- `contributor`: create sessions, inferences, and processing-bound spatial prompts — `POST /inference`, `POST /sessions/{id}/inferences`, `POST /prompts/{id}/point_prompts`, `POST /prompts/{id}/bbox_prompts`, `DELETE /prompts/{id}/point_prompts/{spid}`, `DELETE /prompts/{id}/bbox_prompts/{spid}`.
+- `maintainer`: archive sessions and processings, rename sessions — `DELETE /sessions/{id}`, `DELETE /processings/{id}`, `PATCH /sessions/{id}`.
+
+Legacy processings without a `project_id` fall back to the owner check (effective email == owner). Denial is reported as `404 ProcessingNotFound` (no role leak).
+
+The plugin mirrors these gates client-side using the existing `UserRole` enum (`mapflow/schema/project.py`):
+- `can_start_processing` (contributor+) — gates create/inference/spatial-prompt actions.
+- `can_delete_rename_review_processing` (maintainer+) — gates delete/archive/rename actions.
+
+Prompt CRUD (`POST /prompts`, `PATCH /prompts/{id}`, `DELETE /prompts/{id}`) is user-scoped and not gated by project role.
 
 ## Authentication
 

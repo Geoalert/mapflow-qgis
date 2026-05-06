@@ -14,6 +14,7 @@ from ..layer_utils import ResultsLoader, generate_vector_layer
 from ..view.sam_view import SamView
 from ...dialogs.main_dialog import MainDialog
 from ...config import config
+from ...schema.project import UserRole
 from ...schema.sam import (
     ProcessingListResponse,
     ProcessingDetailResponse,
@@ -48,22 +49,66 @@ class SamService(QObject):
         self._limit = config.SAM_PROCESSINGS_PAGE_LIMIT
         self._total = 0
 
+        # Project + role context. The SAM tab follows the main-tab project
+        # selection: with no project, the processings table stays empty and
+        # no HTTP request is made. The role drives which action buttons are
+        # enabled in the view (mirrors backend ACL: contributor+ for create,
+        # maintainer+ for delete/rename).
+        self._project_id: Optional[str] = None
+        self._user_role: UserRole = UserRole.owner
+
         # Cached data for double-click layer display
         self._last_prompt_detail = None
         self._last_session = None
         self._last_session_prompts = []
 
     # ------------------------------------------------------------------
+    # Project context
+    # ------------------------------------------------------------------
+
+    def set_project_context(self, project_id: Optional[str], user_role: UserRole):
+        """Update the project the SAM tab is bound to and the caller's role.
+
+        Resets pagination so the new project starts on page 0. When the
+        project is unset (main table is on the projects view), clears the
+        processings table without firing an HTTP request — matches the rule
+        that processings are only meaningful within a project context.
+        """
+        self._project_id = project_id
+        self._user_role = user_role or UserRole.readonly
+        self._offset = 0
+        self._total = 0
+        self.view.set_user_role(self._user_role)
+        if project_id:
+            self.list_processings()
+        else:
+            self.view.clear_processings_table()
+
+    # ------------------------------------------------------------------
     # Processings
     # ------------------------------------------------------------------
 
     def list_processings(self, filter_: Optional[str] = None):
+        if not self._project_id:
+            self.view.clear_processings_table()
+            return
         self.api.list_processings(
             callback=self.list_processings_callback,
             filter_=filter_,
             limit=self._limit,
             offset=self._offset,
+            project_id=self._project_id,
         )
+
+    def refresh_processings(self, filter_: Optional[str] = None):
+        """Refresh the processings list, jumping back to page 0.
+
+        Pagination state survives between fetches so prev/next pages keep
+        their offset; the Refresh button explicitly opts out of that — the
+        user expects to see the newest data.
+        """
+        self._offset = 0
+        self.list_processings(filter_=filter_)
 
     def list_processings_callback(self, response: QNetworkReply):
         data = json.loads(response.readAll().data().decode())

@@ -57,10 +57,13 @@ class SamApi(QObject):
 
     def list_processings(self, callback: Callable,
                          filter_: Optional[str] = None,
-                         limit: int = 20, offset: int = 0):
+                         limit: int = 20, offset: int = 0,
+                         project_id: Optional[str] = None):
         params = f"limit={limit}&offset={offset}"
         if filter_:
             params += f"&filter={filter_}"
+        if project_id:
+            params += f"&projectId={project_id}"
         self.http.get(
             url=f"{self.server}/processings/page?{params}",
             headers={},

@@ -29,6 +29,7 @@ from qgis.core import (
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs import icons
 
+from ...schema.project import UserRole
 from ...schema.sam import (
     GeometryType,
     ProcessingSummaryResponse,
@@ -49,6 +50,15 @@ class SamView(QObject):
         self.dlg.samRefreshPrompts.setIcon(icons.refresh_icon)
         self.dlg.samRefreshSessions.setIcon(icons.refresh_icon)
         self.dlg.samRefreshInferenceStatus.setIcon(icons.refresh_icon)
+
+        # Caller role on the currently selected project. Mirrors backend
+        # gating: contributor+ may create, maintainer+ may delete/rename.
+        self._user_role: UserRole = UserRole.owner
+        # Tracks current selection state so role updates can re-evaluate
+        # button enablement without callers having to re-pass it.
+        self._has_processing_selection = False
+        self._has_prompt_selection = False
+        self._has_session_selection = False
 
         self._setup_processings_pagination_controls()
         self._setup_processings_table()
@@ -171,24 +181,112 @@ class SamView(QObject):
         self.dlg.samRefreshSessions.setEnabled(False)
         # Require prior inference
         self.dlg.samRefreshInferenceStatus.setEnabled(False)
+        # Run-Inference is gated by role + selection of processing/prompt;
+        # initial state is "enabled by default for owner role" — controller
+        # paths still require selection at click time.
+        self._apply_processing_selection_state()
+        self._apply_prompt_selection_state()
+        self._apply_session_selection_state()
+        self._apply_role_only_buttons()
+
+    # ------------------------------------------------------------------
+    # Role-aware enablement
+    # ------------------------------------------------------------------
+
+    def set_user_role(self, user_role: UserRole):
+        """Update the caller's role on the active project.
+
+        Re-applies enablement to all action buttons; role gates intersect
+        with selection state so the user can never act on a row without
+        the right privilege, regardless of UI history.
+        """
+        self._user_role = user_role or UserRole.readonly
+        self._apply_processing_selection_state()
+        self._apply_prompt_selection_state()
+        self._apply_session_selection_state()
+        self._apply_role_only_buttons()
+
+    @property
+    def _can_modify(self) -> bool:
+        return bool(self._user_role and self._user_role.can_start_processing)
+
+    @property
+    def _can_delete(self) -> bool:
+        return bool(self._user_role
+                    and self._user_role.can_delete_rename_review_processing)
+
+    def _apply_role_only_buttons(self):
+        """Buttons that depend only on role, not on row selection."""
+        # Run-Inference is also bound to having a processing+prompt selected,
+        # but those checks happen at click time. Disable here when role is
+        # too low so the button is visibly unavailable to readonly users.
+        self.dlg.samRunInference.setEnabled(self._can_modify)
 
     def set_prompt_buttons_enabled(self, enabled: bool):
-        self.dlg.samAddPointPrompt.setEnabled(enabled)
-        self.dlg.samAddBboxPrompt.setEnabled(enabled)
+        self._has_prompt_selection = enabled
+        self._apply_prompt_selection_state()
+
+    def _apply_prompt_selection_state(self):
+        enabled = self._has_prompt_selection
+        # Adding spatial prompts modifies a processing-bound prompt → contributor+.
+        self.dlg.samAddPointPrompt.setEnabled(enabled and self._can_modify)
+        self.dlg.samAddBboxPrompt.setEnabled(enabled and self._can_modify)
+        # Prompts themselves are user-scoped, not project-scoped, so deletion
+        # is allowed regardless of project role.
         self.dlg.deletePromptButton.setEnabled(enabled)
 
     def set_session_buttons_enabled(self, enabled: bool):
-        # Refresh-status now polls the selected session, so it tracks
-        # session selection rather than the existence of a single inference.
-        self.dlg.samRunSessionInference.setEnabled(enabled)
-        self.dlg.deleteSessionButton.setEnabled(enabled)
+        self._has_session_selection = enabled
+        self._apply_session_selection_state()
+
+    def _apply_session_selection_state(self):
+        enabled = self._has_session_selection
+        # Refresh-status is read-only.
         self.dlg.samRefreshInferenceStatus.setEnabled(enabled)
+        # Adding a session-inference creates new work → contributor+.
+        self.dlg.samRunSessionInference.setEnabled(enabled and self._can_modify)
+        # Archiving a session → maintainer+.
+        self.dlg.deleteSessionButton.setEnabled(enabled and self._can_delete)
+
+    def set_processing_action_buttons(self, enabled: bool):
+        self._has_processing_selection = enabled
+        self._apply_processing_selection_state()
+
+    def _apply_processing_selection_state(self):
+        enabled = self._has_processing_selection
+        # Refresh-sessions is read-only.
+        self.dlg.samRefreshSessions.setEnabled(enabled)
+        # Archiving a processing → maintainer+.
+        self.dlg.deleteProcessingButton.setEnabled(enabled and self._can_delete)
 
     def set_inference_refresh_enabled(self, enabled: bool):
         # Kept for service callers that flip the button after creating an
         # inference (the new session row gets selected immediately, so the
         # button would normally already be enabled by set_session_buttons_enabled).
         self.dlg.samRefreshInferenceStatus.setEnabled(enabled)
+
+    def clear_processings_table(self):
+        """Empty the processings list and all dependent panels.
+
+        Called when the user is on the projects view (no project selected):
+        nothing in the SAM tab is meaningful without a project context, so
+        every dependent table is cleared and selection-bound buttons drop
+        to their disabled state.
+        """
+        self.dlg.samProcessingsTable.clearSelection()
+        self.dlg.samProcessingsTable.setRowCount(0)
+        self.set_processing_action_buttons(False)
+        self.set_session_buttons_enabled(False)
+        self.clear_processing_detail()
+        self.clear_session_display()
+        # Hide pagination controls since there is nothing to paginate.
+        self.update_pagination_buttons(False, False, 0, self._limit_or_zero(), 0)
+
+    def _limit_or_zero(self) -> int:
+        # update_pagination_buttons compares limit vs total to decide whether
+        # to show controls. We don't track limit here; pass 1 so total=0 keeps
+        # the controls hidden.
+        return 1
 
     # ------------------------------------------------------------------
     # Processings
@@ -568,8 +666,7 @@ class SamView(QObject):
         table.selectRow(row)
         table.blockSignals(False)
 
-    @staticmethod
-    def _set_session_row(table, row: int, sess: SessionResponse):
+    def _set_session_row(self, table, row: int, sess: SessionResponse):
         id_item = QTableWidgetItem()
         id_item.setData(Qt.DisplayRole, sess.id)
         id_item.setFlags(id_item.flags() & ~Qt.ItemIsEditable)
@@ -578,7 +675,13 @@ class SamView(QObject):
         name_item = QTableWidgetItem()
         name_item.setData(Qt.DisplayRole, sess.name or sess.id[:12])
         name_item.setData(Qt.UserRole, sess.name or sess.id[:12])
-        name_item.setFlags(name_item.flags() | Qt.ItemIsEditable)
+        # Session rename is grouped with delete/review on the backend
+        # (maintainer+); keep the cell read-only otherwise so users can't
+        # start an edit that would only be rejected at PATCH time.
+        if self._can_delete:
+            name_item.setFlags(name_item.flags() | Qt.ItemIsEditable)
+        else:
+            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
         table.setItem(row, 1, name_item)
 
         # Progress aggregates land on the LIST endpoint as inferences_total /

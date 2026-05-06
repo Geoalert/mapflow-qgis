@@ -104,13 +104,16 @@ class SamController(QObject):
     # ------------------------------------------------------------------
 
     def _refresh_processings(self):
-        self.service.list_processings()
+        # Refresh = "show me the freshest state from page 0". Backend orders
+        # by created_at DESC, so a newly-OK processing always lands on page 0.
+        # Without this reset, refresh fetches whatever page the user paged to
+        # last and the new row never shows until the project is re-entered.
+        self.service.refresh_processings()
 
     def _on_processing_selected(self):
         processing_id = self.view.selected_processing_id()
         has_selection = bool(processing_id)
-        self.dlg.samRefreshSessions.setEnabled(has_selection)
-        self.dlg.deleteProcessingButton.setEnabled(has_selection)
+        self.view.set_processing_action_buttons(has_selection)
         self.view.set_session_buttons_enabled(False)
         self.view.clear_session_display()
         if processing_id:

@@ -734,20 +734,26 @@ class Mapflow(QObject):
             return
         if selected_id is None:
             self.current_project = self.project_id = None
+            self.user_role = UserRole.readonly
             self.settings.setValue("project_id", None)
             self.setup_project_change_rights()
             self.dlg.setWindowTitle(helpers.generate_plugin_header(self.plugin_name,
                                                                    env=self.config.MAPFLOW_ENV))
             self.dlg.switchProcessingsButton.setEnabled(False)
+            self.sam_service.set_project_context(None, self.user_role)
         else:
             self.dlg.switchProcessingsButton.setEnabled(True)
             # Find project in projects/page and set as current
             self.project_id = selected_id
+            # Reset role so an unshared project (no shareProject body) doesn't
+            # inherit the previous project's role. get_project_sharing only
+            # writes role when shareProject is populated.
+            self.user_role = UserRole.owner
             for pid, project in self.projects.items():
                 if selected_id == pid:
                     self.current_project = project
-                    elided_name = self.dlg.currentProjectLabel.fontMetrics().elidedText(self.current_project.name, 
-                                                                                        Qt.ElideRight, 
+                    elided_name = self.dlg.currentProjectLabel.fontMetrics().elidedText(self.current_project.name,
+                                                                                        Qt.ElideRight,
                                                                                         self.dlg.currentProjectLabel.width() - 50)
                     self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(elided_name))
             if self.current_project:
@@ -755,7 +761,8 @@ class Mapflow(QObject):
                 self.setup_workflow_defs(self.current_project.workflowDefs)
             self.setup_project_change_rights()
             self.settings.setValue("project_id", self.project_id)
-            
+            self.sam_service.set_project_context(self.project_id, self.user_role)
+
             # Manually toggle function to avoid race condition
             self.calculate_aoi_area_use_image_extent()
 
