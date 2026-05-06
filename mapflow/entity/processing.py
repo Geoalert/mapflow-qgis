@@ -1,10 +1,11 @@
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional, Tuple
 
 from .status import ProcessingStatus, ProcessingReviewStatus
 from ..errors import ErrorMessage
 from ..schema.processing import BlockOption, ProcessingParams
+from ..schema.base import parse_api_datetime_utc
 
 
 class Processing:
@@ -34,7 +35,7 @@ class Processing:
         self.workflow_def = workflow_def
         self.aoi_area = aoi_area
         self.cost = int(cost)
-        self.created = created.astimezone()
+        self.created = parse_api_datetime_utc(created)
         self.percent_completed = int(percent_completed)
         self.errors = errors
         self.raster_layer = raster_layer
@@ -61,7 +62,7 @@ class Processing:
             created = processing['created'].replace('Z', '+0000')
         else:
             created = processing['created']
-        created = datetime.strptime(created, '%Y-%m-%dT%H:%M:%S.%f%z').astimezone()
+        created = parse_api_datetime_utc(created)
         percent_completed = processing['percentCompleted']
         messages = processing.get('messages', [])
         errors = [ErrorMessage.from_response(message) for message in messages]
@@ -71,7 +72,7 @@ class Processing:
             review_status = processing.get('reviewStatus', {}).get('reviewStatus')
             in_review_until_str = processing.get('reviewStatus', {}).get('inReviewUntil')
             if in_review_until_str:
-                in_review_until = datetime.strptime(in_review_until_str, '%Y-%m-%dT%H:%M:%S.%f%z').astimezone()
+                in_review_until = parse_api_datetime_utc(in_review_until_str)
             else:
                 in_review_until = None
         else:
@@ -100,7 +101,7 @@ class Processing:
 
     @property
     def is_new(self):
-        now = datetime.now().astimezone()
+        now = datetime.now(timezone.utc)
         one_day = timedelta(1)
         return now - self.created < one_day
 
@@ -109,7 +110,7 @@ class Processing:
         if not isinstance(self.in_review_until, datetime)\
                 or not self.review_status.is_in_review:
             return False
-        now = datetime.now().astimezone()
+        now = datetime.now(timezone.utc)
         one_day = timedelta(1)
         return self.in_review_until - now < one_day
 
@@ -129,9 +130,9 @@ class Processing:
             'percentCompleted': self.percent_completed,
             'errors': self.errors,
             # Serialize datetime and drop seconds for brevity
-            'created': self.created.strftime('%Y-%m-%d %H:%M'),
+            'created': self.created.astimezone().strftime('%Y-%m-%d %H:%M'),
             'rasterLayer': self.raster_layer,
-            'reviewUntil':  self.in_review_until.strftime('%Y-%m-%d %H:%M') if self.in_review_until else "",
+            'reviewUntil':  self.in_review_until.astimezone().strftime('%Y-%m-%d %H:%M') if self.in_review_until else "",
             'description': self.description,
             'meta': self.meta
         }

@@ -5,7 +5,7 @@ from typing import Optional
 
 from PyQt5.QtCore import QObject
 
-from .base import Serializable, SkipDataClass
+from .base import Serializable, SkipDataClass, parse_api_datetime_utc
 
 
 class ProcessingStatusDict(QObject):
@@ -114,7 +114,7 @@ class ProcessingReviewStatus(Serializable, SkipDataClass):
 
     def __post_init__(self):
         if self.inReviewUntil:
-            self.inReviewUntil = datetime.strptime(self.inReviewUntil, '%Y-%m-%dT%H:%M:%S.%f%z').astimezone()
+            self.inReviewUntil = parse_api_datetime_utc(self.inReviewUntil)
         self.reviewStatus = ProcessingReviewStatusEnum(self.reviewStatus)
 
     @property

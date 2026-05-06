@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, Mapping, Any, Union, List
 
-from .base import Serializable, SkipDataClass
+from .base import Serializable, SkipDataClass, parse_api_datetime_utc
 
 from ..config import Config
 
@@ -77,7 +77,7 @@ class ImageSchema(Serializable, SkipDataClass):
 
     def __post_init__(self):
         if isinstance(self.acquisitionDate, str):
-            self.acquisitionDate = datetime.fromisoformat(self.acquisitionDate.replace("Z", "+00:00"))
+            self.acquisitionDate = parse_api_datetime_utc(self.acquisitionDate)
         elif not isinstance(self.acquisitionDate, datetime):
             raise TypeError("Acquisition date must be either datetime or ISO-formatted str")
         self.cloudCover = self.cloudCover

@@ -587,12 +587,14 @@ class Mapflow(QObject):
         linked_processings = self._linked_processings_from_template(template)
         linked_count = len(linked_processings)
         new_images = template.newImagesCount or 0
+        local_created_at = template.createdAt.astimezone()
+        local_active_until = template.activeUntil.astimezone()
 
         details = (
             f"<b>{template.name}</b><br/>"
             f"<b>Status:</b> {template.status}<br/>"
-            f"<b>Created:</b> {template.createdAt.strftime('%Y-%m-%d %H:%M')}<br/>"
-            f"<b>Active Until:</b> {template.activeUntil.strftime('%Y-%m-%d %H:%M')}<br/>"
+            f"<b>Created:</b> {local_created_at.strftime('%Y-%m-%d %H:%M')}<br/>"
+            f"<b>Active Until:</b> {local_active_until.strftime('%Y-%m-%d %H:%M')}<br/>"
             f"<b>Linked processings:</b> {linked_count}<br/>"
             f"<b>New images:</b> {new_images}"
         )
