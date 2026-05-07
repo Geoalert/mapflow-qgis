@@ -44,10 +44,14 @@ class SamService(QObject):
         self.results_loader = results_loader
         self._load_processing_results_callback = load_processing_results_callback
 
-        # Pagination state for processings list
+        # Pagination state for processings list. Backend dropped `total` to
+        # skip the COUNT(*) on large tables; we paginate by offset+limit and
+        # use `has_more` from each response to drive the "next page"
+        # affordance. Note: a page may legitimately come back with fewer
+        # than `limit` items even when has_more=True.
         self._offset = 0
         self._limit = config.SAM_PROCESSINGS_PAGE_LIMIT
-        self._total = 0
+        self._has_more = False
 
         # Project + role context. The SAM tab follows the main-tab project
         # selection: with no project, the processings table stays empty and
@@ -77,7 +81,7 @@ class SamService(QObject):
         self._project_id = project_id
         self._user_role = user_role or UserRole.readonly
         self._offset = 0
-        self._total = 0
+        self._has_more = False
         self.view.set_user_role(self._user_role)
         if project_id:
             self.list_processings()
@@ -113,13 +117,10 @@ class SamService(QObject):
     def list_processings_callback(self, response: QNetworkReply):
         data = json.loads(response.readAll().data().decode())
         result = ProcessingListResponse.from_dict(data)
-        self._total = result.total
+        self._has_more = result.has_more
         self.view.display_processings(result.items)
         self.view.append_debug("List Processings", data)
-        self.view.update_pagination_buttons(
-            self.has_prev_page, self.has_next_page,
-            self._offset, self._limit, self._total,
-        )
+        self.view.update_pagination_buttons(self.has_prev_page, self.has_next_page)
 
     def delete_processing(self):
         processing_id = self.view.selected_processing_id()
@@ -487,7 +488,11 @@ class SamService(QObject):
 
     @property
     def has_next_page(self) -> bool:
-        return self._offset + self._limit < self._total
+        # Server tells us directly whether more rows exist beyond this page.
+        # We do not infer it from items count vs limit because a page can
+        # be partially trimmed server-side while still having more rows
+        # available (rows archived during a per-page sync).
+        return self._has_more
 
     @property
     def has_prev_page(self) -> bool:
@@ -495,6 +500,8 @@ class SamService(QObject):
 
     def next_page(self):
         if self.has_next_page:
+            # Always advance by the full limit, even if the current page
+            # came back partial — that's what `offset` semantics require.
             self._offset += self._limit
             self.list_processings()
 

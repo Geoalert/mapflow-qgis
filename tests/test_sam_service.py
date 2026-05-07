@@ -63,12 +63,12 @@ def sam_service(sam_api, sam_view):
     service.view = sam_view
     service._offset = 0
     service._limit = 20
-    service._total = 0
     # Default to a project + owner role so the existing pagination/filter
     # tests reach the HTTP layer. Tests that exercise the no-project path
     # override _project_id explicitly.
     service._project_id = TEST_PROJECT_ID
     service._user_role = UserRole.owner
+    service._has_more = False
     return service
 
 
@@ -168,7 +168,7 @@ class TestRefreshProcessings:
 
 class TestListProcessingsCallback:
     RESPONSE_DATA = {
-        "total": 2,
+        "has_more": True,
         "limit": 20,
         "offset": 0,
         "items": [
@@ -193,7 +193,7 @@ class TestListProcessingsCallback:
         reply = _make_reply(self.RESPONSE_DATA)
         sam_service.list_processings_callback(reply)
 
-        assert sam_service._total == 2
+        assert sam_service._has_more is True
 
     def test_appends_debug_output(self, sam_service, sam_view):
         reply = _make_reply(self.RESPONSE_DATA)
@@ -202,15 +202,29 @@ class TestListProcessingsCallback:
         sam_view.append_debug.assert_called_once()
         title, data = sam_view.append_debug.call_args[0]
         assert "List Processings" in title
-        assert data["total"] == 2
+        assert data["has_more"] is True
 
     def test_empty_response(self, sam_service, sam_view):
-        reply = _make_reply({"total": 0, "limit": 20, "offset": 0, "items": []})
+        reply = _make_reply({"has_more": False, "limit": 20, "offset": 0, "items": []})
         sam_service.list_processings_callback(reply)
 
         sam_view.display_processings.assert_called_once()
         items = sam_view.display_processings.call_args[0][0]
         assert len(items) == 0
+        assert sam_service._has_more is False
+
+    def test_partial_page_with_has_more(self, sam_service, sam_view):
+        # Backend may trim a page (rows archived during per-page sync) and
+        # still set has_more=true. Service must not infer "last page" from
+        # items count vs limit.
+        reply = _make_reply({
+            "has_more": True, "limit": 20, "offset": 0,
+            "items": [{"id": "p1", "name": "proc-1", "status": "done"}],
+        })
+        sam_service.list_processings_callback(reply)
+
+        assert sam_service._has_more is True
+        assert sam_service.has_next_page is True
 
 
 # ---------------------------------------------------------------------------
@@ -267,24 +281,24 @@ class TestShowProcessingLayers:
 
 class TestPagination:
     def test_next_page_increments_offset(self, sam_service, http_mock):
-        sam_service._total = 50
+        sam_service._has_more = True
         sam_service._offset = 0
         sam_service._limit = 20
 
         sam_service.next_page()
         assert sam_service._offset == 20
 
-    def test_next_page_clamps_to_total(self, sam_service, http_mock):
-        sam_service._total = 25
+    def test_next_page_blocked_when_no_more(self, sam_service, http_mock):
+        # has_more=False means the server says we're on the last page; the
+        # client must not advance offset blindly.
+        sam_service._has_more = False
         sam_service._offset = 20
         sam_service._limit = 20
 
         sam_service.next_page()
-        # offset should not go beyond total
         assert sam_service._offset == 20
 
     def test_prev_page_decrements_offset(self, sam_service, http_mock):
-        sam_service._total = 50
         sam_service._offset = 20
         sam_service._limit = 20
 
@@ -292,7 +306,6 @@ class TestPagination:
         assert sam_service._offset == 0
 
     def test_prev_page_clamps_to_zero(self, sam_service, http_mock):
-        sam_service._total = 50
         sam_service._offset = 0
         sam_service._limit = 20
 
@@ -300,12 +313,10 @@ class TestPagination:
         assert sam_service._offset == 0
 
     def test_has_next_page(self, sam_service):
-        sam_service._total = 50
-        sam_service._offset = 0
-        sam_service._limit = 20
+        sam_service._has_more = True
         assert sam_service.has_next_page is True
 
-        sam_service._offset = 40
+        sam_service._has_more = False
         assert sam_service.has_next_page is False
 
     def test_has_prev_page(self, sam_service):
@@ -370,7 +381,7 @@ class TestListPrompts:
 
 class TestListPromptsCallback:
     RESPONSE_DATA = {
-        "total": 2,
+        "has_more": False,
         "limit": 20,
         "offset": 0,
         "items": [

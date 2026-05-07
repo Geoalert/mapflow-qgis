@@ -113,8 +113,10 @@ Extends ProcessingSummaryResponse with `"sessions": ["UUID"]`.
 
 ### ProcessingListResponse
 ```json
-{"total": 0, "limit": 20, "offset": 0, "items": [ProcessingSummaryResponse]}
+{"has_more": false, "limit": 20, "offset": 0, "items": [ProcessingSummaryResponse]}
 ```
+- `has_more` replaced the previously-returned `total`. The server skips a `COUNT(*)` over the processings table; clients paginate by `offset + limit` and use `has_more` to decide whether to expose a "next page" affordance.
+- A page may legitimately contain fewer than `limit` items even when `has_more=true` — the backend fetches `limit + 1` rows and may drop ones that were confirmed deleted upstream during a per-page sync. The client always advances by `limit`, never by `len(items)`.
 
 ### MapflowProcessingResponse
 ```json
@@ -201,6 +203,16 @@ Paginated endpoints accept query parameters:
 
 `GET /processings/page` additionally accepts:
 - `projectId` (optional): Mapflow project id to scope the listing. When set, the backend returns processings owned by any user as long as the caller has at least `readonly` access to the project (cross-owner visibility for shared projects). When unset, the endpoint falls back to listing processings owned by the calling user only.
+
+`GET /processings/page` and `GET /prompts/page` use a forward-only paging shape:
+```json
+{"has_more": false, "limit": 20, "offset": 0, "items": [...]}
+```
+- The server does not return a `total` count (would require a `COUNT(*)`). Clients paginate by `offset + limit` and use `has_more` to drive the "next page" affordance. There is no "page X of N" UI — only previous / next.
+- For `/processings/page`, a page may contain fewer than `limit` items even when `has_more=true` (the backend fetches `limit + 1` rows and may drop ones archived upstream during a per-page sync). The client always advances by `limit`, never by `len(items)`.
+- For `/prompts/page`, pages are always full up to `limit`.
+
+Other paged listing endpoints (e.g. `GET /processings/{id}/sessions`) keep their existing `total` field for now; this migration only applies to the two endpoints above.
 
 ## Authorization & Roles
 

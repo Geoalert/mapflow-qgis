@@ -47,31 +47,19 @@ def test_processings_table_keeps_name_column_preferred_over_created():
     assert sam_view.dlg.samProcessingsTable.columnWidth(1) >= 200
 
 
-def test_processings_pagination_buttons_hidden_when_page_not_full():
+def test_processings_pagination_buttons_hidden_when_no_other_pages():
     sam_view = _create_view()
 
-    sam_view.update_pagination_buttons(
-        has_prev=False,
-        has_next=False,
-        offset=0,
-        limit=100,
-        total=80,
-    )
+    sam_view.update_pagination_buttons(has_prev=False, has_next=False)
 
     assert sam_view.dlg.samProcessingsPrevPage.isHidden() is True
     assert sam_view.dlg.samProcessingsNextPage.isHidden() is True
 
 
-def test_processings_pagination_buttons_first_full_page_states():
+def test_processings_pagination_buttons_first_page_states():
     sam_view = _create_view()
 
-    sam_view.update_pagination_buttons(
-        has_prev=False,
-        has_next=True,
-        offset=0,
-        limit=100,
-        total=230,
-    )
+    sam_view.update_pagination_buttons(has_prev=False, has_next=True)
 
     assert sam_view.dlg.samProcessingsPrevPage.isHidden() is False
     assert sam_view.dlg.samProcessingsNextPage.isHidden() is False
@@ -79,16 +67,10 @@ def test_processings_pagination_buttons_first_full_page_states():
     assert sam_view.dlg.samProcessingsNextPage.isEnabled() is True
 
 
-def test_processings_pagination_buttons_last_partial_page_stays_visible_and_disables_right():
+def test_processings_pagination_buttons_last_page_stays_visible_and_disables_right():
     sam_view = _create_view()
 
-    sam_view.update_pagination_buttons(
-        has_prev=True,
-        has_next=False,
-        offset=200,
-        limit=100,
-        total=230,
-    )
+    sam_view.update_pagination_buttons(has_prev=True, has_next=False)
 
     assert sam_view.dlg.samProcessingsPrevPage.isHidden() is False
     assert sam_view.dlg.samProcessingsNextPage.isHidden() is False

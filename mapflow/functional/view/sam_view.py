@@ -280,13 +280,7 @@ class SamView(QObject):
         self.clear_processing_detail()
         self.clear_session_display()
         # Hide pagination controls since there is nothing to paginate.
-        self.update_pagination_buttons(False, False, 0, self._limit_or_zero(), 0)
-
-    def _limit_or_zero(self) -> int:
-        # update_pagination_buttons compares limit vs total to decide whether
-        # to show controls. We don't track limit here; pass 1 so total=0 keeps
-        # the controls hidden.
-        return 1
+        self.update_pagination_buttons(has_prev=False, has_next=False)
 
     # ------------------------------------------------------------------
     # Processings
@@ -826,15 +820,17 @@ class SamView(QObject):
             debug_text = str(data)
         self.dlg.samDebugOutput.append(f"--- {title} ---\n{debug_text}\n")
 
-    def update_pagination_buttons(self, has_prev: bool, has_next: bool,
-                                  offset: int, limit: int, total: int):
-        has_multiple_pages = total > limit
+    def update_pagination_buttons(self, has_prev: bool, has_next: bool):
+        # Backend dropped `total`, so we can no longer say "page X of N".
+        # The pagination strip is just a prev/next pair, visible whenever
+        # at least one direction is reachable.
+        any_other_page = has_prev or has_next
 
-        self.dlg.samProcessingsPrevPage.setVisible(has_multiple_pages)
-        self.dlg.samProcessingsNextPage.setVisible(has_multiple_pages)
+        self.dlg.samProcessingsPrevPage.setVisible(any_other_page)
+        self.dlg.samProcessingsNextPage.setVisible(any_other_page)
 
-        self.dlg.samProcessingsPrevPage.setEnabled(has_multiple_pages and has_prev)
-        self.dlg.samProcessingsNextPage.setEnabled(has_multiple_pages and has_next)
+        self.dlg.samProcessingsPrevPage.setEnabled(any_other_page and has_prev)
+        self.dlg.samProcessingsNextPage.setEnabled(any_other_page and has_next)
 
 
 def QVariant_String():

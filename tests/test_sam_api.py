@@ -322,14 +322,14 @@ class TestSchemas:
     def test_processing_list_response_parses_items(self):
         from mapflow.schema.sam import ProcessingListResponse
         data = {
-            "total": 2, "limit": 20, "offset": 0,
+            "has_more": True, "limit": 20, "offset": 0,
             "items": [
                 {"id": "1", "name": "p1", "status": "ready"},
                 {"id": "2", "name": "p2", "status": "pending", "unknown_field": "ignored"},
             ],
         }
         resp = ProcessingListResponse.from_dict(data)
-        assert resp.total == 2
+        assert resp.has_more is True
         assert len(resp.items) == 2
         assert resp.items[0].name == "p1"
         assert resp.items[1].status == "pending"

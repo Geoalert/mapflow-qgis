@@ -161,7 +161,12 @@ class ProcessingDetailResponse(SkipDataClass):
 
 @dataclass
 class ProcessingListResponse(SkipDataClass):
-    total: int = 0
+    # Backend dropped `total` to skip the COUNT(*) on large tables; pages
+    # advertise whether more rows exist via `has_more` and the client
+    # paginates by `offset + limit` regardless of the actual page size.
+    # Note: a page may legitimately come back with fewer than `limit` items
+    # even when has_more=True (rows archived during a per-page sync).
+    has_more: bool = False
     limit: int = 20
     offset: int = 0
     items: Optional[List[dict]] = None
@@ -222,7 +227,9 @@ class PromptDetailResponse(SkipDataClass):
 
 @dataclass
 class PromptListResponse(SkipDataClass):
-    total: int = 0
+    # See ProcessingListResponse — same has_more migration applied. For
+    # /prompts/page the backend always returns full pages up to `limit`.
+    has_more: bool = False
     limit: int = 20
     offset: int = 0
     items: Optional[List[dict]] = None
