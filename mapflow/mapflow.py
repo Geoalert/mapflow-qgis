@@ -428,8 +428,8 @@ class Mapflow(QObject):
         self.current_project = MapflowProject.from_dict(json.loads(response.readAll().data()))
         if self.current_project:
             self.project_id = self.current_project.id
-            elided_name = self.dlg.currentProjectLabel.fontMetrics().elidedText(self.current_project.name, 
-                                                                                Qt.ElideRight, 
+            elided_name = self.dlg.currentProjectLabel.fontMetrics().elidedText(self.current_project.name,
+                                                                                Qt.ElideRight,
                                                                                 self.dlg.currentProjectLabel.width() - 50)
             self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(elided_name))
             self.dlg.currentProjectLabel.adjustSize()
@@ -437,13 +437,22 @@ class Mapflow(QObject):
         self.setup_project_change_rights()
         self.settings.setValue("project_id", self.project_id)
         self.setup_workflow_defs(self.current_project.workflowDefs)
+        # Auto-load path: the user wasn't asked to pick a project (it was
+        # restored from settings), so on_project_change never fired. The SAM
+        # service still needs the project + role to populate its tab and
+        # gate buttons; without this the SAM list stays empty and Refresh is
+        # a no-op until the user manually re-enters the project.
+        self.sam_service.set_project_context(self.project_id, self.user_role)
         # Manually toggle function to avoid race condition
         self.calculate_aoi_area_use_image_extent()
-    
+
     def get_project_error_handler(self, response: QNetworkReply):
         self.default_error_handler(response)
         # Switch to projects table if couldn't get current project
         self.project_service.switch_to_projects()
+        # Clear SAM context to mirror "no project selected" — otherwise the
+        # tab keeps stale data from a previous session that's no longer valid.
+        self.sam_service.set_project_context(None, UserRole.readonly)
 
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.draw_aoi)
