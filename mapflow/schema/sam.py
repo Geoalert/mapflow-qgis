@@ -81,6 +81,18 @@ class PromptCreateRequest(Serializable):
 
 
 @dataclass
+class PromptCopyRequest(Serializable):
+    """Body for POST /prompts/{id}/copy.
+
+    Both fields optional. Backend defaults `name` to `"<source.name> (copy)"`
+    when omitted; `text_prompt` omitted/null/empty reuses the source prompt's
+    `text_prompt_id` by FK reuse.
+    """
+    name: Optional[str] = None
+    text_prompt: Optional[str] = None
+
+
+@dataclass
 class InferenceCreateRequest(Serializable):
     """POST /inference — creates a new session and dispatches the first
     inference batch (one Inference per workflow intersecting the AOI)."""

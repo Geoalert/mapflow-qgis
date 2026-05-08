@@ -61,6 +61,7 @@ class SamController(QObject):
         self.dlg.samCreatePrompt.clicked.connect(self._create_prompt)
         self.dlg.samRefreshPrompts.clicked.connect(self._refresh_prompts)
         self.dlg.deletePromptButton.clicked.connect(self._delete_prompt)
+        self.dlg.samCopyPrompt.clicked.connect(self._copy_prompt)
         self.dlg.samAddPointPrompt.clicked.connect(self._activate_point_tool)
         self.dlg.samAddBboxPrompt.clicked.connect(self._activate_bbox_tool)
         self.dlg.samPromptsTable.selectionModel().selectionChanged.connect(
@@ -168,6 +169,26 @@ class SamController(QObject):
 
     def _delete_prompt(self):
         self.service.delete_prompt()
+
+    def _copy_prompt(self):
+        # Reuse the create dialog in copy mode. Both inputs are optional;
+        # leaving them blank lets the backend apply its own copy defaults
+        # (auto-suffixed name, source `text_prompt_id` reused via FK).
+        prompt_id = self.view.selected_prompt_id()
+        if not prompt_id:
+            return
+        dialog = SamPromptCreateDialog(
+            parent=self.dlg,
+            mode=SamPromptCreateDialog.MODE_COPY,
+            source_name=self.view.selected_prompt_name(),
+        )
+        if dialog.exec_() != dialog.Accepted:
+            return
+        self.service.copy_prompt(
+            prompt_id=prompt_id,
+            name=dialog.name,
+            text_prompt=dialog.text_prompt,
+        )
 
     def _unlink_spatial_prompt(self):
         spatial_prompt_id, prompt_type = self.view.selected_spatial_prompt()

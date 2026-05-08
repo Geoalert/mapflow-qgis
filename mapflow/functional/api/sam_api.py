@@ -11,6 +11,7 @@ from ...http import Http
 from ...schema.sam import (
     ProcessingCreateRequest,
     PromptCreateRequest,
+    PromptCopyRequest,
     PromptUpdateRequest,
     PointPromptRequest,
     BboxPromptRequest,
@@ -131,6 +132,17 @@ class SamApi(QObject):
     def create_prompt(self, request: PromptCreateRequest, callback: Callable):
         self.http.post(
             url=f"{self.server}/prompts",
+            body=request.as_json().encode(),
+            headers={},
+            callback=callback,
+            use_default_error_handler=True,
+            timeout=5,
+        )
+
+    def copy_prompt(self, prompt_id: str, request: PromptCopyRequest,
+                    callback: Callable):
+        self.http.post(
+            url=f"{self.server}/prompts/{prompt_id}/copy",
             body=request.as_json().encode(),
             headers={},
             callback=callback,

@@ -26,6 +26,7 @@ It shares the same base URL and authentication as the main Mapflow API (`config.
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/prompts` | Create a prompt (with optional text) |
+| POST | `/prompts/{id}/copy` | Create a copy of an existing prompt (returns the new `PromptDetailResponse`) |
 | GET | `/prompts/page` | List prompts (paginated) |
 | GET | `/prompts/{id}` | Get prompt detail (includes point/bbox prompts) |
 | POST | `/prompts/{id}/point_prompts` | Add a point prompt to a prompt |
@@ -135,6 +136,16 @@ Extends ProcessingSummaryResponse with `"sessions": ["UUID"]`.
 
 ### PromptDetailResponse
 Extends PromptResponse with `"spatial_prompts": [SpatialPromptResponse]`. Spatial prompts are returned as a single unified array discriminated by `geometry_type` (`"point"` or `"bbox"`).
+
+### PromptCopyRequest
+```json
+{"name": "string | null", "text_prompt": "string | null"}
+```
+Body for `POST /prompts/{id}/copy`. Both fields are optional.
+- `name` defaults to `"<original.name> (copy)"` when omitted, or `"(copy)"` if the source prompt has no name.
+- `text_prompt` — when omitted, `null`, or empty string, the new prompt reuses the source prompt's `text_prompt_id` by FK reuse (no row duplication). Any non-empty string is resolved through the same find-or-create `TextPrompt` path as `POST /prompts`.
+- Spatial prompts: junction rows in `prompt_spatial_prompts` are copied to the new prompt id. No new `spatial_prompt` rows are created and no S3 objects are duplicated — this is the same shared-junction model used by the session snapshot (see `003_local_storage.md`).
+- Returns `201` with the new `PromptDetailResponse`. Returns `404` when `{id}` is not found or not owned by the caller.
 
 ### SpatialPromptResponse
 ```json

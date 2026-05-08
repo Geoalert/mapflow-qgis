@@ -371,6 +371,52 @@ class TestCreatePromptCallback:
 
 
 # ---------------------------------------------------------------------------
+# copy_prompt
+# ---------------------------------------------------------------------------
+
+class TestCopyPrompt:
+    def test_calls_api_with_overrides(self, sam_service, http_mock):
+        sam_service.copy_prompt(
+            prompt_id="pr-1", name="renamed", text_prompt="find barns",
+        )
+
+        http_mock.post.assert_called_once()
+        url = http_mock.post.call_args[1]["url"]
+        assert url.endswith("/prompts/pr-1/copy")
+        body = json.loads(http_mock.post.call_args[1]["body"])
+        assert body == {"name": "renamed", "text_prompt": "find barns"}
+
+    def test_calls_api_with_no_overrides(self, sam_service, http_mock):
+        # Empty body = let backend apply copy defaults (auto-suffixed name,
+        # FK reuse of source text_prompt_id).
+        sam_service.copy_prompt(prompt_id="pr-1")
+
+        http_mock.post.assert_called_once()
+        body = json.loads(http_mock.post.call_args[1]["body"])
+        assert body == {}
+
+
+class TestCopyPromptCallback:
+    PROMPT_DATA = {"id": "pr2", "text_prompt_id": "tp1", "text_prompt": "find barns",
+                   "spatial_prompts": []}
+
+    def test_appends_debug(self, sam_service, sam_view):
+        reply = _make_reply(self.PROMPT_DATA)
+        sam_service.copy_prompt_callback(reply)
+
+        sam_view.append_debug.assert_called_once()
+        title, data = sam_view.append_debug.call_args[0]
+        assert "Copy Prompt" in title
+        assert data["id"] == "pr2"
+
+    def test_refreshes_prompts_list(self, sam_service, sam_view):
+        reply = _make_reply(self.PROMPT_DATA)
+        with patch.object(sam_service, 'list_prompts') as mock_list:
+            sam_service.copy_prompt_callback(reply)
+            mock_list.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
 # list_prompts
 # ---------------------------------------------------------------------------
 

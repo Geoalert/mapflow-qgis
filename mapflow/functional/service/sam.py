@@ -22,6 +22,7 @@ from ...schema.sam import (
     PromptListResponse,
     PromptDetailResponse,
     PromptCreateRequest,
+    PromptCopyRequest,
     PromptUpdateRequest,
     PointPromptRequest,
     BboxPromptRequest,
@@ -180,6 +181,21 @@ class SamService(QObject):
     def create_prompt_callback(self, response: QNetworkReply):
         data = json.loads(response.readAll().data().decode())
         self.view.append_debug("Create Prompt", data)
+        self.list_prompts()
+
+    def copy_prompt(self, prompt_id: str,
+                    name: Optional[str] = None,
+                    text_prompt: Optional[str] = None):
+        request = PromptCopyRequest(name=name, text_prompt=text_prompt)
+        self.api.copy_prompt(
+            prompt_id=prompt_id,
+            request=request,
+            callback=self.copy_prompt_callback,
+        )
+
+    def copy_prompt_callback(self, response: QNetworkReply):
+        data = json.loads(response.readAll().data().decode())
+        self.view.append_debug("Copy Prompt", data)
         self.list_prompts()
 
     def list_prompts(self):

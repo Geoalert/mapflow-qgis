@@ -9,6 +9,7 @@ from mapflow.functional.api.sam_api import SamApi
 from mapflow.schema.sam import (
     ProcessingCreateRequest,
     PromptCreateRequest,
+    PromptCopyRequest,
     PromptUpdateRequest,
     PointPromptRequest,
     BboxPromptRequest,
@@ -152,6 +153,28 @@ class TestCreatePrompt:
         api = SamApi(http=http_mock, server=SERVER)
         request = PromptCreateRequest()
         api.create_prompt(request, callback=_noop)
+
+        body = json.loads(http_mock.post.call_args[1]["body"].decode())
+        assert body == {}
+
+
+class TestCopyPrompt:
+    def test_calls_post_to_copy_endpoint(self, http_mock):
+        api = SamApi(http=http_mock, server=SERVER)
+        request = PromptCopyRequest(name="renamed", text_prompt="find barns")
+        api.copy_prompt("prompt-42", request, callback=_noop)
+
+        http_mock.post.assert_called_once()
+        call_kwargs = http_mock.post.call_args[1]
+        assert call_kwargs["url"] == f"{SERVER}/prompts/prompt-42/copy"
+        body = json.loads(call_kwargs["body"].decode())
+        assert body == {"name": "renamed", "text_prompt": "find barns"}
+
+    def test_empty_request_serializes_to_empty_object(self, http_mock):
+        # Both fields optional → backend applies copy defaults
+        # (auto-suffixed name, FK reuse for text_prompt).
+        api = SamApi(http=http_mock, server=SERVER)
+        api.copy_prompt("prompt-42", PromptCopyRequest(), callback=_noop)
 
         body = json.loads(http_mock.post.call_args[1]["body"].decode())
         assert body == {}

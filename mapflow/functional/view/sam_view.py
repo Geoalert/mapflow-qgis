@@ -279,8 +279,9 @@ class SamView(QObject):
         self.dlg.samAddPointPrompt.setEnabled(enabled and self._can_modify)
         self.dlg.samAddBboxPrompt.setEnabled(enabled and self._can_modify)
         # Prompts themselves are user-scoped, not project-scoped, so deletion
-        # is allowed regardless of project role.
+        # and copy are allowed regardless of project role.
         self.dlg.deletePromptButton.setEnabled(enabled)
+        self.dlg.samCopyPrompt.setEnabled(enabled)
 
     def set_session_buttons_enabled(self, enabled: bool):
         self._has_session_selection = enabled
@@ -440,6 +441,23 @@ class SamView(QObject):
         row = selected[0].row()
         item = table.item(row, 0)
         return item.data(Qt.DisplayRole) if item else None
+
+    def selected_prompt_name(self) -> Optional[str]:
+        """Return the visible name of the currently selected prompt, if any.
+
+        Used to seed the copy dialog's name placeholder so the user sees
+        what the backend's auto-suffixed name will look like.
+        """
+        table = self.dlg.samPromptsTable
+        selected = table.selectionModel().selectedRows()
+        if not selected:
+            return None
+        row = selected[0].row()
+        item = table.item(row, 1)
+        if item is None:
+            return None
+        value = item.data(Qt.DisplayRole)
+        return value or None
 
     def populate_spatial_prompts_table(self, spatial_prompts: List[SpatialPromptResponse]):
         """Populate spatialPromptsTable without adding map layers."""
