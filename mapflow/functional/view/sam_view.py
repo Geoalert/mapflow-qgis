@@ -5,16 +5,21 @@ prompt map visualization, and debug output.
 No business logic or API calls.
 """
 import json
+import os
 from typing import List, Optional, Tuple
 
 import sip
 from PyQt5.QtCore import QObject, QPointF, Qt
 from PyQt5.QtGui import QColor, QBrush, QPainter, QPen, QPixmap, QPolygonF
-from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import (
+    QTableWidget, QTableWidgetItem, QHeaderView, QHBoxLayout,
+    QPushButton, QCheckBox,
+)
 
 from qgis.core import (
     QgsProject,
     QgsVectorLayer,
+    QgsRasterLayer,
     QgsFeature,
     QgsGeometry,
     QgsField,
@@ -65,6 +70,7 @@ class SamView(QObject):
         self._setup_prompts_table()
         self._setup_sessions_table()
         self._setup_spatial_prompts_table()
+        self._setup_show_rasters_checkbox()
         self._setup_inferences_table()
         self._setup_initial_button_states()
         self.clear_processing_detail()
@@ -75,6 +81,11 @@ class SamView(QObject):
         # One result vector layer per session, keyed by session_id, so we
         # can refresh partial results in place rather than spawn duplicates.
         self._result_layers = {}
+        # GeoTIFF preview crops for spatial prompts: each download is saved
+        # to a temp file and added as a raster layer under the previews
+        # subgroup. We track sp_id -> temp_path so we can drop the layer
+        # AND delete the file together when the user picks a new prompt.
+        self._preview_temp_files = {}
 
     def _setup_processings_pagination_controls(self):
         prev_button = QPushButton("")
@@ -154,6 +165,42 @@ class SamView(QObject):
         table.setColumnHidden(0, True)
         table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+
+    def _setup_show_rasters_checkbox(self):
+        """Toggle for the GeoTIFF preview crops shown next to the prompts.
+
+        On (default): each spatial prompt's raster_url is downloaded on
+        prompt/session double-click and attached as a layer in the
+        previews subgroup.
+        Off: no downloads happen, no layers are added, and any previews
+        already on the map are dropped immediately.
+
+        The checkbox is created here (rather than in the .ui file) so the
+        view stays the single source of truth for SAM-tab widget setup —
+        same approach as the pagination buttons above.
+        """
+        checkbox = QCheckBox(self.tr("Show rasters"))
+        checkbox.setObjectName("samShowRastersCheckbox")
+        checkbox.setChecked(True)
+        checkbox.setToolTip(self.tr(
+            "Download and display the source GeoTIFF crop for each spatial "
+            "prompt when you double-click a prompt or session row."
+        ))
+        self.dlg.samShowRastersCheckbox = checkbox
+        # Sit above the spatial prompts table inside its existing vertical
+        # layout (the .ui file auto-names this layout verticalLayout_13).
+        self.dlg.verticalLayout_13.insertWidget(0, checkbox)
+
+    def is_show_rasters_enabled(self) -> bool:
+        return bool(self.dlg.samShowRastersCheckbox.isChecked())
+
+    def clear_spatial_prompt_previews(self):
+        """Public entry point for the service to drop preview rasters.
+
+        Used when the user toggles the checkbox off — pull existing
+        rasters off the map without touching the geometry layers.
+        """
+        self._clear_preview_layers()
 
     def _setup_inferences_table(self):
         # One row per Inference belonging to the currently selected session.
@@ -404,14 +451,70 @@ class SamView(QObject):
         self.dlg.deleteSpatialPrompt.setEnabled(len(spatial_prompts) > 0)
 
     def show_spatial_prompt_layers(self, spatial_prompts: List[SpatialPromptResponse]):
-        """Add spatial prompt features to map layers."""
+        """Add spatial prompt features to map layers.
+
+        Synchronous part only — clears geometry + raster preview layers
+        from the previous prompt and rebuilds vector geometry. Raster
+        preview layers are attached later by the service via
+        ``add_spatial_prompt_preview`` once each download finishes.
+        """
         self._clear_prompts_layers()
+        self._clear_preview_layers()
         for sp in spatial_prompts:
             geom_type = "Point" if sp.geometry_type == GeometryType.POINT.value else "Polygon"
             self._add_spatial_prompt_feature(sp, geom_type)
         self._refresh_prompt_layer_extents()
         selected_prompt_id, prompt_type = self.selected_spatial_prompt()
         self.highlight_spatial_prompt(selected_prompt_id, prompt_type)
+
+    # ------------------------------------------------------------------
+    # Spatial prompt raster previews
+    # ------------------------------------------------------------------
+
+    def add_spatial_prompt_preview(self, local_path: str, sp_id: str,
+                                   geometry_type: str):
+        """Attach a downloaded GeoTIFF crop as a raster layer.
+
+        Called by the service once `download_spatial_prompt_raster` has
+        written the bytes to a temp file. The layer is registered with the
+        project (legend off) and parented to the SAM Prompt Previews
+        subgroup so the user can collapse / hide / delete the whole batch
+        in one click.
+        """
+        layer_name = f"prompt-{sp_id[:8]} ({geometry_type})"
+        layer = QgsRasterLayer(local_path, layer_name)
+        if not layer.isValid():
+            # Don't pollute the layer tree with broken entries; the temp
+            # file stays on disk but is short-lived (cleared on the next
+            # _clear_preview_layers call when its sp_id is re-keyed).
+            self._preview_temp_files[sp_id] = local_path
+            return
+        QgsProject.instance().addMapLayer(layer, False)
+        previews_group = self._get_or_create_previews_group()
+        previews_group.addLayer(layer)
+        self._preview_temp_files[sp_id] = local_path
+
+    def _clear_preview_layers(self):
+        """Drop all raster previews and the temp files behind them.
+
+        Removes layers before deleting files so QGIS releases the file
+        handle first; otherwise on Windows the unlink would silently fail.
+        """
+        project = QgsProject.instance()
+        previews_group = project.layerTreeRoot().findGroup(self.PROMPTS_GROUP_NAME)
+        if previews_group is not None:
+            previews_group = previews_group.findGroup(self.PREVIEWS_GROUP_NAME)
+        if previews_group is not None:
+            for child in list(previews_group.findLayers()):
+                project.removeMapLayer(child.layerId())
+        for path in list(self._preview_temp_files.values()):
+            try:
+                os.unlink(path)
+            except OSError:
+                # Best-effort cleanup; the OS will reclaim the temp dir
+                # eventually. Don't let a stuck handle block the UI flow.
+                pass
+        self._preview_temp_files.clear()
 
     def clear_spatial_prompt_highlight(self):
         for layer in (self._point_highlight_layer, self._bbox_highlight_layer):
@@ -504,6 +607,52 @@ class SamView(QObject):
     # ------------------------------------------------------------------
     # Map layers for prompt visualization
     # ------------------------------------------------------------------
+    #
+    # Layer organization (lazy-built on first prompt display):
+    #
+    #   project root
+    #     └── SAM Prompts (group)
+    #           ├── SAM <Point|Bbox> Prompts Highlight   (vector, top → drawn over)
+    #           ├── SAM <Point|Bbox> Prompts             (vector)
+    #           └── SAM Prompt Previews (subgroup)        ← raster crops, bottom
+    #                  ├── prompt-XXXXXXXX (point)        (raster)
+    #                  └── ...
+    #
+    # New geometry layers are inserted at the TOP of the prompts group so
+    # the rendering order matches the previous (root-level) behavior, where
+    # the latest-added layer drew on top. The previews subgroup stays
+    # pinned at the bottom — that's where the user asked for it.
+
+    PROMPTS_GROUP_NAME = "SAM Prompts"
+    PREVIEWS_GROUP_NAME = "SAM Prompt Previews"
+
+    def _get_or_create_prompts_group(self):
+        root = QgsProject.instance().layerTreeRoot()
+        group = root.findGroup(self.PROMPTS_GROUP_NAME)
+        if group is None:
+            group = root.insertGroup(0, self.PROMPTS_GROUP_NAME)
+        return group
+
+    def _get_or_create_previews_group(self):
+        prompts_group = self._get_or_create_prompts_group()
+        previews = prompts_group.findGroup(self.PREVIEWS_GROUP_NAME)
+        if previews is None:
+            # Append at the bottom of the prompts group so it sits below
+            # all geometry layers; geometry layers always insert at index 0.
+            previews = prompts_group.addGroup(self.PREVIEWS_GROUP_NAME)
+        return previews
+
+    def _add_layer_to_prompts_group(self, layer):
+        """Register a vector layer with the project and pin it to the top
+        of the SAM Prompts group (preserves the legacy 'latest on top'
+        ordering after the move from project root into the group).
+        """
+        # addMapLayer(..., addToLegend=False) keeps the project from
+        # auto-attaching the layer to the layer tree root; we then
+        # explicitly insert it under our group at the top.
+        QgsProject.instance().addMapLayer(layer, False)
+        prompts_group = self._get_or_create_prompts_group()
+        prompts_group.insertLayer(0, layer)
 
     def _create_prompts_layer(self, geom_type: str, name: str) -> QgsVectorLayer:
         layer = QgsVectorLayer(
@@ -530,7 +679,7 @@ class SamView(QObject):
         renderer = QgsCategorizedSymbolRenderer("positive", categories)
         layer.setRenderer(renderer)
 
-        QgsProject.instance().addMapLayer(layer)
+        self._add_layer_to_prompts_group(layer)
         return layer
 
     def _create_highlight_layer(self, geom_type: str, name: str) -> QgsVectorLayer:
@@ -565,7 +714,7 @@ class SamView(QObject):
             symbol.changeSymbolLayer(0, symbol_layer)
         layer.setRenderer(QgsSingleSymbolRenderer(symbol))
 
-        QgsProject.instance().addMapLayer(layer)
+        self._add_layer_to_prompts_group(layer)
         return layer
 
     @staticmethod

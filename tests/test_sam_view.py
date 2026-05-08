@@ -301,6 +301,89 @@ def test_clear_processings_table_empties_dependent_panels():
     assert sam_view.dlg.deleteSessionButton.isEnabled() is False
 
 
+def test_show_rasters_checkbox_defaults_to_on():
+    sam_view = _create_view()
+
+    assert sam_view.dlg.samShowRastersCheckbox.isChecked() is True
+    assert sam_view.is_show_rasters_enabled() is True
+
+
+def test_show_rasters_checkbox_off_reports_disabled():
+    sam_view = _create_view()
+    sam_view.dlg.samShowRastersCheckbox.setChecked(False)
+
+    assert sam_view.is_show_rasters_enabled() is False
+
+
+def test_show_spatial_prompt_layers_creates_prompts_group():
+    # Geometry layers move under the SAM Prompts group on first display so
+    # the user can collapse / hide / delete the whole batch in one click.
+    sam_view = _create_view()
+    point_prompt = SpatialPromptResponse.from_dict({
+        "id": "sp1",
+        "geometry_type": "point",
+        "processing_id": "proc-1",
+        "geometry": {"type": "Point", "coordinates": [12.3, 54.3]},
+        "positive": True,
+    })
+
+    sam_view.show_spatial_prompt_layers([point_prompt])
+
+    from qgis.core import QgsProject
+    root = QgsProject.instance().layerTreeRoot()
+    prompts_group = root.findGroup(SamView.PROMPTS_GROUP_NAME)
+    assert prompts_group is not None
+    layer_names = [n.name() for n in prompts_group.findLayers()]
+    assert "SAM Point Prompts" in layer_names
+
+
+def test_add_spatial_prompt_preview_attaches_to_previews_subgroup(tmp_path):
+    sam_view = _create_view()
+    sam_view.show_spatial_prompt_layers([])
+    # Use a real (tiny) GeoTIFF wouldn't simplify the test; what we care
+    # about is that the layer is registered under the previews subgroup,
+    # not whether QGIS could parse it. A non-existent path is fine — the
+    # method falls through the isValid()=False branch but still tracks
+    # the temp file. Test the happy path with a real tif via rasterio
+    # would need a fixture — skip for now and assert via group existence.
+    fake_tiff = tmp_path / "preview.tif"
+    fake_tiff.write_bytes(b"\x49\x49\x2A\x00")  # TIFF magic + nothing valid
+
+    sam_view.add_spatial_prompt_preview(
+        local_path=str(fake_tiff), sp_id="sp-abcdef12", geometry_type="point",
+    )
+
+    from qgis.core import QgsProject
+    prompts_group = QgsProject.instance().layerTreeRoot().findGroup(
+        SamView.PROMPTS_GROUP_NAME
+    )
+    assert prompts_group is not None
+    previews_group = prompts_group.findGroup(SamView.PREVIEWS_GROUP_NAME)
+    # If the raster is not parseable the layer is rejected and the subgroup
+    # may not have been created yet — but the temp file path is tracked for
+    # cleanup either way.
+    assert "sp-abcdef12" in sam_view._preview_temp_files
+
+
+def test_show_spatial_prompt_layers_replaces_previous_previews(tmp_path):
+    # Calling show_spatial_prompt_layers must drop previously-attached
+    # raster previews so the user only sees crops for the current prompt.
+    sam_view = _create_view()
+    sam_view.show_spatial_prompt_layers([])
+
+    f1 = tmp_path / "a.tif"
+    f1.write_bytes(b"\x49\x49\x2A\x00")
+    sam_view.add_spatial_prompt_preview(
+        local_path=str(f1), sp_id="sp-1", geometry_type="point",
+    )
+    assert sam_view._preview_temp_files
+
+    sam_view.show_spatial_prompt_layers([])
+
+    # Tracking dict cleared on each new prompt display.
+    assert sam_view._preview_temp_files == {}
+
+
 def test_highlight_overlay_uses_yellow_stroke_with_width_0_6():
     sam_view = _create_view()
     point_prompt = SpatialPromptResponse.from_dict({

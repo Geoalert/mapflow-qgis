@@ -4,7 +4,8 @@ Coordinates SamApi (HTTP calls) and SamView (UI state).
 Manages pagination state and response parsing.
 """
 import json
-from typing import Callable, Optional
+import tempfile
+from typing import Callable, Iterable, List, Optional
 
 from PyQt5.QtCore import QObject
 from PyQt5.QtNetwork import QNetworkReply
@@ -65,6 +66,11 @@ class SamService(QObject):
         self._last_prompt_detail = None
         self._last_session = None
         self._last_session_prompts = []
+        # Tracks whichever set of spatial prompts is currently rendered on
+        # the map (from prompt or session double-click). Used by the
+        # "Show rasters" toggle handler to know what to re-fetch when the
+        # user flips the checkbox back on.
+        self._last_displayed_prompts: List[SpatialPromptResponse] = []
 
     # ------------------------------------------------------------------
     # Project context
@@ -202,9 +208,86 @@ class SamService(QObject):
         self.view.append_debug("Prompt Detail", data)
 
     def show_prompt_layers(self):
-        """Double-click action: show spatial prompt layers on map."""
+        """Double-click action: show spatial prompt layers on map.
+
+        Renders vector geometry synchronously, then kicks off async raster
+        downloads — the GeoTIFF crops drop into the previews subgroup as
+        each one finishes. View clears the previous batch before painting.
+        """
         if self._last_prompt_detail:
-            self.view.show_spatial_prompt_layers(self._last_prompt_detail.spatial_prompts)
+            spatial_prompts = list(self._last_prompt_detail.spatial_prompts or [])
+            self._last_displayed_prompts = spatial_prompts
+            self.view.show_spatial_prompt_layers(spatial_prompts)
+            self._fetch_spatial_prompt_previews(spatial_prompts)
+
+    # ------------------------------------------------------------------
+    # Spatial prompt raster previews
+    # ------------------------------------------------------------------
+
+    def _fetch_spatial_prompt_previews(self,
+                                       spatial_prompts: Iterable[SpatialPromptResponse]):
+        """Start an async download for every spatial prompt with a raster_url.
+
+        `raster_url` is a backend-rooted path (e.g.
+        `/sessions/{sid}/spatial_prompts/{spid}/raster`); the API client
+        joins it with the SAM base. Skipped silently when the field is
+        empty — older prompts created before the preview pipeline existed
+        don't have one.
+
+        Short-circuits when the user has the "Show rasters" toggle off —
+        no HTTP requests, no temp files, no layers. Toggling the checkbox
+        back on re-enters this method via on_show_rasters_toggled.
+        """
+        if not self.view.is_show_rasters_enabled():
+            return
+        for sp in spatial_prompts:
+            if not sp.raster_url:
+                continue
+            self.api.download_spatial_prompt_raster(
+                raster_url=sp.raster_url,
+                callback=self._on_spatial_prompt_raster_downloaded,
+                callback_kwargs={
+                    "sp_id": sp.id,
+                    "geometry_type": sp.geometry_type,
+                },
+            )
+
+    def on_show_rasters_toggled(self, enabled: bool):
+        """User flipped the "Show rasters" checkbox.
+
+        On: re-download previews for whatever spatial prompts are
+        currently rendered (so the user sees rasters appear without
+        having to double-click again).
+        Off: drop existing preview layers; further downloads are
+        suppressed by `_fetch_spatial_prompt_previews`.
+        """
+        if enabled:
+            self._fetch_spatial_prompt_previews(self._last_displayed_prompts)
+        else:
+            self.view.clear_spatial_prompt_previews()
+
+    def _on_spatial_prompt_raster_downloaded(self, response: QNetworkReply,
+                                             sp_id: str, geometry_type: str):
+        # Match the convention used by other binary-body callbacks in this
+        # module (see get_result_callback): readAll().data() returns the
+        # raw bytes regardless of QByteArray vs bytes mocking conventions.
+        data = response.readAll().data()
+        if not data:
+            self.view.append_debug(
+                "Spatial Prompt Preview",
+                {"sp_id": sp_id, "error": "empty body"},
+            )
+            return
+        # delete=False so the file outlives the context manager — QGIS
+        # holds the path; the view tracks it for cleanup on next clear.
+        with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
+            f.write(data)
+            local_path = f.name
+        self.view.add_spatial_prompt_preview(
+            local_path=local_path,
+            sp_id=sp_id,
+            geometry_type=geometry_type,
+        )
 
     def add_point_prompt(self, prompt_id: str, processing_id: str,
                          geometry: dict, positive: bool = True):
@@ -378,7 +461,13 @@ class SamService(QObject):
                 tile_url=session.vector_layer.tile_url,
             )
         if self._last_session_prompts:
-            self.view.show_spatial_prompt_layers(self._last_session_prompts)
+            spatial_prompts = list(self._last_session_prompts)
+            self._last_displayed_prompts = spatial_prompts
+            self.view.show_spatial_prompt_layers(spatial_prompts)
+            # The frozen prompt snapshot also carries raster_url per spatial
+            # prompt — show those previews so the session's source crops
+            # are visible alongside the result.
+            self._fetch_spatial_prompt_previews(spatial_prompts)
 
     def list_sessions(self, processing_id: str):
         self.api.get_processing_sessions(

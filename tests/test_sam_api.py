@@ -315,6 +315,59 @@ class TestGetResult:
 
 
 # ---------------------------------------------------------------------------
+# Spatial prompt raster preview download
+# ---------------------------------------------------------------------------
+
+class TestDownloadSpatialPromptRaster:
+    def test_joins_relative_path_with_sam_base(self, http_mock):
+        # `raster_url` arrives rooted at /sam-interactive (no server, no
+        # /rest/sam-interactive prefix). SamApi must concatenate it with
+        # `self.server` and not rewrite the prefix — the prefix encodes
+        # the auth path (session-rooted vs prompt-rooted).
+        api = SamApi(http=http_mock, server=SERVER)
+        api.download_spatial_prompt_raster(
+            raster_url="/sessions/sess-1/spatial_prompts/sp-42/raster",
+            callback=_noop,
+        )
+
+        http_mock.get.assert_called_once()
+        kwargs = http_mock.get.call_args[1]
+        assert kwargs["url"] == (
+            f"{SERVER}/sam-interactive"
+            "/sessions/sess-1/spatial_prompts/sp-42/raster"
+        )
+
+    def test_preserves_prompt_rooted_path(self, http_mock):
+        api = SamApi(http=http_mock, server=SERVER)
+        api.download_spatial_prompt_raster(
+            raster_url="/prompts/prm-7/spatial_prompts/sp-9/raster",
+            callback=_noop,
+        )
+
+        url = http_mock.get.call_args[1]["url"]
+        # Same join, different rooting prefix; we never rewrite which
+        # parent owns the access check.
+        assert url == (
+            f"{SERVER}/sam-interactive"
+            "/prompts/prm-7/spatial_prompts/sp-9/raster"
+        )
+
+    def test_forwards_callback_kwargs(self, http_mock):
+        api = SamApi(http=http_mock, server=SERVER)
+        api.download_spatial_prompt_raster(
+            raster_url="/sessions/s/spatial_prompts/p/raster",
+            callback=_noop,
+            callback_kwargs={"sp_id": "sp-1", "geometry_type": "point"},
+        )
+
+        kwargs = http_mock.get.call_args[1]
+        assert kwargs["callback_kwargs"] == {
+            "sp_id": "sp-1",
+            "geometry_type": "point",
+        }
+
+
+# ---------------------------------------------------------------------------
 # Schema tests
 # ---------------------------------------------------------------------------
 

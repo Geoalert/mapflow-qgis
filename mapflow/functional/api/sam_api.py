@@ -291,6 +291,36 @@ class SamApi(QObject):
         )
 
     # ------------------------------------------------------------------
+    # Spatial prompt raster previews
+    # ------------------------------------------------------------------
+
+    def download_spatial_prompt_raster(self, raster_url: str, callback: Callable,
+                                       callback_kwargs: Optional[dict] = None):
+        """Download a spatial-prompt GeoTIFF preview.
+
+        `raster_url` is the value of `SpatialPromptResponse.raster_url`. The
+        backend returns it relative to the `/sam-interactive` base — e.g.
+        `/sessions/{sid}/spatial_prompts/{spid}/raster` when the response
+        came from a session, or the prompt-rooted equivalent — so we
+        concatenate it with `self.server` here. The URL prefix encodes the
+        access path the backend uses to authorize the call (session-rights
+        vs prompt-ownership), so we must not rewrite it client-side.
+
+        Auth header is added by `Http` automatically (same OAuth/Basic
+        scheme as every other SAM endpoint). The reply body is binary
+        GeoTIFF bytes; the caller writes them to a temp file before
+        loading as a raster layer.
+        """
+        self.http.get(
+            url=f"{self.server}{raster_url}",
+            headers={},
+            callback=callback,
+            callback_kwargs=callback_kwargs,
+            use_default_error_handler=True,
+            timeout=15,
+        )
+
+    # ------------------------------------------------------------------
     # Result endpoints
     # ------------------------------------------------------------------
 

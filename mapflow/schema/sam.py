@@ -207,7 +207,11 @@ class SpatialPromptResponse(SkipDataClass):
     geometry_type: str = ""  # "point" or "bbox", see GeometryType enum
     processing_id: str = ""
     embedding_uri: Optional[str] = None
-    raw_raster_uri: Optional[str] = None
+    # `raster_url` is an https link to the GeoTIFF preview crop the prompt
+    # was created from; the backend serves it with the same auth as the
+    # rest of /sam-interactive. None when no crop is available (legacy rows
+    # created before the preview pipeline existed).
+    raster_url: Optional[str] = None
     geometry: Optional[dict] = None
     positive: bool = True
 

@@ -70,6 +70,10 @@ class SamController(QObject):
         self.dlg.spatialPromptsTable.selectionModel().selectionChanged.connect(
             self._on_spatial_prompt_selected)
         self.dlg.deleteSpatialPrompt.clicked.connect(self._unlink_spatial_prompt)
+        # "Show rasters" toggle: ON re-fetches previews for the currently
+        # rendered prompts; OFF drops them. The view creates the checkbox.
+        self.dlg.samShowRastersCheckbox.toggled.connect(
+            self.service.on_show_rasters_toggled)
 
         # Sessions
         self.dlg.samRefreshSessions.clicked.connect(self._refresh_sessions)

@@ -52,6 +52,10 @@ def sam_api(http_mock):
 def sam_view():
     view = MagicMock()
     view.selected_session_id.return_value = None
+    # Default UX: "Show rasters" checkbox is ON, so preview downloads
+    # fire on every show_*_layers call. Tests that exercise the OFF path
+    # override this explicitly.
+    view.is_show_rasters_enabled.return_value = True
     return view
 
 
@@ -455,6 +459,142 @@ class TestGetPromptDetailCallback:
         sam_view.append_debug.assert_called_once()
         title, _ = sam_view.append_debug.call_args[0]
         assert "Prompt Detail" in title
+
+
+# ---------------------------------------------------------------------------
+# Spatial prompt raster previews
+# ---------------------------------------------------------------------------
+
+class TestShowPromptLayersWithPreviews:
+    def _stub_detail(self, prompts):
+        from mapflow.schema.sam import PromptDetailResponse
+        detail = PromptDetailResponse.from_dict({
+            "id": "prm-1",
+            "spatial_prompts": prompts,
+        })
+        return detail
+
+    def test_kicks_off_one_download_per_prompt_with_raster_url(self, sam_service, http_mock):
+        # raster_url is rooted at /sam-interactive (no server prefix); the
+        # API client joins it with SamApi.server before issuing the GET.
+        sam_service._last_prompt_detail = self._stub_detail([
+            {"id": "sp-1", "geometry_type": "point", "processing_id": "p1",
+             "geometry": {"type": "Point", "coordinates": [0, 0]}, "positive": True,
+             "raster_url": "/prompts/prm-1/spatial_prompts/sp-1/raster"},
+            {"id": "sp-2", "geometry_type": "bbox", "processing_id": "p1",
+             "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
+             "positive": False,
+             "raster_url": "/prompts/prm-1/spatial_prompts/sp-2/raster"},
+        ])
+
+        sam_service.show_prompt_layers()
+
+        # First call paints the geometry layers (no HTTP); subsequent calls
+        # are the per-prompt raster downloads.
+        assert http_mock.get.call_count == 2
+        urls = [c[1]["url"] for c in http_mock.get.call_args_list]
+        assert any(u.endswith("/prompts/prm-1/spatial_prompts/sp-1/raster") for u in urls)
+        assert any(u.endswith("/prompts/prm-1/spatial_prompts/sp-2/raster") for u in urls)
+
+    def test_skips_prompts_without_raster_url(self, sam_service, http_mock):
+        sam_service._last_prompt_detail = self._stub_detail([
+            {"id": "sp-1", "geometry_type": "point", "processing_id": "p1",
+             "geometry": {"type": "Point", "coordinates": [0, 0]}, "positive": True},
+        ])
+
+        sam_service.show_prompt_layers()
+
+        http_mock.get.assert_not_called()
+
+    def test_show_rasters_off_skips_all_downloads(self, sam_service, sam_view, http_mock):
+        # Toggle OFF means no HTTP, no temp files, no layers — even when
+        # prompts have a raster_url available.
+        sam_view.is_show_rasters_enabled.return_value = False
+        sam_service._last_prompt_detail = self._stub_detail([
+            {"id": "sp-1", "geometry_type": "point", "processing_id": "p1",
+             "geometry": {"type": "Point", "coordinates": [0, 0]}, "positive": True,
+             "raster_url": "/prompts/prm-1/spatial_prompts/sp-1/raster"},
+        ])
+
+        sam_service.show_prompt_layers()
+
+        http_mock.get.assert_not_called()
+        sam_view.add_spatial_prompt_preview.assert_not_called()
+
+
+class TestShowRastersToggle:
+    def test_toggle_on_refetches_displayed_prompts(self, sam_service, sam_view, http_mock):
+        # User flipped OFF→ON: re-issue downloads for whatever spatial
+        # prompts are still rendered on the map.
+        sam_service._last_displayed_prompts = [
+            SpatialPromptResponse.from_dict({
+                "id": "sp-1", "geometry_type": "point", "processing_id": "p1",
+                "geometry": {"type": "Point", "coordinates": [0, 0]}, "positive": True,
+                "raster_url": "/prompts/prm-1/spatial_prompts/sp-1/raster",
+            }),
+        ]
+        sam_view.is_show_rasters_enabled.return_value = True
+
+        sam_service.on_show_rasters_toggled(enabled=True)
+
+        http_mock.get.assert_called_once()
+        url = http_mock.get.call_args[1]["url"]
+        assert url.endswith("/prompts/prm-1/spatial_prompts/sp-1/raster")
+
+    def test_toggle_off_clears_existing_previews(self, sam_service, sam_view, http_mock):
+        sam_service._last_displayed_prompts = [
+            SpatialPromptResponse.from_dict({
+                "id": "sp-1", "geometry_type": "point", "processing_id": "p1",
+                "raster_url": "/x",
+            }),
+        ]
+
+        sam_service.on_show_rasters_toggled(enabled=False)
+
+        http_mock.get.assert_not_called()
+        sam_view.clear_spatial_prompt_previews.assert_called_once()
+
+    def test_toggle_on_with_no_displayed_prompts_does_nothing(self, sam_service, http_mock):
+        # Edge case: user opens SAM tab, immediately toggles the checkbox
+        # off→on without ever double-clicking a prompt.
+        sam_service._last_displayed_prompts = []
+
+        sam_service.on_show_rasters_toggled(enabled=True)
+
+        http_mock.get.assert_not_called()
+
+
+class TestRasterDownloadCallback:
+    def _binary_reply(self, payload: bytes):
+        # Mirror _make_reply() but for non-JSON binary bodies — readAll()
+        # returns an object whose .data() yields the raw bytes.
+        reply = MagicMock()
+        reply.readAll.return_value.data.return_value = payload
+        return reply
+
+    def test_writes_bytes_to_temp_and_attaches_layer(self, sam_service, sam_view):
+        reply = self._binary_reply(b"\x49\x49\x2A\x00fake-tiff")
+
+        sam_service._on_spatial_prompt_raster_downloaded(
+            reply, sp_id="sp-1", geometry_type="point",
+        )
+
+        sam_view.add_spatial_prompt_preview.assert_called_once()
+        kwargs = sam_view.add_spatial_prompt_preview.call_args[1]
+        assert kwargs["sp_id"] == "sp-1"
+        assert kwargs["geometry_type"] == "point"
+        # The temp file should exist and contain the bytes we wrote.
+        with open(kwargs["local_path"], "rb") as f:
+            assert f.read() == b"\x49\x49\x2A\x00fake-tiff"
+
+    def test_empty_body_does_not_attach_layer(self, sam_service, sam_view):
+        reply = self._binary_reply(b"")
+
+        sam_service._on_spatial_prompt_raster_downloaded(
+            reply, sp_id="sp-1", geometry_type="point",
+        )
+
+        sam_view.add_spatial_prompt_preview.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

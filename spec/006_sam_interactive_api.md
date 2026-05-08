@@ -138,8 +138,11 @@ Extends PromptResponse with `"spatial_prompts": [SpatialPromptResponse]`. Spatia
 
 ### SpatialPromptResponse
 ```json
-{"id": "UUID", "geometry_type": "point|bbox", "processing_id": "UUID", "embedding_uri": "string|null", "raw_raster_uri": "string|null", "geometry": "GeoJSON|null", "positive": true}
+{"id": "UUID", "geometry_type": "point|bbox", "processing_id": "UUID", "embedding_uri": "string|null", "raster_url": "string|null", "geometry": "GeoJSON|null", "positive": true}
 ```
+- `raster_url` is a path to the GeoTIFF preview crop the prompt was created from, **rooted at the `/sam-interactive` base** (the API does not include the server / `/rest/sam-interactive` prefix). The plugin concatenates it with `SamApi.server` before issuing the GET. Replaces the previous `raw_raster_uri` (an `s3://` URI), which the client could not fetch directly. May be `null` for legacy prompts created before the preview pipeline existed.
+- The path itself encodes how the backend authorizes the call. When the response came from a session endpoint the URL is `/sessions/{session_id}/spatial_prompts/{sp_id}/raster` (rights derive from the session's processing); when the response came from a prompt endpoint it's the prompt-rooted equivalent (rights derive from prompt ownership). The client must not rewrite the prefix — that would defeat the auth scheme.
+- The plugin downloads the GeoTIFF on prompt double-click and attaches it as a raster layer under the `SAM Prompts > SAM Prompt Previews` layer-tree subgroup, replacing whatever previews were attached for the previous prompt.
 
 ### SessionResponse
 ```json
