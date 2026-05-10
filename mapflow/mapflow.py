@@ -353,6 +353,7 @@ class Mapflow(QObject):
         self.dlg.searchRightButton.clicked.connect(self.show_search_next_page)
         self.dlg.searchLeftButton.clicked.connect(self.show_search_previous_page)
         self.setup_metadata_search_dropdown()
+        self.setup_metadata_seen_dropdown()
 
         # ========== 14. ZOOM SELECTOR CONFIGURATION ==========
         if self.app_context.zoom_selector:
@@ -432,6 +433,10 @@ class Mapflow(QObject):
         self.dlg.processing_update_action.triggered.connect(self.processing_service.update_processing)
         self.dlg.processing_restart_action.triggered.connect(self.processing_service.restart_processing)
         self.dlg.processing_duplicate_action.triggered.connect(self.check_dir_and_duplicate_processing)
+        # Template-specific actions
+        self.dlg.template_rename_action.triggered.connect(self.processing_service.update_template)
+        self.dlg.template_pause_action.triggered.connect(self.processing_service.pause_template)
+        self.dlg.template_resume_action.triggered.connect(self.processing_service.resume_template)
         self.dlg.options_menu.aboutToShow.connect(self.update_processing_options_menu)
         self.dlg.saveOptionsButton.setMenu(self.dlg.options_menu)
 
@@ -448,6 +453,15 @@ class Mapflow(QObject):
             menu.addAction(self.dlg.see_details_action)
             menu.addAction(self.dlg.see_search_results_action)
             menu.addAction(self.dlg.see_processings_action)
+            if self.app_context.user_role.can_delete_rename_review_processing:
+                menu.addAction(self.dlg.template_rename_action)
+            # Add pause/resume based on template status.
+            if selected_template.isActive:
+                menu.addAction(self.dlg.template_pause_action)
+            elif (selected_template.status or "").upper() == "FAILED":
+                menu.addAction(self.tr("Restart")).triggered.connect(self.processing_service.restart_template)
+            else:
+                menu.addAction(self.dlg.template_resume_action)
             return
 
         # Processing selection: show processing-related actions.
@@ -622,10 +636,6 @@ class Mapflow(QObject):
             template_aoi_layer = None
 
         links = self._linked_processings_from_template(template)
-        linked_ids = [str(item.get("processingId")) for item in links if item.get("processingId")]
-        if not linked_ids:
-            return
-
         linked_items = []
         seen_ids = set()
         for item in links:
@@ -639,16 +649,11 @@ class Mapflow(QObject):
             processing_name = item.get("processingName") or item.get("name") or self.tr("Unknown")
             linked_items.append((processing_name, processing_id))
 
-        linked_details = "<br/>".join(
-            f"- <b>{name}</b> ({pid})" for name, pid in linked_items
-        )
-        alert(
-            self.tr("Linked processings:<br/>{details}").format(details=linked_details),
-            QMessageBox.Information,
-        )
+        if not linked_items:
+            return
 
         # Add linked processings AOIs to the same group as template AOI
-        for processing_id in linked_ids:
+        for _, processing_id in linked_items:
             self.http.get(
                 url=f'{self.server}/processings/{processing_id}/aois',
                 callback=self._add_template_processing_aoi_callback,
@@ -661,6 +666,14 @@ class Mapflow(QObject):
                 use_default_error_handler=True,
                 timeout=30,
             )
+        
+        linked_details = "<br/>".join(
+            f"- <b>{name}</b> ({pid})" for name, pid in linked_items
+        )
+        alert(
+            self.tr("Linked processings:<br/>{details}").format(details=linked_details),
+            QMessageBox.Information,
+        )
 
     def _add_geojson_aoi_layer(self,
                                features: list,
@@ -1228,6 +1241,17 @@ class Mapflow(QObject):
         self.dlg.getMetadata.setMenu(self.metadata_search_menu)
         self.set_metadata_search_mode("search")
 
+    def setup_metadata_seen_dropdown(self):
+        """Set Seen button as dropdown with Seen and Seen all actions."""
+        self.metadata_seen_menu = QMenu(self.dlg.markSeenButton)
+        self.metadata_seen_action = self.metadata_seen_menu.addAction(self.tr("Seen"))
+        self.metadata_seen_all_action = self.metadata_seen_menu.addAction(self.tr("Seen all"))
+        self.metadata_seen_action.triggered.connect(self.mark_selected_template_images_seen)
+        self.metadata_seen_all_action.triggered.connect(self.mark_all_template_images_seen)
+        self.dlg.markSeenButton.setPopupMode(QToolButton.MenuButtonPopup)
+        self.dlg.markSeenButton.setMenu(self.metadata_seen_menu)
+        self.dlg.markSeenButton.setDefaultAction(self.metadata_seen_action)
+
     def set_metadata_search_mode(self, mode: str):
         self.metadata_search_mode = mode
         self.dlg.getMetadata.setText(self.tr("Plan search") if mode == "plan" else self.tr("Search"))
@@ -1266,14 +1290,21 @@ class Mapflow(QObject):
             dataProviders=search_providers,
         )
 
-        template_name = self.dlg.processingName.text().strip() or self.tr("Planned search {date}").format(
-            date=datetime.now().strftime('%Y-%m-%d %H:%M')
-        )
+        template_name = self.dlg.processingName.text().strip()
+        if not template_name:
+            self.alert(self.tr('Please, specify a name for your search'))
+            return
+
+        now_utc = datetime.utcnow()
+        # Backend validates activeUntil against a strict 0-6m window.
+        # Use a duration cap to avoid edge-case rejections around month-length differences.
+        active_until = now_utc + timedelta(days=180) - timedelta(minutes=1)
+
         template_payload = CreateProcessingTemplateSchema(
             name=template_name,
             searchParams=search_params,
             projectId=str(self.app_context.project_id),
-            activeUntil=(datetime.utcnow() + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%S.0Z'),
+            activeUntil=active_until.strftime('%Y-%m-%dT%H:%M:%S.0Z'),
         )
 
         self.dlg.getMetadata.setEnabled(False)
@@ -2444,20 +2475,24 @@ class Mapflow(QObject):
             self.preview_xyz(provider=provider, image_id=image_id)
     
     def on_metadata_table_cell_clicked(self, row: int, column: int):
-        """Mark template image as seen when user clicks a row with the (new) badge."""
+        """Keep click behavior passive; marking seen is handled by Seen actions only."""
+        return
+
+    def _mark_template_image_seen_by_row(self, row: int) -> bool:
+        """Mark one metadata-table row image as seen for active template when row is marked as new."""
         if not self.active_template_id:
-            return
+            return False
         product_type_col = 0  # 'productType' is the first column in METADATA_TABLE_ATTRIBUTES
         cell = self.dlg.metadataTable.item(row, product_type_col)
         if not cell:
-            return
+            return False
         text = cell.text()
         if not text.endswith(" (new)"):
-            return
+            return False
         id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
         id_item = self.dlg.metadataTable.item(row, id_column_index)
         if not id_item:
-            return
+            return False
         image_id = id_item.text()
         cell.setText(text[: -len(" (new)")])
         self.processing_service.api.mark_template_image_seen(
@@ -2467,15 +2502,31 @@ class Mapflow(QObject):
             error_handler=lambda _: None,
         )
         self._decrement_template_new_images_count(self.active_template_id)
+        return True
+
+    def mark_selected_template_images_seen(self):
+        """Mark selected metadata rows as seen for active template."""
+        if not self.active_template_id:
+            return
+        rows = sorted({item.row() for item in self.dlg.metadataTable.selectedItems()})
+        for row in rows:
+            self._mark_template_image_seen_by_row(row)
+
+    def mark_all_template_images_seen(self):
+        """Mark all metadata rows as seen for active template."""
+        if not self.active_template_id:
+            return
+        for row in range(self.dlg.metadataTable.rowCount()):
+            self._mark_template_image_seen_by_row(row)
 
     def _decrement_template_new_images_count(self, template_id: str):
         """Decrement newImagesCount on the in-memory template DTO and update processings table status cell."""
-        from uuid import UUID
-        try:
-            key = UUID(template_id)
-        except (ValueError, AttributeError):
-            key = template_id
-        template = self.processing_service.templates.get(key)
+        template = None
+        template_map = getattr(self.processing_service, "templates", {}) or {}
+        for key, value in template_map.items():
+            if str(key) == str(template_id):
+                template = value
+                break
         if template is None:
             return
         if template.newImagesCount and template.newImagesCount > 0:

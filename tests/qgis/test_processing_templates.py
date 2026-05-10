@@ -246,3 +246,16 @@ class TestTemplateApi:
 
         self.http.post.assert_called_once()
         assert self.http.post.call_args.kwargs["path"] == "processings/template/tpl-3/v2"
+
+    def test_restart_template_path(self):
+        callback = MagicMock()
+        error_handler = MagicMock()
+
+        self.api.restart_template(
+            template_id="tpl-4",
+            callback=callback,
+            error_handler=error_handler,
+        )
+
+        self.http.post.assert_called_once()
+        assert self.http.post.call_args.kwargs["path"] == "processings/template/tpl-4/restart"

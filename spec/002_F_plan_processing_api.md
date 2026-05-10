@@ -59,7 +59,7 @@ Response:
 ### `DELETE /processings/template/{templateId}`
 Mark template as deleted.
 
-### `POST /processings/template/{templateId}/stop`
+### `POST /processings/template/{templateId}/pause`
 Set template status to Inactive.
 
 Response:
