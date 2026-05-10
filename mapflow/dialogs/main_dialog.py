@@ -135,6 +135,10 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.processing_update_action = QAction(self.tr("Rename"))
         self.processing_restart_action = QAction(self.tr("Restart"))
         self.processing_duplicate_action = QAction(self.tr("Duplicate"))
+        # Template-specific actions
+        self.template_rename_action = QAction(self.tr("Rename"))
+        self.template_pause_action = QAction(self.tr("Pause"))
+        self.template_resume_action = QAction(self.tr("Resume"))
         self.setup_options_menu()
 
         # Imagery Search

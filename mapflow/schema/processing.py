@@ -251,7 +251,7 @@ class ProcessingTemplateDTO(Serializable, SkipDataClass):
 
     @property
     def table_status(self) -> str:
-        print (self.name, self.newImagesCount)
+        print (self.name, self.isActive)
         if (self.status or "").upper() == "FAILED":
             return "Failed"
         if not self.isActive:
