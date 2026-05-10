@@ -220,7 +220,7 @@ class ProcessingApi(QObject):
 
     def stop_template(self, template_id: Union[UUID, str], callback: Callable, error_handler: Callable):
         self.http.post(
-            path=f"processings/template/{template_id}/stop",
+            path=f"processings/template/{template_id}/pause",
             callback=callback,
             error_handler=error_handler,
             use_default_error_handler=False,
@@ -229,6 +229,14 @@ class ProcessingApi(QObject):
     def resume_template(self, template_id: Union[UUID, str], callback: Callable, error_handler: Callable):
         self.http.post(
             path=f"processings/template/{template_id}/resume",
+            callback=callback,
+            error_handler=error_handler,
+            use_default_error_handler=False,
+        )
+
+    def restart_template(self, template_id: Union[UUID, str], callback: Callable, error_handler: Callable):
+        self.http.post(
+            path=f"processings/template/{template_id}/restart",
             callback=callback,
             error_handler=error_handler,
             use_default_error_handler=False,
