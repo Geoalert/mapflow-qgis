@@ -184,7 +184,7 @@ class ProviderService(QObject):
             selected_images = self.dlg.metadataTable.selectedItems()
             if selected_images:
                 local_image_indices = self.get_local_image_indices(selected_images)
-                _, product_types = self.get_search_providers(local_image_indices)
+                provider_names, product_types = self.get_search_providers(local_image_indices)
                 # Check for zoom consistency
                 if local_image_indices:
                     zooms = []
@@ -197,6 +197,14 @@ class ProviderService(QObject):
                             continue
                     if len(set(product_types)) > 1: # no image + mosaic
                         error = self.tr("Selected search results must be of the same product type")
+                    elif (len(set(provider_names)) > 1
+                          and set(product_types) != set(["Mosaic"])):
+                        # Mixing different providers is only allowed for Mosaics
+                        # (server combines them). For Image product type, including
+                        # orbview_*, the backend rejects mixed providers — block the
+                        # request here so the cost/v2 call is not made with a
+                        # mismatched dataProvider + imageIds payload.
+                        error = self.tr("You can launch multiple image processing only if it has the same provider of mosaic type")
                     elif set(product_types) == set(["Mosaic"]) and len(set(zooms)) > 1: # no mosaics with different zooms
                         error = self.tr("Selected search results must have the same zoom level")
         return error

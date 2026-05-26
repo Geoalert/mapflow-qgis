@@ -149,6 +149,44 @@ class TestMixedProvidersRules:
         assert err == ""
 
 
+# ---------- validate_provider_params blocks the cost/create call on mixed providers ----------
+
+class TestValidateBlocksMixedProviders:
+    def test_mixed_image_providers_returns_error(self):
+        """validate_provider_params must surface the mismatch so
+        validate_all_processing_params propagates it and blocks the cost call."""
+        from mapflow.entity.provider import ImagerySearchProvider
+        rows = _rows_with_ids(["a", "b"])
+        provider_names = ["orbview_msi", "orbview_pan"]
+        product_types = ["Image", "Image"]
+        service = _make_service(rows, provider_names, product_types)
+        service.imagery_search_provider_instance.image_ids = ["a", "b"]
+        provider = ImagerySearchProvider(proxy="http://example")
+        err = service.validate_provider_params(provider)
+        assert err is not None and err != ""
+
+    def test_same_image_provider_no_error(self):
+        from mapflow.entity.provider import ImagerySearchProvider
+        rows = _rows_with_ids(["a", "b"])
+        provider_names = ["orbview_msi", "orbview_msi"]
+        product_types = ["Image", "Image"]
+        service = _make_service(rows, provider_names, product_types)
+        service.imagery_search_provider_instance.image_ids = ["a", "b"]
+        provider = ImagerySearchProvider(proxy="http://example")
+        assert service.validate_provider_params(provider) is None
+
+    def test_mixed_mosaics_no_error(self):
+        from mapflow.entity.provider import ImagerySearchProvider
+        rows = _rows_with_ids(["a", "b"])
+        provider_names = ["foo", "bar"]
+        product_types = ["Mosaic", "Mosaic"]
+        service = _make_service(rows, provider_names, product_types,
+                                zooms=["18", "18"])
+        service.imagery_search_provider_instance.image_ids = ["a", "b"]
+        provider = ImagerySearchProvider(proxy="http://example")
+        assert service.validate_provider_params(provider) is None
+
+
 # ---------- Bug 3: duplicate_imagery_search expands all rows ----------
 
 class TestDuplicateImagerySearchMultiRow:
