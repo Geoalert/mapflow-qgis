@@ -9,12 +9,16 @@ about=Mapflow provides AI models for automatic feature extraction from satellite
         - roads
         - construction sites
     For a step-by-step user guide, go to https://docs.mapflow.ai/api/qgis_mapflow#user-interface
-version=3.5.1
+version=3.5.2
 experimental=False
 deprecated=False
 author=Geoalert
 email=hello@geoalert.io
 changelog:
+    3.5.2
+    - Hotfix: Imagery Search now sends every selected image (not just the first one) in cost and create-processing requests
+    - Allow combining multiple orbview_* providers (e.g. orbview_msi + orbview_pan) in a single processing
+    - "See details" / Duplicate now restores all images from the original processing into the search table
     3.5.1
     - Stability improvements after processing and project architecture refactoring
     - Processing improvements: pagination, sorting and filtering in processing lists
