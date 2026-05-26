@@ -175,6 +175,10 @@ class AreaCalculatorService(QObject):
         except Exception as e:
             # Could not calculate AOI size
             real_aoi = QgsGeometry()
+        # Store the cropped AOI so processing/cost requests send the geometry
+        # the server's provider-minimum-area check should actually operate on
+        # (user AOI intersected with the union of selected image footprints).
+        self.app_context.processing_aoi = real_aoi if real_aoi and not real_aoi.isEmpty() else None
         try:
             self.app_context.aoi_size = layer_utils.calculate_aoi_area(real_aoi,
                                                                        self.app_context.project.transformContext())

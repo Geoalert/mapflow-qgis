@@ -135,9 +135,6 @@ class ProviderService(QObject):
                 if selection_error:
                     self.dlg.disable_processing_start(selection_error)
                 self.imagery_search_provider_instance.image_ids = image_ids
-                # For orbview_* family the backend accepts any orbview-prefixed name
-                # (OrbviewService.isValidRequest / .isOrbView use startsWith("orbview")),
-                # so the first selected provider name is a valid canonical dataProvider.
                 provider_name = provider_names[0] if provider_names else None # the same for all [i] if there was no 'selection_error'
 
         if not provider_name:
@@ -187,7 +184,7 @@ class ProviderService(QObject):
             selected_images = self.dlg.metadataTable.selectedItems()
             if selected_images:
                 local_image_indices = self.get_local_image_indices(selected_images)
-                provider_names, product_types = self.get_search_providers(local_image_indices)
+                _, product_types = self.get_search_providers(local_image_indices)
                 # Check for zoom consistency
                 if local_image_indices:
                     zooms = []
@@ -200,25 +197,9 @@ class ProviderService(QObject):
                             continue
                     if len(set(product_types)) > 1: # no image + mosaic
                         error = self.tr("Selected search results must be of the same product type")
-                    elif (len(set(provider_names)) > 1
-                          and set(product_types) != set(["Mosaic"])
-                          and not (self._is_orbview_family(provider_names)
-                                   and set(product_types) == set(["Image"]))):
-                        # Mixed provider names are OK for all-Mosaic and for the orbview_* family;
-                        # block everything else here so we surface the error consistently
-                        # alongside the get_search_images_ids check.
-                        error = self.tr("You can launch multiple image processing only if it has the same provider of mosaic type")
                     elif set(product_types) == set(["Mosaic"]) and len(set(zooms)) > 1: # no mosaics with different zooms
                         error = self.tr("Selected search results must have the same zoom level")
         return error
-
-    @staticmethod
-    def _is_orbview_family(provider_names):
-        """All selected provider names share the orbview backend dispatcher."""
-        return bool(provider_names) and all(
-            isinstance(n, str) and n.lower().startswith("orbview")
-            for n in provider_names
-        )
 
     def get_local_image_indices(self, selected_images):
         try:
@@ -260,15 +241,7 @@ class ProviderService(QObject):
         selection_error = ""
         try:
             if len(set(provider_names)) > 1:
-                # All-Mosaic mixes are still allowed (server resolves them).
-                # All-orbview_* mixes are routed through a single backend dispatcher
-                # (OrbviewService.isValidRequest -> startsWith("orbview")) when the
-                # product type is Image, so combining e.g. orbview_msi + orbview_pan
-                # in one processing is a legitimate request.
-                if set(product_types) != set(["Mosaic"]) and not (
-                    self._is_orbview_family(provider_names)
-                    and set(product_types) == set(["Image"])
-                ):
+                if set(product_types) != set(["Mosaic"]):
                     selection_error = self.tr("You can launch multiple image processing only if it has the same provider of mosaic type")
         except:
             return image_ids, selection_error

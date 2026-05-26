@@ -36,6 +36,11 @@ class AppContext:
 
     # === AOI State ===
     aoi: Optional[QgsGeometry] = None
+    # AOI used for processing creation/cost requests; equals `aoi` when no imagery
+    # cropping is needed, otherwise the user AOI intersected with the union of
+    # selected image footprints. Server-side provider minimum-area checks apply
+    # to whatever geometry is sent, so for Imagery Search we must send the cropped one.
+    processing_aoi: Optional[QgsGeometry] = None
     aoi_size: Optional[float] = None
     aoi_layers: List[QgsVectorLayer] = field(default_factory=list)
     

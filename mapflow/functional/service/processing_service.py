@@ -241,13 +241,16 @@ class ProcessingService(QObject):
 
         provider_params, processing_meta = get_provider_params(provider=provider,
                                                                zoom=ui_start_params.zoom)
-        
+
+        # Prefer the AOI cropped by selected image footprints (Imagery Search)
+        # so provider minimum-area checks compare against the actually-processable area.
+        aoi_for_request = self.app_context.processing_aoi or self.app_context.aoi
         processing_params = PostProcessingSchemaV2(
             name=ui_start_params.name,
             description=None,
             projectId=self.app_context.project_id,
             wdId=wd.id,
-            geometry=json.loads(self.app_context.aoi.asJson()),
+            geometry=json.loads(aoi_for_request.asJson()),
             params=provider_params,
             meta=processing_meta,
             blocks=blocks)

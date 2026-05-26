@@ -1,8 +1,8 @@
 ## 3.5.2
     - Hotfix: Imagery Search multi-image selection
         - cost and create-processing requests now include every selected image (previously only the first)
-        - orbview_* providers (orbview_msi, orbview_pan, …) can be combined in a single processing when product type is Image
         - "See details" / Duplicate now restores all images from the original processing into the search table
+        - provider minimum-area checks now operate on the user AOI intersected with the union of selected image footprints (the actually-processable area) instead of the raw AOI
 ## 3.5.1
     - Processing refactoring
     - Processing improvements: pagination, sorting and filtering

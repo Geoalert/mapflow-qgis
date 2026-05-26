@@ -17,8 +17,8 @@ email=hello@geoalert.io
 changelog:
     3.5.2
     - Hotfix: Imagery Search now sends every selected image (not just the first one) in cost and create-processing requests
-    - Allow combining multiple orbview_* providers (e.g. orbview_msi + orbview_pan) in a single processing
     - "See details" / Duplicate now restores all images from the original processing into the search table
+    - Provider minimum-area checks now operate on the user AOI intersected with the union of selected image footprints
     3.5.1
     - Stability improvements after processing and project architecture refactoring
     - Processing improvements: pagination, sorting and filtering in processing lists
