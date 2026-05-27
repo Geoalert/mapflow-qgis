@@ -161,13 +161,15 @@ class ProviderService(QObject):
             selected_cells = self.dlg.metadataTable.selectedItems()
             if not selected_cells:
                 image_id = None
+                selected_rows_count = 0
             else:
-                # WARNING: for multi-image selections we only show the first ID in the header.
-                # Spec could be improved to summarise "(N images)" or list IDs.
                 id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
+                selected_rows_count = len({cell.row() for cell in selected_cells})
                 image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
-            if image_id:
-                provider_text += " ({iid})". format(iid=image_id)
+            if selected_rows_count > 1:
+                provider_text += " ({count} images selected)".format(count=selected_rows_count)
+            elif image_id:
+                provider_text += " ({iid})".format(iid=image_id)
         return provider_text
     
     def validate_provider_params(self, provider):
@@ -404,9 +406,18 @@ class ProviderService(QObject):
                 table_item = QTableWidgetItem()
                 table_item.setData(Qt.DisplayRole, value)
                 self.dlg.metadataTable.setItem(row, column, table_item)
-        # Create pseudo footprints dict keyed by local_index so multi-image cost requests resolve correctly
+        # Create pseudo footprints dict keyed by local_index so multi-image cost requests resolve correctly.
+        # local_index is stored as a string in the in-memory layer field (no explicit type was given when
+        # the layer was created), but the rest of the codebase expects integer keys
+        # (`get_local_image_indices` casts the table text via `int(...)`). Convert here.
+        def _coerce_local_index(raw):
+            try:
+                return int(raw)
+            except (TypeError, ValueError):
+                return raw
+
         self.app_context.search_footprints = {
-            feature.attribute("local_index"): feature
+            _coerce_local_index(feature.attribute("local_index")): feature
             for feature in self.app_context.metadata_layer.getFeatures()
         }
         self.dlg.metadataTableFilled.emit()

@@ -248,4 +248,66 @@ class TestDuplicateImagerySearchMultiRow:
                 if len(args) >= 2:
                     seen_ids.add(args[1])
         assert seen_ids == set(image_ids)
-        assert set(service.app_context.search_footprints.keys()) == {0, 1, 2}
+        # Keys must be ints — `get_local_image_indices` casts the table text via int(),
+        # so a string-keyed dict would KeyError downstream and leave the request without dataProvider.
+        keys = list(service.app_context.search_footprints.keys())
+        assert all(isinstance(k, int) for k in keys)
+        assert set(keys) == {0, 1, 2}
+
+
+# ---------- confirmation dialog summary ----------
+
+class TestSetupProviderInfoMultiImage:
+    def test_multiple_rows_show_count(self):
+        from mapflow.entity.provider import ImagerySearchProvider
+        rows = _rows_with_ids(["a", "b", "c"])
+        service = _make_service(rows,
+                                provider_names=["orbview_msi"] * 3,
+                                product_types=["Image"] * 3)
+        provider = ImagerySearchProvider(proxy="http://example")
+        text = service.setup_provider_info(provider)
+        assert "3 images selected" in text
+
+    def test_single_row_shows_id(self):
+        from mapflow.entity.provider import ImagerySearchProvider
+        rows = _rows_with_ids(["only-one"])
+        service = _make_service(rows,
+                                provider_names=["orbview_msi"],
+                                product_types=["Image"])
+        provider = ImagerySearchProvider(proxy="http://example")
+        text = service.setup_provider_info(provider)
+        assert "only-one" in text
+        assert "images selected" not in text
+
+
+# ---------- billing-aware /cost skip ----------
+
+class TestUpdateProcessingCostSkipsNonCredits:
+    def _service(self, billing_type):
+        from mapflow.functional.service.processing_service import ProcessingService
+        service = ProcessingService.__new__(ProcessingService)
+        service.app_context = SimpleNamespace(billing_type=billing_type)
+        service.api = MagicMock()
+        service.dlg = MagicMock()
+        # Tag validate_all_processing_params so we can detect whether we got past the billing gate.
+        service.validate_all_processing_params = MagicMock(return_value=(MagicMock(), None))
+        return service
+
+    def test_skips_when_billing_is_area(self):
+        from mapflow.schema import BillingType
+        service = self._service(BillingType.area)
+        service.update_processing_cost()
+        service.api.get_cost.assert_not_called()
+        service.validate_all_processing_params.assert_not_called()
+
+    def test_skips_when_billing_is_none(self):
+        from mapflow.schema import BillingType
+        service = self._service(BillingType.none)
+        service.update_processing_cost()
+        service.api.get_cost.assert_not_called()
+
+    def test_runs_when_billing_is_credits(self):
+        from mapflow.schema import BillingType
+        service = self._service(BillingType.credits)
+        service.update_processing_cost()
+        service.api.get_cost.assert_called_once()

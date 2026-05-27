@@ -1,8 +1,11 @@
 ## 3.5.2
     - Hotfix: Imagery Search multi-image selection
         - cost and create-processing requests now include every selected image (previously only the first)
-        - "See details" / Duplicate now restores all images from the original processing into the search table
+        - block requests that mix different non-Mosaic providers in one selection (backend rejects them)
+        - "See details" / Duplicate now restores all images from the original processing into the search table; AOI area + dataProvider are now correctly propagated to the recreated processing
         - provider minimum-area checks now operate on the user AOI intersected with the union of selected image footprints (the actually-processable area) instead of the raw AOI
+        - confirmation dialog shows "(N images selected)" when more than one image is queued
+        - /cost calls are skipped entirely when the user is not billed in credits
 ## 3.5.1
     - Processing refactoring
     - Processing improvements: pagination, sorting and filtering

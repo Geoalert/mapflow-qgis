@@ -244,7 +244,13 @@ class ProcessingService(QObject):
 
         # Prefer the AOI cropped by selected image footprints (Imagery Search)
         # so provider minimum-area checks compare against the actually-processable area.
-        aoi_for_request = self.app_context.processing_aoi or self.app_context.aoi
+        # Note: QgsGeometry truthiness can't be relied on uniformly across PyQGIS
+        # builds, so guard against None/null/empty explicitly.
+        cropped = self.app_context.processing_aoi
+        if cropped is not None and not cropped.isNull() and not cropped.isEmpty():
+            aoi_for_request = cropped
+        else:
+            aoi_for_request = self.app_context.aoi
         processing_params = PostProcessingSchemaV2(
             name=ui_start_params.name,
             description=None,
@@ -453,9 +459,14 @@ class ProcessingService(QObject):
     # Processing cost
     def update_processing_cost(self):
         """Update the processing cost based on current AOI and workflow.
-        
+
         Uses app_context for: aoi, workflow_defs, user_role, billing_type
         """
+        # /cost is only meaningful when the user is billed in credits.
+        # For area and `none` billing skip the network call entirely.
+        if self.app_context.billing_type != BillingType.credits:
+            return
+
         processing_params, error = self.validate_all_processing_params(allow_empty_name=True)
 
         if error:

@@ -43,7 +43,7 @@ class AreaCalculatorService(QObject):
             else:
                 reason = self.tr('Set AOI to start processing')
             self.dlg.disable_processing_start(reason, clear_area=True)
-            self.app_context.aoi = self.app_context.aoi_size = None
+            self.app_context.aoi = self.app_context.aoi_size = self.app_context.processing_aoi = None
             return
 
         features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
@@ -68,7 +68,7 @@ class AreaCalculatorService(QObject):
             else:
                 reason = self.tr('AOI must contain not more than {} polygons').format(self.app_context.max_aois_per_processing)
             self.dlg.disable_processing_start(reason, clear_area=True)
-            self.app_context.aoi = self.app_context.aoi_size = None
+            self.app_context.aoi = self.app_context.aoi_size = self.app_context.processing_aoi = None
 
     def calculate_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
         """Get the AOI size total when polygon another layer is chosen,
