@@ -129,13 +129,21 @@ class ProviderService(QObject):
 
             selected_images = self.dlg.metadataTable.selectedItems()
             if selected_images:
-                local_image_indices = self.get_local_image_indices(selected_images) 
+                local_image_indices = self.get_local_image_indices(selected_images)
                 provider_names, product_types = self.get_search_providers(local_image_indices)
                 image_ids, selection_error = self.get_search_images_ids(provider_names, product_types)
                 if selection_error:
                     self.dlg.disable_processing_start(selection_error)
                 self.imagery_search_provider_instance.image_ids = image_ids
                 provider_name = provider_names[0] if provider_names else None # the same for all [i] if there was no 'selection_error'
+            else:
+                # Selection was cleared. Drop the cached image IDs and provider state so
+                # the next /cost or create-processing call doesn't carry stale image IDs
+                # paired with a missing dataProvider — that combination is rejected with 400.
+                # validate_provider_params catches the missing-id case and short-circuits
+                # the request via validate_all_processing_params.
+                self.imagery_search_provider_instance.image_ids = None
+                self.imagery_search_provider_instance.requires_id = None
 
         if not provider_name:
             try:
@@ -178,7 +186,10 @@ class ProviderService(QObject):
             if self.my_imagery_provider_instance.mosaic_id == self.my_imagery_provider_instance.image_ids == None:
                 error = self.tr('Choose imagery collection or image to start processing')
         elif isinstance(provider, ImagerySearchProvider):
-            if self.imagery_search_provider_instance.image_ids == None:
+            # `not image_ids` covers both the cleared-selection case (None) and
+            # the empty-list case written by get_search_images_ids when the
+            # table is empty.
+            if not self.imagery_search_provider_instance.image_ids:
                 error = self.tr("This provider requires image ID. Use search tab to find imagery for you requirements, "
                                 "and select image in the table.")
         # Check for zoom errors by examining the UI state

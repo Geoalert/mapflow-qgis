@@ -311,3 +311,43 @@ class TestUpdateProcessingCostSkipsNonCredits:
         service = self._service(BillingType.credits)
         service.update_processing_cost()
         service.api.get_cost.assert_called_once()
+
+
+# ---------- Clearing the imagery search selection ----------
+
+class TestSelectionClearedResetsState:
+    def test_get_provider_params_drops_stale_image_ids(self):
+        """When the user deselects all rows, get_provider_params must wipe the
+        cached image_ids so the next /cost call isn't dispatched with a stale
+        imageId and a missing dataProvider (backend 400)."""
+        from mapflow.entity.provider import ImagerySearchProvider
+        service = _make_service(rows=[],
+                                provider_names=[],
+                                product_types=[])
+        # Simulate residual state from a previous selection.
+        service.imagery_search_provider_instance.image_ids = ["stale-id"]
+        service.imagery_search_provider_instance.requires_id = True
+        # Avoid touching the real provider's to_processing_params; we only care
+        # about side effects on imagery_search_provider_instance.
+        provider = MagicMock(spec=ImagerySearchProvider)
+        provider.name = "imagery_search"
+        provider.to_processing_params.return_value = (MagicMock(), {})
+
+        service.app_context.plugin_version = "test"
+        service.get_provider_params(provider, zoom=None)
+
+        assert service.imagery_search_provider_instance.image_ids is None
+        assert service.imagery_search_provider_instance.requires_id is None
+
+    def test_validate_blocks_when_image_ids_is_empty_list(self):
+        """get_search_images_ids writes [] (not None) when its inner branch
+        runs with no rows. validate_provider_params must treat [] the same as
+        None and surface the error so /cost is short-circuited."""
+        from mapflow.entity.provider import ImagerySearchProvider
+        service = _make_service(rows=[],
+                                provider_names=[],
+                                product_types=[])
+        service.imagery_search_provider_instance.image_ids = []
+        provider = ImagerySearchProvider(proxy="http://example")
+        err = service.validate_provider_params(provider)
+        assert err is not None and err != ""
