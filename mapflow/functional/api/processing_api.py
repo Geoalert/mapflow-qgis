@@ -35,7 +35,8 @@ class ProcessingApi(QObject):
             callback=callback,
             error_handler=error_handler,
             use_default_error_handler=False,
-            body=data.as_json().encode()
+            body=data.as_json().encode(),
+            timeout=30,
         )
 
     def update_processing(self, processing_id: Union[UUID, str], 

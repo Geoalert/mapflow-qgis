@@ -293,23 +293,39 @@ class TestUpdateProcessingCostSkipsNonCredits:
         service.validate_all_processing_params = MagicMock(return_value=(MagicMock(), None))
         return service
 
-    def test_skips_when_billing_is_area(self):
+    def test_validation_runs_but_cost_skipped_for_area(self):
+        """Validation must still drive the UI label / start-button state for
+        AREA billing — only the network call is skipped."""
         from mapflow.schema import BillingType
         service = self._service(BillingType.area)
         service.update_processing_cost()
+        service.validate_all_processing_params.assert_called_once()
         service.api.get_cost.assert_not_called()
-        service.validate_all_processing_params.assert_not_called()
 
-    def test_skips_when_billing_is_none(self):
+    def test_validation_runs_but_cost_skipped_for_none(self):
         from mapflow.schema import BillingType
         service = self._service(BillingType.none)
         service.update_processing_cost()
+        service.validate_all_processing_params.assert_called_once()
+        service.api.get_cost.assert_not_called()
+
+    def test_validation_error_short_circuits_for_area(self):
+        """A validation error surfaced by the chain must disable the start
+        button even when /cost is not called, so issues like mixed-provider
+        selection and missing project are visible immediately."""
+        from mapflow.schema import BillingType
+        service = self._service(BillingType.area)
+        service.validate_all_processing_params = MagicMock(
+            return_value=(None, "Models are not initialized"))
+        service.update_processing_cost()
+        service.dlg.disable_processing_start.assert_called_once()
         service.api.get_cost.assert_not_called()
 
     def test_runs_when_billing_is_credits(self):
         from mapflow.schema import BillingType
         service = self._service(BillingType.credits)
         service.update_processing_cost()
+        service.validate_all_processing_params.assert_called_once()
         service.api.get_cost.assert_called_once()
 
 

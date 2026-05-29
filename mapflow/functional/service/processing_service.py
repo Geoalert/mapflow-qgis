@@ -462,15 +462,29 @@ class ProcessingService(QObject):
 
         Uses app_context for: aoi, workflow_defs, user_role, billing_type
         """
-        # /cost is only meaningful when the user is billed in credits.
-        # For area and `none` billing skip the network call entirely.
-        if self.app_context.billing_type != BillingType.credits:
-            return
-
+        # Always run validation so the error label and the start-processing
+        # button reflect the current form state, regardless of billing.
+        # validate_all_processing_params drives:
+        #   - validate_context_params  -> AOI / project / billing gates,
+        #   - validate_processing_params -> AOI size + name,
+        #   - validate_provider_params -> mixed-provider, image-id, product-type checks.
+        # All four issues surfaced by skipping this call (mixed-provider warning
+        # delayed, start button not re-enabled after deselect, wrong "Set AOI"
+        # message hiding "Models not initialized") trace back to this chain.
         processing_params, error = self.validate_all_processing_params(allow_empty_name=True)
 
         if error:
             self.dlg.disable_processing_start(error, clear_area=error)
+            return
+
+        # /cost itself is only meaningful when the user is billed in credits.
+        # validate_all_processing_params above has already enabled the start
+        # button for AREA / NONE billing via validate_context_params, so the
+        # network call would just burn the round-trip for a number the user
+        # never sees. Server-side checks that ride along on the /cost response
+        # (e.g. ProviderMinAreaError) will only surface at processing start
+        # for non-credits billing as a result — acceptable tradeoff.
+        if self.app_context.billing_type != BillingType.credits:
             return
 
         self.api.get_cost(data=processing_params,
