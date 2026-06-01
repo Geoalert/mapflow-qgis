@@ -5,7 +5,8 @@
         - "See details" / Duplicate now restores all images from the original processing into the search table; AOI area + dataProvider are now correctly propagated to the recreated processing
         - provider minimum-area checks now operate on the user AOI intersected with the union of selected image footprints (the actually-processable area) instead of the raw AOI
         - confirmation dialog shows "(N images selected)" when more than one image is queued
-        - /cost calls are skipped entirely when the user is not billed in credits
+        - /cost network call is skipped for non-credits billing, but the input validation chain still runs
+        - provider minimum-area (minAreaSqkm) is now checked client-side on every selection/AOI change, so AREA-billed users see the error before starting the processing
 ## 3.5.1
     - Processing refactoring
     - Processing improvements: pagination, sorting and filtering

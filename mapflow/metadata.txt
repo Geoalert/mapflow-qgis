@@ -21,7 +21,8 @@ changelog:
     - "See details" / Duplicate now restores all images, AOI area and dataProvider from the original processing
     - Provider minimum-area checks now operate on the user AOI intersected with the union of selected image footprints
     - Confirmation dialog shows "(N images selected)" when more than one image is queued
-    - /cost requests are skipped when the user is not billed in credits
+    - /cost network call is skipped for non-credits billing, but input validation still runs
+    - Provider minimum area is checked client-side on selection/AOI change (shown before processing start for area billing)
     3.5.1
     - Stability improvements after processing and project architecture refactoring
     - Processing improvements: pagination, sorting and filtering in processing lists

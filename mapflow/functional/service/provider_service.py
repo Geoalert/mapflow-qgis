@@ -220,7 +220,52 @@ class ProviderService(QObject):
                         error = self.tr("You can launch multiple image processing only if it has the same provider of mosaic type")
                     elif set(product_types) == set(["Mosaic"]) and len(set(zooms)) > 1: # no mosaics with different zooms
                         error = self.tr("Selected search results must have the same zoom level")
+                # Minimum-area check. The server enforces a per-provider minimum
+                # (ProviderMinAreaError) on the processing geometry. For credits
+                # billing this rides along on the /cost response, but for AREA / NONE
+                # billing /cost is not called, so without this the user only sees the
+                # rejection when the processing is actually started. minAreaSqkm comes
+                # in with each search result, so check it on every selection/AOI change.
+                if not error and local_image_indices:
+                    min_area_error = self._min_area_error(local_image_indices, provider_names)
+                    if min_area_error:
+                        error = min_area_error
         return error
+
+    def _min_area_error(self, local_image_indices, provider_names):
+        """Return an error string if the processing AOI is below the selected
+        provider's minimum area, otherwise None.
+
+        Compares against app_context.aoi_size, which is the cropped AOI area
+        (user AOI ∩ selected image footprints) — the same geometry sent to the
+        server, so the comparison matches the server-side ProviderMinAreaError.
+        """
+        min_areas = []
+        for local_image_index in local_image_indices:
+            try:
+                value = self.app_context.search_footprints[local_image_index].attribute("minAreaSqkm")
+            except (KeyError, AttributeError):
+                continue
+            if value in (None, '', 'NULL'):
+                continue
+            try:
+                min_areas.append(float(value))
+            except (TypeError, ValueError):
+                continue
+        if not min_areas:
+            return None
+        provider_min_area = max(min_areas)
+        aoi_size = self.app_context.aoi_size or 0
+        # Only error when we actually have an AOI to measure; a missing AOI is
+        # handled by the AOI checks upstream.
+        if aoi_size and aoi_size < provider_min_area:
+            provider_name = provider_names[0] if provider_names else ""
+            return self.tr("Geometry area is {aoiArea:.2f} sq km, which is smaller than the "
+                           "minimum required area for {providerName} data provider "
+                           "({providerMinArea} sq km)").format(aoiArea=aoi_size,
+                                                               providerName=provider_name,
+                                                               providerMinArea=provider_min_area)
+        return None
 
     def get_local_image_indices(self, selected_images):
         try:

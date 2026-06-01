@@ -43,7 +43,8 @@ def _make_table(rows):
     return table
 
 
-def _make_service(rows, provider_names, product_types, zooms=None):
+def _make_service(rows, provider_names, product_types, zooms=None,
+                  min_areas=None, aoi_size=None):
     """Build the minimum ProviderService surface needed by the methods under test."""
     from mapflow.functional.service.provider_service import ProviderService
     from mapflow.config import Config
@@ -58,15 +59,22 @@ def _make_service(rows, provider_names, product_types, zooms=None):
 
     footprints = {}
     zooms = zooms or [None] * len(provider_names)
-    for idx, (pname, ptype, zoom) in enumerate(zip(provider_names, product_types, zooms)):
+    # `min_areas=None` means the field is absent — feature.attribute("minAreaSqkm")
+    # raises KeyError, matching how a layer without that field behaves.
+    min_areas = min_areas if min_areas is not None else [None] * len(provider_names)
+    for idx, (pname, ptype, zoom, min_area) in enumerate(
+            zip(provider_names, product_types, zooms, min_areas)):
         feature = MagicMock()
 
-        def attribute(name, _p=pname, _t=ptype, _z=zoom):
-            return {"providerName": _p, "productType": _t, "zoom": _z}[name]
+        def attribute(name, _p=pname, _t=ptype, _z=zoom, _m=min_area):
+            values = {"providerName": _p, "productType": _t, "zoom": _z}
+            if _m is not None:
+                values["minAreaSqkm"] = _m
+            return values[name]  # KeyError for absent fields, as a real layer would
 
         feature.attribute.side_effect = attribute
         footprints[idx] = feature
-    app_context = SimpleNamespace(search_footprints=footprints)
+    app_context = SimpleNamespace(search_footprints=footprints, aoi_size=aoi_size)
 
     service = ProviderService.__new__(ProviderService)
     service.dlg = dlg
@@ -183,6 +191,74 @@ class TestValidateBlocksMixedProviders:
         service = _make_service(rows, provider_names, product_types,
                                 zooms=["18", "18"])
         service.imagery_search_provider_instance.image_ids = ["a", "b"]
+        provider = ImagerySearchProvider(proxy="http://example")
+        assert service.validate_provider_params(provider) is None
+
+
+# ---------- Provider minimum-area check (AREA billing & any change) ----------
+
+class TestMinAreaCheck:
+    def test_aoi_below_min_area_errors(self):
+        from mapflow.entity.provider import ImagerySearchProvider
+        rows = _rows_with_ids(["a"])
+        service = _make_service(rows,
+                                provider_names=["maxar"],
+                                product_types=["Image"],
+                                min_areas=[25.0],
+                                aoi_size=10.0)
+        service.imagery_search_provider_instance.image_ids = ["a"]
+        provider = ImagerySearchProvider(proxy="http://example")
+        err = service.validate_provider_params(provider)
+        assert err is not None and "minimum required area" in err
+
+    def test_aoi_above_min_area_no_error(self):
+        from mapflow.entity.provider import ImagerySearchProvider
+        rows = _rows_with_ids(["a"])
+        service = _make_service(rows,
+                                provider_names=["maxar"],
+                                product_types=["Image"],
+                                min_areas=[25.0],
+                                aoi_size=30.0)
+        service.imagery_search_provider_instance.image_ids = ["a"]
+        provider = ImagerySearchProvider(proxy="http://example")
+        assert service.validate_provider_params(provider) is None
+
+    def test_multiple_images_use_max_min_area(self):
+        from mapflow.entity.provider import ImagerySearchProvider
+        rows = _rows_with_ids(["a", "b"])
+        service = _make_service(rows,
+                                provider_names=["orbview_msi", "orbview_msi"],
+                                product_types=["Image", "Image"],
+                                min_areas=[10.0, 25.0],
+                                aoi_size=20.0)  # below the max (25)
+        service.imagery_search_provider_instance.image_ids = ["a", "b"]
+        provider = ImagerySearchProvider(proxy="http://example")
+        err = service.validate_provider_params(provider)
+        assert err is not None and "minimum required area" in err
+
+    def test_missing_min_area_field_no_error(self):
+        """Duplicated search layers don't carry minAreaSqkm; absence must not crash
+        or block."""
+        from mapflow.entity.provider import ImagerySearchProvider
+        rows = _rows_with_ids(["a"])
+        service = _make_service(rows,
+                                provider_names=["maxar"],
+                                product_types=["Image"],
+                                min_areas=None,  # field absent
+                                aoi_size=1.0)
+        service.imagery_search_provider_instance.image_ids = ["a"]
+        provider = ImagerySearchProvider(proxy="http://example")
+        assert service.validate_provider_params(provider) is None
+
+    def test_no_aoi_size_no_error(self):
+        from mapflow.entity.provider import ImagerySearchProvider
+        rows = _rows_with_ids(["a"])
+        service = _make_service(rows,
+                                provider_names=["maxar"],
+                                product_types=["Image"],
+                                min_areas=[25.0],
+                                aoi_size=None)  # AOI not measured yet
+        service.imagery_search_provider_instance.image_ids = ["a"]
         provider = ImagerySearchProvider(proxy="http://example")
         assert service.validate_provider_params(provider) is None
 
