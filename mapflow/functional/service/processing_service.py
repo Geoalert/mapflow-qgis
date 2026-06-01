@@ -241,13 +241,22 @@ class ProcessingService(QObject):
 
         provider_params, processing_meta = get_provider_params(provider=provider,
                                                                zoom=ui_start_params.zoom)
-        
+
+        # Prefer the AOI cropped by selected image footprints (Imagery Search)
+        # so provider minimum-area checks compare against the actually-processable area.
+        # Note: QgsGeometry truthiness can't be relied on uniformly across PyQGIS
+        # builds, so guard against None/null/empty explicitly.
+        cropped = self.app_context.processing_aoi
+        if cropped is not None and not cropped.isNull() and not cropped.isEmpty():
+            aoi_for_request = cropped
+        else:
+            aoi_for_request = self.app_context.aoi
         processing_params = PostProcessingSchemaV2(
             name=ui_start_params.name,
             description=None,
             projectId=self.app_context.project_id,
             wdId=wd.id,
-            geometry=json.loads(self.app_context.aoi.asJson()),
+            geometry=json.loads(aoi_for_request.asJson()),
             params=provider_params,
             meta=processing_meta,
             blocks=blocks)
@@ -450,13 +459,32 @@ class ProcessingService(QObject):
     # Processing cost
     def update_processing_cost(self):
         """Update the processing cost based on current AOI and workflow.
-        
+
         Uses app_context for: aoi, workflow_defs, user_role, billing_type
         """
+        # Always run validation so the error label and the start-processing
+        # button reflect the current form state, regardless of billing.
+        # validate_all_processing_params drives:
+        #   - validate_context_params  -> AOI / project / billing gates,
+        #   - validate_processing_params -> AOI size + name,
+        #   - validate_provider_params -> mixed-provider, image-id, product-type checks.
+        # All four issues surfaced by skipping this call (mixed-provider warning
+        # delayed, start button not re-enabled after deselect, wrong "Set AOI"
+        # message hiding "Models not initialized") trace back to this chain.
         processing_params, error = self.validate_all_processing_params(allow_empty_name=True)
 
         if error:
             self.dlg.disable_processing_start(error, clear_area=error)
+            return
+
+        # /cost itself is only meaningful when the user is billed in credits.
+        # validate_all_processing_params above has already enabled the start
+        # button for AREA / NONE billing via validate_context_params, so the
+        # network call would just burn the round-trip for a number the user
+        # never sees. Server-side checks that ride along on the /cost response
+        # (e.g. ProviderMinAreaError) will only surface at processing start
+        # for non-credits billing as a result — acceptable tradeoff.
+        if self.app_context.billing_type != BillingType.credits:
             return
 
         self.api.get_cost(data=processing_params,
