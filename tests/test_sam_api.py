@@ -16,6 +16,7 @@ from mapflow.schema.sam import (
     SessionInferenceCreateRequest,
     SessionNameUpdateRequest,
     InferenceCreateRequest,
+    MergeStrategy,
     parse_confidence_threshold,
 )
 
@@ -288,6 +289,7 @@ class TestCreateInference:
             prompt_id="prompt-1",
             geometry={"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
             confidence_threshold=0.8,
+            merge_strategy=MergeStrategy.NONE,
         )
         api.create_inference(request, callback=_noop)
 
@@ -298,10 +300,24 @@ class TestCreateInference:
         assert body["prompt_id"] == "prompt-1"
         assert "workflow_id" not in body
         assert body["confidence_threshold"] == 0.8
+        assert body["merge_strategy"] == MergeStrategy.NONE.value
 
 
 class TestCreateSessionInference:
-    def test_calls_post_without_confidence_threshold(self, http_mock):
+    def test_calls_post_with_merge_strategy(self, http_mock):
+        api = SamApi(http=http_mock, server=SERVER)
+        request = SessionInferenceCreateRequest(
+            geometry={"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
+            merge_strategy=MergeStrategy.INSTANCE_SEGMENTATION,
+        )
+        api.create_session_inference("sess-1", request, callback=_noop)
+
+        call_kwargs = http_mock.post.call_args[1]
+        assert call_kwargs["url"] == f"{SERVER}/sessions/sess-1/inferences"
+        body = json.loads(call_kwargs["body"].decode())
+        assert body["merge_strategy"] == MergeStrategy.INSTANCE_SEGMENTATION.value
+
+    def test_calls_post_without_confidence_threshold_or_merge_strategy(self, http_mock):
         api = SamApi(http=http_mock, server=SERVER)
         request = SessionInferenceCreateRequest(
             geometry={"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
@@ -313,6 +329,7 @@ class TestCreateSessionInference:
         body = json.loads(call_kwargs["body"].decode())
         assert "workflow_id" not in body
         assert "confidence_threshold" not in body
+        assert "merge_strategy" not in body
 
 
 class TestGetInference:

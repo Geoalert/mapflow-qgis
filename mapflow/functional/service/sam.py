@@ -512,6 +512,7 @@ class SamService(QObject):
         prompt_id: str,
         geometry: dict,
         confidence_threshold: Optional[float] = None,
+        merge_strategy: Optional[str] = None,
     ):
         """POST /inference — creates a new session and dispatches the first
         batch of inferences (one per workflow intersecting the AOI)."""
@@ -520,6 +521,7 @@ class SamService(QObject):
             prompt_id=prompt_id,
             geometry=geometry,
             confidence_threshold=confidence_threshold,
+            merge_strategy=merge_strategy,
         )
         self.api.create_inference(
             request=request,
@@ -540,11 +542,13 @@ class SamService(QObject):
         self,
         session_id: str,
         geometry: dict,
+        merge_strategy: Optional[str] = None,
     ):
         """POST /sessions/{id}/inferences — add a new inference batch (one per
         intersecting workflow) to an existing session."""
         request = SessionInferenceCreateRequest(
             geometry=geometry,
+            merge_strategy=merge_strategy,
         )
         self.api.create_session_inference(
             session_id=session_id,

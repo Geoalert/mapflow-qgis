@@ -4,6 +4,7 @@ from qgis.core import QgsSettings
 
 from mapflow.config import config
 from mapflow.dialogs.main_dialog import MainDialog
+from mapflow.schema.sam import MergeStrategy
 
 
 def _create_dialog() -> MainDialog:
@@ -66,5 +67,23 @@ def test_processing_confidence_threshold_is_available_in_sam_sidebar():
         assert dialog.samProcessingConfidenceThresholdInput.value() == 0.5
         assert dialog.samProcessingConfidenceThresholdInput.minimum() == 0.25
         assert dialog.samProcessingConfidenceThresholdInput.maximum() == 0.75
+    finally:
+        dialog.close()
+
+
+def test_inference_merge_strategy_selector_defaults_to_instance_segmentation():
+    expected_values = [strategy.value for strategy in MergeStrategy]
+    dialog = _create_dialog()
+    try:
+        inference_values = [
+            dialog.samMergeStrategyInput.itemText(i)
+            for i in range(dialog.samMergeStrategyInput.count())
+        ]
+
+        assert dialog.samMergeStrategyLabel.text() == "Merge:"
+        assert inference_values == expected_values
+        assert dialog.samMergeStrategyInput.currentText() == (
+            MergeStrategy.INSTANCE_SEGMENTATION.value
+        )
     finally:
         dialog.close()

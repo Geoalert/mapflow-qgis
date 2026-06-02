@@ -3720,6 +3720,35 @@
                          </widget>
                         </item>
                         <item>
+                         <widget class="QLabel" name="samMergeStrategyLabel">
+                          <property name="text">
+                           <string>Merge:</string>
+                          </property>
+                         </widget>
+                        </item>
+                        <item>
+                         <widget class="QComboBox" name="samMergeStrategyInput">
+                          <property name="toolTip">
+                           <string>Vector merge strategy for the next SAM inference request.</string>
+                          </property>
+                          <item>
+                           <property name="text">
+                            <string>INSTANCE_SEGMENTATION</string>
+                           </property>
+                          </item>
+                          <item>
+                           <property name="text">
+                            <string>SEMANTIC_SEGMENTATION</string>
+                           </property>
+                          </item>
+                          <item>
+                           <property name="text">
+                            <string>NONE</string>
+                           </property>
+                          </item>
+                         </widget>
+                        </item>
+                        <item>
                          <widget class="QPushButton" name="samRunInference">
                           <property name="text">
                            <string>Run Inference</string>

@@ -24,6 +24,7 @@ from mapflow.schema.sam import (
     PromptListResponse,
     SpatialPromptResponse,
     SessionResponse,
+    MergeStrategy,
 )
 
 
@@ -883,6 +884,7 @@ class TestCreateInferenceService:
             "prompt-1",
             geojson,
             confidence_threshold=0.55,
+            merge_strategy=MergeStrategy.SEMANTIC_SEGMENTATION,
         )
 
         http_mock.post.assert_called_once()
@@ -892,6 +894,7 @@ class TestCreateInferenceService:
         assert body["processing_id"] == "proc-1"
         assert body["prompt_id"] == "prompt-1"
         assert body["confidence_threshold"] == 0.55
+        assert body["merge_strategy"] == MergeStrategy.SEMANTIC_SEGMENTATION.value
 
 
 class TestCreateInferenceCallback:
@@ -942,11 +945,12 @@ class TestCreateInferenceCallback:
 
 
 class TestCreateSessionInferenceService:
-    def test_calls_api_without_confidence_threshold(self, sam_service, http_mock):
+    def test_calls_api_with_merge_strategy(self, sam_service, http_mock):
         geojson = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}
         sam_service.create_session_inference(
             "session-1",
             geojson,
+            merge_strategy=MergeStrategy.INSTANCE_SEGMENTATION,
         )
 
         http_mock.post.assert_called_once()
@@ -955,6 +959,7 @@ class TestCreateSessionInferenceService:
         body = json.loads(http_mock.post.call_args[1]["body"])
         assert "workflow_id" not in body
         assert "confidence_threshold" not in body
+        assert body["merge_strategy"] == MergeStrategy.INSTANCE_SEGMENTATION.value
 
 
 class TestCreateSessionInferenceCallback:

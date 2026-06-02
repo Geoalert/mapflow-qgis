@@ -282,6 +282,9 @@ class SamController(QObject):
     def _confidence_threshold(self):
         return self.dlg.samConfidenceThresholdInput.value()
 
+    def _merge_strategy(self):
+        return self.dlg.samMergeStrategyInput.currentText()
+
     # ------------------------------------------------------------------
     # Sessions
     # ------------------------------------------------------------------
@@ -351,6 +354,7 @@ class SamController(QObject):
             prompt_id,
             geometry,
             confidence_threshold=self._confidence_threshold(),
+            merge_strategy=self._merge_strategy(),
         )
 
     def _run_session_inference(self):
@@ -367,6 +371,7 @@ class SamController(QObject):
         self.service.create_session_inference(
             session_id,
             geometry,
+            merge_strategy=self._merge_strategy(),
         )
 
     def _refresh_session_status(self):

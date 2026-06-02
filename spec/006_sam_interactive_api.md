@@ -85,23 +85,27 @@ A single `POST /inference` or `POST /sessions/{id}/inferences` request produces 
   "processing_id": "UUID",
   "prompt_id": "UUID",
   "geometry": "GeoJSON",
-  "confidence_threshold": "float | null"
+  "confidence_threshold": "float | null",
+  "merge_strategy": "INSTANCE_SEGMENTATION | SEMANTIC_SEGMENTATION | NONE | null"
 }
 ```
 - `workflow_id` is no longer required; the backend auto-selects all processing workflows whose geometry intersects the inference AOI.
 - `processing_id` identifies the processing whose workflows will be used.
 - `confidence_threshold` is optional and SAM-specific; when provided it must be a float in the `[0, 1]` range.
 - When provided, `confidence_threshold` is stored on the newly created session and reused by later `POST /sessions/{session_id}/inferences` requests for that session.
+- `merge_strategy` is optional and controls vector merging for the import-vector workflows launched by this request.
 - Response body is a `SessionResponse` containing the new session and the N inferences just dispatched (one per intersecting workflow).
 
 ### SessionInferenceCreateRequest
 ```json
 {
-  "geometry": "GeoJSON"
+  "geometry": "GeoJSON",
+  "merge_strategy": "INSTANCE_SEGMENTATION | SEMANTIC_SEGMENTATION | NONE | null"
 }
 ```
 - `workflow_id` is no longer required; the backend auto-selects intersecting workflows from the session's processing.
 - This endpoint does not accept `confidence_threshold`; it reuses the selected session's stored threshold.
+- `merge_strategy` is optional and controls vector merging for the import-vector workflows launched by this request.
 - Response body is a `SessionResponse` reflecting the session after the new inferences have been added.
 
 ### ProcessingSummaryResponse

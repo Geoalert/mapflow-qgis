@@ -100,6 +100,7 @@ class InferenceCreateRequest(Serializable):
     prompt_id: str
     geometry: dict  # GeoJSON
     confidence_threshold: Optional[float] = None
+    merge_strategy: Optional[str] = None
 
 
 @dataclass
@@ -107,6 +108,7 @@ class SessionInferenceCreateRequest(Serializable):
     """POST /sessions/{id}/inferences — adds a new inference batch to an
     existing session (one Inference per workflow intersecting the AOI)."""
     geometry: dict  # GeoJSON
+    merge_strategy: Optional[str] = None
 
 
 @dataclass
@@ -127,6 +129,12 @@ class PromptUpdateRequest(Serializable):
 class GeometryType(Enum):
     POINT = "point"
     BBOX = "bbox"
+
+
+class MergeStrategy(str, Enum):
+    INSTANCE_SEGMENTATION = "INSTANCE_SEGMENTATION"
+    SEMANTIC_SEGMENTATION = "SEMANTIC_SEGMENTATION"
+    NONE = "NONE"
 
 
 # ---------------------------------------------------------------------------
