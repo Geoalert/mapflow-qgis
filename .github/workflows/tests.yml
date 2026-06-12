@@ -1,0 +1,36 @@
+name: tests
+
+on:
+  push:
+    branches:
+      - dev
+      - master
+  pull_request:
+
+jobs:
+  functional:
+    name: Functional tier
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run functional tests
+        run: make test-functional
+
+  qgis:
+    name: QGIS tier
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run qgis tests
+        run: make test-qgis
+
+  ui:
+    name: UI tier
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ui tests
+        # No UI tests authored yet — `make test-ui` treats pytest's
+        # exit-5 (no tests collected) as a pass. Real xvfb / image
+        # failures still fail the job.
+        run: make test-ui
