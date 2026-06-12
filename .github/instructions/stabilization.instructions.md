@@ -11,7 +11,7 @@ Drive failing work to implementation DoD through controlled iterative fix cycles
 ## Iteration Loop
 1. Reproduce failures and capture the exact failing signature.
 2. Apply the smallest targeted fix.
-3. Re-run the narrowest relevant tests (`pytest tests/test_<name>.py -k "failing_test"`), then broader tests (`pytest tests/`).
+3. Re-run the narrowest relevant tests (`agent-make test-functional`, `agent-make test-qgis`, or `agent-make test-ui`), then broader tests (`agent-make test`).
 4. Repeat until green or a stop condition is reached.
 
 ## Breakpoints and Stop Conditions

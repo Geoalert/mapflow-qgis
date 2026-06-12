@@ -1,0 +1,31 @@
+# Test runtime for the mapflow-qgis plugin.
+#
+# Pinned to qgis/qgis:release-3_28 — the LTR release, matches the
+# 3.20+ minimum in spec/004_stack.md. Bump only when the plugin's
+# minimum target changes.
+#
+# The repo is bind-mounted at /app at run time (see Makefile); we do
+# not COPY sources here so an iteration cycle is just `docker run`,
+# not rebuild.
+FROM qgis/qgis:release-3_28
+
+# xvfb-run is needed by the UI tier; the base image does not ship it.
+# Run apt without recommends to keep the image lean.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
+# QGIS images ship pytest-qgis hooks already; we only need pytest +
+# pytest-qt (the latter for the UI tier). The base image's pip is old
+# enough that PEP 668's externally-managed marker is not enforced.
+RUN python3 -m pip install --no-cache-dir \
+        pytest \
+        pytest-qt
+
+# Run Qt without an X display by default; the UI tier overrides this
+# by wrapping pytest in `xvfb-run` (provides a real X server).
+ENV QT_QPA_PLATFORM=offscreen \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
