@@ -7,6 +7,10 @@
 - Use `agent-git` whenever possible for git operations. `agent-git` is expected to be in the "always allowed" command pool, so it should be the default path for agent workflows.
 - Use raw `git` only when `agent-git` cannot express the required operation. Such usage is **not recommended** and must be explicitly justified in the command text.
 
+# BUILD COMMAND POLICY FOR AGENTS
+- Use `agent-make` instead of plain `make` everywhere.
+- Plain `make` is not allowed when `agent-make` can express the same target.
+
 # PROJECT STRUCTURE AND ADDRESSING
 - /mapflow: QGIS plugin source code (Python, Qt/PyQGIS)
 - /mapflow/dialogs: Qt dialog classes and `.ui` files
@@ -48,7 +52,7 @@ Execute it every time a session is initiated.
     - tests;
     - code;
 10. stabilization.instructions.md:
-    - run tests;
+    - run tests (for example: `agent-make test`);
     - if tests pass, continue;
     - if tests fail, use delivery.instruction.md to iterate on code changes; and test execution until tests pass or you are blocked (`.github/instructions/stabilization.instructions.md`).
     - write discoveries to `WAL_<N>.md`
@@ -75,8 +79,8 @@ Execute it every time a session is initiated.
     - If user merged without prior approval signal: `agent-git checkout dev && agent-git pull --ff-only`, mark WAL step `[v]`, commit and push directly to dev using `agent-git push`.
 
 # IMPLEMENTATION DEFINITION OF DONE (PRE-MERGE)
-- tests added/updated according to the feature specification
-- `pytest tests/` runs successfully
+- tests are written/updated according to the feature specification
+- tests are executed locally and pass before moving to review (for example: `agent-make test`)
 - branch pushed and `[Draft]` MR created
 - WAL step is updated to `[ready-for-review]` with concise motivation
 
@@ -110,14 +114,15 @@ limited connections to avoid server DDoS protection, issues can start around 40 
 ```
 
 # COMMANDS TO RUN
-`pytest tests/` to run the full test suite
-`pytest tests/test_<name>.py` to run a specific test file
-`pytest tests/ -k "test_name"` to run a specific test by name
+`agent-make test` to run the full test workflow
+`agent-make test-functional` to run functional tests
+`agent-make test-qgis` to run QGIS-runtime tests
+`agent-make test-ui` to run UI tests
+`agent-make <target>` to run Makefile targets (instead of plain `make`)
 
 # TEST EXECUTION MODES
-- All tests run locally with pytest (no containers).
-- QGIS-dependent tests may require a QGIS environment or mocking of `qgis.*` / `PyQt5.*` imports.
-- Pure logic tests (data transforms, URL building, schema validation) should not depend on QGIS runtime.
+- All tests are run locally via `agent-make`, which executes them in the configured Docker test image.
+- Use tiered targets when iterating: `agent-make test-functional`, `agent-make test-qgis`, `agent-make test-ui`.
 
 # TERMINAL COMMAND BATCHING
 - Combine commands that both require user approval into a single `&&`-chained invocation to minimize approval prompts.

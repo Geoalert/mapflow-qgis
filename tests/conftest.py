@@ -1,58 +1,7 @@
-"""Shared fixtures for mapflow plugin tests.
+"""Shared fixtures for the mapflow test suite.
 
-All tests run inside the QGIS Python environment.
-QgsApplication is bootstrapped before test collection via pytest_configure
-so that module-level Qt objects (QIcon etc.) can be created during import.
+Tier-specific bootstrap (PyQGIS startup, sys.modules stubs, Xvfb wiring)
+lives in tests/functional/conftest.py, tests/qgis/conftest.py, and
+tests/ui/conftest.py. Keep this file empty unless a fixture is genuinely
+needed by every tier.
 """
-import importlib
-import pytest
-from unittest.mock import MagicMock
-
-
-def pytest_configure(config):
-    """Bootstrap QgsApplication before test collection.
-
-    Must happen here (not in a fixture) because mapflow modules create
-    Qt objects (QIcon, etc.) at import time, which requires a living
-    QApplication before any test file is imported.
-    """
-    from qgis.testing import start_app
-    start_app()
-
-    # Pre-warm the mapflow module tree to survive the circular import on first load.
-    # The chain mapflow.schema.processing -> entity.provider -> functional.layer_utils
-    # -> dialogs -> mapflow.schema creates a circular dependency that fails on the
-    # first attempt but succeeds on retry because partial modules are cached.
-    for _ in range(2):
-        try:
-            importlib.import_module("mapflow.schema.processing")
-            break
-        except ImportError:
-            pass
-
-
-@pytest.fixture()
-def iface():
-    """Mock QgisInterface for tests that need a plugin iface reference."""
-    mock_iface = MagicMock()
-    mock_iface.mapCanvas.return_value = MagicMock()
-    mock_iface.mainWindow.return_value = MagicMock()
-    return mock_iface
-
-
-@pytest.fixture()
-def http_mock():
-    """Mock Http client with pre-wired methods.
-
-    Usage:
-        def test_something(http_mock):
-            api = ProjectApi(http=http_mock, server="https://example.com")
-            api.get_projects(callback=my_callback)
-            http_mock.get.assert_called_once()
-    """
-    mock = MagicMock()
-    mock.get.return_value = MagicMock()
-    mock.post.return_value = MagicMock()
-    mock.put.return_value = MagicMock()
-    mock.delete.return_value = MagicMock()
-    return mock
