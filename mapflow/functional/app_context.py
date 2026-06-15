@@ -48,6 +48,7 @@ class AppContext:
     remaining_limit: float = 0.0
     remaining_credits: float = 0.0
     aoi_area_limit: float = 0.0
+    template_area_limit: float = 0.0
     max_aois_per_processing: int = 1
     review_workflow_enabled: bool = False
 
