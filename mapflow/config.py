@@ -112,7 +112,7 @@ class Config:
 
     MAX_AOIS_PER_PROCESSING = int(QgsSettings().value("variables/mapflow_max_aois", "10"))
 
-    SEARCH_RESULTS_PAGE_LIMIT = 1000 # objects per page
+    SEARCH_RESULTS_PAGE_LIMIT = 100 # objects per page
     PROJECTS_PAGE_LIMIT = 20
     PROCESSINGS_PAGE_LIMIT = 30
 
