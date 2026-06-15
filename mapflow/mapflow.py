@@ -29,6 +29,7 @@ from . import constants
 from .config import Config, ConfigColumns
 from .errors import (AoiNotIntersectsImage,
                      BadProcessingInput,
+                     ErrorMessage,
                      ImageIdRequired,
                      PluginError,
                      ProcessingInputDataMissing,
@@ -1269,6 +1270,16 @@ class Mapflow(QObject):
             self.alert(self.tr('Please, select a valid area of interest'))
             return
 
+        # Forbid creation client-side when the AOI exceeds the planned-processing area cap (mirrors processing creation).
+        # A zero/unknown limit disables the check and lets the backend be the source of truth.
+        if self.app_context.template_area_limit and self.app_context.aoi_size \
+                and self.app_context.aoi_size > self.app_context.template_area_limit:
+            self.alert(ErrorMessage(
+                code="TEMPLATE_AREA_LIMIT_EXCEEDED",
+                parameters={"templateAreaLimit": round(self.app_context.template_area_limit, 2)},
+            ).to_str())
+            return
+
         from_time = self.dlg.metadataFrom.dateTime().toUTC().toString("yyyy-MM-ddTHH:mm:ss.zzz'Z'")
         to_time = self.dlg.metadataTo.dateTime().toUTC().toString("yyyy-MM-ddTHH:mm:ss.zzz'Z'")
         max_cloud_cover = self.dlg.maxCloudCover.value()
@@ -2062,6 +2073,8 @@ class Mapflow(QObject):
         # get limits
         self.app_context.remaining_limit = int(response_data.get('remainingArea', 0)) / 1e6  # convert into sq.km
         self.app_context.remaining_credits = int(response_data.get('remainingCredits', 0))
+        # Planned-processing (template) area cap; absent/zero means "unknown" and disables the client-side check
+        self.app_context.template_area_limit = int(response_data.get('templateAreaLimit', 0)) / 1e6  # convert into sq.km
         self.app_context.max_aois_per_processing = int(response_data.get("maxAoisPerProcessing",
                                                              self.config.MAX_AOIS_PER_PROCESSING))
         if self.app_context.billing_type == BillingType.credits:

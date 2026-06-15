@@ -108,3 +108,23 @@ Response:
 - `projectId` (uuid)
 - `area` (number)
 - `newImagesCount` (integer)
+
+## Limits and client-side validation
+
+### Template area limit
+`GET /user/status` exposes `templateAreaLimit` (number, square metres): the maximum
+AOI area allowed for a planned processing (template). It is the template-scoped
+counterpart of the per-processing `aoiAreaLimit`.
+
+The plugin stores it as square kilometres and, before issuing
+`POST /processings/template`, forbids creation client-side when the selected AOI
+exceeds the limit — mirroring the pre-flight check done for regular processing
+creation. A missing or zero `templateAreaLimit` disables the client-side check and
+defers to the backend.
+
+### Error feedback
+When the backend rejects template creation because the limit is exceeded it returns
+the standard error model (`{"code", "message", "params"}`) with a generic
+`code` (e.g. `BAD_REQUEST`) and a human-readable `message`. The plugin resolves the
+error to a single, translatable description (see the central error registry in
+`mapflow/errors`) rather than surfacing the raw backend text.
