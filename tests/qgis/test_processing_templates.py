@@ -132,6 +132,35 @@ class TestTemplateSchemas:
         assert "aoiDetails" not in data["searchParams"]
         assert "processingParams" not in data
 
+    def _template_with_data_providers(self, data_providers):
+        return CreateProcessingTemplateSchema(
+            name="T1",
+            searchParams=SearchParams(
+                aoi={"type": "Polygon", "coordinates": []},
+                dataProviders=data_providers,
+            ),
+            processingParams=None,
+            projectId="3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            activeUntil="2026-05-06T11:03:37.743Z",
+        )
+
+    def test_none_data_providers_is_omitted_not_serialized_as_null(self):
+        raw = self._template_with_data_providers(None).as_json()
+        # The field must not appear at all — neither as a value nor as JSON null,
+        # otherwise the backend reads it literally as "search no providers".
+        assert "dataProviders" not in raw
+        assert "dataProviders" not in json.loads(raw)["searchParams"]
+
+    def test_empty_data_providers_is_kept_as_empty_list(self):
+        # Documents *why* the caller must pass None, not []: an explicit empty list
+        # survives serialization and would reach the backend.
+        data = json.loads(self._template_with_data_providers([]).as_json())
+        assert data["searchParams"]["dataProviders"] == []
+
+    def test_selected_data_providers_are_serialized(self):
+        data = json.loads(self._template_with_data_providers(["arcgis_world_imagery"]).as_json())
+        assert data["searchParams"]["dataProviders"] == ["arcgis_world_imagery"]
+
     @pytest.mark.parametrize(
         ("payload_updates", "expected_status"),
         [
