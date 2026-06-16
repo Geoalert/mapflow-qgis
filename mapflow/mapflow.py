@@ -532,11 +532,38 @@ class Mapflow(QObject):
         geoms = response_data.as_geojson()
         for position, feature in enumerate(geoms.get("features", ())):
             feature["properties"]["local_index"] = position
+        # Footprints must keep the real providerName/productType so that a planned
+        # processing started from these results can resolve its source params
+        # (dataProvider). Build them before the display-only "(new)" marker is added.
+        self._store_template_search_footprints(geoms)
+        for position, feature in enumerate(geoms.get("features", ())):
             if raw_images[position].get("isNew"):
                 feature["properties"]["productType"] = (
                     (feature["properties"].get("productType") or "") + " (new)"
                 ).strip()
         self.dlg.fill_metadata_table(geoms)
+
+    def _store_template_search_footprints(self, geoms: dict) -> None:
+        """Populate ``app_context.search_footprints`` (QgsFeatures keyed by ``local_index``)
+        from template search results, mirroring a regular imagery search.
+
+        Without this the search footprints stay empty and starting a planned processing
+        from template results omits the ``dataProvider`` (resolved from the footprint
+        ``providerName``), so the backend rejects the request with HTTP 400.
+        """
+        self.app_context.search_footprints = {}
+        provider = self.imagery_search_provider
+        if not provider:
+            return
+        filename = provider.save_search_layer(self.app_context.temp_dir, geoms)
+        if not filename:
+            return
+        layer = QgsVectorLayer(filename, f"{provider.name} template metadata", "ogr")
+        if not layer.isValid():
+            return
+        self.app_context.search_footprints = {
+            feature["local_index"]: feature for feature in layer.getFeatures()
+        }
 
     def populate_search_table_from_template(self, search_results: List[dict]):
         """Populate search table with search results returned for a selected template.""" #!
