@@ -1313,7 +1313,9 @@ class Mapflow(QObject):
         min_intersection = self.dlg.minIntersection.value()
         hide_unavailable = self.dlg.hideUnavailableResults.isChecked()
         product_types = self.selected_search_product_types() or []
-        search_providers = self.dlg.searchProvidersCombo.checkedItemsData() or []
+        # An empty providers selection must be omitted, not sent as []: the backend reads
+        # [] literally as "search no providers" and rejects template creation.
+        search_providers = self.dlg.searchProvidersCombo.checkedItemsData() or None
 
         search_params = SearchParams(
             aoi=json.loads(self.app_context.aoi.asJson()),
