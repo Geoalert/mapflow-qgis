@@ -82,6 +82,9 @@ Response:
 ### `POST /processings/template/{templateId}/image/{imageId}/seen`
 Mark one image as seen for template.
 
+### `PUT /processings/template/{templateId}/image/seenAll`
+Mark all of the template's images as seen in a single call (resets `newImagesCount` to 0).
+
 ### `GET /processings/template/user/{userId}`
 Get templates for a specific user id.
 

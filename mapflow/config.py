@@ -78,6 +78,11 @@ class Config:
     DEFAULT_HIDDEN_COLUMNS = (PROCESSING_TABLE_COLUMNS.index(item) for item in ('id', 'reviewUntil', 'cost'))
     
     # MAXAR
+    # The "new image" marker icon lives in the LEFTMOST column — its meaning is positional,
+    # not tied to the product-type content that happens to sit there. The user can hide that
+    # column via the search-column checkboxes, so the marker falls back to the leftmost
+    # *visible* column at render time (see Mapflow._new_image_marker_column).
+    NEW_IMAGE_MARKER_COLUMN_INDEX = 0
     MAXAR_ID_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()).index('id')
     LOCAL_INDEX_COLUMN = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()).index('local_index')
     PPRVIEW_INDEX_COLUMN = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()).index('preview')
