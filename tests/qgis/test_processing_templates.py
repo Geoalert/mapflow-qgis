@@ -199,6 +199,28 @@ class TestTemplateSchemas:
         table_row = dto.as_processing_table_dict()
         assert table_row["created"] == dto.createdAt.astimezone().strftime("%Y-%m-%d %H:%M")
 
+    def test_template_aoi_area_uses_backend_area_field(self):
+        # The project template list omits searchParams but returns `area` (m²);
+        # the table must show it without hydrating searchParams.
+        dto = ProcessingTemplateDTO.from_dict({**_template_payload(), "area": 15574401})
+        expected = round(15574401 / 1e6, 4)
+        assert dto.area == 15574401
+        assert dto.aoi_area == expected
+        assert dto.as_processing_table_dict()["aoiArea"] == expected
+
+    def test_template_aoi_area_falls_back_to_searchparams_when_area_absent(self):
+        payload = _template_payload()
+        payload.pop("area", None)
+        payload["searchParams"] = {
+            "aoi": {
+                "type": "Polygon",
+                "coordinates": [[[13.0, 52.0], [14.0, 52.0], [14.0, 51.0], [13.0, 51.0], [13.0, 52.0]]],
+            }
+        }
+        dto = ProcessingTemplateDTO.from_dict(payload)
+        assert dto.area is None
+        assert dto.aoi_area is not None and dto.aoi_area > 0
+
 
 class TestTemplateApi:
     def setup_method(self):
