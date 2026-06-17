@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 from mapflow.functional.service import processing_service as processing_service_module
 from mapflow.functional.service.processing_service import ProcessingService
@@ -229,119 +229,156 @@ def test_select_template_processings_deduplicates_linked_processing_aoi_requests
 	assert kwargs["url"] == "https://server/processings/proc-1/aois"
 
 
-def test_mark_selected_template_images_seen_marks_unique_selected_new_rows():
+def _mark_seen_plugin(selected_rows=None):
+	"""Plugin wired for mark-seen tests: rows 0 (img-1, new), 1 (img-2, seen), 2 (img-3, new).
+
+	``_set_new_image_marker`` is mocked here so these tests focus on the request/gating
+	logic; the icon mechanics are covered by ``test_apply_new_image_markers_*``.
+	"""
 	plugin = Mapflow.__new__(Mapflow)
+	plugin.tr = lambda text: text
 	plugin.active_template_id = "tpl-1"
-	plugin.config = SimpleNamespace(MAXAR_ID_COLUMN_INDEX=1)
+	plugin.config = SimpleNamespace(MAXAR_ID_COLUMN_INDEX=1, NEW_IMAGE_MARKER_COLUMN_INDEX=0)
 	plugin.processing_service = SimpleNamespace(api=MagicMock())
 	plugin._decrement_template_new_images_count = MagicMock()
+	plugin._reset_template_new_images_count = MagicMock()
+	plugin._set_new_image_marker = MagicMock()
 	plugin.dlg = MagicMock()
-
-	product_cells = {
-		0: MagicMock(text=MagicMock(return_value="Image (new)")),
-		1: MagicMock(text=MagicMock(return_value="Image")),
-		2: MagicMock(text=MagicMock(return_value="Mosaic (new)")),
+	plugin.dlg.metadataTable.rowCount.return_value = 3
+	plugin.template_search_images = {
+		"img-1": SimpleNamespace(id="img-1", isNew=True, productType="Image"),
+		"img-2": SimpleNamespace(id="img-2", isNew=False, productType="Image"),
+		"img-3": SimpleNamespace(id="img-3", isNew=True, productType="Mosaic"),
 	}
 	id_cells = {
 		0: MagicMock(text=MagicMock(return_value="img-1")),
 		1: MagicMock(text=MagicMock(return_value="img-2")),
 		2: MagicMock(text=MagicMock(return_value="img-3")),
 	}
+	plugin.dlg.metadataTable.item.side_effect = (
+		lambda row, col: id_cells.get(row) if col == 1 else None
+	)
+	if selected_rows is not None:
+		plugin.dlg.metadataTable.selectedItems.return_value = [
+			SimpleNamespace(row=lambda r=r: r) for r in selected_rows
+		]
+	return plugin
 
-	def item_side_effect(row, col):
-		if col == 0:
-			return product_cells.get(row)
-		if col == 1:
-			return id_cells.get(row)
-		return None
 
-	plugin.dlg.metadataTable.item.side_effect = item_side_effect
-	plugin.dlg.metadataTable.selectedItems.return_value = [
-		SimpleNamespace(row=lambda: 0),
-		SimpleNamespace(row=lambda: 0),
-		SimpleNamespace(row=lambda: 2),
-	]
+def test_mark_selected_template_images_seen_requests_only_new_rows_and_defers_update():
+	plugin = _mark_seen_plugin(selected_rows=[0, 0, 2])
+	api = plugin.processing_service.api
 
 	plugin.mark_selected_template_images_seen()
 
-	assert plugin.processing_service.api.mark_template_image_seen.call_count == 2
-	called_image_ids = [
-		kwargs["image_id"]
-		for kwargs in (
-			call.kwargs for call in plugin.processing_service.api.mark_template_image_seen.call_args_list
-		)
-	]
-	assert called_image_ids == ["img-1", "img-3"]
+	# One request per unique selected NEW row (img-2 is not new); update is deferred.
+	assert api.mark_template_image_seen.call_count == 2
+	assert [c.kwargs["image_id"] for c in api.mark_template_image_seen.call_args_list] == ["img-1", "img-3"]
+	plugin._decrement_template_new_images_count.assert_not_called()
+	plugin._set_new_image_marker.assert_not_called()
+
+	# Simulate a successful response for each request.
+	for c in api.mark_template_image_seen.call_args_list:
+		c.kwargs["callback"](MagicMock())
+
 	assert plugin._decrement_template_new_images_count.call_count == 2
+	# Marker icon is cleared per row only after its request succeeds.
+	assert plugin._set_new_image_marker.call_args_list == [call(0, False), call(2, False)]
+	assert plugin.template_search_images["img-1"].isNew is False
+	assert plugin.template_search_images["img-3"].isNew is False
 
 
-def test_mark_all_template_images_seen_marks_only_new_rows():
+def test_mark_all_template_images_seen_uses_single_endpoint_and_defers_update():
+	plugin = _mark_seen_plugin()
+	api = plugin.processing_service.api
+
+	plugin.mark_all_template_images_seen()
+
+	# Single seen-all request, no per-image calls, no optimistic update.
+	api.mark_all_template_images_seen.assert_called_once()
+	assert api.mark_all_template_images_seen.call_args.kwargs["template_id"] == "tpl-1"
+	api.mark_template_image_seen.assert_not_called()
+	plugin._reset_template_new_images_count.assert_not_called()
+
+	api.mark_all_template_images_seen.call_args.kwargs["callback"](MagicMock())
+
+	# Only the NEW rows get their marker icon cleared; the counter is reset once.
+	assert plugin._set_new_image_marker.call_args_list == [call(0, False), call(2, False)]
+	plugin._reset_template_new_images_count.assert_called_once_with("tpl-1")
+
+
+def test_mark_seen_error_leaves_marker_and_counter_untouched():
+	plugin = _mark_seen_plugin(selected_rows=[0])
+	plugin.iface = MagicMock()
+	plugin.app_context = SimpleNamespace(plugin_name="Mapflow")
+	api = plugin.processing_service.api
+
+	plugin.mark_selected_template_images_seen()
+	api.mark_template_image_seen.call_args.kwargs["error_handler"](MagicMock())
+
+	plugin._set_new_image_marker.assert_not_called()
+	plugin._decrement_template_new_images_count.assert_not_called()
+	assert plugin.template_search_images["img-1"].isNew is True
+	plugin.iface.messageBar().pushWarning.assert_called_once()
+
+
+def test_apply_new_image_markers_sets_icon_only_on_new_rows():
 	plugin = Mapflow.__new__(Mapflow)
-	plugin.active_template_id = "tpl-1"
-	plugin.config = SimpleNamespace(MAXAR_ID_COLUMN_INDEX=1)
-	plugin.processing_service = SimpleNamespace(api=MagicMock())
-	plugin._decrement_template_new_images_count = MagicMock()
-	plugin.dlg = MagicMock()
-	plugin.dlg.metadataTable.rowCount.return_value = 3
-
-	product_cells = {
-		0: MagicMock(text=MagicMock(return_value="Image (new)")),
-		1: MagicMock(text=MagicMock(return_value="Image")),
-		2: MagicMock(text=MagicMock(return_value="Mosaic (new)")),
+	plugin.config = SimpleNamespace(MAXAR_ID_COLUMN_INDEX=1, NEW_IMAGE_MARKER_COLUMN_INDEX=0)
+	plugin.template_search_images = {
+		"img-1": SimpleNamespace(id="img-1", isNew=True, productType="Image"),
+		"img-2": SimpleNamespace(id="img-2", isNew=False, productType="Image"),
 	}
+	plugin.dlg = MagicMock()
+	plugin.dlg.metadataTable.rowCount.return_value = 2
+	plugin.dlg.metadataTable.columnCount.return_value = 3
+	plugin.dlg.metadataTable.isColumnHidden.return_value = False
+	marker_cells = {0: MagicMock(), 1: MagicMock()}
 	id_cells = {
 		0: MagicMock(text=MagicMock(return_value="img-1")),
 		1: MagicMock(text=MagicMock(return_value="img-2")),
-		2: MagicMock(text=MagicMock(return_value="img-3")),
 	}
 
 	def item_side_effect(row, col):
 		if col == 0:
-			return product_cells.get(row)
+			return marker_cells.get(row)
 		if col == 1:
 			return id_cells.get(row)
 		return None
 
 	plugin.dlg.metadataTable.item.side_effect = item_side_effect
 
-	plugin.mark_all_template_images_seen()
+	plugin._apply_new_image_markers()
 
-	assert plugin.processing_service.api.mark_template_image_seen.call_count == 2
-	called_image_ids = [
-		kwargs["image_id"]
-		for kwargs in (
-			call.kwargs for call in plugin.processing_service.api.mark_template_image_seen.call_args_list
-		)
-	]
-	assert called_image_ids == ["img-1", "img-3"]
-	assert plugin._decrement_template_new_images_count.call_count == 2
+	new_icon = marker_cells[0].setIcon.call_args.args[0]
+	seen_icon = marker_cells[1].setIcon.call_args.args[0]
+	assert not new_icon.isNull()  # new image -> the exclamation icon
+	assert seen_icon.isNull()     # seen image -> icon cleared
+
+
+def test_new_image_marker_column_skips_hidden_leftmost_column():
+	plugin = Mapflow.__new__(Mapflow)
+	plugin.config = SimpleNamespace(NEW_IMAGE_MARKER_COLUMN_INDEX=0)
+	plugin.dlg = MagicMock()
+	plugin.dlg.metadataTable.columnCount.return_value = 4
+	# User hid column 0 -> marker falls back to the leftmost visible column (1).
+	plugin.dlg.metadataTable.isColumnHidden.side_effect = lambda col: col == 0
+
+	assert plugin._new_image_marker_column() == 1
 
 
 def test_on_metadata_table_cell_clicked_does_not_mark_seen():
 	plugin = Mapflow.__new__(Mapflow)
 	plugin.active_template_id = "tpl-1"
-	plugin.config = SimpleNamespace(MAXAR_ID_COLUMN_INDEX=1)
 	plugin.processing_service = SimpleNamespace(api=MagicMock())
 	plugin._decrement_template_new_images_count = MagicMock()
 	plugin.dlg = MagicMock()
 
-	product_cell = MagicMock()
-	product_cell.text.return_value = "Image (new)"
-	id_cell = MagicMock()
-	id_cell.text.return_value = "img-1"
-
-	def item_side_effect(row, col):
-		if col == 0:
-			return product_cell
-		if col == 1:
-			return id_cell
-		return None
-
-	plugin.dlg.metadataTable.item.side_effect = item_side_effect
-
 	plugin.on_metadata_table_cell_clicked(0, 0)
 
+	# Clicking a cell is passive; marking is only via the Seen / Seen all actions.
 	plugin.processing_service.api.mark_template_image_seen.assert_not_called()
+	plugin.processing_service.api.mark_all_template_images_seen.assert_not_called()
 	plugin._decrement_template_new_images_count.assert_not_called()
 
 

@@ -310,3 +310,22 @@ class TestTemplateApi:
 
         self.http.post.assert_called_once()
         assert self.http.post.call_args.kwargs["path"] == "processings/template/tpl-4/restart"
+
+    def test_mark_template_image_seen_path(self):
+        self.api.mark_template_image_seen(
+            template_id="tpl-5",
+            image_id="img-1",
+            callback=MagicMock(),
+            error_handler=MagicMock(),
+        )
+        self.http.post.assert_called_once()
+        assert self.http.post.call_args.kwargs["path"] == "processings/template/tpl-5/image/img-1/seen"
+
+    def test_mark_all_template_images_seen_path(self):
+        self.api.mark_all_template_images_seen(
+            template_id="tpl-6",
+            callback=MagicMock(),
+            error_handler=MagicMock(),
+        )
+        self.http.put.assert_called_once()
+        assert self.http.put.call_args.kwargs["path"] == "processings/template/tpl-6/image/seenAll"

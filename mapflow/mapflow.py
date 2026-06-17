@@ -12,7 +12,7 @@ from PyQt5.QtCore import (
     QByteArray, QCoreApplication, QDate, QObject, Qt, 
     QTextStream, QTimer, QTranslator
 )
-from PyQt5.QtGui import QColor
+from PyQt5.QtGui import QColor, QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
 from PyQt5.QtWidgets import (
     QAbstractItemView, QAction, QApplication, QFileDialog, QMenu, 
@@ -85,7 +85,7 @@ from .dialogs import (ErrorMessageWidget,
                       MapflowLoginDialog,
                       ProviderDialog,
                       ReviewDialog)
-from .dialogs.icons import plugin_icon
+from .dialogs.icons import plugin_icon, new_image_icon
 from .dialogs.processing_details_dialog import ProcessingDetailsDialog
 # Entity/providers
 from .entity.provider import (BasicAuth,
@@ -532,21 +532,19 @@ class Mapflow(QObject):
             return
         template = self.processing_service.selected_template()
         template_group_name = str(template.name) if template else None
-        raw_images = response_json.get("images", [])
         response_data = ImageCatalogResponseSchema(**response_json)
+        images = response_data.images
         geoms = response_data.as_geojson()
         for position, feature in enumerate(geoms.get("features", ())):
             feature["properties"]["local_index"] = position
         # Footprints must keep the real providerName/productType so that a planned
-        # processing started from these results can resolve its source params
-        # (dataProvider). Build them before the display-only "(new)" marker is added.
+        # processing started from these results can resolve its source params (dataProvider).
         self._store_template_search_footprints(geoms, template_group_name=template_group_name)
-        for position, feature in enumerate(geoms.get("features", ())):
-            if raw_images[position].get("isNew"):
-                feature["properties"]["productType"] = (
-                    (feature["properties"].get("productType") or "") + " (new)"
-                ).strip()
         self.dlg.fill_metadata_table(geoms)
+        # Keep the image DTOs (they carry isNew) keyed by id so mark-seen reads truth.
+        self.template_search_images = {str(image.id): image for image in images}
+        # New images are flagged with an icon in the leftmost column (not by editing text).
+        self._apply_new_image_markers()
 
     def _store_template_search_footprints(self,
                                           geoms: dict,
@@ -592,30 +590,6 @@ class Mapflow(QObject):
         self.app_context.search_footprints = {
             feature["local_index"]: feature for feature in layer.getFeatures()
         }
-
-    def populate_search_table_from_template(self, search_results: List[dict]):
-        """Populate search table with search results returned for a selected template.""" #!
-        self.dlg.metadataTable.clearSelection()
-        self.dlg.metadataTable.setSortingEnabled(False)
-        self.dlg.metadataTable.setRowCount(len(search_results))
-
-        for row, result in enumerate(search_results):
-            metadata = result.get("metadata") or {}
-            if metadata.get("id") is None:
-                metadata["id"] = result.get("id")
-            metadata["local_index"] = row
-            if result.get("isNew"):
-                metadata["productType"] = (
-                    (metadata.get("productType") or "") + " (new)"
-                ).strip()
-
-            for col, attr in enumerate(self.config_search_columns.METADATA_TABLE_ATTRIBUTES.values()):
-                item = QTableWidgetItem()
-                item.setData(Qt.DisplayRole, metadata.get(attr))
-                self.dlg.metadataTable.setItem(row, col, item)
-
-        self.dlg.metadataTable.setSortingEnabled(True)
-        self.dlg.metadataTable.resizeColumnsToContents()
 
     def _aoi_ids_from_template(self, template) -> List[str]:
         """Extract AOI IDs from template searchParams.aoiDetails features."""
@@ -2553,61 +2527,124 @@ class Mapflow(QObject):
         """Keep click behavior passive; marking seen is handled by Seen actions only."""
         return
 
-    def _mark_template_image_seen_by_row(self, row: int) -> bool:
-        """Mark one metadata-table row image as seen for active template when row is marked as new."""
-        if not self.active_template_id:
-            return False
-        product_type_col = 0  # 'productType' is the first column in METADATA_TABLE_ATTRIBUTES
-        cell = self.dlg.metadataTable.item(row, product_type_col)
-        if not cell:
-            return False
-        text = cell.text()
-        if not text.endswith(" (new)"):
-            return False
-        id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
-        id_item = self.dlg.metadataTable.item(row, id_column_index)
-        if not id_item:
-            return False
-        image_id = id_item.text()
-        cell.setText(text[: -len(" (new)")])
-        self.processing_service.api.mark_template_image_seen(
-            template_id=self.active_template_id,
-            image_id=image_id,
-            callback=lambda _: None,
-            error_handler=lambda _: None,
-        )
-        self._decrement_template_new_images_count(self.active_template_id)
-        return True
+    def _mark_template_image_seen_by_row(self, row: int) -> None:
+        """Request 'seen' for one row's image, only if its DTO is still new.
 
-    def mark_selected_template_images_seen(self):
-        """Mark selected metadata rows as seen for active template."""
+        The row marker and the new-images counter are updated from the success
+        callback (``_on_template_image_seen``) — never optimistically.
+        """
         if not self.active_template_id:
             return
-        rows = sorted({item.row() for item in self.dlg.metadataTable.selectedItems()})
-        for row in rows:
+        image = self._template_image_at_row(row)
+        if image is None or not image.isNew:
+            return
+        template_id = self.active_template_id
+        self.processing_service.api.mark_template_image_seen(
+            template_id=template_id,
+            image_id=str(image.id),
+            callback=lambda _response, r=row, img=image, tid=template_id:
+                self._on_template_image_seen(r, img, tid),
+            error_handler=self._mark_seen_error_handler,
+        )
+
+    def mark_selected_template_images_seen(self):
+        """Mark selected metadata rows as seen for the active template."""
+        if not self.active_template_id:
+            return
+        for row in sorted({item.row() for item in self.dlg.metadataTable.selectedItems()}):
             self._mark_template_image_seen_by_row(row)
 
     def mark_all_template_images_seen(self):
-        """Mark all metadata rows as seen for active template."""
+        """Mark every image of the active template as seen with a single request."""
         if not self.active_template_id:
             return
-        for row in range(self.dlg.metadataTable.rowCount()):
-            self._mark_template_image_seen_by_row(row)
+        template_id = self.active_template_id
+        self.processing_service.api.mark_all_template_images_seen(
+            template_id=template_id,
+            callback=lambda _response, tid=template_id: self._on_all_template_images_seen(tid),
+            error_handler=self._mark_seen_error_handler,
+        )
 
-    def _decrement_template_new_images_count(self, template_id: str):
-        """Decrement newImagesCount on the in-memory template DTO and update processings table status cell."""
-        template = None
+    def _template_image_at_row(self, row: int):
+        """Return the stored image DTO for a metadata-table row, or None."""
+        id_item = self.dlg.metadataTable.item(row, self.config.MAXAR_ID_COLUMN_INDEX)
+        if not id_item:
+            return None
+        return getattr(self, "template_search_images", {}).get(id_item.text())
+
+    def _on_template_image_seen(self, row: int, image, template_id: str) -> None:
+        """Success: clear the row marker and decrement the new-images counter."""
+        image.isNew = False
+        self._set_new_image_marker(row, False)
+        self._decrement_template_new_images_count(template_id)
+
+    def _on_all_template_images_seen(self, template_id: str) -> None:
+        """Success: clear every visible marker and zero the new-images counter."""
+        for row in range(self.dlg.metadataTable.rowCount()):
+            image = self._template_image_at_row(row)
+            if image is not None and image.isNew:
+                image.isNew = False
+                self._set_new_image_marker(row, False)
+        self._reset_template_new_images_count(template_id)
+
+    def _mark_seen_error_handler(self, response: QNetworkReply) -> None:
+        """Leave markers/counter untouched and tell the user the request failed."""
+        self.iface.messageBar().pushWarning(
+            self.app_context.plugin_name,
+            self.tr("Could not mark image(s) as seen, please try again."),
+        )
+
+    def _new_image_marker_column(self) -> int:
+        """Leftmost visible column — where the 'new image' icon is shown.
+
+        Starts at the configured leftmost index (0) and skips columns the user hid via
+        the search-column checkboxes, so the marker never lands on a hidden column.
+        """
+        start = self.config.NEW_IMAGE_MARKER_COLUMN_INDEX
+        table = self.dlg.metadataTable
+        for col in range(start, table.columnCount()):
+            if not table.isColumnHidden(col):
+                return col
+        return start
+
+    def _apply_new_image_markers(self) -> None:
+        """Show the 'new image' icon on every row whose image DTO is still new."""
+        for row in range(self.dlg.metadataTable.rowCount()):
+            image = self._template_image_at_row(row)
+            self._set_new_image_marker(row, bool(image is not None and image.isNew))
+
+    def _set_new_image_marker(self, row: int, is_new: bool) -> None:
+        """Set or clear the 'new image' icon on a row's leftmost-visible cell."""
+        cell = self.dlg.metadataTable.item(row, self._new_image_marker_column())
+        if cell is not None:
+            cell.setIcon(new_image_icon if is_new else QIcon())
+
+    def _find_template(self, template_id: str):
         template_map = getattr(self.processing_service, "templates", {}) or {}
         for key, value in template_map.items():
             if str(key) == str(template_id):
-                template = value
-                break
+                return value
+        return None
+
+    def _decrement_template_new_images_count(self, template_id: str):
+        """Decrement newImagesCount on the in-memory template DTO and refresh its status cell."""
+        template = self._find_template(template_id)
         if template is None:
             return
         if template.newImagesCount and template.newImagesCount > 0:
             template.newImagesCount -= 1
+        self._refresh_template_status_cell(template_id, template)
 
-        # Update the status cell in processingsTable
+    def _reset_template_new_images_count(self, template_id: str):
+        """Zero newImagesCount on the in-memory template DTO and refresh its status cell."""
+        template = self._find_template(template_id)
+        if template is None:
+            return
+        template.newImagesCount = 0
+        self._refresh_template_status_cell(template_id, template)
+
+    def _refresh_template_status_cell(self, template_id: str, template) -> None:
+        """Update the template's status cell text + tooltip in the processings table."""
         id_col = self.config.PROCESSING_TABLE_ID_COLUMN_INDEX
         status_col = list(self.config.PROCESSING_TABLE_COLUMNS).index('status')
         table = self.dlg.processingsTable
