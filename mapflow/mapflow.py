@@ -527,6 +527,8 @@ class Mapflow(QObject):
             self.dlg.metadataTable.setRowCount(0)
             self.alert(self.tr("No images was found"), QMessageBox.Information)
             return
+        template = self.processing_service.selected_template()
+        template_group_name = str(template.name) if template else None
         raw_images = response_json.get("images", [])
         response_data = ImageCatalogResponseSchema(**response_json)
         geoms = response_data.as_geojson()
@@ -535,7 +537,7 @@ class Mapflow(QObject):
         # Footprints must keep the real providerName/productType so that a planned
         # processing started from these results can resolve its source params
         # (dataProvider). Build them before the display-only "(new)" marker is added.
-        self._store_template_search_footprints(geoms)
+        self._store_template_search_footprints(geoms, template_group_name=template_group_name)
         for position, feature in enumerate(geoms.get("features", ())):
             if raw_images[position].get("isNew"):
                 feature["properties"]["productType"] = (
@@ -543,13 +545,18 @@ class Mapflow(QObject):
                 ).strip()
         self.dlg.fill_metadata_table(geoms)
 
-    def _store_template_search_footprints(self, geoms: dict) -> None:
-        """Populate ``app_context.search_footprints`` (QgsFeatures keyed by ``local_index``)
-        from template search results, mirroring a regular imagery search.
+    def _store_template_search_footprints(self,
+                                          geoms: dict,
+                                          template_group_name: Optional[str] = None) -> None:
+        """Build the template search-results footprint layer.
 
-        Without this the search footprints stay empty and starting a planned processing
-        from template results omits the ``dataProvider`` (resolved from the footprint
-        ``providerName``), so the backend rejects the request with HTTP 400.
+        Two responsibilities, mirroring a regular imagery search:
+        * populate ``app_context.search_footprints`` (QgsFeatures keyed by ``local_index``)
+          so a planned processing started from these results resolves its source params
+          (``dataProvider`` comes from the footprint ``providerName``; otherwise the
+          backend rejects creation with HTTP 400);
+        * add the styled footprint layer to the map under the template's group so the
+          user can preview image footprints and request imagery previews.
         """
         self.app_context.search_footprints = {}
         provider = self.imagery_search_provider
@@ -558,9 +565,27 @@ class Mapflow(QObject):
         filename = provider.save_search_layer(self.app_context.temp_dir, geoms)
         if not filename:
             return
-        layer = QgsVectorLayer(filename, f"{provider.name} template metadata", "ogr")
+        # Drop the previous footprint layer so repeated searches don't stack duplicates.
+        if getattr(self.app_context, 'metadata_layer', None) is not None:
+            try:
+                self.app_context.project.removeMapLayer(self.app_context.metadata_layer)
+            except (AttributeError, RuntimeError):
+                pass
+        layer = QgsVectorLayer(filename, f"{provider.name} metadata", "ogr")
         if not layer.isValid():
+            self.app_context.metadata_layer = None
             return
+        layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
+        if template_group_name:
+            target_group = self._template_group_target(template_group_name)
+            self.app_context.project.addMapLayer(layer, addToLegend=False)
+            target_group.insertLayer(0, layer)
+        else:
+            self.result_loader.add_layer(layer=layer)
+        self.app_context.metadata_layer = layer
+        # Selecting a footprint on the map selects the matching table row (and triggers preview).
+        self.app_context.meta_layer_table_connection = layer.selectionChanged.connect(
+            self.sync_layer_selection_with_table)
         self.app_context.search_footprints = {
             feature["local_index"]: feature for feature in layer.getFeatures()
         }
@@ -736,21 +761,7 @@ class Mapflow(QObject):
 
         root = self.app_context.project.layerTreeRoot()
         if template_group_name:
-            mapflow_group_name = self.app_context.settings.value('layerGroup') or self.app_context.plugin_name
-            mapflow_group = root.findGroup(mapflow_group_name)
-
-            parent_group = mapflow_group if mapflow_group else root
-            template_group = parent_group.findGroup(template_group_name)
-            if not template_group:
-                template_group = parent_group.insertGroup(0, template_group_name)
-
-            target_group = template_group
-            if subgroup_name:
-                subgroup = template_group.findGroup(subgroup_name)
-                if not subgroup:
-                    subgroup = template_group.insertGroup(0, subgroup_name)
-                target_group = subgroup
-
+            target_group = self._template_group_target(template_group_name, subgroup_name)
             self.app_context.project.addMapLayer(aoi_layer, addToLegend=False)
             target_group.insertLayer(0, aoi_layer)
         elif reference_layer_id:
@@ -768,6 +779,25 @@ class Mapflow(QObject):
         self.add_to_layers(aoi_layer)
         self.iface.setActiveLayer(aoi_layer)
         return aoi_layer
+
+    def _template_group_target(self,
+                               template_group_name: str,
+                               subgroup_name: Optional[str] = None):
+        """Find or create the ``Mapflow > <template name> [> <subgroup>]`` layer-tree group
+        and return the node new layers should be inserted into."""
+        root = self.app_context.project.layerTreeRoot()
+        mapflow_group_name = self.app_context.settings.value('layerGroup') or self.app_context.plugin_name
+        mapflow_group = root.findGroup(mapflow_group_name)
+        parent_group = mapflow_group if mapflow_group else root
+        template_group = parent_group.findGroup(template_group_name)
+        if not template_group:
+            template_group = parent_group.insertGroup(0, template_group_name)
+        if subgroup_name:
+            subgroup = template_group.findGroup(subgroup_name)
+            if not subgroup:
+                subgroup = template_group.insertGroup(0, subgroup_name)
+            return subgroup
+        return template_group
 
     def _add_template_processing_aoi_callback(self,
                                               response: QNetworkReply,
