@@ -70,6 +70,7 @@ def test_create_search_template_blocks_when_aoi_exceeds_template_area_limit():
         aoi_size=120.0,
         template_area_limit=50.0,
         project_id="project-1",
+        current_project=SimpleNamespace(id="project-1"),
     )
 
     plugin.create_search_template()
@@ -94,6 +95,7 @@ def test_create_search_template_proceeds_when_limit_is_unknown():
         aoi_size=10.0,
         template_area_limit=0.0,  # unknown -> client-side check disabled
         project_id="project-1",
+        current_project=SimpleNamespace(id="project-1"),
         plugin_name="Mapflow",
     )
 
