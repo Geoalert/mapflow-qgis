@@ -1369,9 +1369,7 @@ class Mapflow(QObject):
         min_intersection = self.dlg.minIntersection.value()
         hide_unavailable = self.dlg.hideUnavailableResults.isChecked()
         product_types = self.selected_search_product_types() or []
-        # An empty providers selection must be omitted, not sent as []: the backend reads
-        # [] literally as "search no providers" and rejects template creation.
-        search_providers = self.dlg.searchProvidersCombo.checkedItemsData() or None
+        search_providers = self.selected_search_providers()
 
         search_params = SearchParams(
             aoi=json.loads(self.app_context.aoi.asJson()),
@@ -1458,7 +1456,7 @@ class Mapflow(QObject):
 
         hide_unavailable = self.dlg.hideUnavailableResults.isChecked()
         product_types = self.selected_search_product_types()
-        search_providers = self.dlg.searchProvidersCombo.checkedItemsData() or None
+        search_providers = self.selected_search_providers()
 
         if isinstance(provider, MaxarProvider):
             self.get_maxar_metadata(aoi=aoi,
@@ -3384,6 +3382,18 @@ class Mapflow(QObject):
         if len(product_types) == 0:
             product_types = [ProductType.mosaic.upper(), ProductType.image.upper()]
         return product_types
+
+    def selected_search_providers(self):
+        """Provider filter to send with a search/template request.
+
+        Only meaningful while the search is limited to available providers; when
+        "Search only through available providers" is off, the (hidden) provider selection
+        must NOT be sent — the search runs across all providers. An empty selection is
+        also omitted (None), since the backend reads ``[]`` as "search no providers".
+        """
+        if not self.dlg.hideUnavailableResults.isChecked():
+            return None
+        return self.dlg.searchProvidersCombo.checkedItemsData() or None
 
     def setup_tempdir(self):
         if not self.app_context.settings.value('outputDir'):
