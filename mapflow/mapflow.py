@@ -1317,6 +1317,21 @@ class Mapflow(QObject):
     def set_metadata_search_mode(self, mode: str):
         self.metadata_search_mode = mode
         self.dlg.getMetadata.setText(self.tr("Plan search") if mode == "plan" else self.tr("Search"))
+        self.update_plan_search_message()
+
+    def _select_project_for_template_message(self) -> str:
+        return self.tr("Select a project to create a template")
+
+    def update_plan_search_message(self) -> None:
+        """A template must belong to a project. In plan mode without one, prompt the user in
+        the cost/message label (the immediate search is never blocked, so the button stays usable)."""
+        message = self._select_project_for_template_message()
+        if getattr(self, "metadata_search_mode", "search") == "plan" and not self.app_context.current_project:
+            self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
+            self.dlg.processingProblemsLabel.setText(message)
+        elif self.dlg.processingProblemsLabel.text() == message:
+            # Only clear our own message, never the cost / other reasons.
+            self.dlg.processingProblemsLabel.clear()
 
     def handle_metadata_button_click(self):
         if getattr(self, "metadata_search_mode", "search") == "plan":
@@ -1327,6 +1342,13 @@ class Mapflow(QObject):
     def create_search_template(self):
         """Create planned search template using current AOI and imagery-search filters."""
         self.replace_search_provider_index()
+        # A template always belongs to a project — block creation (but not the immediate search)
+        # and tell the user, instead of sending a request that the backend would reject.
+        if not self.app_context.current_project:
+            self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
+            self.dlg.processingProblemsLabel.setText(self._select_project_for_template_message())
+            self.alert(self._select_project_for_template_message(), QMessageBox.Warning)
+            return
         if not self.app_context.aoi:
             self.alert(self.tr('Please, select a valid area of interest'))
             return
