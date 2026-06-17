@@ -195,6 +195,7 @@ class ProcessingTemplateDTO(Serializable, SkipDataClass):
     isActive: bool = False
     isArchived: bool = False
     maxAoiIntersectionPercent: Optional[float] = None
+    area: Optional[float] = None  # AOI area in square metres, as reported by the backend
 
     def __post_init__(self):
         self.createdAt = _parse_iso_datetime(self.createdAt)
@@ -238,7 +239,17 @@ class ProcessingTemplateDTO(Serializable, SkipDataClass):
 
     @property
     def aoi_area(self) -> Optional[float]:
-        """Total AOI area in sq km, computed from searchParams.aoiDetails features."""
+        """Total AOI area in sq km.
+
+        Prefers the backend-provided ``area`` (square metres), which the project
+        template list returns even though it omits ``searchParams``. Falls back to
+        computing from ``searchParams.aoiDetails`` when ``area`` is absent.
+        """
+        if self.area is not None:
+            try:
+                return round(float(self.area) / 1e6, 4)
+            except (TypeError, ValueError):
+                pass
         try:
             features = self._aoi_features()
             if not features:
@@ -251,7 +262,6 @@ class ProcessingTemplateDTO(Serializable, SkipDataClass):
 
     @property
     def table_status(self) -> str:
-        print (self.name, self.isActive)
         if (self.status or "").upper() == "FAILED":
             return "Failed"
         if not self.isActive:
