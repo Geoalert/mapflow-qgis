@@ -74,6 +74,7 @@ class ImageSchema(Serializable, SkipDataClass):
     providerName: Optional[str] = None
     zoom: Optional[str] = None
     minAreaSqkm: Optional[float] = None
+    isNew: Optional[bool] = None  # template search results: image is new since lastCheckedAt
 
     def __post_init__(self):
         if isinstance(self.acquisitionDate, str):
