@@ -22,7 +22,6 @@ from qgis.core import (QgsRectangle,
                        QgsDistanceArea,
                        QgsVectorFileWriter,
                        QgsProject,
-                       QgsMessageLog,
                        QgsCoordinateTransform
                        )
 
