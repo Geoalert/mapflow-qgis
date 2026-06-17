@@ -379,14 +379,19 @@ class Mapflow(QObject):
             self.iface.addCustomActionForLayer(self.add_layer_action, layer)
         self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
 
-    def add_to_layers(self, layer=None):
+    def add_to_layers(self, layer=None, recompute_cost: bool = True):
         if not layer:
             layer = self.iface.layerTreeView().currentLayer()
         if layer not in self.app_context.aoi_layers:
             self.app_context.aoi_layers.append(layer)
             self.iface.addCustomActionForLayer(self.remove_layer_action, layer)
         self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
+        # When adding template AOI layers in bulk (recompute_cost=False), don't let each
+        # setLayer fire polygonCombo.layerChanged -> a cost request: no image is selected yet,
+        # and the user's click will compute the cost once afterwards.
+        self.dlg.polygonCombo.blockSignals(not recompute_cost)
         self.dlg.polygonCombo.setLayer(layer)
+        self.dlg.polygonCombo.blockSignals(False)
 
     def remove_from_layers(self, layer=None):
         if not layer:
@@ -577,13 +582,15 @@ class Mapflow(QObject):
             self.app_context.metadata_layer = None
             return
         layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
+        # Register as the current search-metadata layer BEFORE adding it to the project, so
+        # the AOI-area monitor (which reacts to layersAdded) recognizes and skips it.
+        self.app_context.metadata_layer = layer
         if template_group_name:
             target_group = self._template_group_target(template_group_name)
             self.app_context.project.addMapLayer(layer, addToLegend=False)
             target_group.insertLayer(0, layer)
         else:
             self.result_loader.add_layer(layer=layer)
-        self.app_context.metadata_layer = layer
         # Selecting a footprint on the map selects the matching table row (and triggers preview).
         self.app_context.meta_layer_table_connection = layer.selectionChanged.connect(
             self.sync_layer_selection_with_table)
@@ -753,7 +760,8 @@ class Mapflow(QObject):
             self.app_context.project.addMapLayer(aoi_layer)
 
         aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', style_name))
-        self.add_to_layers(aoi_layer)
+        # Template AOI layers are added in bulk on open; don't fire a cost request per layer.
+        self.add_to_layers(aoi_layer, recompute_cost=False)
         self.iface.setActiveLayer(aoi_layer)
         return aoi_layer
 
@@ -1154,10 +1162,29 @@ class Mapflow(QObject):
         :param layers: A list of layers of any type (all non-polygon layers will be skipped)
         """
         for layer in filter(layer_utils.is_polygon_layer, layers):
+            # The current search-results footprint layer is a polygon too, but it is NOT an
+            # AOI. Wiring its selection to the area calc would recompute (and re-request) the
+            # processing cost a second time on every image click — skip it.
+            if self._is_search_metadata_layer(layer):
+                continue
             layer.selectionChanged.connect(self.area_calculator_service.calculate_aoi_area_selection)
             layer.geometryChanged.connect(self.area_calculator_service.calculate_aoi_area_layer_edited)
             layer.featureAdded.connect(self.area_calculator_service.calculate_aoi_area_layer_edited)
             layer.featuresDeleted.connect(self.area_calculator_service.calculate_aoi_area_layer_edited)
+
+    def _is_search_metadata_layer(self, layer) -> bool:
+        """True if `layer` is the current imagery-search footprints layer.
+
+        Metadata-layer creators assign ``app_context.metadata_layer`` before adding the
+        layer to the project, so this is reliable at ``layersAdded`` time.
+        """
+        metadata_layer = self.app_context.metadata_layer
+        if metadata_layer is None:
+            return False
+        try:
+            return layer.id() == metadata_layer.id()
+        except RuntimeError:  # metadata layer was deleted
+            return False
 
     def toggle_imagery_search(self,
                               provider):
@@ -1498,6 +1525,7 @@ class Mapflow(QObject):
             self.app_context.project.removeMapLayer(self.app_context.metadata_layer)
         except (AttributeError, RuntimeError):  # metadata layer has been deleted
             pass
+        # Assigned (before add_layer) so the AOI-area monitor recognizes and skips it.
         self.app_context.metadata_layer = QgsVectorLayer(filename, layer_name, 'ogr')
         self.app_context.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
         # Place search results under AOI layer
@@ -1966,21 +1994,21 @@ class Mapflow(QObject):
             self.app_context.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(
                 self.sync_layer_selection_with_table)
             raise e
-        self.area_calculator_service.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
-        self.app_context.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(
-            self.sync_layer_selection_with_table)
-        
-        # Set zoom (if available)
+        # Set the zoom from the selected image BEFORE recomputing cost, with the combo's
+        # signals blocked. Otherwise zoomCombo.currentIndexChanged -> on_zoom_change fires a
+        # SECOND, duplicate cost request (and the first one below would use the stale zoom).
         if self.app_context.zoom_selector:
             if selected_rows:
                 zooms = [self.dlg.metadataTable.item(row, self.config.ZOOM_COLUMN_INDEX).text() for row in selected_rows]
-                zoom_index = self.dlg.zoomCombo.findText(zooms[0]) # different zooms are not allowed
+                zoom_index = self.dlg.zoomCombo.findText(zooms[0])  # different zooms are not allowed
             else:
                 zoom_index = -1
-            if zoom_index == -1:
-                self.dlg.zoomCombo.setCurrentIndex(0)
-            else:
-                self.dlg.zoomCombo.setCurrentIndex(zoom_index)
+            self.dlg.zoomCombo.blockSignals(True)
+            self.dlg.zoomCombo.setCurrentIndex(0 if zoom_index == -1 else zoom_index)
+            self.dlg.zoomCombo.blockSignals(False)
+        self.area_calculator_service.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+        self.app_context.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(
+            self.sync_layer_selection_with_table)
 
     def sync_layer_selection_with_table(self, selected_ids: List[int]) -> None:
         """
@@ -2139,7 +2167,26 @@ class Mapflow(QObject):
                 self.project_processing_controller.show_projects()
                 self.project_service.setup_project_change_rights()
 
+    def _register_provider_min_areas(self, providers_data):
+        """Map provider name -> minimum AOI area (sq km) from /user/status provider data.
+
+        Keyed by both the api name and the display name (lowercased) so it matches whatever
+        the search results report as the image's ``providerName``.
+        """
+        for data in providers_data or []:
+            min_area = data.get("minAreaSqKm", data.get("minAreaSqkm"))
+            if min_area is None:
+                continue
+            try:
+                min_area = float(min_area)
+            except (TypeError, ValueError):
+                continue
+            for key in (data.get("name"), data.get("displayName")):
+                if key:
+                    self.app_context.provider_min_areas[str(key).lower()] = min_area
+
     def setup_providers(self, providers_data):
+        self._register_provider_min_areas(providers_data)
         self.provider_service.imagery_search_provider_instance = ImagerySearchProvider(proxy=self.server)
         self.provider_service.my_imagery_provider_instance = MyImageryProvider()
         # Get only unique providers to avoid index shifting in souceCombo when one provider is sent multiple times
@@ -2155,6 +2202,7 @@ class Mapflow(QObject):
             provider.clear_saved_search(self.app_context.temp_dir)
     
     def setup_search_providers(self, providers_data):
+        self._register_provider_min_areas(providers_data)
         search_providers = ProvidersList([DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
                                           for data in providers_data])
         self.dlg.enable_search_providers_filter(len(search_providers))

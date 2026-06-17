@@ -54,6 +54,8 @@ class AppContext:
 
     # === Provider State ===
     data_provider: Optional["ProviderInterface"] = None
+    # Minimum AOI area (sq km) per provider, by lowercased provider name — from /user/status.
+    provider_min_areas: Dict[str, float] = field(default_factory=dict)
     
     # === Imagery Search State ===
     search_provider: Optional["ProviderInterface"] = None
