@@ -67,3 +67,28 @@ def test_selected_providers_are_sent():
     search_params = _created_search_params(plugin)
 
     assert search_params["dataProviders"] == ["arcgis_world_imagery"]
+
+
+def test_providers_omitted_when_available_filter_is_off_even_if_selected():
+    # "Search only through available providers" OFF -> the (hidden) selection must NOT be sent.
+    plugin = _plugin_ready_to_create_template(checked_providers=["arcgis_world_imagery"])
+    plugin.dlg.hideUnavailableResults.isChecked.return_value = False
+
+    search_params = _created_search_params(plugin)
+
+    assert "dataProviders" not in search_params
+
+
+def test_selected_search_providers_respects_available_filter_checkbox():
+    plugin = Mapflow.__new__(Mapflow)
+    plugin.dlg = MagicMock()
+    plugin.dlg.searchProvidersCombo.checkedItemsData.return_value = ["arcgis_world_imagery"]
+
+    plugin.dlg.hideUnavailableResults.isChecked.return_value = False
+    assert plugin.selected_search_providers() is None  # filter off -> nothing sent
+
+    plugin.dlg.hideUnavailableResults.isChecked.return_value = True
+    assert plugin.selected_search_providers() == ["arcgis_world_imagery"]
+
+    plugin.dlg.searchProvidersCombo.checkedItemsData.return_value = []
+    assert plugin.selected_search_providers() is None  # empty selection -> omitted
