@@ -47,6 +47,8 @@ def _plugin_with_search_provider(tmp_path, template_name="Template A"):
     plugin.tr = lambda text: text
     plugin.alert = MagicMock()
     plugin.dlg = MagicMock()
+    # fill_metadata_table is mocked, so no real rows exist -> the marker pass is a no-op.
+    plugin.dlg.metadataTable.rowCount.return_value = 0
     plugin.plugin_dir = PLUGIN_DIR
     plugin.result_loader = MagicMock()
     plugin.provider_service = SimpleNamespace(
@@ -89,8 +91,8 @@ def test_template_callback_keeps_product_type_clean_for_new_images(tmp_path):
 
     plugin.get_selected_template_callback(_response({"images": [_image(is_new=True)], "total": 1}))
 
-    # The display-only "(new)" marker must not leak into the footprint productType,
-    # which feeds product-type / zoom consistency checks during params building.
+    # The footprint productType stays the raw value (it feeds product-type / zoom
+    # consistency checks during params building); the new-image state is an icon, not text.
     assert plugin.app_context.search_footprints[0].attribute("productType") == "Image"
 
 
@@ -107,6 +109,25 @@ def test_template_callback_adds_footprint_layer_under_template_group(tmp_path):
     added_layer = layers[0].layer()
     assert added_layer is plugin.app_context.metadata_layer
     assert added_layer.featureCount() == 1
+
+
+def test_template_callback_keeps_product_type_text_clean_and_stores_new_flag(tmp_path):
+    plugin = _plugin_with_search_provider(tmp_path)
+
+    plugin.get_selected_template_callback(_response({
+        "images": [
+            _image(image_id="img-new", is_new=True),
+            _image(image_id="img-seen", is_new=False),
+        ],
+        "total": 2,
+    }))
+
+    geoms = plugin.dlg.fill_metadata_table.call_args.args[0]
+    # The "new" state is shown with an icon now, so the product-type text stays clean.
+    assert [f["properties"]["productType"] for f in geoms["features"]] == ["Image", "Image"]
+    # Image DTOs are stored by id and carry the authoritative isNew flag for mark-seen.
+    assert plugin.template_search_images["img-new"].isNew is True
+    assert plugin.template_search_images["img-seen"].isNew is False
 
 
 def test_template_callback_alerts_and_skips_when_no_images(tmp_path):

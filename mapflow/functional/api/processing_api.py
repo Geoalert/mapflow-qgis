@@ -262,6 +262,19 @@ class ProcessingApi(QObject):
             use_default_error_handler=False,
         )
 
+    def mark_all_template_images_seen(self,
+                                      template_id: Union[UUID, str],
+                                      callback: Callable,
+                                      error_handler: Callable):
+        """Mark every image of the template as seen in a single request."""
+        self.http.put(
+            path=f"processings/template/{template_id}/image/seenAll",
+            body=b"",
+            callback=callback,
+            error_handler=error_handler,
+            use_default_error_handler=False,
+        )
+
     def get_templates_by_user(self, user_id: Union[UUID, str], callback: Callable):
         self.http.get(
             path=f"processings/template/user/{user_id}",
