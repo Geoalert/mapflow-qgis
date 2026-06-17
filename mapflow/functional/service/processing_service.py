@@ -16,6 +16,7 @@ from ...dialogs.main_dialog import MainDialog
 from ...dialogs.confirm_processing_start_dialog import ConfirmProcessingStartDialog
 from ...errors import (ProcessingInputDataMissing,
                        BadProcessingInput,
+                       ErrorMessage,
                        PluginError,
                        ImageIdRequired,
                        AoiNotIntersectsImage)
@@ -33,6 +34,7 @@ from ...schema.processing import (
 from ...schema.processing import ProcessingTemplateDTO
 from ..service.alert_service import alert, AlertService
 from ..app_context import AppContext
+from ...entity.provider import ImagerySearchProvider
 from ...config import Config
 from ...functional.layer_utils import ResultsLoader
 from ...http import Http, get_error_report_body
@@ -113,6 +115,19 @@ class ProcessingService(QObject):
                 raise BadProcessingInput(self.tr(
                     'Up to {} sq km can be processed at a time. '
                     'Try splitting your area(s) into several processings.').format(self.app_context.aoi_area_limit))
+            min_area, provider_name = self._selected_search_min_area()
+            if min_area is not None and self.app_context.aoi_size is not None \
+                    and self.app_context.aoi_size < min_area:
+                # Intersection of the AOI with the selected image is below the provider's
+                # minimum: reject client-side so we never send the cost/start request.
+                raise BadProcessingInput(ErrorMessage(
+                    code="ProviderMinAreaError",
+                    parameters={
+                        "aoiArea": round(self.app_context.aoi_size, 2),
+                        "providerName": provider_name or self.tr("the selected"),
+                        "providerMinArea": round(min_area, 2),
+                    },
+                ).to_str())
         except AoiNotIntersectsImage:
             error = self.tr("Selected AOI does not intersect the selected imagery")
         except ImageIdRequired:
@@ -121,7 +136,47 @@ class ProcessingService(QObject):
         except PluginError as e:
             error = str(e)
         return error, disable_start
-    
+
+    def _selected_search_min_area(self):
+        """Provider minimum AOI area for the currently selected search image(s).
+
+        The minimum lives on the provider (from ``/user/status``, see
+        ``app_context.provider_min_areas``); the selected footprints supply the
+        ``providerName`` to look it up. Returns ``(min_area_sqkm, provider_name)`` with the
+        most restrictive minimum, or ``(None, None)`` when nothing relevant is selected.
+        """
+        # Only imagery search ties the AOI to a provider's per-image minimum; for any other
+        # provider the metadata-table selection (possibly stale) is irrelevant — bail early.
+        if not isinstance(self.app_context.data_provider, ImagerySearchProvider):
+            return None, None
+        selected = self.dlg.metadataTable.selectedItems()
+        if not selected:
+            return None, None
+        footprints = self.app_context.search_footprints or {}
+        provider_min_areas = getattr(self.app_context, "provider_min_areas", None) or {}
+        # Track the binding (largest) minimum so the reported provider name matches it.
+        binding_min, binding_provider = None, None
+        for row in sorted({item.row() for item in selected}):
+            index_item = self.dlg.metadataTable.item(row, Config.LOCAL_INDEX_COLUMN)
+            if not index_item:
+                continue
+            try:
+                feature = footprints.get(int(index_item.text()))
+            except (TypeError, ValueError):
+                feature = None
+            if feature is None:
+                continue
+            try:
+                name = feature.attribute("providerName")
+            except (TypeError, KeyError):
+                name = None
+            if name in (None, "", "NULL"):
+                continue
+            min_area = provider_min_areas.get(str(name).lower())
+            if min_area is not None and (binding_min is None or min_area > binding_min):
+                binding_min, binding_provider = min_area, name
+        return binding_min, binding_provider
+
     def validate_context_params(self):
         error = None
         planned_selection_error = self.planned_processing_selection_error()
