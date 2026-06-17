@@ -24,6 +24,7 @@ def _plugin_ready_to_create_template(checked_providers):
         aoi_size=10.0,
         template_area_limit=0.0,
         project_id="project-1",
+        current_project=SimpleNamespace(id="project-1"),
         plugin_name="Mapflow",
     )
 
