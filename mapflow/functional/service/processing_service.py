@@ -443,52 +443,18 @@ class ProcessingService(QObject):
             self.view.update_processing_table(self.combined_processing_rows())
 
     def get_templates_callback(self, response: QNetworkReply):
+        """Build templates from the project-scoped list.
+
+        The project endpoint omits ``searchParams``; they are hydrated lazily when a
+        template is opened (see ``Mapflow._open_template``). Keeping the poll to this
+        single request avoids a second full-list fetch on every tick.
+        """
         response_data = json.loads(response.readAll().data())
         if isinstance(response_data, dict):
             template_items = response_data.get("templates") or response_data.get("results") or []
         else:
             template_items = response_data or []
-
-        needs_hydration = any(
-            isinstance(item, dict) and not item.get("searchParams")
-            for item in template_items
-        )
-        if needs_hydration and getattr(self, "api", None):
-            self.api.get_templates(
-                callback=lambda full_response, project_items=template_items: self.get_templates_full_callback(
-                    full_response,
-                    project_items,
-                )
-            )
-            return
-
         self._set_templates_from_items(template_items)
-
-    def get_templates_full_callback(self, response: QNetworkReply, project_template_items):
-        """Merge full template payload fields into project-scoped template payloads."""
-        response_data = json.loads(response.readAll().data())
-        if isinstance(response_data, dict):
-            full_template_items = response_data.get("templates") or response_data.get("results") or []
-        else:
-            full_template_items = response_data or []
-
-        full_by_id = {}
-        for item in full_template_items:
-            if isinstance(item, dict) and item.get("id"):
-                full_by_id[str(item.get("id"))] = item
-
-        merged_items = []
-        for item in project_template_items:
-            if not isinstance(item, dict):
-                continue
-            normalized_item = dict(item)
-            full_item = full_by_id.get(str(item.get("id")))
-            if full_item and full_item.get("searchParams"):
-                normalized_item["searchParams"] = full_item.get("searchParams")
-            normalized_item.setdefault("searchParams", {})
-            merged_items.append(normalized_item)
-
-        self._set_templates_from_items(merged_items)
 
     def _set_templates_from_items(self, template_items):
         """Build and render template DTOs from raw template item list."""
@@ -561,24 +527,25 @@ class ProcessingService(QObject):
     def update_local_processings(self, processings: List[ProcessingDTO]):
         """
         Update local processing history and notify user of status changes.
-        
+
+        Does NOT render the table: the poll renders once with the combined
+        (templates + processings) rows after templates resolve, so the table
+        doesn't flash through a processings-only intermediate state.
+
         Args:
             processings: List of ProcessingDTO from server
         """
         if not self.processings_history:
             return
-            
+
         # Convert list to dict for history update
         processings_dict = {p.id: p for p in processings}
-        
+
         # Update history and get report of terminal status changes
         terminal_changes = self.processings_history.update(processings_dict, self.app_context.settings)
-        
+
         # Notify user of newly completed/failed processings
         self._notify_status_changes(terminal_changes, processings_dict)
-        
-        # Update the view
-        self.view.update_processing_table(processings)
 
     def _notify_status_changes(self, 
                                terminal_changes: Dict[str, List[UUID]], 

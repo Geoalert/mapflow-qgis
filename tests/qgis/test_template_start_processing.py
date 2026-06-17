@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -146,10 +147,12 @@ def test_on_processings_selection_changed_restores_default_when_processing_selec
 	plugin.dlg.disable_processing_start.assert_not_called()
 
 
-def test_load_results_double_click_template_triggers_both_actions():
+def test_load_results_double_click_hydrated_template_opens_directly():
 	plugin = Mapflow.__new__(Mapflow)
 	plugin.processing_service = MagicMock()
-	plugin.processing_service.selected_template.return_value = SimpleNamespace(id="template-1")
+	# Template already carries its AOI (searchParams present) -> open without a refetch.
+	template = SimpleNamespace(id="template-1", _aoi_features=lambda: [{"type": "Feature"}])
+	plugin.processing_service.selected_template.return_value = template
 	plugin.select_template_processings = MagicMock()
 	plugin.show_template_search_results = MagicMock()
 
@@ -157,6 +160,49 @@ def test_load_results_double_click_template_triggers_both_actions():
 
 	plugin.select_template_processings.assert_called_once()
 	plugin.show_template_search_results.assert_called_once()
+	plugin.processing_service.api.get_template.assert_not_called()
+
+
+def test_load_results_double_click_unhydrated_template_fetches_then_opens():
+	plugin = Mapflow.__new__(Mapflow)
+	plugin.processing_service = MagicMock()
+	plugin.processing_service.templates = {}
+	# Poll list omitted searchParams -> _aoi_features is empty -> hydrate before opening.
+	template = SimpleNamespace(id="template-1", _aoi_features=lambda: [])
+	plugin.processing_service.selected_template.return_value = template
+	plugin.select_template_processings = MagicMock()
+	plugin.show_template_search_results = MagicMock()
+
+	plugin.load_results()
+
+	plugin.processing_service.api.get_template.assert_called_once()
+	assert plugin.processing_service.api.get_template.call_args.kwargs["template_id"] == "template-1"
+	# Opening is deferred to the hydration callback.
+	plugin.show_template_search_results.assert_not_called()
+	plugin.select_template_processings.assert_not_called()
+
+	hydrated_payload = {
+		"template": {
+			"id": "template-1",
+			"name": "T1",
+			"status": "READY",
+			"createdAt": "2025-09-26T06:25:55.820336Z",
+			"userId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+			"searchParams": {"aoiDetails": {"type": "FeatureCollection", "features": []}},
+			"projectId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+			"activeUntil": "2026-03-15T17:00:00Z",
+		}
+	}
+	response = MagicMock()
+	response.readAll.return_value.data.return_value = json.dumps(hydrated_payload).encode()
+	callback = plugin.processing_service.api.get_template.call_args.kwargs["callback"]
+
+	callback(response)
+
+	assert "template-1" in plugin.processing_service.templates
+	assert plugin.processing_service.templates["template-1"].searchParams is not None
+	plugin.show_template_search_results.assert_called_once()
+	plugin.select_template_processings.assert_called_once()
 
 
 def test_select_template_processings_deduplicates_linked_processing_aoi_requests():
@@ -535,6 +581,9 @@ def test_get_processings_callback_requests_templates_for_current_project_only():
 		callback=service.get_templates_callback,
 	)
 	service.api.get_templates.assert_not_called()
+	# The table render is deferred to the combined render after templates resolve,
+	# so the poll never flashes through a processings-only state.
+	service.view.update_processing_table.assert_not_called()
 
 
 def test_get_templates_callback_filters_templates_to_current_project():
@@ -561,7 +610,8 @@ def test_get_templates_callback_filters_templates_to_current_project():
 	service.view.update_processing_table.assert_called_once()
 
 
-def test_get_templates_callback_handles_missing_search_params():
+def test_get_templates_callback_builds_templates_without_hydration_request():
+	"""Project list omits searchParams; the poll must NOT fall back to the full list."""
 	service = ProcessingService.__new__(ProcessingService)
 	service.tr = lambda text: text
 	service.app_context = SimpleNamespace(current_project=SimpleNamespace(id="3fa85f64-5717-4562-b3fc-2c963f66afa6"))
@@ -579,43 +629,8 @@ def test_get_templates_callback_handles_missing_search_params():
 
 	service.get_templates_callback(response)
 
-	service.api.get_templates.assert_called_once()
-
-
-def test_get_templates_full_callback_hydrates_search_params_from_full_list():
-	service = ProcessingService.__new__(ProcessingService)
-	service.tr = lambda text: text
-	service.app_context = SimpleNamespace(current_project=SimpleNamespace(id="3fa85f64-5717-4562-b3fc-2c963f66afa6"))
-	service.view = MagicMock()
-	service.view.sort_processings.return_value = ("CREATED", "DESC")
-	service.processings = {}
-
-	project_items = [
-		{
-			"id": "11111111-1111-1111-1111-111111111111",
-			"name": "T1",
-			"status": "READY",
-			"createdAt": "2025-09-26T06:25:55.820336Z",
-			"userId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-			"projectId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-			"activeUntil": "2026-03-15T17:00:00Z",
-		}
-	]
-
-	full_response = MagicMock()
-	full_response.readAll.return_value.data.return_value = (
-		b'['
-		b'{"id":"11111111-1111-1111-1111-111111111111","name":"T1","status":"READY","createdAt":"2025-09-26T06:25:55.820336Z","userId":"3fa85f64-5717-4562-b3fc-2c963f66afa6","searchParams":{"aoiDetails":{"type":"FeatureCollection","features":[]}},"projectId":"3fa85f64-5717-4562-b3fc-2c963f66afa6","activeUntil":"2026-03-15T17:00:00Z"}'
-		b']'
-	)
-
-	service.get_templates_full_callback(full_response, project_items)
-
-	assert len(service.templates) == 1
-	template = list(service.templates.values())[0]
-	assert template.searchParams is not None
-	assert template.searchParams.aoiDetails["type"] == "FeatureCollection"
-
+	# No second request, and the template is still built and rendered once.
+	service.api.get_templates.assert_not_called()
 	assert len(service.templates) == 1
 	service.view.update_processing_table.assert_called_once()
 

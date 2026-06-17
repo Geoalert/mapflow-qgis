@@ -74,7 +74,10 @@ from .schema.catalog import (AoiResponseSchema,
                              PreviewType,
                              ProductType)
 from .schema.project import MapflowProject, ProjectsRequest, UserRole
-from .schema.processing import CreateProcessingTemplateSchema, SearchParams
+from .schema.processing import (CreateProcessingTemplateSchema,
+                                ProcessingTemplateDetails,
+                                ProcessingTemplateDTO,
+                                SearchParams)
 from .schema.workflow_def import WorkflowDef
 # Dialogs
 from .dialogs import (ErrorMessageWidget,
@@ -2794,14 +2797,54 @@ class Mapflow(QObject):
             
 
     # =================== Results management ==================== #
+    def _open_template(self, template):
+        """Open a template's results, fetching its ``searchParams`` on demand.
+
+        The poll uses the project-scoped template list, which omits ``searchParams``.
+        They are needed to render the template AOI and filter its search results, so
+        when they are missing we fetch the full template by id first, then open.
+        """
+        if self._template_has_aoi(template):
+            self.show_template_search_results()
+            self.select_template_processings()
+            return
+        self.processing_service.api.get_template(
+            template_id=template.id,
+            callback=self._template_hydrated_callback,
+        )
+
+    @staticmethod
+    def _template_has_aoi(template) -> bool:
+        try:
+            return bool(template._aoi_features())
+        except Exception:
+            return False
+
+    def _template_hydrated_callback(self, response: QNetworkReply):
+        """Replace the stored template with its full (searchParams-bearing) version,
+        then open its results and linked-processing AOIs."""
+        try:
+            data = json.loads(response.readAll().data())
+            if isinstance(data, dict) and "template" in data:
+                hydrated = ProcessingTemplateDetails.from_dict(data).template
+            elif isinstance(data, dict):
+                hydrated = ProcessingTemplateDTO.from_dict(data)
+            else:
+                hydrated = None
+            if hydrated is not None:
+                self.processing_service.templates[hydrated.id] = hydrated
+        except Exception:
+            pass
+        self.show_template_search_results()
+        self.select_template_processings()
+
     def load_results(self):
         # Check if it's a template first
         template = self.processing_service.selected_template()
         if template:
-            self.show_template_search_results()
-            self.select_template_processings()
+            self._open_template(template)
             return
-        
+
         # Otherwise, it's a processing
         processing = self.processing_service.selected_processing()
         if not processing:
