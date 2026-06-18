@@ -82,10 +82,6 @@ class AppContext:
             return self.current_project.workflowDefs
         else:
             return None
-        
-    @property
-    def zoom_selector(self):
-        return self.config.ZOOM_SELECTOR.lower() == "true" if self.config else None
 
     def get_workflow_def(self, wd_name):
         if not self.workflow_defs:
