@@ -464,12 +464,18 @@ class Mapflow(QObject):
             menu.addAction(self.dlg.see_processings_action)
             if self.app_context.user_role.can_delete_rename_review_processing:
                 menu.addAction(self.dlg.template_rename_action)
-            # Add pause/resume based on template status.
+            # Add pause/resume/restart based on template status. Controlling the template's
+            # run state is a maintainer+ action, so it is disabled for e.g. contributors.
+            can_control = self.app_context.user_role.can_pause_resume_template
             if selected_template.isActive:
+                self.dlg.template_pause_action.setEnabled(can_control)
                 menu.addAction(self.dlg.template_pause_action)
             elif (selected_template.status or "").upper() == "FAILED":
-                menu.addAction(self.tr("Restart")).triggered.connect(self.processing_service.restart_template)
+                restart_action = menu.addAction(self.tr("Restart"))
+                restart_action.triggered.connect(self.processing_service.restart_template)
+                restart_action.setEnabled(can_control)
             else:
+                self.dlg.template_resume_action.setEnabled(can_control)
                 menu.addAction(self.dlg.template_resume_action)
             return
 
