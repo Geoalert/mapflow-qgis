@@ -94,7 +94,12 @@ class UserRole(str, Enum):
     @property
     def can_delete_rename_review_processing(self):
         return self.value in (UserRole.maintainer, UserRole.owner)
-    
+
+    @property
+    def can_pause_resume_template(self):
+        """Controlling a template's run state (pause / resume / restart) is a maintainer+ action."""
+        return self.value in (UserRole.maintainer, UserRole.owner)
+
     @property
     def can_delete_rename_project(self):
         return self.value == UserRole.owner
