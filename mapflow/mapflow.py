@@ -360,19 +360,18 @@ class Mapflow(QObject):
         self.setup_metadata_seen_dropdown()
 
         # ========== 14. ZOOM SELECTOR CONFIGURATION ==========
-        if self.app_context.zoom_selector:
-            self.dlg.zoomCombo.currentIndexChanged.connect(self.on_zoom_change)
-            saved_zoom = self.app_context.settings.value('zoom')
-            if saved_zoom is None:
+        self.dlg.zoomCombo.currentIndexChanged.connect(self.on_zoom_change)
+        saved_zoom = self.app_context.settings.value('zoom')
+        if saved_zoom is None:
+            self.dlg.zoomCombo.setCurrentIndex(0)
+        else:
+            zoom_index = self.dlg.zoomCombo.findText(saved_zoom)
+            if zoom_index == -1:
+                # Fallback for situation if the settings contain value not available in the list
                 self.dlg.zoomCombo.setCurrentIndex(0)
+                self.app_context.settings.setValue('zoom', None)
             else:
-                zoom_index = self.dlg.zoomCombo.findText(saved_zoom)
-                if zoom_index == -1:
-                    # Fallback for situation if the settings contain value not available in the list
-                    self.dlg.zoomCombo.setCurrentIndex(0)
-                    self.app_context.settings.setValue('zoom', None)
-                else:
-                    self.dlg.zoomCombo.setCurrentIndex(zoom_index)
+                self.dlg.zoomCombo.setCurrentIndex(zoom_index)
     
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
@@ -2023,15 +2022,14 @@ class Mapflow(QObject):
         # Set the zoom from the selected image BEFORE recomputing cost, with the combo's
         # signals blocked. Otherwise zoomCombo.currentIndexChanged -> on_zoom_change fires a
         # SECOND, duplicate cost request (and the first one below would use the stale zoom).
-        if self.app_context.zoom_selector:
-            if selected_rows:
-                zooms = [self.dlg.metadataTable.item(row, self.config.ZOOM_COLUMN_INDEX).text() for row in selected_rows]
-                zoom_index = self.dlg.zoomCombo.findText(zooms[0])  # different zooms are not allowed
-            else:
-                zoom_index = -1
-            self.dlg.zoomCombo.blockSignals(True)
-            self.dlg.zoomCombo.setCurrentIndex(0 if zoom_index == -1 else zoom_index)
-            self.dlg.zoomCombo.blockSignals(False)
+        if selected_rows:
+            zooms = [self.dlg.metadataTable.item(row, self.config.ZOOM_COLUMN_INDEX).text() for row in selected_rows]
+            zoom_index = self.dlg.zoomCombo.findText(zooms[0])  # different zooms are not allowed
+        else:
+            zoom_index = -1
+        self.dlg.zoomCombo.blockSignals(True)
+        self.dlg.zoomCombo.setCurrentIndex(0 if zoom_index == -1 else zoom_index)
+        self.dlg.zoomCombo.blockSignals(False)
         self.area_calculator_service.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
         self.app_context.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(
             self.sync_layer_selection_with_table)
@@ -3334,7 +3332,7 @@ class Mapflow(QObject):
         dialog.toSourceButton.clicked.connect(lambda: self.show_processing_source(
                                                            processing=processing,
                                                            window=dialog))
-        dialog.setup(processing, self.app_context.zoom_selector, error or None)
+        dialog.setup(processing, error or None)
         dialog.deleteLater()
     
     def show_processing_source(self,

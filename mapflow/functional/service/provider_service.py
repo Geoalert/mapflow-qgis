@@ -319,11 +319,10 @@ class ProviderService(QObject):
             self.dlg.startProcessing.setEnabled(True)
         else:
             self.dlg.sourceCombo.setCurrentIndex(index)
-            if self.app_context.zoom_selector:
-                if provider.dataProvider.zoom:
-                    self.dlg.zoomCombo.setCurrentText(str(provider.dataProvider.zoom))
-                else:
-                    self.dlg.zoomCombo.setCurrentIndex(0)
+            if provider.dataProvider.zoom:
+                self.dlg.zoomCombo.setCurrentText(str(provider.dataProvider.zoom))
+            else:
+                self.dlg.zoomCombo.setCurrentIndex(0)
     
     def duplicate_my_imagery(self, provider: MyImageryParams):
         self.dlg.mosaicTable.clearSelection()
@@ -405,8 +404,7 @@ class ProviderService(QObject):
             provider_index = len(self.providers)
             self.update_providers()
             self.dlg.setProviderIndex(provider_index)
-        if self.app_context.zoom_selector:
-            self.dlg.zoomCombo.setCurrentText(str(provider.userDefined.zoom))
+        self.dlg.zoomCombo.setCurrentText(str(provider.userDefined.zoom))
 
     def duplicate_aoi(self, provider):
         if isinstance(provider, ImagerySearchParams):
