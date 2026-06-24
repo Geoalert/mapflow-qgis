@@ -119,12 +119,6 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             highlight_color = self.mosaicTable.palette().highlight().color().name() 
             spacer.setStyleSheet("background-color:" + highlight_color + ";")
         
-        # Hide zoom spinbox
-        if config.ZOOM_SELECTOR.lower() == "true":
-            pass
-        else:
-            self.zoomCombo.hide()
-        
         # Add options menu
         self.options_menu = QMenu()
         self.save_result_action = QAction(self.tr("Save results"))
