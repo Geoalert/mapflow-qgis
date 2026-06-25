@@ -1,0 +1,12 @@
+[tool.ruff]
+target-version = "py39"   # QGIS 3.28 ships Python 3.9
+line-length = 120
+
+[tool.ruff.lint]
+# Start with the real-bug rules; add "E","W","I","UP" once the baseline is clean.
+select = ["F", "B"]   # pyflakes + flake8-bugbear
+
+[tool.ruff.lint.per-file-ignores]
+# __init__.py files re-export symbols for the package's public API; the imports
+# look "unused" locally but are intentional. Standard ruff idiom.
+"__init__.py" = ["F401"]

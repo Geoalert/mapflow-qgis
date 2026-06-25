@@ -1,0 +1,27 @@
+{
+  "include": ["mapflow", "tests"],
+  "typeCheckingMode": "basic",
+  "reportMissingImports": false,
+  "reportMissingModuleSource": false,
+
+  "// note": "Correctness/flow checks Ruff can't do are kept as errors. Type-completeness reports are muted until a dedicated typing pass; this codebase is largely untyped.",
+
+  "reportPossiblyUnbound": "error",
+  "reportUndefinedVariable": "error",
+  "reportSelfClsParameterName": "error",
+
+  "reportOptionalMemberAccess": "none",
+  "reportOptionalSubscript": "none",
+  "reportOptionalIterable": "none",
+  "reportOptionalOperand": "none",
+  "reportOptionalCall": "none",
+  "reportArgumentType": "none",
+  "reportAttributeAccessIssue": "none",
+  "reportCallIssue": "none",
+  "reportReturnType": "none",
+  "reportAssignmentType": "none",
+  "reportOperatorIssue": "none",
+  "reportGeneralTypeIssues": "none",
+  "reportInvalidTypeForm": "none",
+  "reportRedeclaration": "none"
+}
