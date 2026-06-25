@@ -1,15 +1,13 @@
-from typing import Sequence, Union, Optional, Callable, List, Tuple
+from typing import Sequence, Union, Optional, List
 from pathlib import Path
 from uuid import UUID
 import json
-import os.path
-from osgeo import gdal
 
 from PyQt5.QtCore import QObject, QUrl, pyqtSignal, Qt
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
-from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog, QAbstractItemView, QWidget
-from qgis.core import QgsCoordinateReferenceSystem, QgsGeometry, QgsProject, QgsRasterLayer
+from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog, QAbstractItemView
+from qgis.core import QgsCoordinateReferenceSystem, QgsGeometry, QgsRasterLayer
 
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs.mosaic_dialog import CreateMosaicDialog, UpdateMosaicDialog
@@ -17,7 +15,7 @@ from ...dialogs.image_dialog import RenameImageDialog
 from ...dialogs.upload_raster_layer_dialog import UploadRasterLayersDialog
 from ...dialogs.error_message_widget import ErrorMessageWidget
 from ...schema.data_catalog import PreviewSize, MosaicReturnSchema, ImageReturnSchema, UserLimitSchema
-from ...schema import DataProviderParams, MyImageryParams, ImagerySearchParams, UserDefinedParams
+from ...schema import MyImageryParams
 from ..api.data_catalog_api import DataCatalogApi
 from ..view.data_catalog_view import DataCatalogView
 from ...http import Http

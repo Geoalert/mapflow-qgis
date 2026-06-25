@@ -3,7 +3,10 @@ from pathlib import Path
 from PyQt5 import uic
 from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 
-from .icons import plugin_icon
+# Re-exported for other dialogs (image_dialog, processing_details_dialog) that do
+# `from .processing_dialog import plugin_icon`. The redundant alias marks it as an
+# intentional re-export so ruff won't strip it as unused.
+from .icons import plugin_icon as plugin_icon
 from ..schema.processing import UpdateProcessingSchema, ProcessingDTO
 
 ui_path = Path(__file__).parent/'static'/'ui'

@@ -1,8 +1,8 @@
 from PyQt5 import uic
 from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 
-from ..schema.data_catalog import MosaicCreateSchema, MosaicUpdateSchema, MosaicReturnSchema
-from .processing_dialog import plugin_icon, ui_path
+from ..schema.data_catalog import MosaicUpdateSchema, MosaicReturnSchema
+from .processing_dialog import ui_path
 
 class MosaicDialog(*uic.loadUiType(ui_path/'mosaic_dialog.ui')):
     def __init__(self, parent: QWidget) -> None:

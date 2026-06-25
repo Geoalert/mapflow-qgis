@@ -14,8 +14,7 @@ from .provider_service import (get_provider_params,
 from .. import helpers
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs.confirm_processing_start_dialog import ConfirmProcessingStartDialog
-from ...errors import (ProcessingInputDataMissing,
-                       BadProcessingInput,
+from ...errors import (BadProcessingInput,
                        ErrorMessage,
                        PluginError,
                        ImageIdRequired,
@@ -25,19 +24,18 @@ from ..view.processing_view import ProcessingView
 from ..api.processing_api import ProcessingApi
 from ...schema import ProcessingDTO, UpdateProcessingSchema, ProcessingStatus, BillingType, ProcessingHistory, PostProcessingSchemaV2
 from ...schema.processing import (
-    ProcessingUIParams,
     ProcessingsRequest,
     ProcessingsResult,
     RunTemplateProcessingSchema,
     UpdateProcessingTemplateSchema,
 )
 from ...schema.processing import ProcessingTemplateDTO
-from ..service.alert_service import alert, AlertService
+from ..service.alert_service import alert
 from ..app_context import AppContext
 from ...entity.provider import ImagerySearchProvider
 from ...config import Config
 from ...functional.layer_utils import ResultsLoader
-from ...http import Http, get_error_report_body
+from ...http import get_error_report_body
 from ...dialogs.error_message_widget import ErrorMessageWidget
 
 class ProcessingService(QObject):

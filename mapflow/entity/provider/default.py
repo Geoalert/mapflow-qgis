@@ -5,7 +5,6 @@ from .provider import ProviderInterface, SourceType, CRS
 from ...constants import SENTINEL_OPTION_NAME, SEARCH_OPTION_NAME, CATALOG_OPTION_NAME
 from ...errors.plugin_errors import ImageIdRequired
 from ...schema import (PostSourceSchema, 
-                       PostProviderSchema, 
                        DataProviderParams,
                        DataProviderSchema,
                        MyImageryParams,

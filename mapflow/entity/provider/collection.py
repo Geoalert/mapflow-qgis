@@ -35,7 +35,7 @@ class ProvidersList(list):
                     params["name"] = name
                 try:
                     providers.update({name: create_provider(**params)})
-                except Exception as e:
+                except Exception:
                     errors.append(name)
         return cls.from_dict(providers), errors
 

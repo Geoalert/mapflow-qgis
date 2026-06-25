@@ -2,11 +2,9 @@
 
 Spec reference: spec/002_C_myimagery_api.md
 """
-import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from datetime import datetime, timedelta
 
-import pytest
 
 from mapflow.schema.data_catalog import ImageReturnSchema
 

@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Optional
 import sys
 
 from PyQt5.QtCore import QObject, Qt
@@ -7,11 +7,10 @@ from PyQt5.QtWidgets import (QWidget, QTableWidget, QTableWidgetItem, QHeaderVie
 from PyQt5.QtGui import QPixmap, QFontMetrics
 
 from ...dialogs import icons
-from ...dialogs.error_message_widget import ErrorMessageWidget
 from ...dialogs.main_dialog import MainDialog
 from ...functional.app_context import AppContext
 from ...functional.helpers import get_readable_size
-from ...schema import MyImageryParams, UserDefinedParams
+from ...schema import MyImageryParams
 from ...schema.data_catalog import MosaicReturnSchema, ImageReturnSchema
 
 class DataCatalogView(QObject):
@@ -194,7 +193,7 @@ class DataCatalogView(QObject):
                                     pixel_size=pixel_size,
                                     crs=images[0].meta_data.crs,
                                     count=images[0].meta_data.count)
-            local_created_at = mosaic.created_at.astimezone()
+        local_created_at = mosaic.created_at.astimezone()
         text += self.tr("Created: {date} at {time} \nTags: {tags}"
                        ).format(date=local_created_at.date(), time=local_created_at.strftime('%H:%M'),
                                 tags=tags_str)
