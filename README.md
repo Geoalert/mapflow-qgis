@@ -41,6 +41,22 @@ make test              # all three tiers
 Test layout, fixtures, and the policy for adding a test live in
 [`tests/README.md`](tests/README.md).
 
+### Linting
+
+Static analysis runs on the **host** (not in Docker) via the project `venv`:
+
+```bash
+pip install ruff pyright   # once, into the venv
+make lint                  # ruff check + pyright
+```
+
+`ruff` (config in [`pyproject.toml`](pyproject.toml)) catches unused code and
+real-bug patterns; `pyright` (config in [`pyrightconfig.json`](pyrightconfig.json))
+adds flow analysis ruff can't do, such as use-before-assignment and undefined
+names. Pyright's type-completeness checks are muted until the codebase is
+annotated. The rule set starts intentionally narrow — broaden it once the
+baseline is clean.
+
 > **Coverage scope.** CI is pinned to **Linux + QGIS 3.28 LTR**. The
 > `qgis/qgis` Docker image is Linux-only and we do not run a CI matrix
 > across operating systems or QGIS versions. Verify macOS, Windows, and

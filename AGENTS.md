@@ -118,11 +118,22 @@ limited connections to avoid server DDoS protection, issues can start around 40 
 `agent-make test-functional` to run functional tests
 `agent-make test-qgis` to run QGIS-runtime tests
 `agent-make test-ui` to run UI tests
+`agent-make lint` to run static analysis (ruff + pyright)
 `agent-make <target>` to run Makefile targets (instead of plain `make`)
 
 # TEST EXECUTION MODES
 - All tests are run locally via `agent-make`, which executes them in the configured Docker test image.
 - Use tiered targets when iterating: `agent-make test-functional`, `agent-make test-qgis`, `agent-make test-ui`.
+
+# STATIC ANALYSIS (LINTING)
+- `agent-make lint` runs **ruff** (config in `pyproject.toml`) then **pyright** (config in `pyrightconfig.json`).
+- Unlike tests, lint runs on the **host**, not in Docker: ruff is AST-only and pyright runs in lenient
+  `basic` mode, so neither needs the QGIS runtime. Both are installed in the project `venv`.
+- Division of labour: ruff finds unused code and real-bug patterns (pyflakes `F` + bugbear `B`); pyright
+  adds flow analysis ruff cannot do — `reportPossiblyUnbound` and `reportUndefinedVariable`. Pyright's
+  type-completeness reports are intentionally muted until the codebase is annotated (see `pyrightconfig.json`).
+- The rule set is deliberately narrow to start (`select = ["F", "B"]`); broaden it (`E`, `W`, `I`, `UP`)
+  once the baseline is clean. `F401` is ignored in `__init__.py` (intentional re-exports).
 
 # TERMINAL COMMAND BATCHING
 - Combine commands that both require user approval into a single `&&`-chained invocation to minimize approval prompts.
