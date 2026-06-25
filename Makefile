@@ -8,7 +8,13 @@ IMAGE ?= mapflow-qgis-tests
 DOCKERFILE ?= Dockerfile.tests
 DOCKER_RUN = docker run --rm -v "$(CURDIR)":/app -w /app $(IMAGE)
 
-.PHONY: help docker-build test test-functional test-qgis test-ui clean
+# Linting runs on the HOST (not in the Docker image): ruff is AST-only and
+# pyright runs in lenient/basic mode, so neither needs the QGIS runtime. Both
+# are installed in the project venv; override RUFF/PYRIGHT to point elsewhere.
+RUFF ?= venv/bin/ruff
+PYRIGHT ?= venv/bin/pyright
+
+.PHONY: help docker-build test test-functional test-qgis test-ui lint clean
 
 help:
 	@echo "Targets:"
@@ -17,6 +23,7 @@ help:
 	@echo "  test-qgis         Run QGIS-runtime tests under tests/qgis/"
 	@echo "  test-ui           Run UI tests under tests/ui/ (xvfb-run)"
 	@echo "  test              Run all three tiers"
+	@echo "  lint              Run ruff + pyright on the host (uses project venv)"
 	@echo "  clean             Remove pytest cache + bytecode"
 
 docker-build:
@@ -35,6 +42,13 @@ test-ui: docker-build
 	$(DOCKER_RUN) bash -c 'xvfb-run -a pytest tests/ui; rc=$$?; [ $$rc -eq 0 ] || [ $$rc -eq 5 ]'
 
 test: test-functional test-qgis test-ui
+
+# Static analysis. Ruff catches unused code / real-bug patterns; pyright adds
+# flow analysis (possibly-unbound, undefined names) that ruff can't do.
+# Config lives in pyproject.toml (ruff) and pyrightconfig.json (pyright).
+lint:
+	$(RUFF) check mapflow tests
+	$(PYRIGHT)
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
