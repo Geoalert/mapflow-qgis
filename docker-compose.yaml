@@ -1,0 +1,26 @@
+# Compose definition for the mapflow-qgis test image.
+#
+# The Makefile drives the test tiers via `docker build -f Dockerfile.tests`
+# and `docker run` directly; this file mirrors that same setup so the image
+# can also be built and run through Compose, e.g.:
+#
+#   docker compose build
+#   docker compose run --rm tests pytest tests/qgis
+#
+# The repo is bind-mounted at /app (sources are not COPYed into the image),
+# so an iteration cycle is just a re-run, not a rebuild. Keep this in sync
+# with Dockerfile.tests and the Makefile.
+services:
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.tests
+    image: mapflow-qgis-tests
+    volumes:
+      - .:/app
+    working_dir: /app
+    environment:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    command: pytest
