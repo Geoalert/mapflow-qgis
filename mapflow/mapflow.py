@@ -5,7 +5,7 @@ from base64 import b64encode, b64decode
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 from datetime import datetime, timedelta  # processing creation datetime formatting
 from pathlib import Path
-from typing import List, Optional, Union, Callable, Tuple
+from typing import List, Optional, Callable, Tuple
 from osgeo import gdal, ogr
 
 from PyQt5.QtCore import (
@@ -27,8 +27,7 @@ from qgis.core import (
 
 from . import constants
 from .config import Config, ConfigColumns
-from .errors import (AoiNotIntersectsImage,
-                     BadProcessingInput,
+from .errors import (BadProcessingInput,
                      ErrorMessage,
                      ImageIdRequired,
                      PluginError,
@@ -53,27 +52,17 @@ from .http import (Http,
                    securewatch_message_parser)
 # Schema
 from .schema import (BillingType,
-                     DataProviderParams,
                      ImageCatalogRequestSchema,
                      ImageCatalogResponseSchema,
                      ImagerySearchParams,
-                     MapflowProject,
                      MyImageryParams,
-                     PostProcessingSchema,
-                     PostProcessingSchemaV2,
-                     PostSourceSchema,
-                     PreviewType,
-                     ProductType,
                      ProviderReturnSchema,
-                     UserDefinedParams,
-                     UserRole,
-                     WorkflowDef)
+                     UserDefinedParams)
 from .schema.catalog import (AoiResponseSchema,
-                             MultiPreview,
                              MultiPreviewList,
                              PreviewType,
                              ProductType)
-from .schema.project import MapflowProject, ProjectsRequest, UserRole
+from .schema.project import MapflowProject
 from .schema.processing import (CreateProcessingTemplateSchema,
                                 ProcessingTemplateDetails,
                                 ProcessingTemplateDTO,
@@ -88,8 +77,7 @@ from .dialogs import (ErrorMessageWidget,
 from .dialogs.icons import plugin_icon, new_image_icon
 from .dialogs.processing_details_dialog import ProcessingDetailsDialog
 # Entity/providers
-from .entity.provider import (BasicAuth,
-                              create_provider,
+from .entity.provider import (create_provider,
                               DefaultProvider,
                               ImagerySearchProvider,
                               MaxarProvider,
@@ -982,12 +970,8 @@ class Mapflow(QObject):
         # Get attributes
         if self.dlg.sourceCombo.currentText() == constants.SENTINEL_OPTION_NAME:
             id_column_index = self.config.SENTINEL_ID_COLUMN_INDEX
-            datetime_column_index = self.config.SENTINEL_DATETIME_COLUMN_INDEX
-            cloud_cover_column_index = self.config.SENTINEL_CLOUD_COLUMN_INDEX
         else:  # Maxar
             id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
-            datetime_column_index = self.config.MAXAR_DATETIME_COLUMN_INDEX
-            cloud_cover_column_index = self.config.MAXAR_CLOUD_COLUMN_INDEX
         self.app_context.metadata_layer.setSubsetString('')  # clear any existing filters
         filtered_ids = []
         for feature in self.app_context.metadata_layer.getFeatures():
@@ -1010,7 +994,7 @@ class Mapflow(QObject):
             if area < min_intersection_size or not date_ok or not cloud_cover_ok :
                     filtered_ids.append(feature['id'])
         if filtered_ids:
-            filter_ = f'id not in (' + ', '.join((f"'{id_}'" for id_ in filtered_ids)) + ')'
+            filter_ = 'id not in (' + ', '.join((f"'{id_}'" for id_ in filtered_ids)) + ')'
         else:
             filter_ = ''
         # Filter only for real search results, not for duplecated table
@@ -2544,11 +2528,11 @@ class Mapflow(QObject):
         try:
             url = provider.preview_url(image_id=image_id)
             preview_max_zoom = provider.preview_max_zoom
-        except ImageIdRequired as e:
+        except ImageIdRequired:
             self.alert(self.tr("Provider {name} requires image id for preview!").format(name=provider.name),
                        QMessageBox.Warning)
             return
-        except NotImplementedError as e:            
+        except NotImplementedError:            
             self.alert(self.tr("Preview is unavailable for the provider {}. \nOSM layer will be added instead.").format(provider.name), QMessageBox.Information)
             # Add OSM instaed of preview, if it is unavailable (for Mapbox)
             osm = constants.OSM

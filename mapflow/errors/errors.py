@@ -46,7 +46,7 @@ class ErrorMessage(QObject):
             return None
         try:
             message = message.format(**self.parameters)
-        except Exception as e:
+        except Exception:
             # problem during formatting. Probably wrong parameters
             message = None
         return message

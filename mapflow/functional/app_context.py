@@ -1,13 +1,17 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, TYPE_CHECKING
 
 from qgis.core import QgsGeometry, QgsVectorLayer, QgsProject, QgsSettings
 from ..config import Config
 from ..schema.project import UserRole
 from ..schema.project import MapflowProject
-from ..schema.workflow_def import WorkflowDef
-#! from ..entity.billing import BillingType
 from ..entity.provider import ProviderInterface
+
+if TYPE_CHECKING:
+    # Imported only for the string annotations below; kept under TYPE_CHECKING to
+    # avoid runtime import cycles.
+    from ..schema.billing import BillingType
+    from ..schema.data_catalog import MosaicReturnSchema, ImageReturnSchema
 
 
 @dataclass
