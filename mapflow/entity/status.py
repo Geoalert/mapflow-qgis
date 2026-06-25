@@ -87,10 +87,6 @@ class ProcessingStatus(NamedEnum):
     def is_terminal(self):
         return self.is_ok or self.is_failed or self.is_refunded or self.is_cancelled
 
-    @property
-    def is_terminal(self):
-        return self.is_ok or self.is_failed or self.is_refunded or self.is_cancelled
-
 
 class ProcessingReviewStatusEnum(NamedEnum):
     none = None

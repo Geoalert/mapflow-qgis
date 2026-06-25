@@ -1,6 +1,5 @@
 from enum import Enum
 
-from qgis.core import QgsVectorLayer
 from dataclasses import dataclass, fields
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Mapping, Any, Union, Iterable, List

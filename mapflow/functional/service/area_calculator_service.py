@@ -1,6 +1,6 @@
 from typing import Union, List, Optional
 from PyQt5.QtCore import QObject
-from qgis.core import QgsVectorLayer, QgsWkbTypes, QgsGeometry, QgsProject, QgsFeature, QgsCoordinateReferenceSystem
+from qgis.core import QgsVectorLayer, QgsWkbTypes, QgsGeometry, QgsFeature, QgsCoordinateReferenceSystem
 from ..app_context import AppContext
 from .. import layer_utils
 from .. import helpers
@@ -173,13 +173,13 @@ class AreaCalculatorService(QObject):
             # AOI is OK, but image ID is not selected,
             # in this case we should use selected AOI without cut by AOI
             real_aoi = self.app_context.aoi
-        except Exception as e:
+        except Exception:
             # Could not calculate AOI size
             real_aoi = QgsGeometry()
         try:
             self.app_context.aoi_size = layer_utils.calculate_aoi_area(real_aoi,
                                                                        self.app_context.project.transformContext())
-        except Exception as e:
+        except Exception:
             self.app_context.aoi_size = 0
 
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.app_context.aoi_size))
@@ -243,6 +243,6 @@ class AreaCalculatorService(QObject):
                 geom = feature.geometry()
                 aoi = aoi.combine(geom)
         except StopIteration:
-            raise AoiNotIntersectsImage()
+            raise AoiNotIntersectsImage() from None
         return aoi
     

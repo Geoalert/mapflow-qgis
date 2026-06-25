@@ -152,7 +152,7 @@ class Http(QObject):
         request.setRawHeader(b'x-plugin-version', self.plugin_version.encode())
         try:
             request = self.authorize(request, auth)
-        except Exception as e:
+        except Exception:
             # We skip the exception handling, then the request goes out unauthorized and the error response is handled
             pass
 

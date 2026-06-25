@@ -1,5 +1,4 @@
-from typing import Optional
-from PyQt5.QtCore import QObject, QSettings
+from PyQt5.QtCore import QObject
 from PyQt5.QtWidgets import QMessageBox
 
 from ..app_context import AppContext

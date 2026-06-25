@@ -1,6 +1,5 @@
 """Tests for processings pagination schema and logic."""
 import json
-import pytest
 
 from mapflow.schema.processing import (
     ProcessingSortBy,
@@ -121,7 +120,6 @@ class TestPaginationOffsetLogic:
         assert page_number == 3
 
     def test_offset_clamp_when_exceeds_total(self):
-        limit = 30
         total = 50
         offset = 60
         if offset >= total:

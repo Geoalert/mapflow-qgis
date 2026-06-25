@@ -3,7 +3,6 @@ from pathlib import Path
 from PyQt5 import uic
 from PyQt5.QtWidgets import QWidget, QApplication
 
-from .icons import plugin_icon
 
 ui_path = Path(__file__).parent/'static'/'ui'
 

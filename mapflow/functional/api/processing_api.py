@@ -2,7 +2,7 @@ import json
 from typing import Callable, List, Optional, Union
 from uuid import UUID
 
-from PyQt5.QtCore import QObject, pyqtSignal, QFile, QIODevice
+from PyQt5.QtCore import QObject
 from ...http import Http
 from ...dialogs.main_dialog import MainDialog
 from ...schema.processing import (

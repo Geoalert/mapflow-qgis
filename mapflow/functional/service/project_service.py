@@ -1,10 +1,9 @@
 import json
-from typing import Optional, Callable, List
+from typing import Optional, Callable
 
 from PyQt5.QtCore import QObject, pyqtSignal, Qt
 from PyQt5.QtNetwork import QNetworkReply
 from PyQt5.QtWidgets import QAbstractItemView
-from qgis.core import QgsSettings
 from .. import helpers
 from ..app_context import AppContext
 from ...dialogs import MainDialog

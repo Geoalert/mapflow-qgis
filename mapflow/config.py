@@ -17,7 +17,7 @@ class ConfigColumns():
             QCoreApplication.translate('Config', 'Sensor'): 'satId',
             QCoreApplication.translate('Config', 'Band Order'): 'colorBandOrder',
             QCoreApplication.translate('Config', 'Cloud %'): 'cloudCover',
-            QCoreApplication.translate('Config', 'Off Nadir') + f' \N{DEGREE SIGN}': 'offNadirAngle',
+            QCoreApplication.translate('Config', 'Off Nadir') + ' \N{DEGREE SIGN}': 'offNadirAngle',
             QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=SEARCH_CAPTURE_TIMEZONE): 'acquisitionDate',
             QCoreApplication.translate('Config', 'Zoom level'): 'zoom',
             QCoreApplication.translate('Config', 'Spatial Resolution, m'): 'pixelResolution',
@@ -74,7 +74,12 @@ class Config:
     """
     PROCESSING_TABLE_ID_COLUMN_INDEX = PROCESSING_TABLE_COLUMNS.index('id')
     PROCESSING_TABLE_SORT_COLUMN_INDEX = PROCESSING_TABLE_COLUMNS.index('created')
-    DEFAULT_HIDDEN_COLUMNS = (PROCESSING_TABLE_COLUMNS.index(item) for item in ('id', 'reviewUntil', 'cost'))
+    # NB: must be a tuple of direct .index() calls, not a generator/comprehension —
+    # a comprehension body runs in its own scope and cannot see the class-level
+    # PROCESSING_TABLE_COLUMNS, which would raise NameError on iteration.
+    DEFAULT_HIDDEN_COLUMNS = (PROCESSING_TABLE_COLUMNS.index('id'),
+                              PROCESSING_TABLE_COLUMNS.index('reviewUntil'),
+                              PROCESSING_TABLE_COLUMNS.index('cost'))
     
     # MAXAR
     # The "new image" marker icon lives in the LEFTMOST column — its meaning is positional,
