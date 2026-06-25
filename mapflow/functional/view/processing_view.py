@@ -1,5 +1,4 @@
-from typing import List, Optional, Union
-from uuid import UUID
+from typing import List, Union
 from PyQt5.QtCore import Qt, QCoreApplication
 from PyQt5.QtWidgets import QAbstractItemView, QTableWidgetItem, QMessageBox, QCheckBox, QMenu
 from PyQt5.QtGui import QColor
@@ -189,7 +188,7 @@ class ProcessingView:
             # setting color for close review
             set_color = True
             color = QColor(255, 220, 200)
-        for col, attr in enumerate(config.PROCESSING_TABLE_COLUMNS):
+        for _col, attr in enumerate(config.PROCESSING_TABLE_COLUMNS):
             table_item = QTableWidgetItem()
             table_item.setData(Qt.DisplayRole, processing_dict[attr])
             if is_template:

@@ -2,7 +2,7 @@ import json
 import os
 from abc import ABC
 from enum import Enum
-from typing import Iterable, Union, Optional, List
+from typing import Iterable, Union, Optional
 from pathlib import Path
 
 

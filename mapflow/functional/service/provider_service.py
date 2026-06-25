@@ -1,23 +1,20 @@
 # provider_service.py
-from typing import List, Optional, Tuple
+from typing import Optional
 
-from PyQt5.QtCore import Qt, QObject, QVariant, pyqtSignal
+from PyQt5.QtCore import Qt, QObject
 from PyQt5.QtWidgets import QTableWidgetItem, QWidget
-from PyQt5.QtNetwork import QNetworkReply
-from qgis.core import QgsGeometry, QgsVectorLayer, QgsFeature
+from qgis.core import QgsVectorLayer, QgsFeature
 
 from . import DataCatalogService
 from ..app_context import AppContext
-from ...entity.provider import(ProviderInterface, 
-                               ImagerySearchProvider, 
+from ...entity.provider import(ImagerySearchProvider, 
                                MyImageryProvider, 
                                UsersProvider,
                                BasicAuth,
                                ProvidersList,
                                create_provider)
-from ..service.alert_service import alert, AlertService
-from ...schema import (ProductType, 
-                       DataProviderParams, 
+from ..service.alert_service import alert
+from ...schema import (DataProviderParams, 
                        MyImageryParams, 
                        ImagerySearchParams, 
                        UserDefinedParams)

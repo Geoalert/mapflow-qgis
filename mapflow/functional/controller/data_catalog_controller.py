@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QObject, QTimer
+from PyQt5.QtCore import QObject
 from ..service.data_catalog import DataCatalogService
 from ...dialogs.main_dialog import MainDialog
 

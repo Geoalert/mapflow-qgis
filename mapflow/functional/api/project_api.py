@@ -1,5 +1,4 @@
-import json
-from typing import Optional, Callable
+from typing import Callable
 
 from PyQt5.QtCore import QObject
 
