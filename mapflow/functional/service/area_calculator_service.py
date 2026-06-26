@@ -176,6 +176,9 @@ class AreaCalculatorService(QObject):
         except Exception:
             # Could not calculate AOI size
             real_aoi = QgsGeometry()
+        # The cropped AOI is what is actually processed — keep it so the request geometry
+        # matches the displayed area instead of sending the whole (uncropped) AOI.
+        self.app_context.processing_aoi = real_aoi
         try:
             self.app_context.aoi_size = layer_utils.calculate_aoi_area(real_aoi,
                                                                        self.app_context.project.transformContext())

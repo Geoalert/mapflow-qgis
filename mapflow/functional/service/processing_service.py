@@ -349,13 +349,19 @@ class ProcessingService(QObject):
 
         provider_params, processing_meta = get_provider_params(provider=provider,
                                                                zoom=ui_start_params.zoom)
-        
+
+        # Send the AOI cropped to the selected image footprint (what is actually processed and
+        # displayed as the area), falling back to the full AOI when there is no cropping.
+        processing_aoi = getattr(self.app_context, "processing_aoi", None)
+        if processing_aoi is None or processing_aoi.isEmpty():
+            processing_aoi = self.app_context.aoi
+
         processing_params = PostProcessingSchemaV2(
             name=ui_start_params.name,
             description=None,
             projectId=self.app_context.project_id,
             wdId=wd.id,
-            geometry=json.loads(self.app_context.aoi.asJson()),
+            geometry=json.loads(processing_aoi.asJson()),
             params=provider_params,
             meta=processing_meta,
             blocks=blocks)
