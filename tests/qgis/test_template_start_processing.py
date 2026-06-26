@@ -33,7 +33,8 @@ def test_handle_processing_submission_uses_template_run_when_template_selected()
 	service.api = MagicMock()
 	service.start_processing_callback = MagicMock()
 	service.start_processing_error_handler = MagicMock()
-	service.selected_template = MagicMock(return_value=SimpleNamespace(id="template-1"))
+	# A template run happens iff template_to_run() resolves (template + imagery-search source + open results).
+	service.template_to_run = MagicMock(return_value=SimpleNamespace(id="template-1"))
 
 	service.handle_processing_submission(_processing_payload())
 
@@ -74,8 +75,8 @@ def test_planned_processing_selection_error_requires_selected_metadata_rows():
 	service = ProcessingService.__new__(ProcessingService)
 	service.tr = lambda text: text
 	service.dlg = MagicMock()
-	service.selected_template = MagicMock(return_value=SimpleNamespace(id="template-1"))
-	service.selected_processing = MagicMock(return_value=None)
+	# Planned image gate applies only when a planned start applies (template_to_run resolves).
+	service.template_to_run = MagicMock(return_value=SimpleNamespace(id="template-1"))
 
 	service.dlg.metadataTable.selectedItems.return_value = []
 	assert service.planned_processing_selection_error() == (
@@ -115,7 +116,7 @@ def test_on_processings_selection_changed_restores_default_start_button_text_wit
 	)
 	plugin.processing_service = MagicMock()
 	plugin.processing_service.selected_template.return_value = None
-	plugin.processing_service.selected_processing.return_value = None
+	plugin.processing_service.template_to_run.return_value = None
 	plugin.processing_service.planned_processing_selection_error.return_value = None
 
 	plugin.on_processings_selection_changed()
@@ -137,6 +138,8 @@ def test_on_processings_selection_changed_restores_default_when_processing_selec
 	plugin.processing_service = MagicMock()
 	plugin.processing_service.selected_template.return_value = SimpleNamespace(id="template-1")
 	plugin.processing_service.selected_processing.return_value = SimpleNamespace(id="processing-1")
+	# A processing is also selected -> not a planned start.
+	plugin.processing_service.template_to_run.return_value = None
 	plugin.processing_service.planned_processing_selection_error.return_value = None
 
 	plugin.on_processings_selection_changed()

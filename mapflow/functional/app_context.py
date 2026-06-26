@@ -66,6 +66,9 @@ class AppContext:
     
     # === Imagery Search State ===
     search_provider: Optional["ProviderInterface"] = None
+    # Id of the template whose results are currently shown in the search table (None for a
+    # regular search). Used to decide whether "Start" runs a planned (template) processing.
+    open_template_results_id: Optional[str] = None
     metadata_aoi: Optional[QgsGeometry] = None
     metadata_layer: Optional[QgsVectorLayer] = None
     meta_layer_table_connection = None
