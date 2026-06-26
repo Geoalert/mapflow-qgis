@@ -44,7 +44,7 @@ class AreaCalculatorService(QObject):
             else:
                 reason = self.tr('Set AOI to start processing')
             self.dlg.disable_processing_start(reason, clear_area=True)
-            self.app_context.aoi = self.app_context.aoi_size = self.app_context.processing_aoi = None
+            self.app_context.aoi = self.app_context.aoi_size = None
             return
 
         features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
@@ -69,7 +69,7 @@ class AreaCalculatorService(QObject):
             else:
                 reason = self.tr('AOI must contain not more than {} polygons').format(self.app_context.max_aois_per_processing)
             self.dlg.disable_processing_start(reason, clear_area=True)
-            self.app_context.aoi = self.app_context.aoi_size = self.app_context.processing_aoi = None
+            self.app_context.aoi = self.app_context.aoi_size = None
 
     def calculate_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
         """Get the AOI size total when polygon another layer is chosen,
@@ -176,10 +176,9 @@ class AreaCalculatorService(QObject):
         except Exception:
             # Could not calculate AOI size
             real_aoi = QgsGeometry()
-        # Store the cropped AOI so processing/cost requests send the geometry
-        # the server's provider-minimum-area check should actually operate on
-        # (user AOI intersected with the union of selected image footprints).
-        self.app_context.processing_aoi = real_aoi if real_aoi and not real_aoi.isEmpty() else None
+        # The cropped AOI is what is actually processed — keep it so the request geometry
+        # matches the displayed area instead of sending the whole (uncropped) AOI.
+        self.app_context.processing_aoi = real_aoi
         try:
             self.app_context.aoi_size = layer_utils.calculate_aoi_area(real_aoi,
                                                                        self.app_context.project.transformContext())
