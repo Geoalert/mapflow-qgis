@@ -499,12 +499,12 @@ class Mapflow(QObject):
         self.update_start_processing_button_state()
 
     def update_start_processing_button_text(self):
-        selected_template = self.processing_service.selected_template()
-        selected_processing = self.processing_service.selected_processing()
-        if selected_template and not selected_processing:
+        # Mirror what the start action actually does: "Start planned processing" only when a
+        # template run would happen (template selected + imagery-search source + its results open).
+        if self.processing_service.template_to_run():
             self.dlg.startProcessing.setText(self.tr("Start planned processing"))
-            return
-        self.dlg.startProcessing.setText(self.tr("Start processing"))
+        else:
+            self.dlg.startProcessing.setText(self.tr("Start processing"))
 
     def update_start_processing_button_state(self):
         """Render start button text and enforce planned-processing image selection gate."""
@@ -526,10 +526,13 @@ class Mapflow(QObject):
         if not response_json.get("images"):
             self.dlg.metadataTable.clearContents()
             self.dlg.metadataTable.setRowCount(0)
+            self.app_context.open_template_results_id = None
             self.alert(self.tr("No images was found"), QMessageBox.Information)
             return
         template = self.processing_service.selected_template()
         template_group_name = str(template.name) if template else None
+        # Mark these results as belonging to this template, so a "Start" runs a planned processing.
+        self.app_context.open_template_results_id = str(template.id) if template else None
         response_data = ImageCatalogResponseSchema(**response_json)
         images = response_data.images
         geoms = response_data.as_geojson()
@@ -1419,6 +1422,8 @@ class Mapflow(QObject):
             pass
         # If current provider does not support search, we should select ImagerySearchProvider to be able to search
         self.replace_search_provider_index()
+        # A regular search replaces any template results, so a "Start" is no longer planned.
+        self.app_context.open_template_results_id = None
 
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
@@ -1475,6 +1480,7 @@ class Mapflow(QObject):
         except (AttributeError, RuntimeError):  # metadata layer has been deleted
             pass
 
+        self.app_context.open_template_results_id = None
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
         #provider = self.provider_service.providers[self.dlg.providerIndex()]

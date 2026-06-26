@@ -54,7 +54,7 @@ def _plugin_with_search_provider(tmp_path, template_name="Template A"):
     plugin.provider_service = SimpleNamespace(
         providers=[ImagerySearchProvider(proxy="https://example.com/rest")]
     )
-    template = SimpleNamespace(name=template_name) if template_name else None
+    template = SimpleNamespace(name=template_name, id="tpl-test") if template_name else None
     plugin.processing_service = SimpleNamespace(selected_template=lambda: template)
     settings = MagicMock()
     settings.value.return_value = None  # no custom layerGroup -> falls back to plugin_name
