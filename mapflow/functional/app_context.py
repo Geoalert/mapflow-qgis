@@ -37,7 +37,10 @@ class AppContext:
     selected_processing_ids: List[str] = field(default_factory=list)
 
     # === AOI State ===
-    aoi: Optional[QgsGeometry] = None
+    aoi: Optional[QgsGeometry] = None  # full AOI, used for search/metadata requests
+    # AOI actually processed: the full AOI cropped to the selected image footprint(s). This is
+    # what is sent for processing/cost (matches the displayed area); falls back to `aoi`.
+    processing_aoi: Optional[QgsGeometry] = None
     aoi_size: Optional[float] = None
     aoi_layers: List[QgsVectorLayer] = field(default_factory=list)
     
