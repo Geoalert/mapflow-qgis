@@ -196,10 +196,26 @@ class ProcessingService(QObject):
             error = None
         return error
 
-    def planned_processing_selection_error(self) -> Optional[str]:
-        """Return error when template is selected but no search result images are selected."""
+    def template_to_run(self) -> Optional[ProcessingTemplateDTO]:
+        """The template a 'Start' click would run, or None for a regular processing.
+
+        Planned (template) processing applies only when ALL hold: a template is selected
+        (not a processing), the source is imagery search, and that template's results are
+        open in the search table. This is the single source of truth shared by the start
+        button text and the start action, so they never disagree.
+        """
         template = self.selected_template()
         if not template or self.selected_processing():
+            return None
+        if not isinstance(self.app_context.data_provider, ImagerySearchProvider):
+            return None
+        if str(template.id) != str(getattr(self.app_context, "open_template_results_id", None)):
+            return None
+        return template
+
+    def planned_processing_selection_error(self) -> Optional[str]:
+        """Require an image selection only when a planned (template) start actually applies."""
+        if not self.template_to_run():
             return None
         selected_rows = {item.row() for item in self.dlg.metadataTable.selectedItems()}
         if selected_rows:
@@ -251,7 +267,7 @@ class ProcessingService(QObject):
         def post_processing():
             try:
                 self.dlg.startProcessing.setEnabled(False)
-                template = self.selected_template()
+                template = self.template_to_run()
                 if template:
                     self.iface.messageBar().pushInfo(
                         self.app_context.plugin_name,
