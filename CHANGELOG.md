@@ -1,3 +1,6 @@
+## 3.5.3
+    - Hotfix: AOI incompatibility with arbitrary fields bug fixed
+
 ## 3.5.2
     - Hotfix: Imagery Search multi-image selection
         - cost and create-processing requests now include every selected image (previously only the first)
