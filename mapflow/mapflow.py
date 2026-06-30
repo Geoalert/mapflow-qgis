@@ -559,6 +559,22 @@ class Mapflow(QObject):
         if self.dlg.processingProblemsLabel.text() == planned_reason:
             self.dlg.processingProblemsLabel.clear()
 
+    def _template_single_data_provider(self, template) -> Optional[str]:
+        """The template's sole search data provider, used to backfill an image's providerName
+        when the backend returns it null. ``None`` when the template searches zero or several
+        providers (then we cannot attribute an image to one)."""
+        if not template:
+            return None
+        search_params = getattr(template, "searchParams", None)
+        if isinstance(search_params, SearchParams):
+            providers = search_params.dataProviders
+        elif isinstance(search_params, dict):
+            providers = search_params.get("dataProviders")
+        else:
+            providers = None
+        providers = [p for p in (providers or []) if p]
+        return providers[0] if len(providers) == 1 else None
+
     def get_selected_template_callback(self, response: QNetworkReply, template=None):
         """Render a template's search results in the search table.
 
@@ -580,8 +596,16 @@ class Mapflow(QObject):
         response_data = ImageCatalogResponseSchema(**response_json)
         images = response_data.images
         geoms = response_data.as_geojson()
+        # Template search images may omit per-image providerName; without it a planned
+        # processing (and its cost) cannot resolve `dataProvider` and the backend rejects the
+        # request. Backfill from the template's own searchParams.dataProviders when it searches
+        # a single provider (multi-provider templates rely on the backend providing it).
+        template_provider = self._template_single_data_provider(template)
         for position, feature in enumerate(geoms.get("features", ())):
-            feature["properties"]["local_index"] = position
+            props = feature.setdefault("properties", {})
+            props["local_index"] = position
+            if not props.get("providerName") and template_provider:
+                props["providerName"] = template_provider
         # Footprints must keep the real providerName/productType so that a planned
         # processing started from these results can resolve its source params (dataProvider).
         self._store_template_search_footprints(geoms, template_group_name=template_group_name)
