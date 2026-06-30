@@ -1,5 +1,5 @@
 from PyQt5.QtCore import QObject
-from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtWidgets import QMessageBox, QWidget
 
 from ..app_context import AppContext
 from ..service.alert_service import alert
@@ -54,17 +54,71 @@ class ProjectProcessingController(QObject):
         self.project_service.projectsFiltered.connect(self.connect_projects)
 
     def _setup_navigation(self):
-        """Navigation between projects and processings views."""
-        # Connect UI navigation buttons
-        self.dlg.switchProjectsButton.clicked.connect(lambda: self.show_projects(open_saved_page=True))
+        """Navigation between projects, processings and in-template views."""
+        # Left arrow: back one level (template -> processings -> projects).
+        self.dlg.switchProjectsButton.clicked.connect(self.navigate_back)
         self.dlg.switchProcessingsButton.clicked.connect(lambda: self.show_processings(save_page=True))
+        # Right arrow (the former placeholder): enter the selected template ("one step right").
+        self.dlg.switchProcessingsFakeButton.clicked.connect(self.navigate_into_template)
         self.dlg.projectsTable.doubleClicked.connect(self._on_project_double_clicked)
-    
+        # Keep the "enter template" arrow enabled only when a single template is selected.
+        self.dlg.processingsTable.itemSelectionChanged.connect(self._update_nav_buttons)
+        self._update_nav_buttons()
+
     def _on_project_double_clicked(self, index):
         """Handle double-click on project row to navigate to processings."""
         project_id = self.dlg.projectsTable.item(index.row(), 0).text()
         self.app_context.current_project = self.project_service.projects.get(project_id)
         self.show_processings(save_page=True)
+
+    # ==== IN-TEMPLATE NAVIGATION ==== #
+    def navigate_back(self):
+        """Left arrow: leave a template (back to processings) or go back to projects."""
+        if self.processing_service.in_template_mode:
+            self.exit_template()
+        else:
+            self.show_projects(open_saved_page=True)
+
+    def navigate_into_template(self):
+        """Right arrow: enter the currently selected template."""
+        if self.processing_service.in_template_mode:
+            return
+        template = self.processing_service.selected_template()
+        if not template or not self.processing_service.is_only_templates_selected():
+            return
+        self.enter_template(template)
+
+    def enter_template(self, template):
+        """Enter the in-template view for the given template."""
+        self.processing_service.enter_template_view(template)
+        self._set_processings_tab_text(str(template.name))
+        self._update_nav_buttons()
+
+    def exit_template(self):
+        """Return from the in-template view to the project's processings list."""
+        self.processing_service.exit_template_view()
+        self.processing_service.setup_processings_table()
+        self._set_processings_tab_text(self.tr("Processing"))
+        self._update_nav_buttons()
+
+    def _set_processings_tab_text(self, text: str):
+        """Set the processings tab label (used as a breadcrumb for the template name)."""
+        processings_tab = self.dlg.tabWidget.findChild(QWidget, "processingsTab")
+        if processings_tab is None:
+            return
+        tab_index = self.dlg.tabWidget.indexOf(processings_tab)
+        if tab_index >= 0:
+            self.dlg.tabWidget.setTabText(tab_index, text)
+
+    def _update_nav_buttons(self):
+        """Enable the 'enter template' arrow only for a single-template selection."""
+        in_template = self.processing_service.in_template_mode
+        can_enter = (
+            not in_template
+            and self.processing_service.is_only_templates_selected()
+            and self.processing_service.selected_template() is not None
+        )
+        self.dlg.switchProcessingsFakeButton.setEnabled(bool(can_enter))
 
     def show_processings(self, save_page: bool = False):
         """

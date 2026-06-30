@@ -2,7 +2,7 @@ import html
 import json
 from typing import Callable, Union, Optional
 
-from PyQt5.QtCore import QObject, QTimer, QUrl, qVersion
+from PyQt5.QtCore import QBuffer, QByteArray, QObject, QTimer, QUrl, qVersion
 from PyQt5.QtNetwork import QHttpMultiPart, QNetworkReply, QNetworkRequest
 from qgis.core import QgsNetworkAccessManager, Qgis, QgsApplication, QgsAuthMethodConfig
 
@@ -156,7 +156,19 @@ class Http(QObject):
             # We skip the exception handling, then the request goes out unauthorized and the error response is handled
             pass
 
-        response = method(request, body) if (method == self.nam.post or method == self.nam.put) else method(request)
+        if method == self.nam.post or method == self.nam.put:
+            response = method(request, body)
+        elif method == self.nam.deleteResource and body is not None:
+            # QNetworkAccessManager.deleteResource() takes no body; a DELETE with a JSON
+            # payload (e.g. bulk AOI delete) must go through sendCustomRequest with a
+            # QIODevice. Parent the buffer to the reply so it outlives the async request.
+            buffer = QBuffer()
+            buffer.setData(QByteArray(body))
+            buffer.open(QBuffer.ReadOnly)
+            response = self.nam.sendCustomRequest(request, b"DELETE", buffer)
+            buffer.setParent(response)
+        else:
+            response = method(request)
 
         response.finished.connect(lambda response=response,
                                          callback=callback,

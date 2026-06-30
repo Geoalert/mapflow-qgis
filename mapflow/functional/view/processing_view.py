@@ -4,7 +4,10 @@ from PyQt5.QtWidgets import QAbstractItemView, QTableWidgetItem, QMessageBox, QC
 from PyQt5.QtGui import QColor
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs import icons
-from ...schema.processing import ProcessingDTO, ProcessingTemplateDTO, ProcessingUIParams, ProcessingSortBy, ProcessingSortOrder
+from ...schema.processing import (ProcessingDTO, ProcessingTemplateDTO, TemplateAoiDTO,
+                                  AoiProcessingLink, TemplateProcessingSchema,
+                                  NoAoiProcessingsRow,
+                                  ProcessingUIParams, ProcessingSortBy, ProcessingSortOrder)
 from ...config import config
 from ..service.alert_service import alert
 
@@ -181,10 +184,23 @@ class ProcessingView:
         set_color = False
         processing_dict = processing.as_processing_table_dict()
         is_template = isinstance(processing, ProcessingTemplateDTO)
+        is_aoi = isinstance(processing, TemplateAoiDTO)
+        is_separator = isinstance(processing, NoAoiProcessingsRow)
+        # An AOI's processing, whether the lighter aoiDetails link or the full schema.
+        is_template_processing = isinstance(processing, (AoiProcessingLink, TemplateProcessingSchema))
         if is_template:
             set_color = True
             color = QColor(207, 242, 249)  # light blue for templates    #! Dark theme?
-        elif not is_template and processing.status.is_ok and processing.review_expires:
+        elif is_aoi:
+            set_color = True
+            color = QColor(207, 226, 243)  # blue tint for AOI rows (matches the AOI map layer)
+        elif is_template_processing:
+            set_color = True
+            color = QColor(223, 240, 223)  # green tint for an AOI's processings (matches the map)
+        elif is_separator:
+            set_color = True
+            color = QColor(230, 230, 230)  # neutral grey for the 'No AOI' separator
+        elif processing.status.is_ok and processing.review_expires:
             # setting color for close review
             set_color = True
             color = QColor(255, 220, 200)
@@ -198,6 +214,15 @@ class ProcessingView:
                         count=processing.newImagesCount
                     )
                 table_item.setToolTip(template_tip)
+            elif is_aoi:
+                aoi_tip = self.tr("Template AOI")
+                if processing.hasNewImages:
+                    aoi_tip = self.tr("Template AOI with new images")
+                table_item.setToolTip(aoi_tip)
+            elif is_template_processing:
+                table_item.setToolTip(self.tr("Processing from this AOI. Double-click to load results."))
+            elif is_separator:
+                table_item.setToolTip(self.tr("Processings not intersecting any AOI"))
             elif processing.status.is_failed:
                 table_item.setToolTip(processing.error_message(raw=config.SHOW_RAW_ERROR))
             elif processing.reviewUntil:

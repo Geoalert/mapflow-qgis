@@ -12,6 +12,9 @@ from ...schema.processing import (
     CreateProcessingTemplateSchema,
     UpdateProcessingTemplateSchema,
     RunTemplateProcessingSchema,
+    UpdateAoiSchema,
+    AddAoisSchema,
+    DeleteAoisSchema,
 )
 
 class ProcessingApi(QObject):
@@ -247,6 +250,53 @@ class ProcessingApi(QObject):
             path=f"processings/template/{template_id}/processings",
             callback=callback,
             use_default_error_handler=True,
+            timeout=5,
+        )
+
+    # ---- Template AOI management ----
+    def update_aoi(self,
+                   template_id: Union[UUID, str],
+                   aoi_id: Union[UUID, str],
+                   data: UpdateAoiSchema,
+                   callback: Callable,
+                   error_handler: Optional[Callable] = None):
+        # NB: the backend serves AOI update over POST (not PUT) — see
+        # ProcessingResource.updateAoiEndpoint (`.post`). PUT returns 404.
+        self.http.post(
+            path=f"processings/template/{template_id}/aoi/{aoi_id}",
+            body=data.as_json().encode(),
+            headers={},
+            callback=callback,
+            error_handler=error_handler,
+            use_default_error_handler=error_handler is None,
+            timeout=5,
+        )
+
+    def add_aois(self,
+                 template_id: Union[UUID, str],
+                 data: AddAoisSchema,
+                 callback: Callable,
+                 error_handler: Optional[Callable] = None):
+        self.http.post(
+            path=f"processings/template/{template_id}/aoi",
+            body=data.as_json().encode(),
+            callback=callback,
+            error_handler=error_handler,
+            use_default_error_handler=error_handler is None,
+            timeout=5,
+        )
+
+    def delete_aois(self,
+                    template_id: Union[UUID, str],
+                    data: DeleteAoisSchema,
+                    callback: Callable,
+                    error_handler: Optional[Callable] = None):
+        self.http.delete(
+            path=f"processings/template/{template_id}/aoi",
+            body=data.as_json().encode(),
+            callback=callback,
+            error_handler=error_handler,
+            use_default_error_handler=error_handler is None,
             timeout=5,
         )
 

@@ -58,14 +58,14 @@ from .schema import (BillingType,
                      MyImageryParams,
                      ProviderReturnSchema,
                      UserDefinedParams)
-from .schema.catalog import (AoiResponseSchema,
-                             MultiPreviewList,
+from .schema.catalog import (MultiPreviewList,
                              PreviewType,
                              ProductType)
 from .schema.project import MapflowProject
-from .schema.processing import (CreateProcessingTemplateSchema,
-                                ProcessingTemplateDetails,
-                                ProcessingTemplateDTO,
+from .schema.processing import (AOI_NAME_MAX_LENGTH,
+                                AddAoisSchema,
+                                AddSingleAoiSchema,
+                                CreateProcessingTemplateSchema,
                                 SearchParams)
 from .schema.workflow_def import WorkflowDef
 # Dialogs
@@ -90,6 +90,10 @@ from .entity.provider import (create_provider,
 
 class Mapflow(QObject):
     """This class represents the plugin. It is instantiated by QGIS."""
+
+    # The AOI id the in-template search results are currently filtered by (None = all).
+    # Class-level default so the check is safe before on_template_opened sets it.
+    _template_search_aoi_filter = None
 
     def __init__(self, iface) -> None:
         """Initialize the plugin.
@@ -305,6 +309,10 @@ class Mapflow(QObject):
         self.dlg.processingsTable.cellDoubleClicked.connect(self.load_results)
         self.dlg.deleteProcessings.clicked.connect(self.processing_service.confirm_delete_processings)
         self.processing_service.connect_processings_pagination()
+        # In-template navigation: map side-effects on enter/leave a template.
+        self.processing_service.templateOpened.connect(self.on_template_opened)
+        self.processing_service.templateClosed.connect(self.on_template_closed)
+        self.dlg.processingsTable.itemSelectionChanged.connect(self.filter_search_by_selected_aoi)
         # Processings ratings
         self.dlg.processingsTable.itemSelectionChanged.connect(self.enable_feedback)
         self.dlg.processingsTable.itemSelectionChanged.connect(self.on_processings_selection_changed)
@@ -433,6 +441,10 @@ class Mapflow(QObject):
         self.dlg.template_rename_action.triggered.connect(self.processing_service.update_template)
         self.dlg.template_pause_action.triggered.connect(self.processing_service.pause_template)
         self.dlg.template_resume_action.triggered.connect(self.processing_service.resume_template)
+        # AOI actions (in-template view)
+        self.dlg.aoi_rename_action.triggered.connect(self.processing_service.rename_aoi)
+        self.dlg.aoi_delete_action.triggered.connect(self.processing_service.delete_aoi)
+        self.dlg.aoi_add_action.triggered.connect(self.add_template_aoi)
         self.dlg.options_menu.aboutToShow.connect(self.update_processing_options_menu)
         self.dlg.saveOptionsButton.setMenu(self.dlg.options_menu)
 
@@ -443,6 +455,30 @@ class Mapflow(QObject):
 
         selected_template = self.processing_service.selected_template()
         selected_processing = self.processing_service.selected_processing()
+
+        # In-template view: AOI add/rename/delete (only for AOI rows / empty selection;
+        # a selected processing row falls through to the normal processing actions below).
+        if self.processing_service.in_template_mode and not selected_processing:
+            can_edit = self.app_context.user_role.can_delete_rename_review_processing
+            selected_aoi = self.processing_service.selected_aoi()
+            if selected_aoi:
+                self.dlg.aoi_rename_action.setEnabled(can_edit and selected_aoi.can_rename)
+                menu.addAction(self.dlg.aoi_rename_action)
+                self.dlg.aoi_delete_action.setEnabled(can_edit and selected_aoi.can_rename)
+                menu.addAction(self.dlg.aoi_delete_action)
+            self.dlg.aoi_add_action.setEnabled(
+                can_edit and self.dlg.polygonCombo.currentLayer() is not None
+            )
+            menu.addAction(self.dlg.aoi_add_action)
+            return
+
+        # In-template view, a processing row is backed by the v1 TemplateProcessingSchema
+        # (flat params, no ProcessingParams) — offer only the read-only result actions, not
+        # restart/duplicate which need v2 source params.
+        if self.processing_service.in_template_mode and selected_processing:
+            menu.addAction(self.dlg.save_result_action)
+            menu.addAction(self.dlg.see_details_action)
+            return
 
         # Template selection: only template details action.
         if selected_template and not selected_processing:
@@ -520,8 +556,12 @@ class Mapflow(QObject):
         if self.dlg.processingProblemsLabel.text() == planned_reason:
             self.dlg.processingProblemsLabel.clear()
 
-    def get_selected_template_callback(self, response: QNetworkReply):
-        """Render selected template search results in the search table."""
+    def get_selected_template_callback(self, response: QNetworkReply, template=None):
+        """Render a template's search results in the search table.
+
+        ``template`` is passed explicitly because inside the in-template view the table
+        selection points at AOIs/processings, not the template row.
+        """
         response_json = json.loads(response.readAll().data())
         if not response_json.get("images"):
             self.dlg.metadataTable.clearContents()
@@ -529,7 +569,8 @@ class Mapflow(QObject):
             self.app_context.open_template_results_id = None
             self.alert(self.tr("No images was found"), QMessageBox.Information)
             return
-        template = self.processing_service.selected_template()
+        if template is None:
+            template = self.processing_service.selected_template()
         template_group_name = str(template.name) if template else None
         # Mark these results as belonging to this template, so a "Start" runs a planned processing.
         self.app_context.open_template_results_id = str(template.id) if template else None
@@ -584,7 +625,9 @@ class Mapflow(QObject):
         if template_group_name:
             target_group = self._template_group_target(template_group_name)
             self.app_context.project.addMapLayer(layer, addToLegend=False)
-            target_group.insertLayer(0, layer)
+            # Append (bottom) so the search-results footprints sit below the AOI/processing
+            # subgroups rather than on top of them.
+            target_group.addLayer(layer)
         else:
             self.result_loader.add_layer(layer=layer)
         # Selecting a footprint on the map selects the matching table row (and triggers preview).
@@ -612,27 +655,21 @@ class Mapflow(QObject):
                 ids.append(str(aoi_id))
         return ids
 
-    def _linked_processings_from_template(self, template) -> List[dict]:
-        """Extract processing links from template AOI details."""
-        links = []
-        search_params = template.searchParams or {}
-        if isinstance(search_params, dict):
-            aoi_details = search_params.get("aoiDetails", {})
-        else:
-            aoi_details = search_params.aoiDetails
-
-        if not aoi_details:
-            return links
-
-        for feature in aoi_details.get("features", []):
-            feature_processings = feature.get("properties", {}).get("processings", [])
-            links.extend(feature_processings)
-        return links
-
     def show_template_details_and_navigation(self, template):
-        """Show template summary."""
-        linked_processings = self._linked_processings_from_template(template)
-        linked_count = len(linked_processings)
+        """Show template summary. The processings count is fetched from the
+        ``/processings`` endpoint (aoiDetails links are not always populated)."""
+        self.processing_service.api.get_template_processings(
+            template_id=template.id,
+            callback=lambda response: self._show_template_details_callback(template, response),
+        )
+
+    def _show_template_details_callback(self, template, response: QNetworkReply):
+        try:
+            data = json.loads(response.readAll().data())
+            items = data.get("results") if isinstance(data, dict) else data
+            linked_count = len([i for i in (items or []) if isinstance(i, dict)])
+        except Exception:
+            linked_count = 0
         new_images = template.newImagesCount or 0
         local_created_at = template.createdAt.astimezone()
         local_active_until = template.activeUntil.astimezone()
@@ -649,64 +686,40 @@ class Mapflow(QObject):
         alert(details, QMessageBox.Information)
 
     def select_template_processings(self):
-        """Select all processings in the table that were launched from selected template."""
+        """Menu action: load AOI/processing layers for the selected template."""
         template = self.processing_service.selected_template()
         if not template or self.processing_service.selected_processing():
             return
+        # Hydrate first (the list view's template omits aoiDetails), then draw layers.
+        self.processing_service.hydrate_template(template, self._load_template_layers)
 
-        template_group_name = str(template.name)
-        processings_subgroup_name = self.tr("Processings AOI")
-
-        template_aoi_layer = None
-        try:
-            template_aoi_layer = self._add_geojson_aoi_layer(
-                features=template._aoi_features(),
-                layer_name=self.tr("Planned AOI: {name}").format(name=template.name),
-                style_name='aoi.qml',
-                template_group_name=template_group_name,
-            )
-        except Exception:
-            template_aoi_layer = None
-
-        links = self._linked_processings_from_template(template)
-        linked_items = []
-        seen_ids = set()
-        for item in links:
-            processing_id = item.get("processingId")
-            if not processing_id:
-                continue
-            processing_id = str(processing_id)
-            if processing_id in seen_ids:
-                continue
-            seen_ids.add(processing_id)
-            processing_name = item.get("processingName") or item.get("name") or self.tr("Unknown")
-            linked_items.append((processing_name, processing_id))
-
-        if not linked_items:
+    def _load_template_layers(self, template):
+        """Draw, per AOI, a subgroup named after the AOI containing the AOI polygon (blue)
+        and each of its processings' footprints (green), all from the template's
+        ``aoiDetails`` (no extra requests)."""
+        if not template:
             return
-
-        # Add linked processings AOIs to the same group as template AOI
-        for _, processing_id in linked_items:
-            self.http.get(
-                url=f'{self.server}/processings/{processing_id}/aois',
-                callback=self._add_template_processing_aoi_callback,
-                callback_kwargs={
-                    'processing_id': processing_id,
-                    'template_group_name': template_group_name,
-                    'processings_subgroup_name': processings_subgroup_name,
-                    'reference_layer_id': template_aoi_layer.id() if template_aoi_layer else None,
-                },
-                use_default_error_handler=True,
-                timeout=30,
-            )
-        
-        linked_details = "<br/>".join(
-            f"- <b>{name}</b> ({pid})" for name, pid in linked_items
-        )
-        alert(
-            self.tr("Linked processings:<br/>{details}").format(details=linked_details),
-            QMessageBox.Information,
-        )
+        template_group_name = str(template.name)
+        for aoi in template.aoi_dtos():
+            subgroup_name = self.tr("AOI: {name}").format(name=aoi.display_name)
+            if aoi.geometry:
+                self._add_geojson_aoi_layer(
+                    features=[{"type": "Feature", "geometry": aoi.geometry, "properties": {}}],
+                    layer_name=aoi.display_name,
+                    style_name='aoi_template_blue.qml',
+                    template_group_name=template_group_name,
+                    subgroup_name=subgroup_name,
+                )
+            for link in aoi.processings:
+                if not link.geometry:
+                    continue
+                self._add_geojson_aoi_layer(
+                    features=[{"type": "Feature", "geometry": link.geometry, "properties": {}}],
+                    layer_name=link.processingName or str(link.processingId),
+                    style_name='aoi_template_processing_green.qml',
+                    template_group_name=template_group_name,
+                    subgroup_name=subgroup_name,
+                )
 
     def _add_geojson_aoi_layer(self,
                                features: list,
@@ -780,45 +793,80 @@ class Mapflow(QObject):
             return subgroup
         return template_group
 
-    def _add_template_processing_aoi_callback(self,
-                                              response: QNetworkReply,
-                                              processing_id: str,
-                                              template_group_name: Optional[str] = None,
-                                              processings_subgroup_name: Optional[str] = None,
-                                              reference_layer_id: Optional[str] = None):
-        try:
-            data = json.loads(response.readAll().data())
-            geojson = AoiResponseSchema(data).aoi_as_geojson()
-            features = geojson.get('features', [])
-            self._add_geojson_aoi_layer(
-                features=features,
-                layer_name=self.tr("AOI: {id}").format(id=processing_id),
-                style_name='aoi_templates_processing.qml',
-                template_group_name=template_group_name,
-                subgroup_name=processings_subgroup_name,
-                reference_layer_id=reference_layer_id,
-            )
-        except Exception:
-            return
-
     def show_template_search_results(self):
-        """Open imagery search tab and fill it with selected template search results."""
+        """Menu action: fill the imagery-search table with the selected template's results."""
         template = self.processing_service.selected_template()
         if not template or self.processing_service.selected_processing():
             return
+        # Explicit "See search results" action: bring the imagery-search tab to front.
+        self._load_template_search(template, switch_tab=True)
 
-        imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
-        if imagery_search_tab:
-            self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
+    def _load_template_search(self, template, aoi_ids=None, switch_tab=False):
+        """Fill the imagery-search table with the template's search results.
 
-        aoi_ids = self._aoi_ids_from_template(template)
+        ``aoi_ids`` restricts the results to specific AOIs (S7: filter by selected AOI);
+        when ``None`` all of the template's AOIs are used. ``switch_tab`` brings the
+        imagery-search tab to front — only the explicit menu action does so; entering a
+        template or filtering by AOI must not steal focus from the processings tab.
+        """
+        if not template:
+            return
+        if switch_tab:
+            imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
+            if imagery_search_tab:
+                self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
+
+        if aoi_ids is None:
+            aoi_ids = self._aoi_ids_from_template(template)
         self.processing_service.api.get_template_images(
             template_id=template.id,
-            callback=self.get_selected_template_callback,
+            callback=lambda response: self.get_selected_template_callback(response, template),
             limit=self.search_page_limit,
             offset=self.search_page_offset,
             aoi_ids=aoi_ids or None,
         )
+
+    def add_template_aoi(self):
+        """Add the current polygon layer's features as named AOIs to the active template."""
+        template = self.processing_service.active_template
+        if not template:
+            return
+        try:
+            feature_collection = self._build_template_aoi_details()
+        except ValueError as e:
+            self.alert(str(e), QMessageBox.Warning)
+            return
+        if not feature_collection or not feature_collection.get("features"):
+            self.alert(self.tr("Select a polygon layer with at least one feature to add as AOI"),
+                       QMessageBox.Warning)
+            return
+        aois = [
+            AddSingleAoiSchema(geometry=f["geometry"], name=f["properties"].get("name"))
+            for f in feature_collection["features"]
+        ]
+        self.processing_service.api.add_aois(
+            template_id=template.id,
+            data=AddAoisSchema(aois=aois),
+            callback=self.processing_service.aoi_changed_callback,
+            error_handler=self.processing_service.aoi_change_error_handler,
+        )
+
+    def filter_search_by_selected_aoi(self):
+        """S7: inside a template, selecting an AOI filters the imagery-search results
+        (table and footprint layer) to images intersecting that AOI; de-selecting the AOI
+        (or selecting a processing) restores all of the template's results."""
+        if not self.processing_service.in_template_mode:
+            return
+        template = self.processing_service.active_template
+        if not template:
+            return
+        aoi = self.processing_service.selected_aoi()
+        desired = aoi.id if (aoi and aoi.id) else None
+        # Only reload when the effective filter actually changes (selection fires often).
+        if desired == self._template_search_aoi_filter:
+            return
+        self._template_search_aoi_filter = desired
+        self._load_template_search(template, aoi_ids=[desired] if desired else None)
 
     def select_processing_in_table(self, processing_id: str):
         """Select processing row by ID and open processing details."""
@@ -1331,6 +1379,48 @@ class Mapflow(QObject):
             return
         self.get_metadata()
 
+    def _build_template_aoi_details(self) -> Optional[dict]:
+        """Build a GeoJSON FeatureCollection of the AOI layer's features for template creation.
+
+        Each feature carries ``properties.name`` from the layer's ``name`` attribute (when
+        present), so the backend persists named AOIs (parsed as ``InputAoiProperties``).
+        Returns ``None`` when there is no usable polygon layer, so the caller falls back to
+        the combined ``aoi`` geometry. Raises ``ValueError`` if a name exceeds the limit.
+        """
+        layer = self.dlg.polygonCombo.currentLayer()
+        if not layer or layer.featureCount() == 0:
+            return None
+        source_features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
+        if not source_features:
+            return None
+        has_name_field = layer.fields().indexFromName("name") != -1
+        features = []
+        for feature in source_features:
+            geom = feature.geometry()
+            if geom is None or geom.isEmpty():
+                continue
+            wgs_geom = helpers.to_wgs84(QgsGeometry(geom), layer.crs())
+            name = None
+            if has_name_field:
+                raw = feature.attribute("name")
+                # QGIS NULL attributes are not None; normalize to a real None.
+                if raw not in (None, "") and str(raw).upper() != "NULL":
+                    name = str(raw).strip()
+            if name and len(name) > AOI_NAME_MAX_LENGTH:
+                raise ValueError(
+                    self.tr("AOI name '{name}' exceeds {limit} characters").format(
+                        name=name, limit=AOI_NAME_MAX_LENGTH
+                    )
+                )
+            features.append({
+                "type": "Feature",
+                "geometry": json.loads(wgs_geom.asJson()),
+                "properties": {"name": name},
+            })
+        if not features:
+            return None
+        return {"type": "FeatureCollection", "features": features}
+
     def create_search_template(self):
         """Create planned search template using current AOI and imagery-search filters."""
         self.replace_search_provider_index()
@@ -1363,8 +1453,15 @@ class Mapflow(QObject):
         product_types = self.selected_search_product_types() or []
         search_providers = self.selected_search_providers()
 
+        try:
+            aoi_details = self._build_template_aoi_details()
+        except ValueError as e:
+            self.alert(str(e), QMessageBox.Warning)
+            return
+
         search_params = SearchParams(
             aoi=json.loads(self.app_context.aoi.asJson()),
+            aoiDetails=aoi_details,
             acquisitionDateFrom=from_time,
             acquisitionDateTo=to_time,
             maxCloudCover=max_cloud_cover,
@@ -2897,45 +2994,48 @@ class Mapflow(QObject):
 
     # =================== Results management ==================== #
     def _open_template(self, template):
-        """Open a template's results, fetching its ``searchParams`` on demand.
+        """Navigate into a template ('one step right').
 
-        The poll uses the project-scoped template list, which omits ``searchParams``.
-        They are needed to render the template AOI and filter its search results, so
-        when they are missing we fetch the full template by id first, then open.
+        The actual hydration (the poll omits ``searchParams``) and state switch happen in
+        the service; map side-effects are handled by ``on_template_opened`` via signal.
         """
-        if self._template_has_aoi(template):
-            self.show_template_search_results()
-            self.select_template_processings()
+        self.project_processing_controller.enter_template(template)
+
+    def on_template_opened(self, template):
+        """React to entering a template: fill search results and load AOI/processing layers."""
+        # Initial results are the whole template (no AOI filter applied yet).
+        self._template_search_aoi_filter = None
+        self._load_template_search(template)
+        self._load_template_layers(template)
+
+    def on_template_closed(self, template):
+        """React to leaving a template: drop its map group and clear the search table."""
+        if template is not None:
+            self._remove_template_group(str(template.name))
+        self.app_context.open_template_results_id = None
+        self._template_search_aoi_filter = None
+        self.dlg.metadataTable.clearContents()
+        self.dlg.metadataTable.setRowCount(0)
+
+    def _remove_template_group(self, template_group_name: str):
+        """Remove the template's layer-tree group (and its layers) from the map."""
+        if not template_group_name:
             return
-        self.processing_service.api.get_template(
-            template_id=template.id,
-            callback=self._template_hydrated_callback,
-        )
-
-    @staticmethod
-    def _template_has_aoi(template) -> bool:
-        try:
-            return bool(template._aoi_features())
-        except Exception:
-            return False
-
-    def _template_hydrated_callback(self, response: QNetworkReply):
-        """Replace the stored template with its full (searchParams-bearing) version,
-        then open its results and linked-processing AOIs."""
-        try:
-            data = json.loads(response.readAll().data())
-            if isinstance(data, dict) and "template" in data:
-                hydrated = ProcessingTemplateDetails.from_dict(data).template
-            elif isinstance(data, dict):
-                hydrated = ProcessingTemplateDTO.from_dict(data)
-            else:
-                hydrated = None
-            if hydrated is not None:
-                self.processing_service.templates[hydrated.id] = hydrated
-        except Exception:
-            pass
-        self.show_template_search_results()
-        self.select_template_processings()
+        root = self.app_context.project.layerTreeRoot()
+        mapflow_group_name = self.app_context.settings.value('layerGroup') or self.app_context.plugin_name
+        mapflow_group = root.findGroup(mapflow_group_name)
+        parent_group = mapflow_group if mapflow_group else root
+        template_group = parent_group.findGroup(template_group_name)
+        if template_group is None:
+            return
+        for layer in template_group.findLayers():
+            layer_id = layer.layerId()
+            if layer_id:
+                try:
+                    self.app_context.project.removeMapLayer(layer_id)
+                except (RuntimeError, KeyError):
+                    pass
+        parent_group.removeChildNode(template_group)
 
     def load_results(self):
         # Check if it's a template first
