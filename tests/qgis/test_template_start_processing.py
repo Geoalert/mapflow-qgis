@@ -150,39 +150,46 @@ def test_on_processings_selection_changed_restores_default_when_processing_selec
 	plugin.dlg.disable_processing_start.assert_not_called()
 
 
-def test_load_results_double_click_hydrated_template_opens_directly():
+def test_load_results_double_click_template_enters_template_view():
+	"""Double-clicking a template navigates 'one step right' via the controller."""
 	plugin = Mapflow.__new__(Mapflow)
 	plugin.processing_service = MagicMock()
-	# Template already carries its AOI (searchParams present) -> open without a refetch.
-	template = SimpleNamespace(id="template-1", _aoi_features=lambda: [{"type": "Feature"}])
+	template = SimpleNamespace(id="template-1")
 	plugin.processing_service.selected_template.return_value = template
-	plugin.select_template_processings = MagicMock()
-	plugin.show_template_search_results = MagicMock()
+	plugin.project_processing_controller = MagicMock()
 
 	plugin.load_results()
 
-	plugin.select_template_processings.assert_called_once()
-	plugin.show_template_search_results.assert_called_once()
-	plugin.processing_service.api.get_template.assert_not_called()
+	plugin.project_processing_controller.enter_template.assert_called_once_with(template)
 
 
-def test_load_results_double_click_unhydrated_template_fetches_then_opens():
-	plugin = Mapflow.__new__(Mapflow)
-	plugin.processing_service = MagicMock()
-	plugin.processing_service.templates = {}
-	# Poll list omitted searchParams -> _aoi_features is empty -> hydrate before opening.
-	template = SimpleNamespace(id="template-1", _aoi_features=lambda: [])
-	plugin.processing_service.selected_template.return_value = template
-	plugin.select_template_processings = MagicMock()
-	plugin.show_template_search_results = MagicMock()
+def test_enter_template_view_hydrated_skips_refetch():
+	"""A template that already carries its AOIs is entered without a refetch."""
+	service = ProcessingService.__new__(ProcessingService)
+	service.api = MagicMock()
+	service.templates = {}
+	service._do_enter_template = MagicMock()
+	template = SimpleNamespace(id="template-1", aoi_dtos=lambda: [object()])
 
-	plugin.load_results()
+	service.enter_template_view(template)
 
-	plugin.processing_service.api.get_template.assert_called_once()
-	assert plugin.processing_service.api.get_template.call_args.kwargs["template_id"] == "template-1"
-	# Opening is deferred to the hydration callback.
-	plugin.show_template_search_results.assert_not_called()
-	plugin.select_template_processings.assert_not_called()
+	service._do_enter_template.assert_called_once_with(template)
+	service.api.get_template.assert_not_called()
+
+
+def test_enter_template_view_unhydrated_fetches_then_enters():
+	"""A template missing its AOIs (project poll omits searchParams) is hydrated first."""
+	service = ProcessingService.__new__(ProcessingService)
+	service.api = MagicMock()
+	service.templates = {}
+	service._do_enter_template = MagicMock()
+	template = SimpleNamespace(id="template-1", aoi_dtos=lambda: [])
+
+	service.enter_template_view(template)
+
+	service.api.get_template.assert_called_once()
+	assert service.api.get_template.call_args.kwargs["template_id"] == "template-1"
+	service._do_enter_template.assert_not_called()
 
 	hydrated_payload = {
 		"template": {
@@ -198,38 +205,39 @@ def test_load_results_double_click_unhydrated_template_fetches_then_opens():
 	}
 	response = MagicMock()
 	response.readAll.return_value.data.return_value = json.dumps(hydrated_payload).encode()
-	callback = plugin.processing_service.api.get_template.call_args.kwargs["callback"]
+	callback = service.api.get_template.call_args.kwargs["callback"]
 
 	callback(response)
 
-	assert "template-1" in plugin.processing_service.templates
-	assert plugin.processing_service.templates["template-1"].searchParams is not None
-	plugin.show_template_search_results.assert_called_once()
-	plugin.select_template_processings.assert_called_once()
+	assert "template-1" in service.templates
+	service._do_enter_template.assert_called_once()
 
 
-def test_select_template_processings_deduplicates_linked_processing_aoi_requests():
+def test_load_template_layers_builds_per_aoi_subgroups_from_aoidetails():
+	"""Each AOI becomes a subgroup with its polygon (blue) + its processings (green),
+	all from aoiDetails — no per-processing AOI requests."""
+	from mapflow.schema.processing import AoiProcessingLink, TemplateAoiDTO
+
 	plugin = Mapflow.__new__(Mapflow)
 	plugin.tr = lambda text: text
-	plugin.server = "https://server"
-	plugin.http = MagicMock()
-	plugin.processing_service = MagicMock()
-	template = SimpleNamespace(id="template-1", name="Template A", _aoi_features=lambda: [])
-	plugin.processing_service.selected_template.return_value = template
-	plugin.processing_service.selected_processing.return_value = None
-	plugin._add_geojson_aoi_layer = MagicMock(return_value=SimpleNamespace(id=lambda: "layer-1"))
-	plugin._linked_processings_from_template = MagicMock(return_value=[
-		{"processingId": "proc-1", "processingName": "P1"},
-		{"processingId": "proc-1", "processingName": "P1"},
-		{"processingId": "proc-1", "processingName": "P1"},
-	])
+	plugin._add_geojson_aoi_layer = MagicMock()
 
-	with patch("mapflow.mapflow.alert"):
-		plugin.select_template_processings()
+	geom = {"type": "Polygon", "coordinates": [[[0, 0], [0, 1], [1, 1], [0, 0]]]}
+	proc_geom = {"type": "Polygon", "coordinates": [[[0, 0], [0, 2], [2, 2], [0, 0]]]}
+	aoi = TemplateAoiDTO(
+		id="a1", name="North", geometry=geom,
+		processings=[AoiProcessingLink(processingId="p1", processingName="P1", geometry=proc_geom)],
+	)
+	template = SimpleNamespace(name="Template A", aoi_dtos=lambda: [aoi])
 
-	assert plugin.http.get.call_count == 1
-	kwargs = plugin.http.get.call_args.kwargs
-	assert kwargs["url"] == "https://server/processings/proc-1/aois"
+	plugin._load_template_layers(template)
+
+	# One AOI (blue) layer + one processing (green) layer, both in the AOI's subgroup.
+	assert plugin._add_geojson_aoi_layer.call_count == 2
+	styles = [c.kwargs["style_name"] for c in plugin._add_geojson_aoi_layer.call_args_list]
+	assert styles == ["aoi_template_blue.qml", "aoi_template_processing_green.qml"]
+	subgroups = {c.kwargs["subgroup_name"] for c in plugin._add_geojson_aoi_layer.call_args_list}
+	assert subgroups == {"AOI: North"}
 
 
 def _mark_seen_plugin(selected_rows=None):

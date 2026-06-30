@@ -9,6 +9,24 @@
   - navigate from template to processings launched from it
   - create, launch, delete, and update template parameters
 
+### 1a. See & edit template AOIs (feature/see-template-aois) [ready-for-review]
+- Added a 3rd navigation level (Projects -> Processings -> Template). Reused the
+  existing left/right "fake" nav buttons rather than new widgets; the right
+  (placeholder) button becomes "enter selected template", the left button is
+  context-aware (template -> processings -> projects). Decoupled map side-effects
+  via ProcessingService.templateOpened/templateClosed signals so the service stays
+  UI-agnostic and selection-independent (inside a template there is no template row).
+- AOI names: backend parses names from searchParams.aoiDetails InputAoiProperties
+  (max 64 chars); create now sends a per-feature aoiDetails FeatureCollection built
+  from the source layer's `name` attribute, falling back to combined `aoi`.
+- DELETE-with-body needed for bulk AOI delete: QNetworkAccessManager.deleteResource
+  has no body, so http.py routes DELETE+body through sendCustomRequest with a QBuffer
+  parented to the reply.
+- Runtime ids are strings (dataclasses don't coerce UUID), so table_id/selection
+  keys are strings throughout. ProcessingService gained class-level in_template_mode
+  default so partially-constructed (test) instances don't trip PyQt's QObject guard.
+- See WAL_1.md for the full step list and remaining notes.
+
 - UI requirements:
   - show processings from template in related map layers
   - support mark image/all as seen flows
