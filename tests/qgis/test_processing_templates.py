@@ -165,14 +165,16 @@ class TestTemplateSchemas:
         ("payload_updates", "expected_status"),
         [
             ({"status": "FAILED", "isActive": False}, "Failed"),
+            ({"status": "SEARCHING", "isActive": True}, "Searching"),
             ({"status": "READY", "isActive": False}, "Inactive"),
             ({"status": "READY", "isActive": True, "lastCheckedAt": None, "newImagesCount": 0}, "Created"),
             ({
+                # Before the first check, the new-images tag is not shown (Created has no count).
                 "status": "READY",
                 "isActive": True,
                 "lastCheckedAt": None,
                 "newImagesCount": 3,
-            }, "Created (3)"),
+            }, "Created"),
             ({
                 "status": "READY",
                 "isActive": True,

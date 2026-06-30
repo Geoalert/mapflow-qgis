@@ -57,6 +57,13 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.createProject.setIcon(icons.plus_icon)
         self.deleteProject.setIcon(icons.minus_icon)
         self.updateProject.setIcon(icons.edit_icon)
+        # Navigation arrows: left = back one level, right = into the selected template.
+        self.switchProjectsButton.setIcon(icons.arrow_left_icon)
+        self.switchProjectsButton.setToolTip(self.tr("Back"))
+        self.switchProcessingsButton.setIcon(icons.arrow_right_icon)
+        self.switchProcessingsButton.setToolTip(self.tr("Open processings"))
+        self.switchProcessingsFakeButton.setIcon(icons.arrow_right_icon)
+        self.switchProcessingsFakeButton.setToolTip(self.tr("Open selected template"))
 
         coin_pixmap = icons.coins_icon.pixmap(16, 16)
         self.labelCoins_1.setPixmap(coin_pixmap)
@@ -132,6 +139,10 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.template_rename_action = QAction(self.tr("Rename"))
         self.template_pause_action = QAction(self.tr("Pause"))
         self.template_resume_action = QAction(self.tr("Resume"))
+        # AOI-specific actions (in-template view)
+        self.aoi_rename_action = QAction(self.tr("Rename AOI"))
+        self.aoi_delete_action = QAction(self.tr("Delete AOI"))
+        self.aoi_add_action = QAction(self.tr("Add AOI from current layer"))
         self.setup_options_menu()
 
         # Imagery Search
