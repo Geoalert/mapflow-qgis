@@ -6,7 +6,8 @@ from unittest.mock import MagicMock, call, patch
 from mapflow.functional.service import processing_service as processing_service_module
 from mapflow.functional.service.processing_service import ProcessingService
 from mapflow.mapflow import Mapflow
-from mapflow.schema.processing import PostProcessingSchemaV2, RunTemplateProcessingSchema
+from mapflow.schema.processing import PostProcessingSchemaV2
+from mapflow.schema.template import RunTemplateProcessingSchema
 
 
 def _processing_payload():
@@ -216,7 +217,7 @@ def test_enter_template_view_unhydrated_fetches_then_enters():
 def test_load_template_layers_builds_per_aoi_subgroups_from_aoidetails():
 	"""Each AOI becomes a subgroup with its polygon (blue) + its processings (green),
 	all from aoiDetails — no per-processing AOI requests."""
-	from mapflow.schema.processing import AoiProcessingLink, TemplateAoiDTO
+	from mapflow.schema.template import AoiProcessingLink, TemplateAoiDTO
 
 	plugin = Mapflow.__new__(Mapflow)
 	plugin.tr = lambda text: text
