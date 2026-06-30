@@ -24,18 +24,21 @@ from ..view.processing_view import ProcessingView
 from ..api.processing_api import ProcessingApi
 from ...schema import ProcessingDTO, UpdateProcessingSchema, ProcessingStatus, BillingType, ProcessingHistory, PostProcessingSchemaV2
 from ...schema.processing import (
+    ProcessingsRequest,
+    ProcessingsResult,
+)
+from ...schema.template import (
     AOI_NAME_MAX_LENGTH,
     DeleteAoisSchema,
     NoAoiProcessingsRow,
-    ProcessingsRequest,
-    ProcessingsResult,
     RunTemplateProcessingSchema,
     TemplateAoiDTO,
     TemplateProcessingSchema,
     UpdateAoiSchema,
     UpdateProcessingTemplateSchema,
+    ProcessingTemplateDTO,
+    ProcessingTemplateDetails,
 )
-from ...schema.processing import ProcessingTemplateDTO, ProcessingTemplateDetails
 from ..service.alert_service import alert
 from ..app_context import AppContext
 from ...entity.provider import ImagerySearchProvider
@@ -58,6 +61,8 @@ class ProcessingService(QObject):
     # construct the service without running __init__.
     in_template_mode = False
     active_template = None
+    _default_poll_interval = Config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000
+    _template_poll_interval = Config.TEMPLATE_TABLE_REFRESH_INTERVAL * 1000
 
     def __init__(self,
                  http: Http,
@@ -90,6 +95,9 @@ class ProcessingService(QObject):
         self.processings_history = None # ProcessingHistory() - local storage for active processings list
         self.processing_fetch_timer = QTimer(dlg)
         self.processing_fetch_timer.setInterval(timer_interval)
+        # Project-list poll interval vs the slower in-template poll (set on enter/exit).
+        self._default_poll_interval = timer_interval
+        self._template_poll_interval = Config.TEMPLATE_TABLE_REFRESH_INTERVAL * 1000
         self.processing_cost = 0
         self._delete_state = {}  # Store state for template deletion callback
         self._resume_template_state = {}
@@ -684,6 +692,8 @@ class ProcessingService(QObject):
         self._rebuild_template_rows()
         # Fetch the full processings (with result layers) for double-click loading.
         self._fetch_template_processings()
+        # Poll the in-template view less aggressively than the project list.
+        self.processing_fetch_timer.setInterval(self._template_poll_interval)
         self.processing_fetch_timer.start()
         # Map side-effects (search results + AOI layers) are handled by listeners.
         self.templateOpened.emit(template)
@@ -695,33 +705,40 @@ class ProcessingService(QObject):
         self.active_template = None
         self.template_processings = {}
         self.template_aois = {}
+        # Restore the regular (faster) project-list poll cadence.
+        self.processing_fetch_timer.setInterval(self._default_poll_interval)
         # Let listeners clean up the template's map layers / search table.
         self.templateClosed.emit(closed)
 
     def refresh_template_view(self):
-        """Re-hydrate the active template (its ``aoiDetails`` carry the per-AOI processings
-        and statuses) and re-render the grouped rows. Driven by the poll timer."""
-        if not self.active_template:
-            return
-        self.api.get_template(
-            template_id=self.active_template.id,
-            callback=self._refresh_template_callback,
-        )
+        """Poll tick: refresh only the processings (status/progress + the unbound section).
 
-    def _refresh_template_callback(self, response: QNetworkReply):
-        hydrated = self._parse_template_response(response)
-        if hydrated is not None:
-            self.active_template = hydrated
-            self.templates[hydrated.id] = hydrated
-        # Re-fetch the processings too (statuses/progress change); the rows re-render once
-        # that arrives (the processings callback rebuilds).
-        self._fetch_template_processings()
+        The AOI grouping (``aoiDetails`` from the full template) changes slowly and is
+        re-hydrated on enter and after AOI edits — NOT every tick — so a poll is a single
+        ``/processings`` request rather than three. AOI statuses are kept current by syncing
+        them from the polled processings (see ``_sync_aoi_statuses_from_processings``).
+        """
+        if self.active_template:
+            self._fetch_template_processings()
 
     def _rebuild_template_rows(self):
         if not self.active_template:
             return
         self.template_aois = {aoi.table_id: aoi for aoi in self.active_template.aoi_dtos()}
+        self._sync_aoi_statuses_from_processings()
         self.view.update_processing_table(self.combined_template_rows())
+
+    def _sync_aoi_statuses_from_processings(self):
+        """Refresh each AOI's processing-link statuses from the latest polled processings, so
+        the AOI aggregate status is current without re-fetching the full template each tick."""
+        for aoi in self.template_aois.values():
+            for link in aoi.processings:
+                full = self.template_processings.get(str(link.processingId))
+                if full is not None:
+                    try:
+                        link.processingStatus = full.status.value
+                    except AttributeError:
+                        pass
 
     def _fetch_template_processings(self):
         """Fetch the template's processings (v1 ``ProcessingJson``) for the full row data

@@ -20,8 +20,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtXml import QDomDocument
 from qgis.core import (
-    Qgis, QgsCoordinateReferenceSystem, QgsDistanceArea, QgsFeature, QgsGeometry, 
-    QgsMapLayer, QgsMapLayerType, QgsPoint, QgsProject, QgsRasterLayer, 
+    Qgis, QgsCoordinateReferenceSystem, QgsDistanceArea, QgsFeature, QgsGeometry,
+    QgsLayerTreeLayer, QgsMapLayer, QgsMapLayerType, QgsPoint, QgsProject, QgsRasterLayer,
     QgsRectangle, QgsVectorLayer, QgsWkbTypes
 )
 
@@ -62,11 +62,11 @@ from .schema.catalog import (MultiPreviewList,
                              PreviewType,
                              ProductType)
 from .schema.project import MapflowProject
-from .schema.processing import (AOI_NAME_MAX_LENGTH,
-                                AddAoisSchema,
-                                AddSingleAoiSchema,
-                                CreateProcessingTemplateSchema,
-                                SearchParams)
+from .schema.template import (AOI_NAME_MAX_LENGTH,
+                              AddAoisSchema,
+                              AddSingleAoiSchema,
+                              CreateProcessingTemplateSchema,
+                              SearchParams)
 from .schema.workflow_def import WorkflowDef
 # Dialogs
 from .dialogs import (ErrorMessageWidget,
@@ -94,6 +94,9 @@ class Mapflow(QObject):
     # The AOI id the in-template search results are currently filtered by (None = all).
     # Class-level default so the check is safe before on_template_opened sets it.
     _template_search_aoi_filter = None
+    # Id of the currently shown mosaic-preview boundary layer, so it can be removed when the
+    # next preview is shown (its name varies by acquisition date, so name-match alone misses it).
+    _mosaic_preview_footprint_id = None
 
     def __init__(self, iface) -> None:
         """Initialize the plugin.
@@ -720,6 +723,34 @@ class Mapflow(QObject):
                     template_group_name=template_group_name,
                     subgroup_name=subgroup_name,
                 )
+
+    def _relocate_preview_to_template_group(self, layer) -> None:
+        """In the in-template view, move a freshly added preview layer into the template's
+        map group, above the search-results footprints and below the AOI subgroups, so the
+        precedence is AOIs (top) > previews > search results (bottom)."""
+        service = self.processing_service
+        if not layer or not service.in_template_mode or not service.active_template:
+            return
+        try:
+            template_group = self._template_group_target(str(service.active_template.name))
+            root = self.app_context.project.layerTreeRoot()
+            node = root.findLayer(layer.id())
+            if node is None or template_group is None:
+                return
+            footprints_layer = getattr(self.app_context, 'metadata_layer', None)
+            footprints_id = footprints_layer.id() if footprints_layer else None
+            children = template_group.children()
+            # Default to the bottom; otherwise insert directly above the footprints layer
+            # (which itself sits below the AOI/processing subgroups).
+            insert_index = len(children)
+            for i, child in enumerate(children):
+                if isinstance(child, QgsLayerTreeLayer) and child.layerId() == footprints_id:
+                    insert_index = i
+                    break
+            template_group.insertChildNode(insert_index, node.clone())
+            (node.parent() or root).removeChildNode(node)
+        except (AttributeError, RuntimeError):
+            return
 
     def _add_geojson_aoi_layer(self,
                                features: list,
@@ -1380,42 +1411,53 @@ class Mapflow(QObject):
         self.get_metadata()
 
     def _build_template_aoi_details(self) -> Optional[dict]:
-        """Build a GeoJSON FeatureCollection of the AOI layer's features for template creation.
+        """Build the ``searchParams.aoiDetails`` FeatureCollection for template creation.
 
         Each feature carries ``properties.name`` from the layer's ``name`` attribute (when
-        present), so the backend persists named AOIs (parsed as ``InputAoiProperties``).
-        Returns ``None`` when there is no usable polygon layer, so the caller falls back to
-        the combined ``aoi`` geometry. Raises ``ValueError`` if a name exceeds the limit.
+        present), so the backend persists named AOIs (parsed as ``InputAoiProperties``; the
+        name is optional). When the AOI does not come from a polygon layer (e.g. an
+        image/mosaic extent), a single unnamed feature is built from ``app_context.aoi``.
+
+        ``aoiDetails`` is always used — the legacy plain ``aoi`` field is deprecated because
+        names cannot be attached to it. Returns ``None`` only when there is no AOI at all.
+        Raises ``ValueError`` if a name exceeds the limit.
         """
         layer = self.dlg.polygonCombo.currentLayer()
-        if not layer or layer.featureCount() == 0:
-            return None
-        source_features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
-        if not source_features:
-            return None
-        has_name_field = layer.fields().indexFromName("name") != -1
+        source_features = []
+        if layer is not None and layer.featureCount():
+            source_features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
         features = []
-        for feature in source_features:
-            geom = feature.geometry()
-            if geom is None or geom.isEmpty():
-                continue
-            wgs_geom = helpers.to_wgs84(QgsGeometry(geom), layer.crs())
-            name = None
-            if has_name_field:
-                raw = feature.attribute("name")
-                # QGIS NULL attributes are not None; normalize to a real None.
-                if raw not in (None, "") and str(raw).upper() != "NULL":
-                    name = str(raw).strip()
-            if name and len(name) > AOI_NAME_MAX_LENGTH:
-                raise ValueError(
-                    self.tr("AOI name '{name}' exceeds {limit} characters").format(
-                        name=name, limit=AOI_NAME_MAX_LENGTH
+        if source_features:
+            has_name_field = layer.fields().indexFromName("name") != -1
+            for feature in source_features:
+                geom = feature.geometry()
+                if geom is None or geom.isEmpty():
+                    continue
+                wgs_geom = helpers.to_wgs84(QgsGeometry(geom), layer.crs())
+                name = None
+                if has_name_field:
+                    raw = feature.attribute("name")
+                    # QGIS NULL attributes are not None; normalize to a real None.
+                    if raw not in (None, "") and str(raw).upper() != "NULL":
+                        name = str(raw).strip()
+                if name and len(name) > AOI_NAME_MAX_LENGTH:
+                    raise ValueError(
+                        self.tr("AOI name '{name}' exceeds {limit} characters").format(
+                            name=name, limit=AOI_NAME_MAX_LENGTH
+                        )
                     )
-                )
+                features.append({
+                    "type": "Feature",
+                    "geometry": json.loads(wgs_geom.asJson()),
+                    "properties": {"name": name},
+                })
+        # Fall back to the combined AOI (e.g. image/mosaic extent) as one unnamed feature,
+        # so we still send aoiDetails rather than the deprecated plain `aoi`.
+        if not features and self.app_context.aoi:
             features.append({
                 "type": "Feature",
-                "geometry": json.loads(wgs_geom.asJson()),
-                "properties": {"name": name},
+                "geometry": json.loads(self.app_context.aoi.asJson()),
+                "properties": {"name": None},
             })
         if not features:
             return None
@@ -1458,9 +1500,13 @@ class Mapflow(QObject):
         except ValueError as e:
             self.alert(str(e), QMessageBox.Warning)
             return
+        if not aoi_details:
+            self.alert(self.tr('Please, select a valid area of interest'))
+            return
 
+        # Always send aoiDetails (FeatureCollection); the plain `aoi` field is deprecated
+        # because per-AOI names cannot be attached to it.
         search_params = SearchParams(
-            aoi=json.loads(self.app_context.aoi.asJson()),
             aoiDetails=aoi_details,
             acquisitionDateFrom=from_time,
             acquisitionDateTo=to_time,
@@ -2374,10 +2420,29 @@ class Mapflow(QObject):
         self.alert(self.tr("Sorry, we couldn't load the image"))
         self.report_http_error(response, self.tr('Error previewing Sentinel imagery'))
 
+    def _move_layer_to_top(self, layer_id: str) -> bool:
+        """Move an existing layer's tree node to the top of its parent group."""
+        root = self.app_context.project.layerTreeRoot()
+        node = root.findLayer(layer_id)
+        if not node:
+            return False
+        parent = node.parent() or root
+        parent.insertChildNode(0, node.clone())
+        parent.removeChildNode(node)
+        return True
+
     def preview_catalog(self, image_id):
         feature = self.metadata_feature(image_id)
         if not feature:
             self.alert(self.tr("Preview is unavailable when metadata layer is removed"))
+            return
+        # If this image's preview is already on the map (layers are named "<image_id> preview"),
+        # just bring it to the top instead of downloading and adding a duplicate.
+        existing_preview = self.app_context.project.mapLayersByName(f"{image_id} preview")
+        if existing_preview:
+            self._move_layer_to_top(existing_preview[0].id())
+            self.iface.setActiveLayer(existing_preview[0])
+            self.iface.mapCanvas().refresh()
             return
         footprint = self.metadata_footprint(feature=feature)
         url = feature.attribute('previewUrl')
@@ -2478,13 +2543,14 @@ class Mapflow(QObject):
         Display image preview using Ground Control Points from footprint corners.
         Delegates to ResultsLoader.display_preview_with_gcp().
         """
-        self.result_loader.display_preview_with_gcp(
+        layer = self.result_loader.display_preview_with_gcp(
             response=response,
             footprint=footprint,
             crs=crs,
             image_name=image_id,
             add_aoi=True
         )
+        self._relocate_preview_to_template_group(layer)
 
     def preview_multiple_png(self,
                              response: QNetworkReply,
@@ -2508,6 +2574,7 @@ class Mapflow(QObject):
             vrt_layer = QgsRasterLayer(vrt_path, "{image_id} preview".format(image_id=image_id), 'gdal')
             self.result_loader.add_layer(vrt_layer)
             self.result_loader.add_aoi_to_preview()
+            self._relocate_preview_to_template_group(vrt_layer)
             return
         # Requset part: remove first image from the list and get its preview
         image_to_preview = previews.pop(0)
@@ -2537,6 +2604,7 @@ class Mapflow(QObject):
                             if layer.dataProvider().dataSourceUri() == tile_layer.dataProvider().dataSourceUri()]
         self.app_context.project.removeMapLayers(tiles_to_delete)
         self.result_loader.add_layer(layer=tile_layer, order=0)
+        self._relocate_preview_to_template_group(tile_layer)
         # Add footprint layer
         if feature:
             footprint_layer = QgsVectorLayer("Polygon?crs=EPSG:4326",
@@ -2545,10 +2613,16 @@ class Mapflow(QObject):
             footprint_layer.dataProvider().addFeatures([feature])
             footprint_layer.updateExtents()
             footprint_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata_footprint.qml'))
+            # Remove same-named boundaries AND the previously shown one (its name varies by
+            # acquisition date, so a name match alone leaves the old boundary on the map).
             footprints_to_delete = [layer.id() for layer in self.app_context.project.mapLayers().values()
                                     if layer.name() == footprint_layer.name()]
+            if self._mosaic_preview_footprint_id:
+                footprints_to_delete.append(self._mosaic_preview_footprint_id)
             self.app_context.project.removeMapLayers(footprints_to_delete)
             self.result_loader.add_layer(layer=footprint_layer, order=0)
+            self._mosaic_preview_footprint_id = footprint_layer.id()
+            self._relocate_preview_to_template_group(footprint_layer)
         self.result_loader.add_aoi_to_preview()
 
     def preview_sentinel(self, image_id):

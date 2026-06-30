@@ -18,6 +18,21 @@ from .processing import (PostSourceSchema,
                          ProcessingSortOrder,
                          ProcessingsRequest,
                          ProcessingsResult)
+from .template import (AOI_NAME_MAX_LENGTH,
+                       SearchParams,
+                       ProcessingTemplateDTO,
+                       ProcessingTemplateDetails,
+                       TemplateAoiDTO,
+                       AoiProcessingLink,
+                       NoAoiProcessingsRow,
+                       TemplateProcessingSchema,
+                       CreateProcessingTemplateSchema,
+                       UpdateProcessingTemplateSchema,
+                       RunTemplateProcessingSchema,
+                       UpdateAoiSchema,
+                       AddSingleAoiSchema,
+                       AddAoisSchema,
+                       DeleteAoisSchema)
 from .provider import ProviderReturnSchema
 from .workflow_def import WorkflowDef, BlockConfig
 from .status import ProcessingStatus, ProcessingReviewStatus

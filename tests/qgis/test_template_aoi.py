@@ -6,13 +6,56 @@ from unittest.mock import MagicMock
 from mapflow.functional.service import processing_service as ps_mod
 from mapflow.functional.service.processing_service import ProcessingService
 from mapflow.mapflow import Mapflow
-from mapflow.schema.processing import (
+from mapflow.schema.processing import ProcessingParams
+from mapflow.schema.template import (
     AOI_NAME_MAX_LENGTH,
-    ProcessingParams,
     ProcessingTemplateDTO,
     TemplateAoiDTO,
     UpdateAoiSchema,
 )
+
+
+def test_refresh_template_view_polls_only_processings():
+    """The poll tick must be a single /processings request, not get_template + processings."""
+    service = ProcessingService.__new__(ProcessingService)
+    service.active_template = SimpleNamespace(id="t-1")
+    service.api = MagicMock()
+
+    service.refresh_template_view()
+
+    service.api.get_template_processings.assert_called_once()
+    service.api.get_template.assert_not_called()
+
+
+def test_sync_aoi_statuses_from_processings_refreshes_aoi_status():
+    """AOI status stays current from the polled processings without re-fetching the template."""
+    from mapflow.schema.status import ProcessingStatus
+    service = ProcessingService.__new__(ProcessingService)
+    aoi = TemplateAoiDTO.from_feature(
+        _aoi_feature(processings=[{"processingId": "p1", "processingStatus": "OK"}])
+    )
+    service.template_aois = {aoi.table_id: aoi}
+    service.template_processings = {"p1": SimpleNamespace(status=ProcessingStatus("FAILED"))}
+
+    service._sync_aoi_statuses_from_processings()
+
+    assert aoi.processings[0].processingStatus == "FAILED"
+    assert aoi.table_status == "Failed (0/1)"
+
+
+def test_update_processing_table_blocks_signals_during_render():
+    """The programmatic table rebuild must not emit selection signals (which would re-run
+    the AOI search filter / map rebuild every poll)."""
+    from mapflow.functional.view.processing_view import ProcessingView
+    view = ProcessingView.__new__(ProcessingView)
+    view._header_sort_by = None
+    view.dlg = MagicMock()
+    view.selected_processing_ids = MagicMock(return_value=[])
+
+    view.update_processing_table([])
+
+    block_calls = [c.args for c in view.dlg.processingsTable.blockSignals.call_args_list]
+    assert (True,) in block_calls and (False,) in block_calls
 
 
 def _aoi_feature(aoi_id="aoi-1", name="North field", processings=None, has_new=False):
@@ -239,7 +282,7 @@ def test_aoi_status_aggregates_processing_statuses():
 
 
 def test_combined_template_rows_appends_unbound_under_no_aoi_separator():
-    from mapflow.schema.processing import NoAoiProcessingsRow
+    from mapflow.schema.template import NoAoiProcessingsRow
     service = ProcessingService.__new__(ProcessingService)
     aoi = TemplateAoiDTO.from_feature(_aoi_feature(
         "a1", "Alpha",
