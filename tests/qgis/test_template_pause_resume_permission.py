@@ -23,6 +23,8 @@ def _plugin_with_template(user_role, is_active=True, status="READY"):
         isActive=is_active, status=status,
     )
     plugin.processing_service.selected_processing.return_value = None
+    # Selecting a template row happens in the processings list, not inside a template.
+    plugin.processing_service.in_template_mode = False
     plugin.app_context = SimpleNamespace(user_role=user_role)
     return plugin
 
