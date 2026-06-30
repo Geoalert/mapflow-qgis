@@ -1,13 +1,14 @@
 from typing import List, Union
 from PyQt5.QtCore import Qt, QCoreApplication
 from PyQt5.QtWidgets import QAbstractItemView, QTableWidgetItem, QMessageBox, QCheckBox, QMenu
-from PyQt5.QtGui import QColor
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs import icons
-from ...schema.processing import (ProcessingDTO, ProcessingTemplateDTO, TemplateAoiDTO,
-                                  AoiProcessingLink, TemplateProcessingSchema,
-                                  NoAoiProcessingsRow,
+from ...dialogs import colors
+from ...schema.processing import (ProcessingDTO,
                                   ProcessingUIParams, ProcessingSortBy, ProcessingSortOrder)
+from ...schema.template import (ProcessingTemplateDTO, TemplateAoiDTO,
+                                AoiProcessingLink, TemplateProcessingSchema,
+                                NoAoiProcessingsRow)
 from ...config import config
 from ..service.alert_service import alert
 
@@ -190,20 +191,20 @@ class ProcessingView:
         is_template_processing = isinstance(processing, (AoiProcessingLink, TemplateProcessingSchema))
         if is_template:
             set_color = True
-            color = QColor(207, 242, 249)  # light blue for templates    #! Dark theme?
+            color = colors.TemplateRow  #! Dark theme?
         elif is_aoi:
             set_color = True
-            color = QColor(207, 226, 243)  # blue tint for AOI rows (matches the AOI map layer)
+            color = colors.AoiRow  # matches the AOI map layer
         elif is_template_processing:
             set_color = True
-            color = QColor(223, 240, 223)  # green tint for an AOI's processings (matches the map)
+            color = colors.AoiProcessingRow  # matches the processing map layer
         elif is_separator:
             set_color = True
-            color = QColor(230, 230, 230)  # neutral grey for the 'No AOI' separator
+            color = colors.SeparatorRow  # the 'No AOI' separator
         elif processing.status.is_ok and processing.review_expires:
             # setting color for close review
             set_color = True
-            color = QColor(255, 220, 200)
+            color = colors.ReviewExpiringRow
         for _col, attr in enumerate(config.PROCESSING_TABLE_COLUMNS):
             table_item = QTableWidgetItem()
             table_item.setData(Qt.DisplayRole, processing_dict[attr])
@@ -242,30 +243,38 @@ class ProcessingView:
         # UPDATE THE TABLE
         # Memorize the selection to restore it after table update
         selected_processings = self.selected_processing_ids()
-        # Explicitly clear selection since resetting row count won't do it
-        self.dlg.processingsTable.clearSelection()
-        # Temporarily enable multi selection so that selectRow won't clear previous selection
-        self.dlg.processingsTable.setSelectionMode(QAbstractItemView.MultiSelection)
-        # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
-        self.dlg.processingsTable.setSortingEnabled(False)
-        self.dlg.processingsTable.setRowCount(len(processings))
-        # Fill out the table
-        for row, proc in enumerate(processings):
-            table_items = self.create_table_items(processing=proc)
-            for col, item in enumerate(table_items):
-                self.dlg.processingsTable.setItem(row, col, item)
-            if proc.id in selected_processings:
-                self.dlg.processingsTable.selectRow(row)
-        # Keep Qt sorting disabled — row order is set by combined_processing_rows (templates first).
-        # Re-show sort indicator if a header sort is active (setSortingEnabled(False) hides it)
-        if self._header_sort_by is not None:
-            col = next(c for c, s in self._COLUMN_SORT_MAP.items() if s == self._header_sort_by)
-            order = Qt.DescendingOrder if self._header_sort_desc else Qt.AscendingOrder
-            header = self.dlg.processingsTable.horizontalHeader()
-            header.setSortIndicatorShown(True)
-            header.setSortIndicator(col, order)
-        # Restore extended selection and filtering
-        self.dlg.processingsTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        table = self.dlg.processingsTable
+        # Block selection signals during the programmatic rebuild: clearing and re-selecting
+        # rows would otherwise fire itemSelectionChanged on every poll, which (in the
+        # in-template view) re-runs the AOI search-results filter and rebuilds map layers.
+        table.blockSignals(True)
+        try:
+            # Explicitly clear selection since resetting row count won't do it
+            table.clearSelection()
+            # Temporarily enable multi selection so that selectRow won't clear previous selection
+            table.setSelectionMode(QAbstractItemView.MultiSelection)
+            # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
+            table.setSortingEnabled(False)
+            table.setRowCount(len(processings))
+            # Fill out the table
+            for row, proc in enumerate(processings):
+                table_items = self.create_table_items(processing=proc)
+                for col, item in enumerate(table_items):
+                    table.setItem(row, col, item)
+                if proc.id in selected_processings:
+                    table.selectRow(row)
+            # Keep Qt sorting disabled — row order is set by combined_processing_rows (templates first).
+            # Re-show sort indicator if a header sort is active (setSortingEnabled(False) hides it)
+            if self._header_sort_by is not None:
+                col = next(c for c, s in self._COLUMN_SORT_MAP.items() if s == self._header_sort_by)
+                order = Qt.DescendingOrder if self._header_sort_desc else Qt.AscendingOrder
+                header = table.horizontalHeader()
+                header.setSortIndicatorShown(True)
+                header.setSortIndicator(col, order)
+            # Restore extended selection and filtering
+            table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        finally:
+            table.blockSignals(False)
 
     def add_new_processing(self, processing: ProcessingDTO):
         self.dlg.processingsTable.insertRow(0)

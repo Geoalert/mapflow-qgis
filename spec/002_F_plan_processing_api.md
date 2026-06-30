@@ -173,7 +173,8 @@ returned only by endpoints that serialize the full template `searchParams` —
 `GET /processings/template/user/{userId}`. It is **absent** from
 `GET /processings/template/project/{projectId}` (returns `ProcessingTemplateShortDetails`
 without `searchParams`), which the poll uses; the plugin therefore hydrates the template by
-id when entering it (and re-hydrates on the in-template poll to refresh processing statuses).
+id when **entering** it (and again after an AOI add/rename/delete), but **not** on every
+poll tick — the grouping changes slowly, so re-fetching it each tick is wasteful.
 
 This is the source the plugin uses to **group** processings under their AOI — both in the
 in-template table (each AOI row followed by its processings) and on the map (a layer-tree
@@ -183,12 +184,14 @@ layers) for loading a processing's results on double-click.
 
 ### Setting AOI names on creation
 `POST /processings/template` accepts AOI names via `searchParams.aoiDetails`: each
-feature's `properties` is read as `{ id?, name? }` (`InputAoiProperties`). The plugin,
-when creating a template from a layer whose features carry a `name` attribute, sends
-`aoiDetails` as a FeatureCollection with one feature per AOI and `properties.name` set
-from that attribute. When the attribute is absent the AOI is created with a `null`
-name and can be renamed later via `PUT .../aoi/{aoiId}`. The legacy combined `aoi`
-geometry remains accepted as a fallback when no names are needed.
+feature's `properties` is read as `{ id?, name? }` (`InputAoiProperties`) — `name` is
+optional. The plugin **always** sends `searchParams.aoiDetails` (a FeatureCollection),
+never the legacy plain `searchParams.aoi`, which is **deprecated** because per-AOI names
+cannot be attached to it. One feature is sent per AOI; `properties.name` is set from the
+source layer's `name` attribute when present, and omitted/`null` otherwise (the AOI can be
+renamed later via `POST .../aoi/{aoiId}`). When the AOI does not come from a polygon layer
+(e.g. an image/mosaic extent), a single unnamed feature is built from the combined AOI
+geometry. The backend still accepts `aoi` as a fallback, but the plugin no longer sends it.
 
 ### Name constraints
 AOI names must not exceed **64 characters**; the plugin validates this client-side
@@ -234,6 +237,17 @@ AOI row (in-template) — aggregated from its processings' statuses:
 - any `IN_PROGRESS`/`AWAITING` → `In progress (ok/total)`;
 - else any `FAILED` → `Failed (ok/total)`;
 - else all `OK` → `OK (total)`; no processings → `—`.
+
+The AOI aggregate status is kept current from the polled `/processings` (statuses synced
+into the cached grouping), so it does not require re-fetching the full template each tick.
+
+### Polling
+
+The in-template poll is a **single** `GET …/processings` request per tick (no `get_template`,
+no `images`), and runs on a **slower** cadence than the project processings list. The
+imagery-search (`images`) endpoint is only hit on enter, on the "See search results" action,
+and on AOI selection (S7) — never from the poll. The table is re-rendered with selection
+signals blocked so a poll does not re-trigger the AOI search filter or rebuild map layers.
 
 Template Progress (`100% × covered AOI area / total AOI area`, i.e. the share of the
 template's AOI area processed at least once) is **not implemented (#WARNING)**: it is not

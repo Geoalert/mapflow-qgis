@@ -50,6 +50,9 @@ class Config:
 
     # PROCESSINGS
     PROCESSING_TABLE_REFRESH_INTERVAL = 6  # in seconds
+    # In-template view polls a single (lighter) endpoint and its data changes slowly,
+    # so it refreshes less often than the project processings list.
+    TEMPLATE_TABLE_REFRESH_INTERVAL = 15  # in seconds
     PROCESSING_TABLE_COLUMNS = ('name',
                                 'workflowDef',
                                 'status',

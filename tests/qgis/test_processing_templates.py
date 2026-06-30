@@ -5,7 +5,7 @@ from datetime import timedelta
 import pytest
 
 from mapflow.functional.api.processing_api import ProcessingApi
-from mapflow.schema.processing import (
+from mapflow.schema.template import (
     CreateProcessingTemplateSchema,
     UpdateProcessingTemplateSchema,
     RunTemplateProcessingSchema,

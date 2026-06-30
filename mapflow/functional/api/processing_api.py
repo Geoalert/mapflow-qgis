@@ -9,6 +9,8 @@ from ...schema.processing import (
     PostProcessingSchema,
     UpdateProcessingSchema,
     ProcessingsRequest,
+)
+from ...schema.template import (
     CreateProcessingTemplateSchema,
     UpdateProcessingTemplateSchema,
     RunTemplateProcessingSchema,
