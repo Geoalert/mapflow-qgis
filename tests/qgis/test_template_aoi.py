@@ -10,9 +10,23 @@ from mapflow.schema.processing import ProcessingParams
 from mapflow.schema.template import (
     AOI_NAME_MAX_LENGTH,
     ProcessingTemplateDTO,
+    SearchParams,
     TemplateAoiDTO,
     UpdateAoiSchema,
 )
+
+
+def test_template_single_data_provider_backfill_source():
+    """providerName backfill source: the template's sole search data provider, else None."""
+    plugin = Mapflow.__new__(Mapflow)
+    single = SimpleNamespace(searchParams=SearchParams(dataProviders=["arcgis_world_imagery"]))
+    assert plugin._template_single_data_provider(single) == "arcgis_world_imagery"
+    several = SimpleNamespace(searchParams=SearchParams(dataProviders=["a", "b"]))
+    assert plugin._template_single_data_provider(several) is None
+    none = SimpleNamespace(searchParams=SearchParams(dataProviders=None))
+    assert plugin._template_single_data_provider(none) is None
+    as_dict = SimpleNamespace(searchParams={"dataProviders": ["mapbox"]})
+    assert plugin._template_single_data_provider(as_dict) == "mapbox"
 
 
 def test_refresh_template_view_polls_only_processings():
