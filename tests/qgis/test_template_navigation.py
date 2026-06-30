@@ -100,6 +100,7 @@ def test_exit_template_view_emits_closed_signal_and_clears_state():
     service.active_template = template
     service.template_processings = {"p": object()}
     service.template_aois = {"a": object()}
+    service.processing_fetch_timer = MagicMock()
     received = []
     service.templateClosed.connect(lambda t: received.append(t))
 

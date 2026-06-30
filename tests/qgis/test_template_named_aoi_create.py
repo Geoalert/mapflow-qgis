@@ -3,6 +3,7 @@
 When the source layer has a ``name`` attribute, each AOI feature in
 ``searchParams.aoiDetails`` carries that name; otherwise the name is ``None``.
 """
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -10,7 +11,7 @@ from qgis.core import QgsVectorLayer, QgsFeature, QgsGeometry, QgsField
 from PyQt5.QtCore import QVariant
 
 from mapflow.mapflow import Mapflow
-from mapflow.schema.processing import AOI_NAME_MAX_LENGTH
+from mapflow.schema.template import AOI_NAME_MAX_LENGTH
 
 
 def _layer_with(features, with_name_field=True):
@@ -70,10 +71,27 @@ def test_aoi_details_rejects_overlong_name():
         plugin._build_template_aoi_details()
 
 
-def test_no_layer_returns_none():
+def test_no_layer_falls_back_to_aoi_as_one_unnamed_feature():
+    """Without a polygon layer (e.g. an image extent) aoiDetails is still built from the
+    combined AOI as a single unnamed feature — the deprecated plain `aoi` is never sent."""
     plugin = Mapflow.__new__(Mapflow)
     plugin.tr = lambda text: text
     plugin.dlg = MagicMock()
     plugin.dlg.polygonCombo.currentLayer.return_value = None
+    plugin.app_context = SimpleNamespace(aoi=QgsGeometry.fromWkt("POLYGON((0 0,0 1,1 1,1 0,0 0))"))
+
+    fc = plugin._build_template_aoi_details()
+
+    assert fc["type"] == "FeatureCollection"
+    assert len(fc["features"]) == 1
+    assert fc["features"][0]["properties"]["name"] is None
+
+
+def test_no_layer_no_aoi_returns_none():
+    plugin = Mapflow.__new__(Mapflow)
+    plugin.tr = lambda text: text
+    plugin.dlg = MagicMock()
+    plugin.dlg.polygonCombo.currentLayer.return_value = None
+    plugin.app_context = SimpleNamespace(aoi=None)
 
     assert plugin._build_template_aoi_details() is None
