@@ -18,4 +18,8 @@ class ApiErrors(ErrorMessageList):
             "You don't have enough limit, please contact admin!":
                 self.tr("You don't have enough limit to create this planned processing. "
                         "Please contact your administrator to increase the limit."),
+            # Backend rejects activating/resuming a template past the active-templates cap.
+            "You have reached the maximum number of active templates":
+                self.tr("You have reached the maximum number of active planned processings. "
+                        "Pause or delete another one before activating this template."),
         }

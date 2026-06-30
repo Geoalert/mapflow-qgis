@@ -947,9 +947,10 @@ class ProcessingService(QObject):
             pass
         self.get_processings()
 
-    def update_template_error_handler(self, error: str):
+    def update_template_error_handler(self, response):
         """Handle template update error."""
-        alert(self.tr("Error renaming template: {}" ).format(error), QMessageBox.Critical)
+        alert(self.tr("Error renaming template: {}").format(self._template_error_text(response)),
+              QMessageBox.Critical)
 
     # Processing cost
     def update_processing_cost(self):
@@ -1102,9 +1103,24 @@ class ProcessingService(QObject):
         except Exception as e:
             alert(self.tr("Failed to pause template: {}").format(str(e)), QMessageBox.Critical)
     
-    def pause_template_error_handler(self, error: str):
+    def _template_error_text(self, response) -> str:
+        """Resolve a template/AOI action error response to a meaningful, translatable message.
+
+        The error handlers receive a ``QNetworkReply``; parse its body through the central
+        error registry (e.g. a generic ``BAD_REQUEST`` with "You have reached the maximum
+        number of active templates" maps to a translated description) rather than formatting
+        the raw reply object (which produced an empty/garbled message box)."""
+        try:
+            body = response.readAll().data().decode()
+            message = api_message_parser(body)
+        except Exception:
+            message = None
+        return message or self.tr("Unknown server error")
+
+    def pause_template_error_handler(self, response):
         """Handle pause template error."""
-        alert(self.tr("Error pausing template: {}").format(error), QMessageBox.Critical)
+        alert(self.tr("Error pausing template: {}").format(self._template_error_text(response)),
+              QMessageBox.Critical)
     
     def resume_template(self):
         """Resume the selected template."""
@@ -1156,10 +1172,11 @@ class ProcessingService(QObject):
         except Exception as e:
             alert(self.tr("Failed to resume template: {}").format(str(e)), QMessageBox.Critical)
     
-    def resume_template_error_handler(self, error: str):
-        """Handle resume template error."""
+    def resume_template_error_handler(self, response):
+        """Handle resume template error (e.g. "maximum number of active templates")."""
         self._resume_template_state = {}
-        alert(self.tr("Error resuming template: {}").format(error), QMessageBox.Critical)
+        alert(self.tr("Error resuming template: {}").format(self._template_error_text(response)),
+              QMessageBox.Critical)
 
     def restart_template(self):
         """Restart the selected failed template."""
@@ -1183,9 +1200,10 @@ class ProcessingService(QObject):
         except Exception as e:
             alert(self.tr("Failed to restart template: {}").format(str(e)), QMessageBox.Critical)
 
-    def restart_template_error_handler(self, error: str):
+    def restart_template_error_handler(self, response):
         """Handle restart template error."""
-        alert(self.tr("Error restarting template: {}").format(error), QMessageBox.Critical)
+        alert(self.tr("Error restarting template: {}").format(self._template_error_text(response)),
+              QMessageBox.Critical)
     
     def delete_template(self):
         """Delete the selected template after confirmation."""
@@ -1215,9 +1233,10 @@ class ProcessingService(QObject):
         except Exception as e:
             alert(self.tr("Failed to delete template: {}").format(str(e)), QMessageBox.Critical)
     
-    def delete_template_error_handler(self, error: str):
+    def delete_template_error_handler(self, response):
         """Handle delete template error."""
-        alert(self.tr("Error deleting template: {}").format(error), QMessageBox.Critical)
+        alert(self.tr("Error deleting template: {}").format(self._template_error_text(response)),
+              QMessageBox.Critical)
 
     # ============ AOI ACTIONS (in-template view) ============ #
 
@@ -1302,8 +1321,9 @@ class ProcessingService(QObject):
             self.template_aois = {aoi.table_id: aoi for aoi in self.active_template.aoi_dtos()}
             self.view.update_processing_table(self.combined_template_rows())
 
-    def aoi_change_error_handler(self, error):
-        alert(self.tr("AOI update failed: {}").format(error), QMessageBox.Critical)
+    def aoi_change_error_handler(self, response):
+        alert(self.tr("AOI update failed: {}").format(self._template_error_text(response)),
+              QMessageBox.Critical)
 
     def open_template_details(self):
         """Open a dialog showing template details."""

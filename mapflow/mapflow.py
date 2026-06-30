@@ -847,6 +847,9 @@ class Mapflow(QObject):
             if imagery_search_tab:
                 self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
 
+        # A template's search results always load from the first page — pagination is per-load
+        # context (template / selected AOI) and must not carry over from a previous one.
+        self.search_page_offset = 0
         if aoi_ids is None:
             aoi_ids = self._aoi_ids_from_template(template)
         self.processing_service.api.get_template_images(
@@ -3090,6 +3093,9 @@ class Mapflow(QObject):
         self._template_search_aoi_filter = None
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
+        # Clear the template search-results pagination so it is not preserved on re-open.
+        self.search_page_offset = 0
+        self.dlg.enable_search_pages(False)
 
     def _remove_template_group(self, template_group_name: str):
         """Remove the template's layer-tree group (and its layers) from the map."""
