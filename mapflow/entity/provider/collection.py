@@ -2,7 +2,7 @@ import json
 
 from .factory import create_provider, create_provider_old
 from .provider import NoneProvider
-from ...constants import PROVIDERS_KEY, LEGACY_PROVIDERS_KEY, LEGACY_PROVIDER_LOGIN_KEY, LEGACY_PROVIDER_PASSWORD_KEY
+from ...constants import PROVIDERS_KEY
 
 
 def decorate(base_name, existing_names):
@@ -37,33 +37,6 @@ class ProvidersList(list):
                     providers.update({name: create_provider(**params)})
                 except Exception:
                     errors.append(name)
-
-        # Importing providers from old plugin settings
-        old_login = settings.value(LEGACY_PROVIDER_LOGIN_KEY, "")
-        old_password = settings.value(LEGACY_PROVIDER_PASSWORD_KEY, "")
-        old_providers = settings.value(LEGACY_PROVIDERS_KEY, {})
-        for name, params in old_providers.items():
-            if any(key not in params.keys() for key in ('type', 'url')):
-                # settings are not understandable
-                errors.append(name)
-            provider = create_provider_old(name=name,
-                                           source_type=params.get("type"),
-                                           url=params.get("url"),
-                                           login=old_login,
-                                           password=old_password,
-                                           connect_id=params.get("connectId", ""))
-            if not provider:
-                # this means that the provider should not be added
-                continue
-            if name in providers.keys():
-                name = decorate(name, providers.keys())
-                provider.name = name
-            providers.update({name: provider})
-        # clear old providers so that they will not be loaded again
-        settings.remove(LEGACY_PROVIDERS_KEY)
-        settings.remove(LEGACY_PROVIDER_PASSWORD_KEY)
-        settings.remove(LEGACY_PROVIDER_LOGIN_KEY)
-
         return cls.from_dict(providers), errors
 
     def dict(self):

@@ -401,18 +401,21 @@ class ProcessingService(QObject):
         provider_params, processing_meta = get_provider_params(provider=provider,
                                                                zoom=ui_start_params.zoom)
 
-        # Send the AOI cropped to the selected image footprint (what is actually processed and
-        # displayed as the area), falling back to the full AOI when there is no cropping.
-        processing_aoi = getattr(self.app_context, "processing_aoi", None)
-        if processing_aoi is None or processing_aoi.isEmpty():
-            processing_aoi = self.app_context.aoi
-
+        # Prefer the AOI cropped by selected image footprints (Imagery Search)
+        # so provider minimum-area checks compare against the actually-processable area.
+        # Note: QgsGeometry truthiness can't be relied on uniformly across PyQGIS
+        # builds, so guard against None/null/empty explicitly.
+        cropped = self.app_context.processing_aoi
+        if cropped is not None and not cropped.isNull() and not cropped.isEmpty():
+            aoi_for_request = cropped
+        else:
+            aoi_for_request = self.app_context.aoi
         processing_params = PostProcessingSchemaV2(
             name=ui_start_params.name,
             description=None,
             projectId=self.app_context.project_id,
             wdId=wd.id,
-            geometry=json.loads(processing_aoi.asJson()),
+            geometry=json.loads(aoi_for_request.asJson()),
             params=provider_params,
             meta=processing_meta,
             blocks=blocks)
@@ -931,7 +934,7 @@ class ProcessingService(QObject):
             response_data = json.loads(response.readAll().data())
         except Exception:
             response_data = {}
-        
+
         print (response_data)
 
         template_data = response_data.get("template", response_data)
@@ -955,13 +958,32 @@ class ProcessingService(QObject):
     # Processing cost
     def update_processing_cost(self):
         """Update the processing cost based on current AOI and workflow.
-        
+
         Uses app_context for: aoi, workflow_defs, user_role, billing_type
         """
+        # Always run validation so the error label and the start-processing
+        # button reflect the current form state, regardless of billing.
+        # validate_all_processing_params drives:
+        #   - validate_context_params  -> AOI / project / billing gates,
+        #   - validate_processing_params -> AOI size + name,
+        #   - validate_provider_params -> mixed-provider, image-id, product-type checks.
+        # All four issues surfaced by skipping this call (mixed-provider warning
+        # delayed, start button not re-enabled after deselect, wrong "Set AOI"
+        # message hiding "Models not initialized") trace back to this chain.
         processing_params, error = self.validate_all_processing_params(allow_empty_name=True)
 
         if error:
             self.dlg.disable_processing_start(error, clear_area=error)
+            return
+
+        # /cost itself is only meaningful when the user is billed in credits.
+        # validate_all_processing_params above has already enabled the start
+        # button for AREA / NONE billing via validate_context_params, so the
+        # network call would just burn the round-trip for a number the user
+        # never sees. Server-side checks that ride along on the /cost response
+        # (e.g. ProviderMinAreaError) will only surface at processing start
+        # for non-credits billing as a result — acceptable tradeoff.
+        if self.app_context.billing_type != BillingType.credits:
             return
 
         self.api.get_cost(data=processing_params,
@@ -1020,7 +1042,7 @@ class ProcessingService(QObject):
     def delete_processings(self, 
                            response: QNetworkReply, 
                            items: List,
-                           deleted: List, 
+                           deleted: List,
                            failed: List):
         # todo: save and report error responses?
         if len(items) == 0:
@@ -1032,7 +1054,7 @@ class ProcessingService(QObject):
         else:
             item_to_delete = items[0]
             remaining_items = items[1:]
-            
+
             # Determine if this is a template or processing
             if item_to_delete in self.templates:
                 # Delete template
@@ -1059,7 +1081,7 @@ class ProcessingService(QObject):
                     error_handler_kwargs={'items': remaining_items,
                                           'deleted': deleted,
                                           'failed': list(failed) + [item_to_delete]})
-    
+
     def delete_processings_callback(self, response: QNetworkReply):
         """Callback for template deletion to continue with remaining items."""
         state = self._delete_state
@@ -1069,7 +1091,7 @@ class ProcessingService(QObject):
             deleted=state['deleted'],
             failed=state['failed']
         )
-    
+
     def delete_processings_error_handler(self, response: QNetworkReply):
         """Error handler for template deletion to continue with remaining items."""
         state = self._delete_state
@@ -1081,7 +1103,7 @@ class ProcessingService(QObject):
         )
 
     # ============ TEMPLATE ACTIONS ============ #
-    
+
     def pause_template(self):
         """Pause the selected template."""
         template = self.selected_template()
@@ -1094,7 +1116,7 @@ class ProcessingService(QObject):
                                   error_handler=self.pause_template_error_handler)
         else:
             alert(self.tr("Template is not active"), QMessageBox.Information)
-    
+
     def pause_template_callback(self, response: QNetworkReply):
         """Handle pause template response."""
         try:
@@ -1102,7 +1124,7 @@ class ProcessingService(QObject):
             alert(self.tr("Template paused successfully"), QMessageBox.Information)
         except Exception as e:
             alert(self.tr("Failed to pause template: {}").format(str(e)), QMessageBox.Critical)
-    
+
     def _template_error_text(self, response) -> str:
         """Resolve a template/AOI action error response to a meaningful, translatable message.
 
@@ -1121,7 +1143,7 @@ class ProcessingService(QObject):
         """Handle pause template error."""
         alert(self.tr("Error pausing template: {}").format(self._template_error_text(response)),
               QMessageBox.Critical)
-    
+
     def resume_template(self):
         """Resume the selected template."""
         template = self.selected_template()
@@ -1162,7 +1184,7 @@ class ProcessingService(QObject):
             callback=self.resume_template_callback,
             error_handler=self.resume_template_error_handler,
         )
-    
+
     def resume_template_callback(self, response: QNetworkReply):
         """Handle resume template response."""
         try:
@@ -1171,7 +1193,7 @@ class ProcessingService(QObject):
             alert(self.tr("Template resumed successfully"), QMessageBox.Information)
         except Exception as e:
             alert(self.tr("Failed to resume template: {}").format(str(e)), QMessageBox.Critical)
-    
+
     def resume_template_error_handler(self, response):
         """Handle resume template error (e.g. "maximum number of active templates")."""
         self._resume_template_state = {}
@@ -1204,13 +1226,13 @@ class ProcessingService(QObject):
         """Handle restart template error."""
         alert(self.tr("Error restarting template: {}").format(self._template_error_text(response)),
               QMessageBox.Critical)
-    
+
     def delete_template(self):
         """Delete the selected template after confirmation."""
         template = self.selected_template()
         if not template:
             return
-        
+
         reply = QMessageBox.question(
             self.dlg,
             self.tr("Delete Template"),
@@ -1218,13 +1240,13 @@ class ProcessingService(QObject):
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
-        
+
         if reply == QMessageBox.Yes:
             template_id = template.id
             self.api.delete_template(template_id=template_id,
                                     callback=self.delete_template_callback,
                                     error_handler=self.delete_template_error_handler)
-    
+
     def delete_template_callback(self, response: QNetworkReply):
         """Handle delete template response."""
         try:
@@ -1232,7 +1254,7 @@ class ProcessingService(QObject):
             alert(self.tr("Template deleted successfully"), QMessageBox.Information)
         except Exception as e:
             alert(self.tr("Failed to delete template: {}").format(str(e)), QMessageBox.Critical)
-    
+
     def delete_template_error_handler(self, response):
         """Handle delete template error."""
         alert(self.tr("Error deleting template: {}").format(self._template_error_text(response)),
@@ -1333,7 +1355,7 @@ class ProcessingService(QObject):
 
         local_created_at = template.createdAt.astimezone()
         local_active_until = template.activeUntil.astimezone()
-        
+
         # Show template details in a message box for now
         # TODO: Create a proper template details dialog
         details = (
@@ -1346,7 +1368,7 @@ class ProcessingService(QObject):
             f"<b>New Images:</b> {template.newImagesCount or 0}<br/>"
             f"<b>AOI Intersection:</b> {template.maxAoiIntersectionPercent or 'N/A'}%"
         )
-        
+
         alert(details, QMessageBox.Information)
 
     def stop(self):
@@ -1384,19 +1406,19 @@ class ProcessingService(QObject):
         # Filter to get only templates (not processings)
         selected_templates = [self.templates[pid] for pid in filter(lambda pid: pid in self.templates, pids)]
         return selected_templates
-    
+
     def selected_template(self) -> Optional[ProcessingTemplateDTO]:
         """Get the first selected template, if any."""
         first = self.selected_templates(limit=1)
         if not first:
             return None
         return first[0]
-    
+
     def is_processing_selected(self) -> bool:
         """Check if selected item is a processing (not a template)."""
         selected = self.selected_processing()
         return selected is not None
-    
+
     def is_template_selected(self) -> bool:
         """Check if selected item is a template."""
         selected = self.selected_template()
@@ -1408,7 +1430,7 @@ class ProcessingService(QObject):
         if not pids:
             return False
         return all(pid in self.templates for pid in pids)
-    
+
     def restart_processing(self):
         processing = self.selected_processing()
         if not processing:

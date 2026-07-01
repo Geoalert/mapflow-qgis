@@ -126,13 +126,21 @@ class ProviderService(QObject):
 
             selected_images = self.dlg.metadataTable.selectedItems()
             if selected_images:
-                local_image_indices = self.get_local_image_indices(selected_images) 
+                local_image_indices = self.get_local_image_indices(selected_images)
                 provider_names, product_types = self.get_search_providers(local_image_indices)
                 image_ids, selection_error = self.get_search_images_ids(provider_names, product_types)
                 if selection_error:
                     self.dlg.disable_processing_start(selection_error)
                 self.imagery_search_provider_instance.image_ids = image_ids
                 provider_name = provider_names[0] if provider_names else None # the same for all [i] if there was no 'selection_error'
+            else:
+                # Selection was cleared. Drop the cached image IDs and provider state so
+                # the next /cost or create-processing call doesn't carry stale image IDs
+                # paired with a missing dataProvider — that combination is rejected with 400.
+                # validate_provider_params catches the missing-id case and short-circuits
+                # the request via validate_all_processing_params.
+                self.imagery_search_provider_instance.image_ids = None
+                self.imagery_search_provider_instance.requires_id = None
 
         if not provider_name:
             try:
@@ -158,11 +166,15 @@ class ProviderService(QObject):
             selected_cells = self.dlg.metadataTable.selectedItems()
             if not selected_cells:
                 image_id = None
+                selected_rows_count = 0
             else:
                 id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
+                selected_rows_count = len({cell.row() for cell in selected_cells})
                 image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
-            if image_id:
-                provider_text += " ({iid})". format(iid=image_id)
+            if selected_rows_count > 1:
+                provider_text += " ({count} images selected)".format(count=selected_rows_count)
+            elif image_id:
+                provider_text += " ({iid})".format(iid=image_id)
         return provider_text
     
     def validate_provider_params(self, provider):
@@ -171,7 +183,10 @@ class ProviderService(QObject):
             if self.my_imagery_provider_instance.mosaic_id == self.my_imagery_provider_instance.image_ids == None:
                 error = self.tr('Choose imagery collection or image to start processing')
         elif isinstance(provider, ImagerySearchProvider):
-            if self.imagery_search_provider_instance.image_ids == None:
+            # `not image_ids` covers both the cleared-selection case (None) and
+            # the empty-list case written by get_search_images_ids when the
+            # table is empty.
+            if not self.imagery_search_provider_instance.image_ids:
                 error = self.tr("This provider requires image ID. Use search tab to find imagery for you requirements, "
                                 "and select image in the table.")
         # Check for zoom errors by examining the UI state
@@ -179,7 +194,7 @@ class ProviderService(QObject):
             selected_images = self.dlg.metadataTable.selectedItems()
             if selected_images:
                 local_image_indices = self.get_local_image_indices(selected_images)
-                _, product_types = self.get_search_providers(local_image_indices)
+                provider_names, product_types = self.get_search_providers(local_image_indices)
                 # Check for zoom consistency
                 if local_image_indices:
                     zooms = []
@@ -192,9 +207,62 @@ class ProviderService(QObject):
                             continue
                     if len(set(product_types)) > 1: # no image + mosaic
                         error = self.tr("Selected search results must be of the same product type")
+                    elif (len(set(provider_names)) > 1
+                          and set(product_types) != set(["Mosaic"])):
+                        # Mixing different providers is only allowed for Mosaics
+                        # (server combines them). For Image product type, including
+                        # orbview_*, the backend rejects mixed providers — block the
+                        # request here so the cost/v2 call is not made with a
+                        # mismatched dataProvider + imageIds payload.
+                        error = self.tr("You can launch multiple image processing only if it has the same provider of mosaic type")
                     elif set(product_types) == set(["Mosaic"]) and len(set(zooms)) > 1: # no mosaics with different zooms
                         error = self.tr("Selected search results must have the same zoom level")
+                # Minimum-area check. The server enforces a per-provider minimum
+                # (ProviderMinAreaError) on the processing geometry. For credits
+                # billing this rides along on the /cost response, but for AREA / NONE
+                # billing /cost is not called, so without this the user only sees the
+                # rejection when the processing is actually started. minAreaSqkm comes
+                # in with each search result, so check it on every selection/AOI change.
+                if not error and local_image_indices:
+                    min_area_error = self._min_area_error(local_image_indices, provider_names)
+                    if min_area_error:
+                        error = min_area_error
         return error
+
+    def _min_area_error(self, local_image_indices, provider_names):
+        """Return an error string if the processing AOI is below the selected
+        provider's minimum area, otherwise None.
+
+        Compares against app_context.aoi_size, which is the cropped AOI area
+        (user AOI ∩ selected image footprints) — the same geometry sent to the
+        server, so the comparison matches the server-side ProviderMinAreaError.
+        """
+        min_areas = []
+        for local_image_index in local_image_indices:
+            try:
+                value = self.app_context.search_footprints[local_image_index].attribute("minAreaSqkm")
+            except (KeyError, AttributeError):
+                continue
+            if value in (None, '', 'NULL'):
+                continue
+            try:
+                min_areas.append(float(value))
+            except (TypeError, ValueError):
+                continue
+        if not min_areas:
+            return None
+        provider_min_area = max(min_areas)
+        aoi_size = self.app_context.aoi_size or 0
+        # Only error when we actually have an AOI to measure; a missing AOI is
+        # handled by the AOI checks upstream.
+        if aoi_size and aoi_size < provider_min_area:
+            provider_name = provider_names[0] if provider_names else ""
+            return self.tr("Geometry area is {aoiArea:.2f} sq km, which is smaller than the "
+                           "minimum required area for {providerName} data provider "
+                           "({providerMinArea} sq km)").format(aoiArea=aoi_size,
+                                                               providerName=provider_name,
+                                                               providerMinArea=provider_min_area)
+        return None
 
     def get_local_image_indices(self, selected_images):
         try:
@@ -221,25 +289,33 @@ class ProviderService(QObject):
     def get_search_images_ids(self, provider_names, product_types):
         selected_cells = self.dlg.metadataTable.selectedItems()
         if not selected_cells:
-            image_id = None
+            image_ids = None
         else:
             id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
-            image_id = [self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()]
+            rows = sorted({cell.row() for cell in selected_cells})
+            image_ids = []
+            for row in rows:
+                cell = self.dlg.metadataTable.item(row, id_column_index)
+                text = cell.text() if cell is not None else ""
+                if text:
+                    image_ids.append(text)
+            if not image_ids:
+                image_ids = None
         selection_error = ""
         try:
             if len(set(provider_names)) > 1:
                 if set(product_types) != set(["Mosaic"]):
                     selection_error = self.tr("You can launch multiple image processing only if it has the same provider of mosaic type")
         except:
-            return image_id, selection_error
-        # Require image id only for single images and not mosaics
-        if image_id:
+            return image_ids, selection_error
+        # Require image id only for images (not mosaics)
+        if image_ids:
             self.imagery_search_provider_instance.requires_id = True
-            self.imagery_search_provider_instance.image_ids = image_id
+            self.imagery_search_provider_instance.image_ids = image_ids
         else:
             self.imagery_search_provider_instance.requires_id = False
             self.imagery_search_provider_instance.image_ids = []
-        return image_id, selection_error        
+        return image_ids, selection_error
     
     def duplicate_provider_and_model(self, processing):
         self.duplicate_provider(processing)
@@ -335,47 +411,70 @@ class ProviderService(QObject):
 
     def duplicate_imagery_search(self, provider: ImagerySearchParams):
         self.dlg.sourceCombo.setCurrentIndex(self.imagery_search_provider_index)
-        # Setup table to have one row
+        image_ids = list(provider.imagerySearch.imageIds or [])
+        # Setup table to have one row per duplicated image id (Bug #3 fix)
         self.dlg.metadataTable.clearContents()
-        self.dlg.metadataTable.setRowCount(1)
+        self.dlg.metadataTable.setRowCount(len(image_ids))
         imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
         self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
-        # Only name, zoom and id are returned, so we create dict with them as values and indecies as keys
-        columns = {self.config.NAME_COLUMN_INDEX: provider.imagerySearch.dataProvider, 
-                   self.config.MAXAR_ID_COLUMN_INDEX: provider.imagerySearch.imageIds[0], 
-                   self.config.ZOOM_COLUMN_INDEX: provider.imagerySearch.zoom,
-                   self.config.LOCAL_INDEX_COLUMN: 0}
-        # And with column indecies we get corresponding field names
-        column_names = []
-        for index in columns.keys():
-            column_names.append(list(self.config_search_columns.values())[index])
+        # Only name, zoom and id are returned, so we map column indices to per-row value lookups
+        per_row_columns = lambda row, image_id: {
+            self.config.NAME_COLUMN_INDEX: provider.imagerySearch.dataProvider,
+            self.config.MAXAR_ID_COLUMN_INDEX: image_id,
+            self.config.ZOOM_COLUMN_INDEX: provider.imagerySearch.zoom,
+            self.config.LOCAL_INDEX_COLUMN: row,
+        }
+        column_indices = [self.config.NAME_COLUMN_INDEX,
+                          self.config.MAXAR_ID_COLUMN_INDEX,
+                          self.config.ZOOM_COLUMN_INDEX,
+                          self.config.LOCAL_INDEX_COLUMN]
+        column_names = [list(self.config_search_columns.values())[index] for index in column_indices]
         # Create pseudo search metadata vector layer
         self.app_context.metadata_layer = QgsVectorLayer('polygon?crs=epsg:4326&index=yes&' +
                                                          '&'.join(f'field={name}' for name in column_names),
                                                          'Duplicated Imagery Search',
                                                          'memory')
         data_provider = self.app_context.metadata_layer.dataProvider()
-        # Fill this layer with AOI (since we don't have accsess to footprint)
-        for f in self.dlg.polygonCombo.currentLayer().getFeatures():
-            feature = QgsFeature(self.app_context.metadata_layer.fields())
-            feature.setGeometry(f.geometry())
-            self.app_context.metadata_layer.startEditing()
-            for column, value in columns.items():
-                field_name = list(self.config_search_columns.values())[column]
-                feature.setAttribute(field_name, value)
-            data_provider.addFeatures([feature])
-            self.app_context.metadata_layer.commitChanges()
+        # Fill the layer with one feature per (AOI x image_id) combination.
+        # Individual image footprints aren't downloaded for duplicated processings,
+        # so every row shares the AOI geometry — sufficient for selection-driven cost recalc.
+        aoi_features = list(self.dlg.polygonCombo.currentLayer().getFeatures())
+        for row, image_id in enumerate(image_ids):
+            row_columns = per_row_columns(row, image_id)
+            for aoi_feature in aoi_features:
+                feature = QgsFeature(self.app_context.metadata_layer.fields())
+                feature.setGeometry(aoi_feature.geometry())
+                self.app_context.metadata_layer.startEditing()
+                for column, value in row_columns.items():
+                    field_name = list(self.config_search_columns.values())[column]
+                    feature.setAttribute(field_name, value)
+                data_provider.addFeatures([feature])
+                self.app_context.metadata_layer.commitChanges()
         self.app_context.metadata_layer.updateExtents()
         self.app_context.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(self.selection_sync_callback)
         # Fill metadata table with the returned values
-        for column, value in columns.items():
-            table_item = QTableWidgetItem()
-            table_item.setData(Qt.DisplayRole, value)
-            self.dlg.metadataTable.setItem(0, column, table_item)
-        # Create pseudo footprints dict for one created feature
-        self.app_context.search_footprints = {0: feature for feature in self.app_context.metadata_layer.getFeatures()}
+        for row, image_id in enumerate(image_ids):
+            for column, value in per_row_columns(row, image_id).items():
+                table_item = QTableWidgetItem()
+                table_item.setData(Qt.DisplayRole, value)
+                self.dlg.metadataTable.setItem(row, column, table_item)
+        # Create pseudo footprints dict keyed by local_index so multi-image cost requests resolve correctly.
+        # local_index is stored as a string in the in-memory layer field (no explicit type was given when
+        # the layer was created), but the rest of the codebase expects integer keys
+        # (`get_local_image_indices` casts the table text via `int(...)`). Convert here.
+        def _coerce_local_index(raw):
+            try:
+                return int(raw)
+            except (TypeError, ValueError):
+                return raw
+
+        self.app_context.search_footprints = {
+            _coerce_local_index(feature.attribute("local_index")): feature
+            for feature in self.app_context.metadata_layer.getFeatures()
+        }
         self.dlg.metadataTableFilled.emit()
-        self.dlg.metadataTable.selectRow(0)
+        for row in range(len(image_ids)):
+            self.dlg.metadataTable.selectRow(row)
 
     
     def duplicate_user_provider(self, provider: UserDefinedParams):
