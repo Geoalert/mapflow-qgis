@@ -1,5 +1,4 @@
 from typing import Union, Callable, Optional
-import json
 from pathlib import Path
 from uuid import UUID
 
@@ -160,7 +159,7 @@ class DataCatalogApi(QObject):
         else:
             try:
                 bounding_box = layer_utils.get_bounding_box_from_tile_json(response=response)
-            except Exception as e:
+            except Exception:
                 errors = True
             else:
                 layer.setExtent(rect=bounding_box)

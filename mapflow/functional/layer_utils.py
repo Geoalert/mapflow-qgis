@@ -10,7 +10,6 @@ from PyQt5.QtWidgets import QFileDialog, QApplication
 from pyproj import Proj, transform
 from qgis.core import (QgsRectangle,
                        QgsRasterLayer,
-                       QgsFeature,
                        QgsMapLayer,
                        QgsVectorLayer,
                        QgsVectorTileLayer,
@@ -22,19 +21,17 @@ from qgis.core import (QgsRectangle,
                        QgsDistanceArea,
                        QgsVectorFileWriter,
                        QgsProject,
-                       QgsMessageLog,
                        QgsCoordinateTransform
                        )
 
 from .app_context import AppContext
 from ..config import Config
 from ..dialogs.error_message_widget import ErrorMessageWidget
-from ..entity.processing import Processing
-from .geometry import clip_aoi_to_image_extent, clip_aoi_to_catalog_extent
+from .geometry import clip_aoi_to_catalog_extent
 from .helpers import WGS84, to_wgs84, WGS84_ELLIPSOID
 from ..schema.catalog import AoiResponseSchema, PreviewType
 from ..schema.processing import ProcessingDTO
-from ..styles import get_style_name
+from ..styles import get_style_name  
 
 
 def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
@@ -537,7 +534,7 @@ class ResultsLoader(QObject):
         else:
             try:
                 bounding_box = get_bounding_box_from_tile_json(response=response)
-            except Exception as e:
+            except Exception:
                 errors = True
             else:
                 layer.setExtent(rect=bounding_box)
@@ -665,7 +662,7 @@ class ResultsLoader(QObject):
             timeout=300
         )
 
-    def download_results_callback(self, response: QNetworkReply, processing: ProcessingDTO) -> None:
+    def download_results_callback(self, response: QNetworkReply, processing: 'ProcessingDTO') -> None:
         """Display processing results upon their successful fetch.
 
         :param response: The HTTP response.
@@ -770,7 +767,7 @@ class ResultsLoader(QObject):
         """
         try:
             bounding_box = get_bounding_box_from_tile_json(response=response)
-        except Exception as e:
+        except Exception:
             # we assume that the raster extent must be present,
             # otherwise there is some error in raster tile server, and we should not add the layer
             self.message_bar.pushWarning(self.tr("Results loaded"),

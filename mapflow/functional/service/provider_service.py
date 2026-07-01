@@ -1,23 +1,20 @@
 # provider_service.py
-from typing import List, Optional, Tuple
+from typing import Optional
 
-from PyQt5.QtCore import Qt, QObject, QVariant, pyqtSignal
+from PyQt5.QtCore import Qt, QObject
 from PyQt5.QtWidgets import QTableWidgetItem, QWidget
-from PyQt5.QtNetwork import QNetworkReply
-from qgis.core import QgsGeometry, QgsVectorLayer, QgsFeature
+from qgis.core import QgsVectorLayer, QgsFeature
 
 from . import DataCatalogService
 from ..app_context import AppContext
-from ...entity.provider import(ProviderInterface, 
-                               ImagerySearchProvider, 
+from ...entity.provider import(ImagerySearchProvider, 
                                MyImageryProvider, 
                                UsersProvider,
                                BasicAuth,
                                ProvidersList,
                                create_provider)
-from ..service.alert_service import alert, AlertService
-from ...schema import (ProductType, 
-                       DataProviderParams, 
+from ..service.alert_service import alert
+from ...schema import (DataProviderParams, 
                        MyImageryParams, 
                        ImagerySearchParams, 
                        UserDefinedParams)
@@ -395,11 +392,10 @@ class ProviderService(QObject):
             self.dlg.startProcessing.setEnabled(True)
         else:
             self.dlg.sourceCombo.setCurrentIndex(index)
-            if self.app_context.zoom_selector:
-                if provider.dataProvider.zoom:
-                    self.dlg.zoomCombo.setCurrentText(str(provider.dataProvider.zoom))
-                else:
-                    self.dlg.zoomCombo.setCurrentIndex(0)
+            if provider.dataProvider.zoom:
+                self.dlg.zoomCombo.setCurrentText(str(provider.dataProvider.zoom))
+            else:
+                self.dlg.zoomCombo.setCurrentIndex(0)
     
     def duplicate_my_imagery(self, provider: MyImageryParams):
         self.dlg.mosaicTable.clearSelection()
@@ -504,8 +500,7 @@ class ProviderService(QObject):
             provider_index = len(self.providers)
             self.update_providers()
             self.dlg.setProviderIndex(provider_index)
-        if self.app_context.zoom_selector:
-            self.dlg.zoomCombo.setCurrentText(str(provider.userDefined.zoom))
+        self.dlg.zoomCombo.setCurrentText(str(provider.userDefined.zoom))
 
     def duplicate_aoi(self, provider):
         if isinstance(provider, ImagerySearchParams):

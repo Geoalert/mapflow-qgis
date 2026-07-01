@@ -2,11 +2,9 @@
 
 Spec reference: spec/002_C_myimagery_api.md
 """
-import json
-from unittest.mock import MagicMock, patch
-from datetime import datetime
+from unittest.mock import MagicMock
+from datetime import datetime, timedelta
 
-import pytest
 
 from mapflow.schema.data_catalog import ImageReturnSchema
 
@@ -68,6 +66,7 @@ class TestImageReturnSchema:
         data = _image_data()
         image = ImageReturnSchema.from_dict(data)
         assert isinstance(image.uploaded_at, datetime)
+        assert image.uploaded_at.utcoffset() == timedelta(0)
 
     def test_meta_data_parsed(self):
         """meta_data dict is parsed into ImageMetadataSchema."""

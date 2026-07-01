@@ -1,6 +1,5 @@
 """Tests for processings pagination schema and logic."""
 import json
-import pytest
 
 from mapflow.schema.processing import (
     ProcessingSortBy,
@@ -12,16 +11,16 @@ from mapflow.schema.processing import (
 
 class TestProcessingSortBy:
     def test_enum_values(self):
-        assert ProcessingSortBy.created.value == "created"
-        assert ProcessingSortBy.name.value == "name"
-        assert ProcessingSortBy.status.value == "status"
-        assert ProcessingSortBy.cost.value == "cost"
-        assert ProcessingSortBy.area.value == "area"
-        assert ProcessingSortBy.progress.value == "progress"
+        assert ProcessingSortBy.created.value == "CREATED"
+        assert ProcessingSortBy.name.value == "NAME"
+        assert ProcessingSortBy.status.value == "STATUS"
+        assert ProcessingSortBy.cost.value == "COST"
+        assert ProcessingSortBy.area.value == "AREA"
+        assert ProcessingSortBy.progress.value == "PROGRESS"
 
     def test_all_expected_members(self):
-        expected = {"scenario", "name", "project", "email", "created",
-                    "status", "progress", "completed", "cost", "area", "provider"}
+        expected = {"SCENARIO", "NAME", "PROJECT", "EMAIL", "CREATED",
+                    "STATUS", "PROGRESS", "COMPLETED", "COST", "AREA", "PROVIDER"}
         assert set(m.value for m in ProcessingSortBy) == expected
 
 
@@ -61,7 +60,7 @@ class TestProcessingsRequest:
             "limit": 30,
             "offset": 60,
             "terms": "my search",
-            "sortBy": "created",
+            "sortBy": "CREATED",
             "sortOrder": "DESC",
         }
 
@@ -121,7 +120,6 @@ class TestPaginationOffsetLogic:
         assert page_number == 3
 
     def test_offset_clamp_when_exceeds_total(self):
-        limit = 30
         total = 50
         offset = 60
         if offset >= total:

@@ -1,9 +1,10 @@
 import json
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 from typing import Dict, Optional, List
-from PyQt5.QtCore import QObject, QTimer
+from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 from PyQt5.QtNetwork import QNetworkReply
-from PyQt5.QtWidgets import QMessageBox, QApplication
+from PyQt5.QtWidgets import QMessageBox, QApplication, QInputDialog
 from .provider_service import (get_provider_params, 
                                setup_provider_info, 
                                validate_provider_params, 
@@ -13,8 +14,8 @@ from .provider_service import (get_provider_params,
 from .. import helpers
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs.confirm_processing_start_dialog import ConfirmProcessingStartDialog
-from ...errors import (ProcessingInputDataMissing,
-                       BadProcessingInput,
+from ...errors import (BadProcessingInput,
+                       ErrorMessage,
                        PluginError,
                        ImageIdRequired,
                        AoiNotIntersectsImage)
@@ -22,18 +23,46 @@ from ...http import Http, api_message_parser
 from ..view.processing_view import ProcessingView
 from ..api.processing_api import ProcessingApi
 from ...schema import ProcessingDTO, UpdateProcessingSchema, ProcessingStatus, BillingType, ProcessingHistory, PostProcessingSchemaV2
-from ...schema.processing import ProcessingUIParams, ProcessingsRequest, ProcessingsResult
-from ..service.alert_service import alert, AlertService
+from ...schema.processing import (
+    ProcessingsRequest,
+    ProcessingsResult,
+)
+from ...schema.template import (
+    AOI_NAME_MAX_LENGTH,
+    DeleteAoisSchema,
+    NoAoiProcessingsRow,
+    RunTemplateProcessingSchema,
+    TemplateAoiDTO,
+    TemplateProcessingSchema,
+    UpdateAoiSchema,
+    UpdateProcessingTemplateSchema,
+    ProcessingTemplateDTO,
+    ProcessingTemplateDetails,
+)
+from ..service.alert_service import alert
 from ..app_context import AppContext
+from ...entity.provider import ImagerySearchProvider
 from ...config import Config
 from ...functional.layer_utils import ResultsLoader
-from ...http import Http, get_error_report_body
+from ...http import get_error_report_body
 from ...dialogs.error_message_widget import ErrorMessageWidget
 
 class ProcessingService(QObject):
     """
     A service to store & query the mapflow processings.
     """
+
+    # Emitted when entering/leaving the in-template view, so map side-effects
+    # (search results, AOI layers) can be handled outside the service.
+    templateOpened = pyqtSignal(object)
+    templateClosed = pyqtSignal(object)
+
+    # Class-level defaults so the mode check is safe even when callers (and tests)
+    # construct the service without running __init__.
+    in_template_mode = False
+    active_template = None
+    _default_poll_interval = Config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000
+    _template_poll_interval = Config.TEMPLATE_TABLE_REFRESH_INTERVAL * 1000
 
     def __init__(self,
                  http: Http,
@@ -54,13 +83,24 @@ class ProcessingService(QObject):
                                  iface=iface,
                                  result_loader=self.result_loader)
         self.processings = {}
+        self.templates = {}
+        # In-template navigation state (level 3: Projects -> Processings -> Template).
+        self.in_template_mode = False
+        self.active_template = None  # ProcessingTemplateDTO currently opened
+        self.template_processings = {}  # processings launched from the active template
+        self.template_aois = {}  # TemplateAoiDTO keyed by table_id
         self.processings_data = None  # ProcessingsResult
         self.processings_page_limit = Config.PROCESSINGS_PAGE_LIMIT
         self.processings_page_offset = 0
         self.processings_history = None # ProcessingHistory() - local storage for active processings list
         self.processing_fetch_timer = QTimer(dlg)
         self.processing_fetch_timer.setInterval(timer_interval)
+        # Project-list poll interval vs the slower in-template poll (set on enter/exit).
+        self._default_poll_interval = timer_interval
+        self._template_poll_interval = Config.TEMPLATE_TABLE_REFRESH_INTERVAL * 1000
         self.processing_cost = 0
+        self._delete_state = {}  # Store state for template deletion callback
+        self._resume_template_state = {}
 
     def load_processing_history(self):
         """
@@ -102,6 +142,19 @@ class ProcessingService(QObject):
                 raise BadProcessingInput(self.tr(
                     'Up to {} sq km can be processed at a time. '
                     'Try splitting your area(s) into several processings.').format(self.app_context.aoi_area_limit))
+            min_area, provider_name = self._selected_search_min_area()
+            if min_area is not None and self.app_context.aoi_size is not None \
+                    and self.app_context.aoi_size < min_area:
+                # Intersection of the AOI with the selected image is below the provider's
+                # minimum: reject client-side so we never send the cost/start request.
+                raise BadProcessingInput(ErrorMessage(
+                    code="ProviderMinAreaError",
+                    parameters={
+                        "aoiArea": round(self.app_context.aoi_size, 2),
+                        "providerName": provider_name or self.tr("the selected"),
+                        "providerMinArea": round(min_area, 2),
+                    },
+                ).to_str())
         except AoiNotIntersectsImage:
             error = self.tr("Selected AOI does not intersect the selected imagery")
         except ImageIdRequired:
@@ -110,9 +163,52 @@ class ProcessingService(QObject):
         except PluginError as e:
             error = str(e)
         return error, disable_start
-    
+
+    def _selected_search_min_area(self):
+        """Provider minimum AOI area for the currently selected search image(s).
+
+        The minimum lives on the provider (from ``/user/status``, see
+        ``app_context.provider_min_areas``); the selected footprints supply the
+        ``providerName`` to look it up. Returns ``(min_area_sqkm, provider_name)`` with the
+        most restrictive minimum, or ``(None, None)`` when nothing relevant is selected.
+        """
+        # Only imagery search ties the AOI to a provider's per-image minimum; for any other
+        # provider the metadata-table selection (possibly stale) is irrelevant — bail early.
+        if not isinstance(self.app_context.data_provider, ImagerySearchProvider):
+            return None, None
+        selected = self.dlg.metadataTable.selectedItems()
+        if not selected:
+            return None, None
+        footprints = self.app_context.search_footprints or {}
+        provider_min_areas = getattr(self.app_context, "provider_min_areas", None) or {}
+        # Track the binding (largest) minimum so the reported provider name matches it.
+        binding_min, binding_provider = None, None
+        for row in sorted({item.row() for item in selected}):
+            index_item = self.dlg.metadataTable.item(row, Config.LOCAL_INDEX_COLUMN)
+            if not index_item:
+                continue
+            try:
+                feature = footprints.get(int(index_item.text()))
+            except (TypeError, ValueError):
+                feature = None
+            if feature is None:
+                continue
+            try:
+                name = feature.attribute("providerName")
+            except (TypeError, KeyError):
+                name = None
+            if name in (None, "", "NULL"):
+                continue
+            min_area = provider_min_areas.get(str(name).lower())
+            if min_area is not None and (binding_min is None or min_area > binding_min):
+                binding_min, binding_provider = min_area, name
+        return binding_min, binding_provider
+
     def validate_context_params(self):
         error = None
+        planned_selection_error = self.planned_processing_selection_error()
+        if planned_selection_error:
+            return planned_selection_error
         if not self.app_context.aoi:
             # Here the button must already be disabled, and the warning text set
             if self.view.dlg.startProcessing.isEnabled():
@@ -128,6 +224,38 @@ class ProcessingService(QObject):
             self.view.dlg.processingProblemsLabel.clear()
             error = None
         return error
+
+    def template_to_run(self) -> Optional[ProcessingTemplateDTO]:
+        """The template a 'Start' click would run, or None for a regular processing.
+
+        Planned (template) processing applies when the source is imagery search and the
+        open search results belong to a template — either the template currently opened in
+        the in-template view, or (in the processings list) a selected template row. This is
+        the single source of truth shared by the start button text and the start action,
+        so they never disagree.
+        """
+        if self.in_template_mode:
+            template = self.active_template
+        else:
+            template = self.selected_template()
+            if not template or self.selected_processing():
+                return None
+        if not template:
+            return None
+        if not isinstance(self.app_context.data_provider, ImagerySearchProvider):
+            return None
+        if str(template.id) != str(getattr(self.app_context, "open_template_results_id", None)):
+            return None
+        return template
+
+    def planned_processing_selection_error(self) -> Optional[str]:
+        """Require an image selection only when a planned (template) start actually applies."""
+        if not self.template_to_run():
+            return None
+        selected_rows = {item.row() for item in self.dlg.metadataTable.selectedItems()}
+        if selected_rows:
+            return None
+        return self.tr("Select one or more images in search results to start planned processing")
 
     def start_processing(self):
         self.processing_fetch_timer.stop()
@@ -172,17 +300,30 @@ class ProcessingService(QObject):
         Handle the actual processing submission, either directly or after confirmation.
         """
         def post_processing():
-            self.iface.messageBar().pushInfo(
-                self.app_context.plugin_name, 
-                self.tr('Starting the processing...')
-            )
             try:
                 self.dlg.startProcessing.setEnabled(False)
-                self.api.create_processing(
-                    processing_params, 
-                    self.start_processing_callback,
-                    self.start_processing_error_handler
-                )
+                template = self.template_to_run()
+                if template:
+                    self.iface.messageBar().pushInfo(
+                        self.app_context.plugin_name,
+                        self.tr('Starting planned processing...')
+                    )
+                    self.api.run_template_processing(
+                        template_id=template.id,
+                        data=self._build_run_template_processing_schema(processing_params),
+                        callback=self.start_processing_callback,
+                        error_handler=self.start_processing_error_handler,
+                    )
+                else:
+                    self.iface.messageBar().pushInfo(
+                        self.app_context.plugin_name,
+                        self.tr('Starting the processing...')
+                    )
+                    self.api.create_processing(
+                        processing_params,
+                        self.start_processing_callback,
+                        self.start_processing_error_handler
+                    )
             except Exception as e:
                 alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
         
@@ -191,6 +332,24 @@ class ProcessingService(QObject):
             self.show_confirmation_dialog(processing_params, post_processing)
         else:
             post_processing()
+
+    def _build_run_template_processing_schema(
+        self,
+        processing_params: PostProcessingSchemaV2,
+    ) -> RunTemplateProcessingSchema:
+        wd_id = processing_params.wdId
+        wd_name = None if wd_id else self.dlg.modelCombo.currentText()
+        return RunTemplateProcessingSchema(
+            name=processing_params.name,
+            description=processing_params.description,
+            wdName=wd_name,
+            wdId=wd_id,
+            geometry=processing_params.geometry,
+            params=processing_params.params,
+            meta=processing_params.meta or {},
+            blocks=processing_params.blocks or [],
+            updateTemplateGeometry=False,
+        )
 
     def show_confirmation_dialog(self, processing_params: PostProcessingSchemaV2, callback):
         """
@@ -270,14 +429,22 @@ class ProcessingService(QObject):
             QMessageBox.Information
         )
         response_data = json.loads(response.readAll().data())
-        new_processing = ProcessingDTO.from_dict(response_data)
-        self.view.clear_processing_name(new_processing.name)
+        new_processing = None
+        # Template start responses may differ from processing-create responses.
+        # Try optimistic local update only when payload looks like a Processing DTO.
+        if isinstance(response_data, dict) and response_data.get("id") and response_data.get("name"):
+            new_processing = ProcessingDTO.from_dict(response_data)
+            self.view.clear_processing_name(new_processing.name)
         self.processing_fetch_timer.start()  # start monitoring
-        # Add to history
-        self.processings[new_processing.id] = new_processing
-        self.processings_history.add(new_processing.id, new_processing.status)
-        # display
-        self.view.add_new_processing(new_processing)
+        if new_processing is not None:
+            # Add to history
+            self.processings[new_processing.id] = new_processing
+            self.processings_history.add(new_processing.id, new_processing.status)
+            # display
+            self.view.add_new_processing(new_processing)
+        # Always refresh full list because template-started processings can affect
+        # both processings and template status/counts in table.
+        self.get_processings()
         self.dlg.startProcessing.setEnabled(True)
 
     def start_processing_error_handler(self, response: QNetworkReply) -> None:        
@@ -321,10 +488,25 @@ class ProcessingService(QObject):
         self.dlg.processingsNextPageButton.clicked.connect(self.show_processings_next_page)
         self.dlg.processingsPreviousPageButton.clicked.connect(self.show_processings_previous_page)
         self.dlg.filterProcessings.textEdited.connect(self.get_filtered_processings)
-        self.dlg.sortProcessingsCombo.activated.connect(lambda: self.get_processings())
+        self.dlg.sortProcessingsCombo.activated.connect(self._on_combo_sort_changed)
+        self.view.connect_header_sort(self._on_header_sort_changed)
+
+    def _on_combo_sort_changed(self):
+        """Combo sort resets any header-click override and re-fetches."""
+        self.view._header_sort_by = None
+        self.get_processings()
+
+    def _on_header_sort_changed(self):
+        """Re-render the table with current data using the header sort."""
+        self.view.update_processing_table(self.combined_processing_rows())
 
     def get_processings(self):
         if not self.app_context.current_project:
+            return
+        # While inside a template, the table shows that template's AOIs + processings.
+        # The poll timer calls this method, so redirect it to the template refresh.
+        if self.in_template_mode:
+            self.refresh_template_view()
             return
         # Clamp offset if it exceeds total
         try:
@@ -368,6 +550,256 @@ class ProcessingService(QObject):
         else:
             self.view.show_processings_pages(False)
         self.update_local_processings(processings)
+        current_project_id = getattr(self.app_context.current_project, "id", None)
+        if current_project_id:
+            self.api.get_templates_by_project(
+                project_id=current_project_id,
+                callback=self.get_templates_callback,
+            )
+        else:
+            self.templates = {}
+            self.view.update_processing_table(self.combined_processing_rows())
+
+    def get_templates_callback(self, response: QNetworkReply):
+        """Build templates from the project-scoped list.
+
+        The project endpoint omits ``searchParams``; they are hydrated lazily when a
+        template is opened (see ``Mapflow._open_template``). Keeping the poll to this
+        single request avoids a second full-list fetch on every tick.
+        """
+        response_data = json.loads(response.readAll().data())
+        if isinstance(response_data, dict):
+            template_items = response_data.get("templates") or response_data.get("results") or []
+        else:
+            template_items = response_data or []
+        self._set_templates_from_items(template_items)
+
+    def _set_templates_from_items(self, template_items):
+        """Build and render template DTOs from raw template item list."""
+
+        current_project_id = str(getattr(self.app_context.current_project, "id", ""))
+        templates = []
+        for item in template_items:
+            if not isinstance(item, dict):
+                continue
+            normalized_item = dict(item)
+            normalized_item.setdefault("searchParams", {})
+            try:
+                template = ProcessingTemplateDTO.from_dict(normalized_item)
+            except (TypeError, ValueError, KeyError):
+                continue
+            if current_project_id and str(template.projectId) != current_project_id:
+                continue
+            templates.append(template)
+
+        self.templates = {template.id: template for template in templates}
+        self.view.update_processing_table(self.combined_processing_rows())
+
+    def _sort_key(self, item, sort_by: str):
+        if isinstance(item, TemplateAoiDTO):
+            return self._aoi_sort_key(item, sort_by)
+        is_processing = isinstance(item, ProcessingDTO)
+        if sort_by == "NAME":
+            return (item.name or "").lower()
+        if sort_by == "WORKFLOW":
+            return (item.workflowDef.name if is_processing else "Planned").lower()
+        if sort_by == "STATUS":
+            if is_processing:
+                if item.reviewStatus and not item.reviewStatus.is_none:
+                    return (item.reviewStatus.reviewStatus.display_value or "").lower()
+                return (item.status.display_value or "").lower()
+            return item.table_status.lower()
+        if sort_by == "PROGRESS":
+            return (item.percentCompleted or 0) if is_processing else -1
+        if sort_by == "AREA":
+            return (item.aoiArea or 0) if is_processing else (item.aoi_area or 0)
+        if sort_by == "COST":
+            return (item.cost or 0) if is_processing else 0
+        if sort_by == "REVIEW_UNTIL":
+            if is_processing and item.reviewUntil:
+                return item.reviewUntil
+            return datetime.min.replace(tzinfo=timezone.utc)
+        # CREATED (default)
+        return item.created if is_processing else item.createdAt
+
+    def _aoi_sort_key(self, aoi: TemplateAoiDTO, sort_by: str):
+        """Sort key for AOI rows. AOIs are sorted only among themselves (see
+        ``combined_template_rows``), so keys never compare across row types."""
+        if sort_by == "AREA":
+            return aoi.aoi_area or 0
+        if sort_by == "STATUS":
+            return aoi.table_status.lower()
+        # NAME and everything else (AOIs have no creation time): order by name.
+        return (aoi.display_name or "").lower()
+
+    def combined_processing_rows(self):
+        if self.in_template_mode:
+            return self.combined_template_rows()
+        sort_by, sort_order = self.view.sort_processings()
+        reverse = sort_order == "DESC"
+        templates = sorted(self.templates.values(), key=lambda t: self._sort_key(t, sort_by), reverse=reverse)
+        processings = sorted(self.processings.values(), key=lambda p: self._sort_key(p, sort_by), reverse=reverse)
+        return list(templates) + list(processings)
+
+    # ============ IN-TEMPLATE VIEW ============ #
+
+    @staticmethod
+    def _template_has_aoi(template: ProcessingTemplateDTO) -> bool:
+        try:
+            return bool(template.aoi_dtos())
+        except Exception:
+            return False
+
+    @staticmethod
+    def _parse_template_response(response: QNetworkReply):
+        """Parse a ``GET /processings/template/{id}`` response into a ProcessingTemplateDTO."""
+        try:
+            data = json.loads(response.readAll().data())
+            if isinstance(data, dict) and "template" in data:
+                return ProcessingTemplateDetails.from_dict(data).template
+            if isinstance(data, dict):
+                return ProcessingTemplateDTO.from_dict(data)
+        except Exception:
+            return None
+        return None
+
+    def hydrate_template(self, template: ProcessingTemplateDTO, callback):
+        """Ensure the template carries its ``aoiDetails`` (the project poll omits them),
+        then invoke ``callback(hydrated_template)``."""
+        if self._template_has_aoi(template):
+            callback(template)
+            return
+        self.api.get_template(
+            template_id=template.id,
+            callback=lambda response: callback(self._parse_template_response(response) or template),
+        )
+
+    def enter_template_view(self, template: ProcessingTemplateDTO):
+        """Open a template ('one step right'): show its AOIs + launched processings.
+
+        The project-scoped poll omits ``searchParams``; hydrate the template by id first
+        when its AOIs are missing, then enter.
+        """
+        self.hydrate_template(template, self._hydrate_and_enter)
+
+    def _hydrate_and_enter(self, template: ProcessingTemplateDTO):
+        if template is not None:
+            self.templates[template.id] = template
+        self._do_enter_template(template)
+
+    def _do_enter_template(self, template: ProcessingTemplateDTO):
+        self.in_template_mode = True
+        self.active_template = template
+        self.template_aois = {aoi.table_id: aoi for aoi in template.aoi_dtos()}
+        self.template_processings = {}
+        self._rebuild_template_rows()
+        # Fetch the full processings (with result layers) for double-click loading.
+        self._fetch_template_processings()
+        # Poll the in-template view less aggressively than the project list.
+        self.processing_fetch_timer.setInterval(self._template_poll_interval)
+        self.processing_fetch_timer.start()
+        # Map side-effects (search results + AOI layers) are handled by listeners.
+        self.templateOpened.emit(template)
+
+    def exit_template_view(self):
+        """Leave the template ('one step left'): return to the project's processings."""
+        closed = self.active_template
+        self.in_template_mode = False
+        self.active_template = None
+        self.template_processings = {}
+        self.template_aois = {}
+        # Restore the regular (faster) project-list poll cadence.
+        self.processing_fetch_timer.setInterval(self._default_poll_interval)
+        # Let listeners clean up the template's map layers / search table.
+        self.templateClosed.emit(closed)
+
+    def refresh_template_view(self):
+        """Poll tick: refresh only the processings (status/progress + the unbound section).
+
+        The AOI grouping (``aoiDetails`` from the full template) changes slowly and is
+        re-hydrated on enter and after AOI edits — NOT every tick — so a poll is a single
+        ``/processings`` request rather than three. AOI statuses are kept current by syncing
+        them from the polled processings (see ``_sync_aoi_statuses_from_processings``).
+        """
+        if self.active_template:
+            self._fetch_template_processings()
+
+    def _rebuild_template_rows(self):
+        if not self.active_template:
+            return
+        self.template_aois = {aoi.table_id: aoi for aoi in self.active_template.aoi_dtos()}
+        self._sync_aoi_statuses_from_processings()
+        self.view.update_processing_table(self.combined_template_rows())
+
+    def _sync_aoi_statuses_from_processings(self):
+        """Refresh each AOI's processing-link statuses from the latest polled processings, so
+        the AOI aggregate status is current without re-fetching the full template each tick."""
+        for aoi in self.template_aois.values():
+            for link in aoi.processings:
+                full = self.template_processings.get(str(link.processingId))
+                if full is not None:
+                    try:
+                        link.processingStatus = full.status.value
+                    except AttributeError:
+                        pass
+
+    def _fetch_template_processings(self):
+        """Fetch the template's processings (v1 ``ProcessingJson``) for the full row data
+        (model, progress, status, result layers) and the unbound ('No AOI') section."""
+        if not self.active_template:
+            return
+        self.api.get_template_processings(
+            template_id=self.active_template.id,
+            callback=self.get_template_processings_callback,
+        )
+
+    def get_template_processings_callback(self, response: QNetworkReply):
+        """Store the template's full processings (keyed by id) and re-render the rows."""
+        try:
+            data = json.loads(response.readAll().data())
+        except Exception:
+            data = []
+        items = data.get("results") if isinstance(data, dict) else data
+        processings = {}
+        for item in items or []:
+            if not isinstance(item, dict):
+                continue
+            try:
+                processing = TemplateProcessingSchema.from_dict(item)
+            except (TypeError, ValueError, KeyError):
+                continue
+            processings[str(processing.id)] = processing
+        self.template_processings = processings
+        if self.in_template_mode:
+            self._rebuild_template_rows()
+
+    def template_processing(self, processing_id: str):
+        """Full processing (with layers) for a grouped AOI-processing row, by id."""
+        return self.template_processings.get(str(processing_id))
+
+    def combined_template_rows(self):
+        """Grouped layout: each AOI row (color-coded) followed by its processings, then the
+        next AOI; finally a 'No AOI' separator and any processings attached to the template
+        but not intersecting an AOI (absent from aoiDetails).
+
+        Processing rows use the full ``TemplateProcessingSchema`` (model/progress/status)
+        when loaded, falling back to the lighter aoiDetails link until then.
+        """
+        rows = []
+        bound_ids = set()
+        for aoi in self.template_aois.values():
+            rows.append(aoi)
+            for link in aoi.processings:
+                pid = str(link.processingId) if link.processingId else ""
+                if pid:
+                    bound_ids.add(pid)
+                full = self.template_processings.get(pid)
+                rows.append(full if full is not None else link)
+        unbound = [p for pid, p in self.template_processings.items() if pid not in bound_ids]
+        if unbound:
+            rows.append(NoAoiProcessingsRow())
+            rows.extend(unbound)
+        return rows
 
     def show_processings_next_page(self):
         self.processings_page_offset += self.processings_page_limit
@@ -387,24 +819,25 @@ class ProcessingService(QObject):
     def update_local_processings(self, processings: List[ProcessingDTO]):
         """
         Update local processing history and notify user of status changes.
-        
+
+        Does NOT render the table: the poll renders once with the combined
+        (templates + processings) rows after templates resolve, so the table
+        doesn't flash through a processings-only intermediate state.
+
         Args:
             processings: List of ProcessingDTO from server
         """
         if not self.processings_history:
             return
-            
+
         # Convert list to dict for history update
         processings_dict = {p.id: p for p in processings}
-        
+
         # Update history and get report of terminal status changes
         terminal_changes = self.processings_history.update(processings_dict, self.app_context.settings)
-        
+
         # Notify user of newly completed/failed processings
         self._notify_status_changes(terminal_changes, processings_dict)
-        
-        # Update the view
-        self.view.update_processing_table(processings)
 
     def _notify_status_changes(self, 
                                terminal_changes: Dict[str, List[UUID]], 
@@ -456,6 +889,72 @@ class ProcessingService(QObject):
         self.view.update_processing_name(processing_id=processing.id, new_name=processing.name)
         self.processings[processing.id] = processing
 
+    def update_template(self):
+        """Rename selected template using update-template API."""
+        template = self.selected_template()
+        print (template.id)
+        if not template:
+            return
+
+        new_name, ok = QInputDialog.getText(
+            self.dlg,
+            self.tr("Rename template"),
+            self.tr("Template name:"),
+            text=str(template.name or ""),
+        )
+        if not ok:
+            return
+
+        new_name = (new_name or "").strip()
+        if not new_name:
+            alert(self.tr("Please, specify template name"), QMessageBox.Warning)
+            return
+        if new_name == template.name:
+            return
+
+        payload = UpdateProcessingTemplateSchema(
+            name=new_name,
+            # Rename-only flow: do not send searchParams to avoid geometry update rejection.
+            searchParams=None,
+            # Keep processing params unchanged on backend; omit field to avoid decoding issues
+            processingParams=None,
+            activeUntil=None,
+        )
+
+        self.api.update_template(
+            template_id=template.id,
+            data=payload,
+            callback=self.update_template_callback,
+            error_handler=self.update_template_error_handler,
+        )
+
+    def update_template_callback(self, response: QNetworkReply):
+        """Handle template update response and refresh table."""
+        try:
+            response_data = json.loads(response.readAll().data())
+        except Exception:
+            response_data = {}
+
+        print (response_data)
+
+        template_data = response_data.get("template", response_data)
+        try:
+            if isinstance(template_data, dict) and template_data.get("id"):
+                updated_template = ProcessingTemplateDTO.from_dict(template_data)
+                self.templates[updated_template.id] = updated_template
+                self.view.update_processing_name(
+                    processing_id=updated_template.id,
+                    new_name=updated_template.name,
+                )
+        except Exception:
+            pass
+        self.get_processings()
+
+    def update_template_error_handler(self, response):
+        """Handle template update error."""
+        alert(self.tr("Error renaming template: {}").format(self._template_error_text(response)),
+              QMessageBox.Critical)
+
     # Processing cost
     def update_processing_cost(self):
         """Update the processing cost based on current AOI and workflow.
@@ -504,7 +1003,19 @@ class ProcessingService(QObject):
         """
         response_text = response.readAll().data().decode()
         if response_text is not None:
-            message = api_message_parser(response_text)
+            try:
+                message = api_message_parser(response_text)
+            except Exception:
+                message = None
+
+            if not message or str(message).strip().lower() in {"none", "null"}:
+                network_error = ""
+                try:
+                    network_error = (response.errorString() or "").strip()
+                except Exception:
+                    network_error = ""
+                message = network_error or self.tr("Unknown server error")
+
             if not self.app_context.user_role.can_start_processing:
                 reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.app_context.user_role.value)
             else:
@@ -512,44 +1023,353 @@ class ProcessingService(QObject):
             self.view.disable_processing_start(reason, clear_area=False)
 
     def confirm_delete_processings(self) -> None:
-        """Delete one or more processings from the server.
+        """Delete one or more processings or templates from the server.
 
-        Asks for confirmation in a pop-up dialog. Multiple processings can be selected.
+        Asks for confirmation in a pop-up dialog. Multiple items can be selected.
         Is called by clicking the deleteProcessings ('Delete') button.
         """
         # Pause refreshing processings table to avoid conflicts
         self.processing_fetch_timer.stop()
         selected_ids = self.view.selected_processing_ids()
+        # Filter to only items that exist (templates or processings)
+        valid_ids = [pid for pid in selected_ids if pid in self.processings or pid in self.templates]
         # Ask for confirmation if there are selected rows
-        if selected_ids and alert(
-                self.tr('Delete selected processings?'), QMessageBox.Question
+        if valid_ids and alert(
+                self.tr('Delete selected items?'), QMessageBox.Question
         ):
-            self.delete_processings(response=None, processings=selected_ids, deleted=[], failed=[])
+            self.delete_processings(response=None, items=valid_ids, deleted=[], failed=[])
             
     def delete_processings(self, 
                            response: QNetworkReply, 
-                           processings: List[UUID],
-                           deleted: List[UUID], 
-                           failed: List[UUID]):
+                           items: List,
+                           deleted: List,
+                           failed: List):
         # todo: save and report error responses?
-        if len(processings) == 0:
+        if len(items) == 0:
             self.view.delete_processings_from_table(deleted)
             if len(failed) > 0:
-                failed_ids = ', <br>'.join(failed)
-                alert(self.tr(f"Failed to remove processings with following ids: <center> {failed_ids}"))
+                failed_ids = ', <br>'.join(str(f) for f in failed)
+                alert(self.tr(f"Failed to remove items with following ids: <center> {failed_ids}"))
             self.processing_fetch_timer.start()
         else:
-            processing_to_delete = processings[0]
-            non_deleted = processings[1:]
-            self.api.delete_processing(processing_id=processing_to_delete,
-                                       callback=self.delete_processings,
-                                       error_handler=self.delete_processings,
-                                       callback_kwargs={'processings': non_deleted,
-                                                        'deleted': list(deleted) + [processing_to_delete],
-                                                        'failed': failed},
-                                       error_handler_kwargs={'processings': non_deleted,
-                                                             'deleted': deleted,
-                                                             'failed': list(failed) + [processing_to_delete]})
+            item_to_delete = items[0]
+            remaining_items = items[1:]
+
+            # Determine if this is a template or processing
+            if item_to_delete in self.templates:
+                # Delete template
+                self.api.delete_template(
+                    template_id=item_to_delete,
+                    callback=self.delete_processings_callback,
+                    error_handler=self.delete_processings_error_handler,
+                )
+                # Store state for callback
+                self._delete_state = {
+                    'remaining_items': remaining_items,
+                    'deleted': list(deleted) + [item_to_delete],
+                    'failed': failed
+                }
+            else:
+                # Delete processing
+                self.api.delete_processing(
+                    processing_id=item_to_delete,
+                    callback=self.delete_processings,
+                    error_handler=self.delete_processings,
+                    callback_kwargs={'items': remaining_items,
+                                     'deleted': list(deleted) + [item_to_delete],
+                                     'failed': failed},
+                    error_handler_kwargs={'items': remaining_items,
+                                          'deleted': deleted,
+                                          'failed': list(failed) + [item_to_delete]})
+
+    def delete_processings_callback(self, response: QNetworkReply):
+        """Callback for template deletion to continue with remaining items."""
+        state = self._delete_state
+        self.delete_processings(
+            response=response,
+            items=state['remaining_items'],
+            deleted=state['deleted'],
+            failed=state['failed']
+        )
+
+    def delete_processings_error_handler(self, response: QNetworkReply):
+        """Error handler for template deletion to continue with remaining items."""
+        state = self._delete_state
+        self.delete_processings(
+            response=response,
+            items=state['remaining_items'],
+            deleted=state['deleted'],
+            failed=list(state['failed']) + [state['deleted'][-1]]
+        )
+
+    # ============ TEMPLATE ACTIONS ============ #
+
+    def pause_template(self):
+        """Pause the selected template."""
+        template = self.selected_template()
+        if not template:
+            return
+        if template.isActive:
+            template_id = template.id
+            self.api.stop_template(template_id=template_id,
+                                  callback=self.pause_template_callback,
+                                  error_handler=self.pause_template_error_handler)
+        else:
+            alert(self.tr("Template is not active"), QMessageBox.Information)
+
+    def pause_template_callback(self, response: QNetworkReply):
+        """Handle pause template response."""
+        try:
+            self.get_processings()  # Refresh to get updated template status
+            alert(self.tr("Template paused successfully"), QMessageBox.Information)
+        except Exception as e:
+            alert(self.tr("Failed to pause template: {}").format(str(e)), QMessageBox.Critical)
+
+    def _template_error_text(self, response) -> str:
+        """Resolve a template/AOI action error response to a meaningful, translatable message.
+
+        The error handlers receive a ``QNetworkReply``; parse its body through the central
+        error registry (e.g. a generic ``BAD_REQUEST`` with "You have reached the maximum
+        number of active templates" maps to a translated description) rather than formatting
+        the raw reply object (which produced an empty/garbled message box)."""
+        try:
+            body = response.readAll().data().decode()
+            message = api_message_parser(body)
+        except Exception:
+            message = None
+        return message or self.tr("Unknown server error")
+
+    def pause_template_error_handler(self, response):
+        """Handle pause template error."""
+        alert(self.tr("Error pausing template: {}").format(self._template_error_text(response)),
+              QMessageBox.Critical)
+
+    def resume_template(self):
+        """Resume the selected template."""
+        template = self.selected_template()
+        if not template:
+            return
+        if not template.isActive:
+            self._resume_template_state = {
+                'template_id': template.id,
+                'template_name': template.name,
+            }
+            template_id = template.id
+            self.api.resume_template(template_id=template_id,
+                                    callback=self.resume_template_update_active_until,
+                                    error_handler=self.resume_template_error_handler)
+        else:
+            alert(self.tr("Template is already active"), QMessageBox.Information)
+
+    def resume_template_update_active_until(self, response: QNetworkReply):
+        """After resume succeeds, extend activeUntil to 6 months from now."""
+        state = getattr(self, '_resume_template_state', {}) or {}
+        template_id = state.get('template_id')
+        template_name = state.get('template_name')
+        if not template_id or not template_name:
+            self.resume_template_callback(response)
+            return
+
+        active_until = datetime.utcnow() + timedelta(days=180) - timedelta(minutes=1)
+        payload = UpdateProcessingTemplateSchema(
+            name=template_name,
+            searchParams=None,
+            processingParams=None,
+            activeUntil=active_until.strftime('%Y-%m-%dT%H:%M:%S.0Z'),
+        )
+
+        self.api.update_template(
+            template_id=template_id,
+            data=payload,
+            callback=self.resume_template_callback,
+            error_handler=self.resume_template_error_handler,
+        )
+
+    def resume_template_callback(self, response: QNetworkReply):
+        """Handle resume template response."""
+        try:
+            self._resume_template_state = {}
+            self.get_processings()  # Refresh to get updated template status
+            alert(self.tr("Template resumed successfully"), QMessageBox.Information)
+        except Exception as e:
+            alert(self.tr("Failed to resume template: {}").format(str(e)), QMessageBox.Critical)
+
+    def resume_template_error_handler(self, response):
+        """Handle resume template error (e.g. "maximum number of active templates")."""
+        self._resume_template_state = {}
+        alert(self.tr("Error resuming template: {}").format(self._template_error_text(response)),
+              QMessageBox.Critical)
+
+    def restart_template(self):
+        """Restart the selected failed template."""
+        template = self.selected_template()
+        if not template:
+            return
+        if (template.status or "").upper() != "FAILED":
+            alert(self.tr("Only failed templates can be restarted"), QMessageBox.Information)
+            return
+        self.api.restart_template(
+            template_id=template.id,
+            callback=self.restart_template_callback,
+            error_handler=self.restart_template_error_handler,
+        )
+
+    def restart_template_callback(self, response: QNetworkReply):
+        """Handle restart template response."""
+        try:
+            self.get_processings()  # Refresh to get updated template status
+            alert(self.tr("Template restarted successfully"), QMessageBox.Information)
+        except Exception as e:
+            alert(self.tr("Failed to restart template: {}").format(str(e)), QMessageBox.Critical)
+
+    def restart_template_error_handler(self, response):
+        """Handle restart template error."""
+        alert(self.tr("Error restarting template: {}").format(self._template_error_text(response)),
+              QMessageBox.Critical)
+
+    def delete_template(self):
+        """Delete the selected template after confirmation."""
+        template = self.selected_template()
+        if not template:
+            return
+
+        reply = QMessageBox.question(
+            self.dlg,
+            self.tr("Delete Template"),
+            self.tr("Are you sure you want to delete the template '{}'?").format(template.name),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            template_id = template.id
+            self.api.delete_template(template_id=template_id,
+                                    callback=self.delete_template_callback,
+                                    error_handler=self.delete_template_error_handler)
+
+    def delete_template_callback(self, response: QNetworkReply):
+        """Handle delete template response."""
+        try:
+            self.get_processings()  # Refresh to remove deleted template from table
+            alert(self.tr("Template deleted successfully"), QMessageBox.Information)
+        except Exception as e:
+            alert(self.tr("Failed to delete template: {}").format(str(e)), QMessageBox.Critical)
+
+    def delete_template_error_handler(self, response):
+        """Handle delete template error."""
+        alert(self.tr("Error deleting template: {}").format(self._template_error_text(response)),
+              QMessageBox.Critical)
+
+    # ============ AOI ACTIONS (in-template view) ============ #
+
+    def rename_aoi(self):
+        """Rename the selected AOI via the per-AOI update endpoint."""
+        aoi = self.selected_aoi()
+        template = self.active_template
+        if not aoi or not template:
+            return
+        if not aoi.can_rename:
+            alert(self.tr("This AOI has no id yet and cannot be renamed. "
+                          "Reopen the template and try again."), QMessageBox.Information)
+            return
+
+        new_name, ok = QInputDialog.getText(
+            self.dlg,
+            self.tr("Rename AOI"),
+            self.tr("AOI name:"),
+            text=str(aoi.name or ""),
+        )
+        if not ok:
+            return
+        new_name = (new_name or "").strip()
+        if not new_name:
+            alert(self.tr("Please, specify AOI name"), QMessageBox.Warning)
+            return
+        if len(new_name) > AOI_NAME_MAX_LENGTH:
+            alert(self.tr("AOI name must not exceed {limit} characters").format(
+                limit=AOI_NAME_MAX_LENGTH), QMessageBox.Warning)
+            return
+        if new_name == (aoi.name or ""):
+            return
+
+        self.api.update_aoi(
+            template_id=template.id,
+            aoi_id=aoi.id,
+            data=UpdateAoiSchema(name=new_name),
+            callback=self.aoi_changed_callback,
+            error_handler=self.aoi_change_error_handler,
+        )
+
+    def delete_aoi(self):
+        """Delete the selected AOI(s) from the active template."""
+        template = self.active_template
+        if not template:
+            return
+        deletable = [a for a in self.selected_aois() if a.can_rename]
+        if not deletable:
+            return
+        if not alert(self.tr("Delete selected AOI(s)?"), QMessageBox.Question):
+            return
+        self.api.delete_aois(
+            template_id=template.id,
+            data=DeleteAoisSchema(aoiIds=[a.id for a in deletable]),
+            callback=self.aoi_changed_callback,
+            error_handler=self.aoi_change_error_handler,
+        )
+
+    def aoi_changed_callback(self, response: QNetworkReply):
+        """After an AOI add/rename/delete, re-hydrate the template (so names/ids are fresh)."""
+        if self.active_template:
+            self.api.get_template(
+                template_id=self.active_template.id,
+                callback=self._reopen_template_callback,
+            )
+
+    def _reopen_template_callback(self, response: QNetworkReply):
+        try:
+            data = json.loads(response.readAll().data())
+            if isinstance(data, dict) and "template" in data:
+                hydrated = ProcessingTemplateDetails.from_dict(data).template
+            elif isinstance(data, dict):
+                hydrated = ProcessingTemplateDTO.from_dict(data)
+            else:
+                hydrated = None
+            if hydrated is not None:
+                self.active_template = hydrated
+                self.templates[hydrated.id] = hydrated
+        except Exception:
+            pass
+        if self.in_template_mode and self.active_template:
+            self.template_aois = {aoi.table_id: aoi for aoi in self.active_template.aoi_dtos()}
+            self.view.update_processing_table(self.combined_template_rows())
+
+    def aoi_change_error_handler(self, response):
+        alert(self.tr("AOI update failed: {}").format(self._template_error_text(response)),
+              QMessageBox.Critical)
+
+    def open_template_details(self):
+        """Open a dialog showing template details."""
+        template = self.selected_template()
+        if not template:
+            return
+
+        local_created_at = template.createdAt.astimezone()
+        local_active_until = template.activeUntil.astimezone()
+
+        # Show template details in a message box for now
+        # TODO: Create a proper template details dialog
+        details = (
+            f"<b>{template.name}</b><br/>"
+            f"<b>Status:</b> {template.status}<br/>"
+            f"<b>Created:</b> {local_created_at.strftime('%Y-%m-%d %H:%M')}<br/>"
+            f"<b>Active Until:</b> {local_active_until.strftime('%Y-%m-%d %H:%M')}<br/>"
+            f"<b>Active:</b> {'Yes' if template.isActive else 'No'}<br/>"
+            f"<b>Archived:</b> {'Yes' if template.isArchived else 'No'}<br/>"
+            f"<b>New Images:</b> {template.newImagesCount or 0}<br/>"
+            f"<b>AOI Intersection:</b> {template.maxAoiIntersectionPercent or 'N/A'}%"
+        )
+
+        alert(details, QMessageBox.Information)
 
     def stop(self):
         self.processing_fetch_timer.stop()
@@ -557,9 +1377,22 @@ class ProcessingService(QObject):
 
     def selected_processings(self, limit=None) -> List[ProcessingDTO]:
         pids = self.view.selected_processing_ids(limit=limit)
+        # In template view the table holds the template's processings, not the project's.
+        pool = self.template_processings if self.in_template_mode else self.processings
         # limit None will give full selection
-        selected_processings = [self.processings[pid] for pid in filter(lambda pid: pid in pids, self.processings)]
+        selected_processings = [pool[pid] for pid in filter(lambda pid: pid in pids, pool)]
         return selected_processings
+
+    def selected_aois(self, limit=None) -> List[TemplateAoiDTO]:
+        """Selected AOI rows (only meaningful inside the in-template view)."""
+        pids = self.view.selected_processing_ids(limit=limit)
+        return [self.template_aois[pid] for pid in filter(lambda pid: pid in pids, self.template_aois)]
+
+    def selected_aoi(self) -> Optional[TemplateAoiDTO]:
+        first = self.selected_aois(limit=1)
+        if not first:
+            return None
+        return first[0]
 
     def selected_processing(self) -> Optional[ProcessingDTO]:
         first = self.selected_processings(limit=1)
@@ -567,6 +1400,37 @@ class ProcessingService(QObject):
             return None
         return first[0]
     
+    def selected_templates(self, limit=None) -> List[ProcessingTemplateDTO]:
+        """Get selected templates from the table."""
+        pids = self.view.selected_processing_ids(limit=limit)
+        # Filter to get only templates (not processings)
+        selected_templates = [self.templates[pid] for pid in filter(lambda pid: pid in self.templates, pids)]
+        return selected_templates
+
+    def selected_template(self) -> Optional[ProcessingTemplateDTO]:
+        """Get the first selected template, if any."""
+        first = self.selected_templates(limit=1)
+        if not first:
+            return None
+        return first[0]
+
+    def is_processing_selected(self) -> bool:
+        """Check if selected item is a processing (not a template)."""
+        selected = self.selected_processing()
+        return selected is not None
+
+    def is_template_selected(self) -> bool:
+        """Check if selected item is a template."""
+        selected = self.selected_template()
+        return selected is not None
+
+    def is_only_templates_selected(self) -> bool:
+        """True only when current table selection contains templates and no processings."""
+        pids = self.view.selected_processing_ids()
+        if not pids:
+            return False
+        return all(pid in self.templates for pid in pids)
+
     def restart_processing(self):
         processing = self.selected_processing()
         if not processing:

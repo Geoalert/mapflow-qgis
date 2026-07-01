@@ -4,7 +4,6 @@ from PyQt5 import uic
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QAbstractItemView, QListWidgetItem
 
-from .icons import plugin_icon
 
 ui_path = Path(__file__).parent/'static'/'ui'
 

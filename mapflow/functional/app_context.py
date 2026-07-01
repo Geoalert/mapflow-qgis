@@ -1,15 +1,17 @@
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, TYPE_CHECKING
 
 from qgis.core import QgsGeometry, QgsVectorLayer, QgsProject, QgsSettings
-from ..schema.project import UserRole
 from ..config import Config
+from ..schema.project import UserRole
+from ..schema.project import MapflowProject
+from ..entity.provider import ProviderInterface
 
 if TYPE_CHECKING:
-    from ..schema.project import MapflowProject
-    from ..schema.workflow_def import WorkflowDef
-    from ..entity.billing import BillingType
-    from ..entity.provider import ProviderInterface
+    # Imported only for the string annotations below; kept under TYPE_CHECKING to
+    # avoid runtime import cycles.
+    from ..schema.billing import BillingType
+    from ..schema.data_catalog import MosaicReturnSchema, ImageReturnSchema
 
 
 @dataclass
@@ -35,11 +37,9 @@ class AppContext:
     selected_processing_ids: List[str] = field(default_factory=list)
 
     # === AOI State ===
-    aoi: Optional[QgsGeometry] = None
-    # AOI used for processing creation/cost requests; equals `aoi` when no imagery
-    # cropping is needed, otherwise the user AOI intersected with the union of
-    # selected image footprints. Server-side provider minimum-area checks apply
-    # to whatever geometry is sent, so for Imagery Search we must send the cropped one.
+    aoi: Optional[QgsGeometry] = None  # full AOI, used for search/metadata requests
+    # AOI actually processed: the full AOI cropped to the selected image footprint(s). This is
+    # what is sent for processing/cost (matches the displayed area); falls back to `aoi`.
     processing_aoi: Optional[QgsGeometry] = None
     aoi_size: Optional[float] = None
     aoi_layers: List[QgsVectorLayer] = field(default_factory=list)
@@ -55,14 +55,20 @@ class AppContext:
     remaining_limit: float = 0.0
     remaining_credits: float = 0.0
     aoi_area_limit: float = 0.0
+    template_area_limit: float = 0.0
     max_aois_per_processing: int = 1
     review_workflow_enabled: bool = False
 
     # === Provider State ===
     data_provider: Optional["ProviderInterface"] = None
+    # Minimum AOI area (sq km) per provider, by lowercased provider name — from /user/status.
+    provider_min_areas: Dict[str, float] = field(default_factory=dict)
     
     # === Imagery Search State ===
     search_provider: Optional["ProviderInterface"] = None
+    # Id of the template whose results are currently shown in the search table (None for a
+    # regular search). Used to decide whether "Start" runs a planned (template) processing.
+    open_template_results_id: Optional[str] = None
     metadata_aoi: Optional[QgsGeometry] = None
     metadata_layer: Optional[QgsVectorLayer] = None
     meta_layer_table_connection = None
@@ -90,10 +96,6 @@ class AppContext:
         else:
             return None
         
-    @property
-    def zoom_selector(self):
-        return self.config.ZOOM_SELECTOR.lower() == "true" if self.config else None
-
     def get_workflow_def(self, wd_name):
         if not self.workflow_defs:
             return None

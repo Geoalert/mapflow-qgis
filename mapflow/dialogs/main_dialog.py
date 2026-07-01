@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 from typing import Iterable, Optional, List, Dict
-from datetime import datetime
 
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -58,6 +57,13 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.createProject.setIcon(icons.plus_icon)
         self.deleteProject.setIcon(icons.minus_icon)
         self.updateProject.setIcon(icons.edit_icon)
+        # Navigation arrows: left = back one level, right = into the selected template.
+        self.switchProjectsButton.setIcon(icons.arrow_left_icon)
+        self.switchProjectsButton.setToolTip(self.tr("Back"))
+        self.switchProcessingsButton.setIcon(icons.arrow_right_icon)
+        self.switchProcessingsButton.setToolTip(self.tr("Open processings"))
+        self.switchProcessingsFakeButton.setIcon(icons.arrow_right_icon)
+        self.switchProcessingsFakeButton.setToolTip(self.tr("Open selected template"))
 
         coin_pixmap = icons.coins_icon.pixmap(16, 16)
         self.labelCoins_1.setPixmap(coin_pixmap)
@@ -119,20 +125,24 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             highlight_color = self.mosaicTable.palette().highlight().color().name() 
             spacer.setStyleSheet("background-color:" + highlight_color + ";")
         
-        # Hide zoom spinbox
-        if config.ZOOM_SELECTOR.lower() == "true":
-            pass
-        else:
-            self.zoomCombo.hide()
-        
         # Add options menu
         self.options_menu = QMenu()
         self.save_result_action = QAction(self.tr("Save results"))
         self.download_aoi_action = QAction(self.tr("Download AOI"))
         self.see_details_action = QAction(self.tr("See details"))
+        self.see_processings_action = QAction(self.tr("See processings"))
+        self.see_search_results_action = QAction(self.tr("See search results"))
         self.processing_update_action = QAction(self.tr("Rename"))
         self.processing_restart_action = QAction(self.tr("Restart"))
         self.processing_duplicate_action = QAction(self.tr("Duplicate"))
+        # Template-specific actions
+        self.template_rename_action = QAction(self.tr("Rename"))
+        self.template_pause_action = QAction(self.tr("Pause"))
+        self.template_resume_action = QAction(self.tr("Resume"))
+        # AOI-specific actions (in-template view)
+        self.aoi_rename_action = QAction(self.tr("Rename AOI"))
+        self.aoi_delete_action = QAction(self.tr("Delete AOI"))
+        self.aoi_add_action = QAction(self.tr("Add AOI from current layer"))
         self.setup_options_menu()
 
         # Imagery Search
@@ -165,8 +175,13 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.viewAsLocal.setChecked(True)
         self.useAllVectorLayers.setChecked(str(self.settings.value('useAllVectorLayers', "true")).lower() == "true")
         self.cornfirmProcessingStart.setChecked(str(self.settings.value('confirmProcessingStart', "true")).lower() == "true")
-        self.cornfirmProcessingStart.toggled.connect(lambda: self.settings.setValue("confirmProcessingStart", 
+        self.cornfirmProcessingStart.toggled.connect(lambda: self.settings.setValue("confirmProcessingStart",
                                                                                     self.cornfirmProcessingStart.isChecked()))
+        # The "Providers" filter is only relevant when the search is limited to available
+        # providers, so show it only while that checkbox is set.
+        self._search_providers_available = False
+        self.hideUnavailableResults.toggled.connect(self.update_search_providers_filter_visibility)
+        self.update_search_providers_filter_visibility()
 
     # connect raster/provider combos funcs
     def switch_provider_combo(self, text):
@@ -558,12 +573,15 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.searchPageLabel.setText(f"{page_number}/{total_pages}")
     
     def enable_search_providers_filter(self, search_provides_count: int):
-        if search_provides_count == 0:
-            self.searchProvidersCombo.setVisible(False)
-            self.searchProvidersLabel.setVisible(False)
-        else:
-            self.searchProvidersCombo.setVisible(True)
-            self.searchProvidersLabel.setVisible(True)
+        self._search_providers_available = search_provides_count > 0
+        self.update_search_providers_filter_visibility()
+
+    def update_search_providers_filter_visibility(self):
+        """Show the providers filter only when there are providers AND the search is limited
+        to available ones ("Search only through available providers" is checked)."""
+        visible = getattr(self, "_search_providers_available", False) and self.hideUnavailableResults.isChecked()
+        self.searchProvidersCombo.setVisible(visible)
+        self.searchProvidersLabel.setVisible(visible)
 
     def enable_projects_pages(self, enable: bool = False, page_number: int = 1, total_pages: int = 1):
         self.projectsPreviousPageButton.setVisible(enable)

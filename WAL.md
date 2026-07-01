@@ -1,61 +1,46 @@
-# Journal for logging and planning of features to implement
+# Journal for active implementation planning
 
-## 1. Add AI setup
-[v]
-- Modify agents.md to meet this repo's structure (no makefile, no docker, etc.)
-- Modify planning, implementation and stabilization instructions to address stack and UI component of this app (QT, PyQGis)
-Adapted from generic Docker/Makefile/alembic template to QGIS plugin structure; UI instructions derived from existing dialog patterns (uic.loadUiType, signal/slot, separation of concerns)
-
-## 2. Generate spec
-[v]
-- Research existing codebase
-- Populate spec with necessary documents; ask for API documentation if needed
-All 5 specs populated from codebase analysis: goal (plugin purpose/constraints), API (all Mapflow/Maxar/Sentinel endpoints consumed), persistence (full QgsSettings key inventory from code), stack (PyQt5/QGIS/pytest + strict no-external-deps policy), interactions (all external systems; Maxar/Sentinel marked legacy)
-
-## 3. Plan test
-[v]
-- Unit tests on functional
-- Integration tests on API calls
-- UI testing
-All tests require QGIS runtime — no value in partial testing without it. Tools: pytest + pytest-qt + unittest.mock (stdlib). QgsApplication bootstrapped via qgis.testing.start_app() in pytest_configure hook (must run before collection because plugin modules create QIcon at import time). conftest.py provides iface mock and http_mock fixtures. pytest-qt chosen over raw PyQt5.QtTest for signal-heavy architecture (waitSignal, auto widget cleanup via qtbot).
-
-## 4. Feature: download image from data-catalog
-[v]
-- Refactored 002_api.md into index + 4 sub-files (A: project, B: processing, C: my imagery, D: search) for maintainability
-- Added `GET /rest/rasters/image/{image_id}/download` spec with presigned URL response model and error codes (404/403/409)
-- Added `available_for_download` boolean to ImageReturnSchema (defaults True for backward compat via SkipDataClass.from_dict)
-- Download uses two-step flow: authenticated GET for presigned URL, then unauthenticated direct S3 download — avoids routing large files through the backend
-- Download button placed first in image cell layout for discoverability; disabled with tooltip change when `available_for_download=False`
-- 6 tests added (schema parsing, default values, API URL construction); all pass on QGIS 3.28 Python 3.9
-
-## 5. Feature: processings pagination
-[v]
-- Add arrow buttons (like projectsPreviousPageButton and projectsNextPageButton) to be able to show in processings table only 30 processings per page;
-- Add 'sort by' combo box, filtering line edit already exists;
-- Change get_processings function, use the following description for new api:
-#### `POST /projects/{projectId}/processings/v2/page`
-    Returns paginated processings of project with filtering and sorting.
-    
-    Parameters:
-    - 'terms' (string) - Search term to filter by name, project name, workflow name, or email;
-    - 'limit' (integer) - Maximum number of results to return
-    - 'offset' (integer) - Number of results to skip
-    - sortBy	(string) - Field to sort by: [ scenario, name, project, email, created, status, progress, completed, cost, area, provider ]
-    - sortOrder	(string) - Sort direction [ ASC, DESC ]
-    
-    Response shape:
-    ```json
-    {
-        "results": List[Processing],
-        "total": integer,
-        "count": integer
-    }
-    ```;
-- Implement pagination, sorting and new filtering (troug the request on text change, not though the table filtering).
-
-## 6. Add new zoom-selector feature
+## 1. Add support of planned processing feature (processing templates)
 [ ]
-Use 002_E_zoom_selector_api.md
-- Add small button near zoom selector comboBox to call for zoom selector api, active if selected source is Mapflow data provider
-- On press of the button, call api and select zoom automatically depending on response
-- on error, report to user with reasonable message
+- Implement planned processings using templates_service, templates_api, templates_view logic.
+- User should be able to:
+  - see created templates as planned processings
+  - see AOIs and connected processings in one layer with clear statuses
+  - navigate from template to processings launched from it
+  - create, launch, delete, and update template parameters
+
+### 1a. See & edit template AOIs (feature/see-template-aois) [ready-for-review]
+- Added a 3rd navigation level (Projects -> Processings -> Template). Reused the
+  existing left/right "fake" nav buttons rather than new widgets; the right
+  (placeholder) button becomes "enter selected template", the left button is
+  context-aware (template -> processings -> projects). Decoupled map side-effects
+  via ProcessingService.templateOpened/templateClosed signals so the service stays
+  UI-agnostic and selection-independent (inside a template there is no template row).
+- AOI names: backend parses names from searchParams.aoiDetails InputAoiProperties
+  (max 64 chars); create now sends a per-feature aoiDetails FeatureCollection built
+  from the source layer's `name` attribute, falling back to combined `aoi`.
+- DELETE-with-body needed for bulk AOI delete: QNetworkAccessManager.deleteResource
+  has no body, so http.py routes DELETE+body through sendCustomRequest with a QBuffer
+  parented to the reply.
+- Runtime ids are strings (dataclasses don't coerce UUID), so table_id/selection
+  keys are strings throughout. ProcessingService gained class-level in_template_mode
+  default so partially-constructed (test) instances don't trip PyQt's QObject guard.
+- See WAL_1.md for the full step list and remaining notes.
+
+- UI requirements:
+  - show processings from template in related map layers
+  - support mark image/all as seen flows
+  - display template current results in search table and on map
+  - expose template edit/activate/deactivate controls
+  - adapt Start processing button behavior for planned processing flow
+  - display templates together with processings table entries
+
+- API spec work:
+  - maintain and implement support for 002_F_plan_processing_api.md endpoints
+
+## 2. Add new zoom-selector feature
+[ ]
+- Use 002_E_zoom_selector_api.md
+- Add a small button near zoom selector comboBox to call zoom-selector API, active when selected source is a Mapflow data provider.
+- On button press, call API and select zoom automatically depending on response.
+- On error, show a reasonable user-facing message.

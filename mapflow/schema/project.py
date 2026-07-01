@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, List, Dict
 
-from .base import Serializable, SkipDataClass
+from .base import Serializable, SkipDataClass, parse_api_datetime_utc
 from .workflow_def import WorkflowDef
 from ..config import Config
 
@@ -38,12 +38,14 @@ class ShareProject(SkipDataClass):
             self.users = [ShareProjectUser.from_dict(item) for item in self.users]
 
     def get_user_role(self, email):
-        for owner in self.owners:
+        for owner in self.owners or []:
             if owner.email == email:
                  return UserRole.owner
-        for user in self.users:
+        for user in self.users or []:
             if user.email == email:
                 return UserRole(user.role)
+        # Shared project payload may not include the current user; default to least privilege.
+        return UserRole.readonly
 
 
 @dataclass
@@ -76,8 +78,8 @@ class MapflowProject(SkipDataClass):
         else:
             self.shareProject = None
         if self.created and self.updated:
-            self.created = datetime.fromisoformat(self.created.replace("Z", "+00:00"))
-            self.updated = datetime.fromisoformat(self.updated.replace("Z", "+00:00"))
+            self.created = parse_api_datetime_utc(self.created)
+            self.updated = parse_api_datetime_utc(self.updated)
     
 class UserRole(str, Enum):
     readonly = "readonly"
@@ -92,7 +94,12 @@ class UserRole(str, Enum):
     @property
     def can_delete_rename_review_processing(self):
         return self.value in (UserRole.maintainer, UserRole.owner)
-    
+
+    @property
+    def can_pause_resume_template(self):
+        """Controlling a template's run state (pause / resume / restart) is a maintainer+ action."""
+        return self.value in (UserRole.maintainer, UserRole.owner)
+
     @property
     def can_delete_rename_project(self):
         return self.value == UserRole.owner

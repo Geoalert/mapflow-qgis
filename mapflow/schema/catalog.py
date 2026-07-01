@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, Mapping, Any, Union, List
 
-from .base import Serializable, SkipDataClass
+from .base import Serializable, SkipDataClass, parse_api_datetime_utc
 
 from ..config import Config
 
@@ -74,10 +74,11 @@ class ImageSchema(Serializable, SkipDataClass):
     providerName: Optional[str] = None
     zoom: Optional[str] = None
     minAreaSqkm: Optional[float] = None
+    isNew: Optional[bool] = None  # template search results: image is new since lastCheckedAt
 
     def __post_init__(self):
         if isinstance(self.acquisitionDate, str):
-            self.acquisitionDate = datetime.fromisoformat(self.acquisitionDate.replace("Z", "+00:00"))
+            self.acquisitionDate = parse_api_datetime_utc(self.acquisitionDate)
         elif not isinstance(self.acquisitionDate, datetime):
             raise TypeError("Acquisition date must be either datetime or ISO-formatted str")
         self.cloudCover = self.cloudCover
@@ -108,7 +109,7 @@ class ImageCatalogResponseSchema(Serializable):
         return {"type": "FeatureCollection", "features": [image.as_geojson() for image in self.images]}
 
 @dataclass
-class Aoi:
+class Aoi(SkipDataClass):
     id: str
     status: str
     percentCompleted: int
@@ -132,7 +133,7 @@ class AoiResponseSchema:
     aois: List[Aoi]
 
     def __post_init__(self):
-        self.aois = [Aoi(**data) for data in self.aois]
+        self.aois = [Aoi.from_dict(data) for data in self.aois]
 
     def aoi_as_geojson(self):
         geojson = { "type": "FeatureCollection",

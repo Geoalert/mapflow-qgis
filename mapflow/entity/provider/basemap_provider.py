@@ -2,11 +2,11 @@
 Basic, non-authentification XYZ provider
 """
 from abc import ABC
-from typing import Optional,List
+from typing import Optional
 from urllib.parse import urlparse, parse_qs
 
 from .provider import SourceType, CRS, UsersProvider, staticproperty
-from ...functional.layer_utils import maxar_tile_url, add_connect_id
+from .url_utils import add_connect_id, maxar_tile_url
 from ...requests.maxar_metadata_request import MAXAR_REQUEST_BODY, MAXAR_META_URL
 from ...schema.processing import PostSourceSchema, UserDefinedParams, UserDefinedSchema, ProcessingParams
 
@@ -102,9 +102,9 @@ class MaxarProvider(UsersProvider):
 
         try:
             self.connect_id = parse_qs(urlparse(self.url.lower()).query)['connectid'][0]
-        except (KeyError, IndexError):
+        except (KeyError, IndexError) as e:
             # could not extract connectId from URL!
-            raise ValueError("Maxar provider link must contain your ConnectID parameter")
+            raise ValueError("Maxar provider link must contain your ConnectID parameter") from e
 
     @staticproperty
     def option_name():

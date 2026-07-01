@@ -1,10 +1,23 @@
-from typing import Callable, Union, Optional
+import json
+from typing import Callable, List, Optional, Union
 from uuid import UUID
 
-from PyQt5.QtCore import QObject, pyqtSignal, QFile, QIODevice
+from PyQt5.QtCore import QObject
 from ...http import Http
 from ...dialogs.main_dialog import MainDialog
-from ...schema.processing import PostProcessingSchema, UpdateProcessingSchema, ProcessingsRequest
+from ...schema.processing import (
+    PostProcessingSchema,
+    UpdateProcessingSchema,
+    ProcessingsRequest,
+)
+from ...schema.template import (
+    CreateProcessingTemplateSchema,
+    UpdateProcessingTemplateSchema,
+    RunTemplateProcessingSchema,
+    UpdateAoiSchema,
+    AddAoisSchema,
+    DeleteAoisSchema,
+)
 
 class ProcessingApi(QObject):
     """
@@ -95,4 +108,238 @@ class ProcessingApi(QObject):
             callback=callback,
             error_handler=error_handler,
             use_default_error_handler=False
+        )
+
+    def create_template(self, data: CreateProcessingTemplateSchema, callback: Callable, error_handler: Callable):
+        self.http.post(
+            path="processings/template",
+            callback=callback,
+            error_handler=error_handler,
+            use_default_error_handler=False,
+            body=data.as_json().encode(),
+        )
+
+    def get_templates(self, callback: Callable):
+        self.http.get(
+            path="processings/template",
+            callback=callback,
+            use_default_error_handler=True,
+            timeout=5,
+        )
+
+    def get_template(self, template_id: Union[UUID, str], callback: Callable):
+        self.http.get(
+            path=f"processings/template/{template_id}",
+            callback=callback,
+            use_default_error_handler=True,
+            timeout=5,
+        )
+
+    def post_template(
+        self,
+        template_id: Union[UUID, str],
+        callback: Callable,
+        limit: int = 100,
+        offset: int = 0,
+        aoi_ids: Optional[List[str]] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ):
+        body: dict = {"limit": limit, "offset": offset}
+        if aoi_ids is not None:
+            body["aoiIds"] = aoi_ids
+        if sort_by is not None:
+            body["sortBy"] = sort_by
+        if sort_order is not None:
+            body["sortOrder"] = sort_order
+        self.http.post(
+            path=f"processings/template/{template_id}/run",
+            body=json.dumps(body).encode(),
+            headers={},
+            callback=callback,
+            use_default_error_handler=True,
+            timeout=5,
+        )
+
+    def get_template_images(
+        self,
+        template_id: Union[UUID, str],
+        callback: Callable,
+        limit: int = 100,
+        offset: int = 0,
+        aoi_ids: Optional[List[str]] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ):
+        body: dict = {"limit": limit, "offset": offset}
+        if aoi_ids is not None:
+            body["aoiIds"] = aoi_ids
+        if sort_by is not None:
+            body["sortBy"] = sort_by
+        if sort_order is not None:
+            body["sortOrder"] = sort_order
+        self.http.post(
+            path=f"processings/template/{template_id}/images",
+            body=json.dumps(body).encode(),
+            headers={},
+            callback=callback,
+            use_default_error_handler=True,
+            timeout=5,
+        )
+
+    def update_template(self,
+                        template_id: Union[UUID, str],
+                        data: UpdateProcessingTemplateSchema,
+                        callback: Callable,
+                        error_handler: Optional[Callable] = None):
+        self.http.put(
+            path=f"processings/template/{template_id}",
+            body=data.as_json().encode(),
+            headers={},
+            callback=callback,
+            error_handler=error_handler,
+            use_default_error_handler=error_handler is None,
+            timeout=5,
+        )
+
+    def delete_template(self, template_id: Union[UUID, str], callback: Callable, error_handler: Callable):
+        self.http.delete(
+            path=f"processings/template/{template_id}",
+            callback=callback,
+            error_handler=error_handler,
+            use_default_error_handler=False,
+            timeout=5,
+        )
+
+    def run_template_processing(self,
+                                template_id: Union[UUID, str],
+                                data: RunTemplateProcessingSchema,
+                                callback: Callable,
+                                error_handler: Callable):
+        self.http.post(
+            path=f"processings/template/{template_id}/v2",
+            callback=callback,
+            error_handler=error_handler,
+            use_default_error_handler=False,
+            body=data.as_json().encode(),
+        )
+
+    def stop_template(self, template_id: Union[UUID, str], callback: Callable, error_handler: Callable):
+        self.http.post(
+            path=f"processings/template/{template_id}/pause",
+            callback=callback,
+            error_handler=error_handler,
+            use_default_error_handler=False,
+        )
+
+    def resume_template(self, template_id: Union[UUID, str], callback: Callable, error_handler: Callable):
+        self.http.post(
+            path=f"processings/template/{template_id}/resume",
+            callback=callback,
+            error_handler=error_handler,
+            use_default_error_handler=False,
+        )
+
+    def restart_template(self, template_id: Union[UUID, str], callback: Callable, error_handler: Callable):
+        self.http.post(
+            path=f"processings/template/{template_id}/restart",
+            callback=callback,
+            error_handler=error_handler,
+            use_default_error_handler=False,
+        )
+
+    def get_template_processings(self, template_id: Union[UUID, str], callback: Callable):
+        self.http.get(
+            path=f"processings/template/{template_id}/processings",
+            callback=callback,
+            use_default_error_handler=True,
+            timeout=5,
+        )
+
+    # ---- Template AOI management ----
+    def update_aoi(self,
+                   template_id: Union[UUID, str],
+                   aoi_id: Union[UUID, str],
+                   data: UpdateAoiSchema,
+                   callback: Callable,
+                   error_handler: Optional[Callable] = None):
+        # NB: the backend serves AOI update over POST (not PUT) — see
+        # ProcessingResource.updateAoiEndpoint (`.post`). PUT returns 404.
+        self.http.post(
+            path=f"processings/template/{template_id}/aoi/{aoi_id}",
+            body=data.as_json().encode(),
+            headers={},
+            callback=callback,
+            error_handler=error_handler,
+            use_default_error_handler=error_handler is None,
+            timeout=5,
+        )
+
+    def add_aois(self,
+                 template_id: Union[UUID, str],
+                 data: AddAoisSchema,
+                 callback: Callable,
+                 error_handler: Optional[Callable] = None):
+        self.http.post(
+            path=f"processings/template/{template_id}/aoi",
+            body=data.as_json().encode(),
+            callback=callback,
+            error_handler=error_handler,
+            use_default_error_handler=error_handler is None,
+            timeout=5,
+        )
+
+    def delete_aois(self,
+                    template_id: Union[UUID, str],
+                    data: DeleteAoisSchema,
+                    callback: Callable,
+                    error_handler: Optional[Callable] = None):
+        self.http.delete(
+            path=f"processings/template/{template_id}/aoi",
+            body=data.as_json().encode(),
+            callback=callback,
+            error_handler=error_handler,
+            use_default_error_handler=error_handler is None,
+            timeout=5,
+        )
+
+    def mark_template_image_seen(self,
+                                 template_id: Union[UUID, str],
+                                 image_id: str,
+                                 callback: Callable,
+                                 error_handler: Callable):
+        self.http.post(
+            path=f"processings/template/{template_id}/image/{image_id}/seen",
+            callback=callback,
+            error_handler=error_handler,
+            use_default_error_handler=False,
+        )
+
+    def mark_all_template_images_seen(self,
+                                      template_id: Union[UUID, str],
+                                      callback: Callable,
+                                      error_handler: Callable):
+        """Mark every image of the template as seen in a single request."""
+        self.http.put(
+            path=f"processings/template/{template_id}/image/seenAll",
+            body=b"",
+            callback=callback,
+            error_handler=error_handler,
+            use_default_error_handler=False,
+        )
+
+    def get_templates_by_user(self, user_id: Union[UUID, str], callback: Callable):
+        self.http.get(
+            path=f"processings/template/user/{user_id}",
+            callback=callback,
+            use_default_error_handler=True,
+            timeout=5,
+        )
+
+    def get_templates_by_project(self, project_id: Union[UUID, str], callback: Callable):
+        self.http.get(
+            path=f"processings/template/project/{project_id}",
+            callback=callback,
+            use_default_error_handler=True,
+            timeout=5,
         )

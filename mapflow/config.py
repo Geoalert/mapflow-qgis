@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from PyQt5.QtCore import QCoreApplication
 from qgis.core import QgsSettings
 
+
+SEARCH_CAPTURE_TIMEZONE = 'UTC'
+
 @dataclass
 class ConfigColumns():
     def __init__(self):
@@ -14,8 +17,8 @@ class ConfigColumns():
             QCoreApplication.translate('Config', 'Sensor'): 'satId',
             QCoreApplication.translate('Config', 'Band Order'): 'colorBandOrder',
             QCoreApplication.translate('Config', 'Cloud %'): 'cloudCover',
-            QCoreApplication.translate('Config', 'Off Nadir') + f' \N{DEGREE SIGN}': 'offNadirAngle',
-            QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=time.localtime().tm_zone): 'acquisitionDate',
+            QCoreApplication.translate('Config', 'Off Nadir') + ' \N{DEGREE SIGN}': 'offNadirAngle',
+            QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=SEARCH_CAPTURE_TIMEZONE): 'acquisitionDate',
             QCoreApplication.translate('Config', 'Zoom level'): 'zoom',
             QCoreApplication.translate('Config', 'Spatial Resolution, m'): 'pixelResolution',
             QCoreApplication.translate('Config', 'Image ID'): 'id',
@@ -44,10 +47,12 @@ class Config:
     TOP_UP_URL = "https://app.mapflow.ai/account/balance"
     MODEL_DOCS_URL = "https://docs.mapflow.ai/userguides/pipelines.html"
     IMAGERY_DOCS_URL = "https://docs.mapflow.ai/userguides/my_imagery.html#my-imagery-in-qgis"
-    ZOOM_SELECTOR = QgsSettings().value("variables/zoom_selector", "false")
 
     # PROCESSINGS
     PROCESSING_TABLE_REFRESH_INTERVAL = 6  # in seconds
+    # In-template view polls a single (lighter) endpoint and its data changes slowly,
+    # so it refreshes less often than the project processings list.
+    TEMPLATE_TABLE_REFRESH_INTERVAL = 15  # in seconds
     PROCESSING_TABLE_COLUMNS = ('name',
                                 'workflowDef',
                                 'status',
@@ -72,15 +77,27 @@ class Config:
     """
     PROCESSING_TABLE_ID_COLUMN_INDEX = PROCESSING_TABLE_COLUMNS.index('id')
     PROCESSING_TABLE_SORT_COLUMN_INDEX = PROCESSING_TABLE_COLUMNS.index('created')
-    DEFAULT_HIDDEN_COLUMNS = (PROCESSING_TABLE_COLUMNS.index(item) for item in ('id', 'reviewUntil', 'cost'))
+    # NB: must be a tuple of direct .index() calls, not a generator/comprehension —
+    # a comprehension body runs in its own scope and cannot see the class-level
+    # PROCESSING_TABLE_COLUMNS, which would raise NameError on iteration.
+    DEFAULT_HIDDEN_COLUMNS = (PROCESSING_TABLE_COLUMNS.index('id'),
+                              PROCESSING_TABLE_COLUMNS.index('reviewUntil'),
+                              PROCESSING_TABLE_COLUMNS.index('cost'))
     
     # MAXAR
+    # The "new image" marker icon lives in the LEFTMOST column — its meaning is positional,
+    # not tied to the product-type content that happens to sit there. The user can hide that
+    # column via the search-column checkboxes, so the marker falls back to the leftmost
+    # *visible* column at render time (see Mapflow._new_image_marker_column).
+    NEW_IMAGE_MARKER_COLUMN_INDEX = 0
     MAXAR_ID_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()).index('id')
     LOCAL_INDEX_COLUMN = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()).index('local_index')
     PPRVIEW_INDEX_COLUMN = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()).index('preview')
     NAME_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()).index('providerName')
     ZOOM_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()).index('zoom')
-    MAXAR_DATETIME_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.keys()).index(QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=TIMEZONE))
+    MAXAR_DATETIME_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.keys()).index(
+        QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=SEARCH_CAPTURE_TIMEZONE)
+    )
     MAXAR_CLOUD_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.keys()).index(QCoreApplication.translate('Config', 'Cloud %'))
     MAXAR_MAX_FREE_ZOOM = 12
 
@@ -107,7 +124,7 @@ class Config:
 
     MAX_AOIS_PER_PROCESSING = int(QgsSettings().value("variables/mapflow_max_aois", "10"))
 
-    SEARCH_RESULTS_PAGE_LIMIT = 1000 # objects per page
+    SEARCH_RESULTS_PAGE_LIMIT = 100 # objects per page
     PROJECTS_PAGE_LIMIT = 20
     PROCESSINGS_PAGE_LIMIT = 30
 

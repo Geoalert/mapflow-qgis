@@ -38,12 +38,15 @@ class ErrorMessage(QObject):
         returns formatted translated error message; if the translation is missing from the plugin code, returns None
         """
         message = error_message_list.get(self.code)
+        if not message and self.message:
+            # Unknown/generic code: try to recognize the message text itself
+            message = error_message_list.get_by_message(self.message)
         if not message:
             # no message description
             return None
         try:
             message = message.format(**self.parameters)
-        except Exception as e:
+        except Exception:
             # problem during formatting. Probably wrong parameters
             message = None
         return message
@@ -60,6 +63,7 @@ class ErrorMessage(QObject):
         elif raw:
             return self.raw_message
         else:
+            params = ''
             if len(self.parameters.items()) > 0:
                 params = ',\n'.join([f"{key}: {value}" for key, value in self.parameters.items()])
             if self.message and params:
@@ -68,6 +72,8 @@ class ErrorMessage(QObject):
                 message = self.message
             elif params:
                 message = params
+            else:
+                message = default
             return message or default
     
     def __reduce__(self):

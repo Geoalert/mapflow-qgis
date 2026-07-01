@@ -1,17 +1,22 @@
 from enum import Enum
 
-from qgis.core import QgsVectorLayer
-from dataclasses import dataclass, fields
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Mapping, Any, Union, Iterable, List
 from uuid import UUID
 
-from .base import SkipDataClass, Serializable
+from .base import SkipDataClass, Serializable, parse_api_datetime_utc
 from .status import ProcessingStatus, ProcessingReviewStatus
 from .layer import RasterLayer, VectorLayer
 from .workflow_def import WorkflowDef
 from ..entity.provider.provider import SourceType
 from ..errors import ErrorMessage
+
+
+def _parse_iso_datetime(dt_str: str) -> datetime:
+    """Parse ISO 8601 datetime strings with or without microseconds."""
+    return parse_api_datetime_utc(dt_str)
+
 
 @dataclass
 class PostSourceSchema(Serializable, SkipDataClass):
@@ -20,7 +25,7 @@ class PostSourceSchema(Serializable, SkipDataClass):
     projection: Optional[str] = None
     raster_login: Optional[str] = None
     raster_password: Optional[str] = None
-    zoom: Optional[str] = None    
+    zoom: Optional[str] = None
 
 
 @dataclass
@@ -88,6 +93,7 @@ class ImagerySearchSchema(Serializable):
     dataProvider: str
     imageIds: List[str]
     zoom: int
+    searchId: Optional[str] = None
 
 
 @dataclass
@@ -116,20 +122,25 @@ class ProcessingParams(Serializable, SkipDataClass):
                         MyImageryParams,
                         ImagerySearchParams,
                         UserDefinedParams]
-    
+
     @classmethod
     def from_dict(cls, params_dict: Optional[dict]):
         if not params_dict:
             return None
-        clsf = [f.name for f in fields(cls)]
-        processing_params = cls(**{k: v for k, v in params_dict.items() if k in clsf})
-        source_params = processing_params.sourceParams
+        # The template `/processings` endpoint returns legacy flat params
+        # (e.g. {"url", "zoom", "data_provider"}) instead of the v2 {"sourceParams": {...}}
+        # shape. Without sourceParams there is nothing to resolve — return None rather
+        # than raise (a raise here would drop the whole processing from the list).
+        source_params = params_dict.get("sourceParams")
+        if not isinstance(source_params, dict):
+            return None
 
         if source_params.get("dataProvider"):
             source_params = DataProviderParams(DataProviderSchema(**source_params.get("dataProvider")))
         elif source_params.get("myImagery"):
             source_params = MyImageryParams(MyImagerySchema(**source_params.get("myImagery")))
         elif source_params.get("imagerySearch"):
+            #! print (str(source_params))
             source_params = ImagerySearchParams(ImagerySearchSchema(**source_params.get("imagerySearch")))
         elif source_params.get("userDefined"):
             source_params = UserDefinedParams(UserDefinedSchema(**source_params.get("userDefined")))
@@ -181,7 +192,7 @@ class ProcessingDTO(Serializable, SkipDataClass):
 
     def __post_init__(self):
         self.status = ProcessingStatus(self.status)
-        self.created = datetime.strptime(self.created, '%Y-%m-%dT%H:%M:%S.%f%z').astimezone()
+        self.created = _parse_iso_datetime(self.created)
         self.params = ProcessingParams.from_dict(self.params)
         self.blocks = [BlockOption.from_dict(block) for block in self.blocks]
         self.workflowDef = WorkflowDef.from_dict(self.workflowDef)
@@ -198,7 +209,7 @@ class ProcessingDTO(Serializable, SkipDataClass):
         if not isinstance(self.reviewStatus.inReviewUntil, datetime)\
                 or not self.reviewStatus.is_in_review:
             return False
-        now = datetime.now().astimezone()
+        now = datetime.now(timezone.utc)
         one_day = timedelta(1)
         return self.reviewStatus.inReviewUntil - now < one_day
 
@@ -225,13 +236,13 @@ class ProcessingDTO(Serializable, SkipDataClass):
         return {
             "name": self.name,
             "workflowDef": self.workflowDef.name,
-            "status": self.reviewStatus.reviewStatus.display_value 
-                      if (self.reviewStatus and not self.reviewStatus.is_none) 
+            "status": self.reviewStatus.reviewStatus.display_value
+                      if (self.reviewStatus and not self.reviewStatus.is_none)
                       else self.status.display_value,
             "percentCompleted": self.percentCompleted,
             "aoiArea": self.aoiArea/1000000,
             "cost": self.cost,
-            "created": self.created.strftime('%Y-%m-%d %H:%M'),
+            "created": self.created.astimezone().strftime('%Y-%m-%d %H:%M'),
             "reviewUntil": self.reviewUntil,
             "id": self.id
         }

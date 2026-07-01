@@ -1,10 +1,9 @@
 from typing import Union, List, Optional
 from PyQt5.QtCore import QObject
-from qgis.core import QgsVectorLayer, QgsWkbTypes, QgsGeometry, QgsProject, QgsFeature, QgsCoordinateReferenceSystem
+from qgis.core import QgsVectorLayer, QgsWkbTypes, QgsGeometry, QgsFeature, QgsCoordinateReferenceSystem
 from ..app_context import AppContext
 from .. import layer_utils
 from .. import helpers
-from ...dialogs import MainDialog
 from ...entity.provider import (MaxarProvider,
                                 SentinelProvider,
                                 ImagerySearchProvider,
@@ -14,12 +13,14 @@ from ...errors import (BadProcessingInput,
                        ImageIdRequired,
                        AoiNotIntersectsImage)
 from ..geometry import clip_aoi_to_image_extent
+from ...dialogs.main_dialog import MainDialog
+
 
 class AreaCalculatorService(QObject):
     def __init__(self,
                  iface,
                  app_context: AppContext,
-                 dlg: MainDialog,
+                 dlg: 'MainDialog',
                  config,
                  data_catalog_service,
                  processing_service,
@@ -172,17 +173,16 @@ class AreaCalculatorService(QObject):
             # AOI is OK, but image ID is not selected,
             # in this case we should use selected AOI without cut by AOI
             real_aoi = self.app_context.aoi
-        except Exception as e:
+        except Exception:
             # Could not calculate AOI size
             real_aoi = QgsGeometry()
-        # Store the cropped AOI so processing/cost requests send the geometry
-        # the server's provider-minimum-area check should actually operate on
-        # (user AOI intersected with the union of selected image footprints).
-        self.app_context.processing_aoi = real_aoi if real_aoi and not real_aoi.isEmpty() else None
+        # The cropped AOI is what is actually processed — keep it so the request geometry
+        # matches the displayed area instead of sending the whole (uncropped) AOI.
+        self.app_context.processing_aoi = real_aoi
         try:
             self.app_context.aoi_size = layer_utils.calculate_aoi_area(real_aoi,
                                                                        self.app_context.project.transformContext())
-        except Exception as e:
+        except Exception:
             self.app_context.aoi_size = 0
 
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.app_context.aoi_size))
@@ -246,5 +246,6 @@ class AreaCalculatorService(QObject):
                 geom = feature.geometry()
                 aoi = aoi.combine(geom)
         except StopIteration:
-            raise AoiNotIntersectsImage()
+            raise AoiNotIntersectsImage() from None
         return aoi
+

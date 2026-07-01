@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1060</width>
+    <width>1083</width>
     <height>550</height>
    </rect>
   </property>
@@ -148,10 +148,10 @@
            <property name="maxVisibleItems">
             <number>30</number>
            </property>
-           <property name="allowEmptyLayer">
+           <property name="allowEmptyLayer" stdset="0">
             <bool>false</bool>
            </property>
-           <property name="showCrs">
+           <property name="showCrs" stdset="0">
             <bool>true</bool>
            </property>
           </widget>
@@ -1080,7 +1080,6 @@
                     <widget class="QLabel" name="projectsPageLabel">
                      <property name="font">
                       <font>
-                       <weight>50</weight>
                        <bold>false</bold>
                       </font>
                      </property>
@@ -1318,7 +1317,6 @@
                   <widget class="QLabel" name="processingsPageLabel">
                    <property name="font">
                     <font>
-                     <weight>50</weight>
                      <bold>false</bold>
                     </font>
                    </property>
@@ -1429,7 +1427,6 @@
                    </property>
                    <property name="font">
                     <font>
-                     <weight>50</weight>
                      <bold>false</bold>
                     </font>
                    </property>
@@ -1648,7 +1645,7 @@
                  </spacer>
                 </item>
                 <item>
-                 <widget class="QPushButton" name="getMetadata">
+                 <widget class="QToolButton" name="getMetadata">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                     <horstretch>0</horstretch>
@@ -1672,6 +1669,9 @@
                   </property>
                   <property name="text">
                    <string>Search </string>
+                  </property>
+                  <property name="popupMode">
+                   <enum>QToolButton::MenuButtonPopup</enum>
                   </property>
                  </widget>
                 </item>
@@ -1767,6 +1767,22 @@
                  </spacer>
                 </item>
                 <item>
+                 <widget class="QToolButton" name="markSeenButton">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="text">
+                   <string>Seen</string>
+                  </property>
+                  <property name="popupMode">
+                   <enum>QToolButton::MenuButtonPopup</enum>
+                  </property>
+                 </widget>
+                </item>
+                <item>
                  <widget class="QPushButton" name="clearSearch">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -1822,13 +1838,13 @@
                 <property name="checked">
                  <bool>false</bool>
                 </property>
-                <property name="collapsed">
+                <property name="collapsed" stdset="0">
                  <bool>false</bool>
                 </property>
-                <property name="saveCollapsedState">
+                <property name="saveCollapsedState" stdset="0">
                  <bool>true</bool>
                 </property>
-                <property name="saveCheckedState">
+                <property name="saveCheckedState" stdset="0">
                  <bool>false</bool>
                 </property>
                 <layout class="QGridLayout" name="layoutMetadataFilters" columnstretch="0,0,0">
@@ -1978,7 +1994,7 @@
                    <item>
                     <widget class="QCheckBox" name="hideUnavailableResults">
                      <property name="sizePolicy">
-                      <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                        <horstretch>0</horstretch>
                        <verstretch>0</verstretch>
                       </sizepolicy>
@@ -3034,7 +3050,7 @@
                  <rect>
                   <x>0</x>
                   <y>0</y>
-                  <width>207</width>
+                  <width>213</width>
                   <height>240</height>
                  </rect>
                 </property>
