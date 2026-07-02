@@ -960,7 +960,8 @@ class Mapflow(QObject):
         self.iface.setActiveLayer(aoi_layer)
     
     def create_aoi_layer_from_imagery(self, action: QAction):
-        image = self.data_catalog_service.selected_image()
+        # Non-ready (preprocessing/failed) images have no footprint; fall back to the mosaic.
+        image = self.data_catalog_service.selected_ready_image()
         mosaic = self.data_catalog_service.selected_mosaic()
         if image:
             aoi_geometry = QgsGeometry().fromWkt(image.footprint)

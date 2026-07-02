@@ -767,6 +767,18 @@ class DataCatalogService(QObject):
             return None
         return first[0]
 
+    def selected_ready_image(self) -> Optional[ImageReturnSchema]:
+        """First selected image that is ready (has full metadata / footprint).
+
+        Non-ready (preprocessing / failed) selections are ignored — they carry no
+        footprint or extent, so they cannot drive AOI/area/processing. Callers that
+        need imagery geometry must use this rather than ``selected_image``.
+        """
+        for image in self.selected_images():
+            if self._is_full_image(image):
+                return image
+        return None
+
     @staticmethod
     def _is_full_image(image) -> bool:
         """True for ready images with full metadata (preview/download/info/rename)."""

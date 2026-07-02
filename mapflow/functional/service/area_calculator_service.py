@@ -98,7 +98,9 @@ class AreaCalculatorService(QObject):
         """
         # If different provider is chosen, set it to My imagery
         self.data_catalog_service.set_catalog_provider(self.provider_service.providers)
-        image = self.data_catalog_service.selected_image()
+        # Only a ready image has a footprint/extent; a preprocessing/failed selection
+        # must not drive the AOI (falls back to the mosaic extent below).
+        image = self.data_catalog_service.selected_ready_image()
         mosaic = self.data_catalog_service.selected_mosaic()
         if image or mosaic:
             self.use_imagery_extent.setEnabled(True)
@@ -216,7 +218,7 @@ class AreaCalculatorService(QObject):
                 aoi = selected_aoi
                 # raise PluginError(self.tr("Please select image in Search table for {}").format(provider.name))
             elif isinstance(provider, MyImageryProvider):
-                image = self.data_catalog_service.selected_image()
+                image = self.data_catalog_service.selected_ready_image()
                 mosaic = self.data_catalog_service.selected_mosaic()
                 if image:
                     catalog_aoi = QgsGeometry().fromWkt(image.footprint)

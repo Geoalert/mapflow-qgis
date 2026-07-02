@@ -435,3 +435,82 @@ class TestLoadChain:
         svc.view.display_images.assert_called_once()
         _, rendered_statuses = svc.view.display_images.call_args.args
         assert rendered_statuses == []
+
+
+def _open_mosaic(image_list, status_images):
+    """Drive the full open-mosaic chain (/image then /status) and return the service."""
+    svc = _bare_service()
+    svc._on_mosaic_images_loaded(_response(image_list), mosaic_id="m1", is_poll=False)
+    callback = svc.api.get_mosaic_status.call_args.kwargs["callback"]
+    payload = {
+        "mosaic_id": "m1", "total_images": len(status_images),
+        "ready_images": 0, "pending_images": 0, "in_progress_images": 0,
+        "failed_images": 0, "tiles_ready_images": 0, "images": status_images,
+    }
+    callback(_response(payload))
+    return svc
+
+
+class TestOpenMosaicStates:
+    """Opening a mosaic must not crash and must flag rows for edge compositions."""
+
+    def test_only_failed(self):
+        svc = _open_mosaic(
+            image_list=[],  # no ready images
+            status_images=[_status_image(image_id="f1", filename="f1.tif",
+                                         preprocessing_status="FAILED", data_available=False)],
+        )
+        rendered_images, rendered_statuses = svc.view.display_images.call_args.args
+        assert rendered_images == []
+        assert [s.id for s in rendered_statuses] == ["f1"]
+        svc.view.set_failed_images_present.assert_called_with(True)
+
+    def test_only_in_progress(self):
+        svc = _open_mosaic(
+            image_list=[],
+            status_images=[_status_image(image_id="p1", filename="p1.tif",
+                                         preprocessing_status="IN_PROGRESS", data_available=False)],
+        )
+        rendered_images, rendered_statuses = svc.view.display_images.call_args.args
+        assert rendered_images == []
+        assert [s.id for s in rendered_statuses] == ["p1"]
+        svc.view.set_failed_images_present.assert_called_with(False)  # no failed → no bulk button
+
+    def test_mix_ready_pending_failed(self):
+        svc = _open_mosaic(
+            image_list=[_image_data(id="r1")],
+            status_images=[
+                _status_image(image_id="r1", preprocessing_status="COMPLETED", data_available=True),
+                _status_image(image_id="p1", preprocessing_status="PENDING", data_available=False),
+                _status_image(image_id="ip1", preprocessing_status="IN_PROGRESS", data_available=False),
+                _status_image(image_id="f1", preprocessing_status="FAILED", data_available=False),
+            ],
+        )
+        rendered_images, rendered_statuses = svc.view.display_images.call_args.args
+        assert [i.id for i in rendered_images] == ["r1"]
+        assert {s.id for s in rendered_statuses} == {"p1", "ip1", "f1"}
+        svc.view.set_failed_images_present.assert_called_with(True)
+
+    def test_empty_mosaic(self):
+        svc = _open_mosaic(image_list=[], status_images=[])
+        rendered_images, rendered_statuses = svc.view.display_images.call_args.args
+        assert rendered_images == []
+        assert rendered_statuses == []
+        svc.view.set_failed_images_present.assert_called_with(False)
+
+
+class TestSelectedReadyImage:
+    def test_non_ready_selection_is_ignored(self):
+        """A selected preprocessing/failed image must not be treated as usable imagery
+        (guards area/AOI code that reads .footprint)."""
+        svc = _bare_service()
+        ready = ImageReturnSchema.from_dict(_image_data(id="r"))
+        failed = ImageStatusSchema.from_dict(_status_image(image_id="f", preprocessing_status="FAILED"))
+        svc.images = [ready]
+        svc.image_statuses = [failed]
+
+        svc.view.selected_images_indecies.return_value = ["f"]  # only the failed row selected
+        assert svc.selected_ready_image() is None
+
+        svc.view.selected_images_indecies.return_value = ["r"]
+        assert svc.selected_ready_image() is ready
