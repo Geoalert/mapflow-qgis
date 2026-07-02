@@ -8,7 +8,7 @@ from PyQt5.QtCore import QObject, QUrl, QTimer, pyqtSignal, Qt
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
 from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog, QAbstractItemView
-from qgis.core import QgsCoordinateReferenceSystem, QgsGeometry, QgsRasterLayer
+from qgis.core import QgsCoordinateReferenceSystem, QgsGeometry, QgsRasterLayer, QgsMessageLog, Qgis
 
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs.mosaic_dialog import CreateMosaicDialog, UpdateMosaicDialog
@@ -366,11 +366,26 @@ class DataCatalogService(QObject):
 
     def _on_mosaic_status_failed(self, response: QNetworkReply, mosaic_id, images, is_poll: bool):
         # Backend without /status (or transient error): show ready images only, as before.
+        code = response.attribute(QNetworkRequest.HttpStatusCodeAttribute)
+        QgsMessageLog.logMessage(
+            f"mosaic {mosaic_id} /status request failed (HTTP {code}, {response.errorString()}); "
+            "showing ready images only, preprocessing/failed rows will be hidden",
+            "Mapflow", Qgis.Warning)
         self._render_mosaic_images(mosaic_id, images, non_ready=[], is_poll=is_poll)
 
     def _on_mosaic_status_loaded(self, response: QNetworkReply, mosaic_id, images, is_poll: bool):
-        status = MosaicStatusResponse.from_dict(json.loads(response.readAll().data()))
-        non_ready = [] if self._hide_unprocessed() else status.non_ready_images()
+        try:
+            status = MosaicStatusResponse.from_dict(json.loads(response.readAll().data()))
+            non_ready = [] if self._hide_unprocessed() else status.non_ready_images()
+        except Exception as e:
+            QgsMessageLog.logMessage(
+                f"mosaic {mosaic_id} /status response could not be parsed ({e}); "
+                "showing ready images only", "Mapflow", Qgis.Warning)
+            self._render_mosaic_images(mosaic_id, images, non_ready=[], is_poll=is_poll)
+            return
+        if not is_poll:
+            QgsMessageLog.logMessage(
+                f"mosaic {mosaic_id} /status: {len(non_ready)} non-ready image(s)", "Mapflow", Qgis.Info)
         # An image can be data_available (present in /image) yet still PENDING/IN_PROGRESS;
         # show it once as a flagged row rather than twice.
         non_ready_ids = {str(s.id) for s in non_ready}

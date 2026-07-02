@@ -188,15 +188,23 @@ class DataCatalogView(QObject):
             ready=summary.ready, preprocessing=summary.preprocessing, failed=summary.failed)
 
     def _mosaic_status_width(self) -> int:
-        """Fixed width fitting the full 3-segment status line (with generous count room)."""
-        sample = "{ok} 999   {pending} 999   {failed} 999".format(
+        """Fixed width fitting the full 3-segment status line (2-digit counts).
+
+        # TWEAK: adjust the sample (digit room / spacing) or the trailing pad to
+        # widen/narrow the mosaic Status column.
+        """
+        sample = "{ok} 99 {pending} 99 {failed} 99".format(
             ok=STATUS_OK_ICON, pending=STATUS_PENDING_ICON, failed=STATUS_FAILED_ICON)
-        return self.dlg.mosaicTable.fontMetrics().horizontalAdvance(sample) + 24
+        return self.dlg.mosaicTable.fontMetrics().horizontalAdvance(sample) + 8
 
     def _image_status_width(self) -> int:
-        """Fixed width fitting the longest per-image status label."""
+        """Fixed width fitting the longest per-image status label.
+
+        # TWEAK: change the trailing pad (or the label) to widen/narrow the image
+        # Status column.
+        """
         sample = self.tr("Preprocessing failed")
-        return self.dlg.imageTable.fontMetrics().horizontalAdvance(sample) + 24
+        return self.dlg.imageTable.fontMetrics().horizontalAdvance(sample) + 8
 
     def sort_catalog(self):
         index = self.dlg.sortCatalogCombo.currentIndex()
