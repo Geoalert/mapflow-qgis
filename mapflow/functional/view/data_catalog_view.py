@@ -19,6 +19,7 @@ STATUS_PENDING_ICON = "\U0001F551"  # 🕑
 STATUS_FAILED_ICON = "✗"    # ✗
 FAILED_COLOR = QColor(200, 60, 60)
 PENDING_COLOR = QColor(210, 140, 30)
+READY_COLOR = QColor(60, 160, 60)
 
 # The name column hosts the row controls; the status column is the last, display-only column.
 NAME_COLUMN = 1
@@ -203,7 +204,7 @@ class DataCatalogView(QObject):
         # TWEAK: change the trailing pad (or the label) to widen/narrow the image
         # Status column.
         """
-        sample = self.tr("Preprocessing failed")
+        sample = "{icon} {label}".format(icon=STATUS_FAILED_ICON, label=self.tr("Preprocessing failed"))
         return self.dlg.imageTable.fontMetrics().horizontalAdvance(sample) + 8
 
     def sort_catalog(self):
@@ -376,16 +377,21 @@ class DataCatalogView(QObject):
         self.dlg.imageTable.setColumnHidden(3, True)
         self.dlg.imageTable.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         row = 0
+        ready_text = "{icon} {label}".format(icon=STATUS_OK_ICON, label=self.tr("Ready"))
         for image in images:
+            # Ready images (present in /image, deduped against non-ready) are all usable.
             self._set_image_row(row, image.id, image.filename, image.file_size,
-                                image.uploaded_at.timestamp())
+                                image.uploaded_at.timestamp(),
+                                status_text=ready_text, status_color=READY_COLOR)
             row += 1
         for status in statuses:
             uploaded_ts = status.uploaded_at.timestamp() if status.uploaded_at else 0
             if status.is_failed:
-                text, color = self.tr("Preprocessing failed"), FAILED_COLOR
+                text = "{icon} {label}".format(icon=STATUS_FAILED_ICON, label=self.tr("Preprocessing failed"))
+                color = FAILED_COLOR
             else:
-                text, color = self.tr("Preprocessing"), PENDING_COLOR
+                text = "{icon} {label}".format(icon=STATUS_PENDING_ICON, label=self.tr("Preprocessing"))
+                color = PENDING_COLOR
             self._set_image_row(row, status.id, status.filename, 0, uploaded_ts,
                                 status_text=text, status_color=color,
                                 status_tooltip=status.preprocessing_error)
