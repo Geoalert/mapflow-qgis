@@ -428,7 +428,9 @@ class DataCatalogService(QObject):
 
     # Status polling
     def _manage_status_polling(self, mosaic_id, non_ready: List[ImageStatusSchema]):
-        has_pending = any(s.preprocessing_status.is_pending for s in non_ready)
+        # Poll while anything is still in flight (preprocessing or loading). Failed is
+        # terminal, so a mosaic whose only non-ready images are failed doesn't poll.
+        has_pending = any(not s.is_failed for s in non_ready)
         if has_pending:
             self._polling_mosaic_id = mosaic_id
             if not self._status_poll_timer.isActive():

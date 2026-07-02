@@ -181,6 +181,19 @@ class ImageStatusSchema(SkipDataClass):
     def is_failed(self) -> bool:
         return self.preprocessing_status.is_failed
 
+    @property
+    def is_pending(self) -> bool:
+        return self.preprocessing_status.is_pending
+
+    @property
+    def is_usable(self) -> bool:
+        """Ready to use: data is available AND no preprocessing is outstanding.
+
+        Anything else is shown with a flag — failed, still preprocessing, or a
+        load_data image that is still *loading* (``data_available=False`` while its
+        ``preprocessing_status`` is NONE, since the loader doesn't set PENDING)."""
+        return self.data_available and self.preprocessing_status.is_ready
+
 
 @dataclass
 class MosaicStatusResponse(SkipDataClass):
@@ -198,11 +211,13 @@ class MosaicStatusResponse(SkipDataClass):
         self.images = [ImageStatusSchema.from_dict(i) for i in (self.images or [])]
 
     def non_ready_images(self) -> List[ImageStatusSchema]:
-        """Images to flag as preprocessing/failed, keyed on ``preprocessing_status``.
+        """Images to flag (not yet usable): failed, still preprocessing, or still loading.
 
-        Uses the same bucketing as the mosaic-list ``status_summary`` badge
-        (``ready = NONE + COMPLETED``), so a mosaic's 🕑/✗ counts always match the
-        number of flagged image rows. The caller dedupes the ready image list against
-        these ids, since an image can be ``data_available`` yet still PENDING/IN_PROGRESS.
+        An image is usable only when ``data_available`` AND its ``preprocessing_status``
+        is ready — everything else gets a flag. This catches load_data images that are
+        still loading (``data_available=False`` with status NONE), which the plain
+        ``/image`` list omits and a status-only filter would miss. The caller dedupes
+        the ready ``/image`` list against these ids, since an image can be
+        ``data_available`` yet still PENDING/IN_PROGRESS.
         """
-        return [i for i in self.images if not i.is_ready]
+        return [i for i in self.images if not i.is_usable]

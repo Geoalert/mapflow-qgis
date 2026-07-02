@@ -227,23 +227,28 @@ class TestImageStatusSchema:
 
 
 class TestMosaicStatusResponse:
-    def test_non_ready_images_flags_by_status(self):
-        """non_ready is keyed on preprocessing_status (matching the mosaic badge buckets)."""
+    def test_non_ready_images_by_usability(self):
+        """non_ready = not usable: failed, preprocessing, or still-loading images.
+
+        Usable = data_available AND status ready. A NONE-status image that is not yet
+        available is a load_data image still *loading* and must be flagged.
+        """
         data = {
             "mosaic_id": "11111111-2222-3333-4444-555555555555",
-            "total_images": 4,
+            "total_images": 5,
             "ready_images": 2, "pending_images": 1, "in_progress_images": 0,
             "failed_images": 1, "tiles_ready_images": 2,
             "images": [
-                _status_image(image_id="1", preprocessing_status="NONE", data_available=True),
-                _status_image(image_id="2", preprocessing_status="COMPLETED", data_available=True),
-                _status_image(image_id="3", preprocessing_status="PENDING", data_available=False),
-                _status_image(image_id="4", preprocessing_status="FAILED", data_available=False),
+                _status_image(image_id="1", preprocessing_status="NONE", data_available=True),      # usable
+                _status_image(image_id="2", preprocessing_status="COMPLETED", data_available=True),  # usable
+                _status_image(image_id="3", preprocessing_status="PENDING", data_available=False),   # preprocessing
+                _status_image(image_id="4", preprocessing_status="FAILED", data_available=False),     # failed
+                _status_image(image_id="5", preprocessing_status="NONE", data_available=False),       # loading
             ],
         }
         resp = MosaicStatusResponse.from_dict(data)
         ids = {s.id for s in resp.non_ready_images()}
-        assert ids == {"3", "4"}  # NONE and COMPLETED are ready
+        assert ids == {"3", "4", "5"}  # loading (NONE + not available) is included
 
     def test_empty_images(self):
         resp = MosaicStatusResponse.from_dict(
@@ -294,31 +299,29 @@ class TestStatusApiUrls:
         assert f"/rasters/mosaic/{mosaic_id}/failed" in url
 
 
-# ====== Mosaic status counts → pictogram text ====== #
+# ====== Mosaic status counts → pictogram segments ====== #
 
-class TestStatusSummaryText:
-    def _text(self, summary):
-        # _status_summary_text does not use instance state; call it unbound with a dummy self.
+class TestStatusSummarySegments:
+    def _segments(self, summary):
+        # _status_summary_segments does not use instance state; call it unbound.
         from mapflow.functional.view.data_catalog_view import DataCatalogView
-        return DataCatalogView._status_summary_text(object(), summary)
+        return DataCatalogView._status_summary_segments(object(), summary)
 
-    def test_none_summary_is_blank(self):
-        assert self._text(None) == ""
-
-    def test_ready_only_hides_pending_and_failed(self):
-        from mapflow.functional.view import data_catalog_view as v
+    def test_ready_only_single_segment(self):
         s = MosaicStatusSummary.from_dict({"ready": 7, "pending": 0, "in_progress": 0, "failed": 0})
-        text = self._text(s)
-        assert "7" in text
-        assert v.STATUS_OK_ICON in text
-        # No pending/failed segments when their counts are zero
-        assert v.STATUS_PENDING_ICON not in text
-        assert v.STATUS_FAILED_ICON not in text
+        segments = self._segments(s)
+        assert len(segments) == 1  # only the ready segment
+        assert segments[0][1] == 7  # (icon, count, color)
 
-    def test_shows_pending_and_failed_when_present(self):
-        s = MosaicStatusSummary.from_dict({"ready": 7, "pending": 1, "in_progress": 0, "failed": 2})
-        text = self._text(s)
-        assert "7" in text and "1" in text and "2" in text
+    def test_all_segments_when_present(self):
+        s = MosaicStatusSummary.from_dict({"ready": 7, "pending": 1, "in_progress": 1, "failed": 2})
+        counts = [count for _, count, _ in self._segments(s)]
+        assert counts == [7, 2, 2]  # ready, preprocessing (pending+in_progress), failed
+
+    def test_failed_shown_without_preprocessing(self):
+        s = MosaicStatusSummary.from_dict({"ready": 3, "pending": 0, "in_progress": 0, "failed": 1})
+        counts = [count for _, count, _ in self._segments(s)]
+        assert counts == [3, 1]  # ready + failed, no preprocessing segment
 
 
 # ====== Image list signature (poll change detection) ====== #
@@ -497,6 +500,96 @@ class TestOpenMosaicStates:
         assert rendered_images == []
         assert rendered_statuses == []
         svc.view.set_failed_images_present.assert_called_with(False)
+
+
+class TestViewRenderingSmoke:
+    """Exercise the real table rendering (QPainter pixmap + QIcon) to catch Qt API errors,
+    since the callback-chain tests use a mocked view."""
+
+    def _view(self):
+        from mapflow.functional.view.data_catalog_view import DataCatalogView
+        from PyQt5.QtCore import QObject
+        from PyQt5.QtWidgets import QTableWidget, QWidget, QHBoxLayout
+        view = DataCatalogView.__new__(DataCatalogView)
+        QObject.__init__(view)  # enable self.tr() without running the heavy __init__
+        view.dlg = MagicMock()
+        view.dlg.mosaicTable = QTableWidget()
+        view.dlg.imageTable = QTableWidget()
+        view.dlg.filterCatalog.text.return_value = ""
+        view.mosaicContainerWidget = QWidget()
+        view.imageContainerWidget = QWidget()
+        view.mosaic_cell_layout = QHBoxLayout()
+        view.image_cell_layout = QHBoxLayout()
+        view.sort_mosaics_column = 1
+        view.sort_images_column = 1
+        view._failed_present = False
+        return view
+
+    def test_display_mosaics_renders_status_pixmap(self):
+        view = self._view()
+        mosaic = MosaicReturnSchema.from_dict(_mosaic_data(
+            status_summary={"total": 10, "ready": 7, "pending": 1, "in_progress": 0, "failed": 2}))
+        view.display_mosaics([mosaic])  # must not raise (composes the QPainter pixmap)
+        assert view.dlg.mosaicTable.rowCount() == 1
+        assert not view.dlg.mosaicTable.item(0, 4).icon().isNull()
+
+    def test_display_images_renders_status_icons(self):
+        view = self._view()
+        images = [ImageReturnSchema.from_dict(_image_data(id="r"))]
+        statuses = [ImageStatusSchema.from_dict(_status_image(image_id="f", preprocessing_status="FAILED"))]
+        view.display_images(images, statuses)
+        assert view.dlg.imageTable.rowCount() == 2
+        # Every row carries a status icon (ready + failed here)
+        for r in range(2):
+            assert not view.dlg.imageTable.item(r, 4).icon().isNull()
+
+    def test_empty_mosaic_shows_empty_text(self):
+        view = self._view()
+        mosaic = MosaicReturnSchema.from_dict(_mosaic_data(
+            status_summary={"total": 0, "ready": 0, "pending": 0, "in_progress": 0, "failed": 0}))
+        view.display_mosaics([mosaic])
+        item = view.dlg.mosaicTable.item(0, 4)
+        assert item.text() == "Empty"          # plain text, not a "✓ 0" badge
+        assert item.icon().isNull()
+
+    def test_image_status_style_labels(self):
+        view = self._view()
+        failed = ImageStatusSchema.from_dict(_status_image(preprocessing_status="FAILED"))
+        pending = ImageStatusSchema.from_dict(_status_image(preprocessing_status="PENDING"))
+        loading = ImageStatusSchema.from_dict(
+            _status_image(preprocessing_status="NONE", data_available=False))
+        assert view._image_status_style(failed)[0] == "Preprocessing failed"
+        assert view._image_status_style(pending)[0] == "Preprocessing"
+        assert view._image_status_style(loading)[0] == "Loading"
+
+
+class TestStatusPolling:
+    def _svc(self):
+        svc = _bare_service()
+        svc._status_poll_timer = MagicMock()
+        svc._status_poll_timer.isActive.return_value = False
+        svc._polling_mosaic_id = None
+        return svc
+
+    def test_polls_while_loading(self):
+        svc = self._svc()
+        loading = [ImageStatusSchema.from_dict(_status_image(preprocessing_status="NONE", data_available=False))]
+        svc._manage_status_polling("m1", loading)
+        svc._status_poll_timer.start.assert_called_once()
+
+    def test_polls_while_preprocessing(self):
+        svc = self._svc()
+        pending = [ImageStatusSchema.from_dict(_status_image(preprocessing_status="PENDING", data_available=False))]
+        svc._manage_status_polling("m1", pending)
+        svc._status_poll_timer.start.assert_called_once()
+
+    def test_does_not_poll_when_only_failed(self):
+        svc = self._svc()
+        svc._polling_mosaic_id = "m1"
+        failed = [ImageStatusSchema.from_dict(_status_image(preprocessing_status="FAILED", data_available=False))]
+        svc._manage_status_polling("m1", failed)
+        svc._status_poll_timer.start.assert_not_called()
+        svc._status_poll_timer.stop.assert_called_once()
 
 
 class TestSelectedReadyImage:
