@@ -38,6 +38,9 @@ class DataCatalogController(QObject):
         # Mosaic or image (depending on selection)
         self.dlg.addCatalogButton.clicked.connect(self.service.add_mosaic_or_image)
         self.dlg.deleteCatalogButton.clicked.connect(self.service.delete_mosaic_or_image)
+        self.dlg.deleteFailedButton.clicked.connect(self.service.confirm_delete_failed_images)
+        # Re-render the image list when the preprocessing/failed visibility setting changes
+        self.dlg.hideUnprocessedImages.toggled.connect(self.service.on_hide_unprocessed_toggled)
         self.dlg.sortCatalogCombo.activated.connect(self.view.sort_catalog)
         self.dlg.refreshCatalogButton.clicked.connect(self.service.refresh_catalog)
         self.dlg.filterCatalog.textChanged.connect(self.view.filter_catalog_table)

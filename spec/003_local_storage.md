@@ -28,6 +28,7 @@ All plugin settings are scoped under the `"mapflow"` group via `settings.beginGr
 | `layerGroup` | string | Plugin layer group name in QGIS legend |
 | `visibleProcessingColumns` | list of strings | Visible column indices in processings table |
 | `visibleSearchColumns` | list of strings | Visible column indices in search results table |
+| `hideUnprocessedImages` | string ("true"/"false") | Hide preprocessing/failed images (and their rows) in the My Imagery image list. Default `false` (uploaded images stay visible with a status flag). See `002_C_myimagery_api.md`. |
 
 #### Metadata Search & Filters
 | Key | Type | Purpose |
