@@ -55,6 +55,22 @@ carries just `filename/uploaded_at/preprocessing_status/error/data_available/til
 - `agent-make lint`: red on **pre-existing** issues only (mapflow.py B006, display_image_preview B008,
   test_layer_utils F403/F405). Changed files: ruff-clean, pyright-clean.
 
+## Endpoint bucketing gotcha (important)
+The mosaic-list `status_summary` badge buckets by `preprocessing_status`
+(`ready = NONE + COMPLETED`), but `GET /mosaic/{id}/status` buckets `ready` by
+`data_available` first. So an image can be `data_available=true` (present in `/image`)
+yet `PENDING`/`IN_PROGRESS`. We flag non-ready rows by `preprocessing_status` (so the
+per-image flags always match the mosaic 🕑/✗ badge) and **dedupe** the ready `/image`
+list against those ids — otherwise such an image would render twice, or (if flagged by
+`data_available`) show no flag while the badge says 🕑.
+
+## UI polish (review round 1)
+- Mosaic + image Status columns are **fixed-width** (sized to the full 3-segment line /
+  "Preprocessing failed") so they don't jump on status changes.
+- Status cells are **non-selectable** (`Qt.ItemIsEnabled` only) and row controls are always
+  anchored to the name column (`NAME_COLUMN`), so clicking the status column never relocates
+  the controls into it.
+
 ## Known limitations / follow-ups
 - Placeholder glyphs (✓/🕑/✗) — user will swap for real icons.
 - Mosaic-list counts refresh on manual refresh/reopen (polling is scoped to the open image list).

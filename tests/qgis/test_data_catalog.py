@@ -2,6 +2,7 @@
 
 Spec reference: spec/002_C_myimagery_api.md
 """
+import json
 from unittest.mock import MagicMock
 from datetime import datetime, timedelta
 
@@ -226,25 +227,23 @@ class TestImageStatusSchema:
 
 
 class TestMosaicStatusResponse:
-    def test_non_ready_images_excludes_ready(self):
+    def test_non_ready_images_flags_by_status(self):
+        """non_ready is keyed on preprocessing_status (matching the mosaic badge buckets)."""
         data = {
             "mosaic_id": "11111111-2222-3333-4444-555555555555",
-            "total_images": 3,
-            "ready_images": 1,
-            "pending_images": 1,
-            "in_progress_images": 0,
-            "failed_images": 1,
-            "tiles_ready_images": 1,
+            "total_images": 4,
+            "ready_images": 2, "pending_images": 1, "in_progress_images": 0,
+            "failed_images": 1, "tiles_ready_images": 2,
             "images": [
-                _status_image(image_id="1", preprocessing_status="COMPLETED"),
-                _status_image(image_id="2", preprocessing_status="PENDING"),
-                _status_image(image_id="3", preprocessing_status="FAILED"),
+                _status_image(image_id="1", preprocessing_status="NONE", data_available=True),
+                _status_image(image_id="2", preprocessing_status="COMPLETED", data_available=True),
+                _status_image(image_id="3", preprocessing_status="PENDING", data_available=False),
+                _status_image(image_id="4", preprocessing_status="FAILED", data_available=False),
             ],
         }
         resp = MosaicStatusResponse.from_dict(data)
-        non_ready = resp.non_ready_images()
-        ids = {s.id for s in non_ready}
-        assert ids == {"2", "3"}  # COMPLETED (ready) is excluded
+        ids = {s.id for s in resp.non_ready_images()}
+        assert ids == {"3", "4"}  # NONE and COMPLETED are ready
 
     def test_empty_images(self):
         resp = MosaicStatusResponse.from_dict(
@@ -341,3 +340,98 @@ class TestImageSignature:
         sig_pending = DataCatalogService._image_signature("m1", images, pending)
         sig_failed = DataCatalogService._image_signature("m1", images, failed)
         assert sig_pending != sig_failed
+
+
+# ====== Full load chain: /image then /status, statuses reach the view ====== #
+
+def _bare_service():
+    """A DataCatalogService with __init__ bypassed and collaborators mocked."""
+    from mapflow.functional.service.data_catalog import DataCatalogService
+    svc = DataCatalogService.__new__(DataCatalogService)
+    svc.api = MagicMock()
+    svc.view = MagicMock()
+    svc.view.mosaic_table_visible = False  # skip the preview branch
+    svc.app_context = MagicMock()
+    svc.dlg = MagicMock()
+    svc.dlg.settings.value.return_value = "false"  # hideUnprocessedImages off
+    svc._status_poll_timer = MagicMock()
+    svc._polling_mosaic_id = None
+    svc._last_image_signature = None
+    svc.images = []
+    svc.image_statuses = []
+    svc.preview_idx = 0
+    return svc
+
+
+def _response(payload):
+    resp = MagicMock()
+    resp.readAll.return_value.data.return_value = json.dumps(payload).encode()
+    return resp
+
+
+class TestLoadChain:
+    def test_status_request_is_sent_after_images(self):
+        svc = _bare_service()
+        image_list = [_image_data(id="ready-1"), _image_data(id="ready-2")]
+        svc._on_mosaic_images_loaded(_response(image_list), mosaic_id="m1", is_poll=False)
+        # The /image callback must chain a /status request for the same mosaic.
+        svc.api.get_mosaic_status.assert_called_once()
+        assert svc.api.get_mosaic_status.call_args.kwargs["mosaic_id"] == "m1"
+
+    def test_non_ready_rows_reach_the_view(self):
+        svc = _bare_service()
+        image_list = [_image_data(id="ready-1")]  # /image returns only the ready one
+        svc._on_mosaic_images_loaded(_response(image_list), mosaic_id="m1", is_poll=False)
+        status_callback = svc.api.get_mosaic_status.call_args.kwargs["callback"]
+
+        status_payload = {
+            "mosaic_id": "m1",
+            "total_images": 2,
+            "ready_images": 1, "pending_images": 1, "in_progress_images": 0,
+            "failed_images": 0, "tiles_ready_images": 1,
+            "images": [
+                _status_image(image_id="ready-1", preprocessing_status="COMPLETED",
+                              data_available=True),
+                _status_image(image_id="pending-1", filename="pending.tif",
+                              preprocessing_status="PENDING", data_available=False),
+            ],
+        }
+        status_callback(_response(status_payload))
+
+        svc.view.display_images.assert_called_once()
+        rendered_images, rendered_statuses = svc.view.display_images.call_args.args
+        assert [i.id for i in rendered_images] == ["ready-1"]
+        assert [s.filename for s in rendered_statuses] == ["pending.tif"]
+
+    def test_available_but_pending_image_is_not_duplicated(self):
+        """A data_available image that is still PENDING appears once (flagged), not twice."""
+        svc = _bare_service()
+        # /image returns both the ready one and the still-pending-but-available one
+        image_list = [_image_data(id="ready-1"), _image_data(id="dup-pending")]
+        svc._on_mosaic_images_loaded(_response(image_list), mosaic_id="m1", is_poll=False)
+        status_callback = svc.api.get_mosaic_status.call_args.kwargs["callback"]
+        status_payload = {
+            "mosaic_id": "m1",
+            "total_images": 2,
+            "ready_images": 1, "pending_images": 1, "in_progress_images": 0,
+            "failed_images": 0, "tiles_ready_images": 1,
+            "images": [
+                _status_image(image_id="ready-1", preprocessing_status="COMPLETED", data_available=True),
+                _status_image(image_id="dup-pending", filename="dup.tif",
+                              preprocessing_status="PENDING", data_available=True),
+            ],
+        }
+        status_callback(_response(status_payload))
+        rendered_images, rendered_statuses = svc.view.display_images.call_args.args
+        assert [i.id for i in rendered_images] == ["ready-1"]        # dup removed from ready list
+        assert [s.id for s in rendered_statuses] == ["dup-pending"]  # shown once, flagged
+
+    def test_status_failure_falls_back_to_ready_only(self):
+        svc = _bare_service()
+        image_list = [_image_data(id="ready-1")]
+        svc._on_mosaic_images_loaded(_response(image_list), mosaic_id="m1", is_poll=False)
+        error_handler = svc.api.get_mosaic_status.call_args.kwargs["error_handler"]
+        error_handler(_response({"detail": "not found"}))
+        svc.view.display_images.assert_called_once()
+        _, rendered_statuses = svc.view.display_images.call_args.args
+        assert rendered_statuses == []

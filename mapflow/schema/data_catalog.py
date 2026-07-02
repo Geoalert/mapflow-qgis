@@ -198,5 +198,11 @@ class MosaicStatusResponse(SkipDataClass):
         self.images = [ImageStatusSchema.from_dict(i) for i in (self.images or [])]
 
     def non_ready_images(self) -> List[ImageStatusSchema]:
-        """Images that would otherwise be invisible in the plain image list."""
+        """Images to flag as preprocessing/failed, keyed on ``preprocessing_status``.
+
+        Uses the same bucketing as the mosaic-list ``status_summary`` badge
+        (``ready = NONE + COMPLETED``), so a mosaic's 🕑/✗ counts always match the
+        number of flagged image rows. The caller dedupes the ready image list against
+        these ids, since an image can be ``data_available`` yet still PENDING/IN_PROGRESS.
+        """
         return [i for i in self.images if not i.is_ready]

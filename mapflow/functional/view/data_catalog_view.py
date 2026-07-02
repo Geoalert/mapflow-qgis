@@ -20,6 +20,10 @@ STATUS_FAILED_ICON = "✗"    # ✗
 FAILED_COLOR = QColor(200, 60, 60)
 PENDING_COLOR = QColor(210, 140, 30)
 
+# The name column hosts the row controls; the status column is the last, display-only column.
+NAME_COLUMN = 1
+STATUS_COLUMN = 4
+
 class DataCatalogView(QObject):
     def __init__(self, dlg: MainDialog, app_context: AppContext):
         super().__init__()
@@ -143,11 +147,18 @@ class DataCatalogView(QObject):
             status_item.setData(Qt.DisplayRole, self._status_summary_text(mosaic.status_summary))
             status_item.setToolTip(self._status_summary_tooltip(mosaic.status_summary))
             status_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self.dlg.mosaicTable.setItem(row, 4, status_item)
+            # Display-only: not selectable, so clicking it neither selects the cell nor
+            # relocates the row controls (which always live in the name column).
+            status_item.setFlags(Qt.ItemIsEnabled)
+            self.dlg.mosaicTable.setItem(row, STATUS_COLUMN, status_item)
         self.dlg.mosaicTable.setHorizontalHeaderLabels(
             ["ID", self.tr("Imagery collections"), self.tr("Size"), self.tr("Created"), self.tr("Status")])
-        self.dlg.mosaicTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.dlg.mosaicTable.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        header = self.dlg.mosaicTable.horizontalHeader()
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        # Fixed width sized to the full 3-segment line, so the column never jumps when a
+        # segment appears/disappears on status changes.
+        header.setSectionResizeMode(STATUS_COLUMN, QHeaderView.ResizeMode.Fixed)
+        self.dlg.mosaicTable.setColumnWidth(STATUS_COLUMN, self._mosaic_status_width())
         self.dlg.mosaicTable.sortItems(self.sort_mosaics_column, Qt.AscendingOrder)
         # Set show-images tooltip for mosaics' cells
         for row in range(self.dlg.mosaicTable.rowCount()):
@@ -175,6 +186,17 @@ class DataCatalogView(QObject):
             return ""
         return self.tr("Ready: {ready}\nPreprocessing: {preprocessing}\nFailed: {failed}").format(
             ready=summary.ready, preprocessing=summary.preprocessing, failed=summary.failed)
+
+    def _mosaic_status_width(self) -> int:
+        """Fixed width fitting the full 3-segment status line (with generous count room)."""
+        sample = "{ok} 999   {pending} 999   {failed} 999".format(
+            ok=STATUS_OK_ICON, pending=STATUS_PENDING_ICON, failed=STATUS_FAILED_ICON)
+        return self.dlg.mosaicTable.fontMetrics().horizontalAdvance(sample) + 24
+
+    def _image_status_width(self) -> int:
+        """Fixed width fitting the longest per-image status label."""
+        sample = self.tr("Preprocessing failed")
+        return self.dlg.imageTable.fontMetrics().horizontalAdvance(sample) + 24
 
     def sort_catalog(self):
         index = self.dlg.sortCatalogCombo.currentIndex()
@@ -323,12 +345,14 @@ class DataCatalogView(QObject):
         self.dlg.imageTable.setItem(row, 3, date_item)
         status_item = QTableWidgetItem()
         status_item.setData(Qt.DisplayRole, status_text)
+        # Display-only: not selectable, so clicking it never relocates the row controls.
+        status_item.setFlags(Qt.ItemIsEnabled)
         if status_color is not None:
             status_item.setForeground(QBrush(status_color))
         if status_tooltip:
             status_item.setToolTip(status_tooltip)
             name_item.setToolTip(status_tooltip)
-        self.dlg.imageTable.setItem(row, 4, status_item)
+        self.dlg.imageTable.setItem(row, STATUS_COLUMN, status_item)
 
     def display_images(self,
                        images: list[ImageReturnSchema],
@@ -360,8 +384,10 @@ class DataCatalogView(QObject):
             row += 1
         self.dlg.imageTable.setHorizontalHeaderLabels(
             ["ID", self.tr("Images"), self.tr("Size"), self.tr("Uploaded"), self.tr("Status")])
-        self.dlg.imageTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.dlg.imageTable.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        header = self.dlg.imageTable.horizontalHeader()
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(STATUS_COLUMN, QHeaderView.ResizeMode.Fixed)
+        self.dlg.imageTable.setColumnWidth(STATUS_COLUMN, self._image_status_width())
         self.dlg.imageTable.sortItems(self.sort_images_column, Qt.AscendingOrder)
         if len(images) == 0:
             self.dlg.previewMosaicButton.setEnabled(False)
@@ -662,23 +688,23 @@ class DataCatalogView(QObject):
         self.image_cell_layout.setAlignment(Qt.AlignRight)
 
     def add_mosaic_cell_buttons(self):
-        # Create layout of mosaic cell buttons
-        # Create mosaic cell widget with this layout
+        # Create mosaic cell widget with the buttons layout.
+        # Always anchor the controls to the name column, regardless of which cell was
+        # clicked, so clicking the (display-only) status column never relocates them.
         cellWidget = QWidget()
         cellWidget.setLayout(self.mosaic_cell_layout)
-        self.dlg.mosaicTable.setCellWidget(self.dlg.selected_mosaic_cell.row(), 
-                                           self.dlg.selected_mosaic_cell.column(),
+        self.dlg.mosaicTable.setCellWidget(self.dlg.selected_mosaic_cell.row(),
+                                           NAME_COLUMN,
                                            cellWidget)
-    
+
     def add_image_cell_buttons(self):
         if self.dlg.imageTable.selectionModel().hasSelection():
             self.dlg.selected_image_cell = self.dlg.imageTable.selectedIndexes()[0]
-        # Create layout of image cell buttons
-        # Create image cell widget with this layout
+        # Create image cell widget with the buttons layout, anchored to the name column.
         cellWidget = QWidget()
         cellWidget.setLayout(self.image_cell_layout)
         self.dlg.imageTable.setCellWidget(self.dlg.selected_image_cell.row(),
-                                          self.dlg.selected_image_cell.column(),
+                                          NAME_COLUMN,
                                           cellWidget)
         
     def contain_mosaic_cell_buttons(self):

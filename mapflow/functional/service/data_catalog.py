@@ -371,6 +371,10 @@ class DataCatalogService(QObject):
     def _on_mosaic_status_loaded(self, response: QNetworkReply, mosaic_id, images, is_poll: bool):
         status = MosaicStatusResponse.from_dict(json.loads(response.readAll().data()))
         non_ready = [] if self._hide_unprocessed() else status.non_ready_images()
+        # An image can be data_available (present in /image) yet still PENDING/IN_PROGRESS;
+        # show it once as a flagged row rather than twice.
+        non_ready_ids = {str(s.id) for s in non_ready}
+        images = [i for i in images if str(i.id) not in non_ready_ids]
         self._render_mosaic_images(mosaic_id, images, non_ready, is_poll=is_poll)
 
     def _render_mosaic_images(self,
