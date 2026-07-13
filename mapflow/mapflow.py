@@ -9,7 +9,7 @@ from typing import List, Optional, Callable, Tuple
 from osgeo import gdal, ogr
 
 from PyQt5.QtCore import (
-    QByteArray, QCoreApplication, QDate, QObject, Qt, 
+    QByteArray, QCoreApplication, QDate, QDateTime, QObject, Qt,
     QTextStream, QTimer, QTranslator
 )
 from PyQt5.QtGui import QColor, QIcon
@@ -3106,6 +3106,7 @@ class Mapflow(QObject):
         """React to entering a template: fill search results and load AOI/processing layers."""
         # Initial results are the whole template (no AOI filter applied yet).
         self._template_search_aoi_filter = None
+        self.apply_search_params_to_ui(getattr(template, "searchParams", None))
         self._load_template_search(template)
         self._load_template_layers(template)
 
@@ -3120,6 +3121,57 @@ class Mapflow(QObject):
         # Clear the template search-results pagination so it is not preserved on re-open.
         self.search_page_offset = 0
         self.dlg.enable_search_pages(False)
+
+    def apply_search_params_to_ui(self, search_params):
+        """Populate the Imagery Search filters from a template's stored ``searchParams``
+        (web parity: the user can see what the template searches for). The widgets stay
+        editable — changing them affects the current search view only, never the template.
+        Fields the template does not carry leave the corresponding widgets untouched."""
+        if not search_params:
+            return
+        if isinstance(search_params, dict):
+            search_params = SearchParams.from_dict(search_params)
+
+        date_from = self._utc_date_from_iso(search_params.acquisitionDateFrom)
+        if date_from is not None:
+            self.dlg.metadataFrom.setDate(date_from)
+        date_to = self._utc_date_from_iso(search_params.acquisitionDateTo)
+        if date_to is not None:
+            self.dlg.metadataTo.setDate(date_to)
+        if search_params.maxCloudCover is not None:
+            self.dlg.maxCloudCover.setValue(int(round(search_params.maxCloudCover)))
+        if search_params.minAoiIntersectionPercent is not None:
+            self.dlg.minIntersection.setValue(int(round(search_params.minAoiIntersectionPercent)))
+        if search_params.hideUnavailable is not None:
+            self.dlg.hideUnavailableResults.setChecked(bool(search_params.hideUnavailable))
+        product_types = [str(pt).upper() for pt in (search_params.productTypes or [])]
+        if product_types:
+            self.dlg.searchMosaicCheckBox.setChecked(ProductType.mosaic.upper() in product_types)
+            self.dlg.searchImageCheckBox.setChecked(ProductType.image.upper() in product_types)
+        self._apply_search_providers_to_combo(search_params.dataProviders)
+
+    @staticmethod
+    def _utc_date_from_iso(value: Optional[str]) -> Optional[QDate]:
+        """Parse an ISO-8601 timestamp (as stored in ``searchParams``) into a UTC QDate."""
+        if not value:
+            return None
+        parsed = QDateTime.fromString(value, Qt.ISODateWithMs)
+        if not parsed.isValid():
+            parsed = QDateTime.fromString(value, Qt.ISODate)
+        return parsed.toUTC().date() if parsed.isValid() else None
+
+    def _apply_search_providers_to_combo(self, data_providers: Optional[List[str]]):
+        """Mirror ``selected_search_providers``: check the combo items whose api-name is in
+        the template's ``dataProviders``; ``None``/empty means the template searched all
+        providers, shown as no checked items ("Show all")."""
+        combo = self.dlg.searchProvidersCombo
+        combo.deselectAllOptions()
+        if not data_providers:
+            return
+        wanted = set(data_providers)
+        for index in range(combo.count()):
+            if combo.itemData(index) in wanted:
+                combo.setItemCheckState(index, Qt.Checked)
 
     def _remove_template_group(self, template_group_name: str):
         """Remove the template's layer-tree group (and its layers) from the map."""
