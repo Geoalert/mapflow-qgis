@@ -282,6 +282,21 @@ exceeds the limit — mirroring the pre-flight check done for regular processing
 creation. A missing or zero `templateAreaLimit` disables the client-side check and
 defers to the backend.
 
+### Search area limit (Plan Search prompt)
+`GET /user/status` also exposes `searchAreaLimit` (number, square metres): the maximum
+AOI area allowed for an *immediate* imagery search. When the user triggers a regular
+search with an AOI larger than this limit, the plugin does not run the immediate search;
+instead it prompts:
+
+> The search area is too large for immediate processing. The Planned Search will be
+> created and run in the background. You will be notified when results are available.
+
+with **[Cancel]** and **[Plan Search]**. Choosing **Plan Search** creates a template in
+the currently selected project (`POST /processings/template`) auto-named
+`Searching <YYYY-MM-DD HH:MM>`. If the AOI also exceeds `templateAreaLimit`, the existing
+template-area-limit message is shown and no template is created. A missing or zero
+`searchAreaLimit` disables the prompt and lets the immediate search proceed.
+
 ### Error feedback
 When the backend rejects template creation because the limit is exceeded it returns
 the standard error model (`{"code", "message", "params"}`) with a generic

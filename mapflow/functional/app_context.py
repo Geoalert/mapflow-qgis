@@ -56,6 +56,9 @@ class AppContext:
     remaining_credits: float = 0.0
     aoi_area_limit: float = 0.0
     template_area_limit: float = 0.0
+    # Max AOI area (sq.km) allowed for an immediate imagery search; above it the user is
+    # offered a Planned Search instead. Zero/absent disables the client-side check.
+    search_area_limit: float = 0.0
     max_aois_per_processing: int = 1
     review_workflow_enabled: bool = False
 
