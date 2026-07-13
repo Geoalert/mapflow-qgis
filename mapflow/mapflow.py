@@ -1060,6 +1060,24 @@ class Mapflow(QObject):
             crs = self.app_context.metadata_layer.crs()
         except (RuntimeError, AttributeError):  # no metadata layer
             return
+        # In template mode the search results are already filtered server-side by the
+        # template's stored searchParams (spec 002_F: AOI filtering uses `aoiIds` on the
+        # template images request). The offline filter below tests every image against a
+        # SINGLE AOI, so when minIntersection > 0 it wrongly drops images intersecting the
+        # template's OTHER AOIs — the "only the first AOI's results" bug (feedback 2). Show
+        # the server's results verbatim instead.
+        if getattr(self.processing_service, "in_template_mode", False):
+            self.app_context.metadata_layer.setSubsetString('')
+            for row in range(self.dlg.metadataTable.rowCount()):
+                self.dlg.metadataTable.setRowHidden(row, False)
+            try:  # avoid stacking duplicate preview connections across table refills
+                self.dlg.metadataTable.disconnect(self.cell_preview_connection)
+            except (AttributeError, TypeError, RuntimeError):
+                # no previous connection, or its underlying C++ object is gone
+                pass
+            self.cell_preview_connection = self.dlg.metadataTable.cellClicked.connect(
+                self.preview_search_from_cell)
+            return
         if max_cloud_cover is None:
             max_cloud_cover = self.dlg.maxCloudCover.value()
         if min_intersection is None:
