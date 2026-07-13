@@ -187,11 +187,13 @@ layers) for loading a processing's results on double-click.
 feature's `properties` is read as `{ id?, name? }` (`InputAoiProperties`) — `name` is
 optional. The plugin **always** sends `searchParams.aoiDetails` (a FeatureCollection),
 never the legacy plain `searchParams.aoi`, which is **deprecated** because per-AOI names
-cannot be attached to it. One feature is sent per AOI; `properties.name` is set from the
-source layer's `name` attribute when present, and omitted/`null` otherwise (the AOI can be
-renamed later via `POST .../aoi/{aoiId}`). When the AOI does not come from a polygon layer
-(e.g. an image/mosaic extent), a single unnamed feature is built from the combined AOI
-geometry. The backend still accepts `aoi` as a fallback, but the plugin no longer sends it.
+cannot be attached to it. One Polygon feature is sent per AOI part: a MultiPolygon AOI is
+split into one Polygon feature per part (the backend ignores MultiPolygon features in
+`aoiDetails`), each carrying the same `name`. `properties.name` is set from the source
+layer's `name` attribute when present, and omitted/`null` otherwise (the AOI can be renamed
+later via `POST .../aoi/{aoiId}`). When the AOI does not come from a polygon layer (e.g. an
+image/mosaic extent), unnamed feature(s) are built from the combined AOI geometry (again one
+Polygon per part). The backend still accepts `aoi` as a fallback, but the plugin no longer sends it.
 
 ### Name constraints
 AOI names must not exceed **64 characters**; the plugin validates this client-side
