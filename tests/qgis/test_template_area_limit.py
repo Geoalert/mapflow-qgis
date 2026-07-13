@@ -9,6 +9,8 @@ import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from qgis.core import QgsGeometry
+
 from mapflow.functional.app_context import AppContext
 from mapflow.mapflow import Mapflow
 
@@ -91,7 +93,7 @@ def test_create_search_template_proceeds_when_limit_is_unknown():
     plugin.selected_search_product_types = MagicMock(return_value=["IMAGE"])
     plugin.processing_service = MagicMock()
     plugin.app_context = SimpleNamespace(
-        aoi=MagicMock(asJson=MagicMock(return_value='{"type":"Polygon","coordinates":[]}')),
+        aoi=QgsGeometry.fromWkt("POLYGON((0 0,0 1,1 1,1 0,0 0))"),
         aoi_size=10.0,
         template_area_limit=0.0,  # unknown -> client-side check disabled
         project_id="project-1",
