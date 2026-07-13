@@ -642,6 +642,8 @@ def test_get_templates_callback_filters_templates_to_current_project():
 	service.view = MagicMock()
 	service.view.sort_processings.return_value = ("CREATED", "DESC")
 	service.processings = {}
+	service.in_template_mode = False
+	service.processing_fetch_timer = MagicMock()
 
 	response = MagicMock()
 	response.readAll.return_value.data.return_value = (
@@ -668,6 +670,8 @@ def test_get_templates_callback_builds_templates_without_hydration_request():
 	service.view = MagicMock()
 	service.view.sort_processings.return_value = ("CREATED", "DESC")
 	service.processings = {}
+	service.in_template_mode = False
+	service.processing_fetch_timer = MagicMock()
 
 	response = MagicMock()
 	response.readAll.return_value.data.return_value = (

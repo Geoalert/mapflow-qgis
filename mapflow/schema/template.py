@@ -261,6 +261,14 @@ class ProcessingTemplateDTO(Serializable, SkipDataClass):
     def is_template(self) -> bool:
         return True
 
+    @property
+    def is_search_in_progress(self) -> bool:
+        """The template is still running its initial (or a re-run) search — the ``Searching``
+        table status. This is the only non-terminal template state the fast project poll
+        waits on; ``Created``/``Updated``/``Failed``/``Inactive`` are steady until the
+        backend's daily check, which the poll does not spin for."""
+        return (self.status or "").upper() == "SEARCHING"
+
     def _aoi_features(self):
         """Return template AOI features from either aoiDetails or aoi shape."""
         if isinstance(self.searchParams, SearchParams):
