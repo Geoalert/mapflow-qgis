@@ -254,8 +254,10 @@ template's AOI area processed at least once) is **not implemented (#WARNING)**: 
 derivable from existing responses without geometric union/difference of AOI vs processing
 footprints; it should be computed by the backend and exposed on the template instead.
 
-Selecting an AOI row filters the imagery-search results (both table and footprint
-layer) to images intersecting that AOI (`aoiIds` on the template images request).
+Selecting one or more AOI rows filters the imagery-search results (both table and
+footprint layer) to images intersecting any of the selected AOIs (all selected ids
+are sent as `aoiIds` on the template images request). Deselecting all AOIs restores
+the full template results.
 
 Leaving a template ("one step left", back button) returns to the project's
 processings list and removes the template's layer group from the map.
