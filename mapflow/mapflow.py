@@ -94,6 +94,10 @@ class Mapflow(QObject):
     # The AOI id the in-template search results are currently filtered by (None = all).
     # Class-level default so the check is safe before on_template_opened sets it.
     _template_search_aoi_filter = None
+    # The AOI ids the processing Area is currently derived from (T9), so a repeated selection
+    # signal doesn't rebuild the area layer. The dedicated Area layer holding their union.
+    _processing_area_aoi_filter = None
+    _selected_aoi_layer = None
     # Id of the currently shown mosaic-preview boundary layer, so it can be removed when the
     # next preview is shown (its name varies by acquisition date, so name-match alone misses it).
     _mosaic_preview_footprint_id = None
@@ -316,6 +320,7 @@ class Mapflow(QObject):
         self.processing_service.templateOpened.connect(self.on_template_opened)
         self.processing_service.templateClosed.connect(self.on_template_closed)
         self.dlg.processingsTable.itemSelectionChanged.connect(self.filter_search_by_selected_aoi)
+        self.dlg.processingsTable.itemSelectionChanged.connect(self.sync_processing_area_to_selected_aois)
         # Processings ratings
         self.dlg.processingsTable.itemSelectionChanged.connect(self.enable_feedback)
         self.dlg.processingsTable.itemSelectionChanged.connect(self.on_processings_selection_changed)
@@ -377,13 +382,18 @@ class Mapflow(QObject):
             self.iface.addCustomActionForLayer(self.add_layer_action, layer)
         self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
 
-    def add_to_layers(self, layer=None, recompute_cost: bool = True):
+    def add_to_layers(self, layer=None, recompute_cost: bool = True, set_current: bool = True):
         if not layer:
             layer = self.iface.layerTreeView().currentLayer()
         if layer not in self.app_context.aoi_layers:
             self.app_context.aoi_layers.append(layer)
             self.iface.addCustomActionForLayer(self.remove_layer_action, layer)
         self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
+        # ``set_current=False`` for template AOI *display* layers added in bulk: they must not
+        # hijack the processing Area (the last one used to stick as the Area — feedback 8.1);
+        # the Area is driven by the AOI table selection instead.
+        if not set_current:
+            return
         # When adding template AOI layers in bulk (recompute_cost=False), don't let each
         # setLayer fire polygonCombo.layerChanged -> a cost request: no image is selected yet,
         # and the user's click will compute the cost once afterwards.
@@ -824,9 +834,10 @@ class Mapflow(QObject):
             self.app_context.project.addMapLayer(aoi_layer)
 
         aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', style_name))
-        # Template AOI layers are added in bulk on open; don't fire a cost request per layer.
-        self.add_to_layers(aoi_layer, recompute_cost=False)
-        self.iface.setActiveLayer(aoi_layer)
+        # Template AOI layers are added in bulk on open; don't fire a cost request per layer,
+        # and don't let them become the current processing Area (feedback 8.1) — the Area is
+        # set from the AOI table selection (see sync_processing_area_to_selected_aois).
+        self.add_to_layers(aoi_layer, recompute_cost=False, set_current=False)
         return aoi_layer
 
     def _template_group_target(self,
@@ -928,6 +939,80 @@ class Mapflow(QObject):
             return
         self._template_search_aoi_filter = selected_ids or None
         self._load_template_search(template, aoi_ids=list(selected_ids) or None)
+
+    def sync_processing_area_to_selected_aois(self):
+        """T9: inside a template, set the processing Area to the union of the selected AOIs'
+        geometries, so a processing started from the template covers exactly those AOIs
+        (feedback 8.1; with T13 multi-select several AOIs union into one Area). No-op when no
+        AOI is selected, keeping the current Area (e.g. while a processing row is selected)."""
+        if not self.processing_service.in_template_mode:
+            return
+        selected_ids = frozenset(
+            str(aoi.id) for aoi in self.processing_service.selected_aois() if aoi and aoi.id
+        )
+        # Selection signals fire often; only rebuild the Area layer when the set changes.
+        if selected_ids == (self._processing_area_aoi_filter or frozenset()):
+            return
+        union = self._union_of_selected_aoi_geometries()
+        if union is None:
+            return
+        self._processing_area_aoi_filter = selected_ids or None
+        self._set_template_processing_area(union)
+
+    def _union_of_selected_aoi_geometries(self) -> Optional[QgsGeometry]:
+        """Union (WGS84) of the currently selected template AOIs' geometries, or ``None`` when
+        no AOI is selected or none has a usable geometry."""
+        geometries = []
+        for aoi in self.processing_service.selected_aois():
+            geom = self._geometry_from_geojson(getattr(aoi, "geometry", None))
+            if geom is not None:
+                geometries.append(geom)
+        if not geometries:
+            return None
+        if len(geometries) == 1:
+            return geometries[0]
+        union = QgsGeometry.unaryUnion(geometries)
+        return union if (union is not None and not union.isEmpty()) else None
+
+    @staticmethod
+    def _geometry_from_geojson(geom_dict) -> Optional[QgsGeometry]:
+        """Build a QgsGeometry from a GeoJSON geometry mapping (as carried in aoiDetails)."""
+        if not geom_dict:
+            return None
+        try:
+            ogr_geom = ogr.CreateGeometryFromJson(json.dumps(geom_dict))
+        except Exception:
+            return None
+        if not ogr_geom:
+            return None
+        geom = QgsGeometry.fromWkt(ogr_geom.ExportToWkt())
+        return geom if not geom.isEmpty() else None
+
+    def _set_template_processing_area(self, geometry: QgsGeometry):
+        """Put ``geometry`` into a dedicated reusable memory layer and make it the current AOI
+        layer, so the standard area/cost/crop machinery treats it as the processing Area.
+        Replaces any previous selected-AOI layer so they don't stack."""
+        self._remove_selected_aoi_layer()
+        layer = QgsVectorLayer('Polygon?crs=epsg:4326', self.tr('Selected AOI'), 'memory')
+        feature = QgsFeature()
+        feature.setGeometry(geometry)
+        layer.dataProvider().addFeatures([feature])
+        layer.updateExtents()
+        self._selected_aoi_layer = layer
+        self.app_context.project.addMapLayer(layer, addToLegend=False)
+        self.add_to_layers(layer, recompute_cost=True)
+
+    def _remove_selected_aoi_layer(self):
+        """Drop the dedicated selected-AOI processing-area layer (if any)."""
+        layer = self._selected_aoi_layer
+        self._selected_aoi_layer = None
+        if layer is None:
+            return
+        try:
+            self.remove_from_layers(layer)
+            self.app_context.project.removeMapLayer(layer)
+        except (RuntimeError, KeyError, AttributeError):
+            pass
 
     def select_processing_in_table(self, processing_id: str):
         """Select processing row by ID and open processing details."""
@@ -3149,6 +3234,9 @@ class Mapflow(QObject):
             self._remove_template_group(str(template.name))
         self.app_context.open_template_results_id = None
         self._template_search_aoi_filter = None
+        # Drop the AOI-selection processing Area so it doesn't leak to the project view.
+        self._remove_selected_aoi_layer()
+        self._processing_area_aoi_filter = None
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
         # Clear the template search-results pagination so it is not preserved on re-open.
