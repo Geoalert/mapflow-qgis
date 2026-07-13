@@ -1,17 +1,31 @@
 from typing import Optional
 import sys
 
-from PyQt5.QtCore import QObject, Qt
+from PyQt5.QtCore import QObject, Qt, QSize, QRect
 from PyQt5.QtWidgets import (QWidget, QTableWidget, QTableWidgetItem, QHeaderView, QHBoxLayout, QAbstractItemView, QToolButton,
                              QMessageBox, QApplication, QMenu, QAction)
-from PyQt5.QtGui import QPixmap, QFontMetrics
+from PyQt5.QtGui import QPixmap, QFontMetrics, QColor, QBrush, QIcon, QPainter
 
 from ...dialogs import icons
 from ...dialogs.main_dialog import MainDialog
 from ...functional.app_context import AppContext
 from ...functional.helpers import get_readable_size
 from ...schema import MyImageryParams
-from ...schema.data_catalog import MosaicReturnSchema, ImageReturnSchema
+from ...schema.data_catalog import MosaicReturnSchema, ImageReturnSchema, ImageStatusSchema, MosaicStatusSummary
+
+FAILED_COLOR = QColor(200, 60, 60)
+PENDING_COLOR = QColor(210, 140, 30)
+READY_COLOR = QColor(60, 160, 60)
+
+# Preprocessing status pictograms. Ordered ready / preprocessing / failed.
+STATUS_GLYPH_SIZE = 16   # icon edge in px
+STATUS_ROW_HEIGHT = 20   # composed-pixmap / icon box height
+_STATUS_ICON_TEXT_GAP = 2   # px between an icon and its count
+_STATUS_SEG_GAP = 5        # px between count-segments in the mosaic cell
+
+# The name column hosts the row controls; the status column is the last, display-only column.
+NAME_COLUMN = 1
+STATUS_COLUMN = 4
 
 class DataCatalogView(QObject):
     def __init__(self, dlg: MainDialog, app_context: AppContext):
@@ -96,6 +110,11 @@ class DataCatalogView(QObject):
         self.dlg.myImageryDocsButton.setToolTip(self.tr("More about My imagery"))
         self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter imagery collections by name or id"))
 
+        # "Delete failed" bulk button (visible only in the image list, when failures exist)
+        self.dlg.deleteFailedButton.setIcon(icons.minus_icon)
+        self.dlg.deleteFailedButton.setVisible(False)
+        self._failed_present = False
+
         # Connection on toSourceButton click in a ProcessingDetailsDialog
         self.show_source_image_connection = None
 
@@ -107,8 +126,8 @@ class DataCatalogView(QObject):
         self.contain_mosaic_cell_buttons()
         if not mosaics:
             return
-        # First column is ID, hidden; second is name
-        self.dlg.mosaicTable.setColumnCount(4)
+        # Columns: 0 ID (hidden), 1 name, 2 size (hidden), 3 created (hidden), 4 status counts
+        self.dlg.mosaicTable.setColumnCount(5)
         self.dlg.mosaicTable.setColumnHidden(0, True)
         self.dlg.mosaicTable.setColumnHidden(2, True)
         self.dlg.mosaicTable.setColumnHidden(3, True)
@@ -127,8 +146,32 @@ class DataCatalogView(QObject):
             date_item = QTableWidgetItem()
             date_item.setData(Qt.DisplayRole, mosaic.created_at.timestamp())
             self.dlg.mosaicTable.setItem(row, 3, date_item)
-            self.dlg.mosaicTable.setHorizontalHeaderLabels(["ID", self.tr("Imagery collections"), self.tr("Size"), self.tr("Created")])
-        self.dlg.mosaicTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+            status_item = QTableWidgetItem()
+            summary = mosaic.status_summary
+            if summary is not None and summary.total == 0:
+                # No images at all — plain "Empty" rather than a "✓ 0" badge.
+                status_item.setData(Qt.DisplayRole, self.tr("Empty"))
+                status_item.setForeground(QBrush(QColor(130, 130, 130)))
+            else:
+                pixmap = self._status_summary_pixmap(summary)
+                if pixmap is not None:
+                    status_item.setIcon(QIcon(pixmap))
+            status_item.setToolTip(self._status_summary_tooltip(summary))
+            # Display-only: not selectable, so clicking it neither selects the cell nor
+            # relocates the row controls (which always live in the name column).
+            status_item.setFlags(Qt.ItemIsEnabled)
+            self.dlg.mosaicTable.setItem(row, STATUS_COLUMN, status_item)
+        self.dlg.mosaicTable.setHorizontalHeaderLabels(
+            ["ID", self.tr("Imagery collections"), self.tr("Size"), self.tr("Created"), self.tr("Status")])
+        header = self.dlg.mosaicTable.horizontalHeader()
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        # Fixed width sized to the full 3-segment line, so the column never jumps when a
+        # segment appears/disappears on status changes.
+        header.setSectionResizeMode(STATUS_COLUMN, QHeaderView.ResizeMode.Fixed)
+        status_width = self._mosaic_status_width()
+        self.dlg.mosaicTable.setColumnWidth(STATUS_COLUMN, status_width)
+        # The composed status pixmap is wide; let the icon box hold it at natural size.
+        self.dlg.mosaicTable.setIconSize(QSize(status_width, STATUS_ROW_HEIGHT))
         self.dlg.mosaicTable.sortItems(self.sort_mosaics_column, Qt.AscendingOrder)
         # Set show-images tooltip for mosaics' cells
         for row in range(self.dlg.mosaicTable.rowCount()):
@@ -136,6 +179,69 @@ class DataCatalogView(QObject):
             item.setToolTip(self.tr("Double-click to show images"))
         self.sort_catalog()
         self.filter_catalog_table(self.dlg.filterCatalog.text())
+
+    def _status_summary_segments(self, summary: MosaicStatusSummary):
+        """(icon, count, color) triples for a mosaic row. Ready is always shown;
+        preprocessing/failed only when non-zero, to reduce noise."""
+        segments = [(icons.ok_circle_icon, summary.ready, READY_COLOR)]
+        if summary.preprocessing:
+            segments.append((icons.clock_five_icon, summary.preprocessing, PENDING_COLOR))
+        if summary.failed:
+            segments.append((icons.close_circle_icon, summary.failed, FAILED_COLOR))
+        return segments
+
+    def _status_summary_pixmap(self, summary: MosaicStatusSummary) -> Optional[QPixmap]:
+        """Compose the ✓ready / 🕑preprocessing / ✗failed counts into one pixmap.
+
+        A single pixmap (set as the item's decoration) moves with its row on sort,
+        unlike a cell widget — so counts stay put when the table is re-sorted.
+        """
+        if not summary:
+            return None
+        segments = self._status_summary_segments(summary)
+        fm = self.dlg.mosaicTable.fontMetrics()
+        seg_widths = [STATUS_GLYPH_SIZE + _STATUS_ICON_TEXT_GAP + fm.horizontalAdvance(str(count))
+                      for _, count, _ in segments]
+        total_w = sum(seg_widths) + _STATUS_SEG_GAP * (len(segments) - 1)
+        pixmap = QPixmap(max(total_w, 1), STATUS_ROW_HEIGHT)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        x = 0
+        for (icon, count, color), seg_w in zip(segments, seg_widths):
+            icon.paint(painter, QRect(x, (STATUS_ROW_HEIGHT - STATUS_GLYPH_SIZE) // 2,
+                                      STATUS_GLYPH_SIZE, STATUS_GLYPH_SIZE))
+            painter.setPen(color)
+            painter.drawText(QRect(x + STATUS_GLYPH_SIZE + _STATUS_ICON_TEXT_GAP, 0,
+                                   seg_w - STATUS_GLYPH_SIZE - _STATUS_ICON_TEXT_GAP, STATUS_ROW_HEIGHT),
+                             Qt.AlignVCenter | Qt.AlignLeft, str(count))
+            x += seg_w + _STATUS_SEG_GAP
+        painter.end()
+        return pixmap
+
+    def _status_summary_tooltip(self, summary: MosaicStatusSummary) -> str:
+        if not summary:
+            return ""
+        return self.tr("Ready: {ready}\nPreprocessing: {preprocessing}\nFailed: {failed}").format(
+            ready=summary.ready, preprocessing=summary.preprocessing, failed=summary.failed)
+
+    def _mosaic_status_width(self) -> int:
+        """Fixed width fitting the full 3-segment status line (2-digit counts).
+
+        # TWEAK: change the count room ("99") or the trailing pad to widen/narrow
+        # the mosaic Status column.
+        """
+        fm = self.dlg.mosaicTable.fontMetrics()
+        seg = STATUS_GLYPH_SIZE + _STATUS_ICON_TEXT_GAP + fm.horizontalAdvance("99")
+        return seg * 3 + _STATUS_SEG_GAP * 2 + 12
+
+    def _image_status_width(self) -> int:
+        """Fixed width fitting the longest per-image status label (icon + text).
+
+        # TWEAK: change the trailing pad (or the label) to widen/narrow the image
+        # Status column.
+        """
+        text_w = self.dlg.imageTable.fontMetrics().horizontalAdvance(self.tr("Preprocessing failed"))
+        return STATUS_GLYPH_SIZE + _STATUS_ICON_TEXT_GAP + text_w + 12
 
     def sort_catalog(self):
         index = self.dlg.sortCatalogCombo.currentIndex()
@@ -268,30 +374,81 @@ class DataCatalogView(QObject):
         except IndexError:
             return
 
-    def display_images(self, images: list[ImageReturnSchema]):
+    def _set_image_row(self, row, image_id, filename, file_size, uploaded_ts,
+                       status_text: str = "", status_color=None, status_icon: Optional[QIcon] = None,
+                       status_tooltip: Optional[str] = None):
+        id_item = QTableWidgetItem()
+        id_item.setData(Qt.DisplayRole, image_id)
+        self.dlg.imageTable.setItem(row, 0, id_item)
+        name_item = QTableWidgetItem()
+        name_item.setData(Qt.DisplayRole, filename)
+        self.dlg.imageTable.setItem(row, 1, name_item)
+        size_item = QTableWidgetItem()
+        size_item.setData(Qt.DisplayRole, file_size)
+        self.dlg.imageTable.setItem(row, 2, size_item)
+        date_item = QTableWidgetItem()
+        date_item.setData(Qt.DisplayRole, uploaded_ts)
+        self.dlg.imageTable.setItem(row, 3, date_item)
+        status_item = QTableWidgetItem()
+        status_item.setData(Qt.DisplayRole, status_text)
+        if status_icon is not None:
+            status_item.setIcon(status_icon)
+        # Display-only: not selectable, so clicking it never relocates the row controls.
+        status_item.setFlags(Qt.ItemIsEnabled)
+        if status_color is not None:
+            status_item.setForeground(QBrush(status_color))
+        if status_tooltip:
+            status_item.setToolTip(status_tooltip)
+            name_item.setToolTip(status_tooltip)
+        self.dlg.imageTable.setItem(row, STATUS_COLUMN, status_item)
+
+    def _image_status_style(self, status: ImageStatusSchema):
+        """(label, color, icon) for a non-ready image row.
+
+        ``failed`` → ✗ red; ``preprocessing`` (PENDING/IN_PROGRESS) → 🕑 orange;
+        otherwise it's a load_data image still ``loading`` (not available, status NONE).
+        """
+        if status.is_failed:
+            return self.tr("Preprocessing failed"), FAILED_COLOR, icons.close_circle_icon
+        if status.is_pending:
+            return self.tr("Preprocessing"), PENDING_COLOR, icons.clock_five_icon
+        return self.tr("Loading"), PENDING_COLOR, icons.clock_five_icon
+
+    def display_images(self,
+                       images: list[ImageReturnSchema],
+                       statuses: Optional[list[ImageStatusSchema]] = None):
+        statuses = statuses or []
         self.contain_image_cell_buttons()
         self.dlg.imageTable.selectionModel().clearSelection()
-        self.dlg.imageTable.setRowCount(len(images))
-        self.dlg.imageTable.setColumnCount(4)
+        self.dlg.imageTable.setRowCount(len(images) + len(statuses))
+        # Columns: 0 ID (hidden), 1 name, 2 size (hidden), 3 uploaded (hidden), 4 status
+        self.dlg.imageTable.setColumnCount(5)
         self.dlg.imageTable.setColumnHidden(0, True)
         self.dlg.imageTable.setColumnHidden(2, True)
         self.dlg.imageTable.setColumnHidden(3, True)
         self.dlg.imageTable.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        for row, image in enumerate(images):
-            table_item = QTableWidgetItem()
-            table_item.setData(Qt.DisplayRole, image.id)
-            self.dlg.imageTable.setItem(row, 0, table_item)
-            name_item = QTableWidgetItem()
-            name_item.setData(Qt.DisplayRole, image.filename)
-            self.dlg.imageTable.setItem(row, 1, name_item)
-            size_item = QTableWidgetItem()
-            size_item.setData(Qt.DisplayRole, image.file_size)
-            self.dlg.imageTable.setItem(row, 2, size_item)
-            date_item = QTableWidgetItem()
-            date_item.setData(Qt.DisplayRole, image.uploaded_at.timestamp())
-            self.dlg.imageTable.setItem(row, 3, date_item)
-        self.dlg.imageTable.setHorizontalHeaderLabels(["ID", self.tr("Images"), self.tr("Size"), self.tr("Uploaded")])
-        self.dlg.imageTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        row = 0
+        for image in images:
+            # Ready images (present in /image, deduped against non-ready) are all usable.
+            self._set_image_row(row, image.id, image.filename, image.file_size,
+                                image.uploaded_at.timestamp(),
+                                status_text=self.tr("Ready"), status_color=READY_COLOR,
+                                status_icon=icons.ok_circle_icon)
+            row += 1
+        for status in statuses:
+            uploaded_ts = status.uploaded_at.timestamp() if status.uploaded_at else 0
+            text, color, icon = self._image_status_style(status)
+            self._set_image_row(row, status.id, status.filename, 0, uploaded_ts,
+                                status_text=text, status_color=color, status_icon=icon,
+                                status_tooltip=status.preprocessing_error)
+            row += 1
+        self.dlg.imageTable.setHorizontalHeaderLabels(
+            ["ID", self.tr("Images"), self.tr("Size"), self.tr("Uploaded"), self.tr("Status")])
+        header = self.dlg.imageTable.horizontalHeader()
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(STATUS_COLUMN, QHeaderView.ResizeMode.Fixed)
+        self.dlg.imageTable.setColumnWidth(STATUS_COLUMN, self._image_status_width())
+        self.dlg.imageTable.setIconSize(QSize(STATUS_GLYPH_SIZE, STATUS_GLYPH_SIZE))
         self.dlg.imageTable.sortItems(self.sort_images_column, Qt.AscendingOrder)
         if len(images) == 0:
             self.dlg.previewMosaicButton.setEnabled(False)
@@ -444,12 +601,54 @@ class DataCatalogView(QObject):
                                                           self.dlg.catalogSelectionLabel.width() - 10)))
         # Show widgets
         self.dlg.deleteCatalogButton.setEnabled(True)
+        # Re-enable actions that a previous non-ready selection may have disabled
+        self.dlg.previewImageButton.setEnabled(True)
+        self.dlg.imageInfoButton.setEnabled(True)
+        self.dlg.renameImageButton.setEnabled(True)
         self.dlg.downloadImageButton.setEnabled(image.available_for_download)
         if not image.available_for_download:
             self.dlg.downloadImageButton.setToolTip(self.tr("Image is not available for download"))
         else:
             self.dlg.downloadImageButton.setToolTip(self.tr("Download"))
         self.set_table_tooltip(self.dlg.imageTable)
+
+    def show_image_status_info(self, status: ImageStatusSchema):
+        """Info panel for a non-ready (preprocessing / failed) image row.
+
+        Preview/download/info/rename are unavailable for such images; only delete works.
+        """
+        if not status:
+            return
+        local_uploaded_at = status.uploaded_at.astimezone() if status.uploaded_at else None
+        state, _, _ = self._image_status_style(status)
+        lines = [self.tr("Status: {state}").format(state=state)]
+        if local_uploaded_at:
+            lines.append(self.tr("Uploaded: {date} at {time}").format(
+                date=local_uploaded_at.date(), time=local_uploaded_at.strftime('%H:%M')))
+        if status.preprocessing_error:
+            lines.append(self.tr("Error: {error}").format(error=status.preprocessing_error))
+        self.dlg.catalogInfo.setText(" \n".join(lines))
+        self.dlg.imagePreview.clear()
+        bold_font = self.dlg.catalogSelectionLabel.font()
+        bold_font.setBold(True)
+        self.dlg.catalogSelectionLabel.setText(self.tr("Selected image: <b>{image_name}").format(
+            image_name=QFontMetrics(bold_font).elidedText(status.filename,
+                                                          Qt.ElideRight,
+                                                          self.dlg.catalogSelectionLabel.width() - 10)))
+        # Only delete is available for non-ready images
+        self.dlg.deleteCatalogButton.setEnabled(True)
+        self.dlg.previewImageButton.setEnabled(False)
+        self.dlg.imageInfoButton.setEnabled(False)
+        self.dlg.renameImageButton.setEnabled(False)
+        self.dlg.downloadImageButton.setEnabled(False)
+        self.dlg.downloadImageButton.setToolTip(self.tr("Image is not available for download"))
+        self.set_table_tooltip(self.dlg.imageTable)
+
+    def set_failed_images_present(self, present: bool):
+        """Track whether the open mosaic has failed images and show the bulk-delete button
+        accordingly (only while the image list is visible)."""
+        self._failed_present = present
+        self.dlg.deleteFailedButton.setVisible(present and not self.mosaic_table_visible)
 
     def clear_image_info(self):
         self.contain_image_cell_buttons()
@@ -495,6 +694,8 @@ class DataCatalogView(QObject):
         # Set filter and its placeholder text
         self.filter_catalog_table(self.dlg.filterCatalog.text())
         self.dlg.filterCatalog.setPlaceholderText(self.tr("Filter images by name or id"))
+        # Reveal the bulk "delete failed" button if the open mosaic has failed images
+        self.dlg.deleteFailedButton.setVisible(self._failed_present)
 
     def show_mosaics_table(self, selected_mosaic_name: Optional[str]):
         # Save buttons before deleting cells and therefore widgets
@@ -504,6 +705,8 @@ class DataCatalogView(QObject):
         self.dlg.deleteCatalogButton.setText(self.tr("Delete collection"))
         self.dlg.addCatalogButton.setText(self.tr("Add collection"))
         self.dlg.addCatalogButton.setMenu(None)
+        # "Delete failed" is only relevant inside a mosaic's image list
+        self.dlg.deleteFailedButton.setVisible(False)
         # Clear image table
         self.dlg.imageTable.clearSelection()
         # Show mosaics
@@ -543,23 +746,23 @@ class DataCatalogView(QObject):
         self.image_cell_layout.setAlignment(Qt.AlignRight)
 
     def add_mosaic_cell_buttons(self):
-        # Create layout of mosaic cell buttons
-        # Create mosaic cell widget with this layout
+        # Create mosaic cell widget with the buttons layout.
+        # Always anchor the controls to the name column, regardless of which cell was
+        # clicked, so clicking the (display-only) status column never relocates them.
         cellWidget = QWidget()
         cellWidget.setLayout(self.mosaic_cell_layout)
-        self.dlg.mosaicTable.setCellWidget(self.dlg.selected_mosaic_cell.row(), 
-                                           self.dlg.selected_mosaic_cell.column(),
+        self.dlg.mosaicTable.setCellWidget(self.dlg.selected_mosaic_cell.row(),
+                                           NAME_COLUMN,
                                            cellWidget)
-    
+
     def add_image_cell_buttons(self):
         if self.dlg.imageTable.selectionModel().hasSelection():
             self.dlg.selected_image_cell = self.dlg.imageTable.selectedIndexes()[0]
-        # Create layout of image cell buttons
-        # Create image cell widget with this layout
+        # Create image cell widget with the buttons layout, anchored to the name column.
         cellWidget = QWidget()
         cellWidget.setLayout(self.image_cell_layout)
         self.dlg.imageTable.setCellWidget(self.dlg.selected_image_cell.row(),
-                                          self.dlg.selected_image_cell.column(),
+                                          NAME_COLUMN,
                                           cellWidget)
         
     def contain_mosaic_cell_buttons(self):

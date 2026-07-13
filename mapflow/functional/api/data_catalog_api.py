@@ -251,6 +251,32 @@ class DataCatalogApi(QObject):
                       use_default_error_handler=False
                      )
 
+    def get_mosaic_status(self,
+                          mosaic_id: UUID,
+                          callback: Callable,
+                          error_handler: Optional[Callable] = None):
+        """Aggregate + per-image preprocessing status, incl. non-ready images."""
+        self.http.get(url=f"{self.server}/rasters/mosaic/{mosaic_id}/status",
+                      callback=callback,
+                      use_default_error_handler=error_handler is None,
+                      error_handler=error_handler
+                     )
+
+    def delete_failed_images(self,
+                             mosaic_id: UUID,
+                             callback: Callable = lambda *args: None,
+                             callback_kwargs: Optional[dict] = None,
+                             error_handler: Optional[Callable] = None,
+                             error_handler_kwargs: Optional[dict] = None):
+        """Bulk-delete every FAILED image of the mosaic (DELETE .../mosaic/{id}/failed)."""
+        self.http.delete(url=f"{self.server}/rasters/mosaic/{mosaic_id}/failed",
+                         callback=callback,
+                         callback_kwargs=callback_kwargs or {},
+                         use_default_error_handler=error_handler is None,
+                         error_handler=error_handler,
+                         error_handler_kwargs=error_handler_kwargs or {}
+                        )
+
     def get_image(self, image_id: UUID, callback: Callable, error_handler: Callable):
         self.http.get(url=f"{self.server}/rasters/image/{image_id}",
                       callback=callback,

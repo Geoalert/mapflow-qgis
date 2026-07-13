@@ -2058,6 +2058,19 @@
                    </property>
                   </widget>
                  </item>
+                 <item>
+                  <widget class="QPushButton" name="deleteFailedButton">
+                   <property name="visible">
+                    <bool>false</bool>
+                   </property>
+                   <property name="toolTip">
+                    <string>Delete all images whose preprocessing failed in this collection</string>
+                   </property>
+                   <property name="text">
+                    <string>Delete failed</string>
+                   </property>
+                  </widget>
+                 </item>
                 </layout>
                </item>
                <item row="7" column="0">
@@ -2740,6 +2753,19 @@
                  </property>
                  <property name="checked">
                   <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QCheckBox" name="hideUnprocessedImages">
+                 <property name="toolTip">
+                  <string>Hide images that are still being preprocessed or whose preprocessing failed in the My Imagery image list</string>
+                 </property>
+                 <property name="text">
+                  <string>Hide preprocessing / failed imagery</string>
+                 </property>
+                 <property name="checked">
+                  <bool>false</bool>
                  </property>
                 </widget>
                </item>

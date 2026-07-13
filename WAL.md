@@ -44,3 +44,29 @@
 - Add a small button near zoom selector comboBox to call zoom-selector API, active when selected source is a Mapflow data provider.
 - On button press, call API and select zoom automatically depending on response.
 - On error, show a reasonable user-facing message.
+
+## 3. Track uploaded image preprocessing status (feature/track-uploaded-image-status) [ready-for-review]
+- The plain image list (`GET /mosaic/{id}/image`) only returns `data_available` images, so
+  preprocessing/failed uploads were invisible. `GET /mosaic/{id}/status` is the only source of
+  non-ready images — we *merge* it into the existing list rather than replacing the call, so ready
+  images keep their full metadata (previews/size/footprint) that `/status` does not carry.
+- Poll `/status` only while a pending/in_progress image exists, and skip re-rendering when the row
+  signature (ids + statuses) is unchanged — otherwise a background refresh would reset the user's
+  selection/preview every 10s.
+- Non-ready rows have no metadata (API limitation), so preview/download/info/rename are disabled for
+  them; delete works for any status (`DELETE /image/{id}`), plus a mosaic-level "Delete failed"
+  (`DELETE /mosaic/{id}/failed`).
+- `status_summary` rides on the legacy mosaic-list response the plugin already calls, so the mosaic
+  Status column (✓ ready · 🕑 preprocessing · ✗ failed, placeholder glyphs) needs no extra request.
+- `/status` errors (e.g. older backend) fall back to ready-only rendering — no error popup — so the
+  feature degrades gracefully.
+- Setting `hideUnprocessedImages` (default off) gates the non-ready rows; toggling re-renders the list.
+- Spec deltas: documented `/mosaic/{id}/status`, `status_summary`, `/mosaic/{id}/failed`,
+  `/image/{id}/status`, and the ready-only nature of `/mosaic/{id}/image` in `002_C_myimagery_api.md`;
+  added `hideUnprocessedImages` to `003_local_storage.md`.
+- Tests: schema parsing (summary/status/response), status semantics + unknown-status tolerance, row
+  contract (both row types expose `.id`/`.filename`), API URLs, count→pictogram text, poll signature.
+- Pre-existing unrelated red: `test_processing_aoi_geometry::test_processing_geometry_uses_cropped_aoi`
+  fails on clean `dev` too; `agent-make lint` was already red before this branch (mapflow.py B006,
+  display_image_preview B008, test_layer_utils F403/F405). This branch adds no new lint errors and
+  pyright is clean on changed files. See WAL_3.md.

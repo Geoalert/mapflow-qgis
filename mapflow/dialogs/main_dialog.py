@@ -177,6 +177,11 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.cornfirmProcessingStart.setChecked(str(self.settings.value('confirmProcessingStart', "true")).lower() == "true")
         self.cornfirmProcessingStart.toggled.connect(lambda: self.settings.setValue("confirmProcessingStart",
                                                                                     self.cornfirmProcessingStart.isChecked()))
+        # Uploaded images that are still preprocessing (or failed) stay visible by default,
+        # so users can track and manage them. See spec/002_C_myimagery_api.md.
+        self.hideUnprocessedImages.setChecked(str(self.settings.value('hideUnprocessedImages', "false")).lower() == "true")
+        self.hideUnprocessedImages.toggled.connect(lambda: self.settings.setValue("hideUnprocessedImages",
+                                                                                  self.hideUnprocessedImages.isChecked()))
         # The "Providers" filter is only relevant when the search is limited to available
         # providers, so show it only while that checkbox is set.
         self._search_providers_available = False

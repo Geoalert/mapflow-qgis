@@ -1,20 +1,22 @@
 from typing import Sequence, Union, Optional, List
 from pathlib import Path
 from uuid import UUID
+from functools import partial
 import json
 
-from PyQt5.QtCore import QObject, QUrl, pyqtSignal, Qt
+from PyQt5.QtCore import QObject, QUrl, QTimer, pyqtSignal, Qt
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
 from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog, QAbstractItemView
-from qgis.core import QgsCoordinateReferenceSystem, QgsGeometry, QgsRasterLayer
+from qgis.core import QgsCoordinateReferenceSystem, QgsGeometry, QgsRasterLayer, QgsMessageLog, Qgis
 
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs.mosaic_dialog import CreateMosaicDialog, UpdateMosaicDialog
 from ...dialogs.image_dialog import RenameImageDialog
 from ...dialogs.upload_raster_layer_dialog import UploadRasterLayersDialog
 from ...dialogs.error_message_widget import ErrorMessageWidget
-from ...schema.data_catalog import PreviewSize, MosaicReturnSchema, ImageReturnSchema, UserLimitSchema
+from ...schema.data_catalog import (PreviewSize, MosaicReturnSchema, ImageReturnSchema, UserLimitSchema,
+                                    ImageStatusSchema, MosaicStatusResponse)
 from ...schema import MyImageryParams
 from ..api.data_catalog_api import DataCatalogApi
 from ..view.data_catalog_view import DataCatalogView
@@ -53,11 +55,20 @@ class DataCatalogService(QObject):
         self.api = DataCatalogApi(http=http, server=server, dlg=dlg, iface=iface, result_loader=self.result_loader, plugin_version=self.plugin_version)
         self.view = DataCatalogView(dlg=dlg, app_context=self.app_context)
         self.mosaics = {}
-        self.images = []
+        self.images = []  # ready images (full ImageReturnSchema), used for preview/selection
+        self.image_statuses = []  # non-ready images (ImageStatusSchema): preprocessing / failed
         self.image_max_size_pixels = Config.MAX_FILE_SIZE_PIXELS
         self.image_max_size_bytes = Config.MAX_FILE_SIZE_BYTES
         self.free_storage = None
         self.preview_idx = 0
+
+        # Poll the open mosaic's /status while any image is still being preprocessed, so
+        # rows flip from "Preprocessing" to ready/failed without a manual refresh.
+        self._polling_mosaic_id = None
+        self._last_image_signature = None
+        self._status_poll_timer = QTimer(self)
+        self._status_poll_timer.setInterval(10000)  # 10s
+        self._status_poll_timer.timeout.connect(self._poll_open_mosaic_status)
 
 
     # Mosaics CRUD
@@ -330,12 +341,73 @@ class DataCatalogService(QObject):
                                   image_count=len(uploaded+[image_to_upload]+non_uploaded+failed)
                                  )
 
-    def get_mosaic_images(self, mosaic_id):
-        self.api.get_mosaic_images(mosaic_id=mosaic_id, callback=self.get_mosaic_images_callback)
+    def get_mosaic_images(self, mosaic_id, is_poll: bool = False):
+        """Load a mosaic's images.
 
-    def get_mosaic_images_callback(self, response: QNetworkReply):
-        self.images = [ImageReturnSchema.from_dict(data) for data in json.loads(response.readAll().data())]
-        self.view.display_images(self.images)
+        The plain image list only returns ready (``data_available``) images, so we
+        chain a ``/status`` request to also surface preprocessing/failed images.
+        ``is_poll`` marks background status refreshes, which skip re-rendering (and
+        thus preserve the user's selection) when nothing changed.
+        """
+        if not is_poll:
+            # A fresh (user-initiated) load of a different mosaic invalidates the signature.
+            self._last_image_signature = None
+        self.api.get_mosaic_images(
+            mosaic_id=mosaic_id,
+            callback=partial(self._on_mosaic_images_loaded, mosaic_id=mosaic_id, is_poll=is_poll))
+
+    def _on_mosaic_images_loaded(self, response: QNetworkReply, mosaic_id, is_poll: bool):
+        images = [ImageReturnSchema.from_dict(data) for data in json.loads(response.readAll().data())]
+        # Augment with non-ready images from /status; degrade gracefully if unavailable.
+        self.api.get_mosaic_status(
+            mosaic_id=mosaic_id,
+            callback=partial(self._on_mosaic_status_loaded, mosaic_id=mosaic_id, images=images, is_poll=is_poll),
+            error_handler=partial(self._on_mosaic_status_failed, mosaic_id=mosaic_id, images=images, is_poll=is_poll))
+
+    def _on_mosaic_status_failed(self, response: QNetworkReply, mosaic_id, images, is_poll: bool):
+        # Backend without /status (or transient error): show ready images only, as before.
+        code = response.attribute(QNetworkRequest.HttpStatusCodeAttribute)
+        QgsMessageLog.logMessage(
+            f"mosaic {mosaic_id} /status request failed (HTTP {code}, {response.errorString()}); "
+            "showing ready images only, preprocessing/failed rows will be hidden",
+            "Mapflow", Qgis.Warning)
+        self._render_mosaic_images(mosaic_id, images, non_ready=[], is_poll=is_poll)
+
+    def _on_mosaic_status_loaded(self, response: QNetworkReply, mosaic_id, images, is_poll: bool):
+        try:
+            status = MosaicStatusResponse.from_dict(json.loads(response.readAll().data()))
+            non_ready = [] if self._hide_unprocessed() else status.non_ready_images()
+        except Exception as e:
+            QgsMessageLog.logMessage(
+                f"mosaic {mosaic_id} /status response could not be parsed ({e}); "
+                "showing ready images only", "Mapflow", Qgis.Warning)
+            self._render_mosaic_images(mosaic_id, images, non_ready=[], is_poll=is_poll)
+            return
+        if not is_poll:
+            QgsMessageLog.logMessage(
+                f"mosaic {mosaic_id} /status: {len(non_ready)} non-ready image(s)", "Mapflow", Qgis.Info)
+        # An image can be data_available (present in /image) yet still PENDING/IN_PROGRESS;
+        # show it once as a flagged row rather than twice.
+        non_ready_ids = {str(s.id) for s in non_ready}
+        images = [i for i in images if str(i.id) not in non_ready_ids]
+        self._render_mosaic_images(mosaic_id, images, non_ready, is_poll=is_poll)
+
+    def _render_mosaic_images(self,
+                              mosaic_id,
+                              images: List[ImageReturnSchema],
+                              non_ready: List[ImageStatusSchema],
+                              is_poll: bool):
+        self.images = images
+        self.image_statuses = non_ready
+        self.app_context.images = self.images
+        self._manage_status_polling(mosaic_id, non_ready)
+        signature = self._image_signature(mosaic_id, images, non_ready)
+        # During background polling, don't disturb the user unless the list actually changed.
+        if is_poll and signature == self._last_image_signature:
+            return
+        self._last_image_signature = signature
+        self.view.display_images(self.images, self.image_statuses)
+        self.view.set_failed_images_present(any(s.is_failed for s in non_ready))
         if self.view.mosaic_table_visible:
             self.view.display_mosaic_info(self.selected_mosaic(), self.images)
             self.preview_idx = 0
@@ -343,7 +415,50 @@ class DataCatalogService(QObject):
                 self.get_image_preview_s(self.images[self.preview_idx])
             else:
                 self.view.enable_mosaic_images_preview(len(self.images), self.preview_idx)
-        self.app_context.images = self.images
+
+    @staticmethod
+    def _image_signature(mosaic_id, images, non_ready):
+        """Order-independent fingerprint of the rendered rows to detect real changes."""
+        ready = sorted(str(i.id) for i in images)
+        pending = sorted((str(s.id), s.preprocessing_status.value) for s in non_ready)
+        return (str(mosaic_id), tuple(ready), tuple(pending))
+
+    def _hide_unprocessed(self) -> bool:
+        return str(self.dlg.settings.value('hideUnprocessedImages', 'false')).lower() == 'true'
+
+    # Status polling
+    def _manage_status_polling(self, mosaic_id, non_ready: List[ImageStatusSchema]):
+        # Poll while anything is still in flight (preprocessing or loading). Failed is
+        # terminal, so a mosaic whose only non-ready images are failed doesn't poll.
+        has_pending = any(not s.is_failed for s in non_ready)
+        if has_pending:
+            self._polling_mosaic_id = mosaic_id
+            if not self._status_poll_timer.isActive():
+                self._status_poll_timer.start()
+        elif self._polling_mosaic_id == mosaic_id:
+            self._stop_status_polling()
+
+    def _stop_status_polling(self):
+        self._status_poll_timer.stop()
+        self._polling_mosaic_id = None
+
+    def _poll_open_mosaic_status(self):
+        mosaic_id = self._polling_mosaic_id
+        if not mosaic_id:
+            self._stop_status_polling()
+            return
+        # Stop polling once the user navigated away from this mosaic.
+        current = self.selected_mosaic()
+        if not current or str(current.id) != str(mosaic_id):
+            self._stop_status_polling()
+            return
+        self.get_mosaic_images(mosaic_id, is_poll=True)
+
+    def on_hide_unprocessed_toggled(self):
+        """Re-render the open image list when the visibility setting changes."""
+        mosaic = self.selected_mosaic()
+        if mosaic:
+            self.get_mosaic_images(mosaic.id)
     
     def get_next_preview(self):
         try:
@@ -411,7 +526,38 @@ class DataCatalogService(QObject):
         if box_exec == QMessageBox.Ok:
             self.delete_images(response = None, images=images, deleted=[], failed=[])
 
-    def on_image_selection(self, image: ImageReturnSchema):
+    def confirm_delete_failed_images(self):
+        mosaic = self.selected_mosaic()
+        if not mosaic:
+            return
+        failed_count = sum(1 for s in self.image_statuses if s.is_failed)
+        if failed_count == 0:
+            return
+        message = self.tr("<center>Delete all <b>{count}</b> failed image(s) from '{mosaic}' imagery collection?"
+                         ).format(count=failed_count, mosaic=mosaic.name)
+        box = QMessageBox(QMessageBox.Question, "Mapflow", message, parent=QApplication.activeWindow())
+        box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
+        if box.exec() == QMessageBox.Ok:
+            self.api.delete_failed_images(mosaic_id=mosaic.id,
+                                          callback=self.delete_failed_images_callback,
+                                          error_handler=self.delete_failed_images_error_handler)
+
+    def delete_failed_images_callback(self, response: QNetworkReply):
+        mosaic = self.selected_mosaic()
+        if mosaic:
+            self.get_mosaic_images(mosaic.id)
+        self.mosaicsUpdated.emit()
+
+    def delete_failed_images_error_handler(self, response: QNetworkReply):
+        self.view.alert(self.tr("Could not delete failed images"))
+
+    def on_image_selection(self, image):
+        if not self._is_full_image(image):
+            # Non-ready image (preprocessing / failed): no preview/metadata to show.
+            self.view.show_image_status_info(image)
+            self.view.add_image_cell_buttons()
+            self.app_context.selected_image = None
+            return image
         selected_images = self.dlg.imageTable.selectedIndexes()
         selected_mosaics = self.dlg.mosaicTable.selectedIndexes()
         if not selected_mosaics or (len(selected_images) > 1 and self.dlg.selected_image_cell == selected_images[0]):
@@ -426,7 +572,7 @@ class DataCatalogService(QObject):
 
     def image_info(self):
         image = self.selected_image()
-        if not image:
+        if not self._is_full_image(image):
             return
         self.view.full_image_info(image=image)
 
@@ -445,6 +591,8 @@ class DataCatalogService(QObject):
     def get_image_preview_l(self):
         try:
             image = self.selected_image()
+            if not self._is_full_image(image):
+                return
             footprint = QgsGeometry.fromWkt(image.footprint)  # already in WGS84
             self.api.get_image_preview_l(image=image,
                                          footprint=footprint,
@@ -485,6 +633,8 @@ class DataCatalogService(QObject):
 
     def show_rename_image_dialog(self):
         image = self.selected_image()
+        if not self._is_full_image(image):
+            return
         dialog = RenameImageDialog(self.dlg)
         dialog.accepted.connect(lambda:self.rename_image(image.id, dialog.image()))
         dialog.setup(image)
@@ -501,7 +651,7 @@ class DataCatalogService(QObject):
 
     def download_image(self):
         image = self.selected_image()
-        if not image:
+        if not self._is_full_image(image):
             return
         self.api.download_image(image_id=image.id,
                                 callback=self.download_image_callback,
@@ -619,16 +769,37 @@ class DataCatalogService(QObject):
         self.app_context.selected_mosaic = first[0]
         return first[0]
         
-    def selected_images(self, limit=None) -> List[MosaicReturnSchema]:
+    def selected_images(self, limit=None) -> list:
+        """Selected image rows, mixing ready (ImageReturnSchema) and non-ready
+        (ImageStatusSchema) images. Both expose ``.id`` and ``.filename`` so the
+        delete flow works uniformly."""
         ids = self.view.selected_images_indecies(limit=limit)
-        images = [i for i in self.images if i.id in ids]
-        return images
+        rows = {str(i.id): i for i in self.images}
+        rows.update({str(s.id): s for s in self.image_statuses})
+        return [rows[i] for i in ids if i in rows]
 
-    def selected_image(self) -> Optional[ImageReturnSchema]:
+    def selected_image(self):
         first = self.selected_images(limit=1)
         if not first:
             return None
         return first[0]
+
+    def selected_ready_image(self) -> Optional[ImageReturnSchema]:
+        """First selected image that is ready (has full metadata / footprint).
+
+        Non-ready (preprocessing / failed) selections are ignored — they carry no
+        footprint or extent, so they cannot drive AOI/area/processing. Callers that
+        need imagery geometry must use this rather than ``selected_image``.
+        """
+        for image in self.selected_images():
+            if self._is_full_image(image):
+                return image
+        return None
+
+    @staticmethod
+    def _is_full_image(image) -> bool:
+        """True for ready images with full metadata (preview/download/info/rename)."""
+        return isinstance(image, ImageReturnSchema)
 
     # Provider
     def set_catalog_provider(self, providers):
