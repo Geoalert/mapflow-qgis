@@ -261,6 +261,11 @@ footprint layer) to images intersecting any of the selected AOIs (all selected i
 are sent as `aoiIds` on the template images request). Deselecting all AOIs restores
 the full template results.
 
+Selecting one or more AOI rows also sets the processing **Area** to the union of the
+selected AOIs' geometries, so a processing started from the template covers exactly
+those AOIs. Selecting no AOI (e.g. while a processing row is selected) keeps the
+current Area; the template's AOIs are not auto-selected as the Area on open.
+
 Leaving a template ("one step left", back button) returns to the project's
 processings list and removes the template's layer group from the map.
 
