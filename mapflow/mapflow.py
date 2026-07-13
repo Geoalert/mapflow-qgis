@@ -910,21 +910,24 @@ class Mapflow(QObject):
         )
 
     def filter_search_by_selected_aoi(self):
-        """S7: inside a template, selecting an AOI filters the imagery-search results
-        (table and footprint layer) to images intersecting that AOI; de-selecting the AOI
-        (or selecting a processing) restores all of the template's results."""
+        """S7: inside a template, selecting one or more AOIs filters the imagery-search
+        results (table and footprint layer) to images intersecting any of the selected AOIs;
+        de-selecting all AOIs (or selecting a processing) restores all of the template's
+        results."""
         if not self.processing_service.in_template_mode:
             return
         template = self.processing_service.active_template
         if not template:
             return
-        aoi = self.processing_service.selected_aoi()
-        desired = aoi.id if (aoi and aoi.id) else None
+        selected_ids = frozenset(
+            str(aoi.id) for aoi in self.processing_service.selected_aois() if aoi and aoi.id
+        )
         # Only reload when the effective filter actually changes (selection fires often).
-        if desired == self._template_search_aoi_filter:
+        current = self._template_search_aoi_filter or frozenset()
+        if selected_ids == current:
             return
-        self._template_search_aoi_filter = desired
-        self._load_template_search(template, aoi_ids=[desired] if desired else None)
+        self._template_search_aoi_filter = selected_ids or None
+        self._load_template_search(template, aoi_ids=list(selected_ids) or None)
 
     def select_processing_in_table(self, processing_id: str):
         """Select processing row by ID and open processing details."""
