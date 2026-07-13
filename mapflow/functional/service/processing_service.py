@@ -426,13 +426,26 @@ class ProcessingService(QObject):
             QMessageBox.Information
         )
         response_data = json.loads(response.readAll().data())
+        self.processing_fetch_timer.start()  # start monitoring
+        if self.in_template_mode:
+            # In a template the new processing is shown grouped UNDER its AOI. That binding
+            # lives in the template's aoiDetails, which the run response does not carry, so a
+            # flat optimistic add would place the processing under the "No AOI" separator until
+            # the user re-entered the template (feedback 8.2). Re-hydrate the template instead
+            # (fresh aoiDetails binds the processing to its AOI) and refetch the template
+            # processings for the full row data. Template run responses also may not be a full
+            # ProcessingDTO, so we do not parse one here.
+            if isinstance(response_data, dict) and response_data.get("name"):
+                self.view.clear_processing_name(response_data["name"])
+            self._refresh_active_template()
+            self.dlg.startProcessing.setEnabled(True)
+            return
         new_processing = None
         # Template start responses may differ from processing-create responses.
         # Try optimistic local update only when payload looks like a Processing DTO.
         if isinstance(response_data, dict) and response_data.get("id") and response_data.get("name"):
             new_processing = ProcessingDTO.from_dict(response_data)
             self.view.clear_processing_name(new_processing.name)
-        self.processing_fetch_timer.start()  # start monitoring
         if new_processing is not None:
             # Add to history
             self.processings[new_processing.id] = new_processing
@@ -443,6 +456,18 @@ class ProcessingService(QObject):
         # both processings and template status/counts in table.
         self.get_processings()
         self.dlg.startProcessing.setEnabled(True)
+
+    def _refresh_active_template(self):
+        """Re-hydrate the active template's ``aoiDetails`` and its processings, then rebuild
+        the grouped rows. Used after starting a template processing so the new processing is
+        bound to its AOI instead of appearing under 'No AOI' (feedback 8.2)."""
+        if not self.active_template:
+            return
+        self.api.get_template(
+            template_id=self.active_template.id,
+            callback=self._reopen_template_callback,
+        )
+        self._fetch_template_processings()
 
     def start_processing_error_handler(self, response: QNetworkReply) -> None:        
         """Error handler for processing creation requests.
