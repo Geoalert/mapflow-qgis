@@ -1576,7 +1576,42 @@ class Mapflow(QObject):
         if getattr(self, "metadata_search_mode", "search") == "plan":
             self.create_search_template()
             return
+        # An immediate search over a too-large AOI is offered as a Planned Search instead (T8).
+        if self._search_area_exceeds_limit():
+            self._prompt_plan_search()
+            return
         self.get_metadata()
+
+    def _search_area_exceeds_limit(self) -> bool:
+        """Whether the current AOI is too large for an immediate search (T8). Zero/unknown
+        ``searchAreaLimit`` disables the check and lets the search proceed."""
+        limit = self.app_context.search_area_limit
+        return bool(limit and self.app_context.aoi_size and self.app_context.aoi_size > limit)
+
+    def _planned_search_default_name(self) -> str:
+        """Auto-name for a Planned Search created from the too-large-AOI prompt (T8)."""
+        return self.tr("Searching {datetime}").format(
+            datetime=datetime.now().strftime("%Y-%m-%d %H:%M"))
+
+    def _prompt_plan_search(self) -> None:
+        """Offer to create a Planned Search when the AOI exceeds the immediate-search limit
+        (T8). On confirmation, create a template with an auto-generated name; the existing
+        template-area-limit check inside ``create_search_template`` still applies."""
+        box = QMessageBox(
+            QMessageBox.Question,
+            self.plugin_name,
+            self.tr("The search area is too large for immediate processing. The Planned Search "
+                    "will be created and run in the background. You will be notified when "
+                    "results are available."),
+            parent=self.main_window,
+        )
+        box.addButton(QMessageBox.Cancel)
+        plan_button = box.addButton(self.tr("Plan Search"), QMessageBox.AcceptRole)
+        box.setDefaultButton(plan_button)
+        box.exec()
+        if box.clickedButton() is not plan_button:
+            return
+        self.create_search_template(name_override=self._planned_search_default_name())
 
     def _build_template_aoi_details(self) -> Optional[dict]:
         """Build the ``searchParams.aoiDetails`` FeatureCollection for template creation.
@@ -1643,8 +1678,11 @@ class Mapflow(QObject):
             })
         return features
 
-    def create_search_template(self):
-        """Create planned search template using current AOI and imagery-search filters."""
+    def create_search_template(self, name_override: Optional[str] = None):
+        """Create planned search template using current AOI and imagery-search filters.
+
+        ``name_override`` supplies the template name for the Planned Search auto-created from
+        the too-large-AOI prompt (T8); otherwise the name comes from the search name field."""
         self.replace_search_provider_index()
         # A template always belongs to a project — block creation (but not the immediate search)
         # and tell the user, instead of sending a request that the backend would reject.
@@ -1699,7 +1737,7 @@ class Mapflow(QObject):
             dataProviders=search_providers,
         )
 
-        template_name = self.dlg.processingName.text().strip()
+        template_name = (name_override or self.dlg.processingName.text()).strip()
         if not template_name:
             self.alert(self.tr('Please, specify a name for your search'))
             return
@@ -2458,6 +2496,8 @@ class Mapflow(QObject):
         self.app_context.remaining_credits = int(response_data.get('remainingCredits', 0))
         # Planned-processing (template) area cap; absent/zero means "unknown" and disables the client-side check
         self.app_context.template_area_limit = int(response_data.get('templateAreaLimit', 0)) / 1e6  # convert into sq.km
+        # Immediate-search area cap; above it the user is offered a Planned Search (T8). Zero = unknown/disabled.
+        self.app_context.search_area_limit = int(response_data.get('searchAreaLimit', 0)) / 1e6  # convert into sq.km
         self.app_context.max_aois_per_processing = int(response_data.get("maxAoisPerProcessing",
                                                              self.config.MAX_AOIS_PER_PROCESSING))
         if self.app_context.billing_type == BillingType.credits:
