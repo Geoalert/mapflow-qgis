@@ -231,29 +231,31 @@ def test_rename_aoi_rejects_overlong_name(monkeypatch):
     assert alerts  # user was warned
 
 
-def test_filter_search_by_selected_aoi_passes_single_aoi_id():
+def test_filter_search_by_selected_aoi_passes_selected_aoi_ids():
     plugin = Mapflow.__new__(Mapflow)
     plugin.processing_service = MagicMock()
     plugin.processing_service.in_template_mode = True
+    plugin._template_search_aoi_filter = None
     template = SimpleNamespace(id="t-1")
     plugin.processing_service.active_template = template
-    plugin.processing_service.selected_aoi.return_value = SimpleNamespace(id="aoi-1")
+    plugin.processing_service.selected_aois.return_value = [SimpleNamespace(id="aoi-1")]
     plugin._load_template_search = MagicMock()
 
     plugin.filter_search_by_selected_aoi()
 
     plugin._load_template_search.assert_called_once_with(template, aoi_ids=["aoi-1"])
+    assert plugin._template_search_aoi_filter == frozenset({"aoi-1"})
 
 
 def test_filter_search_resets_to_all_when_aoi_deselected():
-    """De-selecting the AOI (or selecting a processing) restores the full template results."""
+    """De-selecting all AOIs (or selecting a processing) restores the full template results."""
     plugin = Mapflow.__new__(Mapflow)
     plugin.processing_service = MagicMock()
     plugin.processing_service.in_template_mode = True
     template = SimpleNamespace(id="t-1")
     plugin.processing_service.active_template = template
-    plugin.processing_service.selected_aoi.return_value = None
-    plugin._template_search_aoi_filter = "aoi-1"  # previously filtered by an AOI
+    plugin.processing_service.selected_aois.return_value = []
+    plugin._template_search_aoi_filter = frozenset({"aoi-1"})  # previously filtered by an AOI
     plugin._load_template_search = MagicMock()
 
     plugin.filter_search_by_selected_aoi()
@@ -268,7 +270,7 @@ def test_filter_search_noop_when_filter_unchanged():
     plugin.processing_service = MagicMock()
     plugin.processing_service.in_template_mode = True
     plugin.processing_service.active_template = SimpleNamespace(id="t-1")
-    plugin.processing_service.selected_aoi.return_value = None
+    plugin.processing_service.selected_aois.return_value = []
     plugin._template_search_aoi_filter = None  # already showing all results
     plugin._load_template_search = MagicMock()
 
