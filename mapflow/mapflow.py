@@ -624,6 +624,8 @@ class Mapflow(QObject):
         self.template_search_images = {str(image.id): image for image in images}
         # New images are flagged with an icon in the leftmost column (not by editing text).
         self._apply_new_image_markers()
+        # Toggle/wire the search pager for the template results (T6).
+        self._update_search_pager(response_data.total, response_data.limit, response_data.offset)
 
     def _store_template_search_footprints(self,
                                           geoms: dict,
@@ -884,13 +886,15 @@ class Mapflow(QObject):
         # Explicit "See search results" action: bring the imagery-search tab to front.
         self._load_template_search(template, switch_tab=True)
 
-    def _load_template_search(self, template, aoi_ids=None, switch_tab=False):
+    def _load_template_search(self, template, aoi_ids=None, switch_tab=False, offset=0):
         """Fill the imagery-search table with the template's search results.
 
         ``aoi_ids`` restricts the results to specific AOIs (S7: filter by selected AOI);
         when ``None`` all of the template's AOIs are used. ``switch_tab`` brings the
         imagery-search tab to front — only the explicit menu action does so; entering a
         template or filtering by AOI must not steal focus from the processings tab.
+        ``offset`` selects the results page: entering a template or changing the AOI filter
+        resets to the first page (offset 0); the search pager passes a page offset (T6).
         """
         if not template:
             return
@@ -899,9 +903,7 @@ class Mapflow(QObject):
             if imagery_search_tab:
                 self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
 
-        # A template's search results always load from the first page — pagination is per-load
-        # context (template / selected AOI) and must not carry over from a previous one.
-        self.search_page_offset = 0
+        self.search_page_offset = max(0, offset)
         if aoi_ids is None:
             aoi_ids = self._aoi_ids_from_template(template)
         self.processing_service.api.get_template_images(
@@ -911,6 +913,15 @@ class Mapflow(QObject):
             offset=self.search_page_offset,
             aoi_ids=aoi_ids or None,
         )
+
+    def _load_template_search_page(self, offset: int):
+        """Re-fetch the active template's search results at ``offset``, preserving the current
+        AOI filter — the search pager's next/prev inside a template (T6)."""
+        template = self.processing_service.active_template
+        if not template:
+            return
+        aoi_ids = list(self._template_search_aoi_filter) if self._template_search_aoi_filter else None
+        self._load_template_search(template, aoi_ids=aoi_ids, offset=offset)
 
     def add_template_aoi(self):
         """Add the current polygon layer's features as named AOIs to the active template."""
@@ -1895,25 +1906,7 @@ class Mapflow(QObject):
         self.display_metadata_geojson_layer(filename, f"{provider.name} metadata")
         self.dlg.fill_metadata_table(geoms)
 
-        if response_data.total > response_data.limit:
-            self.search_page_offset = response_data.offset
-            self.search_page_limit = response_data.limit
-            quotient, remainder = divmod(response_data.total, response_data.limit)
-            search_total_pages = quotient + (remainder > 0)            
-            search_page_number = int(response_data.offset/response_data.limit) + 1
-            self.dlg.enable_search_pages(True, search_page_number, search_total_pages)
-            # Disable next arrow for the last page
-            if search_page_number == search_total_pages:
-                self.dlg.searchRightButton.setEnabled(False)
-            else:
-                self.dlg.searchRightButton.setEnabled(True)
-            # Disable previous arrow for the first page
-            if search_page_number == 1:
-                self.dlg.searchLeftButton.setEnabled(False)
-            else:
-                self.dlg.searchLeftButton.setEnabled(True)
-        else:
-            self.dlg.enable_search_pages(False)
+        self._update_search_pager(response_data.total, response_data.limit, response_data.offset)
 
     def request_skywatch_metadata(
             self,
@@ -3764,11 +3757,35 @@ class Mapflow(QObject):
             product_types = []
         return provider_names, product_types
     
+    def _update_search_pager(self, total: int, limit: int, offset: int):
+        """Show/hide and wire the imagery-search page navigation from a search response's
+        ``total``/``limit``/``offset``. Shared by regular search and template search (T6):
+        template results used to fill the table but never toggle the pager."""
+        if limit and total > limit:
+            self.search_page_offset = offset
+            self.search_page_limit = limit
+            quotient, remainder = divmod(total, limit)
+            total_pages = quotient + (remainder > 0)
+            page_number = int(offset / limit) + 1
+            self.dlg.enable_search_pages(True, page_number, total_pages)
+            self.dlg.searchRightButton.setEnabled(page_number != total_pages)
+            self.dlg.searchLeftButton.setEnabled(page_number != 1)
+        else:
+            self.dlg.enable_search_pages(False)
+
     def show_search_next_page(self):
-        self.get_metadata(offset=self.search_page_offset + self.search_page_limit)
+        offset = self.search_page_offset + self.search_page_limit
+        if self.processing_service.in_template_mode:
+            self._load_template_search_page(offset)
+        else:
+            self.get_metadata(offset=offset)
 
     def show_search_previous_page(self):
-        self.get_metadata(offset=self.search_page_offset - self.search_page_limit)
+        offset = self.search_page_offset - self.search_page_limit
+        if self.processing_service.in_template_mode:
+            self._load_template_search_page(offset)
+        else:
+            self.get_metadata(offset=offset)
     
     def selected_search_product_types(self):
         product_types = []
