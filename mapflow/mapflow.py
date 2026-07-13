@@ -758,6 +758,13 @@ class Mapflow(QObject):
                     subgroup_name=subgroup_name,
                 )
 
+    def _add_aoi_to_preview_if_needed(self) -> None:
+        """Overlay the search AOI on a preview — but not inside a template, where the AOI is
+        already drawn as its own layer, so the clone would just duplicate it (feedback 1)."""
+        if self.processing_service.in_template_mode:
+            return
+        self.result_loader.add_aoi_to_preview()
+
     def _relocate_preview_to_template_group(self, layer) -> None:
         """In the in-template view, move a freshly added preview layer into the template's
         map group, above the search-results footprints and below the AOI subgroups, so the
@@ -844,10 +851,20 @@ class Mapflow(QObject):
                                template_group_name: str,
                                subgroup_name: Optional[str] = None):
         """Find or create the ``Mapflow > <template name> [> <subgroup>]`` layer-tree group
-        and return the node new layers should be inserted into."""
+        and return the node new layers should be inserted into.
+
+        The Mapflow group is created here when missing so the template group is nested under it
+        from the very first (template-open) call. Previously the open path fell back to the root
+        because the Mapflow group did not exist yet, and a later preview — by which point the
+        group had been created — added a SECOND template group under it (feedback 4.1). If the
+        user has deleted the Mapflow group (the result loader then adds to root), respect that
+        and place template groups at the root too, keeping a single path."""
         root = self.app_context.project.layerTreeRoot()
         mapflow_group_name = self.app_context.settings.value('layerGroup') or self.app_context.plugin_name
         mapflow_group = root.findGroup(mapflow_group_name)
+        if mapflow_group is None and getattr(self.result_loader, 'add_layers_to_group', True):
+            mapflow_group = root.insertGroup(0, mapflow_group_name)
+            self.app_context.settings.setValue('layerGroup', mapflow_group_name)
         parent_group = mapflow_group if mapflow_group else root
         template_group = parent_group.findGroup(template_group_name)
         if not template_group:
@@ -1158,13 +1175,7 @@ class Mapflow(QObject):
             self.app_context.metadata_layer.setSubsetString('')
             for row in range(self.dlg.metadataTable.rowCount()):
                 self.dlg.metadataTable.setRowHidden(row, False)
-            try:  # avoid stacking duplicate preview connections across table refills
-                self.dlg.metadataTable.disconnect(self.cell_preview_connection)
-            except (AttributeError, TypeError, RuntimeError):
-                # no previous connection, or its underlying C++ object is gone
-                pass
-            self.cell_preview_connection = self.dlg.metadataTable.cellClicked.connect(
-                self.preview_search_from_cell)
+            self._reconnect_cell_preview()
             return
         if max_cloud_cover is None:
             max_cloud_cover = self.dlg.maxCloudCover.value()
@@ -1223,7 +1234,20 @@ class Mapflow(QObject):
         else: # show the whole table (should be one row)
             for row in range(self.dlg.metadataTable.rowCount()):
                 self.dlg.metadataTable.setRowHidden(row, False)
-        self.cell_preview_connection = self.dlg.metadataTable.cellClicked.connect(self.preview_search_from_cell)
+        self._reconnect_cell_preview()
+
+    def _reconnect_cell_preview(self):
+        """Rewire the search table's 'Preview' cell click to a single handler. ``filter_metadata``
+        runs on every filter change and table refill; connecting without disconnecting first
+        stacks the connections, so one click fires the preview several times and adds several
+        preview layers at once (feedback 4.2). Disconnect the previous connection first."""
+        try:
+            self.dlg.metadataTable.disconnect(self.cell_preview_connection)
+        except (AttributeError, TypeError, RuntimeError):
+            # no previous connection, or its underlying C++ object is gone
+            pass
+        self.cell_preview_connection = self.dlg.metadataTable.cellClicked.connect(
+            self.preview_search_from_cell)
 
     def set_up_login_dialog(self) -> MapflowLoginDialog:
         """Create a login dialog, set its title and signal-slot connections."""
@@ -2693,7 +2717,9 @@ class Mapflow(QObject):
             footprint=footprint,
             crs=crs,
             image_name=image_id,
-            add_aoi=True
+            # Don't clone the AOI over the preview inside a template: the AOI is already drawn
+            # as its own layer there, so the "Search area" clone just duplicates it (feedback 1).
+            add_aoi=not self.processing_service.in_template_mode,
         )
         self._relocate_preview_to_template_group(layer)
 
@@ -2718,7 +2744,7 @@ class Mapflow(QObject):
             vrt = None
             vrt_layer = QgsRasterLayer(vrt_path, "{image_id} preview".format(image_id=image_id), 'gdal')
             self.result_loader.add_layer(vrt_layer)
-            self.result_loader.add_aoi_to_preview()
+            self._add_aoi_to_preview_if_needed()
             self._relocate_preview_to_template_group(vrt_layer)
             return
         # Requset part: remove first image from the list and get its preview
@@ -2768,7 +2794,7 @@ class Mapflow(QObject):
             self.result_loader.add_layer(layer=footprint_layer, order=0)
             self._mosaic_preview_footprint_id = footprint_layer.id()
             self._relocate_preview_to_template_group(footprint_layer)
-        self.result_loader.add_aoi_to_preview()
+        self._add_aoi_to_preview_if_needed()
 
     def preview_sentinel(self, image_id):
         selected_cells = self.dlg.metadataTable.selectedItems()
