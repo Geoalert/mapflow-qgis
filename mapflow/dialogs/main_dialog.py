@@ -149,6 +149,11 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.metadataTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.enable_search_pages(False)
 
+        # Processings/AOI table: allow selecting several AOI rows at once so template
+        # search results can be filtered by multiple AOIs (spec 002_F). All handlers use
+        # "first-selected" accessors, so multi-selection is additive for them.
+        self.processingsTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
+
     def update_project_label(self):
         full_name = self.currentProjectLabel.property("fullProjectName")
         if full_name:
