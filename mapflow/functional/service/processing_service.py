@@ -61,6 +61,9 @@ class ProcessingService(QObject):
     # construct the service without running __init__.
     in_template_mode = False
     active_template = None
+    # Whether the last processings poll saw only final-state processings; combined with
+    # template statuses to decide if the project poll can stop (see _apply_poll_timer_state).
+    _processings_all_final = True
     _default_poll_interval = Config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000
     _template_poll_interval = Config.TEMPLATE_TABLE_REFRESH_INTERVAL * 1000
 
@@ -563,8 +566,10 @@ class ProcessingService(QObject):
         response_data = json.loads(response.readAll().data())
         self.processings_data = ProcessingsResult.from_dict(response_data)
         processings = self.processings_data.results
-        if all(p.is_final_state for p in processings):
-            self.processing_fetch_timer.stop()
+        # Whether to keep polling depends on templates too (a 'Searching' template must keep
+        # the poll alive — feedback 9), and templates are fetched *after* this. Remember the
+        # processings verdict and decide in _apply_poll_timer_state once templates are in.
+        self._processings_all_final = all(p.is_final_state for p in processings)
         self.processings = {processing.id: processing for processing in processings}
         # Update pagination UI
         if self.processings_data.total > self.processings_page_limit:
@@ -584,6 +589,7 @@ class ProcessingService(QObject):
         else:
             self.templates = {}
             self.view.update_processing_table(self.combined_processing_rows())
+            self._apply_poll_timer_state()
 
     def get_templates_callback(self, response: QNetworkReply):
         """Build templates from the project-scoped list.
@@ -619,6 +625,24 @@ class ProcessingService(QObject):
 
         self.templates = {template.id: template for template in templates}
         self.view.update_processing_table(self.combined_processing_rows())
+        self._apply_poll_timer_state()
+
+    def _apply_poll_timer_state(self):
+        """Run the project poll while there is something to watch, stop it when idle.
+
+        Something to watch = a non-final processing OR a template still searching. Considering
+        templates here (not just processings) means a template created/searching while the user
+        waits in the project table reaches a terminal status without re-entering the project
+        (feedback 9). Re-starting when work appears covers a template created after the poll had
+        already stopped. Skipped in the in-template view, which polls on its own cadence."""
+        if self.in_template_mode:
+            return
+        processings_final = self._processings_all_final
+        templates_searching = any(t.is_search_in_progress for t in self.templates.values())
+        if processings_final and not templates_searching:
+            self.processing_fetch_timer.stop()
+        elif not self.processing_fetch_timer.isActive():
+            self.processing_fetch_timer.start()
 
     def _sort_key(self, item, sort_by: str):
         if isinstance(item, TemplateAoiDTO):
