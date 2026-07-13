@@ -8,6 +8,8 @@ import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from qgis.core import QgsGeometry
+
 from mapflow.mapflow import Mapflow
 
 
@@ -20,7 +22,7 @@ def _plugin_ready_to_create_template(checked_providers):
     plugin.selected_search_product_types = MagicMock(return_value=["IMAGE"])
     plugin.processing_service = MagicMock()
     plugin.app_context = SimpleNamespace(
-        aoi=MagicMock(asJson=MagicMock(return_value='{"type":"Polygon","coordinates":[]}')),
+        aoi=QgsGeometry.fromWkt("POLYGON((0 0,0 1,1 1,1 0,0 0))"),
         aoi_size=10.0,
         template_area_limit=0.0,
         project_id="project-1",

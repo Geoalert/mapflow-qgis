@@ -1494,22 +1494,34 @@ class Mapflow(QObject):
                             name=name, limit=AOI_NAME_MAX_LENGTH
                         )
                     )
-                features.append({
-                    "type": "Feature",
-                    "geometry": json.loads(wgs_geom.asJson()),
-                    "properties": {"name": name},
-                })
+                features.extend(self._polygon_aoi_features(wgs_geom, name))
         # Fall back to the combined AOI (e.g. image/mosaic extent) as one unnamed feature,
         # so we still send aoiDetails rather than the deprecated plain `aoi`.
         if not features and self.app_context.aoi:
-            features.append({
-                "type": "Feature",
-                "geometry": json.loads(self.app_context.aoi.asJson()),
-                "properties": {"name": None},
-            })
+            features.extend(self._polygon_aoi_features(self.app_context.aoi, None))
         if not features:
             return None
         return {"type": "FeatureCollection", "features": features}
+
+    @staticmethod
+    def _polygon_aoi_features(wgs_geom: QgsGeometry, name: Optional[str]) -> List[dict]:
+        """Split a (possibly multi-)polygon into one GeoJSON *Polygon* Feature per part.
+
+        The backend ignores ``MultiPolygon`` features in ``aoiDetails`` — an all-MultiPolygon
+        upload would create an empty, Failed template (feedback 10) — so mirror the web client
+        and explode each MultiPolygon into separate single-part Polygon features. Parts share
+        the source feature's ``name``. ``asGeometryCollection`` returns one element for a plain
+        Polygon and one per part for a MultiPolygon."""
+        features = []
+        for part in wgs_geom.asGeometryCollection() or [wgs_geom]:
+            if part is None or part.isEmpty():
+                continue
+            features.append({
+                "type": "Feature",
+                "geometry": json.loads(part.asJson()),
+                "properties": {"name": name},
+            })
+        return features
 
     def create_search_template(self):
         """Create planned search template using current AOI and imagery-search filters."""
