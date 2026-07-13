@@ -95,3 +95,49 @@ def test_no_layer_no_aoi_returns_none():
     plugin.app_context = SimpleNamespace(aoi=None)
 
     assert plugin._build_template_aoi_details() is None
+
+
+def test_multipolygon_feature_is_exploded_into_polygons():
+    """The backend ignores MultiPolygon features in aoiDetails (feedback 10), so a
+    MultiPolygon AOI is split into one Polygon feature per part, each keeping the name."""
+    layer = _layer_with([
+        ("MULTIPOLYGON(((0 0,0 1,1 1,1 0,0 0)),((2 2,2 3,3 3,3 2,2 2)))", "Combo"),
+    ])
+    plugin = _plugin_with_layer(layer)
+
+    fc = plugin._build_template_aoi_details()
+
+    assert len(fc["features"]) == 2
+    assert [f["geometry"]["type"] for f in fc["features"]] == ["Polygon", "Polygon"]
+    assert [f["properties"]["name"] for f in fc["features"]] == ["Combo", "Combo"]
+
+
+def test_mixed_polygon_and_multipolygon_features_all_become_polygons():
+    layer = _layer_with([
+        ("POLYGON((0 0,0 1,1 1,1 0,0 0))", "Single"),
+        ("MULTIPOLYGON(((2 2,2 3,3 3,3 2,2 2)),((4 4,4 5,5 5,5 4,4 4)))", "Double"),
+    ])
+    plugin = _plugin_with_layer(layer)
+
+    fc = plugin._build_template_aoi_details()
+
+    assert [f["geometry"]["type"] for f in fc["features"]] == ["Polygon", "Polygon", "Polygon"]
+    assert [f["properties"]["name"] for f in fc["features"]] == ["Single", "Double", "Double"]
+
+
+def test_fallback_multipolygon_aoi_is_exploded():
+    plugin = Mapflow.__new__(Mapflow)
+    plugin.tr = lambda text: text
+    plugin.dlg = MagicMock()
+    plugin.dlg.polygonCombo.currentLayer.return_value = None
+    plugin.app_context = SimpleNamespace(
+        aoi=QgsGeometry.fromWkt(
+            "MULTIPOLYGON(((0 0,0 1,1 1,1 0,0 0)),((2 2,2 3,3 3,3 2,2 2)))"
+        )
+    )
+
+    fc = plugin._build_template_aoi_details()
+
+    assert len(fc["features"]) == 2
+    assert all(f["geometry"]["type"] == "Polygon" for f in fc["features"])
+    assert all(f["properties"]["name"] is None for f in fc["features"])
