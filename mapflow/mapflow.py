@@ -1,7 +1,7 @@
 import json
 import os.path
 import shutil
-from base64 import b64encode, b64decode
+from base64 import b64decode
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 from datetime import datetime, timedelta  # processing creation datetime formatting
 from pathlib import Path
@@ -9,20 +9,19 @@ from typing import List, Optional, Callable, Tuple
 from osgeo import gdal, ogr
 
 from PyQt5.QtCore import (
-    QByteArray, QCoreApplication, QDate, QDateTime, QObject, Qt,
-    QTextStream, QTimer, QTranslator
+    QCoreApplication, QDate, QDateTime, QObject, Qt,
+    QTimer, QTranslator
 )
-from PyQt5.QtGui import QColor, QIcon
+from PyQt5.QtGui import QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
 from PyQt5.QtWidgets import (
-    QAbstractItemView, QAction, QApplication, QFileDialog, QMenu, 
-    QMessageBox, QPushButton, QTableWidgetItem, QWidget, QToolButton
+    QAbstractItemView, QAction, QApplication, QFileDialog, QMenu,
+    QMessageBox, QPushButton, QWidget, QToolButton
 )
-from PyQt5.QtXml import QDomDocument
 from qgis.core import (
     Qgis, QgsCoordinateReferenceSystem, QgsDistanceArea, QgsFeature, QgsGeometry,
-    QgsLayerTreeLayer, QgsMapLayer, QgsMapLayerType, QgsPoint, QgsProject, QgsRasterLayer,
-    QgsRectangle, QgsVectorLayer, QgsWkbTypes
+    QgsLayerTreeLayer, QgsMapLayer, QgsMapLayerType, QgsProject, QgsRasterLayer,
+    QgsRectangle, QgsVectorLayer
 )
 
 from . import constants
@@ -48,8 +47,7 @@ from .functional.service.area_calculator_service import AreaCalculatorService
 # HTTP
 from .http import (Http,
                    api_message_parser,
-                   get_error_report_body,
-                   securewatch_message_parser)
+                   get_error_report_body)
 # Schema
 from .schema import (BillingType,
                      ImageCatalogRequestSchema,
@@ -80,12 +78,9 @@ from .dialogs.processing_details_dialog import ProcessingDetailsDialog
 from .entity.provider import (create_provider,
                               DefaultProvider,
                               ImagerySearchProvider,
-                              MaxarProvider,
                               MyImageryProvider,
                               ProviderInterface,
-                              ProvidersList,
-                              SentinelProvider,
-                              UsersProvider)
+                              ProvidersList)
 
 
 class Mapflow(QObject):
@@ -244,7 +239,6 @@ class Mapflow(QObject):
         errors = []
         try:
             self.provider_service.user_providers, errors = ProvidersList.from_settings(settings=self.app_context.settings)
-            self.provider_service.sentinel_providers = ProvidersList([SentinelProvider(proxy=self.server)])
             self.provider_service.default_providers = ProvidersList([])
         except Exception as e:
             self.alert(self.tr("Error during loading the data providers: {e}").format(str(e)), icon=Qgis.Warning)
@@ -1205,10 +1199,7 @@ class Mapflow(QObject):
         aoi = QgsGeometry.createGeometryEngine(aoi.constGet())
         aoi.prepareGeometry()
         # Get attributes
-        if self.dlg.sourceCombo.currentText() == constants.SENTINEL_OPTION_NAME:
-            id_column_index = self.config.SENTINEL_ID_COLUMN_INDEX
-        else:  # Maxar
-            id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
+        id_column_index = self.config.SEARCH_ID_COLUMN_INDEX
         self.app_context.metadata_layer.setSubsetString('')  # clear any existing filters
         filtered_ids = []
         for feature in self.app_context.metadata_layer.getFeatures():
@@ -1434,41 +1425,28 @@ class Mapflow(QObject):
         if not provider_changed:
             return
         # No need to re-set imagery search if the provider is not set,
-        # or if search provider did not change
-        if isinstance(self.app_context.search_provider, SentinelProvider):
-            columns = self.config.SENTINEL_ATTRIBUTES
-            hidden_columns = (len(columns) - 1,)
-            sort_by = self.config.SENTINEL_DATETIME_COLUMN_INDEX
-            current_zoom = max_zoom = None
-            image_id_tooltip = self.tr(
-                'If you already know which {provider_name} image you want to process,\n'
-                'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
-            ).format(provider_name=self.app_context.search_provider.name)
-            image_id_placeholder = self.tr('e.g. S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00')
-            geoms = None
-        else:  # any non-sentinel provider: setup table as for ImagerySearch provider
-            columns = self.config_search_columns.METADATA_TABLE_ATTRIBUTES
-            hidden_columns = (len(columns) - 1,)
-            sort_by = self.config.MAXAR_DATETIME_COLUMN_INDEX
-            max_zoom = self.config.MAX_ZOOM
-            current_zoom = int(self.app_context.settings.value('maxZoom', self.config.DEFAULT_ZOOM))
-            image_id_tooltip = self.tr(
-                'If you already know which {provider_name} image you want to process,\n'
-                'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
-            ).format(provider_name=self.app_context.search_provider.name)
-            image_id_placeholder = self.tr('e.g. a3b154c40cc74f3b934c0ffc9b34ecd1')
+        # or if search provider did not change. All search goes through the Mapflow catalog.
+        columns = self.config_search_columns.METADATA_TABLE_ATTRIBUTES
+        hidden_columns = (len(columns) - 1,)
+        sort_by = self.config.SEARCH_DATETIME_COLUMN_INDEX
+        max_zoom = self.config.MAX_ZOOM
+        current_zoom = int(self.app_context.settings.value('maxZoom', self.config.DEFAULT_ZOOM))
+        image_id_tooltip = self.tr(
+            'If you already know which {provider_name} image you want to process,\n'
+            'simply paste its ID here. Otherwise, search suitable images in the catalog below.'
+        ).format(provider_name=self.app_context.search_provider.name)
+        image_id_placeholder = self.tr('e.g. a3b154c40cc74f3b934c0ffc9b34ecd1')
 
-            # If we have searched with current provider previously, we want to restore the search results as it were
-            # We store the results in a temp folder, separate file for each provider
-            geoms = self.app_context.search_provider.load_search_layer(self.app_context.temp_dir)
-            if geoms:
-                self.display_metadata_geojson_layer(
-                    os.path.join(self.app_context.temp_dir, self.app_context.search_provider.metadata_layer_name),
-                    f"{self.app_context.search_provider.name} metadata")
-            else:
-                self.clear_metadata()
+        # If we have searched with current provider previously, we want to restore the search results as it were
+        # We store the results in a temp folder, separate file for each provider
+        geoms = self.app_context.search_provider.load_search_layer(self.app_context.temp_dir)
+        if geoms:
+            self.display_metadata_geojson_layer(
+                os.path.join(self.app_context.temp_dir, self.app_context.search_provider.metadata_layer_name),
+                f"{self.app_context.search_provider.name} metadata")
+        else:
+            self.clear_metadata()
 
-        # override max zoom for proxy maxar provider
         self.dlg.setup_imagery_search(provider=self.app_context.search_provider,
                                       columns=columns,
                                       hidden_columns=hidden_columns,
@@ -1800,9 +1778,6 @@ class Mapflow(QObject):
             self.alert(self.tr('Please, select a valid area of interest'))
             return
 
-        from_ = self.dlg.metadataFrom.date().toString(Qt.ISODate)
-        to = self.dlg.metadataTo.date().toString(Qt.ISODate)
-
         from_time = self.dlg.metadataFrom.dateTime().toTimeSpec(Qt.UTC).toString(Qt.ISODate)
         to_time = self.dlg.metadataTo.dateTime().toTimeSpec(Qt.UTC).toString(Qt.ISODate)
 
@@ -1813,27 +1788,17 @@ class Mapflow(QObject):
         product_types = self.selected_search_product_types()
         search_providers = self.selected_search_providers()
 
-        if isinstance(provider, MaxarProvider):
-            self.get_maxar_metadata(aoi=aoi,
-                                    provider=provider,
-                                    from_=from_,
-                                    to=to,
-                                    max_cloud_cover=max_cloud_cover,
-                                    min_intersection=min_intersection)
-        elif isinstance(provider, SentinelProvider):
-            self.request_skywatch_metadata(aoi, from_, to, max_cloud_cover, min_intersection)
-        else:
-            self.request_mapflow_metadata(aoi=aoi,
-                                          provider=provider,
-                                          from_=from_time,
-                                          to=to_time,
-                                          offset=offset,
-                                          hide_unavailable=hide_unavailable,
-                                          product_types=product_types,
-                                          search_providers=search_providers)
-            # HEAD API does not work properly with intersection percent, so not sending it yet (filtering after)
-            # max_cloud_cover=max_cloud_cover,
-            # min_intersection=min_intersection)
+        # All imagery search goes through the Mapflow catalog API, which filters server-side.
+        self.request_mapflow_metadata(aoi=aoi,
+                                      provider=provider,
+                                      from_=from_time,
+                                      to=to_time,
+                                      offset=offset,
+                                      max_cloud_cover=max_cloud_cover,
+                                      min_intersection=min_intersection,
+                                      hide_unavailable=hide_unavailable,
+                                      product_types=product_types,
+                                      search_providers=search_providers)
 
     def clear_metadata(self):
         try:
@@ -1946,389 +1911,14 @@ class Mapflow(QObject):
 
         self._update_search_pager(response_data.total, response_data.limit, response_data.offset)
 
-    def request_skywatch_metadata(
-            self,
-            aoi: QgsGeometry,
-            from_: str,
-            to: str,
-            max_cloud_cover: int,
-            min_intersection: int,
-    ) -> None:
-        """Sumbit a request to SkyWatch to get metadata."""
-        self.app_context.metadata_aoi = aoi
-        callback_kwargs = {'max_cloud_cover': max_cloud_cover, 'min_intersection': min_intersection}
-        # Check if the AOI is too large
-        self.calculator.setEllipsoid(helpers.WGS84_ELLIPSOID)
-        self.calculator.setSourceCrs(helpers.WGS84, self.app_context.project.transformContext())
-        aoi_bbox = aoi.boundingBox()
-        aoi_bbox_geom = QgsGeometry.fromRect(aoi_bbox)
-        # Check the area
-        aoi_too_large_message = self.tr('Your area of interest is too large.')
-        if self.calculator.measureArea(aoi_bbox_geom) > self.config.SKYWATCH_METADATA_MAX_AREA:
-            self.alert(aoi_too_large_message)
-            return
-        # Check the side length
-        x_min, x_max, y_min, y_max = (
-            aoi_bbox.xMinimum(),
-            aoi_bbox.xMaximum(),
-            aoi_bbox.yMinimum(),
-            aoi_bbox.yMaximum()
-        )
-        north_west = QgsPoint(x_min, y_max)
-        width = QgsGeometry.fromPolyline((north_west, QgsPoint(x_max, y_max)))
-        height = QgsGeometry.fromPolyline((north_west, QgsPoint(x_min, y_min)))
-        if (
-                self.calculator.measureLength(width) > self.config.SKYWATCH_METADATA_MAX_SIDE_LENGTH
-                or self.calculator.measureLength(height) > self.config.SKYWATCH_METADATA_MAX_SIDE_LENGTH
-        ):
-            self.alert(aoi_too_large_message)
-            return
-        # Handle the multipolygon case
-        if aoi.wkbType() == QgsWkbTypes.MultiPolygon:
-            if len(aoi.asMultiPolygon()) == 1:
-                aoi.convertToSingleType()
-            else:  # use the BBOX of the parts
-                aoi = aoi_bbox_geom
-        url = self.server + '/meta/skywatch/id'
-        headers = {}
-        self.http.post(
-            url=url,
-            body=json.dumps({
-                'location': json.loads(aoi.asJson()),
-                'resolution': 'low',
-                'coverage': min_intersection,
-                'start_date': from_,
-                'end_date': to,
-                'order_by': ['-date']
-            }).encode(),
-            headers=headers,
-            callback=self.request_skywatch_metadata_callback,
-            callback_kwargs=callback_kwargs,
-            error_handler=self.request_skywatch_metadata_error_handler,
-            use_default_error_handler=False
-        )
-        self.dlg.getMetadata.setDown(True)
-        self.dlg.getMetadata.blockSignals(True)
-
-    def request_skywatch_metadata_callback(
-            self,
-            response: QNetworkReply,
-            max_cloud_cover: int,
-            min_intersection: int
-    ):
-        """Start polling SkyWatch for metadata upon a successful request submission
-
-        :param response: The HTTP response.
-        :param max_cloud_cover: Passed on to fetch_skywatch_metadata().
-        """
-        request_id = json.loads(response.readAll().data())['data']['id']
-        self.sentinel_metadata_coords = {}
-        # Delete previous search
-        try:
-            self.app_context.project.removeMapLayer(self.app_context.metadata_layer)
-        except (AttributeError, RuntimeError):  # metadata layer has been deleted
-            pass
-        # Prepare a layer
-        self.app_context.metadata_layer = QgsVectorLayer(
-            'polygon?crs=epsg:4326&index=yes&' +
-            '&'.join(f'field={name}:{type_}' for name, type_ in {
-                'id': 'string',
-                'preview': 'string',
-                'cloudCover': 'int',
-                'acquisitionDate': 'datetime'
-            }.items()),
-            constants.SENTINEL_OPTION_NAME + ' metadata',
-            'memory'
-        )
-        self.app_context.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
-        self.app_context.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(
-            self.sync_layer_selection_with_table)
-        # Poll processings
-        metadata_fetch_timer = QTimer(self.dlg)
-        metadata_fetch_timer.setInterval(self.config.SKYWATCH_POLL_INTERVAL * 1000)
-        metadata_fetch_timer.timeout.connect(
-            lambda: self.fetch_skywatch_metadata(
-                'mapflow' in response.request().url().authority(),
-                request_id,
-                max_cloud_cover,
-                min_intersection,
-                metadata_fetch_timer
-            )
-        )
-        metadata_fetch_timer.start()
-
-    def request_skywatch_metadata_error_handler(self, response: QNetworkReply) -> None:
-        """Error handler for Sentinel metadata requests.
-
-        :param response: The HTTP response.
-        """
-        self.dlg.getMetadata.blockSignals(False)
-        self.dlg.getMetadata.setDown(False)
-        error = response.error()
-        if error == QNetworkReply.ContentAccessDenied:
-            self.alert(self.tr('Please, check your credentials'))
-        else:
-            self.report_http_error(response, self.tr("We couldn't fetch Sentinel metadata"))
-
-    def fetch_skywatch_metadata(
-            self,
-            is_proxied: bool,
-            request_id: str,
-            max_cloud_cover: int = None,
-            min_intersection: int = None,
-            timer: QTimer = None,
-            start_index: int = 0
-    ) -> None:
-        """Check if the metadata is ready.
-
-        :param request_id: The UUID of the submitted SkyWatch request.
-        :param max_cloud_cover: All metadata with a higher cloud cover % will be discarded.
-        """
-        url = f'{self.server}/meta/skywatch/page?id={request_id}&cursor={start_index}'
-        headers = {}
-        self.http.get(
-            url=url,
-            headers=headers,
-            callback=self.fetch_skywatch_metadata_callback,
-            callback_kwargs={
-                'max_cloud_cover': max_cloud_cover,
-                'min_intersection': min_intersection,
-                'request_id': request_id,
-                'timer': timer,
-            },
-            error_handler=self.fetch_skywatch_metadata_error_handler,
-            error_handler_kwargs={'timer': timer},
-            use_default_error_handler=False
-        )
-
-    def fetch_skywatch_metadata_callback(
-            self,
-            response: QNetworkReply,
-            request_id: str,
-            max_cloud_cover: int = None,
-            min_intersection: int = None,
-            timer: QTimer = None,
-    ):
-        """Parse the returned metadata page and fill out the table and the layer."""
-        is_proxied = 'mapflow' in response.request().url().authority()
-        if response.attribute(QNetworkRequest.HttpStatusCodeAttribute) == 202:
-            return  # not ready yet
-        if timer:
-            timer.stop()
-        if min_intersection is None:
-            min_intersection = self.dlg.minIntersection.value()
-        if max_cloud_cover is None:
-            max_cloud_cover = self.dlg.maxCloudCover.value()
-        response = json.loads(response.readAll().data())
-        metadata = {'type': 'FeatureCollection', 'features': []}
-        for feature in response['data']:
-            if round(feature['result_cloud_cover_percentage']) > max_cloud_cover:
-                continue
-            id_ = feature['product_name'].split('tiles')[-1].split('metadata')[0]
-            formatted_feature = {
-                'id': id_,
-                'type': 'Feature',
-                'geometry': feature['location'],
-                'properties': {
-                    'preview': feature['preview_uri'],
-                    'cloudCover': round(feature['result_cloud_cover_percentage']),
-                }
-            }
-            try:
-                datetime_ = datetime.strptime(feature['start_time'], '%Y-%m-%dT%H:%M:%S.%f%z')
-            except ValueError:  # non-standard time format (missing milliseconds)
-                datetime_ = datetime.strptime(feature['start_time'], '%Y-%m-%dT%H:%M:%S%z')
-            formatted_feature['properties']['acquisitionDate'] = datetime_.astimezone().strftime('%Y-%m-%d %H:%M')
-            metadata['features'].append(formatted_feature)
-        self.sentinel_metadata_coords.update({
-            feature['id']: feature['geometry']['bbox']
-            for feature in metadata['features']
-        })
-        # Create a temporary layer for the current page of metadata
-        output_file_name = os.path.join(self.app_context.temp_dir, os.urandom(32).hex())
-        with open(output_file_name, 'w') as file:
-            json.dump(metadata, file)
-        metadata_layer = QgsVectorLayer(output_file_name, '', 'ogr')
-        # Add the new features to the displayed metadata layer
-        self.app_context.metadata_layer.dataProvider().addFeatures(metadata_layer.getFeatures())
-        if timer:  # first page
-            # Place search results under AOI layer
-            aoi_layer = self.dlg.polygonCombo.currentLayer()
-            aoi_layer_tree = self.app_context.project.layerTreeRoot().findLayer(aoi_layer.id())
-            index = aoi_layer_tree.parent().children().index(aoi_layer_tree)
-            self.result_loader.add_layer(self.app_context.metadata_layer, index+1)
-        current_row_count = self.dlg.metadataTable.rowCount()
-        self.dlg.metadataTable.setRowCount(current_row_count + metadata_layer.featureCount())
-        self.dlg.metadataTable.setSortingEnabled(False)
-        for row, feature in enumerate(metadata['features'], start=current_row_count):
-            table_items = [QTableWidgetItem() for _ in range(len(self.config.SENTINEL_ATTRIBUTES))]
-            table_items[0].setData(Qt.DisplayRole, feature['properties']['acquisitionDate'])
-            table_items[1].setData(Qt.DisplayRole, round(feature['properties']['cloudCover']))
-            table_items[2].setData(Qt.DisplayRole, feature['id'])
-            table_items[3].setData(Qt.DisplayRole, feature['properties']['preview'])
-            for col, table_item in enumerate(table_items):
-                self.dlg.metadataTable.setItem(row, col, table_item)
-        self.filter_metadata(min_intersection=min_intersection, max_cloud_cover=max_cloud_cover)
-        self.dlg.metadataTable.setSortingEnabled(True)
-        # Handle pagination
-        try:
-            next_page_start_index = response['pagination']['cursor']['next']
-        except TypeError:  # {"data": [], "pagination": None}
-            try:
-                self.app_context.project.removeMapLayer(self.app_context.metadata_layer)
-            except (AttributeError, RuntimeError):  # metadata layer has been deleted
-                pass
-            self.alert(
-                self.tr('No images match your criteria. Try relaxing the filters.'),
-                QMessageBox.Information
-            )
-            self.dlg.getMetadata.blockSignals(False)
-            self.dlg.getMetadata.setDown(False)
-            return
-        if next_page_start_index is not None:
-            # Create a 'More' button
-            more_button = QPushButton(self.tr('More'))
-            more_button.setObjectName(self.config.METADATA_MORE_BUTTON_OBJECT_NAME)
-            self.dlg.layoutMetadataTable.addWidget(more_button)
-
-            # Set the button to fetch more metadata on click
-
-            def fetch_skywatch_metadata_next_page(**kwargs):
-                self.fetch_skywatch_metadata(**kwargs)
-                # more_button = self.dlg.findChild(QPushButton, config.METADATA_MORE_BUTTON_OBJECT_NAME)
-                self.dlg.layoutMetadataTable.removeWidget(more_button)
-                more_button.deleteLater()
-
-            more_button.clicked.connect(
-                lambda: fetch_skywatch_metadata_next_page(
-                    is_proxied=is_proxied,
-                    request_id=request_id,
-                    start_index=next_page_start_index
-                )
-            )
-        if timer:
-            self.dlg.getMetadata.blockSignals(False)
-            self.dlg.getMetadata.setDown(False)
-
-    def fetch_skywatch_metadata_error_handler(self, response: QNetworkReply, timer: QTimer) -> None:
-        """Error handler for Sentinel metadata requests.
-
-        :param response: The HTTP response.
-        """
-        try:
-            timer.stop()
-            timer.deleteLater()
-        except (RuntimeError, AttributeError):  # None or has been destroyed
-            pass
-        self.report_http_error(response, self.tr("We couldn't fetch Sentinel metadata"))
-
-    def get_maxar_metadata(
-            self,
-            aoi: QgsGeometry,
-            provider: UsersProvider,
-            from_: str,
-            to: str,
-            max_cloud_cover: int,
-            min_intersection: int
-    ) -> None:
-        """Get SecureWatch image metadata."""
-        self.app_context.metadata_aoi = aoi
-        callback_kwargs = {
-            'provider': provider,
-            'min_intersection': min_intersection,
-            'max_cloud_cover': max_cloud_cover
-        }
-        byte_array = QByteArray(b'')
-        stream = QTextStream(byte_array)
-        elem = aoi.get().asGml3(QDomDocument(), precision=5, ns="http://www.opengis.net/gml")
-        elem.save(stream, 0)  # 0 = no indentation (minimize request size)
-        stream.seek(0)  # rewind to the start
-        request_body = provider.meta_request(from_=from_,
-                                             to=to,
-                                             max_cloud_cover=max_cloud_cover / 100,
-                                             geometry=stream.readAll())
-        encoded_credentials = b64encode(':'.join((
-            provider.credentials.login,
-            provider.credentials.password
-        )).encode())
-        self.http.post(
-            url=provider.meta_url,
-            body=request_body,
-            auth=f'Basic {encoded_credentials.decode()}'.encode(),
-            callback=self.get_maxar_metadata_callback,
-            callback_kwargs=callback_kwargs,
-            use_default_error_handler=False,
-            error_handler=self.get_maxar_metadata_error_handler
-        )
-
-    def get_maxar_metadata_callback(
-            self,
-            response: QNetworkReply,
-            provider: UsersProvider,
-            min_intersection: int,
-            max_cloud_cover: int
-    ) -> None:
-        """Format, save and load Maxar metadata.
-
-        :param response: The HTTP response.
-        :param product: Maxar product whose metadata was requested.
-        """
-        self.dlg.metadataTable.clearContents()
-        response_data = response.readAll().data()
-        metadata = json.loads(response_data)
-        if metadata['totalFeatures'] == 0:
-            self.alert(
-                self.tr('No images match your criteria. Try relaxing the filters.'),
-                QMessageBox.Information
-            )
-            return
-        # Format decimals and dates
-        for feature in metadata['features']:
-            # Parse, localize & format the datetime
-            feature['properties']['acquisitionDate'] = datetime.strptime(
-                feature['properties']['acquisitionDate'] + '+0000', '%Y-%m-%d %H:%M:%S%z'
-            ).astimezone().strftime('%Y-%m-%d %H:%M')
-            # Round values for display
-            if feature['properties']['offNadirAngle']:
-                feature['properties']['offNadirAngle'] = round(feature['properties']['offNadirAngle'])
-            if feature['properties']['cloudCover']:
-                feature['properties']['cloudCover'] = round(feature['properties']['cloudCover'] * 100)
-        # Save metadata to file to return to previous search
-        filename = provider.save_search_layer(self.app_context.temp_dir, metadata)
-        self.display_metadata_geojson_layer(filename, f'{provider.name} metadata')
-        # Memorize IDs and extents to be able to clip the user's AOI to image on processing creation
-        self.dlg.fill_metadata_table(metadata)
-
-    def get_maxar_metadata_error_handler(self, response: QNetworkReply) -> None:
-        """Error handler for metadata requests.
-
-        :param response: The HTTP response.
-        """
-        error = response.error()
-        if error in [QNetworkReply.ContentAccessDenied]:  # , QNetworkReply.AuthenticationRequiredError):
-            self.alert(self.tr('Please, check your Maxar credentials'))
-        else:
-            self.report_http_error(response,
-                                   self.tr("We couldn't get metadata from Maxar, "
-                                           "error {error}").format(
-                                       error=response.attribute(QNetworkRequest.HttpStatusCodeAttribute)),
-                                   error_message_parser=securewatch_message_parser)
-
     def sync_table_selection_with_image_id_and_layer(self) -> None:
         """
         Every time user selects a row in the metadata table, select the
         corresponding feature in the metadata layer and put the selected image's
         id into the "Image ID" field.
         """
-        if self.dlg.sourceCombo.currentText() == constants.SENTINEL_OPTION_NAME:
-            id_column_index = self.config.SENTINEL_ID_COLUMN_INDEX
-            # sentinel is indexed by the image ID
-            local_index_column = id_column_index
-            key = 'id'
-        else:
-            id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
-            local_index_column = self.config.LOCAL_INDEX_COLUMN
-            key = 'local_index'
+        local_index_column = self.config.LOCAL_INDEX_COLUMN
+        key = 'local_index'
 
         selected_cells = self.dlg.metadataTable.selectedItems()
         if not selected_cells:
@@ -2378,10 +1968,8 @@ class Mapflow(QObject):
         self.dlg.metadataTable.setSelectionMode(QAbstractItemView.MultiSelection)
         # Disconnect to avoid backwards signal and possible infinite loop;
         # connection is restored before return
-        key = 'id' if self.dlg.sourceCombo.currentText() == constants.SENTINEL_OPTION_NAME else 'local_index'
-        id_column_index = self.config.SENTINEL_ID_COLUMN_INDEX \
-            if self.dlg.sourceCombo.currentText() == constants.SENTINEL_OPTION_NAME \
-            else self.config.LOCAL_INDEX_COLUMN
+        key = 'local_index'
+        id_column_index = self.config.LOCAL_INDEX_COLUMN
 
         self.dlg.metadataTable.itemSelectionChanged.disconnect(self.meta_table_layer_connection)
 
@@ -2415,24 +2003,6 @@ class Mapflow(QObject):
         if not image_id:
             self.dlg.metadataTable.clearSelection()
             return
-        provider = self.provider_service.providers[self.dlg.providerIndex()]
-
-        if isinstance(provider, SentinelProvider):
-            if not ((
-                            helpers.SENTINEL_DATETIME_REGEX.search(image_id)
-                            and helpers.SENTINEL_COORDINATE_REGEX.search(image_id)
-                    ) or (helpers.SENTINEL_PRODUCT_NAME_REGEX.search(image_id)
-                    )):
-                self.alert(self.tr(
-                    'A Sentinel image ID should look like '
-                    'S2B_OPER_MSI_L1C_TL_VGS4_20220209T091044_A025744_T36SXA_N04_00 '
-                    'or /36/S/XA/2022/02/09/0/'
-                ))
-                return
-        elif isinstance(provider, MaxarProvider):
-            if not helpers.UUID_REGEX.match(image_id):
-                self.alert(self.tr('A Maxar image ID should look like a3b154c40cc74f3b934c0ffc9b34ecd1'))
-                return
         items = self.dlg.metadataTable.findItems(image_id, Qt.MatchExactly)
         if not items:
             self.dlg.metadataTable.clearSelection()
@@ -2570,57 +2140,6 @@ class Mapflow(QObject):
         for pr in search_providers:
             self.dlg.searchProvidersCombo.addItemWithCheckState(pr.name, Qt.Unchecked, pr.api_name)
         self.dlg.searchProvidersCombo.setDefaultText(self.tr("Show all"))
-
-    def preview_sentinel_callback(self, response: QNetworkReply, datetime_: str, image_id: str) -> None:
-        """Save and open the preview image as a layer."""
-        with open(self.app_context.temp_dir/os.urandom(32).hex(), mode='wb') as f:
-            f.write(response.readAll().data())
-        # Some previews aren't georef-ed
-        preview = gdal.Open(f.name)
-        try:
-            image_metadata = self.sentinel_metadata_coords[image_id]
-        except (AttributeError, KeyError):
-            image_metadata = None
-        if image_metadata and not preview.GetProjection():
-            lon_wgs84, *_, lat_wgs84 = image_metadata
-            utm_zone = int((180 + lon_wgs84) // 6 + 1)
-            crs = QgsCoordinateReferenceSystem(f'epsg:32{6 if lat_wgs84 > 0 else 7}{utm_zone}')
-            preview.SetProjection(crs.toWkt())
-            nw = helpers.from_wgs84(QgsGeometry(QgsPoint(lon_wgs84, lat_wgs84)), crs).asPoint()
-            preview.SetGeoTransform([
-                nw.x(),  # north-west corner x (lon, in case of UTM)
-                320,  # pixel horizontal resolution (m)
-                0,  # x-axis rotation
-                nw.y(),  # north-west corner y (lat, in case of UTM)
-                0,  # y-axis rotation
-                -320  # pixel vertical resolution (m)
-            ])
-            preview.FlushCache()
-        layer = QgsRasterLayer(f.name, f'{constants.SENTINEL_OPTION_NAME} {datetime_}', 'gdal')
-        # Set the no-data value if undefined
-        layer_provider = layer.dataProvider()
-        for band in range(1, layer.bandCount() + 1):  # bands are 1-based (!)
-            if not layer_provider.sourceHasNoDataValue(band):
-                layer_provider.setNoDataValue(band, 0)
-        layer.renderer().setNodataColor(QColor(Qt.transparent))
-        self.result_loader.add_layer(layer)
-
-    def preview_sentinel_error_handler(self,
-                                       response: QNetworkReply,
-                                       guess_format=False,
-                                       **kwargs) -> None:
-        """Error handler for requesting a Sentinel preview from SkyWatch."""
-        if guess_format:
-            alternative_url = response.request().url().toDisplayString().replace('jp2', 'jpg')
-            self.http.get(
-                url=alternative_url,
-                callback=self.preview_sentinel_callback,
-                callback_kwargs=kwargs,
-                error_handler=self.preview_sentinel_error_handler
-            )
-            return
-        self.alert(self.tr("Sorry, we couldn't load the image"))
-        self.report_http_error(response, self.tr('Error previewing Sentinel imagery'))
 
     def _move_layer_to_top(self, layer_id: str) -> bool:
         """Move an existing layer's tree node to the top of its parent group."""
@@ -2829,62 +2348,6 @@ class Mapflow(QObject):
             self._relocate_preview_to_template_group(footprint_layer)
         self._add_aoi_to_preview_if_needed()
 
-    def preview_sentinel(self, image_id):
-        selected_cells = self.dlg.metadataTable.selectedItems()
-        if selected_cells:
-            datetime_ = selected_cells[self.config.SENTINEL_DATETIME_COLUMN_INDEX]
-            url = self.dlg.metadataTable.item(datetime_.row(), self.config.SENTINEL_PREVIEW_COLUMN_INDEX).text()
-            if not url:
-                self.alert(self.tr("Sorry, there's no preview for this image"), QMessageBox.Information)
-                return
-            datetime_ = datetime_.text()
-            guess_format = False
-        elif image_id:
-            datetime_ = helpers.SENTINEL_DATETIME_REGEX.search(image_id)
-            if datetime_ and helpers.SENTINEL_COORDINATE_REGEX.search(image_id):
-                url = f'https://preview.skywatch.com/esa/sentinel-2/{image_id}.jp2'
-                datetime_ = datetime.strptime(datetime_.group(0), '%Y%m%dT%H%M%S') \
-                    .astimezone().strftime('%Y-%m-%d %H:%M')
-            else:
-                self.alert(self.tr("We couldn't load a preview for this image"))
-                return
-            guess_format = True
-        else:
-            self.alert(self.tr('Please, select an image to preview'), QMessageBox.Information)
-            return
-        callback_kwargs = {'datetime_': datetime_, 'image_id': image_id}
-        self.http.get(
-            url=url,
-            callback=self.preview_sentinel_callback,
-            callback_kwargs=callback_kwargs,
-            error_handler=self.preview_sentinel_error_handler,
-            error_handler_kwargs={'guess_format': guess_format, **callback_kwargs}
-        )
-        return
-
-    def maxar_layer_name(self, layer_name, image_id):
-        row = self.dlg.metadataTable.currentRow()
-        attrs = tuple(self.config_search_columns.METADATA_TABLE_ATTRIBUTES.values())
-        try:
-            layer_name = ' '.join((
-                layer_name,
-                self.dlg.metadataTable.item(row, attrs.index('acquisitionDate')).text(),
-                self.dlg.metadataTable.item(row, attrs.index('productType')).text()
-            ))
-        except AttributeError:  # the table is empty
-            layer_name = f'{layer_name} {image_id}'
-        return layer_name
-
-    def metadata_extent(self,
-                        image_id=None,
-                        feature=None,
-                        crs: QgsCoordinateReferenceSystem = helpers.WEB_MERCATOR):
-        if not feature:
-            feature = self.metadata_feature(image_id)
-        if not feature:
-            return None
-        return helpers.from_wgs84(feature.geometry(), crs).boundingBox()
-
     def metadata_footprint(self,
                            image_id=None,
                            feature=None,
@@ -2931,12 +2394,6 @@ class Mapflow(QObject):
         layer = QgsRasterLayer(uri, layer_name, 'wms')
         layer.setCrs(QgsCoordinateReferenceSystem(provider.crs))
         if layer.isValid():
-            if isinstance(provider, MaxarProvider) and image_id:
-                layer_name = self.maxar_layer_name(layer_name, image_id)
-                layer.setName(layer_name)
-                extent = self.metadata_extent(image_id)
-                if extent:
-                    layer.setExtent(extent)
             self.result_loader.add_preview_layer(preview_layer=layer)
         else:
             self.alert(self.tr("We couldn't load a preview for this image"))
@@ -2947,15 +2404,13 @@ class Mapflow(QObject):
         if not selected_cells:
             image_id = None
         else:
-            id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
+            id_column_index = self.config.SEARCH_ID_COLUMN_INDEX
             image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
         provider = self.provider_service.providers[self.dlg.providerIndex()]
         if provider.requires_image_id and not image_id:
             self.alert(self.tr("This provider requires image ID!"), QMessageBox.Warning)
             return
-        if isinstance(provider, SentinelProvider):
-            self.preview_sentinel(image_id=image_id)
-        elif isinstance(provider, ImagerySearchProvider):
+        if isinstance(provider, ImagerySearchProvider):
             self.preview_catalog(image_id=image_id)
         else:  # XYZ providers
             self.preview_xyz(provider=provider, image_id=image_id)
@@ -3004,7 +2459,7 @@ class Mapflow(QObject):
 
     def _template_image_at_row(self, row: int):
         """Return the stored image DTO for a metadata-table row, or None."""
-        id_item = self.dlg.metadataTable.item(row, self.config.MAXAR_ID_COLUMN_INDEX)
+        id_item = self.dlg.metadataTable.item(row, self.config.SEARCH_ID_COLUMN_INDEX)
         if not id_item:
             return None
         return getattr(self, "template_search_images", {}).get(id_item.text())
@@ -3101,7 +2556,7 @@ class Mapflow(QObject):
 
     def preview_search_from_cell (self, row, column):
         if column == self.config.PPRVIEW_INDEX_COLUMN:
-            id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
+            id_column_index = self.config.SEARCH_ID_COLUMN_INDEX
             image_id = self.dlg.metadataTable.item(row, id_column_index).text()
             self.preview_catalog(image_id)
 
@@ -3563,8 +3018,8 @@ class Mapflow(QObject):
         Returns True if the error has been handled, otherwise returns False.
         """
         error = response.error()
-        service = 'Mapflow' if 'mapflow' in response.request().url().authority() else 'SecureWatch'
-        parser = api_message_parser if 'mapflow' in response.request().url().authority() else securewatch_message_parser
+        service = 'Mapflow'
+        parser = api_message_parser
         if error == QNetworkReply.AuthenticationRequiredError:  # invalid/empty credentials
             # Prevent deadlocks
             if self.app_context.logged_in:  # token re-issued during a plugin session

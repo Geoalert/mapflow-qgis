@@ -89,11 +89,11 @@ def _make_service(rows, provider_names, product_types, zooms=None,
 def _rows_with_ids(ids):
     from mapflow.config import Config
     config = Config()
-    width = config.MAXAR_ID_COLUMN_INDEX + 1
+    width = config.SEARCH_ID_COLUMN_INDEX + 1
     rows = []
     for image_id in ids:
         row = [""] * width
-        row[config.MAXAR_ID_COLUMN_INDEX] = image_id
+        row[config.SEARCH_ID_COLUMN_INDEX] = image_id
         rows.append(row)
     return rows
 
@@ -314,7 +314,7 @@ class TestDuplicateImagerySearchMultiRow:
 
         assert row_count_holder["n"] == 3, "Should create one table row per imageId"
 
-        id_col = config.MAXAR_ID_COLUMN_INDEX
+        id_col = config.SEARCH_ID_COLUMN_INDEX
         id_items = [(r, item) for (r, c, item) in set_items if c == id_col]
         assert len(id_items) == 3
         seen_ids = set()
