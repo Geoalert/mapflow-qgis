@@ -4,9 +4,7 @@ from qgis.core import QgsVectorLayer, QgsWkbTypes, QgsGeometry, QgsFeature, QgsC
 from ..app_context import AppContext
 from .. import layer_utils
 from .. import helpers
-from ...entity.provider import (MaxarProvider,
-                                SentinelProvider,
-                                ImagerySearchProvider,
+from ...entity.provider import (ImagerySearchProvider,
                                 MyImageryProvider)
 from ...errors import (BadProcessingInput,
                        PluginError,
@@ -164,7 +162,7 @@ class AreaCalculatorService(QObject):
                                    for row in rows]
         else:
             local_image_indices = []
-        # This is AOI with respect to selected Maxar images and raster image extent
+        # This is AOI with respect to selected search images and raster image extent
         try:
             real_aoi = self.get_aoi(provider_index=provider_index,
                                     local_image_indices=local_image_indices,
@@ -201,17 +199,13 @@ class AreaCalculatorService(QObject):
             if not provider:
                 raise PluginError(self.tr('Providers are not initialized'))
             if len(local_image_indices) != 0:
-                if isinstance(provider, (MaxarProvider, ImagerySearchProvider)):
-                    aoi = self.crop_aoi_with_maxar_image_footprint(selected_aoi, local_image_indices)
+                if isinstance(provider, ImagerySearchProvider):
+                    aoi = self.crop_aoi_with_image_footprint(selected_aoi, local_image_indices)
                     if not aoi:
                         raise AoiNotIntersectsImage()
-                elif isinstance(provider, SentinelProvider):
-                    # todo: crop sentinel aoi with image footprint?
-                    aoi = selected_aoi
                 else:
                     aoi = selected_aoi
                     # We ignore image ID if the provider does not support it
-                    # raise PluginError(self.tr("Selection is not available for  {}").format(provider.name))
             elif provider.requires_image_id:
                 aoi = selected_aoi
                 # raise PluginError(self.tr("Please select image in Search table for {}").format(provider.name))
@@ -234,9 +228,9 @@ class AreaCalculatorService(QObject):
                 aoi = selected_aoi
         return aoi
     
-    def crop_aoi_with_maxar_image_footprint(self,
-                                            aoi: QgsFeature,
-                                            local_image_indices: List[int]):
+    def crop_aoi_with_image_footprint(self,
+                                      aoi: QgsFeature,
+                                      local_image_indices: List[int]):
         extents = [self.app_context.search_footprints[local_image_index] for local_image_index in local_image_indices]
         try:
             extents = [self.app_context.search_footprints[local_image_index] for local_image_index in local_image_indices]

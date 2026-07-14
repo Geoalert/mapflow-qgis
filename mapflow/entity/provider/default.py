@@ -2,48 +2,16 @@ from typing import Optional, List
 
 from .provider import BasicAuth
 from .provider import ProviderInterface, SourceType, CRS
-from ...constants import SENTINEL_OPTION_NAME, SEARCH_OPTION_NAME, CATALOG_OPTION_NAME
+from ...constants import SEARCH_OPTION_NAME, CATALOG_OPTION_NAME
 from ...errors.plugin_errors import ImageIdRequired
-from ...schema import (PostSourceSchema, 
-                       DataProviderParams,
+from ...schema import (DataProviderParams,
                        DataProviderSchema,
                        MyImageryParams,
                        MyImagerySchema,
-                       ImagerySearchParams, 
+                       ImagerySearchParams,
                        ImagerySearchSchema,
                        ProcessingParams)
 from ...schema.provider import ProviderReturnSchema
-
-
-class SentinelProvider(ProviderInterface):
-    def __init__(self,
-                 proxy,
-                 **kwargs):
-        super().__init__(name=SENTINEL_OPTION_NAME)
-        self.proxy = proxy
-
-    def preview_url(self, image_id=None):
-        return None
-
-    @property
-    def requires_image_id(self):
-        return True
-
-    def to_processing_params(self,
-                             provider_name: Optional[str] = None,
-                             zoom: Optional[str] = None):
-        if not image_id and requires_id is True:
-            raise ImageIdRequired("Sentinel provider must have image ID to launch the processing")
-        return PostSourceSchema(url=image_id,
-                                source_type=SourceType.sentinel_l2a), {}
-
-    @property
-    def meta_url(self):
-        return self.proxy + '/meta/skywatch/id'
-
-    @property
-    def is_default(self):
-        return True
 
 
 class ImagerySearchProvider(ProviderInterface):
