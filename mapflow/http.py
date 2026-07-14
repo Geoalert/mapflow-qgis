@@ -216,11 +216,6 @@ def api_message_parser(response_body: str) -> str:
         return None
 
 
-def securewatch_message_parser(response_body: str) -> str:
-    # todo: parse this HTML page for useful info, or display it as is?
-    return response_body
-
-
 def get_error_report_body(response: QNetworkReply,
                           response_body: str,
                           plugin_version: str,

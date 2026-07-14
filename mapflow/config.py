@@ -84,39 +84,29 @@ class Config:
                               PROCESSING_TABLE_COLUMNS.index('reviewUntil'),
                               PROCESSING_TABLE_COLUMNS.index('cost'))
     
-    # MAXAR
+    # IMAGERY SEARCH (Mapflow catalog) metadata-table columns
     # The "new image" marker icon lives in the LEFTMOST column — its meaning is positional,
     # not tied to the product-type content that happens to sit there. The user can hide that
     # column via the search-column checkboxes, so the marker falls back to the leftmost
     # *visible* column at render time (see Mapflow._new_image_marker_column).
     NEW_IMAGE_MARKER_COLUMN_INDEX = 0
-    MAXAR_ID_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()).index('id')
+    SEARCH_ID_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()).index('id')
     LOCAL_INDEX_COLUMN = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()).index('local_index')
     PPRVIEW_INDEX_COLUMN = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()).index('preview')
     NAME_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()).index('providerName')
     ZOOM_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()).index('zoom')
-    MAXAR_DATETIME_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.keys()).index(
+    SEARCH_DATETIME_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.keys()).index(
         QCoreApplication.translate('Config', 'Date & Time') + ' ({t})'.format(t=SEARCH_CAPTURE_TIMEZONE)
     )
-    MAXAR_CLOUD_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.keys()).index(QCoreApplication.translate('Config', 'Cloud %'))
-    MAXAR_MAX_FREE_ZOOM = 12
+    SEARCH_CLOUD_COLUMN_INDEX = tuple(ConfigColumns().METADATA_TABLE_ATTRIBUTES.keys()).index(QCoreApplication.translate('Config', 'Cloud %'))
+    MAX_FREE_ZOOM = 12
 
     # MISC
-    ENABLE_SENTINEL = (QgsSettings().value('variables/mapflow_enable_sentinel', "false").lower() == "true")
     SHOW_RAW_ERROR = (QgsSettings().value("variables/mapflow_raw_error", "false").lower() == "true")
-    SKYWATCH_METADATA_MAX_AREA = 1e11  # 100,000 sq.km
-    SKYWATCH_METADATA_MAX_SIDE_LENGTH = 1e6  # 1,000 km
     INVALID_TOKEN_WARNING_OBJECT_NAME = 'invalidToken'
     METADATA_MORE_BUTTON_OBJECT_NAME = 'getMoreMetadata'
-    SENTINEL_WD_NAME_PATTERN = 'Sentinel-2'
-    SENTINEL_ATTRIBUTES = f'Date & Time ({TIMEZONE})', 'Cloud %', 'Image ID', 'Preview'
-    SENTINEL_ID_COLUMN_INDEX = SENTINEL_ATTRIBUTES.index('Image ID')
-    SENTINEL_PREVIEW_COLUMN_INDEX = SENTINEL_ATTRIBUTES.index('Preview')
-    SENTINEL_DATETIME_COLUMN_INDEX = SENTINEL_ATTRIBUTES.index(f'Date & Time ({TIMEZONE})')
-    SENTINEL_CLOUD_COLUMN_INDEX = SENTINEL_ATTRIBUTES.index('Cloud %')
-    SKYWATCH_POLL_INTERVAL = 2
     MAX_ZOOM = 21
-    DEFAULT_ZOOM = MAXAR_MAX_FREE_ZOOM
+    DEFAULT_ZOOM = MAX_FREE_ZOOM
     USER_STATUS_UPDATE_INTERVAL = 30  # seconds
 
     MAX_FILE_SIZE_PIXELS = 30_000

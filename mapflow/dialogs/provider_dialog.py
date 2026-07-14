@@ -9,9 +9,8 @@ from ..entity.provider import (CRS,
                                UsersProvider,
                                XYZProvider,
                                TMSProvider,
-                               QuadkeyProvider,
-                               MaxarProvider)
-from ..functional.helpers import QUAD_KEY_REGEX, XYZ_REGEX, MAXAR_PROVIDER_REGEX
+                               QuadkeyProvider)
+from ..functional.helpers import QUAD_KEY_REGEX, XYZ_REGEX
 
 
 class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
@@ -70,11 +69,8 @@ class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
         self.show()
 
     def on_type_change(self):
-        if self.type.currentText == MaxarProvider.option_name:
-            self.crs.setCurrentText('EPSG:3857')
-            self.crs.setDisabled(True)
-        else:  # ['xyz', 'tms', 'quadkey']
-            self.url.setEnabled(True)
+        # ['xyz', 'tms', 'quadkey']
+        self.url.setEnabled(True)
         self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(self.validate_and_create_provider())
 
     def validate_and_create_provider(self):
@@ -92,8 +88,6 @@ class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
                 res = bool(XYZ_REGEX.match(url))
             elif source_type == QuadkeyProvider.option_name:
                 res = bool(QUAD_KEY_REGEX.match(url))
-            elif source_type == MaxarProvider.option_name:
-                res = bool(MAXAR_PROVIDER_REGEX.match(url)) and bool(login) and bool(password)
             else:
                 raise AssertionError("Unexpected source type")
         if res:
