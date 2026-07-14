@@ -170,14 +170,32 @@ class ProcessingApi(QObject):
         aoi_ids: Optional[List[str]] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
+        acquisition_date_from: Optional[str] = None,
+        acquisition_date_to: Optional[str] = None,
+        min_resolution: Optional[float] = None,
+        max_resolution: Optional[float] = None,
+        max_cloud_cover: Optional[float] = None,
+        min_off_nadir_angle: Optional[float] = None,
+        max_off_nadir_angle: Optional[float] = None,
     ):
+        # The endpoint (ProcessingTemplateRequestJson) applies these filters to the template's
+        # search results server-side and returns the filtered, paginated result — a read-only
+        # filtered VIEW; it does not modify the template. Only the fields the endpoint supports
+        # are sent (no intersection%/hideUnavailable/providers/productTypes).
         body: dict = {"limit": limit, "offset": offset}
-        if aoi_ids is not None:
-            body["aoiIds"] = aoi_ids
-        if sort_by is not None:
-            body["sortBy"] = sort_by
-        if sort_order is not None:
-            body["sortOrder"] = sort_order
+        optional = {
+            "aoiIds": aoi_ids,
+            "sortBy": sort_by,
+            "sortOrder": sort_order,
+            "acquisitionDateFrom": acquisition_date_from,
+            "acquisitionDateTo": acquisition_date_to,
+            "minResolution": min_resolution,
+            "maxResolution": max_resolution,
+            "maxCloudCover": max_cloud_cover,
+            "minOffNadirAngle": min_off_nadir_angle,
+            "maxOffNadirAngle": max_off_nadir_angle,
+        }
+        body.update({k: v for k, v in optional.items() if v is not None})
         self.http.post(
             path=f"processings/template/{template_id}/images",
             body=json.dumps(body).encode(),

@@ -266,6 +266,21 @@ selected AOIs' geometries, so a processing started from the template covers exac
 those AOIs. Selecting no AOI (e.g. while a processing row is selected) keeps the
 current Area; the template's AOIs are not auto-selected as the Area on open.
 
+### Filtering template results
+
+A **Filter** button (shown only while viewing a template) re-issues the template images
+request with the current search-filter widgets applied **server-side**. The
+`POST …/template/{id}/images` body accepts `acquisitionDateFrom`/`acquisitionDateTo`,
+`minResolution`/`maxResolution`, `maxCloudCover`, `minOffNadirAngle`/`maxOffNadirAngle`
+(plus `aoiIds`, `limit`/`offset`, `sortBy`/`sortOrder`) and returns the filtered, paginated
+result with the filtered `total` — a read-only filtered **view** of the template's results;
+it does **not** modify the template. The plugin sends the supported subset it exposes in the
+UI (date range + cloud cover); `minAoiIntersectionPercent`, `hideUnavailable`, `dataProviders`
+and `productTypes` are **not** accepted by this endpoint and are not sent. The applied filter
+is sticky for the template view — it carries across AOI selection and pagination — and is
+cleared on leaving the template. Starting a new (non-template) search or a Plan Search is a
+separate action from filtering an open template's results.
+
 Leaving a template ("one step left", back button) returns to the project's
 processings list and removes the template's layer group from the map.
 
