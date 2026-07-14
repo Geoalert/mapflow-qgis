@@ -18,7 +18,7 @@ Processings: submit, list, update.
 Data Catalog (My Imagery): mosaics, images, upload, download, storage limits. Includes `GET /rasters/image/{image_id}/download` for presigned S3 download URLs.
 
 ### 002_D_search_api.md
-Imagery Search: catalog search, external APIs (Maxar, Sentinel — legacy).
+Imagery Search: Mapflow catalog search.
 
 ## 002_F_plan_processing_api.md
 Planned processing: create/list/update/delete, run from template, and template status/actions.
@@ -35,7 +35,7 @@ Local persistence: QgsSettings keys, QGIS Auth Manager (OAuth2), temporary files
 Used libraries, pinned versions where important, and external system implementation choices.
 
 ## 005_interactions.md
-Integration boundaries: Mapflow backend, Maxar WFS, Sentinel/Skywatch, Keycloak OAuth2, QGIS application, local filesystem.
+Integration boundaries: Mapflow backend, Keycloak OAuth2, QGIS application, local filesystem.
 
 ## etc.
 Additional documents can be added with increasing numeric prefixes (for example: `006_security.md`, `007_observability.md`).
