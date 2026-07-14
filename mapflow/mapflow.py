@@ -331,10 +331,8 @@ class Mapflow(QObject):
         self.review_dialog.accepted.connect(self.submit_review)
 
         # ========== 13. PROVIDERS ==========
-        self.dlg.minIntersectionSpinBox.valueChanged.connect(self.filter_metadata)
-        self.dlg.maxCloudCoverSpinBox.valueChanged.connect(self.filter_metadata)
-        self.dlg.metadataFrom.dateChanged.connect(self.filter_metadata)
-        self.dlg.metadataTo.dateChanged.connect(self.filter_metadata)
+        # Search filters (intersection, cloud, dates) are applied server-side on the next
+        # Search; there is no offline re-filtering on widget change anymore.
         self.dlg.searchImageryButton.clicked.connect(self.preview_or_search)
 
         self.dlg.addProvider.clicked.connect(self.add_provider)
@@ -352,7 +350,7 @@ class Mapflow(QObject):
         self.dlg.metadataTable.cellClicked.connect(self.on_metadata_table_cell_clicked)
         self.dlg.rasterSourceChanged.connect(self.on_provider_change)
         self.dlg.clearSearch.clicked.connect(self.clear_metadata)
-        self.dlg.metadataTableFilled.connect(self.filter_metadata)
+        self.dlg.metadataTableFilled.connect(self.refresh_search_display)
         self.dlg.searchRightButton.clicked.connect(self.show_search_next_page)
         self.dlg.searchLeftButton.clicked.connect(self.show_search_previous_page)
         self.setup_metadata_search_dropdown()
@@ -1165,85 +1163,27 @@ class Mapflow(QObject):
             enabled = block["enabled"]
             self.app_context.settings.setValue(f"wd/{wd.id}/{name}", enabled)
 
-    def filter_metadata(self, *_, min_intersection=None, max_cloud_cover=None) -> None:
-        """Filter out the metadata table and layer every time user changes a filter."""
+    def refresh_search_display(self, *_) -> None:
+        """Show the current search results verbatim and (re)wire the preview-cell click.
+
+        All imagery search now goes through the Mapflow catalog, which applies the filters
+        (intersection, cloud, dates, resolution) server-side and returns the paginated result.
+        The plugin therefore no longer re-filters offline — doing so used to shrink the
+        already-paginated page and break the page count. This just clears any stale subset,
+        makes every row visible, and reconnects the preview handler after a table refill."""
         try:
-            crs = self.app_context.metadata_layer.crs()
+            self.app_context.metadata_layer.setSubsetString('')
         except (RuntimeError, AttributeError):  # no metadata layer
             return
-        # In template mode the search results are already filtered server-side by the
-        # template's stored searchParams (spec 002_F: AOI filtering uses `aoiIds` on the
-        # template images request). The offline filter below tests every image against a
-        # SINGLE AOI, so when minIntersection > 0 it wrongly drops images intersecting the
-        # template's OTHER AOIs — the "only the first AOI's results" bug (feedback 2). Show
-        # the server's results verbatim instead.
-        if getattr(self.processing_service, "in_template_mode", False):
-            self.app_context.metadata_layer.setSubsetString('')
-            for row in range(self.dlg.metadataTable.rowCount()):
-                self.dlg.metadataTable.setRowHidden(row, False)
-            self._reconnect_cell_preview()
-            return
-        if max_cloud_cover is None:
-            max_cloud_cover = self.dlg.maxCloudCover.value()
-        if min_intersection is None:
-            min_intersection = self.dlg.minIntersection.value()
-        from_ = self.dlg.metadataFrom.date()
-        to = self.dlg.metadataTo.date()
-        aoi = helpers.from_wgs84(self.app_context.metadata_aoi, crs)
-        if not aoi:
-            if self.dlg.polygonCombo.currentLayer():
-                geom = layer_utils.collect_geometry_from_layer(self.dlg.polygonCombo.currentLayer())
-                aoi = helpers.from_wgs84(geom, crs)
-        self.calculator.setEllipsoid(crs.ellipsoidAcronym())
-        self.calculator.setSourceCrs(crs, self.app_context.project.transformContext())
-        min_intersection_size = self.calculator.measureArea(aoi) * (min_intersection / 100)
-        aoi = QgsGeometry.createGeometryEngine(aoi.constGet())
-        aoi.prepareGeometry()
-        # Get attributes
-        id_column_index = self.config.SEARCH_ID_COLUMN_INDEX
-        self.app_context.metadata_layer.setSubsetString('')  # clear any existing filters
-        filtered_ids = []
-        for feature in self.app_context.metadata_layer.getFeatures():
-            area = self.calculator.measureArea(QgsGeometry(aoi.intersection(feature.geometry().constGet())))
-            try:
-                acquisition_date = feature.attribute("acquisitionDate").date()
-            except KeyError:
-                acquisition_date = None
-            try:
-                cloud_cover = feature.attribute("cloudCover")
-            except KeyError:
-                cloud_cover = None
-
-            date_ok = (acquisition_date is not None
-                       and from_ <= acquisition_date <= to)
-            # if cloud cover is 100 we don't check it at all, but otherwise we filter non-specified values (none)
-            cloud_cover_ok = max_cloud_cover == 100 or (
-                cloud_cover is not None and cloud_cover < max_cloud_cover
-            )
-            if area < min_intersection_size or not date_ok or not cloud_cover_ok :
-                    filtered_ids.append(feature['id'])
-        if filtered_ids:
-            filter_ = 'id not in (' + ', '.join((f"'{id_}'" for id_ in filtered_ids)) + ')'
-        else:
-            filter_ = ''
-        # Filter only for real search results, not for duplecated table
-        product_type = self.dlg.metadataTable.item(0, 0) # for duplicated processings it will be empty
-        if product_type: # show/hide table rows
-            self.app_context.metadata_layer.setSubsetString(filter_)
-            for row in range(self.dlg.metadataTable.rowCount()):
-                id_ = self.dlg.metadataTable.item(row, id_column_index).data(Qt.DisplayRole)
-                is_unfit = id_ in filtered_ids
-                self.dlg.metadataTable.setRowHidden(row, is_unfit)
-        else: # show the whole table (should be one row)
-            for row in range(self.dlg.metadataTable.rowCount()):
-                self.dlg.metadataTable.setRowHidden(row, False)
+        for row in range(self.dlg.metadataTable.rowCount()):
+            self.dlg.metadataTable.setRowHidden(row, False)
         self._reconnect_cell_preview()
 
     def _reconnect_cell_preview(self):
-        """Rewire the search table's 'Preview' cell click to a single handler. ``filter_metadata``
-        runs on every filter change and table refill; connecting without disconnecting first
-        stacks the connections, so one click fires the preview several times and adds several
-        preview layers at once (feedback 4.2). Disconnect the previous connection first."""
+        """Rewire the search table's 'Preview' cell click to a single handler.
+        ``refresh_search_display`` runs on every table refill; connecting without disconnecting
+        first stacks the connections, so one click fires the preview several times and adds
+        several preview layers at once (feedback 4.2). Disconnect the previous connection first."""
         try:
             self.dlg.metadataTable.disconnect(self.cell_preview_connection)
         except (AttributeError, TypeError, RuntimeError):

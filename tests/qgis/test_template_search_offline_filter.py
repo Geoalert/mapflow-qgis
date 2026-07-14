@@ -1,73 +1,56 @@
-"""QGIS-tier tests for the offline metadata filter behaviour in template mode
-(round-2 feedback 2). Template search results are filtered server-side by the template's
-stored ``searchParams`` (spec 002_F: AOI filtering uses ``aoiIds`` on the images request).
-The client-side ``filter_metadata`` — which tests each image against a SINGLE AOI — must
-NOT run for templates, otherwise images intersecting the template's other AOIs are dropped
-whenever ``minIntersection > 0`` (only the first AOI's results are shown)."""
+"""QGIS-tier tests for search-results display refresh. All imagery search goes through the
+Mapflow catalog, which filters (intersection, cloud, dates, resolution) server-side and
+returns the paginated result; the plugin no longer re-filters offline (that used to shrink
+the paginated page and break the page count, and for templates dropped images intersecting
+the other AOIs — round-2 feedback 2/6). ``refresh_search_display`` just shows the server's
+rows verbatim and (re)wires the preview-cell click."""
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from mapflow.mapflow import Mapflow
 
 
-def _plugin(in_template_mode):
+def _plugin():
     plugin = Mapflow.__new__(Mapflow)
     plugin.dlg = MagicMock()
     plugin.calculator = MagicMock()
-    plugin.config = MagicMock()
     plugin.preview_search_from_cell = MagicMock()
-    plugin.processing_service = SimpleNamespace(in_template_mode=in_template_mode)
     metadata_layer = MagicMock()
-    metadata_layer.crs.return_value = MagicMock()
-    plugin.app_context = SimpleNamespace(metadata_layer=metadata_layer, metadata_aoi=None)
+    plugin.app_context = SimpleNamespace(metadata_layer=metadata_layer)
     plugin.dlg.metadataTable.rowCount.return_value = 3
     return plugin
 
 
-def test_template_mode_skips_offline_intersection_filter():
-    plugin = _plugin(in_template_mode=True)
+def test_display_shows_all_rows_and_clears_subset_without_offline_filtering():
+    plugin = _plugin()
 
-    plugin.filter_metadata(min_intersection=50)
+    plugin.refresh_search_display()
 
-    # No offline filtering: the single-AOI intersection maths must never run.
+    # No offline filtering: the intersection/area maths must never run.
     plugin.calculator.measureArea.assert_not_called()
-    # The server's results are shown verbatim: subset cleared, all rows visible.
+    # Server results shown verbatim: subset cleared, all rows visible.
     plugin.app_context.metadata_layer.setSubsetString.assert_called_once_with('')
     assert plugin.dlg.metadataTable.setRowHidden.call_count == 3
     for call in plugin.dlg.metadataTable.setRowHidden.call_args_list:
         assert call.args[1] is False
-    # Preview clicking is still wired up for template results.
+    # Preview clicking is (re)wired.
     plugin.dlg.metadataTable.cellClicked.connect.assert_called_once_with(
         plugin.preview_search_from_cell)
 
 
-def test_template_mode_reconnect_does_not_stack_preview_connections():
-    plugin = _plugin(in_template_mode=True)
+def test_reconnect_does_not_stack_preview_connections():
+    plugin = _plugin()
     plugin.cell_preview_connection = object()
 
-    plugin.filter_metadata(min_intersection=10)
+    plugin.refresh_search_display()
 
-    # A previous preview connection is disconnected before reconnecting.
     plugin.dlg.metadataTable.disconnect.assert_called_once()
 
 
-def test_template_mode_does_not_read_regular_search_filters():
-    """The template guard returns before the regular path reads the date/AOI widgets."""
-    plugin = _plugin(in_template_mode=True)
+def test_noop_when_no_metadata_layer():
+    plugin = _plugin()
+    plugin.app_context.metadata_layer.setSubsetString.side_effect = RuntimeError
 
-    plugin.filter_metadata(min_intersection=50)
+    plugin.refresh_search_display()  # must not raise
 
-    plugin.dlg.metadataFrom.date.assert_not_called()
-
-
-def test_non_template_mode_enters_regular_offline_path():
-    """Outside template mode the guard is skipped, so the regular offline filter runs
-    (it reads the date widgets that the template branch never touches)."""
-    plugin = _plugin(in_template_mode=False)
-    plugin.dlg.maxCloudCover.value.return_value = 100
-    plugin.dlg.minIntersection.value.return_value = 0
-    try:
-        plugin.filter_metadata(min_intersection=0)
-    except Exception:
-        pass  # real geometry maths is out of scope; we only assert the branch taken
-    plugin.dlg.metadataFrom.date.assert_called()
+    plugin.dlg.metadataTable.setRowHidden.assert_not_called()
