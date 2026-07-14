@@ -41,7 +41,6 @@ class ProviderService(QObject):
         self.imagery_search_provider_instance = None
         self.user_providers = ProvidersList([])
         self.default_providers = ProvidersList([])
-        self.sentinel_providers = ProvidersList([])
         self.config_search_columns = ConfigColumns().METADATA_TABLE_ATTRIBUTES
         self.selection_sync_callback = None
 
@@ -82,14 +81,11 @@ class ProviderService(QObject):
         self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
     
     def set_available_imagery_sources(self, wd: str) -> None:
-        """Restrict the list of imagery sources according to the selected model."""
-        if self.config.SENTINEL_WD_NAME_PATTERN in wd and self.providers != self.sentinel_providers:
-            self.providers = self.sentinel_providers
-        elif not self.providers == self.basemap_providers:
-            self.providers = self.basemap_providers
-        else:
+        """Set the list of imagery sources (all search goes through the Mapflow catalog)."""
+        if self.providers == self.basemap_providers:
             # Providers did not change
             return
+        self.providers = self.basemap_providers
         provider_names = {p.name: getattr(p, 'api_name', p.name) for p in self.providers}
         self.dlg.set_raster_sources(provider_names=provider_names,
                                     default_provider_names=['Mapbox', '🌍 Mapbox Satellite'])
@@ -168,7 +164,7 @@ class ProviderService(QObject):
                 image_id = None
                 selected_rows_count = 0
             else:
-                id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
+                id_column_index = self.config.SEARCH_ID_COLUMN_INDEX
                 selected_rows_count = len({cell.row() for cell in selected_cells})
                 image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
             if selected_rows_count > 1:
@@ -291,7 +287,7 @@ class ProviderService(QObject):
         if not selected_cells:
             image_ids = None
         else:
-            id_column_index = self.config.MAXAR_ID_COLUMN_INDEX
+            id_column_index = self.config.SEARCH_ID_COLUMN_INDEX
             rows = sorted({cell.row() for cell in selected_cells})
             image_ids = []
             for row in rows:
@@ -420,12 +416,12 @@ class ProviderService(QObject):
         # Only name, zoom and id are returned, so we map column indices to per-row value lookups
         per_row_columns = lambda row, image_id: {
             self.config.NAME_COLUMN_INDEX: provider.imagerySearch.dataProvider,
-            self.config.MAXAR_ID_COLUMN_INDEX: image_id,
+            self.config.SEARCH_ID_COLUMN_INDEX: image_id,
             self.config.ZOOM_COLUMN_INDEX: provider.imagerySearch.zoom,
             self.config.LOCAL_INDEX_COLUMN: row,
         }
         column_indices = [self.config.NAME_COLUMN_INDEX,
-                          self.config.MAXAR_ID_COLUMN_INDEX,
+                          self.config.SEARCH_ID_COLUMN_INDEX,
                           self.config.ZOOM_COLUMN_INDEX,
                           self.config.LOCAL_INDEX_COLUMN]
         column_names = [list(self.config_search_columns.values())[index] for index in column_indices]

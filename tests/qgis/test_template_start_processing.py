@@ -250,7 +250,7 @@ def _mark_seen_plugin(selected_rows=None):
 	plugin = Mapflow.__new__(Mapflow)
 	plugin.tr = lambda text: text
 	plugin.active_template_id = "tpl-1"
-	plugin.config = SimpleNamespace(MAXAR_ID_COLUMN_INDEX=1, NEW_IMAGE_MARKER_COLUMN_INDEX=0)
+	plugin.config = SimpleNamespace(SEARCH_ID_COLUMN_INDEX=1, NEW_IMAGE_MARKER_COLUMN_INDEX=0)
 	plugin.processing_service = SimpleNamespace(api=MagicMock())
 	plugin._decrement_template_new_images_count = MagicMock()
 	plugin._reset_template_new_images_count = MagicMock()
@@ -336,7 +336,7 @@ def test_mark_seen_error_leaves_marker_and_counter_untouched():
 
 def test_apply_new_image_markers_sets_icon_only_on_new_rows():
 	plugin = Mapflow.__new__(Mapflow)
-	plugin.config = SimpleNamespace(MAXAR_ID_COLUMN_INDEX=1, NEW_IMAGE_MARKER_COLUMN_INDEX=0)
+	plugin.config = SimpleNamespace(SEARCH_ID_COLUMN_INDEX=1, NEW_IMAGE_MARKER_COLUMN_INDEX=0)
 	plugin.template_search_images = {
 		"img-1": SimpleNamespace(id="img-1", isNew=True, productType="Image"),
 		"img-2": SimpleNamespace(id="img-2", isNew=False, productType="Image"),

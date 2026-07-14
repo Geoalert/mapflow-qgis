@@ -19,7 +19,6 @@ class SourceType(StrEnum):
     xyz = 'xyz'
     tms = 'tms'
     quadkey = 'quadkey'
-    sentinel_l2a = 'sentinel_l2a'
     local = 'local'
 
     @property

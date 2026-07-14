@@ -1,6 +1,6 @@
 import json
 
-from .factory import create_provider, create_provider_old
+from .factory import create_provider
 from .provider import NoneProvider
 from ...constants import PROVIDERS_KEY
 
