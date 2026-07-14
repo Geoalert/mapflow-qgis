@@ -89,6 +89,9 @@ class Mapflow(QObject):
     # The AOI id the in-template search results are currently filtered by (None = all).
     # Class-level default so the check is safe before on_template_opened sets it.
     _template_search_aoi_filter = None
+    # Server-side filters (date/cloud) applied to the in-template search view via the Filter
+    # button (T7); None = the template's results shown unfiltered. Sticky per template view.
+    _template_search_filters = None
     # The AOI ids the processing Area is currently derived from (T9), so a repeated selection
     # signal doesn't rebuild the area layer. The dedicated Area layer holding their union.
     _processing_area_aoi_filter = None
@@ -353,6 +356,7 @@ class Mapflow(QObject):
         self.dlg.metadataTableFilled.connect(self.refresh_search_display)
         self.dlg.searchRightButton.clicked.connect(self.show_search_next_page)
         self.dlg.searchLeftButton.clicked.connect(self.show_search_previous_page)
+        self.dlg.filterTemplateResults.clicked.connect(self.filter_template_results)
         self.setup_metadata_search_dropdown()
         self.setup_metadata_seen_dropdown()
 
@@ -899,12 +903,16 @@ class Mapflow(QObject):
         self.search_page_offset = max(0, offset)
         if aoi_ids is None:
             aoi_ids = self._aoi_ids_from_template(template)
+        # The applied server-side filters (date/cloud, set by the Filter button) are sticky for
+        # this template view — they carry across AOI-selection reloads and pagination (T7).
+        filters = self._template_search_filters or {}
         self.processing_service.api.get_template_images(
             template_id=template.id,
             callback=lambda response: self.get_selected_template_callback(response, template),
             limit=self.search_page_limit,
             offset=self.search_page_offset,
             aoi_ids=aoi_ids or None,
+            **filters,
         )
 
     def _load_template_search_page(self, offset: int):
@@ -915,6 +923,29 @@ class Mapflow(QObject):
             return
         aoi_ids = list(self._template_search_aoi_filter) if self._template_search_aoi_filter else None
         self._load_template_search(template, aoi_ids=aoi_ids, offset=offset)
+
+    def _collect_template_search_filters(self) -> dict:
+        """The subset of the search filter widgets that the template images endpoint supports
+        (date range + cloud cover). Intersection %, providers and product types are not
+        supported server-side for template filtering, so they are not sent (T7)."""
+        return {
+            "acquisition_date_from":
+                self.dlg.metadataFrom.dateTime().toUTC().toString("yyyy-MM-ddTHH:mm:ss.zzz'Z'"),
+            "acquisition_date_to":
+                self.dlg.metadataTo.dateTime().toUTC().toString("yyyy-MM-ddTHH:mm:ss.zzz'Z'"),
+            "max_cloud_cover": self.dlg.maxCloudCover.value(),
+        }
+
+    def filter_template_results(self):
+        """T7: re-issue the active template's search with the current date/cloud filters
+        applied server-side. This is a read-only filtered VIEW of the template's results (it
+        does not modify the template); the filters are sticky across AOI selection and paging."""
+        template = self.processing_service.active_template
+        if not template:
+            return
+        self._template_search_filters = self._collect_template_search_filters()
+        aoi_ids = list(self._template_search_aoi_filter) if self._template_search_aoi_filter else None
+        self._load_template_search(template, aoi_ids=aoi_ids, offset=0)
 
     def add_template_aoi(self):
         """Add the current polygon layer's features as named AOIs to the active template."""
@@ -2677,8 +2708,12 @@ class Mapflow(QObject):
 
     def on_template_opened(self, template):
         """React to entering a template: fill search results and load AOI/processing layers."""
-        # Initial results are the whole template (no AOI filter applied yet).
+        # Initial results are the whole template (no AOI/filter applied yet).
         self._template_search_aoi_filter = None
+        self._template_search_filters = None
+        # The Filter button re-queries the template's results with the current filters (T7);
+        # it only makes sense while viewing a template.
+        self.dlg.filterTemplateResults.setVisible(True)
         self.apply_search_params_to_ui(getattr(template, "searchParams", None))
         self._load_template_search(template)
         self._load_template_layers(template)
@@ -2689,6 +2724,8 @@ class Mapflow(QObject):
             self._remove_template_group(str(template.name))
         self.app_context.open_template_results_id = None
         self._template_search_aoi_filter = None
+        self._template_search_filters = None
+        self.dlg.filterTemplateResults.setVisible(False)
         # Drop the AOI-selection processing Area so it doesn't leak to the project view.
         self._remove_selected_aoi_layer()
         self._processing_area_aoi_filter = None

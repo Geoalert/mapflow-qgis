@@ -1645,6 +1645,31 @@
                  </spacer>
                 </item>
                 <item>
+                 <widget class="QPushButton" name="filterTemplateResults">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>100</width>
+                    <height>0</height>
+                   </size>
+                  </property>
+                  <property name="visible">
+                   <bool>false</bool>
+                  </property>
+                  <property name="toolTip">
+                   <string>Filter this template&apos;s results by the current date and cloud-cover filters</string>
+                  </property>
+                  <property name="text">
+                   <string>Filter</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
                  <widget class="QToolButton" name="getMetadata">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
