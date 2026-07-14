@@ -1,6 +1,6 @@
 import json
 
-from .factory import create_provider
+from .factory import create_provider, provider_options
 from .provider import NoneProvider
 from ...constants import PROVIDERS_KEY
 
@@ -33,6 +33,12 @@ class ProvidersList(list):
                 if name in providers.keys():
                     name = decorate(name, providers.keys())
                     params["name"] = name
+                # Silently discard providers of a removed type (e.g. the legacy Maxar WMTS
+                # search/tile provider) instead of erroring: they are simply dropped and get
+                # purged from settings on the next `to_settings` write. Only genuinely broken
+                # providers of a still-supported type are reported as errors.
+                if params.get("option_name") not in provider_options:
+                    continue
                 try:
                     providers.update({name: create_provider(**params)})
                 except Exception:

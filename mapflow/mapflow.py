@@ -19,7 +19,7 @@ from PyQt5.QtWidgets import (
     QMessageBox, QPushButton, QWidget, QToolButton
 )
 from qgis.core import (
-    Qgis, QgsCoordinateReferenceSystem, QgsDistanceArea, QgsFeature, QgsGeometry,
+    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsFeature, QgsGeometry,
     QgsLayerTreeLayer, QgsMapLayer, QgsMapLayerType, QgsProject, QgsRasterLayer,
     QgsRectangle, QgsVectorLayer
 )
@@ -241,10 +241,11 @@ class Mapflow(QObject):
             self.provider_service.user_providers, errors = ProvidersList.from_settings(settings=self.app_context.settings)
             self.provider_service.default_providers = ProvidersList([])
         except Exception as e:
-            self.alert(self.tr("Error during loading the data providers: {e}").format(str(e)), icon=Qgis.Warning)
+            self.alert(self.tr("Error during loading the data providers: {e}").format(e=str(e)),
+                       icon=QMessageBox.Warning)
         if errors:
             self.alert(self.tr('We failed to import providers from the settings. Please add them again'),
-                    icon=Qgis.Warning)
+                    icon=QMessageBox.Warning)
         self.provider_service.update_providers()
 
         # ========== 9. ADD LAYER MENU ==========
