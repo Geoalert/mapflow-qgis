@@ -67,7 +67,6 @@ All plugin settings are scoped under the `"mapflow"` group via `settings.beginGr
 | `variables/mapflow_env` | string | Environment: production/staging/internal/duty |
 | `variables/mapflow_project_id` | string | Default project ID override |
 | `variables/zoom_selector` | string ("true"/"false") | Enable zoom selector feature |
-| `variables/mapflow_enable_sentinel` | string ("true"/"false") | Enable Sentinel-2 imagery |
 | `variables/mapflow_raw_error` | string ("true"/"false") | Show raw error messages (debug) |
 | `variables/mapflow_max_aois` | string | Max AOIs per processing |
 
