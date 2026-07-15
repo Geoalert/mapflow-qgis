@@ -66,6 +66,16 @@ def test_update_search_params_noop_without_template():
     plugin.processing_service.api.update_template.assert_not_called()
 
 
+def test_update_search_params_omits_active_until_when_none():
+    plugin, template = _plugin_f1()
+    template.activeUntil = None  # must not crash on .strftime
+
+    plugin.update_template_search_params()
+
+    data = plugin.processing_service.api.update_template.call_args.kwargs["data"]
+    assert data.activeUntil is None
+
+
 # ---------- Feature 2: update AOI geometry from layer ----------
 
 def _polygon_layer():
@@ -118,6 +128,20 @@ def test_update_aoi_geometry_requires_a_layer():
     plugin.update_aoi_geometry_from_layer()
 
     plugin.processing_service.api.update_aoi.assert_not_called()
+
+
+def test_update_aoi_geometry_rejects_the_internal_selected_aoi_layer():
+    # Selecting the AOI row makes T9 set polygonCombo to the internal selected-AOI layer;
+    # using it would be a no-op, so it must be rejected (not silently pushed back).
+    aoi = SimpleNamespace(id="aoi-1", can_rename=True)
+    layer = _polygon_layer()
+    plugin = _plugin_f2(aoi, layer)
+    plugin._selected_aoi_layer = layer  # polygonCombo currently points at the T9 layer
+
+    plugin.update_aoi_geometry_from_layer()
+
+    plugin.processing_service.api.update_aoi.assert_not_called()
+    plugin.alert.assert_called_once()
 
 
 # ---------- Feature 3: exclude from search ----------
