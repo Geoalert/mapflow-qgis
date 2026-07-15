@@ -56,6 +56,9 @@ class ProcessingService(QObject):
     # (search results, AOI layers) can be handled outside the service.
     templateOpened = pyqtSignal(object)
     templateClosed = pyqtSignal(object)
+    # Emitted after a template's AOIs change (add/rename/delete/geometry update) and the
+    # template is re-hydrated, so listeners can redraw its map layers.
+    templateAoisChanged = pyqtSignal(object)
 
     # Class-level defaults so the mode check is safe even when callers (and tests)
     # construct the service without running __init__.
@@ -1369,6 +1372,8 @@ class ProcessingService(QObject):
         if self.in_template_mode and self.active_template:
             self.template_aois = {aoi.table_id: aoi for aoi in self.active_template.aoi_dtos()}
             self.view.update_processing_table(self.combined_template_rows())
+            # Redraw the template's AOI/processing map layers to reflect the AOI change.
+            self.templateAoisChanged.emit(self.active_template)
 
     def aoi_change_error_handler(self, response):
         alert(self.tr("AOI update failed: {}").format(self._template_error_text(response)),
