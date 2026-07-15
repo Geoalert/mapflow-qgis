@@ -139,10 +139,13 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.template_rename_action = QAction(self.tr("Rename"))
         self.template_pause_action = QAction(self.tr("Pause"))
         self.template_resume_action = QAction(self.tr("Resume"))
+        self.template_update_search_action = QAction(self.tr("Update search parameters"))
         # AOI-specific actions (in-template view)
         self.aoi_rename_action = QAction(self.tr("Rename AOI"))
         self.aoi_delete_action = QAction(self.tr("Delete AOI"))
         self.aoi_add_action = QAction(self.tr("Add AOI from current layer"))
+        self.aoi_update_geometry_action = QAction(self.tr("Update AOI from current layer"))
+        self.exclude_from_search_action = QAction(self.tr("Exclude from search"))
         self.setup_options_menu()
 
         # Imagery Search
