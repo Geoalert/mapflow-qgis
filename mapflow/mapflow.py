@@ -515,8 +515,9 @@ class Mapflow(QObject):
             menu.addAction(self.dlg.see_processings_action)
             if self.app_context.user_role.can_delete_rename_review_processing:
                 menu.addAction(self.dlg.template_rename_action)
-                self.dlg.template_update_search_action.setEnabled(True)
-                menu.addAction(self.dlg.template_update_search_action)
+                # NB: "Update search parameters" is offered only from *inside* the template
+                # (below), where the filter widgets reflect the template (populated on open).
+                # In this project-list selection they hold unrelated values, so it is not shown.
             # Add pause/resume/restart based on template status. Controlling the template's
             # run state is a maintainer+ action, so it is disabled for e.g. contributors.
             can_control = self.app_context.user_role.can_pause_resume_template
@@ -1755,7 +1756,9 @@ class Mapflow(QObject):
             name=template.name,
             searchParams=self._build_search_params(aoi_details=None),
             processingParams=template.processingParams or {},
-            activeUntil=template.activeUntil.strftime('%Y-%m-%dT%H:%M:%S.0Z'),
+            # activeUntil is optional on the backend (partial update); send it only when set.
+            activeUntil=(template.activeUntil.strftime('%Y-%m-%dT%H:%M:%S.0Z')
+                         if template.activeUntil else None),
         )
         self.iface.messageBar().pushInfo(self.app_context.plugin_name,
                                          self.tr('Updating template search parameters...'))
@@ -1789,9 +1792,12 @@ class Mapflow(QObject):
                                "Reopen the template and try again."), QMessageBox.Information)
             return
         layer = self.dlg.polygonCombo.currentLayer()
-        if layer is None or not layer.featureCount():
-            self.alert(self.tr("Select a polygon layer with the new AOI geometry"),
-                       QMessageBox.Warning)
+        # Selecting the AOI row makes the AOI-selection sync set the Area to the internal
+        # "Selected AOI" layer (T9). That layer is just the AOI's own geometry, so updating
+        # from it would be a no-op — require the user to pick the (edited) source layer.
+        if layer is None or layer is self._selected_aoi_layer or not layer.featureCount():
+            self.alert(self.tr("Select the polygon layer that holds the new AOI geometry "
+                               "(not the current selected-AOI area)"), QMessageBox.Warning)
             return
         wgs = helpers.to_wgs84(layer_utils.collect_geometry_from_layer(layer), layer.crs())
         if wgs is None or wgs.isEmpty():
