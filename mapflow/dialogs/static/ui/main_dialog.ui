@@ -1670,6 +1670,31 @@
                  </widget>
                 </item>
                 <item>
+                 <widget class="QPushButton" name="updateTemplateSearch">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>140</width>
+                    <height>0</height>
+                   </size>
+                  </property>
+                  <property name="visible">
+                   <bool>false</bool>
+                  </property>
+                  <property name="toolTip">
+                   <string>Save the current search filters to this template (replaces its stored search parameters)</string>
+                  </property>
+                  <property name="text">
+                   <string>Update template</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
                  <widget class="QToolButton" name="getMetadata">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">

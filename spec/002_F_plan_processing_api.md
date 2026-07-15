@@ -289,10 +289,14 @@ separate action from filtering an open template's results.
 Three client actions edit an existing template (distinct from *filtering* its results,
 which is read-only):
 
-- **Update search parameters** (context-menu action on a template row / while inside it):
-  `PUT /processings/template/{id}` with `searchParams` built from the current search-filter
-  widgets (dates, cloud, resolution, intersection, hide-unavailable, providers, product
-  types) and **no** geometry — the backend merges them, preserving the AOIs.
+- **Update search parameters** (an **"Update template"** button on the Imagery Search tab,
+  shown only while a template is open — so the widgets reflect that template): `PUT
+  /processings/template/{id}` with `searchParams` built from the current search-filter widgets
+  (dates, cloud, resolution, intersection, hide-unavailable, providers, product types) and
+  **no** geometry — the backend merges them, preserving the AOIs. Only `name` + `searchParams`
+  are sent; `processingParams` is **omitted** (its backend type has a required `rest` field, so
+  an empty/partial object fails to decode — omitting it makes the backend preserve the stored
+  value), as is `activeUntil`.
 - **Update AOI from current layer** (AOI-row context-menu action): replace one AOI's geometry
   with the current polygon layer's geometry via `POST …/aoi/{aoiId}` (`{ geometry }`). Used
   after the user manually edits a layer. Requires an AOI with a persisted `id`.

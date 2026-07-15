@@ -54,6 +54,10 @@ def test_update_search_params_sends_filters_without_geometry():
     assert sp["maxCloudCover"] == 40
     assert sp["minAoiIntersectionPercent"] == 20
     assert sp.get("aoiDetails") is None  # geometry is never sent on the PUT endpoint
+    # processingParams and activeUntil are omitted so the backend preserves them (sending
+    # processingParams={} would fail its required `rest` field).
+    assert "processingParams" not in payload
+    assert "activeUntil" not in payload
 
 
 def test_update_search_params_noop_without_template():
@@ -66,14 +70,16 @@ def test_update_search_params_noop_without_template():
     plugin.processing_service.api.update_template.assert_not_called()
 
 
-def test_update_search_params_omits_active_until_when_none():
-    plugin, template = _plugin_f1()
-    template.activeUntil = None  # must not crash on .strftime
+def test_update_search_params_prefers_active_template():
+    plugin, _ = _plugin_f1()
+    plugin.processing_service.selected_template = lambda: None
+    open_template = SimpleNamespace(id="tpl-open", name="Open", processingParams=None,
+                                    activeUntil=datetime(2026, 3, 1))
+    plugin.processing_service.active_template = open_template
 
     plugin.update_template_search_params()
 
-    data = plugin.processing_service.api.update_template.call_args.kwargs["data"]
-    assert data.activeUntil is None
+    assert plugin.processing_service.api.update_template.call_args.kwargs["template_id"] == "tpl-open"
 
 
 # ---------- Feature 2: update AOI geometry from layer ----------
@@ -213,3 +219,67 @@ def test_exclude_noop_when_processing_not_linked():
 
     plugin.processing_service.api.update_aoi.assert_not_called()
     plugin.processing_service.api.delete_aois.assert_not_called()
+
+
+# ---------- Item 1: redraw template layers on AOI change ----------
+
+def test_on_template_aois_changed_redraws_layers():
+    plugin = Mapflow.__new__(Mapflow)
+    plugin._remove_template_aoi_subgroups = MagicMock()
+    plugin._load_template_layers = MagicMock()
+    template = SimpleNamespace(name="T1")
+
+    plugin.on_template_aois_changed(template)
+
+    plugin._remove_template_aoi_subgroups.assert_called_once_with("T1")
+    plugin._load_template_layers.assert_called_once_with(template)
+
+
+def test_on_template_aois_changed_noop_without_template():
+    plugin = Mapflow.__new__(Mapflow)
+    plugin._load_template_layers = MagicMock()
+
+    plugin.on_template_aois_changed(None)
+
+    plugin._load_template_layers.assert_not_called()
+
+
+def test_reopen_template_callback_emits_aois_changed():
+    from PyQt5.QtCore import QObject
+    from mapflow.functional.service.processing_service import ProcessingService
+    service = ProcessingService.__new__(ProcessingService)
+    QObject.__init__(service)
+    service.in_template_mode = True
+    service.active_template = SimpleNamespace(id="t1", aoi_dtos=lambda: [])
+    service.templates = {}
+    service.view = MagicMock()
+    service.combined_template_rows = lambda: []
+    received = []
+    service.templateAoisChanged.connect(lambda t: received.append(t))
+    resp = MagicMock()
+    resp.readAll.return_value.data.return_value = b'not json'  # parse fails -> keeps active_template
+
+    service._reopen_template_callback(resp)
+
+    assert received == [service.active_template]
+
+
+# ---------- Item 5: internal selected-AOI layer gets a tree parent ----------
+
+def test_selected_aoi_layer_gets_a_tree_parent():
+    from qgis.core import QgsProject
+    project = QgsProject()
+    plugin = Mapflow.__new__(Mapflow)
+    settings = MagicMock()
+    settings.value.return_value = None  # no custom layerGroup -> plugin_name
+    plugin.app_context = SimpleNamespace(project=project, settings=settings, plugin_name="Mapflow")
+    plugin.result_loader = SimpleNamespace(add_layers_to_group=True)
+    layer = QgsVectorLayer("Polygon?crs=epsg:4326", "Selected AOI", "memory")
+    project.addMapLayer(layer, addToLegend=False)
+    assert project.layerTreeRoot().findLayer(layer.id()) is None  # tree-less initially
+
+    plugin._add_layer_to_mapflow_group(layer)
+
+    node = project.layerTreeRoot().findLayer(layer.id())
+    assert node is not None and node.parent() is not None  # now has a parent -> no "no parent" crash
+    assert project.layerTreeRoot().findGroup("Mapflow") is not None
