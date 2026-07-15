@@ -64,7 +64,10 @@ from .schema.template import (AOI_NAME_MAX_LENGTH,
                               AddAoisSchema,
                               AddSingleAoiSchema,
                               CreateProcessingTemplateSchema,
-                              SearchParams)
+                              DeleteAoisSchema,
+                              SearchParams,
+                              UpdateAoiSchema,
+                              UpdateProcessingTemplateSchema)
 from .schema.workflow_def import WorkflowDef
 # Dialogs
 from .dialogs import (ErrorMessageWidget,
@@ -451,10 +454,13 @@ class Mapflow(QObject):
         self.dlg.template_rename_action.triggered.connect(self.processing_service.update_template)
         self.dlg.template_pause_action.triggered.connect(self.processing_service.pause_template)
         self.dlg.template_resume_action.triggered.connect(self.processing_service.resume_template)
+        self.dlg.template_update_search_action.triggered.connect(self.update_template_search_params)
         # AOI actions (in-template view)
         self.dlg.aoi_rename_action.triggered.connect(self.processing_service.rename_aoi)
         self.dlg.aoi_delete_action.triggered.connect(self.processing_service.delete_aoi)
         self.dlg.aoi_add_action.triggered.connect(self.add_template_aoi)
+        self.dlg.aoi_update_geometry_action.triggered.connect(self.update_aoi_geometry_from_layer)
+        self.dlg.exclude_from_search_action.triggered.connect(self.exclude_processing_from_search)
         self.dlg.options_menu.aboutToShow.connect(self.update_processing_options_menu)
         self.dlg.saveOptionsButton.setMenu(self.dlg.options_menu)
 
@@ -476,10 +482,19 @@ class Mapflow(QObject):
                 menu.addAction(self.dlg.aoi_rename_action)
                 self.dlg.aoi_delete_action.setEnabled(can_edit and selected_aoi.can_rename)
                 menu.addAction(self.dlg.aoi_delete_action)
+                # Replace the AOI's geometry with the current polygon layer's (feature 2).
+                self.dlg.aoi_update_geometry_action.setEnabled(
+                    can_edit and selected_aoi.can_rename
+                    and self.dlg.polygonCombo.currentLayer() is not None
+                )
+                menu.addAction(self.dlg.aoi_update_geometry_action)
             self.dlg.aoi_add_action.setEnabled(
                 can_edit and self.dlg.polygonCombo.currentLayer() is not None
             )
             menu.addAction(self.dlg.aoi_add_action)
+            # Save the current search-filter widgets to the template (feature 1).
+            self.dlg.template_update_search_action.setEnabled(can_edit)
+            menu.addAction(self.dlg.template_update_search_action)
             return
 
         # In-template view, a processing row is backed by the v1 TemplateProcessingSchema
@@ -488,6 +503,9 @@ class Mapflow(QObject):
         if self.processing_service.in_template_mode and selected_processing:
             menu.addAction(self.dlg.save_result_action)
             menu.addAction(self.dlg.see_details_action)
+            # Subtract this processing's already-processed area from the template's AOIs (feature 3).
+            if self.app_context.user_role.can_delete_rename_review_processing:
+                menu.addAction(self.dlg.exclude_from_search_action)
             return
 
         # Template selection: only template details action.
@@ -497,6 +515,8 @@ class Mapflow(QObject):
             menu.addAction(self.dlg.see_processings_action)
             if self.app_context.user_role.can_delete_rename_review_processing:
                 menu.addAction(self.dlg.template_rename_action)
+                self.dlg.template_update_search_action.setEnabled(True)
+                menu.addAction(self.dlg.template_update_search_action)
             # Add pause/resume/restart based on template status. Controlling the template's
             # run state is a maintainer+ action, so it is disabled for e.g. contributors.
             can_control = self.app_context.user_role.can_pause_resume_template
@@ -1655,14 +1675,6 @@ class Mapflow(QObject):
             ).to_str())
             return
 
-        from_time = self.dlg.metadataFrom.dateTime().toUTC().toString("yyyy-MM-ddTHH:mm:ss.zzz'Z'")
-        to_time = self.dlg.metadataTo.dateTime().toUTC().toString("yyyy-MM-ddTHH:mm:ss.zzz'Z'")
-        max_cloud_cover = self.dlg.maxCloudCover.value()
-        min_intersection = self.dlg.minIntersection.value()
-        hide_unavailable = self.dlg.hideUnavailableResults.isChecked()
-        product_types = self.selected_search_product_types() or []
-        search_providers = self.selected_search_providers()
-
         try:
             aoi_details = self._build_template_aoi_details()
         except ValueError as e:
@@ -1674,18 +1686,7 @@ class Mapflow(QObject):
 
         # Always send aoiDetails (FeatureCollection); the plain `aoi` field is deprecated
         # because per-AOI names cannot be attached to it.
-        search_params = SearchParams(
-            aoiDetails=aoi_details,
-            acquisitionDateFrom=from_time,
-            acquisitionDateTo=to_time,
-            maxCloudCover=max_cloud_cover,
-            minAoiIntersectionPercent=min_intersection,
-            minOffNadirAngle=0,
-            maxOffNadirAngle=25,
-            hideUnavailable=hide_unavailable,
-            productTypes=product_types,
-            dataProviders=search_providers,
-        )
+        search_params = self._build_search_params(aoi_details=aoi_details)
 
         template_name = (name_override or self.dlg.processingName.text()).strip()
         if not template_name:
@@ -1724,6 +1725,149 @@ class Mapflow(QObject):
             self.tr("Template creation failed"),
             error_message_parser=api_message_parser,
         )
+
+    def _build_search_params(self, aoi_details=None) -> SearchParams:
+        """Build ``SearchParams`` from the current imagery-search filter widgets. When
+        ``aoi_details`` is ``None`` the geometry is omitted — used to update a template's
+        non-geometry search params (which the backend merges); geometry updates go through
+        the per-AOI endpoints instead (the PUT template endpoint rejects geometry)."""
+        return SearchParams(
+            aoiDetails=aoi_details,
+            acquisitionDateFrom=self.dlg.metadataFrom.dateTime().toUTC().toString("yyyy-MM-ddTHH:mm:ss.zzz'Z'"),
+            acquisitionDateTo=self.dlg.metadataTo.dateTime().toUTC().toString("yyyy-MM-ddTHH:mm:ss.zzz'Z'"),
+            maxCloudCover=self.dlg.maxCloudCover.value(),
+            minAoiIntersectionPercent=self.dlg.minIntersection.value(),
+            minOffNadirAngle=0,
+            maxOffNadirAngle=25,
+            hideUnavailable=self.dlg.hideUnavailableResults.isChecked(),
+            productTypes=self.selected_search_product_types() or [],
+            dataProviders=self.selected_search_providers(),
+        )
+
+    def update_template_search_params(self):
+        """Feature 1: save the current imagery-search filter widgets to the selected/open
+        template's stored ``searchParams`` (non-geometry params only — the backend merges
+        them and preserves the geometry). Geometry is never sent on this endpoint."""
+        template = self.processing_service.selected_template() or self.processing_service.active_template
+        if not template:
+            return
+        payload = UpdateProcessingTemplateSchema(
+            name=template.name,
+            searchParams=self._build_search_params(aoi_details=None),
+            processingParams=template.processingParams or {},
+            activeUntil=template.activeUntil.strftime('%Y-%m-%dT%H:%M:%S.0Z'),
+        )
+        self.iface.messageBar().pushInfo(self.app_context.plugin_name,
+                                         self.tr('Updating template search parameters...'))
+        self.processing_service.api.update_template(
+            template_id=template.id,
+            data=payload,
+            callback=self._template_updated_callback,
+            error_handler=self._template_update_error_handler,
+        )
+
+    def _template_updated_callback(self, response: QNetworkReply):
+        alert(self.tr("Template updated."), QMessageBox.Information)
+        # Re-hydrate so the open template / list reflects the new params.
+        self.processing_service.aoi_changed_callback(response)
+        self.processing_service.get_processings()
+
+    def _template_update_error_handler(self, response: QNetworkReply):
+        self.report_http_error(response, self.tr("Template update failed"),
+                               error_message_parser=api_message_parser)
+
+    def update_aoi_geometry_from_layer(self):
+        """Feature 2: replace the selected template AOI's geometry with the current polygon
+        layer's geometry (e.g. after the user manually edits the layer). Geometry updates go
+        through the per-AOI endpoint — the PUT template endpoint rejects geometry."""
+        aoi = self.processing_service.selected_aoi()
+        template = self.processing_service.active_template
+        if not aoi or not template:
+            return
+        if not aoi.can_rename:  # a persisted AOI id is required to update it
+            self.alert(self.tr("This AOI has no id yet and cannot be updated. "
+                               "Reopen the template and try again."), QMessageBox.Information)
+            return
+        layer = self.dlg.polygonCombo.currentLayer()
+        if layer is None or not layer.featureCount():
+            self.alert(self.tr("Select a polygon layer with the new AOI geometry"),
+                       QMessageBox.Warning)
+            return
+        wgs = helpers.to_wgs84(layer_utils.collect_geometry_from_layer(layer), layer.crs())
+        if wgs is None or wgs.isEmpty():
+            self.alert(self.tr("The selected layer has no valid geometry"), QMessageBox.Warning)
+            return
+        self.processing_service.api.update_aoi(
+            template_id=template.id,
+            aoi_id=aoi.id,
+            data=UpdateAoiSchema(geometry=json.loads(wgs.asJson())),
+            callback=self.processing_service.aoi_changed_callback,
+            error_handler=self.processing_service.aoi_change_error_handler,
+        )
+
+    def _processing_footprints_by_aoi(self, template, processing_id: str):
+        """For each of the template's AOIs, the QgsGeometry footprints of the given processing
+        that were run over it (a processing can intersect several AOIs, so it may appear under
+        more than one). Returns ``[(aoi, [footprint, ...]), ...]`` for AOIs it touches."""
+        result = []
+        for aoi in template.aoi_dtos():
+            if not aoi.id or not aoi.geometry:
+                continue
+            footprints = [
+                self._geometry_from_geojson(link.geometry)
+                for link in aoi.processings
+                if str(link.processingId) == str(processing_id) and link.geometry
+            ]
+            footprints = [g for g in footprints if g is not None]
+            if footprints:
+                result.append((aoi, footprints))
+        return result
+
+    def exclude_processing_from_search(self):
+        """Feature 3: 'Exclude from search' — subtract a processing's footprint from the AOIs
+        it was run over, so the template stops searching an area that was already processed.
+        A processing is linked to every AOI it intersects, so subtract from each parent AOI;
+        an AOI fully consumed by the subtraction is deleted."""
+        template = self.processing_service.active_template
+        processing = self.processing_service.selected_processing()
+        if not template or not processing:
+            return
+        affected = self._processing_footprints_by_aoi(template, str(processing.id))
+        updates = []      # (aoi_id, new_geometry_dict)
+        deletions = []    # aoi_id fully consumed
+        for aoi, footprints in affected:
+            aoi_geom = self._geometry_from_geojson(aoi.geometry)
+            if aoi_geom is None:
+                continue
+            footprint = footprints[0] if len(footprints) == 1 else QgsGeometry.unaryUnion(footprints)
+            new_geom = aoi_geom.difference(footprint)
+            if new_geom is None or new_geom.isEmpty() or new_geom.area() == 0:
+                deletions.append(aoi.id)
+            else:
+                updates.append((aoi.id, json.loads(new_geom.asJson())))
+        if not updates and not deletions:
+            self.alert(self.tr("This processing is not linked to any AOI geometry."),
+                       QMessageBox.Information)
+            return
+        if not self.alert(self.tr("Exclude this processing's area from the template's search? "
+                                  "The already-processed area will be removed from the AOI(s)."),
+                          QMessageBox.Question):
+            return
+        for aoi_id, geom in updates:
+            self.processing_service.api.update_aoi(
+                template_id=template.id,
+                aoi_id=aoi_id,
+                data=UpdateAoiSchema(geometry=geom),
+                callback=self.processing_service.aoi_changed_callback,
+                error_handler=self.processing_service.aoi_change_error_handler,
+            )
+        if deletions:
+            self.processing_service.api.delete_aois(
+                template_id=template.id,
+                data=DeleteAoisSchema(aoiIds=deletions),
+                callback=self.processing_service.aoi_changed_callback,
+                error_handler=self.processing_service.aoi_change_error_handler,
+            )
 
     def get_metadata(self, _: Optional[bool] = False, offset: Optional[int] = 0) -> None:
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
