@@ -20,8 +20,8 @@ from PyQt5.QtWidgets import (
 )
 from qgis.core import (
     QgsCoordinateReferenceSystem, QgsDistanceArea, QgsFeature, QgsGeometry,
-    QgsLayerTreeLayer, QgsMapLayer, QgsMapLayerType, QgsProject, QgsRasterLayer,
-    QgsRectangle, QgsVectorLayer
+    QgsLayerTreeGroup, QgsLayerTreeLayer, QgsMapLayer, QgsMapLayerType, QgsProject,
+    QgsRasterLayer, QgsRectangle, QgsVectorLayer
 )
 
 from . import constants
@@ -320,6 +320,7 @@ class Mapflow(QObject):
         # In-template navigation: map side-effects on enter/leave a template.
         self.processing_service.templateOpened.connect(self.on_template_opened)
         self.processing_service.templateClosed.connect(self.on_template_closed)
+        self.processing_service.templateAoisChanged.connect(self.on_template_aois_changed)
         self.dlg.processingsTable.itemSelectionChanged.connect(self.filter_search_by_selected_aoi)
         self.dlg.processingsTable.itemSelectionChanged.connect(self.sync_processing_area_to_selected_aois)
         # Processings ratings
@@ -360,6 +361,7 @@ class Mapflow(QObject):
         self.dlg.searchRightButton.clicked.connect(self.show_search_next_page)
         self.dlg.searchLeftButton.clicked.connect(self.show_search_previous_page)
         self.dlg.filterTemplateResults.clicked.connect(self.filter_template_results)
+        self.dlg.updateTemplateSearch.clicked.connect(self.update_template_search_params)
         self.setup_metadata_search_dropdown()
         self.setup_metadata_seen_dropdown()
 
@@ -454,7 +456,6 @@ class Mapflow(QObject):
         self.dlg.template_rename_action.triggered.connect(self.processing_service.update_template)
         self.dlg.template_pause_action.triggered.connect(self.processing_service.pause_template)
         self.dlg.template_resume_action.triggered.connect(self.processing_service.resume_template)
-        self.dlg.template_update_search_action.triggered.connect(self.update_template_search_params)
         # AOI actions (in-template view)
         self.dlg.aoi_rename_action.triggered.connect(self.processing_service.rename_aoi)
         self.dlg.aoi_delete_action.triggered.connect(self.processing_service.delete_aoi)
@@ -492,9 +493,6 @@ class Mapflow(QObject):
                 can_edit and self.dlg.polygonCombo.currentLayer() is not None
             )
             menu.addAction(self.dlg.aoi_add_action)
-            # Save the current search-filter widgets to the template (feature 1).
-            self.dlg.template_update_search_action.setEnabled(can_edit)
-            menu.addAction(self.dlg.template_update_search_action)
             return
 
         # In-template view, a processing row is backed by the v1 TemplateProcessingSchema
@@ -1073,7 +1071,23 @@ class Mapflow(QObject):
         layer.updateExtents()
         self._selected_aoi_layer = layer
         self.app_context.project.addMapLayer(layer, addToLegend=False)
+        # Give the layer a legend node under the Mapflow group. It must be the polygon combo's
+        # current layer (the image-selection area recompute reads it), so it can't be excluded
+        # from the combo without breaking "process the selected AOIs"; but leaving it tree-less
+        # crashed a regular search that looked up its parent node (item 5). A real node fixes that.
+        self._add_layer_to_mapflow_group(layer)
         self.add_to_layers(layer, recompute_cost=True)
+
+    def _add_layer_to_mapflow_group(self, layer):
+        """Insert an already-registered layer as a node under the Mapflow layer-tree group
+        (creating the group if needed), so it is not a parentless/tree-less layer."""
+        root = self.app_context.project.layerTreeRoot()
+        group_name = self.app_context.settings.value('layerGroup') or self.app_context.plugin_name
+        group = root.findGroup(group_name)
+        if group is None and getattr(self.result_loader, 'add_layers_to_group', True):
+            group = root.insertGroup(0, group_name)
+            self.app_context.settings.setValue('layerGroup', group_name)
+        (group or root).addLayer(layer)
 
     def _remove_selected_aoi_layer(self):
         """Drop the dedicated selected-AOI processing-area layer (if any)."""
@@ -1746,19 +1760,19 @@ class Mapflow(QObject):
         )
 
     def update_template_search_params(self):
-        """Feature 1: save the current imagery-search filter widgets to the selected/open
-        template's stored ``searchParams`` (non-geometry params only — the backend merges
-        them and preserves the geometry). Geometry is never sent on this endpoint."""
-        template = self.processing_service.selected_template() or self.processing_service.active_template
+        """Feature 1: save the current imagery-search filter widgets to the open template's
+        stored ``searchParams`` (non-geometry params only — the backend merges them and
+        preserves the geometry). Triggered by the "Update template" button on the Imagery
+        Search tab, which is shown only while a template is open (so the widgets reflect it)."""
+        template = self.processing_service.active_template or self.processing_service.selected_template()
         if not template:
             return
+        # Only name + searchParams are changed. processingParams and activeUntil are omitted
+        # so the backend preserves them (sending processingParams={} would fail its required
+        # ``rest`` field; a partial update leaves the stored value untouched).
         payload = UpdateProcessingTemplateSchema(
             name=template.name,
             searchParams=self._build_search_params(aoi_details=None),
-            processingParams=template.processingParams or {},
-            # activeUntil is optional on the backend (partial update); send it only when set.
-            activeUntil=(template.activeUntil.strftime('%Y-%m-%dT%H:%M:%S.0Z')
-                         if template.activeUntil else None),
         )
         self.iface.messageBar().pushInfo(self.app_context.plugin_name,
                                          self.tr('Updating template search parameters...'))
@@ -1991,11 +2005,17 @@ class Mapflow(QObject):
         # Assigned (before add_layer) so the AOI-area monitor recognizes and skips it.
         self.app_context.metadata_layer = QgsVectorLayer(filename, layer_name, 'ogr')
         self.app_context.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
-        # Place search results under AOI layer
+        # Place search results just under the AOI layer, if that layer has a legend node.
+        # (A layer added with addToLegend=False has no tree node -> findLayer returns None;
+        # fall back to a plain add instead of dereferencing a missing parent.)
         aoi_layer = self.dlg.polygonCombo.currentLayer()
-        aoi_layer_tree = self.app_context.project.layerTreeRoot().findLayer(aoi_layer.id())
-        index = aoi_layer_tree.parent().children().index(aoi_layer_tree)
-        self.result_loader.add_layer(layer=self.app_context.metadata_layer, order=index+1)
+        aoi_layer_tree = (self.app_context.project.layerTreeRoot().findLayer(aoi_layer.id())
+                          if aoi_layer else None)
+        if aoi_layer_tree is not None and aoi_layer_tree.parent() is not None:
+            index = aoi_layer_tree.parent().children().index(aoi_layer_tree)
+            self.result_loader.add_layer(layer=self.app_context.metadata_layer, order=index + 1)
+        else:
+            self.result_loader.add_layer(layer=self.app_context.metadata_layer)
         # Connect layer with metadata table
         self.app_context.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(
             self.sync_layer_selection_with_table)
@@ -2861,9 +2881,10 @@ class Mapflow(QObject):
         # Initial results are the whole template (no AOI/filter applied yet).
         self._template_search_aoi_filter = None
         self._template_search_filters = None
-        # The Filter button re-queries the template's results with the current filters (T7);
-        # it only makes sense while viewing a template.
+        # Filter (re-query the results with the current filters, T7) and Update template
+        # (save the current filters into the template) only make sense while viewing a template.
         self.dlg.filterTemplateResults.setVisible(True)
+        self.dlg.updateTemplateSearch.setVisible(True)
         self.apply_search_params_to_ui(getattr(template, "searchParams", None))
         self._load_template_search(template)
         self._load_template_layers(template)
@@ -2876,6 +2897,7 @@ class Mapflow(QObject):
         self._template_search_aoi_filter = None
         self._template_search_filters = None
         self.dlg.filterTemplateResults.setVisible(False)
+        self.dlg.updateTemplateSearch.setVisible(False)
         # Drop the AOI-selection processing Area so it doesn't leak to the project view.
         self._remove_selected_aoi_layer()
         self._processing_area_aoi_filter = None
@@ -2884,6 +2906,39 @@ class Mapflow(QObject):
         # Clear the template search-results pagination so it is not preserved on re-open.
         self.search_page_offset = 0
         self.dlg.enable_search_pages(False)
+
+    def on_template_aois_changed(self, template):
+        """Redraw the template's AOI/processing map layers after its AOIs change (add / rename
+        / delete / geometry update / exclude-from-search), so the layer tree stays in sync
+        without re-entering the template."""
+        if not template:
+            return
+        self._remove_template_aoi_subgroups(str(template.name))
+        self._load_template_layers(template)
+
+    def _remove_template_aoi_subgroups(self, template_group_name: str):
+        """Remove the per-AOI subgroups (and their layers) under the template group, keeping
+        the search-results footprint layer that sits directly in the template group."""
+        if not template_group_name:
+            return
+        root = self.app_context.project.layerTreeRoot()
+        mapflow_group_name = self.app_context.settings.value('layerGroup') or self.app_context.plugin_name
+        mapflow_group = root.findGroup(mapflow_group_name)
+        parent_group = mapflow_group if mapflow_group else root
+        template_group = parent_group.findGroup(template_group_name)
+        if template_group is None:
+            return
+        for child in list(template_group.children()):
+            # AOI subgroups are groups; the search-footprints node is a layer — leave it.
+            if isinstance(child, QgsLayerTreeGroup):
+                for layer in child.findLayers():
+                    layer_id = layer.layerId()
+                    if layer_id:
+                        try:
+                            self.app_context.project.removeMapLayer(layer_id)
+                        except (RuntimeError, KeyError):
+                            pass
+                template_group.removeChildNode(child)
 
     def apply_search_params_to_ui(self, search_params):
         """Populate the Imagery Search filters from a template's stored ``searchParams``
