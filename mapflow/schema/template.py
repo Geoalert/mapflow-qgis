@@ -402,10 +402,12 @@ class CreateProcessingTemplateSchema(Serializable, SkipDataClass):
 
 @dataclass
 class UpdateProcessingTemplateSchema(Serializable, SkipDataClass):
+    # All fields are optional on the backend (partial update); the plugin sends the current
+    # name/processingParams to preserve them and omits activeUntil when the template has none.
     name: str
     searchParams: Mapping[str, Any]
     processingParams: Mapping[str, Any]
-    activeUntil: str
+    activeUntil: Optional[str] = None
 
 
 @dataclass
