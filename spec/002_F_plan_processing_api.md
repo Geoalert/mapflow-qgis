@@ -45,11 +45,14 @@ Body includes:
 - `name`, `description`, `wdName`, `wdId`, `geometry`, `params`, `meta`, `blocks`, `updateTemplateGeometry`
 
 ### `PUT /processings/template/{templateId}`
-Update template.
+Update template. All body fields are optional (partial update); provided `searchParams`
+are **merged** into the stored ones.
 
 Body fields:
 - `name` (string)
-- `searchParams` (object)
+- `searchParams` (object) — **non-geometry** params only. The endpoint **rejects** a
+  `searchParams` that carries `aoi` or `aoiDetails` (`400 "Geometry updates are not
+  supported"`): geometry is changed exclusively through the per-AOI endpoints below.
 - `processingParams` (object)
 - `activeUntil` (datetime)
 
@@ -280,6 +283,27 @@ and `productTypes` are **not** accepted by this endpoint and are not sent. The a
 is sticky for the template view — it carries across AOI selection and pagination — and is
 cleared on leaving the template. Starting a new (non-template) search or a Plan Search is a
 separate action from filtering an open template's results.
+
+### Updating a template
+
+Three client actions edit an existing template (distinct from *filtering* its results,
+which is read-only):
+
+- **Update search parameters** (context-menu action on a template row / while inside it):
+  `PUT /processings/template/{id}` with `searchParams` built from the current search-filter
+  widgets (dates, cloud, resolution, intersection, hide-unavailable, providers, product
+  types) and **no** geometry — the backend merges them, preserving the AOIs.
+- **Update AOI from current layer** (AOI-row context-menu action): replace one AOI's geometry
+  with the current polygon layer's geometry via `POST …/aoi/{aoiId}` (`{ geometry }`). Used
+  after the user manually edits a layer. Requires an AOI with a persisted `id`.
+- **Exclude from search** (processing-row context-menu action, inside a template): the
+  processing's already-processed area is removed from the template's search geometry —
+  `new AOI geometry = AOI geometry − processing footprint`. A processing is linked to **every**
+  AOI it intersects, so the subtraction is applied to **each** such AOI (`POST …/aoi/{aoiId}`);
+  an AOI fully consumed by the subtraction is deleted (`DELETE …/aoi`). This mirrors the
+  backend's `updateTemplateGeometry` behaviour (which subtracts the geometry at processing-run
+  time) but is applied on demand to an already-created processing — the area is already being
+  processed, so the user typically no longer wants the template to keep searching over it.
 
 Leaving a template ("one step left", back button) returns to the project's
 processings list and removes the template's layer group from the map.
