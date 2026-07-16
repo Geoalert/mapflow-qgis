@@ -1662,7 +1662,7 @@
                    <bool>false</bool>
                   </property>
                   <property name="toolTip">
-                   <string>Filter this template&apos;s results by the current date and cloud-cover filters</string>
+                   <string>Filter this template&apos;s results by date and cloud cover only. The other filters (intersection, providers, product type) are not applied to template results.</string>
                   </property>
                   <property name="text">
                    <string>Filter</string>
