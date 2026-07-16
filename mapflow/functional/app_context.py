@@ -43,6 +43,10 @@ class AppContext:
     processing_aoi: Optional[QgsGeometry] = None
     aoi_size: Optional[float] = None
     aoi_layers: List[QgsVectorLayer] = field(default_factory=list)
+    # While inside a template, the union of the selected AOIs drives the processing Area
+    # directly (T9) instead of a phantom layer in the polygon combo. When set, the area
+    # calculator uses this geometry as the base AOI. Cleared on leaving the template.
+    processing_area_override: Optional[QgsGeometry] = None
     
     # === User/Account State ===
     is_admin: bool = False
