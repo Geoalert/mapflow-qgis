@@ -1060,37 +1060,18 @@ class Mapflow(QObject):
         return geom if not geom.isEmpty() else None
 
     def _set_template_processing_area(self, geometry: QgsGeometry):
-        """Put ``geometry`` into a dedicated reusable memory layer and make it the current AOI
-        layer, so the standard area/cost/crop machinery treats it as the processing Area.
-        Replaces any previous selected-AOI layer so they don't stack."""
-        self._remove_selected_aoi_layer()
-        layer = QgsVectorLayer('Polygon?crs=epsg:4326', self.tr('Selected AOI'), 'memory')
-        feature = QgsFeature()
-        feature.setGeometry(geometry)
-        layer.dataProvider().addFeatures([feature])
-        layer.updateExtents()
-        self._selected_aoi_layer = layer
-        self.app_context.project.addMapLayer(layer, addToLegend=False)
-        # Give the layer a legend node under the Mapflow group. It must be the polygon combo's
-        # current layer (the image-selection area recompute reads it), so it can't be excluded
-        # from the combo without breaking "process the selected AOIs"; but leaving it tree-less
-        # crashed a regular search that looked up its parent node (item 5). A real node fixes that.
-        self._add_layer_to_mapflow_group(layer)
-        self.add_to_layers(layer, recompute_cost=True)
-
-    def _add_layer_to_mapflow_group(self, layer):
-        """Insert an already-registered layer as a node under the Mapflow layer-tree group
-        (creating the group if needed), so it is not a parentless/tree-less layer."""
-        root = self.app_context.project.layerTreeRoot()
-        group_name = self.app_context.settings.value('layerGroup') or self.app_context.plugin_name
-        group = root.findGroup(group_name)
-        if group is None and getattr(self.result_loader, 'add_layers_to_group', True):
-            group = root.insertGroup(0, group_name)
-            self.app_context.settings.setValue('layerGroup', group_name)
-        (group or root).addLayer(layer)
+        """Make ``geometry`` (the union of the selected template AOIs) the processing Area
+        WITHOUT adding a layer to the polygon combo: the area calculator reads it from the
+        ``processing_area_override`` on app_context (item 5 — no phantom 'Selected AOI' entry
+        in the Area combo, which was not visible on the map/tree and errored when searched)."""
+        self.app_context.processing_area_override = QgsGeometry(geometry)
+        # Recompute Area/cost/crop from the override (the passed layer is ignored while it is set).
+        self.area_calculator_service.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
 
     def _remove_selected_aoi_layer(self):
-        """Drop the dedicated selected-AOI processing-area layer (if any)."""
+        """Clear the template AOI-selection processing Area (the override, and any legacy
+        selected-AOI layer). Called when leaving the template."""
+        self.app_context.processing_area_override = None
         layer = self._selected_aoi_layer
         self._selected_aoi_layer = None
         if layer is None:

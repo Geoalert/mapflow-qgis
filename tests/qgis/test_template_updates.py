@@ -264,22 +264,65 @@ def test_reopen_template_callback_emits_aois_changed():
     assert received == [service.active_template]
 
 
-# ---------- Item 5: internal selected-AOI layer gets a tree parent ----------
+# ---------- Item 5: selected-AOI Area is an app_context override, not a combo layer ----------
 
-def test_selected_aoi_layer_gets_a_tree_parent():
-    from qgis.core import QgsProject
-    project = QgsProject()
+def test_set_template_processing_area_uses_override_not_a_combo_layer():
     plugin = Mapflow.__new__(Mapflow)
-    settings = MagicMock()
-    settings.value.return_value = None  # no custom layerGroup -> plugin_name
-    plugin.app_context = SimpleNamespace(project=project, settings=settings, plugin_name="Mapflow")
-    plugin.result_loader = SimpleNamespace(add_layers_to_group=True)
-    layer = QgsVectorLayer("Polygon?crs=epsg:4326", "Selected AOI", "memory")
-    project.addMapLayer(layer, addToLegend=False)
-    assert project.layerTreeRoot().findLayer(layer.id()) is None  # tree-less initially
+    plugin._selected_aoi_layer = None
+    plugin.app_context = SimpleNamespace(processing_area_override=None)
+    plugin.dlg = MagicMock()
+    plugin.area_calculator_service = MagicMock()
 
-    plugin._add_layer_to_mapflow_group(layer)
+    plugin._set_template_processing_area(Mapflow._geometry_from_geojson(_square(0, 0, 2, 2)))
 
-    node = project.layerTreeRoot().findLayer(layer.id())
-    assert node is not None and node.parent() is not None  # now has a parent -> no "no parent" crash
-    assert project.layerTreeRoot().findGroup("Mapflow") is not None
+    # The union geometry is stored as an override (read by the area calculator) — no layer is
+    # created and nothing is added to the polygon combo.
+    assert round(plugin.app_context.processing_area_override.area(), 6) == 4.0
+    assert plugin._selected_aoi_layer is None
+    plugin.area_calculator_service.calculate_aoi_area_polygon_layer.assert_called_once()
+
+
+def test_remove_selected_aoi_layer_clears_the_override():
+    plugin = Mapflow.__new__(Mapflow)
+    plugin._selected_aoi_layer = None
+    plugin.app_context = SimpleNamespace(
+        processing_area_override=Mapflow._geometry_from_geojson(_square(0, 0, 1, 1)))
+
+    plugin._remove_selected_aoi_layer()
+
+    assert plugin.app_context.processing_area_override is None
+
+
+def test_area_calculator_uses_override_in_template_mode():
+    from mapflow.functional.service.area_calculator_service import AreaCalculatorService
+    svc = AreaCalculatorService.__new__(AreaCalculatorService)
+    svc.app_context = SimpleNamespace(
+        processing_area_override=Mapflow._geometry_from_geojson(_square(0, 0, 2, 2)))
+    svc.processing_service = SimpleNamespace(in_template_mode=True)
+    svc.calculate_aoi_area = MagicMock()
+    svc.get_aoi_area_polygon_layer = MagicMock()
+    svc.provider_service = MagicMock()
+    svc.dlg = MagicMock()
+
+    svc.calculate_aoi_area_polygon_layer(None)
+
+    svc.calculate_aoi_area.assert_called_once()          # Area came from the override
+    svc.get_aoi_area_polygon_layer.assert_not_called()   # the layer path was skipped
+
+
+def test_area_calculator_ignores_override_outside_template_mode():
+    from mapflow.functional.service.area_calculator_service import AreaCalculatorService
+    svc = AreaCalculatorService.__new__(AreaCalculatorService)
+    svc.app_context = SimpleNamespace(
+        processing_area_override=Mapflow._geometry_from_geojson(_square(0, 0, 2, 2)))
+    svc.processing_service = SimpleNamespace(in_template_mode=False)
+    svc.calculate_aoi_area = MagicMock()
+    svc.get_aoi_area_polygon_layer = MagicMock()
+    svc.provider_service = MagicMock()
+    svc.provider_service.providers = [MagicMock()]  # not a MyImageryProvider
+    svc.dlg = MagicMock()
+    svc.dlg.providerIndex.return_value = 0
+
+    svc.calculate_aoi_area_polygon_layer(None)
+
+    svc.get_aoi_area_polygon_layer.assert_called_once()  # used the combo layer path
