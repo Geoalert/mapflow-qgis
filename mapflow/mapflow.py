@@ -12,7 +12,7 @@ from PyQt5.QtCore import (
     QCoreApplication, QDate, QDateTime, QObject, Qt,
     QTimer, QTranslator
 )
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QBrush, QColor, QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
 from PyQt5.QtWidgets import (
     QAbstractItemView, QAction, QApplication, QFileDialog, QMenu,
@@ -92,9 +92,15 @@ class Mapflow(QObject):
     # The AOI id the in-template search results are currently filtered by (None = all).
     # Class-level default so the check is safe before on_template_opened sets it.
     _template_search_aoi_filter = None
-    # Server-side filters (date/cloud) applied to the in-template search view via the Filter
-    # button (T7); None = the template's results shown unfiltered. Sticky per template view.
-    _template_search_filters = None
+    # Guards against the ``metadataTableFilled`` -> ``apply_local_filter`` -> ``fill_metadata_table``
+    # -> ``metadataTableFilled`` re-entrancy: the local filter re-fills the table itself, so the
+    # nested fill must not trigger another filter pass.
+    _suppress_local_filter = False
+    # Last local-filter outcome, so a slider drag that doesn't flip any image skips the re-fill.
+    _last_unfit_set = None
+    _last_filtered_geoms = None
+    # Cached widen-warning messages backing the (!) indicator's click handler.
+    _widen_details = None
     # The AOI ids the processing Area is currently derived from (T9), so a repeated selection
     # signal doesn't rebuild the area layer. The dedicated Area layer holding their union.
     _processing_area_aoi_filter = None
@@ -357,10 +363,25 @@ class Mapflow(QObject):
         self.dlg.metadataTable.cellClicked.connect(self.on_metadata_table_cell_clicked)
         self.dlg.rasterSourceChanged.connect(self.on_provider_change)
         self.dlg.clearSearch.clicked.connect(self.clear_metadata)
-        self.dlg.metadataTableFilled.connect(self.refresh_search_display)
+        self.dlg.metadataTableFilled.connect(self.apply_local_filter)
+        # Instant local filtering: changing a filter widget re-filters the already-fetched
+        # results in place (no server request), for both regular search and templates.
+        self.dlg.minIntersection.valueChanged.connect(self.apply_local_filter)
+        self.dlg.maxCloudCover.valueChanged.connect(self.apply_local_filter)
+        self.dlg.metadataFrom.dateChanged.connect(self.apply_local_filter)
+        self.dlg.metadataTo.dateChanged.connect(self.apply_local_filter)
+        # Provider selection/availability and product type (Mosaic/Image) are local filters too;
+        # re-filter when any of them change.
+        self.dlg.searchProvidersCombo.checkedItemsChanged.connect(self.apply_local_filter)
+        self.dlg.hideUnavailableResults.toggled.connect(self.apply_local_filter)
+        self.dlg.searchMosaicCheckBox.toggled.connect(self.apply_local_filter)
+        self.dlg.searchImageCheckBox.toggled.connect(self.apply_local_filter)
+        self.dlg.resetSearchFilters.clicked.connect(self.reset_filters)
         self.dlg.searchRightButton.clicked.connect(self.show_search_next_page)
         self.dlg.searchLeftButton.clicked.connect(self.show_search_previous_page)
-        self.dlg.filterTemplateResults.clicked.connect(self.filter_template_results)
+        # Repurposed Filter button: now the widen-warning (!) indicator (shown only when the
+        # current filters are wider than what was fetched); clicking it explains what won't apply.
+        self.dlg.searchWidenWarning.clicked.connect(self.show_widen_details)
         self.dlg.updateTemplateSearch.clicked.connect(self.update_template_search_params)
         self.setup_metadata_search_dropdown()
         self.setup_metadata_seen_dropdown()
@@ -635,6 +656,10 @@ class Mapflow(QObject):
         # Footprints must keep the real providerName/productType so that a planned
         # processing started from these results can resolve its source params (dataProvider).
         self._store_template_search_footprints(geoms, template_group_name=template_group_name)
+        # Retain the raw results (for the instant local filter) and the template's own params as
+        # the widen (!) baseline; template results are filtered client-side, not server-side.
+        self.app_context.search_result_geojson = geoms
+        self.app_context.search_baseline_filters = self._template_filter_baseline(template)
         self.dlg.fill_metadata_table(geoms)
         # Keep the image DTOs (they carry isNew) keyed by id so mark-seen reads truth.
         self.template_search_images = {str(image.id): image for image in images}
@@ -922,16 +947,16 @@ class Mapflow(QObject):
         self.search_page_offset = max(0, offset)
         if aoi_ids is None:
             aoi_ids = self._aoi_ids_from_template(template)
-        # The applied server-side filters (date/cloud, set by the Filter button) are sticky for
-        # this template view — they carry across AOI-selection reloads and pagination (T7).
-        filters = self._template_search_filters or {}
+        # Template results are fetched WITHOUT date/cloud server-side filters: those (and the
+        # intersection %) are applied instantly on the client (apply_local_filter). Persisting
+        # them to the template is done separately via the "Update template" button. Only the
+        # selected-AOI scoping (aoi_ids) stays server-side (it decides which AOIs to search).
         self.processing_service.api.get_template_images(
             template_id=template.id,
             callback=lambda response: self.get_selected_template_callback(response, template),
             limit=self.search_page_limit,
             offset=self.search_page_offset,
             aoi_ids=aoi_ids or None,
-            **filters,
         )
 
     def _load_template_search_page(self, offset: int):
@@ -942,29 +967,6 @@ class Mapflow(QObject):
             return
         aoi_ids = list(self._template_search_aoi_filter) if self._template_search_aoi_filter else None
         self._load_template_search(template, aoi_ids=aoi_ids, offset=offset)
-
-    def _collect_template_search_filters(self) -> dict:
-        """The subset of the search filter widgets that the template images endpoint supports
-        (date range + cloud cover). Intersection %, providers and product types are not
-        supported server-side for template filtering, so they are not sent (T7)."""
-        return {
-            "acquisition_date_from":
-                self.dlg.metadataFrom.dateTime().toUTC().toString("yyyy-MM-ddTHH:mm:ss.zzz'Z'"),
-            "acquisition_date_to":
-                self.dlg.metadataTo.dateTime().toUTC().toString("yyyy-MM-ddTHH:mm:ss.zzz'Z'"),
-            "max_cloud_cover": self.dlg.maxCloudCover.value(),
-        }
-
-    def filter_template_results(self):
-        """T7: re-issue the active template's search with the current date/cloud filters
-        applied server-side. This is a read-only filtered VIEW of the template's results (it
-        does not modify the template); the filters are sticky across AOI selection and paging."""
-        template = self.processing_service.active_template
-        if not template:
-            return
-        self._template_search_filters = self._collect_template_search_filters()
-        aoi_ids = list(self._template_search_aoi_filter) if self._template_search_aoi_filter else None
-        self._load_template_search(template, aoi_ids=aoi_ids, offset=0)
 
     def add_template_aoi(self):
         """Add the current polygon layer's features as named AOIs to the active template."""
@@ -1210,25 +1212,374 @@ class Mapflow(QObject):
             enabled = block["enabled"]
             self.app_context.settings.setValue(f"wd/{wd.id}/{name}", enabled)
 
-    def refresh_search_display(self, *_) -> None:
-        """Show the current search results verbatim and (re)wire the preview-cell click.
+    def apply_local_filter(self, *_) -> None:
+        """Instantly filter the current search/template results by the filter widgets
+        (intersection %, cloud cover, date range) without a server request.
 
-        All imagery search now goes through the Mapflow catalog, which applies the filters
-        (intersection, cloud, dates, resolution) server-side and returns the paginated result.
-        The plugin therefore no longer re-filters offline — doing so used to shrink the
-        already-paginated page and break the page count. This just clears any stale subset,
-        makes every row visible, and reconnects the preview handler after a table refill."""
-        try:
-            self.app_context.metadata_layer.setSubsetString('')
-        except (RuntimeError, AttributeError):  # no metadata layer
+        Unfit rows are NOT removed: they are greyed-out, made non-selectable and sorted to the
+        bottom of the page (so pages keep their expected size and the user can see that some
+        images were filtered), and their footprints are hidden from the result layer. Runs on
+        every filter-widget change and after each table (re)fill, and refreshes the widen (!)
+        indicator. Applies to both regular search and template results — templates no longer
+        filter server-side; only "Update template" persists filter values."""
+        if self._suppress_local_filter:
             return
-        for row in range(self.dlg.metadataTable.rowCount()):
-            self.dlg.metadataTable.setRowHidden(row, False)
+        geoms = self.app_context.search_result_geojson
+        if not geoms or not geoms.get("features"):
+            self._reconnect_cell_preview()
+            self._update_widen_indicator()
+            return
+        features = geoms["features"]
+        # Compute fit/unfit from the SAME GeoJSON properties that fill the table, so the greyed
+        # rows always match the values shown in the Cloud %/Date columns (reading the OGR layer
+        # instead risked field-type mismatches, greying rows that looked fine).
+        unfit = self._unfit_local_indices(features)
+        # Skip the (heavier) re-fill/re-mark when the outcome is unchanged — e.g. dragging a
+        # slider through a range where no image flips fit<->unfit. Invalidated automatically when
+        # a new search replaces ``search_result_geojson`` (a different object).
+        if unfit == self._last_unfit_set and geoms is self._last_filtered_geoms:
+            self._update_widen_indicator()
+            return
+        self._last_unfit_set = set(unfit)
+        self._last_filtered_geoms = geoms
+        # Order: fit rows first, unfit rows last; each group newest-first (ISO dates sort
+        # lexicographically). Built-in column sorting is turned OFF for this fill so the order
+        # sticks (otherwise the table re-sorts by date and the unfit rows jump back up).
+        fit_features = self._by_date_desc(
+            [f for f in features if f.get("properties", {}).get("local_index") not in unfit])
+        unfit_features = self._by_date_desc(
+            [f for f in features if f.get("properties", {}).get("local_index") in unfit])
+        reordered = dict(geoms)
+        reordered["features"] = fit_features + unfit_features
+        # Re-fill in the new order. Preview cells are generic and ``local_index`` stays bound to
+        # each feature, so table<->layer selection and footprint mapping are preserved. The
+        # nested ``metadataTableFilled`` is swallowed by the re-entrancy guard.
+        self._suppress_local_filter = True
+        try:
+            self.dlg.fill_metadata_table(reordered, sort=False)
+        finally:
+            self._suppress_local_filter = False
+        # Re-filling drops the per-row 'new image' icons; restore them for template results.
+        if getattr(self.processing_service, "in_template_mode", False):
+            self._apply_new_image_markers()
+        self._mark_unfit_rows(unfit)
+        self._hide_unfit_footprints(getattr(self.app_context, "metadata_layer", None), unfit)
         self._reconnect_cell_preview()
+        self._update_widen_indicator()
+
+    @staticmethod
+    def _by_date_desc(features: list) -> list:
+        """Sort GeoJSON features newest-first by ``acquisitionDate`` (ISO strings sort
+        chronologically); missing dates sort last."""
+        return sorted(features,
+                      key=lambda f: f.get("properties", {}).get("acquisitionDate") or "",
+                      reverse=True)
+
+    def _unfit_local_indices(self, features: list) -> set:
+        """``local_index`` of every result (GeoJSON feature) that FAILS the active filter
+        widgets: date range, cloud cover, provider selection / availability, product type
+        (Mosaic vs Image), and (where an intersection reference exists) min intersection %. A
+        per-feature parsing error never hides the row (treated as fit)."""
+        from_ = self.dlg.metadataFrom.date()
+        to = self.dlg.metadataTo.date()
+        max_cloud_cover = self.dlg.maxCloudCover.value()
+        min_intersection = self.dlg.minIntersection.value()
+        aoi, min_area = self._intersection_reference(min_intersection)
+        provider_set = self._allowed_provider_set()  # None = show all
+        product_filter = self._product_category_filter()  # None = show all
+        unfit = set()
+        for feature in features:
+            props = feature.get("properties", {})
+            local_index = props.get("local_index")
+            if local_index is None:
+                continue
+            try:
+                acquisition_date = self._utc_date_from_iso(props.get("acquisitionDate"))
+                date_ok = acquisition_date is not None and from_ <= acquisition_date <= to
+                cloud_cover = self._to_float(props.get("cloudCover"))
+                # 100% = don't filter by cloud; an unknown cloud value is treated as too cloudy.
+                cloud_ok = max_cloud_cover >= 100 or (cloud_cover is not None
+                                                      and cloud_cover < max_cloud_cover)
+                if provider_set is None:
+                    provider_ok = True
+                else:
+                    provider_name = props.get("providerName")
+                    provider_ok = (provider_name is not None
+                                   and str(provider_name).lower() in provider_set)
+                product_ok = (product_filter is None
+                              or self._product_category(props.get("productType")) in product_filter)
+                if aoi is None:
+                    intersection_ok = True
+                else:
+                    geom = self._geometry_from_geojson(feature.get("geometry"))
+                    intersection_ok = (geom is not None
+                                       and self._wgs84_area(aoi.intersection(geom)) >= min_area)
+                fit = date_ok and cloud_ok and provider_ok and product_ok and intersection_ok
+            except Exception:
+                fit = True  # never hide a row because of a parsing error
+            if not fit:
+                unfit.add(local_index)
+        return unfit
+
+    def _allowed_provider_set(self) -> Optional[set]:
+        """Lowercased provider api-names a result may come from for the LOCAL filter, or ``None``
+        for no provider filtering (show all).
+
+        - "Search only through available providers" OFF -> ``None`` (show all).
+        - ON with specific providers checked -> just those.
+        - ON with none checked -> all providers available to the user
+          (``app_context.search_data_providers``), so results from providers the user cannot use
+          are dropped."""
+        if not self.dlg.hideUnavailableResults.isChecked():
+            return None
+        checked = self.dlg.searchProvidersCombo.checkedItemsData()
+        if checked:
+            return {str(p).lower() for p in checked}
+        available = self.app_context.search_data_providers or []
+        return {str(p).lower() for p in available} if available else None
+
+    def _product_category_filter(self) -> Optional[set]:
+        """The product categories to KEEP ({'MOSAIC'} or {'IMAGE'}), or ``None`` when both or
+        neither Mosaic/Image is checked (= all, no filter)."""
+        mosaic = self.dlg.searchMosaicCheckBox.isChecked()
+        image = self.dlg.searchImageCheckBox.isChecked()
+        if mosaic == image:  # both or neither -> show all
+            return None
+        return {ProductType.mosaic.upper()} if mosaic else {ProductType.image.upper()}
+
+    @staticmethod
+    def _product_category(product_type) -> str:
+        """Map a result's ``productType`` to a Mosaic/Image category: 'Mosaic' -> MOSAIC, anything
+        else -> IMAGE.
+        #WARNING: ``productType`` is free text (e.g. 'OPTICAL', 'Image', ''); this
+        Mosaic-vs-everything-else split is a product decision and may misclassify some providers."""
+        if str(product_type).strip().lower() == ProductType.mosaic.lower():
+            return ProductType.mosaic.upper()
+        return ProductType.image.upper()
+
+    def _intersection_reference(self, min_intersection: int):
+        """The AOI geometry (WGS84) and the minimum intersection area (m²) used to test min
+        intersection %, or ``(None, 0)`` when intersection filtering does not apply.
+
+        Regular search: the searched AOI. Template: the union of the currently SELECTED AOIs;
+        when no AOI is selected, intersection filtering is skipped entirely.
+        #WARNING (spec 002_F): the template rule (union of selected AOIs, skip when none) is
+        provisional and may change — % of a multi-AOI union under-counts an image that fully
+        covers one small AOI."""
+        if min_intersection <= 0:
+            return None, 0
+        if getattr(self.processing_service, "in_template_mode", False):
+            aoi = self._union_of_selected_aoi_geometries()  # WGS84; None when no AOI selected
+            if aoi is None:
+                return None, 0
+        else:
+            aoi = self.app_context.metadata_aoi  # WGS84
+            if not aoi and self.dlg.polygonCombo.currentLayer():
+                layer = self.dlg.polygonCombo.currentLayer()
+                aoi = helpers.to_wgs84(layer_utils.collect_geometry_from_layer(layer), layer.crs())
+            if not aoi:
+                return None, 0
+        min_area = self._wgs84_area(aoi) * (min_intersection / 100)
+        return aoi, min_area
+
+    def _wgs84_area(self, geom: Optional[QgsGeometry]) -> float:
+        """Ellipsoidal area (m²) of a WGS84 geometry, or 0 for an empty/None geometry."""
+        if geom is None or geom.isEmpty():
+            return 0.0
+        self.calculator.setEllipsoid("WGS84")
+        self.calculator.setSourceCrs(helpers.WGS84, self.app_context.project.transformContext())
+        return self.calculator.measureArea(geom)
+
+    @staticmethod
+    def _to_float(value) -> Optional[float]:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _mark_unfit_rows(self, unfit: set) -> None:
+        """Grey-out and disable (non-selectable) the rows whose image was filtered out; restore
+        fit rows to normal. The row order already places the unfit rows last."""
+        grey_text = QBrush(QColor(150, 150, 150))
+        grey_bg = QBrush(QColor(235, 235, 235))
+        table = self.dlg.metadataTable
+        local_col = self.config.LOCAL_INDEX_COLUMN
+        for row in range(table.rowCount()):
+            key = table.item(row, local_col)
+            if key is None:
+                continue
+            try:
+                is_unfit = int(key.text()) in unfit
+            except (TypeError, ValueError):
+                continue
+            for col in range(table.columnCount()):
+                item = table.item(row, col)
+                if item is None:
+                    continue
+                if is_unfit:
+                    item.setForeground(grey_text)
+                    item.setBackground(grey_bg)
+                    item.setFlags(item.flags() & ~Qt.ItemIsSelectable & ~Qt.ItemIsEnabled)
+                else:
+                    item.setForeground(QBrush())
+                    item.setBackground(QBrush())
+                    item.setFlags(item.flags() | Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+
+    def _hide_unfit_footprints(self, layer: QgsVectorLayer, unfit: set) -> None:
+        """Hide the filtered-out images' footprints from the result layer (subset filter),
+        matching the previous behaviour where filtered geometries disappear from the map."""
+        try:
+            if unfit:
+                ids = ', '.join(str(i) for i in sorted(unfit))
+                layer.setSubsetString(f'local_index NOT IN ({ids})')
+            else:
+                layer.setSubsetString('')
+        except (RuntimeError, AttributeError):
+            pass
+
+    def _update_widen_indicator(self) -> None:
+        """Show the (!) indicator when the current filter widgets are WIDER than the filters
+        that fetched the current results (relaxing them cannot surface more images without a new
+        search); hide it otherwise. Its tooltip lists exactly which settings will not apply."""
+        widened = self._widened_filter_messages()
+        button = self.dlg.searchWidenWarning
+        self._widen_details = widened
+        if widened:
+            button.setToolTip(self._format_widen_message(widened))
+            button.setVisible(True)
+        else:
+            button.setToolTip("")
+            button.setVisible(False)
+
+    def _widened_filter_messages(self) -> List[str]:
+        """Human-readable list of the ways the current filter widgets are wider than the
+        baseline that fetched the current results (empty when none / no baseline)."""
+        baseline = self.app_context.search_baseline_filters
+        if not baseline:
+            return []
+        messages = []
+        cur_from = self.dlg.metadataFrom.date()
+        cur_to = self.dlg.metadataTo.date()
+        base_from = baseline.get("date_from")
+        base_to = baseline.get("date_to")
+        if base_from is not None and cur_from < base_from:
+            messages.append(self.tr("Start date {cur} is earlier than searched ({base})").format(
+                cur=cur_from.toString("yyyy-MM-dd"), base=base_from.toString("yyyy-MM-dd")))
+        if base_to is not None and cur_to > base_to:
+            messages.append(self.tr("End date {cur} is later than searched ({base})").format(
+                cur=cur_to.toString("yyyy-MM-dd"), base=base_to.toString("yyyy-MM-dd")))
+        cur_cloud = self.dlg.maxCloudCover.value()
+        base_cloud = baseline.get("max_cloud_cover")
+        if base_cloud is not None and cur_cloud > base_cloud:
+            messages.append(self.tr("Max cloud cover {cur}% is higher than searched ({base}%)").format(
+                cur=cur_cloud, base=int(base_cloud)))
+        cur_int = self.dlg.minIntersection.value()
+        base_int = baseline.get("min_intersection")
+        if base_int is not None and cur_int < base_int:
+            messages.append(self.tr("Min intersection {cur}% is lower than searched ({base}%)").format(
+                cur=cur_int, base=int(base_int)))
+        base_products = baseline.get("product_types")
+        if base_products:
+            extra = [p for p in (str(pt).upper() for pt in self.selected_search_product_types())
+                     if p not in base_products]
+            if extra:
+                messages.append(self.tr("Product type(s) not searched: {extra}").format(
+                    extra=", ".join(extra)))
+        base_providers = baseline.get("data_providers")
+        if base_providers:
+            cur_providers = self.selected_search_providers() or []
+            if not cur_providers:
+                messages.append(self.tr("Showing all providers, but search was limited to: {base}").format(
+                    base=", ".join(base_providers)))
+            else:
+                extra = [p for p in cur_providers if p not in base_providers]
+                if extra:
+                    messages.append(self.tr("Provider(s) not searched: {extra}").format(
+                        extra=", ".join(extra)))
+        return messages
+
+    @staticmethod
+    def _format_widen_message(messages: List[str]) -> str:
+        header = QCoreApplication.translate(
+            "Mapflow",
+            "These filters are wider than the last search, so they will not bring more images. "
+            "Run a new Search to fetch them:")
+        return header + "\n• " + "\n• ".join(messages)
+
+    def show_widen_details(self):
+        """On click of the (!) indicator, explain which filters are wider than the fetched
+        results and therefore have no effect until a new search is run."""
+        messages = self._widen_details or self._widened_filter_messages()
+        if not messages:
+            return
+        self.alert(self._format_widen_message(messages), QMessageBox.Information)
+
+    def _current_filter_baseline(self) -> dict:
+        """Snapshot of the filter widgets at search time, stored as the baseline the widen (!)
+        indicator compares later widget edits against."""
+        return {
+            "date_from": self.dlg.metadataFrom.date(),
+            "date_to": self.dlg.metadataTo.date(),
+            "max_cloud_cover": self.dlg.maxCloudCover.value(),
+            "min_intersection": self.dlg.minIntersection.value(),
+            "product_types": [str(pt).upper() for pt in self.selected_search_product_types()],
+            "data_providers": self.selected_search_providers() or [],
+            "hide_unavailable": self.dlg.hideUnavailableResults.isChecked(),
+        }
+
+    def _template_filter_baseline(self, template) -> Optional[dict]:
+        """Baseline (widen indicator + Reset filters) from a template's stored searchParams. A
+        field the template does not carry stays ``None`` so Reset leaves that widget untouched."""
+        sp = getattr(template, "searchParams", None)
+        if not sp:
+            return None
+        if isinstance(sp, dict):
+            sp = SearchParams.from_dict(sp)
+        return {
+            "date_from": self._utc_date_from_iso(sp.acquisitionDateFrom),
+            "date_to": self._utc_date_from_iso(sp.acquisitionDateTo),
+            "max_cloud_cover": sp.maxCloudCover,
+            "min_intersection": sp.minAoiIntersectionPercent,
+            "product_types": ([str(pt).upper() for pt in sp.productTypes]
+                              if sp.productTypes is not None else None),
+            "data_providers": list(sp.dataProviders) if sp.dataProviders is not None else None,
+            "hide_unavailable": sp.hideUnavailable,
+        }
+
+    def reset_filters(self):
+        """Reset the filter widgets to the parameters the current results were fetched with — a
+        regular search's request params, or the open template's search params. Only params that
+        were part of that request are restored; params it did not carry are left untouched. The
+        local filter is re-applied afterwards (so the greying/order returns to the fetched set)."""
+        self._apply_baseline_to_widgets(self.app_context.search_baseline_filters)
+
+    def _apply_baseline_to_widgets(self, baseline: Optional[dict]) -> None:
+        if not baseline:
+            return
+        if baseline.get("date_from") is not None:
+            self.dlg.metadataFrom.setDate(baseline["date_from"])
+        if baseline.get("date_to") is not None:
+            self.dlg.metadataTo.setDate(baseline["date_to"])
+        if baseline.get("max_cloud_cover") is not None:
+            self.dlg.maxCloudCover.setValue(int(round(baseline["max_cloud_cover"])))
+        if baseline.get("min_intersection") is not None:
+            self.dlg.minIntersection.setValue(int(round(baseline["min_intersection"])))
+        products = baseline.get("product_types")
+        if products is not None:
+            self.dlg.searchMosaicCheckBox.setChecked(ProductType.mosaic.upper() in products)
+            self.dlg.searchImageCheckBox.setChecked(ProductType.image.upper() in products)
+        if baseline.get("hide_unavailable") is not None:
+            self.dlg.hideUnavailableResults.setChecked(bool(baseline["hide_unavailable"]))
+        providers = baseline.get("data_providers")
+        if providers is not None:
+            self._apply_search_providers_to_combo(providers)
+        # Re-filter once against the restored widgets (some setters above may not have changed a
+        # value, so their change-signal would not have fired the filter).
+        self.apply_local_filter()
 
     def _reconnect_cell_preview(self):
         """Rewire the search table's 'Preview' cell click to a single handler.
-        ``refresh_search_display`` runs on every table refill; connecting without disconnecting
+        ``apply_local_filter`` runs on every table refill; connecting without disconnecting
         first stacks the connections, so one click fires the preview several times and adds
         several preview layers at once (feedback 4.2). Disconnect the previous connection first."""
         try:
@@ -1432,6 +1783,10 @@ class Mapflow(QObject):
             self.display_metadata_geojson_layer(
                 os.path.join(self.app_context.temp_dir, self.app_context.search_provider.metadata_layer_name),
                 f"{self.app_context.search_provider.name} metadata")
+            # Keep the restored results available to the instant local filter (fill below emits
+            # metadataTableFilled -> apply_local_filter), so switching back to a provider re-applies
+            # the current filter widgets instead of showing a stale/unfiltered view.
+            self.app_context.search_result_geojson = geoms
         else:
             self.clear_metadata()
 
@@ -1926,6 +2281,10 @@ class Mapflow(QObject):
         self.app_context.open_template_results_id = None
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
+        # Drop the retained results/baseline so a stale widen (!) indicator does not linger.
+        self.app_context.search_result_geojson = None
+        self.app_context.search_baseline_filters = None
+        self.dlg.searchWidenWarning.setVisible(False)
         #provider = self.provider_service.providers[self.dlg.providerIndex()]
         self.app_context.search_provider.clear_saved_search(self.app_context.temp_dir)
 
@@ -1947,6 +2306,10 @@ class Mapflow(QObject):
         if not self.check_if_output_directory_is_selected():
             return # only when outputDirectory is empty AND user closed selection dialog
         self.app_context.metadata_aoi = aoi
+        # Remember what this search actually asks the server for, so the widen (!) indicator can
+        # flag later widget edits that ask for MORE than was fetched (which local filtering can't
+        # surface without a fresh Search).
+        self.app_context.search_baseline_filters = self._current_filter_baseline()
         request_payload = ImageCatalogRequestSchema(aoi=json.loads(aoi.asJson()),
                                                     acquisitionDateFrom=from_,
                                                     acquisitionDateTo=to,
@@ -2030,6 +2393,9 @@ class Mapflow(QObject):
                                 and you have access rights to this folder"))
             return
         self.display_metadata_geojson_layer(filename, f"{provider.name} metadata")
+        # Retain the raw results so the instant local filter can reorder/re-render them without
+        # a new request (fill emits metadataTableFilled -> apply_local_filter).
+        self.app_context.search_result_geojson = geoms
         self.dlg.fill_metadata_table(geoms)
 
         self._update_search_pager(response_data.total, response_data.limit, response_data.offset)
@@ -2257,6 +2623,9 @@ class Mapflow(QObject):
         self._register_provider_min_areas(providers_data)
         search_providers = ProvidersList([DefaultProvider.from_response(ProviderReturnSchema.from_dict(data))
                                           for data in providers_data])
+        # Remember the api-names of the available providers so the local filter can drop results
+        # from providers not available to the user ("Search only through available providers").
+        self.app_context.search_data_providers = [pr.api_name for pr in search_providers]
         self.dlg.enable_search_providers_filter(len(search_providers))
         if len(search_providers) == 0:
             return
@@ -2859,12 +3228,16 @@ class Mapflow(QObject):
 
     def on_template_opened(self, template):
         """React to entering a template: fill search results and load AOI/processing layers."""
-        # Initial results are the whole template (no AOI/filter applied yet).
+        # Initial results are the whole template (no AOI filter applied yet).
         self._template_search_aoi_filter = None
-        self._template_search_filters = None
-        # Filter (re-query the results with the current filters, T7) and Update template
-        # (save the current filters into the template) only make sense while viewing a template.
-        self.dlg.filterTemplateResults.setVisible(True)
+        # Drop the previous view's results/baseline first, so the widget updates below (which
+        # fire the local filter) don't briefly compare against a stale baseline. The template's
+        # own results + baseline are set when its search response arrives.
+        self.app_context.search_result_geojson = None
+        self.app_context.search_baseline_filters = None
+        # "Update template" (save the current filters into the template) only makes sense while
+        # viewing a template. The widen (!) indicator manages its own visibility. Template
+        # results are filtered client-side now (no server-side Filter button).
         self.dlg.updateTemplateSearch.setVisible(True)
         self.apply_search_params_to_ui(getattr(template, "searchParams", None))
         self._load_template_search(template)
@@ -2876,8 +3249,9 @@ class Mapflow(QObject):
             self._remove_template_group(str(template.name))
         self.app_context.open_template_results_id = None
         self._template_search_aoi_filter = None
-        self._template_search_filters = None
-        self.dlg.filterTemplateResults.setVisible(False)
+        self.app_context.search_result_geojson = None
+        self.app_context.search_baseline_filters = None
+        self.dlg.searchWidenWarning.setVisible(False)
         self.dlg.updateTemplateSearch.setVisible(False)
         # Drop the AOI-selection processing Area so it doesn't leak to the project view.
         self._remove_selected_aoi_layer()
