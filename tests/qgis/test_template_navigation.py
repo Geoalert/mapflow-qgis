@@ -18,6 +18,9 @@ def _bare_service():
 
 def _controller():
     controller = ProjectProcessingController.__new__(ProjectProcessingController)
+    # Initialise the QObject base so Qt signal->slot delivery works (the controller connects
+    # its own methods to service signals in _setup_navigation).
+    QObject.__init__(controller)
     controller.tr = lambda text: text
     controller.dlg = MagicMock()
     controller.processing_service = MagicMock()
@@ -91,6 +94,30 @@ def test_enter_template_view_emits_opened_signal():
     assert service.in_template_mode is True
     assert service.active_template is template
     assert received == [template]
+
+
+def test_enter_arrow_disables_on_template_opened_signal():
+    """Entering a template is async when aoiDetails must be fetched, so `in_template_mode`
+    flips only after the controller's synchronous `_update_nav_buttons` has run. The arrow must
+    therefore be refreshed on the `templateOpened` signal — not only on the next selection
+    change (the reported bug: the '>' stayed enabled until an AOI/processing was selected)."""
+    controller = _controller()
+    service = _bare_service()  # real signals
+    service.in_template_mode = False
+    service.is_only_templates_selected = MagicMock(return_value=True)
+    service.selected_template = MagicMock(return_value=SimpleNamespace(id="t-1"))
+    controller.processing_service = service
+
+    controller._setup_navigation()  # wires templateOpened/Closed -> _update_nav_buttons
+    # A single template is selected in the processings view -> arrow enabled.
+    assert controller.dlg.switchProcessingsFakeButton.setEnabled.call_args.args == (True,)
+
+    # Async enter completes: in_template_mode flips, then templateOpened fires.
+    service.in_template_mode = True
+    service.templateOpened.emit(SimpleNamespace(id="t-1"))
+
+    # Arrow is now disabled without any selection change.
+    assert controller.dlg.switchProcessingsFakeButton.setEnabled.call_args.args == (False,)
 
 
 def test_exit_template_view_emits_closed_signal_and_clears_state():
