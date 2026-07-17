@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1083</width>
+    <width>1111</width>
     <height>550</height>
    </rect>
   </property>
@@ -1506,7 +1506,7 @@
              </property>
              <layout class="QGridLayout" name="gridLayout">
               <item row="0" column="0">
-               <layout class="QHBoxLayout" name="layoutMetadataDatetime" stretch="0,0,0,0,0,0,0,0,0">
+               <layout class="QHBoxLayout" name="layoutMetadataDatetime" stretch="0,0,0,0,0,0,0,0,0,0">
                 <item>
                  <widget class="QLabel" name="labelFrom">
                   <property name="toolTip">
@@ -1670,53 +1670,6 @@
                  </widget>
                 </item>
                 <item>
-                 <widget class="QPushButton" name="updateTemplateSearch">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="minimumSize">
-                   <size>
-                    <width>140</width>
-                    <height>0</height>
-                   </size>
-                  </property>
-                  <property name="visible">
-                   <bool>false</bool>
-                  </property>
-                  <property name="toolTip">
-                   <string>Save the current search filters to this template (replaces its stored search parameters)</string>
-                  </property>
-                  <property name="text">
-                   <string>Update template</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QToolButton" name="resetSearchFilters">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="minimumSize">
-                   <size>
-                    <width>110</width>
-                    <height>0</height>
-                   </size>
-                  </property>
-                  <property name="toolTip">
-                   <string>Reset the filters to the parameters the current results were fetched with (search request or template)</string>
-                  </property>
-                  <property name="text">
-                   <string>Reset filters</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
                  <widget class="QToolButton" name="getMetadata">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -1837,6 +1790,31 @@
                    </size>
                   </property>
                  </spacer>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="updateTemplateSearch">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>140</width>
+                    <height>0</height>
+                   </size>
+                  </property>
+                  <property name="visible">
+                   <bool>false</bool>
+                  </property>
+                  <property name="toolTip">
+                   <string>Save the current search filters to this template (replaces its stored search parameters)</string>
+                  </property>
+                  <property name="text">
+                   <string>Update template</string>
+                  </property>
+                 </widget>
                 </item>
                 <item>
                  <widget class="QToolButton" name="markSeenButton">
@@ -2073,6 +2051,28 @@
                      </property>
                      <property name="text">
                       <string>Search only through available providers</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QToolButton" name="resetSearchFilters">
+                     <property name="sizePolicy">
+                      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                       <horstretch>0</horstretch>
+                       <verstretch>0</verstretch>
+                      </sizepolicy>
+                     </property>
+                     <property name="minimumSize">
+                      <size>
+                       <width>110</width>
+                       <height>0</height>
+                      </size>
+                     </property>
+                     <property name="toolTip">
+                      <string>Reset the filters to the parameters the current results were fetched with (search request or template)</string>
+                     </property>
+                     <property name="text">
+                      <string>Reset filters</string>
                      </property>
                     </widget>
                    </item>
