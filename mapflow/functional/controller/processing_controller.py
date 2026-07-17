@@ -63,6 +63,12 @@ class ProjectProcessingController(QObject):
         self.dlg.projectsTable.doubleClicked.connect(self._on_project_double_clicked)
         # Keep the "enter template" arrow enabled only when a single template is selected.
         self.dlg.processingsTable.itemSelectionChanged.connect(self._update_nav_buttons)
+        # Entering a template is async when its aoiDetails must be fetched (the project poll
+        # omits them), so `in_template_mode` flips only in the hydrate callback. Refresh the nav
+        # buttons on the actual open/close signals — otherwise the "enter template" arrow stays
+        # enabled until the next selection change.
+        self.processing_service.templateOpened.connect(self._update_nav_buttons)
+        self.processing_service.templateClosed.connect(self._update_nav_buttons)
         self._update_nav_buttons()
 
     def _on_project_double_clicked(self, index):
@@ -110,8 +116,11 @@ class ProjectProcessingController(QObject):
         if tab_index >= 0:
             self.dlg.tabWidget.setTabText(tab_index, text)
 
-    def _update_nav_buttons(self):
-        """Enable the 'enter template' arrow only for a single-template selection."""
+    def _update_nav_buttons(self, *args):
+        """Enable the 'enter template' arrow only for a single-template selection.
+
+        Accepts optional signal arguments (``templateOpened``/``templateClosed`` emit the
+        template object) so it can be wired directly to those signals."""
         in_template = self.processing_service.in_template_mode
         can_enter = (
             not in_template
