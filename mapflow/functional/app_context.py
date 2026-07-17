@@ -70,6 +70,10 @@ class AppContext:
     data_provider: Optional["ProviderInterface"] = None
     # Minimum AOI area (sq km) per provider, by lowercased provider name — from /user/status.
     provider_min_areas: Dict[str, float] = field(default_factory=dict)
+    # api-names of the search providers available to the user (from /user/status
+    # `searchDataProviders`). Used by the local filter to hide results whose provider is not
+    # available when "Search only through available providers" is on.
+    search_data_providers: List[str] = field(default_factory=list)
     
     # === Imagery Search State ===
     search_provider: Optional["ProviderInterface"] = None
@@ -81,6 +85,16 @@ class AppContext:
     meta_layer_table_connection = None
     search_footprints: Dict[str, Any] = field(default_factory=dict)
     search_page_offset: int = 0
+    # Raw imagery-search results as returned by the API for the current view (regular search
+    # or template) — a GeoJSON FeatureCollection with a per-feature ``local_index``. Retained
+    # so the instant local filter can reorder/re-render the table (fit rows first, unfit rows
+    # greyed at the bottom) without issuing a new request.
+    search_result_geojson: Optional[Dict] = None
+    # The filter parameters that actually fetched ``search_result_geojson`` (for a regular
+    # search: what was sent to /catalog/meta; for a template: its stored searchParams). Used to
+    # warn (the (!) indicator) when the current filter widgets are WIDER than what was fetched,
+    # since local filtering cannot surface data the server never returned.
+    search_baseline_filters: Optional[Dict] = None
     
     # === Preview State ===
     preview_dict: Dict[str, Any] = field(default_factory=dict)

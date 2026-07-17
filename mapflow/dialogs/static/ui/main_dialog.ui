@@ -1645,7 +1645,7 @@
                  </spacer>
                 </item>
                 <item>
-                 <widget class="QPushButton" name="filterTemplateResults">
+                 <widget class="QToolButton" name="searchWidenWarning">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                     <horstretch>0</horstretch>
@@ -1654,7 +1654,7 @@
                   </property>
                   <property name="minimumSize">
                    <size>
-                    <width>100</width>
+                    <width>28</width>
                     <height>0</height>
                    </size>
                   </property>
@@ -1662,10 +1662,10 @@
                    <bool>false</bool>
                   </property>
                   <property name="toolTip">
-                   <string>Filter this template&apos;s results by date and cloud cover only. The other filters (intersection, providers, product type) are not applied to template results.</string>
+                   <string>Some current filters are wider than the last search. Click for details.</string>
                   </property>
                   <property name="text">
-                   <string>Filter</string>
+                   <string>(!)</string>
                   </property>
                  </widget>
                 </item>
@@ -1691,6 +1691,28 @@
                   </property>
                   <property name="text">
                    <string>Update template</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QToolButton" name="resetSearchFilters">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>110</width>
+                    <height>0</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>Reset the filters to the parameters the current results were fetched with (search request or template)</string>
+                  </property>
+                  <property name="text">
+                   <string>Reset filters</string>
                   </property>
                  </widget>
                 </item>
