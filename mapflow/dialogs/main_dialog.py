@@ -142,8 +142,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # AOI-specific actions (in-template view)
         self.aoi_rename_action = QAction(self.tr("Rename AOI"))
         self.aoi_delete_action = QAction(self.tr("Delete AOI"))
-        self.aoi_add_action = QAction(self.tr("Add AOI from current layer"))
-        self.aoi_update_geometry_action = QAction(self.tr("Update AOI from current layer"))
+        self.aoi_add_action = QAction(self.tr("Add AOI from layer…"))
+        self.aoi_update_geometry_action = QAction(self.tr("Update selected AOI"))
+        self.aoi_draw_action = QAction(self.tr("Draw AOI on the map"))
         self.exclude_from_search_action = QAction(self.tr("Exclude from search"))
         self.setup_options_menu()
 
