@@ -454,8 +454,10 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     def setProviderIndex(self, index):
         self.providerCombo.setCurrentIndex(index)
 
-    def fill_metadata_table(self, metadata):
-        # Fill out the table
+    def fill_metadata_table(self, metadata, sort: bool = True):
+        # Fill out the table. ``sort=False`` keeps the given feature order (built-in column
+        # sorting stays OFF) — used by the local filter, which supplies rows already ordered
+        # fit-first / unfit-last so the greyed rows stay pinned to the bottom.
         self.metadataTable.setRowCount(metadata.get('totalFeatures') or len(metadata['features']))
         # Row insertion triggers sorting -> row indexes shift -> duplicate rows, so turn sorting off
         self.metadataTable.setSortingEnabled(False)
@@ -467,8 +469,10 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                 table_item = QTableWidgetItem()
                 table_item.setData(Qt.DisplayRole, value)
                 self.metadataTable.setItem(row, col, table_item)
-        # Turn sorting on again
-        self.metadataTable.setSortingEnabled(True)
+        # Re-enable built-in sorting only when the caller wants it (a plain search); the local
+        # filter keeps it off so its fit/unfit row order is not immediately re-sorted away.
+        if sort:
+            self.metadataTable.setSortingEnabled(True)
         self.metadataTable.resizeColumnsToContents()
         self.add_preview_cell()
         self.metadataTableFilled.emit()

@@ -14,6 +14,9 @@ from mapflow.schema.template import SearchParams
 def _plugin():
     plugin = Mapflow.__new__(Mapflow)
     plugin.dlg = MagicMock()
+    # on_template_opened clears the retained results/baseline (so interim widget-set signals
+    # don't compare against a stale search baseline).
+    plugin.app_context = SimpleNamespace(search_result_geojson=None, search_baseline_filters=None)
     return plugin
 
 
