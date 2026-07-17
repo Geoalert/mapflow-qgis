@@ -354,6 +354,11 @@ class Mapflow(QObject):
 
         self.config_search_columns = ConfigColumns()
         self.active_template_id = None
+        # Image ids whose preview is currently being downloaded (async). Guards against the
+        # dedupe-on-map check missing duplicates, since the preview layer is only added in the
+        # HTTP callback — a second click/double-click fired several downloads before the first
+        # landed, producing duplicate preview layers.
+        self._pending_preview_ids = set()
         self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
             self.sync_table_selection_with_image_id_and_layer)
         self.dlg.metadataTable.itemSelectionChanged.connect(self.update_start_processing_button_state)
@@ -2657,6 +2662,11 @@ class Mapflow(QObject):
             self.iface.setActiveLayer(existing_preview[0])
             self.iface.mapCanvas().refresh()
             return
+        # A preview for this image is already being downloaded (async): a rapid second click /
+        # double-click must not start another download. The preview layer is only added in the
+        # HTTP callback, so the on-map guard above cannot catch these — hence this in-flight set.
+        if image_id in self._pending_preview_ids:
+            return
         footprint = self.metadata_footprint(feature=feature)
         url = feature.attribute('previewUrl')
         preview_type = feature.attribute('previewType')
@@ -2675,6 +2685,7 @@ class Mapflow(QObject):
                 wkt_geom = ogr_geom.ExportToWkt()
                 geom = QgsGeometry.fromWkt(wkt_geom)
                 previews.append((p.url, geom))
+            self._pending_preview_ids.add(image_id)  # in-flight until the VRT is added / errors
             self.preview_multiple_png(response=None,
                                       previews=previews,
                                       footprint=previews[0][1],
@@ -2698,6 +2709,7 @@ class Mapflow(QObject):
             if not url:
                 self.alert(self.tr("Preview with such URL is unavailable"))
                 return
+            self._pending_preview_ids.add(image_id)  # in-flight until the preview is added / errors
             self.preview_png(url, footprint, image_id)
         # Display mosaic preview
         elif preview_type in (PreviewType.xyz, PreviewType.tms, PreviewType.wms):
@@ -2716,6 +2728,7 @@ class Mapflow(QObject):
                       callback=self.display_png_preview_gcp,
                       use_default_error_handler=False,
                       error_handler=self.preview_png_error_handler,
+                      error_handler_kwargs={"image_id": image_id},
                       callback_kwargs={"footprint": footprint,
                                        "image_id": image_id})
 
@@ -2765,6 +2778,7 @@ class Mapflow(QObject):
             # as its own layer there, so the "Search area" clone just duplicates it (feedback 1).
             add_aoi=not self.processing_service.in_template_mode,
         )
+        self._pending_preview_ids.discard(image_id)  # download finished
         self._relocate_preview_to_template_group(layer)
 
     def preview_multiple_png(self,
@@ -2787,6 +2801,7 @@ class Mapflow(QObject):
             vrt.FlushCache()
             vrt = None
             vrt_layer = QgsRasterLayer(vrt_path, "{image_id} preview".format(image_id=image_id), 'gdal')
+            self._pending_preview_ids.discard(image_id)  # multi-part download finished
             self.result_loader.add_layer(vrt_layer)
             self._add_aoi_to_preview_if_needed()
             self._relocate_preview_to_template_group(vrt_layer)
@@ -2799,12 +2814,15 @@ class Mapflow(QObject):
                       callback=self.preview_multiple_png,
                       use_default_error_handler=False,
                       error_handler=self.preview_png_error_handler,
+                      error_handler_kwargs={"image_id": image_id},
                       callback_kwargs={"previews": previews,
                                        "footprint": image_to_preview[1],
                                        "image_id": image_id,
                                        "georeferenced_previews_list":georeferenced_previews_list})
 
-    def preview_png_error_handler(self, response: QNetworkReply):
+    def preview_png_error_handler(self, response: QNetworkReply, image_id: str = ""):
+        # Clear the in-flight flag so the user can retry this image's preview after a failure.
+        self._pending_preview_ids.discard(image_id)
         self.report_http_error(response, self.tr("Could not display preview"))
     
     def preview_mosaic(self,
