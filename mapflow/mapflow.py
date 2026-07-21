@@ -102,10 +102,11 @@ class Mapflow(QObject):
     _last_filtered_geoms = None
     # Cached widen-warning messages backing the (!) indicator's click handler.
     _widen_details = None
-    # The AOI ids the processing Area is currently derived from (T9), so a repeated selection
-    # signal doesn't rebuild the area layer. The dedicated Area layer holding their union.
+    # The AOI ids the processing Area is currently derived from, so a repeated selection signal
+    # doesn't rebuild it. ``_selected_aois_layer_id`` is the visible "Selected AOIs" layer built
+    # for a MULTI-AOI selection (a single selection uses that AOI's own layer).
     _processing_area_aoi_filter = None
-    _selected_aoi_layer = None
+    _selected_aois_layer_id = None
     # Id of the currently shown mosaic-preview boundary layer, so it can be removed when the
     # next preview is shown (its name varies by acquisition date, so name-match alone misses it).
     _mosaic_preview_footprint_id = None
@@ -1272,23 +1273,62 @@ class Mapflow(QObject):
         self._load_template_search(template, aoi_ids=list(selected_ids) or None)
 
     def sync_processing_area_to_selected_aois(self):
-        """T9: inside a template, set the processing Area to the union of the selected AOIs'
-        geometries, so a processing started from the template covers exactly those AOIs
-        (feedback 8.1; with T13 multi-select several AOIs union into one Area). No-op when no
-        AOI is selected, keeping the current Area (e.g. while a processing row is selected)."""
+        """Inside a template, point the Area combo at the selected AOI(s), so the Area shown in
+        the combo IS the one a processing will use — one place to look, no silent override.
+
+        A single selection points at that AOI's own (already visible) layer; a multi-selection
+        points at a visible "Selected AOIs" layer holding one feature per AOI. No-op when no AOI
+        is selected, keeping the current Area (e.g. while a processing row is selected)."""
         if not self.processing_service.in_template_mode:
             return
-        selected_ids = frozenset(
-            str(aoi.id) for aoi in self.processing_service.selected_aois() if aoi and aoi.id
-        )
-        # Selection signals fire often; only rebuild the Area layer when the set changes.
+        aois = [aoi for aoi in self.processing_service.selected_aois() if aoi and aoi.id]
+        selected_ids = frozenset(str(aoi.id) for aoi in aois)
+        # Selection signals fire often; only rebuild when the set actually changes.
         if selected_ids == (self._processing_area_aoi_filter or frozenset()):
             return
-        union = self._union_of_selected_aoi_geometries()
-        if union is None:
+        layer = self._layer_for_selected_aois(aois)
+        if layer is None:
             return
         self._processing_area_aoi_filter = selected_ids or None
-        self._set_template_processing_area(union)
+        # layerChanged -> calculate_aoi_area_polygon_layer recomputes Area/cost from this layer.
+        self.dlg.polygonCombo.setLayer(layer)
+
+    def _layer_for_selected_aois(self, aois) -> Optional[QgsVectorLayer]:
+        """The layer the Area combo should show for the current AOI selection."""
+        if not aois:
+            return None
+        if len(aois) == 1:
+            return self._find_aoi_layer(aois[0].id)
+        geometries = [geom for geom in
+                      (self._geometry_from_geojson(getattr(aoi, "geometry", None)) for aoi in aois)
+                      if geom is not None]
+        return self._rebuild_selected_aois_layer(geometries) if geometries else None
+
+    def _rebuild_selected_aois_layer(self, geometries: List[QgsGeometry]) -> QgsVectorLayer:
+        """(Re)build the visible "Selected AOIs" layer in the template group — one feature per
+        selected AOI, so a processing covers exactly them and the per-processing AOI limit still
+        applies. Visible on the map and in the tree (unlike the old hidden 'Selected AOI')."""
+        self._remove_selected_aois_layer()
+        layer = QgsVectorLayer('Polygon?crs=epsg:4326', self.tr('Selected AOIs'), 'memory')
+        features = []
+        for geom in geometries:
+            feature = QgsFeature()
+            feature.setGeometry(geom)
+            features.append(feature)
+        layer.dataProvider().addFeatures(features)
+        layer.updateExtents()
+        layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
+        template = self.processing_service.active_template
+        group = self._template_group_target(str(template.name)) if template else None
+        if group is not None:
+            self.app_context.project.addMapLayer(layer, addToLegend=False)
+            group.insertLayer(0, layer)
+        else:
+            self.app_context.project.addMapLayer(layer)
+        # Register it as an AOI layer so it is selectable in the combo (not excepted).
+        self.add_to_layers(layer, recompute_cost=False, set_current=False)
+        self._selected_aois_layer_id = layer.id()
+        return layer
 
     def _union_of_selected_aoi_geometries(self) -> Optional[QgsGeometry]:
         """Union (WGS84) of the currently selected template AOIs' geometries, or ``None`` when
@@ -1319,26 +1359,19 @@ class Mapflow(QObject):
         geom = QgsGeometry.fromWkt(ogr_geom.ExportToWkt())
         return geom if not geom.isEmpty() else None
 
-    def _set_template_processing_area(self, geometry: QgsGeometry):
-        """Make ``geometry`` (the union of the selected template AOIs) the processing Area
-        WITHOUT adding a layer to the polygon combo: the area calculator reads it from the
-        ``processing_area_override`` on app_context (item 5 — no phantom 'Selected AOI' entry
-        in the Area combo, which was not visible on the map/tree and errored when searched)."""
-        self.app_context.processing_area_override = QgsGeometry(geometry)
-        # Recompute Area/cost/crop from the override (the passed layer is ignored while it is set).
-        self.area_calculator_service.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
-
-    def _remove_selected_aoi_layer(self):
-        """Clear the template AOI-selection processing Area (the override, and any legacy
-        selected-AOI layer). Called when leaving the template."""
-        self.app_context.processing_area_override = None
-        layer = self._selected_aoi_layer
-        self._selected_aoi_layer = None
-        if layer is None:
+    def _remove_selected_aois_layer(self):
+        """Drop the multi-selection "Selected AOIs" layer (on a new selection or on leaving the
+        template). Single-AOI selections point at the AOI's own layer, so there is nothing to
+        clean up for them."""
+        layer_id = self._selected_aois_layer_id
+        self._selected_aois_layer_id = None
+        if not layer_id:
             return
         try:
-            self.remove_from_layers(layer)
-            self.app_context.project.removeMapLayer(layer)
+            layer = self.app_context.project.mapLayer(layer_id)
+            if layer is not None:
+                self.remove_from_layers(layer)
+            self.app_context.project.removeMapLayer(layer_id)
         except (RuntimeError, KeyError, AttributeError):
             pass
 
@@ -3512,7 +3545,7 @@ class Mapflow(QObject):
         self.dlg.searchWidenWarning.setVisible(False)
         self.dlg.updateTemplateSearch.setVisible(False)
         # Drop the AOI-selection processing Area so it doesn't leak to the project view.
-        self._remove_selected_aoi_layer()
+        self._remove_selected_aois_layer()
         self._processing_area_aoi_filter = None
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
