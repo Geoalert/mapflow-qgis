@@ -1,15 +1,25 @@
 """QGIS-tier tests: the processing request sends the AOI cropped to the selected image
 footprint (the area shown in the UI), not the whole AOI.
+
+Uses real ``QgsGeometry`` rather than mocks: the production guard checks ``isNull()`` as well as
+``isEmpty()``, and a MagicMock that only stubs ``isEmpty`` returns a truthy ``isNull()``, which
+silently sent the test down the fallback branch.
 """
 import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from qgis.core import QgsGeometry
+
 from mapflow.functional.service import processing_service as processing_service_module
 from mapflow.functional.service.processing_service import ProcessingService
 
-WHOLE = '{"type": "Polygon", "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]]}'
-CROPPED = '{"type": "Polygon", "coordinates": [[[0, 0], [0, 0.5], [0.5, 0.5], [0.5, 0], [0, 0]]]}'
+WHOLE_WKT = "POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))"
+CROPPED_WKT = "POLYGON((0 0, 0 0.5, 0.5 0.5, 0.5 0, 0 0))"
+
+
+def _as_geojson(geometry: QgsGeometry) -> dict:
+    return json.loads(geometry.asJson())
 
 
 def _service(processing_aoi):
@@ -21,7 +31,7 @@ def _service(processing_aoi):
     service.app_context = SimpleNamespace(
         project_id="project-1",
         get_workflow_def=lambda name: workflow_def,
-        aoi=MagicMock(asJson=MagicMock(return_value=WHOLE)),
+        aoi=QgsGeometry.fromWkt(WHOLE_WKT),
         processing_aoi=processing_aoi,
     )
     return service
@@ -35,24 +45,24 @@ def _build_geometry(service):
     return params.geometry
 
 
-def _cropped_geometry():
-    geom = MagicMock(asJson=MagicMock(return_value=CROPPED))
-    geom.isEmpty.return_value = False
-    return geom
-
-
 def test_processing_geometry_uses_cropped_aoi():
-    geometry = _build_geometry(_service(processing_aoi=_cropped_geometry()))
-    assert geometry == json.loads(CROPPED)
+    cropped = QgsGeometry.fromWkt(CROPPED_WKT)
+
+    geometry = _build_geometry(_service(processing_aoi=cropped))
+
+    assert geometry == _as_geojson(cropped)
+    # And explicitly NOT the whole AOI — that regression is the point of this test.
+    assert geometry != _as_geojson(QgsGeometry.fromWkt(WHOLE_WKT))
 
 
 def test_processing_geometry_falls_back_to_full_aoi_when_not_cropped():
     geometry = _build_geometry(_service(processing_aoi=None))
-    assert geometry == json.loads(WHOLE)
+
+    assert geometry == _as_geojson(QgsGeometry.fromWkt(WHOLE_WKT))
 
 
 def test_processing_geometry_falls_back_when_cropped_aoi_is_empty():
-    empty = MagicMock()
-    empty.isEmpty.return_value = True
-    geometry = _build_geometry(_service(processing_aoi=empty))
-    assert geometry == json.loads(WHOLE)
+    # An empty/null geometry (e.g. the AOI does not intersect the selected image).
+    geometry = _build_geometry(_service(processing_aoi=QgsGeometry()))
+
+    assert geometry == _as_geojson(QgsGeometry.fromWkt(WHOLE_WKT))
