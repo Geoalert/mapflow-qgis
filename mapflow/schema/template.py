@@ -383,6 +383,20 @@ class DeleteAoisSchema(Serializable, SkipDataClass):
 
 
 @dataclass
+class TemplateImagesRequestSchema(Serializable, SkipDataClass):
+    """Body of ``POST processings/template/{id}/images``: the template's search results,
+    paginated and optionally scoped to specific AOIs.
+
+    ``aoiIds`` is omitted from the body when None (``Serializable`` skips None by default).
+    The endpoint also accepts date/cloud/resolution/off-nadir filters and sorting, but those
+    are not sent — the plugin filters the template's results on the client (see
+    ``Mapflow.apply_local_filter``); re-add fields here if server-side filtering returns."""
+    limit: int = 100
+    offset: int = 0
+    aoiIds: Optional[List[str]] = None
+
+
+@dataclass
 class ProcessingTemplateDetails(Serializable, SkipDataClass):
     template: ProcessingTemplateDTO
 
