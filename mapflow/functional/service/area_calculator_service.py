@@ -75,14 +75,6 @@ class AreaCalculatorService(QObject):
 
         :param layer: The current polygon layer
         """
-        # Inside a template, the selected AOIs' union drives the Area (T9) via this override,
-        # so the union is never added to the polygon combo as a phantom layer (which was not
-        # visible on the map/tree and errored when searched over).
-        override = self.app_context.processing_area_override
-        if (override is not None and not override.isEmpty()
-                and getattr(self.processing_service, "in_template_mode", False)):
-            self.calculate_aoi_area(QgsGeometry(override), helpers.WGS84)
-            return
         self.get_aoi_area_polygon_layer(layer)
         provider = self.provider_service.providers[self.dlg.providerIndex()]
         if isinstance(provider, MyImageryProvider):
