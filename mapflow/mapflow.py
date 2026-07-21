@@ -358,7 +358,6 @@ class Mapflow(QObject):
         self.dlg.removeProvider.clicked.connect(self.remove_provider)
 
         self.config_search_columns = ConfigColumns()
-        self.active_template_id = None
         # Image ids whose preview is currently being downloaded (async). Guards against the
         # dedupe-on-map check missing duplicates, since the preview layer is only added in the
         # HTTP callback — a second click/double-click fired several downloads before the first
@@ -587,12 +586,8 @@ class Mapflow(QObject):
         self.show_details()
 
     def on_processings_selection_changed(self):
-        """Check if selected row is a template, not a processing."""
-        selected_template = self.processing_service.selected_template()
-        if not selected_template:
-            self.active_template_id = None
-        else:
-            self.active_template_id = str(selected_template.id)
+        """Refresh the Start button for the new processings-table selection (it resolves the
+        selected template/processing itself)."""
         self.update_start_processing_button_state()
 
     def update_start_processing_button_text(self):
@@ -3161,18 +3156,31 @@ class Mapflow(QObject):
         """Keep click behavior passive; marking seen is handled by Seen actions only."""
         return
 
+    def _seen_template_id(self) -> Optional[str]:
+        """Id of the template whose search results are currently in the table.
+
+        This must NOT come from the processings-table selection: inside the in-template view the
+        selected rows are AOIs/processings, so a selection-derived id is None there and both Seen
+        actions silently sent no request. ``open_template_results_id`` is set whenever template
+        results are loaded (entering a template and "See search results" alike)."""
+        open_id = getattr(self.app_context, "open_template_results_id", None)
+        if open_id:
+            return str(open_id)
+        template = self.processing_service.active_template
+        return str(template.id) if template else None
+
     def _mark_template_image_seen_by_row(self, row: int) -> None:
         """Request 'seen' for one row's image, only if its DTO is still new.
 
         The row marker and the new-images counter are updated from the success
         callback (``_on_template_image_seen``) — never optimistically.
         """
-        if not self.active_template_id:
+        template_id = self._seen_template_id()
+        if not template_id:
             return
         image = self._template_image_at_row(row)
         if image is None or not image.isNew:
             return
-        template_id = self.active_template_id
         self.processing_service.api.mark_template_image_seen(
             template_id=template_id,
             image_id=str(image.id),
@@ -3182,17 +3190,17 @@ class Mapflow(QObject):
         )
 
     def mark_selected_template_images_seen(self):
-        """Mark selected metadata rows as seen for the active template."""
-        if not self.active_template_id:
+        """Mark selected metadata rows as seen for the template whose results are shown."""
+        if not self._seen_template_id():
             return
         for row in sorted({item.row() for item in self.dlg.metadataTable.selectedItems()}):
             self._mark_template_image_seen_by_row(row)
 
     def mark_all_template_images_seen(self):
-        """Mark every image of the active template as seen with a single request."""
-        if not self.active_template_id:
+        """Mark every image of the shown template as seen with a single request."""
+        template_id = self._seen_template_id()
+        if not template_id:
             return
-        template_id = self.active_template_id
         self.processing_service.api.mark_all_template_images_seen(
             template_id=template_id,
             callback=lambda _response, tid=template_id: self._on_all_template_images_seen(tid),

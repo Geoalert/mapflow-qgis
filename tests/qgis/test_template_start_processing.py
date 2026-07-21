@@ -105,7 +105,6 @@ def test_on_processings_selection_changed_sets_planned_start_button_text():
 
 	plugin.dlg.startProcessing.setText.assert_called_with("Start planned processing")
 	plugin.dlg.disable_processing_start.assert_called_once()
-	assert plugin.active_template_id == "template-1"
 
 
 def test_on_processings_selection_changed_restores_default_start_button_text_without_template():
@@ -126,7 +125,6 @@ def test_on_processings_selection_changed_restores_default_start_button_text_wit
 	plugin.dlg.startProcessing.setEnabled.assert_called_with(True)
 	plugin.dlg.processingProblemsLabel.clear.assert_called_once()
 	plugin.dlg.disable_processing_start.assert_not_called()
-	assert plugin.active_template_id is None
 
 
 def test_on_processings_selection_changed_restores_default_when_processing_selected():
@@ -249,9 +247,10 @@ def _mark_seen_plugin(selected_rows=None):
 	"""
 	plugin = Mapflow.__new__(Mapflow)
 	plugin.tr = lambda text: text
-	plugin.active_template_id = "tpl-1"
+	# The template whose results are shown drives Seen (NOT the processings-table selection).
+	plugin.app_context = SimpleNamespace(open_template_results_id="tpl-1", plugin_name="Mapflow")
 	plugin.config = SimpleNamespace(SEARCH_ID_COLUMN_INDEX=1, NEW_IMAGE_MARKER_COLUMN_INDEX=0)
-	plugin.processing_service = SimpleNamespace(api=MagicMock())
+	plugin.processing_service = SimpleNamespace(api=MagicMock(), active_template=None)
 	plugin._decrement_template_new_images_count = MagicMock()
 	plugin._reset_template_new_images_count = MagicMock()
 	plugin._set_new_image_marker = MagicMock()
@@ -319,10 +318,49 @@ def test_mark_all_template_images_seen_uses_single_endpoint_and_defers_update():
 	plugin._reset_template_new_images_count.assert_called_once_with("tpl-1")
 
 
+def test_seen_works_inside_the_template_view():
+	"""Regression: the template id used to come from the processings-table selection, which is
+	None inside the in-template view (rows are AOIs/processings) — so Seen / Seen all silently
+	sent no request. It must resolve from the results actually on screen."""
+	plugin = _mark_seen_plugin(selected_rows=[0])
+	# In-template view: no template row is selected, results were loaded for tpl-1.
+	plugin.processing_service.active_template = SimpleNamespace(id="tpl-1")
+	api = plugin.processing_service.api
+
+	plugin.mark_all_template_images_seen()
+	plugin.mark_selected_template_images_seen()
+
+	api.mark_all_template_images_seen.assert_called_once()
+	assert api.mark_all_template_images_seen.call_args.kwargs["template_id"] == "tpl-1"
+	assert api.mark_template_image_seen.call_count > 0
+
+
+def test_seen_falls_back_to_the_open_template_when_results_id_missing():
+	plugin = _mark_seen_plugin()
+	plugin.app_context.open_template_results_id = None
+	plugin.processing_service.active_template = SimpleNamespace(id="tpl-7")
+
+	plugin.mark_all_template_images_seen()
+
+	kwargs = plugin.processing_service.api.mark_all_template_images_seen.call_args.kwargs
+	assert kwargs["template_id"] == "tpl-7"
+
+
+def test_seen_noop_without_any_template_context():
+	plugin = _mark_seen_plugin()
+	plugin.app_context.open_template_results_id = None
+	plugin.processing_service.active_template = None
+
+	plugin.mark_all_template_images_seen()
+	plugin.mark_selected_template_images_seen()
+
+	plugin.processing_service.api.mark_all_template_images_seen.assert_not_called()
+	plugin.processing_service.api.mark_template_image_seen.assert_not_called()
+
+
 def test_mark_seen_error_leaves_marker_and_counter_untouched():
 	plugin = _mark_seen_plugin(selected_rows=[0])
 	plugin.iface = MagicMock()
-	plugin.app_context = SimpleNamespace(plugin_name="Mapflow")
 	api = plugin.processing_service.api
 
 	plugin.mark_selected_template_images_seen()
@@ -381,8 +419,8 @@ def test_new_image_marker_column_skips_hidden_leftmost_column():
 
 def test_on_metadata_table_cell_clicked_does_not_mark_seen():
 	plugin = Mapflow.__new__(Mapflow)
-	plugin.active_template_id = "tpl-1"
-	plugin.processing_service = SimpleNamespace(api=MagicMock())
+	plugin.app_context = SimpleNamespace(open_template_results_id="tpl-1")
+	plugin.processing_service = SimpleNamespace(api=MagicMock(), active_template=None)
 	plugin._decrement_template_new_images_count = MagicMock()
 	plugin.dlg = MagicMock()
 
