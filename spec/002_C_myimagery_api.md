@@ -3,6 +3,10 @@
 ## Purpose
 Define the REST API contracts for data catalog (My Imagery) management consumed by this plugin.
 
+My Imagery is also reachable through **imagery search** (`002_D_search_api.md`), via the
+`my_imagery_images` / `my_imagery_mosaics` providers on `POST /catalog/meta`. Those results
+carry mostly-empty metadata and their `previewUrl` is on this data-catalog host, no auth required.
+
 ## Mosaic Endpoints
 
 ### `POST /rasters/mosaic`

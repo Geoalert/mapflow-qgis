@@ -119,6 +119,73 @@ def test_cloud_100_disables_cloud_filter():
     assert unfit == {1}
 
 
+# ---------- My Imagery: missing metadata matches any filter ----------
+
+def _my_imagery_feature(local_index):
+    """A My Imagery row: no acquisition date, no cloud cover, covers the AOI."""
+    return _feature(local_index, None, None, _square_geojson(0, 0, 10, 10))
+
+
+def test_missing_date_passes_date_filter():
+    # Active date range that a real date would have to fall in; the null-date row must stay fit.
+    plugin = _plugin_regular(min_intersection=0, max_cloud=100)
+
+    unfit = plugin._unfit_local_indices([_my_imagery_feature(0)])
+
+    assert unfit == set()
+
+
+def test_missing_cloud_passes_cloud_filter():
+    plugin = _plugin_regular(min_intersection=0, max_cloud=30)  # < 100, so cloud is filtered
+
+    unfit = plugin._unfit_local_indices([_my_imagery_feature(0)])
+
+    assert unfit == set()
+
+
+def test_missing_date_and_cloud_pass_with_both_filters_active():
+    plugin = _plugin_regular(min_intersection=0, max_cloud=30,
+                             date_from=QDate(2025, 1, 1), date_to=QDate(2025, 2, 1))
+
+    unfit = plugin._unfit_local_indices([_my_imagery_feature(0)])
+
+    assert unfit == set()
+
+
+def test_populated_values_still_filter_both_directions():
+    # Guard against over-correcting into "never filter": real out-of-range values must still fail.
+    plugin = _plugin_regular(min_intersection=0, max_cloud=50,
+                             date_from=QDate(2025, 1, 1), date_to=QDate(2025, 12, 31))
+    features = [
+        _feature(0, "2025-06-01T00:00:00Z", 10, _square_geojson(0, 0, 10, 10)),   # in range, clear
+        _feature(1, "2019-06-01T00:00:00Z", 10, _square_geojson(0, 0, 10, 10)),   # date too old
+        _feature(2, "2025-06-01T00:00:00Z", 80, _square_geojson(0, 0, 10, 10)),   # too cloudy
+    ]
+
+    unfit = plugin._unfit_local_indices(features)
+
+    assert unfit == {1, 2}
+
+
+def test_passes_optional_rule():
+    assert Mapflow._passes_optional(None, lambda v: False) is True   # missing -> always passes
+    assert Mapflow._passes_optional(5, lambda v: v < 10) is True
+    assert Mapflow._passes_optional(50, lambda v: v < 10) is False
+
+
+def test_by_date_desc_sorts_missing_dates_last():
+    # Rows without an acquisition date (My Imagery) must sort to the bottom, not the top.
+    features = [
+        _feature(0, None, None, _square_geojson(0, 0, 1, 1)),
+        _feature(1, "2025-06-01T00:00:00Z", 10, _square_geojson(0, 0, 1, 1)),
+        _feature(2, "2025-01-01T00:00:00Z", 10, _square_geojson(0, 0, 1, 1)),
+    ]
+
+    order = [f["properties"]["local_index"] for f in Mapflow._by_date_desc(features)]
+
+    assert order == [1, 2, 0]  # newest, older, then the undated row last
+
+
 def test_template_intersection_skipped_without_selected_aoi():
     plugin = _plugin_regular(min_intersection=50)
     plugin.processing_service.in_template_mode = True
