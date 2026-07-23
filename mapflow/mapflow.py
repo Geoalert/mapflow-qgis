@@ -1585,12 +1585,15 @@ class Mapflow(QObject):
             if local_index is None:
                 continue
             try:
+                # Missing metadata matches any condition: user imagery (My Imagery search) has no
+                # acquisition date / cloud cover, and the server already treats a NULL column as
+                # satisfying every predicate — the local filter must not then demote those rows.
                 acquisition_date = self._utc_date_from_iso(props.get("acquisitionDate"))
-                date_ok = acquisition_date is not None and from_ <= acquisition_date <= to
+                date_ok = self._passes_optional(acquisition_date, lambda d: from_ <= d <= to)
                 cloud_cover = self._to_float(props.get("cloudCover"))
-                # 100% = don't filter by cloud; an unknown cloud value is treated as too cloudy.
-                cloud_ok = max_cloud_cover >= 100 or (cloud_cover is not None
-                                                      and cloud_cover < max_cloud_cover)
+                # 100% = don't filter by cloud at all.
+                cloud_ok = max_cloud_cover >= 100 or self._passes_optional(
+                    cloud_cover, lambda c: c < max_cloud_cover)
                 if provider_set is None:
                     provider_ok = True
                 else:
@@ -1687,6 +1690,14 @@ class Mapflow(QObject):
             return float(value)
         except (TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _passes_optional(value, predicate) -> bool:
+        """A metadata filter clause where a missing value matches any condition: ``None`` passes,
+        otherwise the row must satisfy ``predicate``. My Imagery results carry mostly-empty
+        metadata (no date/cloud), which the server counts as matching every filter; the local
+        filter follows the same rule so user imagery is not hidden when a filter is set."""
+        return value is None or predicate(value)
 
     def _mark_unfit_rows(self, unfit: set) -> None:
         """Grey-out and disable (non-selectable) the rows whose image was filtered out; restore
@@ -2958,7 +2969,10 @@ class Mapflow(QObject):
             url = feature.attribute('previewUrl')
             preview_type = feature.attribute('previewType')
             provider_name = feature.attribute('providerName')
-            image_date = feature.attribute('acquisitionDate').toString("dd.MM.yyyy")
+            # My Imagery results have no acquisition date: a NULL attribute is Python None, so
+            # calling .toString() on it would raise AttributeError (not the KeyError below).
+            raw_date = feature.attribute('acquisitionDate')
+            image_date = raw_date.toString("dd.MM.yyyy") if raw_date is not None else ''
         except KeyError: # duplicated processings don't have these fields
             url = preview_type = provider_name = image_date = ''
         if not preview_type:
@@ -2982,6 +2996,9 @@ class Mapflow(QObject):
                     url: str,
                     footprint: QgsGeometry,
                     image_id: str = ""):
+        # previewUrl is always a self-authenticating (pre-signed) URL — for every provider,
+        # including My Imagery — so we send a dummy Authorization header and never leak the
+        # Mapflow credentials to the (often third-party) preview host.
         self.http.get(url=url,
                       timeout=30,
                       auth='null'.encode(),
