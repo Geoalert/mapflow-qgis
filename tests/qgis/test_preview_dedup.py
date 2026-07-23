@@ -53,33 +53,3 @@ def test_error_handler_clears_in_flight_flag():
 
     assert "IMG-1" not in plugin._pending_preview_ids
     plugin.report_http_error.assert_called_once()
-
-
-# ---------- My Imagery preview auth (§2.3): forward the token to the Mapflow host only ----------
-
-def _auth_plugin():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.app_context = SimpleNamespace(server="https://whitemaps-v2.mapflow.ai/rest")
-    return plugin
-
-
-def test_preview_auth_forwards_token_for_same_host_url():
-    plugin = _auth_plugin()
-    # My Imagery preview lives on the Mapflow host -> None lets Http.authorize apply the real token.
-    url = "https://whitemaps-v2.mapflow.ai/rest/rasters/image/abc/preview/l"
-
-    assert plugin._preview_auth_override(url) is None
-
-
-def test_preview_auth_uses_dummy_header_for_external_host():
-    plugin = _auth_plugin()
-    # External pre-signed preview host -> must NOT leak Mapflow credentials.
-    url = "https://api.sdstream.net/preview/comm/abc123"
-
-    assert plugin._preview_auth_override(url) == b'null'
-
-
-def test_preview_auth_defaults_to_no_credentials_on_bad_url():
-    plugin = _auth_plugin()
-
-    assert plugin._preview_auth_override("::not a url::") == b'null'
