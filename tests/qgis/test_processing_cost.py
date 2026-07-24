@@ -7,10 +7,18 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from qgis.core import QgsGeometry, QgsProject
+
 from mapflow.config import Config
 from mapflow.entity.provider.default import ImagerySearchProvider, MyImageryProvider
 from mapflow.functional.service.processing_service import ProcessingService
 from mapflow.mapflow import Mapflow
+
+
+def _small_aoi():
+    """A ~0.001° square (~0.01 sq km bounding box) — well under any sane aoiAreaLimit,
+    so the per-AOI bbox pre-check passes and these tests exercise the provider-min logic."""
+    return QgsGeometry.fromWkt("POLYGON((0 0, 0.001 0, 0.001 0.001, 0 0.001, 0 0))")
 
 
 def _search_provider():
@@ -111,7 +119,9 @@ def test_validate_processing_params_blocks_below_provider_min_area():
     service = ProcessingService.__new__(ProcessingService)
     service.tr = lambda text: text
     service.dlg = MagicMock()
-    service.app_context = SimpleNamespace(aoi=object(), aoi_size=0.1, aoi_area_limit=1000.0)
+    service.app_context = SimpleNamespace(aoi=_small_aoi(), processing_aoi=_small_aoi(),
+                                          project=QgsProject.instance(),
+                                          aoi_size=0.1, aoi_area_limit=1000.0)
     service._selected_search_min_area = MagicMock(return_value=(5.0, "orbview"))
 
     error, _ = service.validate_processing_params(SimpleNamespace(name="Run 1"), allow_empty_name=False)
@@ -125,7 +135,9 @@ def test_validate_processing_params_passes_when_area_meets_provider_min():
     service = ProcessingService.__new__(ProcessingService)
     service.tr = lambda text: text
     service.dlg = MagicMock()
-    service.app_context = SimpleNamespace(aoi=object(), aoi_size=12.0, aoi_area_limit=1000.0)
+    service.app_context = SimpleNamespace(aoi=_small_aoi(), processing_aoi=_small_aoi(),
+                                          project=QgsProject.instance(),
+                                          aoi_size=12.0, aoi_area_limit=1000.0)
     service._selected_search_min_area = MagicMock(return_value=(5.0, "orbview"))
 
     error, _ = service.validate_processing_params(SimpleNamespace(name="Run 1"), allow_empty_name=False)
@@ -143,7 +155,8 @@ def test_update_processing_cost_skips_request_when_below_provider_min_area():
     service.view = MagicMock()
     service.view.read_processing_start_params.return_value = SimpleNamespace()
     service.app_context = SimpleNamespace(
-        aoi=object(), aoi_size=0.1, aoi_area_limit=1000.0, data_provider=object(),
+        aoi=_small_aoi(), processing_aoi=_small_aoi(), project=QgsProject.instance(),
+        aoi_size=0.1, aoi_area_limit=1000.0, data_provider=object(),
     )
     service.get_processing_schema = MagicMock(return_value=SimpleNamespace(name="Run 1"))
     service._selected_search_min_area = MagicMock(return_value=(5.0, "orbview"))

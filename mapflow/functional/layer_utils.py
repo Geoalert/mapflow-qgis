@@ -118,6 +118,28 @@ def calculate_aoi_area(aoi: QgsGeometry,
     aoi_size = calculator.measureArea(aoi) / 10 ** 6  # sq. m to sq.km
     return aoi_size
 
+def max_aoi_bbox_area(aoi: QgsGeometry,
+                      project_crs: QgsCoordinateReferenceSystem) -> float:
+    """Largest per-AOI lat-lon bounding-box area (sq.m, ellipsoidal) over the AOI's polygons.
+
+    The backend caps every AOI by the ellipsoidal area of its lat-lon–oriented bounding box
+    (envelope), not by the polygon's own area, so a thin diagonal AOI can exceed the limit even
+    when its true area does not. ``aoi`` must be in WGS84; each part's ``boundingBox()`` is then a
+    lat-lon envelope, matching the backend. Returns 0.0 for an empty/None geometry.
+    """
+    if aoi is None or aoi.isEmpty():
+        return 0.0
+    calculator = QgsDistanceArea()
+    calculator.setEllipsoid(WGS84_ELLIPSOID)
+    calculator.setSourceCrs(WGS84, project_crs)
+    max_area = 0.0
+    for part in aoi.asGeometryCollection() or [aoi]:
+        if part is None or part.isEmpty():
+            continue
+        bbox_area = calculator.measureArea(QgsGeometry.fromRect(part.boundingBox()))
+        max_area = max(max_area, bbox_area)
+    return max_area
+
 def count_polygons_in_layer(features: list) -> int:
     """ Count polygon geometries in a multipolygon layer (instead of counting features).
     :param features: A list of fetures, obtained by "list(layer.getFeatures())"

@@ -12,6 +12,10 @@ class ApiErrors(ErrorMessageList):
             # Synthesized client-side before sending the request (see Mapflow.create_search_template)
             "TEMPLATE_AREA_LIMIT_EXCEEDED": self.tr("Up to {templateAreaLimit} sq km can be used for a planned "
                                                     "processing. Try reducing your area of interest."),
+            # Backend rejects a processing that exceeds the area limit (total area or an AOI's
+            # bounding box). params.area and params.aoiAreaLimit are both in sq.m.
+            "TOO_LARGE_PROCESSING": self.tr("The processing area is too large: {area} sq.m exceeds the "
+                                            "{aoiAreaLimit} sq.m limit. Reduce the area of interest."),
         }
         self.message_descriptions = {
             # Backend rejects template creation with a generic "BAD_REQUEST" code and this exact message.

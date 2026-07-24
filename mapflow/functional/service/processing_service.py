@@ -43,7 +43,7 @@ from ..service.alert_service import alert
 from ..app_context import AppContext
 from ...entity.provider import ImagerySearchProvider
 from ...config import Config
-from ...functional.layer_utils import ResultsLoader
+from ...functional.layer_utils import ResultsLoader, max_aoi_bbox_area
 from ...http import get_error_report_body
 from ...dialogs.error_message_widget import ErrorMessageWidget
 
@@ -144,10 +144,31 @@ class ProcessingService(QObject):
                     raise BadProcessingInput(self.tr('Processing area layer is corrupted or has invalid projection'))
                 else:
                     raise BadProcessingInput(self.tr('Please, select a valid area of interest'))
-            if self.app_context.aoi_area_limit < self.app_context.aoi_size:
-                raise BadProcessingInput(self.tr(
-                    'Up to {} sq km can be processed at a time. '
-                    'Try splitting your area(s) into several processings.').format(self.app_context.aoi_area_limit))
+            # Both the whole processing area and each AOI's lat-lon bounding box must fit within
+            # aoiAreaLimit (mirrors the backend; see spec 002_B "AOI area limit"). A zero/unknown
+            # limit disables the checks and defers to the backend.
+            limit_sqkm = self.app_context.aoi_area_limit or 0
+            if limit_sqkm:
+                # 1) Total processing area (all AOIs combined, ellipsoidal, not bounding-boxed).
+                if self.app_context.aoi_size and self.app_context.aoi_size > limit_sqkm:
+                    raise BadProcessingInput(self.tr(
+                        'The processing area is {area} sq km, over the {limit} sq km limit. '
+                        'Try splitting your area(s) into several processings.').format(
+                            area=round(self.app_context.aoi_size, 2),
+                            limit=round(limit_sqkm, 2)))
+                # 2) Each AOI's lat-lon bounding box, on the geometry actually submitted (cropped
+                #    AOI, fallback to the raw AOI).
+                aoi_geometry = self.app_context.processing_aoi
+                if aoi_geometry is None or aoi_geometry.isNull() or aoi_geometry.isEmpty():
+                    aoi_geometry = self.app_context.aoi
+                max_bbox_sqkm = max_aoi_bbox_area(
+                    aoi_geometry, self.app_context.project.transformContext()) / 1e6
+                if max_bbox_sqkm > limit_sqkm:
+                    raise BadProcessingInput(self.tr(
+                        'An AOI is too large: its bounding box is {area} sq km, over the {limit} '
+                        'sq km limit. Reduce the area of interest.').format(
+                            area=round(max_bbox_sqkm, 2),
+                            limit=round(limit_sqkm, 2)))
             min_area, provider_name = self._selected_search_min_area()
             if min_area is not None and self.app_context.aoi_size is not None \
                     and self.app_context.aoi_size < min_area:
