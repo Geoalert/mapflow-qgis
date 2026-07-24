@@ -49,3 +49,27 @@ def test_template_area_limit_code_is_formatted_with_limit():
     resolved = error.to_str()
     assert "12.5" in resolved
     assert "sq km" in resolved
+
+
+def test_too_large_processing_code_is_formatted_with_area_and_limit():
+    # Backend rejects an over-limit processing on start; params carry area and aoiAreaLimit (sq.m).
+    error = ErrorMessage(
+        code="TOO_LARGE_PROCESSING",
+        parameters={"area": "48669864", "aoiAreaLimit": "2500000"},
+        message="Processings larger than 2500000 sq.m. are prohibited. Area: 48669864 sq.m.",
+    )
+    resolved = error.to_str()
+    assert "48669864" in resolved and "2500000" in resolved
+    # Our translatable wording, not the raw backend English.
+    assert "prohibited" not in resolved
+    assert "too large" in resolved.lower()
+
+
+def test_api_message_parser_resolves_too_large_processing():
+    body = ('{"code":"TOO_LARGE_PROCESSING",'
+            '"message":"Processings larger than 2500000 sq.m. are prohibited. Area: 48669864 sq.m.",'
+            '"params":{"area":"48669864","aoiAreaLimit":"2500000"}}')
+    resolved = api_message_parser(response_body=body)
+    assert resolved is not None
+    assert "48669864" in resolved and "2500000" in resolved
+    assert "too large" in resolved.lower()
