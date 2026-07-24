@@ -174,7 +174,7 @@ class ProcessingView:
     def clear_processing_name(self, name):
         # If the name is expected, we clear it after the processsing is launched;
         # Otherwise it means that the user has altered the text already and it should be preserved
-        if self.dlg.processingName.text == name:
+        if self.dlg.processingName.text() == name:
             self.dlg.processingName.clear()
 
     def disable_processing_start(self, reason: str, clear_area: bool):
