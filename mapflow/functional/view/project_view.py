@@ -1,13 +1,46 @@
 from typing import List
 
 from PyQt5.QtCore import QObject, Qt
-from PyQt5.QtWidgets import QWidget, QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView
+from PyQt5.QtWidgets import (QWidget, QTableWidget, QTableWidgetItem, QAbstractItemView,
+                             QHeaderView, QHBoxLayout, QLabel)
 
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs import icons
 from ...config import ConfigColumns
 from ...schema import WorkflowDef
 from ...schema.project import MapflowProject, ProjectSortBy, ProjectSortOrder
+
+
+# Icon size (px) for the project "State" column markers.
+STATE_ICON_SIZE = 14
+
+
+def build_project_state_widget(succeeded: int, failed: int, templates: int) -> QWidget:
+    """A one-line cell for the project "State" column: succeeded / failed processings and
+    planned processings (templates), each as an SVG icon followed by its count.
+
+    Rendered as a cell widget (not a plain item) because a QTableWidgetItem holds only one icon.
+    Made transparent to mouse events so a click still selects the row for opening the project."""
+    widget = QWidget()
+    layout = QHBoxLayout(widget)
+    layout.setContentsMargins(6, 0, 6, 0)
+    layout.setSpacing(4)
+    pairs = ((icons.ok_circle_icon, succeeded),
+             (icons.close_circle_icon, failed),
+             (icons.clock_five_icon, templates))
+    for index, (icon, count) in enumerate(pairs):
+        if index:
+            layout.addSpacing(10)
+        icon_label = QLabel()
+        icon_label.setPixmap(icon.pixmap(STATE_ICON_SIZE, STATE_ICON_SIZE))
+        icon_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        layout.addWidget(icon_label)
+        count_label = QLabel(str(count))
+        count_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        layout.addWidget(count_label)
+    layout.addStretch()
+    widget.setAttribute(Qt.WA_TransparentForMouseEvents)
+    return widget
 
 
 class ProjectView(QObject):
@@ -73,24 +106,31 @@ class ProjectView(QObject):
             name_item = QTableWidgetItem()
             name_item.setData(Qt.DisplayRole, project.name)
             self.dlg.projectsTable.setItem(row, 1, name_item)
-            ok_item = QTableWidgetItem()
-            ok_item.setData(Qt.DisplayRole, project.processingCounts['succeeded'])
-            self.dlg.projectsTable.setItem(row, 2, ok_item)
-            failed_item = QTableWidgetItem()
-            failed_item.setData(Qt.DisplayRole, project.processingCounts['failed'])
-            self.dlg.projectsTable.setItem(row, 3, failed_item)
+            # Combined state: succeeded / failed processings + planned processings (templates).
+            counts = project.processingCounts or {}
+            succeeded = counts.get('succeeded', 0)
+            failed = counts.get('failed', 0)
+            templates = project.templatesCount or 0
+            state_widget = build_project_state_widget(succeeded, failed, templates)
+            state_item = QTableWidgetItem()
+            # Let resizeColumnsToContents account for the widget, and keep an item for selection.
+            state_item.setSizeHint(state_widget.sizeHint())
+            state_item.setToolTip(self.tr("Succeeded: {ok} · Failed: {failed} · Planned: {templates}").format(
+                ok=succeeded, failed=failed, templates=templates))
+            self.dlg.projectsTable.setItem(row, 2, state_item)
+            self.dlg.projectsTable.setCellWidget(row, 2, state_widget)
             owner_item = QTableWidgetItem()
             owner_item.setData(Qt.DisplayRole, project.shareProject.owners[0].email)
-            self.dlg.projectsTable.setItem(row, 4, owner_item)
+            self.dlg.projectsTable.setItem(row, 3, owner_item)
             updated_item = QTableWidgetItem()
             updated_item.setData(Qt.DisplayRole, project.updated.astimezone().strftime('%Y-%m-%d %H:%M'))
-            self.dlg.projectsTable.setItem(row, 5, updated_item)
+            self.dlg.projectsTable.setItem(row, 4, updated_item)
             created_item = QTableWidgetItem()
             created_item.setData(Qt.DisplayRole, project.created.astimezone().strftime('%Y-%m-%d %H:%M'))
-            self.dlg.projectsTable.setItem(row, 6, created_item)
+            self.dlg.projectsTable.setItem(row, 5, created_item)
             self.dlg.projectsTable.setHorizontalHeaderLabels(self.columns_config.PROJECTS_TABLE_COLUMNS)
         self.dlg.projectsTable.resizeColumnsToContents()
-        for column_idx in (1, 4):
+        for column_idx in (1, 3):
             # these columns are user-defined and can expand too wide, so we bound them
             if self.dlg.projectsTable.columnWidth(column_idx) > self.columns_config.MAX_WIDTH:
                 self.dlg.projectsTable.setColumnWidth(column_idx, self.columns_config.MAX_WIDTH)

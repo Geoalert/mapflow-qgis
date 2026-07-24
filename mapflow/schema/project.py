@@ -65,6 +65,7 @@ class MapflowProject(SkipDataClass):
     updated: Optional[datetime] = None
     created: Optional[datetime] = None
     processingCounts: Optional[Dict[str, int]] = None
+    templatesCount: Optional[int] = None
     total: Optional[int] = Config.PROJECTS_PAGE_LIMIT
 
     def __post_init__(self):
