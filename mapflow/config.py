@@ -25,12 +25,11 @@ class ConfigColumns():
             'local_index': 'local_index'
         } 
         self.PROJECTS_TABLE_COLUMNS = [
-            "ID", 
-            QCoreApplication.translate('Config', "Project"), 
-            QCoreApplication.translate('Config', "Succeeded"), 
-            QCoreApplication.translate('Config', "Failed"), 
-            QCoreApplication.translate('Config', "Author"), 
-            QCoreApplication.translate('Config', "Updated at"), 
+            "ID",
+            QCoreApplication.translate('Config', "Project"),
+            QCoreApplication.translate('Config', "State"),
+            QCoreApplication.translate('Config', "Author"),
+            QCoreApplication.translate('Config', "Updated at"),
             QCoreApplication.translate('Config', "Created at")
         ]
         self.MAX_WIDTH = 200

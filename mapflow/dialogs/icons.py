@@ -21,3 +21,7 @@ arrow_left_icon = QIcon(str(icon_path/'arrow_left.svg'))
 refresh_icon = QIcon(str(icon_path/'refresh.svg'))
 download_icon = QIcon(str(icon_path/'download.svg'))
 new_image_icon = QIcon(str(icon_path/'exclamation-mark-round-svgrepo-com.svg'))
+# Project "State" column markers: succeeded / failed processings and planned processings.
+ok_circle_icon = QIcon(str(icon_path/'ok-circle.svg'))
+close_circle_icon = QIcon(str(icon_path/'close-circle.svg'))
+clock_five_icon = QIcon(str(icon_path/'clock-five.svg'))
