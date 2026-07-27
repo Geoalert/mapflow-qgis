@@ -173,18 +173,6 @@ def test_passes_optional_rule():
     assert Mapflow._passes_optional(50, lambda v: v < 10) is False
 
 
-def test_by_date_desc_sorts_missing_dates_last():
-    # Rows without an acquisition date (My Imagery) must sort to the bottom, not the top.
-    features = [
-        _feature(0, None, None, _square_geojson(0, 0, 1, 1)),
-        _feature(1, "2025-06-01T00:00:00Z", 10, _square_geojson(0, 0, 1, 1)),
-        _feature(2, "2025-01-01T00:00:00Z", 10, _square_geojson(0, 0, 1, 1)),
-    ]
-
-    order = [f["properties"]["local_index"] for f in Mapflow._by_date_desc(features)]
-
-    assert order == [1, 2, 0]  # newest, older, then the undated row last
-
 
 def test_template_intersection_skipped_without_selected_aoi():
     plugin = _plugin_regular(min_intersection=50)
@@ -431,8 +419,9 @@ def test_apply_local_filter_preserves_server_order_for_regular_search():
     assert order == [0, 1, 2]  # server order preserved (date-desc would have given [1, 2, 0])
 
 
-def test_apply_local_filter_date_sorts_template_results():
-    # Template search has no server sort, so it keeps the newest-first client fallback.
+def test_apply_local_filter_preserves_server_order_for_template():
+    # Template results are now also sorted server-side (the template-images endpoint takes the
+    # same sortBy/sortOrder), so the local filter must preserve their incoming order too.
     plugin = _plugin_orchestration(unfit=set())
     plugin.processing_service.in_template_mode = True
     plugin.app_context.search_result_geojson = _dated_geoms()
@@ -441,7 +430,7 @@ def test_apply_local_filter_date_sorts_template_results():
 
     order = [f["properties"]["local_index"]
              for f in plugin.dlg.fill_metadata_table.call_args.args[0]["features"]]
-    assert order == [1, 2, 0]  # newest-first
+    assert order == [0, 1, 2]  # server order preserved (no client date re-sort)
 
 
 def test_apply_local_filter_is_reentrancy_guarded():

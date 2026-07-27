@@ -142,12 +142,16 @@ class ProcessingApi(QObject):
         limit: int = 100,
         offset: int = 0,
         aoi_ids: Optional[List[str]] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
     ):
-        """The template's search results, paginated and optionally scoped to specific AOIs.
+        """The template's search results, paginated, optionally scoped to specific AOIs, and
+        sorted server-side (``sort_by`` TemplateImagesSortBy token / ``sort_order`` ASC|DESC).
 
         Read-only: it does not modify the template. Date/cloud/intersection filtering is applied
         on the client (``Mapflow.apply_local_filter``), so no filter fields are sent."""
-        data = TemplateImagesRequestSchema(limit=limit, offset=offset, aoiIds=aoi_ids)
+        data = TemplateImagesRequestSchema(limit=limit, offset=offset, aoiIds=aoi_ids,
+                                           sortBy=sort_by, sortOrder=sort_order)
         self.http.post(
             path=f"processings/template/{template_id}/images",
             body=data.as_json().encode(),
