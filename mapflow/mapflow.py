@@ -986,6 +986,8 @@ class Mapflow(QObject):
             limit=self.search_page_limit,
             offset=self.search_page_offset,
             aoi_ids=aoi_ids or None,
+            sort_by=self._search_sort_by,
+            sort_order=self._search_sort_order,
         )
 
     def _load_template_search_page(self, offset: int):
@@ -1549,17 +1551,14 @@ class Mapflow(QObject):
             return
         self._last_unfit_set = set(unfit)
         self._last_filtered_geoms = geoms
-        # Order: fit rows first, unfit rows last. WITHIN each group keep the incoming order — for a
-        # regular search that is the server sort order (sortBy/sortOrder), which must be preserved
-        # so header-click sorting actually shows in the table. Template results have no server sort,
-        # so they fall back to newest-first by date. Built-in column sorting is OFF so the order
-        # sticks (otherwise the table would re-sort and the unfit rows jump back up).
-        in_template = getattr(self.processing_service, "in_template_mode", False)
-        order = self._by_date_desc if in_template else (lambda fs: fs)
-        fit_features = order(
-            [f for f in features if f.get("properties", {}).get("local_index") not in unfit])
-        unfit_features = order(
-            [f for f in features if f.get("properties", {}).get("local_index") in unfit])
+        # Order: fit rows first, unfit rows last. WITHIN each group keep the incoming order — the
+        # server sort (sortBy/sortOrder) for both regular AND template search — so header-click
+        # sorting actually shows in the table. Built-in column sorting is OFF so the order sticks
+        # (otherwise the table would re-sort and the unfit rows jump back up).
+        fit_features = [
+            f for f in features if f.get("properties", {}).get("local_index") not in unfit]
+        unfit_features = [
+            f for f in features if f.get("properties", {}).get("local_index") in unfit]
         reordered = dict(geoms)
         reordered["features"] = fit_features + unfit_features
         # Re-fill in the new order. Preview cells are generic and ``local_index`` stays bound to
@@ -1577,14 +1576,6 @@ class Mapflow(QObject):
         self._hide_unfit_footprints(getattr(self.app_context, "metadata_layer", None), unfit)
         self._reconnect_cell_preview()
         self._update_widen_indicator()
-
-    @staticmethod
-    def _by_date_desc(features: list) -> list:
-        """Sort GeoJSON features newest-first by ``acquisitionDate`` (ISO strings sort
-        chronologically); missing dates sort last."""
-        return sorted(features,
-                      key=lambda f: f.get("properties", {}).get("acquisitionDate") or "",
-                      reverse=True)
 
     def _unfit_local_indices(self, features: list) -> set:
         """``local_index`` of every result (GeoJSON feature) that FAILS the active filter
@@ -2556,11 +2547,10 @@ class Mapflow(QObject):
 
     def on_metadata_header_clicked(self, column: int) -> None:
         """Clicking a *sortable* search column header re-runs the search sorted server-side by that
-        column, toggling ASC/DESC on repeat clicks. Only the columns the catalog API can sort on
+        column, toggling ASC/DESC on repeat clicks. Only the columns the API can sort on
         (config.SEARCH_SORT_FIELDS) react; the rest (preview, product type, band order, image id)
-        do nothing. Template search is client-filtered (no server sort), so it is left untouched."""
-        if self.processing_service.in_template_mode:
-            return
+        do nothing. Applies to both regular search (/catalog/meta) and template results (the
+        template-images endpoint accepts the same sortBy/sortOrder)."""
         if self.dlg.metadataTable.rowCount() == 0:
             return  # nothing searched yet
         attributes = tuple(self.config_search_columns.METADATA_TABLE_ATTRIBUTES.values())
@@ -2575,7 +2565,12 @@ class Mapflow(QObject):
             self._search_sort_by = sort_field
             self._search_sort_order = "DESC"
         self._update_search_sort_indicator(column)
-        self.get_metadata()  # re-emit the request (offset 0) with the new sort
+        # Re-request the first page with the new sort — the template-images endpoint and
+        # /catalog/meta take the same sort params, so both re-sort server-side.
+        if self.processing_service.in_template_mode:
+            self._load_template_search_page(0)
+        else:
+            self.get_metadata()
 
     def _update_search_sort_indicator(self, column: int) -> None:
         header = self.dlg.metadataTable.horizontalHeader()
