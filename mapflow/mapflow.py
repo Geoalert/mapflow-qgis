@@ -100,6 +100,10 @@ class Mapflow(QObject):
     # Last local-filter outcome, so a slider drag that doesn't flip any image skips the re-fill.
     _last_unfit_set = None
     _last_filtered_geoms = None
+    # Server-side sort of the search results (regular search AND template results). Default:
+    # newest first by acquisition date; a header click changes/flips it and re-runs the search.
+    _search_sort_by = "ACQUISITION_DATE"
+    _search_sort_order = "DESC"
     # Cached widen-warning messages backing the (!) indicator's click handler.
     _widen_details = None
     # The AOI ids the processing Area is currently derived from, so a repeated selection signal
@@ -168,10 +172,6 @@ class Mapflow(QObject):
         # Imagery search pagination
         self.search_page_offset = 0
         self.search_page_limit = self.config.SEARCH_RESULTS_PAGE_LIMIT
-        # Server-side sort of the search results (regular imagery search only). Default: newest
-        # first by acquisition date; header clicks change/flip it and re-run the search.
-        self._search_sort_by = "ACQUISITION_DATE"
-        self._search_sort_order = "DESC"
 
         # ========== 3. INIT DIALOGS ==========
         # Init dialogs before creating timers that need them as parent
