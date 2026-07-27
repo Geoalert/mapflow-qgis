@@ -409,6 +409,41 @@ def test_apply_local_filter_sorts_unfit_rows_to_bottom():
     plugin._update_widen_indicator.assert_called_once()
 
 
+def _dated_geoms():
+    # Deliberately NOT in date order — mimics a server sort by some other column (e.g. resolution).
+    return {"features": [
+        {"properties": {"local_index": 0, "acquisitionDate": "2020-01-01T00:00:00Z"}},
+        {"properties": {"local_index": 1, "acquisitionDate": "2026-01-01T00:00:00Z"}},
+        {"properties": {"local_index": 2, "acquisitionDate": "2023-01-01T00:00:00Z"}},
+    ]}
+
+
+def test_apply_local_filter_preserves_server_order_for_regular_search():
+    # Regression: the local filter used to force date-desc, discarding the server's sort order
+    # (so a pixel-resolution sort never showed in the table). Regular search must keep server order.
+    plugin = _plugin_orchestration(unfit=set())
+    plugin.app_context.search_result_geojson = _dated_geoms()
+
+    plugin.apply_local_filter()
+
+    order = [f["properties"]["local_index"]
+             for f in plugin.dlg.fill_metadata_table.call_args.args[0]["features"]]
+    assert order == [0, 1, 2]  # server order preserved (date-desc would have given [1, 2, 0])
+
+
+def test_apply_local_filter_date_sorts_template_results():
+    # Template search has no server sort, so it keeps the newest-first client fallback.
+    plugin = _plugin_orchestration(unfit=set())
+    plugin.processing_service.in_template_mode = True
+    plugin.app_context.search_result_geojson = _dated_geoms()
+
+    plugin.apply_local_filter()
+
+    order = [f["properties"]["local_index"]
+             for f in plugin.dlg.fill_metadata_table.call_args.args[0]["features"]]
+    assert order == [1, 2, 0]  # newest-first
+
+
 def test_apply_local_filter_is_reentrancy_guarded():
     plugin = _plugin_orchestration(unfit=set())
     # Simulate the nested metadataTableFilled emission during fill_metadata_table.
