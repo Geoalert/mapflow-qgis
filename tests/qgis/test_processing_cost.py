@@ -165,3 +165,5 @@ def test_update_processing_cost_skips_request_when_below_provider_min_area():
 
     service.api.get_cost.assert_not_called()
     service.dlg.disable_processing_start.assert_called_once()
+    # The AOI size is known, so a blocking validation error must NOT clear the area label.
+    assert service.dlg.disable_processing_start.call_args.kwargs.get("clear_area") is False
