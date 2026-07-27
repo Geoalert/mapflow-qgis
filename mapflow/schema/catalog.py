@@ -65,12 +65,14 @@ class ImageSchema(Serializable, SkipDataClass):
     id: str
     footprint: Optional[dict]
     pixelResolution: Optional[float]
-    acquisitionDate: Union[datetime, str, None]
-    productType: Optional[str]
-    sensor: Optional[str]
-    colorBandOrder: Optional[str]
-    cloudCover: Optional[float]
-    offNadirAngle: Optional[float]
+    # Metadata that may be absent from a response (My Imagery and partial-metadata providers):
+    # optional with a default so a missing key parses to None instead of raising.
+    acquisitionDate: Union[datetime, str, None] = None
+    productType: Optional[str] = None
+    sensor: Optional[str] = None
+    colorBandOrder: Optional[str] = None
+    cloudCover: Optional[float] = None
+    offNadirAngle: Optional[float] = None
     satId: Optional[str] = None
     previewType: Optional[PreviewType] = None
     previewUrl: Optional[str] = None
