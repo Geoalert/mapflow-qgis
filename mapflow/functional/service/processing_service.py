@@ -289,7 +289,10 @@ class ProcessingService(QObject):
 
         processing_params, error = self.validate_all_processing_params(allow_empty_name=False)
         if error:
-            self.dlg.disable_processing_start(error, clear_area=error)
+            # Keep the AOI area on screen even when the processing is blocked (e.g. area too
+            # big/small): the size is known and useful. Genuinely-unknown-area cases clear the
+            # label upstream (area_calculator), so never clear it on a validation error here.
+            self.dlg.disable_processing_start(error, clear_area=False)
             return
         elif not processing_params: # neither error nor params => return w/o disabling (empty name)
             return
@@ -1046,7 +1049,9 @@ class ProcessingService(QObject):
         processing_params, error = self.validate_all_processing_params(allow_empty_name=True)
 
         if error:
-            self.dlg.disable_processing_start(error, clear_area=error)
+            # Keep the AOI area visible even when blocked (area too big/small, provider minimum,
+            # etc.) — we know the size. Unknown-area cases are cleared upstream (area_calculator).
+            self.dlg.disable_processing_start(error, clear_area=False)
             return
 
         # /cost itself is only meaningful when the user is billed in credits.
