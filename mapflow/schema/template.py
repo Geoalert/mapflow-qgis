@@ -388,12 +388,15 @@ class TemplateImagesRequestSchema(Serializable, SkipDataClass):
     paginated and optionally scoped to specific AOIs.
 
     ``aoiIds`` is omitted from the body when None (``Serializable`` skips None by default).
-    The endpoint also accepts date/cloud/resolution/off-nadir filters and sorting, but those
-    are not sent — the plugin filters the template's results on the client (see
-    ``Mapflow.apply_local_filter``); re-add fields here if server-side filtering returns."""
+    Date/cloud/resolution/off-nadir *filtering* is applied on the client (see
+    ``Mapflow.apply_local_filter``) and not sent. *Sorting* IS sent server-side: sortBy is a
+    TemplateImagesSortBy token (UPPER_SNAKE_CASE, e.g. ACQUISITION_DATE), sortOrder is ASC/DESC —
+    the same contract as ``/catalog/meta`` (regular search)."""
     limit: int = 100
     offset: int = 0
     aoiIds: Optional[List[str]] = None
+    sortBy: Optional[str] = None
+    sortOrder: Optional[str] = None
 
 
 @dataclass
