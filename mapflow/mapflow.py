@@ -1549,12 +1549,16 @@ class Mapflow(QObject):
             return
         self._last_unfit_set = set(unfit)
         self._last_filtered_geoms = geoms
-        # Order: fit rows first, unfit rows last; each group newest-first (ISO dates sort
-        # lexicographically). Built-in column sorting is turned OFF for this fill so the order
-        # sticks (otherwise the table re-sorts by date and the unfit rows jump back up).
-        fit_features = self._by_date_desc(
+        # Order: fit rows first, unfit rows last. WITHIN each group keep the incoming order — for a
+        # regular search that is the server sort order (sortBy/sortOrder), which must be preserved
+        # so header-click sorting actually shows in the table. Template results have no server sort,
+        # so they fall back to newest-first by date. Built-in column sorting is OFF so the order
+        # sticks (otherwise the table would re-sort and the unfit rows jump back up).
+        in_template = getattr(self.processing_service, "in_template_mode", False)
+        order = self._by_date_desc if in_template else (lambda fs: fs)
+        fit_features = order(
             [f for f in features if f.get("properties", {}).get("local_index") not in unfit])
-        unfit_features = self._by_date_desc(
+        unfit_features = order(
             [f for f in features if f.get("properties", {}).get("local_index") in unfit])
         reordered = dict(geoms)
         reordered["features"] = fit_features + unfit_features
