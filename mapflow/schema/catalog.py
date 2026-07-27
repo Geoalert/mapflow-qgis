@@ -61,7 +61,7 @@ class ImageSchema(Serializable, SkipDataClass):
     id: str
     footprint: Optional[dict]
     pixelResolution: Optional[float]
-    acquisitionDate: Union[datetime, str]
+    acquisitionDate: Union[datetime, str, None]
     productType: Optional[str]
     sensor: Optional[str]
     colorBandOrder: Optional[str]
@@ -79,9 +79,10 @@ class ImageSchema(Serializable, SkipDataClass):
     def __post_init__(self):
         if isinstance(self.acquisitionDate, str):
             self.acquisitionDate = parse_api_datetime_utc(self.acquisitionDate)
-        elif not isinstance(self.acquisitionDate, datetime):
-            raise TypeError("Acquisition date must be either datetime or ISO-formatted str")
-        self.cloudCover = self.cloudCover
+        elif self.acquisitionDate is not None and not isinstance(self.acquisitionDate, datetime):
+            raise TypeError("Acquisition date must be either datetime, ISO-formatted str, or null")
+        # My Imagery search results carry no acquisition date (null) — keep it as None instead of
+        # rejecting the whole response (see spec 002_D "Response and missing metadata").
         try:
             self.previewType = PreviewType(self.previewType)
         except:

@@ -23,6 +23,17 @@ from ...config import Config, ConfigColumns
 from ...errors import PluginError
 
 
+# `productType` casing varies by provider — My Imagery sends 'MOSAIC'/'IMAGE', other search
+# providers send 'Mosaic'/'Image' — so the mosaic/product-type selection rules must compare
+# case-insensitively (mirrors the case-insensitive local Mosaic/Image filter).
+MOSAIC_PRODUCT_TYPES = frozenset({"MOSAIC"})
+
+
+def normalized_product_types(product_types) -> set:
+    """Upper-cased product-type set, for case-insensitive comparison against MOSAIC_PRODUCT_TYPES."""
+    return {str(product_type).strip().upper() for product_type in product_types}
+
+
 class ProviderService(QObject):
     _instance: Optional['ProviderService'] = None
     _initialized: bool = False
@@ -201,17 +212,18 @@ class ProviderService(QObject):
                                 zooms.append(zoom_val)
                         except (KeyError, AttributeError):
                             continue
-                    if len(set(product_types)) > 1: # no image + mosaic
+                    product_type_set = normalized_product_types(product_types)
+                    if len(product_type_set) > 1: # no image + mosaic
                         error = self.tr("Selected search results must be of the same product type")
                     elif (len(set(provider_names)) > 1
-                          and set(product_types) != set(["Mosaic"])):
+                          and product_type_set != MOSAIC_PRODUCT_TYPES):
                         # Mixing different providers is only allowed for Mosaics
                         # (server combines them). For Image product type, including
                         # orbview_*, the backend rejects mixed providers — block the
                         # request here so the cost/v2 call is not made with a
                         # mismatched dataProvider + imageIds payload.
                         error = self.tr("You can launch multiple image processing only if it has the same provider of mosaic type")
-                    elif set(product_types) == set(["Mosaic"]) and len(set(zooms)) > 1: # no mosaics with different zooms
+                    elif product_type_set == MOSAIC_PRODUCT_TYPES and len(set(zooms)) > 1: # no mosaics with different zooms
                         error = self.tr("Selected search results must have the same zoom level")
                 # Minimum-area check. The server enforces a per-provider minimum
                 # (ProviderMinAreaError) on the processing geometry. For credits
@@ -300,7 +312,7 @@ class ProviderService(QObject):
         selection_error = ""
         try:
             if len(set(provider_names)) > 1:
-                if set(product_types) != set(["Mosaic"]):
+                if normalized_product_types(product_types) != MOSAIC_PRODUCT_TYPES:
                     selection_error = self.tr("You can launch multiple image processing only if it has the same provider of mosaic type")
         except:
             return image_ids, selection_error
