@@ -55,6 +55,10 @@ class ImageCatalogRequestSchema(Serializable):
     hideUnavailable: Optional[bool] = False
     productTypes: Optional[List[ProductType]] = None
     dataProviders: Optional[List[str]] = None
+    # Server-side sort. sortBy is a TemplateImagesSortBy token (UPPER_SNAKE_CASE, e.g.
+    # ACQUISITION_DATE); sortOrder is ASC/DESC. Omitted (None) -> server default order.
+    sortBy: Optional[str] = None
+    sortOrder: Optional[str] = None
 
 @dataclass
 class ImageSchema(Serializable, SkipDataClass):
