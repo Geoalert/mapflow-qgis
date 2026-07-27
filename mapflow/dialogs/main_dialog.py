@@ -333,11 +333,14 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         for col in hidden_columns:
             self.metadataTable.setColumnHidden(col, True)
         if sort_by is not None:
-            self.metadataTable.sortByColumn(sort_by, Qt.DescendingOrder)
+            # Built-in sorting is not used (search is sorted server-side); just show the default
+            # sort indicator on the date column. Header clicks trigger a server re-sort instead.
+            self.metadataTable.horizontalHeader().setSortIndicatorShown(True)
+            self.metadataTable.horizontalHeader().setSortIndicator(sort_by, Qt.DescendingOrder)
         self.metadata.setTitle(self.tr("Search ") + provider.name)
 
         if fill:
-            self.fill_metadata_table(fill)
+            self.fill_metadata_table(fill, sort=False)
 
         self.set_search_column_visibility()
 

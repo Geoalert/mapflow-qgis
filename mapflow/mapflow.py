@@ -168,6 +168,10 @@ class Mapflow(QObject):
         # Imagery search pagination
         self.search_page_offset = 0
         self.search_page_limit = self.config.SEARCH_RESULTS_PAGE_LIMIT
+        # Server-side sort of the search results (regular imagery search only). Default: newest
+        # first by acquisition date; header clicks change/flip it and re-run the search.
+        self._search_sort_by = "ACQUISITION_DATE"
+        self._search_sort_order = "DESC"
 
         # ========== 3. INIT DIALOGS ==========
         # Init dialogs before creating timers that need them as parent
@@ -380,6 +384,7 @@ class Mapflow(QObject):
         self.dlg.getMetadata.clicked.connect(self.handle_metadata_button_click)
         self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
         self.dlg.metadataTable.cellClicked.connect(self.on_metadata_table_cell_clicked)
+        self.dlg.metadataTable.horizontalHeader().sectionClicked.connect(self.on_metadata_header_clicked)
         self.dlg.rasterSourceChanged.connect(self.on_provider_change)
         self.dlg.clearSearch.clicked.connect(self.clear_metadata)
         self.dlg.metadataTableFilled.connect(self.apply_local_filter)
@@ -676,7 +681,9 @@ class Mapflow(QObject):
         # the widen (!) baseline; template results are filtered client-side, not server-side.
         self.app_context.search_result_geojson = geoms
         self.app_context.search_baseline_filters = self._template_filter_baseline(template)
-        self.dlg.fill_metadata_table(geoms)
+        # Built-in Qt column sorting stays OFF: search order is server-driven (regular search) or
+        # local-filter-driven (templates); only SEARCH_SORT_FIELDS headers re-sort, server-side.
+        self.dlg.fill_metadata_table(geoms, sort=False)
         # Keep the image DTOs (they carry isNew) keyed by id so mark-seen reads truth.
         self.template_search_images = {str(image.id): image for image in images}
         # New images are flagged with an icon in the leftmost column (not by editing text).
@@ -2543,6 +2550,35 @@ class Mapflow(QObject):
                 error_handler=self.processing_service.aoi_change_error_handler,
             )
 
+    def on_metadata_header_clicked(self, column: int) -> None:
+        """Clicking a *sortable* search column header re-runs the search sorted server-side by that
+        column, toggling ASC/DESC on repeat clicks. Only the columns the catalog API can sort on
+        (config.SEARCH_SORT_FIELDS) react; the rest (preview, product type, band order, image id)
+        do nothing. Template search is client-filtered (no server sort), so it is left untouched."""
+        if self.processing_service.in_template_mode:
+            return
+        if self.dlg.metadataTable.rowCount() == 0:
+            return  # nothing searched yet
+        attributes = tuple(self.config_search_columns.METADATA_TABLE_ATTRIBUTES.values())
+        if not 0 <= column < len(attributes):
+            return
+        sort_field = self.config.SEARCH_SORT_FIELDS.get(attributes[column])
+        if not sort_field:
+            return  # column is not server-sortable
+        if self._search_sort_by == sort_field:
+            self._search_sort_order = "ASC" if self._search_sort_order == "DESC" else "DESC"
+        else:
+            self._search_sort_by = sort_field
+            self._search_sort_order = "DESC"
+        self._update_search_sort_indicator(column)
+        self.get_metadata()  # re-emit the request (offset 0) with the new sort
+
+    def _update_search_sort_indicator(self, column: int) -> None:
+        header = self.dlg.metadataTable.horizontalHeader()
+        header.setSortIndicatorShown(True)
+        order = Qt.DescendingOrder if self._search_sort_order == "DESC" else Qt.AscendingOrder
+        header.setSortIndicator(column, order)
+
     def get_metadata(self, _: Optional[bool] = False, offset: Optional[int] = 0) -> None:
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
         try: # disconnect to prevent adding mutliple previews if table was refilled (multiple searches)
@@ -2588,7 +2624,9 @@ class Mapflow(QObject):
                                       min_intersection=min_intersection,
                                       hide_unavailable=hide_unavailable,
                                       product_types=product_types,
-                                      search_providers=search_providers)
+                                      search_providers=search_providers,
+                                      sort_by=self._search_sort_by,
+                                      sort_order=self._search_sort_order)
 
     def clear_metadata(self):
         try:
@@ -2620,7 +2658,9 @@ class Mapflow(QObject):
                                  offset: Optional[int] = 0,
                                  hide_unavailable: Optional[bool] = False,
                                  product_types: Optional[List[ProductType]] = None,
-                                 search_providers: Optional[List[str]] = None):
+                                 search_providers: Optional[List[str]] = None,
+                                 sort_by: Optional[str] = None,
+                                 sort_order: Optional[str] = None):
         if not self.check_if_output_directory_is_selected():
             return # only when outputDirectory is empty AND user closed selection dialog
         self.app_context.metadata_aoi = aoi
@@ -2641,7 +2681,9 @@ class Mapflow(QObject):
                                                     offset=offset,
                                                     hideUnavailable=hide_unavailable,
                                                     productTypes=product_types,
-                                                    dataProviders=search_providers)
+                                                    dataProviders=search_providers,
+                                                    sortBy=sort_by,
+                                                    sortOrder=sort_order)
         self.http.post(url=provider.meta_url,
                        body=request_payload.as_json().encode(),
                        headers={},
@@ -2714,7 +2756,9 @@ class Mapflow(QObject):
         # Retain the raw results so the instant local filter can reorder/re-render them without
         # a new request (fill emits metadataTableFilled -> apply_local_filter).
         self.app_context.search_result_geojson = geoms
-        self.dlg.fill_metadata_table(geoms)
+        # Built-in Qt sorting stays OFF; the results already arrive in the server sort order and
+        # header clicks re-request with sortBy/sortOrder (see on_metadata_header_clicked).
+        self.dlg.fill_metadata_table(geoms, sort=False)
 
         self._update_search_pager(response_data.total, response_data.limit, response_data.offset)
 
