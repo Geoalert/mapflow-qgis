@@ -118,6 +118,19 @@ class Config:
     PROJECTS_PAGE_LIMIT = 20
     PROCESSINGS_PAGE_LIMIT = 30
 
+    # Metadata columns the catalog API can sort on, mapped to the backend `sortBy` token
+    # (TemplateImagesSortBy, UPPER_SNAKE_CASE). Columns absent here are NOT sortable — clicking
+    # their header does nothing. Keyed by METADATA_TABLE_ATTRIBUTES value (the feature attribute).
+    SEARCH_SORT_FIELDS = {
+        "providerName": "PROVIDER_NAME",
+        "satId": "SAT_ID",
+        "cloudCover": "CLOUD_COVER",
+        "offNadirAngle": "OFF_NADIR_ANGLE",
+        "acquisitionDate": "ACQUISITION_DATE",
+        "zoom": "ZOOM",
+        "pixelResolution": "PIXEL_RESOLUTION",
+    }
+
     # OAuth2
     OAUTH2_URL = "https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect"
     AUTH_CONFIG_NAME = f"mapflow_{MAPFLOW_ENV}"
