@@ -20,8 +20,8 @@ from PyQt5.QtWidgets import (
 )
 from qgis.core import (
     Qgis, QgsCoordinateReferenceSystem, QgsDistanceArea, QgsFeature, QgsGeometry,
-    QgsLayerTreeGroup, QgsLayerTreeLayer, QgsMapLayer, QgsMapLayerType, QgsProject,
-    QgsRasterLayer, QgsRectangle, QgsVectorLayer
+    QgsLayerTreeGroup, QgsLayerTreeLayer, QgsMapLayer, QgsMapLayerType, QgsMessageLog,
+    QgsProject, QgsRasterLayer, QgsRectangle, QgsVectorLayer
 )
 
 from . import constants
@@ -205,11 +205,20 @@ class Mapflow(QObject):
         self.app_startup_user_update_timer.timeout.connect(self.first_status_request)
 
         # ========== 5. SETUP TEMP DIRECTORY ==========
-        self.setup_tempdir()
+        # AlertService must exist before setup_tempdir: an unavailable working directory below (and
+        # select_output_directory on a bad pick) shows a modal, and both run before section 6.
+        AlertService(self.plugin_name)
+        tempdir_error = self.setup_tempdir()
+        if tempdir_error:
+            # Working directory is configured but unavailable (e.g. an unmounted external drive).
+            # It's only needed to save results locally, so let the user fix it now or postpone —
+            # a modal with an action beats a transient status-bar line for a blocking problem.
+            self.prompt_output_directory(
+                self.tr("The working directory '{dir}' is unavailable:<br>{error}<br><br>"
+                        "It is needed to save processing results on your computer.").format(
+                            dir=self.app_context.settings.value('outputDir'), error=tempdir_error))
 
         # ========== 6. INITIALIZE INDEPENDENT SERVICES ==========
-        # Initialize AlertService singleton
-        AlertService(self.plugin_name)
         self.result_loader = layer_utils.ResultsLoader(iface=self.iface,
                                                        maindialog=self.dlg,
                                                        http=self.http,
@@ -2115,7 +2124,13 @@ class Mapflow(QObject):
         if path:
             self.dlg.outputDirectory.setText(path)
             self.app_context.settings.setValue('outputDir', path)
-            self.setup_tempdir()
+            error = self.setup_tempdir()
+            if error:
+                # The chosen directory exists but is not usable (e.g. no write permission, or it
+                # lives on an unmounted volume). Tell the user exactly why and let them pick another.
+                self.alert(self.tr("Cannot use '{dir}' as the working directory:\n{error}\n\n"
+                                   "Please choose another directory.").format(dir=path, error=error),
+                           QMessageBox.Warning)
             return path
 
     def check_if_output_directory_is_selected(self) -> bool:
@@ -2127,6 +2142,33 @@ class Mapflow(QObject):
             return True
         self.alert(self.tr('Please, specify an existing output directory'))
         return False
+
+    def prompt_output_directory(self, message: str) -> bool:
+        """Modal prompt to set the working directory, explaining why it is needed.
+
+        Shows `message` with 'Select directory…' / 'Later' buttons. Returns True if the user picked
+        a usable directory (``temp_dir`` is now set), False if they postponed or the pick failed.
+        Used both at startup (a configured directory turned out unavailable) and before any action
+        that needs the directory (so 'Later' cancels that action)."""
+        box = QMessageBox(QMessageBox.Warning, self.plugin_name, message, parent=self.main_window)
+        box.setTextFormat(Qt.RichText)
+        select_button = box.addButton(self.tr("Select directory…"), QMessageBox.AcceptRole)
+        box.addButton(self.tr("Later"), QMessageBox.RejectRole)
+        box.exec()
+        if box.clickedButton() is not select_button:
+            return False
+        self.select_output_directory()  # alerts by itself if the newly picked directory is unusable
+        return self.app_context.temp_dir is not None
+
+    def ensure_output_directory(self, reason: str) -> bool:
+        """Ensure a usable working directory exists before an action that writes to it.
+
+        Returns True if results can be saved (directory set and present); if not, prompts the user
+        with `reason` and returns whether they selected a usable directory (False = postponed)."""
+        temp_dir = self.app_context.temp_dir
+        if temp_dir is not None and temp_dir.exists():
+            return True
+        return self.prompt_output_directory(reason)
 
     def replace_search_provider(self, provider: ProviderInterface):
         if not provider:
@@ -3692,14 +3734,10 @@ class Mapflow(QObject):
         if self.dlg.viewAsTiles.isChecked():
             self.result_loader.load_result_tiles(processing=processing)
         elif self.dlg.viewAsLocal.isChecked():
-            if not self.app_context.temp_dir:
-                self.select_output_directory()
-            elif not self.app_context.temp_dir.exists():
-                self.alert(self.tr("Directory '{}' does not exist").format(self.app_context.temp_dir) +
-                           self.tr("<br>Using Settings tab, change the output directory to an existing one to download the results"), QMessageBox.Warning)
-                return
-            if not self.check_if_output_directory_is_selected():
-                return
+            if not self.ensure_output_directory(
+                    self.tr("A working directory is required to save the processing results "
+                            "on your computer.")):
+                return  # user chose 'Later' — cancel the action that needs the directory
             self.result_loader.download_results(processing=processing)
 
     def download_results_file(self) -> None:
@@ -3722,14 +3760,10 @@ class Mapflow(QObject):
         processing = self.processing_service.selected_processing()
         if not processing:
             return
-        if not self.app_context.temp_dir:
-            self.select_output_directory()
-        elif not self.app_context.temp_dir.exists():
-            self.alert(self.tr("Directory '{}' does not exist").format(self.app_context.temp_dir) +
-                       self.tr("<br>Using Settings tab, change the output directory to an existing one to download the results"), QMessageBox.Warning)
-            return
-        if not self.check_if_output_directory_is_selected():
-            return
+        if not self.ensure_output_directory(
+                self.tr("A working directory is required to save the area of interest "
+                        "on your computer.")):
+            return  # user chose 'Later' — cancel the action that needs the directory
         self.result_loader.download_aoi_file(pid=processing.id, callback=self.result_loader.download_aoi_file_callback)
 
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
@@ -4150,15 +4184,34 @@ class Mapflow(QObject):
             return None
         return self.dlg.searchProvidersCombo.checkedItemsData() or None
 
-    def setup_tempdir(self):
-        if not self.app_context.settings.value('outputDir'):
-            return # don't ask to specify tempdir at the plugin start
-        self.app_context.temp_dir = Path(self.app_context.settings.value('outputDir'), "Temp")
+    def setup_tempdir(self) -> Optional[str]:
+        """Create the working ``Temp`` directory under the configured output directory.
+
+        Returns ``None`` on success (or when no output directory is configured), or a human-readable
+        error string when the directory is unavailable. Never raises: this runs during plugin startup
+        (``classFactory``), and any failure here must not abort the whole plugin. The directory can be
+        unusable for several reasons — an external drive that is not mounted (its ``/Volumes/<name>``
+        stub is left root-owned and unwritable -> ``PermissionError``), a deleted parent
+        (``FileNotFoundError``), a read-only or full filesystem, etc. — so we catch broadly and fall
+        back to "no working directory", letting the user pick another one.
+        """
+        output_dir = self.app_context.settings.value('outputDir')
+        if not output_dir:
+            return None # don't ask to specify tempdir at the plugin start
+        temp_dir = Path(output_dir, "Temp")
         try:
-            shutil.rmtree(self.app_context.temp_dir) # remove old tempdir
-        except:
+            shutil.rmtree(temp_dir) # remove old tempdir
+        except Exception:
             pass
-        self.app_context.temp_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            temp_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            self.app_context.temp_dir = None
+            QgsMessageLog.logMessage(f"Working directory '{output_dir}' is unavailable: {e}",
+                                     self.plugin_name, level=Qgis.Warning)
+            return str(e)
+        self.app_context.temp_dir = temp_dir
+        return None
 
     def check_dir_and_duplicate_processing(self):
         if not self.check_if_output_directory_is_selected():
