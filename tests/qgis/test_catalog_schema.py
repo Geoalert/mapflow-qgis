@@ -43,6 +43,22 @@ def test_image_schema_rejects_non_date_type():
         ImageSchema.from_dict(_image(12345))
 
 
+def test_image_schema_parses_with_optional_metadata_absent():
+    # A response may omit these keys entirely (My Imagery / partial-metadata providers); they are
+    # optional-with-default, so a missing key parses to None instead of raising. Fields not in the
+    # schema at all (sunAzimuth, etc.) are simply dropped by SkipDataClass — also safe.
+    image = ImageSchema.from_dict({
+        "id": "img-1",
+        "footprint": {"type": "Polygon", "coordinates": [[[0, 0], [0, 1], [1, 1], [0, 0]]]},
+        "pixelResolution": 0.5,
+        "sunAzimuth": 150.0,  # unknown field -> dropped, must not raise
+        "previews": [],
+    })
+    assert image.acquisitionDate is None
+    assert image.cloudCover is None
+    assert image.offNadirAngle is None
+
+
 def test_catalog_response_parses_mixed_null_and_dated_images():
     response = ImageCatalogResponseSchema(
         images=[_image(None), _image("2026-01-02T03:04:05Z")], total=2)
