@@ -3005,18 +3005,17 @@ class Mapflow(QObject):
                                       image_id=image_id,
                                       georeferenced_previews_list=[])
             return
-        # Get single image preview
-        footprint = self.metadata_footprint(feature=feature)
-        try:
-            url = feature.attribute('previewUrl')
-            preview_type = feature.attribute('previewType')
-            provider_name = feature.attribute('providerName')
-            # My Imagery results have no acquisition date: a NULL attribute is Python None, so
-            # calling .toString() on it would raise AttributeError (not the KeyError below).
-            raw_date = feature.attribute('acquisitionDate')
-            image_date = raw_date.toString("dd.MM.yyyy") if raw_date is not None else ''
-        except KeyError: # duplicated processings don't have these fields
-            url = preview_type = provider_name = image_date = ''
+        # Get single image preview. Read each attribute independently: a My Imagery result may
+        # lack whole metadata columns — an all-null acquisitionDate is dropped by the OGR GeoJSON
+        # reader, so feature.attribute('acquisitionDate') raises KeyError. A single missing field
+        # must not blank out the others (a shared try/except previously reset preview_type to '',
+        # so even mosaics with a valid xyz preview reported "no preview"). Duplicated processings
+        # likewise lack these fields, and get '' the same way.
+        url = self._feature_attribute(feature, 'previewUrl') or ''
+        preview_type = self._feature_attribute(feature, 'previewType') or ''
+        provider_name = self._feature_attribute(feature, 'providerName') or ''
+        raw_date = self._feature_attribute(feature, 'acquisitionDate')
+        image_date = raw_date.toString("dd.MM.yyyy") if raw_date else ''
         if not preview_type:
             self.alert(self.tr("Selected imagery has no preview"))
             return
@@ -3186,6 +3185,19 @@ class Mapflow(QObject):
         if not feature:
             return None
         return helpers.from_wgs84(feature.geometry(), crs)
+
+    @staticmethod
+    def _feature_attribute(feature, name):
+        """``feature.attribute(name)``, or ``None`` when that field does not exist on the layer.
+
+        The OGR GeoJSON reader omits a property that is null in every feature, so My Imagery
+        results (all-null ``acquisitionDate`` etc.) lack those columns and a plain
+        ``feature.attribute(name)`` would raise ``KeyError``. A NULL value on an existing field
+        already comes back as Python ``None``."""
+        try:
+            return feature.attribute(name)
+        except KeyError:
+            return None
 
     def metadata_feature(self, image_id):
         if not image_id:
