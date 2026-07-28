@@ -766,7 +766,10 @@ class ResultsLoader(QObject):
         # If raster is available, we zoom to the raster to fit the whole processing, not only the detected objects
         self.iface.setActiveLayer(raster)
         self.iface.zoomToActiveLayer()
-        self.iface.setActiveLayer(vectors[0])
+        # A processing can produce an empty result (FeatureCollection with no features), so there
+        # may be no vector layers to activate — the raster is still shown.
+        if vectors:
+            self.iface.setActiveLayer(vectors[0])
 
     def set_raster_extent_error_handler(self,
                                         response: QNetworkReply,
@@ -774,8 +777,15 @@ class ResultsLoader(QObject):
 
         """Error handler for processing AOI requests. If tilejson can't be loaded, we do not add raster layer, and
         """
+        vectors = vectors or []
         for vector in vectors:
             self.add_layer(vector)
+        # An empty result (FeatureCollection with no features) yields no vector layers; without a
+        # raster there is nothing to show, so tell the user instead of crashing on vectors[0].
+        if not vectors:
+            self.message_bar.pushInfo(self.tr("Results loaded"),
+                                      self.tr("The processing produced no features."))
+            return
         self.iface.setActiveLayer(vectors[0])
         self.iface.zoomToActiveLayer()
     
