@@ -27,7 +27,7 @@ def build_project_state_widget(succeeded: int, failed: int, templates: int) -> Q
     layout.setSpacing(4)
     pairs = ((icons.ok_circle_icon, succeeded),
              (icons.close_circle_icon, failed),
-             (icons.clock_five_icon, templates))
+             (icons.clock_play_icon, templates))
     for index, (icon, count) in enumerate(pairs):
         if index:
             layout.addSpacing(10)
