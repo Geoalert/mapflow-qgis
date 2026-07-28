@@ -158,7 +158,7 @@ class ProcessingApi(QObject):
             headers={},
             callback=callback,
             use_default_error_handler=True,
-            timeout=5,
+            timeout=20,
         )
 
     def update_template(self,
