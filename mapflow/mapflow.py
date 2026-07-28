@@ -1604,7 +1604,7 @@ class Mapflow(QObject):
                 cloud_cover = self._to_float(props.get("cloudCover"))
                 # 100% = don't filter by cloud at all.
                 cloud_ok = max_cloud_cover >= 100 or self._passes_optional(
-                    cloud_cover, lambda c: c < max_cloud_cover)
+                    cloud_cover, lambda c: c <= max_cloud_cover)
                 if provider_set is None:
                     provider_ok = True
                 else:
