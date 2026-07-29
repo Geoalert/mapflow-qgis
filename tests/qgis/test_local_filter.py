@@ -378,6 +378,7 @@ def _plugin_orchestration(unfit):
     plugin._reconnect_cell_preview = MagicMock()
     plugin._update_widen_indicator = MagicMock()
     plugin._apply_new_image_markers = MagicMock()
+    plugin._restore_search_sort_indicator = MagicMock()
     return plugin
 
 
