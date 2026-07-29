@@ -1576,6 +1576,8 @@ class Mapflow(QObject):
         self._hide_unfit_footprints(getattr(self.app_context, "metadata_layer", None), unfit)
         self._reconnect_cell_preview()
         self._update_widen_indicator()
+        # The fill above hid the sort arrow (setSortingEnabled(False)); put it back so it persists.
+        self._restore_search_sort_indicator()
 
     def _unfit_local_indices(self, features: list) -> set:
         """``local_index`` of every result (GeoJSON feature) that FAILS the active filter
@@ -2577,6 +2579,18 @@ class Mapflow(QObject):
         header.setSortIndicatorShown(True)
         order = Qt.DescendingOrder if self._search_sort_order == "DESC" else Qt.AscendingOrder
         header.setSortIndicator(column, order)
+
+    def _restore_search_sort_indicator(self) -> None:
+        """Re-show the sort arrow on the active sort column. Every table (re)fill calls
+        setSortingEnabled(False), which Qt implements as hiding the sort indicator, so it must be
+        restored after each fill (otherwise the arrow flashes on click and immediately vanishes)."""
+        if not self._search_sort_by:
+            return
+        attribute = next((attr for attr, token in self.config.SEARCH_SORT_FIELDS.items()
+                          if token == self._search_sort_by), None)
+        attributes = tuple(self.config_search_columns.METADATA_TABLE_ATTRIBUTES.values())
+        if attribute in attributes:
+            self._update_search_sort_indicator(attributes.index(attribute))
 
     def get_metadata(self, _: Optional[bool] = False, offset: Optional[int] = 0) -> None:
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""

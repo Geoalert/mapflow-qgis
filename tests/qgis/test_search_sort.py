@@ -102,6 +102,23 @@ def test_no_results_yet_does_not_search():
     plugin.get_metadata.assert_not_called()
 
 
+def test_restore_sort_indicator_maps_token_to_its_column():
+    # After a re-fill hides the arrow, the indicator is restored on the column matching the token.
+    plugin = _plugin(sort_by="CLOUD_COVER")
+
+    plugin._restore_search_sort_indicator()
+
+    plugin._update_search_sort_indicator.assert_called_once_with(_column("cloudCover"))
+
+
+def test_restore_sort_indicator_noop_without_active_sort():
+    plugin = _plugin(sort_by=None)
+
+    plugin._restore_search_sort_indicator()
+
+    plugin._update_search_sort_indicator.assert_not_called()
+
+
 def test_request_schema_serializes_sort_fields():
     body = json.loads(ImageCatalogRequestSchema(
         aoi={"type": "Polygon", "coordinates": []},
