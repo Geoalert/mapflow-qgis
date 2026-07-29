@@ -66,3 +66,24 @@ def test_start_button_text_follows_template_to_run():
     plugin.processing_service.template_to_run.return_value = None
     plugin.update_start_processing_button_text()
     plugin.dlg.startProcessing.setText.assert_called_with("Start processing")
+
+
+def test_provider_change_refreshes_start_button_text():
+    # Switching the data source (e.g. an open template -> My imagery) must re-evaluate the button
+    # label, since "planned" only applies to the imagery-search source.
+    plugin = Mapflow.__new__(Mapflow)
+    provider = MagicMock()  # not an ImagerySearchProvider/MyImageryProvider -> the generic branch
+    provider.requires_image_id = False
+    plugin.dlg = MagicMock()
+    plugin.dlg.providerIndex.return_value = 0
+    plugin.provider_service = MagicMock()
+    plugin.provider_service.providers = [provider]
+    plugin.app_context = SimpleNamespace(data_provider=None)
+    plugin.toggle_imagery_search = MagicMock()
+    plugin.area_calculator_service = MagicMock()
+    plugin.update_start_processing_button_text = MagicMock()
+
+    plugin.on_provider_change()
+
+    assert plugin.app_context.data_provider is provider
+    plugin.update_start_processing_button_text.assert_called_once()
