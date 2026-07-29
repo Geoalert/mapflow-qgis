@@ -6,8 +6,9 @@ from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPalette
 from PyQt5.QtWidgets import (QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton,
-                             QAction, QMenu, QAbstractItemView)
+                             QAction, QMenu, QAbstractItemView, QSpinBox, QSlider, QHBoxLayout)
 from qgis.core import QgsMapLayerProxyModel, QgsSettings
+from qgis.gui import QgsRangeSlider
 
 from . import icons
 from ..config import config, ConfigColumns
@@ -87,6 +88,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.connect_processing_column_checkboxes()
         self.set_search_visible_columns()
         self.connect_search_column_checkboxes()
+        self._setup_off_nadir_filter()
         # current state to compare with on change
         self.current_raster_source = self.sourceCombo.currentText()
         # connect raster/provider combos
@@ -646,7 +648,71 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     def connect_search_column_checkboxes(self):
         for checkbox in self.search_columns:
             checkbox.toggled.connect(self.set_search_column_visibility)
-    
+
+    OFF_NADIR_MIN = 0
+    OFF_NADIR_MAX = 30
+
+    def _setup_off_nadir_filter(self):
+        """Add the Off-Nadir two-boundary filter to the metadata-filters grid: a QgsRangeSlider
+        (0-30°) flanked by min/max degree spin boxes, kept in sync. Built in code (not the .ui) to
+        avoid hand-declaring the QgsRangeSlider custom widget. The slider is the source of truth;
+        its ``rangeChanged`` signal is what callers connect the (local) filter to."""
+        row = self.layoutMetadataFilters.rowCount()
+        self.labelOffNadir = QLabel(self.tr("Off-Nadir °:"))
+        self.offNadirSlider = QgsRangeSlider(Qt.Horizontal)
+        self.offNadirSlider.setRangeLimits(self.OFF_NADIR_MIN, self.OFF_NADIR_MAX)
+        self.offNadirSlider.setRange(self.OFF_NADIR_MIN, self.OFF_NADIR_MAX)  # full range = no filter
+        self.offNadirSlider.setTickInterval(5)
+        self.offNadirSlider.setTickPosition(QSlider.TicksBelow)
+        self.offNadirSlider.setToolTip(self.tr("Show only images within this off-nadir angle range"))
+        self.minOffNadirSpinBox = self._off_nadir_spinbox(self.OFF_NADIR_MIN)
+        self.maxOffNadirSpinBox = self._off_nadir_spinbox(self.OFF_NADIR_MAX)
+        spin_row = QHBoxLayout()
+        spin_row.setContentsMargins(0, 0, 0, 0)
+        spin_row.setSpacing(2)
+        spin_row.addWidget(self.minOffNadirSpinBox)
+        spin_row.addWidget(self.maxOffNadirSpinBox)
+        self.layoutMetadataFilters.addWidget(self.labelOffNadir, row, 0)
+        self.layoutMetadataFilters.addWidget(self.offNadirSlider, row, 1)
+        self.layoutMetadataFilters.addLayout(spin_row, row, 2)
+        self.offNadirSlider.rangeChanged.connect(self._sync_off_nadir_spinboxes)
+        self.minOffNadirSpinBox.valueChanged.connect(self._sync_off_nadir_slider)
+        self.maxOffNadirSpinBox.valueChanged.connect(self._sync_off_nadir_slider)
+
+    def _off_nadir_spinbox(self, value: int) -> QSpinBox:
+        box = QSpinBox()
+        box.setRange(self.OFF_NADIR_MIN, self.OFF_NADIR_MAX)
+        box.setSuffix("°")
+        box.setValue(value)
+        return box
+
+    def _sync_off_nadir_spinboxes(self, lower: int, upper: int):
+        """Slider -> spin boxes. Block spin-box signals so this does not loop back to the slider."""
+        for box, val in ((self.minOffNadirSpinBox, lower), (self.maxOffNadirSpinBox, upper)):
+            box.blockSignals(True)
+            box.setValue(val)
+            box.blockSignals(False)
+
+    def _sync_off_nadir_slider(self):
+        """Spin boxes -> slider. Left NOT blocked so the slider's rangeChanged fires (that is what
+        drives the local filter); the resulting sync back to the spin boxes is signal-blocked."""
+        lower = min(self.minOffNadirSpinBox.value(), self.maxOffNadirSpinBox.value())
+        upper = max(self.minOffNadirSpinBox.value(), self.maxOffNadirSpinBox.value())
+        self.offNadirSlider.setRange(lower, upper)
+
+    def off_nadir_range(self) -> tuple:
+        """Selected (lower, upper) off-nadir bounds in degrees."""
+        return self.offNadirSlider.lowerValue(), self.offNadirSlider.upperValue()
+
+    def set_off_nadir_range(self, lower: int, upper: int):
+        self.offNadirSlider.setRange(int(lower), int(upper))
+
+    def off_nadir_is_full_range(self) -> bool:
+        """True when both handles are at the extremes (0-30) — i.e. no off-nadir filtering."""
+        lower, upper = self.off_nadir_range()
+        return lower <= self.OFF_NADIR_MIN and upper >= self.OFF_NADIR_MAX
+
+
     def set_search_column_visibility(self):
         new_visible_columns = []
         # Show / hide newly checked / unchecked columns
