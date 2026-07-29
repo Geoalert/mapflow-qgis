@@ -59,6 +59,9 @@ class ProcessingService(QObject):
     # Emitted after a template's AOIs change (add/rename/delete/geometry update) and the
     # template is re-hydrated, so listeners can redraw its map layers.
     templateAoisChanged = pyqtSignal(object)
+    # Emitted (in template view) once the template's full processings list is loaded, so listeners
+    # can set up the "No AOI" map group for processings not bound to any AOI.
+    templateProcessingsLoaded = pyqtSignal(object)
 
     # Class-level defaults so the mode check is safe even when callers (and tests)
     # construct the service without running __init__.
@@ -848,6 +851,7 @@ class ProcessingService(QObject):
         self.template_processings = processings
         if self.in_template_mode:
             self._rebuild_template_rows()
+            self.templateProcessingsLoaded.emit(self.active_template)
 
     def template_processing(self, processing_id: str):
         """Full processing (with layers) for a grouped AOI-processing row, by id."""
@@ -876,6 +880,16 @@ class ProcessingService(QObject):
             rows.append(NoAoiProcessingsRow())
             rows.extend(unbound)
         return rows
+
+    def no_aoi_processing_ids(self) -> set:
+        """IDs of the template's processings not bound to any AOI (omitted from aoiDetails)."""
+        bound = {str(link.processingId)
+                 for aoi in self.template_aois.values()
+                 for link in aoi.processings if link.processingId}
+        return {pid for pid in self.template_processings if pid not in bound}
+
+    def is_no_aoi_processing(self, processing_id) -> bool:
+        return str(processing_id) in self.no_aoi_processing_ids()
 
     def show_processings_next_page(self):
         self.processings_page_offset += self.processings_page_limit

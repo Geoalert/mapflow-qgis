@@ -349,6 +349,7 @@ class Mapflow(QObject):
         self.processing_service.templateOpened.connect(self.on_template_opened)
         self.processing_service.templateClosed.connect(self.on_template_closed)
         self.processing_service.templateAoisChanged.connect(self.on_template_aois_changed)
+        self.processing_service.templateProcessingsLoaded.connect(self.on_template_processings_loaded)
         self.dlg.processingsTable.itemSelectionChanged.connect(self.filter_search_by_selected_aoi)
         self.dlg.processingsTable.itemSelectionChanged.connect(self.sync_processing_area_to_selected_aois)
         # Processings ratings
@@ -360,6 +361,9 @@ class Mapflow(QObject):
         # Processing feedback
         self.dlg.ratingComboBox.activated.connect(self.enable_feedback)
         self.dlg.processingsTable.cellClicked.connect(self.update_processing_current_rating)
+        # In a template, single-clicking a 'No AOI' processing row adds its AOI to the map
+        # (double-click still loads results).
+        self.dlg.processingsTable.cellClicked.connect(self.on_no_aoi_processing_clicked)
         # Processing review
         self.dlg.acceptButton.clicked.connect(self.accept_processing)
         self.dlg.reviewButton.clicked.connect(self.show_review_dialog)
@@ -380,6 +384,8 @@ class Mapflow(QObject):
         # HTTP callback — a second click/double-click fired several downloads before the first
         # landed, producing duplicate preview layers.
         self._pending_preview_ids = set()
+        # Processing ids whose 'No AOI' AOI request is in flight (guards rapid re-clicks).
+        self._pending_no_aoi_ids = set()
         self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
             self.sync_table_selection_with_image_id_and_layer)
         self.dlg.metadataTable.itemSelectionChanged.connect(self.update_start_processing_button_state)
@@ -828,6 +834,77 @@ class Mapflow(QObject):
                     template_group_name=template_group_name,
                     subgroup_name=subgroup_name,
                 )
+
+    def _no_aoi_subgroup_name(self) -> str:
+        return self.tr("No AOI")
+
+    def on_template_processings_loaded(self, template) -> None:
+        """Once a template's processings load, create the (initially empty) 'No AOI' group if any
+        processing is not bound to an AOI. Each such AOI is fetched and added lazily when the user
+        single-clicks its row (see on_no_aoi_processing_clicked) — no bulk requests on open."""
+        if not template or not self.processing_service.no_aoi_processing_ids():
+            return
+        self._template_group_target(str(template.name), self._no_aoi_subgroup_name())
+
+    def on_no_aoi_processing_clicked(self, *args) -> None:
+        """Single-click on a 'No AOI' processing row: fetch that processing's AOI and add it to the
+        'No AOI' group. No-op outside a template, for AOI/bound-processing rows, or when the AOI is
+        already on the map or its request is already in flight (double-click still loads results)."""
+        if not self.processing_service.in_template_mode:
+            return
+        processing = self.processing_service.selected_processing()
+        if not processing:
+            return
+        pid = str(processing.id)
+        if not self.processing_service.is_no_aoi_processing(pid):
+            return
+        if pid in self._pending_no_aoi_ids or self._no_aoi_aoi_on_map(pid):
+            return
+        self._pending_no_aoi_ids.add(pid)
+        self.http.get(
+            url=f'{self.server}/processings/{pid}/aois',
+            callback=self._add_no_aoi_processing_aoi_callback,
+            callback_kwargs={'pid': pid, 'name': processing.name},
+            error_handler=self._add_no_aoi_processing_aoi_error,
+            error_handler_kwargs={'pid': pid},
+            use_default_error_handler=False,
+            timeout=30,
+        )
+
+    def _add_no_aoi_processing_aoi_callback(self, response: QNetworkReply, pid: str, name: str) -> None:
+        self._pending_no_aoi_ids.discard(pid)
+        template = self.processing_service.active_template
+        if not template or not self.processing_service.in_template_mode or self._no_aoi_aoi_on_map(pid):
+            return
+        # GET /processings/{id}/aois returns a JSON list of AOI objects (each with a `geometry`),
+        # not a FeatureCollection — wrap each geometry into a feature the layer builder understands.
+        try:
+            aois = json.loads(response.readAll().data())
+        except Exception:
+            return
+        if isinstance(aois, dict):
+            aois = aois.get('aois', [])
+        features = [{"type": "Feature", "geometry": aoi.get("geometry"), "properties": {}}
+                    for aoi in aois if isinstance(aoi, dict) and aoi.get("geometry")]
+        if not features:
+            return
+        layer = self._add_geojson_aoi_layer(
+            features=features,
+            layer_name=name or pid,
+            style_name='aoi_template_processing_green.qml',
+            template_group_name=str(template.name),
+            subgroup_name=self._no_aoi_subgroup_name(),
+        )
+        if layer is not None:
+            layer.setCustomProperty('mapflow/no_aoi_processing_id', str(pid))
+
+    def _add_no_aoi_processing_aoi_error(self, response: QNetworkReply, pid: str = None) -> None:
+        self._pending_no_aoi_ids.discard(pid)
+
+    def _no_aoi_aoi_on_map(self, pid) -> bool:
+        """Whether a 'No AOI' processing's AOI layer (tagged with its id) is already on the map."""
+        return any(layer.customProperty('mapflow/no_aoi_processing_id') == str(pid)
+                   for layer in self.app_context.project.mapLayers().values())
 
     def _add_aoi_to_preview_if_needed(self) -> None:
         """Overlay the search AOI on a preview — but not inside a template, where the AOI is
