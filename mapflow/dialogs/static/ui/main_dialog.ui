@@ -1812,7 +1812,7 @@
                    <string>Save the current search filters to this template (replaces its stored search parameters)</string>
                   </property>
                   <property name="text">
-                   <string>Update template</string>
+                   <string>Update search</string>
                   </property>
                  </widget>
                 </item>
