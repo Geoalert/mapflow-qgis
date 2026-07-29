@@ -4,7 +4,7 @@ from typing import Iterable, Optional, List, Dict
 
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QPalette
+from PyQt5.QtGui import QPalette, QColor
 from PyQt5.QtWidgets import (QWidget, QPushButton, QCheckBox, QTableWidgetItem, QStackedLayout, QLabel, QToolButton,
                              QAction, QMenu, QAbstractItemView, QSpinBox, QSlider, QHBoxLayout)
 from qgis.core import QgsMapLayerProxyModel, QgsSettings
@@ -651,6 +651,10 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
     OFF_NADIR_MIN = 0
     OFF_NADIR_MAX = 30
+    # One fixed colour for the range slider's selected span. Matching the native QSliders exactly
+    # would need per-style/per-theme tweaks (each platform paints its own accent), so we accept the
+    # range slider looks a little different and use a blue that reads on both light and dark themes.
+    SELECTED_RANGE_COLOR = "#2f7ff9"
 
     def _setup_off_nadir_filter(self):
         """Add the Off-Nadir two-boundary filter to the metadata-filters grid: a QgsRangeSlider
@@ -667,13 +671,13 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.offNadirSlider.setTickInterval(5)
         self.offNadirSlider.setTickPosition(QSlider.TicksBelow)
         self.offNadirSlider.setToolTip(self.tr("Show only images within this off-nadir angle range"))
-        # QgsRangeSlider fills its selected span with QPalette.Highlight, which in this theme reads
-        # as a muted/"inactive" grey next to the native QSliders (whose grooves use the accent).
-        # Force the active accent for every colour group so it renders blue like the other sliders.
+        # QgsRangeSlider fills its selected span with QPalette.Highlight; set it to our one fixed
+        # selected colour (see SELECTED_RANGE_COLOR) for every colour group so it looks the same on
+        # all platforms/themes and never greys out when the window is inactive.
+        selected_color = QColor(self.SELECTED_RANGE_COLOR)
         slider_palette = self.offNadirSlider.palette()
-        accent = self.palette().color(QPalette.Active, QPalette.Highlight)
         for group in (QPalette.Active, QPalette.Inactive, QPalette.Disabled):
-            slider_palette.setColor(group, QPalette.Highlight, accent)
+            slider_palette.setColor(group, QPalette.Highlight, selected_color)
         self.offNadirSlider.setPalette(slider_palette)
         self.minOffNadirSpinBox = self._off_nadir_spinbox(self.OFF_NADIR_MIN)
         self.maxOffNadirSpinBox = self._off_nadir_spinbox(self.OFF_NADIR_MAX)
