@@ -657,7 +657,9 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         (0-30°) flanked by min/max degree spin boxes, kept in sync. Built in code (not the .ui) to
         avoid hand-declaring the QgsRangeSlider custom widget. The slider is the source of truth;
         its ``rangeChanged`` signal is what callers connect the (local) filter to."""
-        row = self.layoutMetadataFilters.rowCount()
+        # Place it with the other sliders (intersection=row 0, cloud=row 3), above the providers
+        # row (5) — not appended at the bottom next to Reset filters.
+        row = 4
         self.labelOffNadir = QLabel(self.tr("Off-Nadir °:"))
         self.offNadirSlider = QgsRangeSlider(Qt.Horizontal)
         self.offNadirSlider.setRangeLimits(self.OFF_NADIR_MIN, self.OFF_NADIR_MAX)
@@ -665,6 +667,14 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.offNadirSlider.setTickInterval(5)
         self.offNadirSlider.setTickPosition(QSlider.TicksBelow)
         self.offNadirSlider.setToolTip(self.tr("Show only images within this off-nadir angle range"))
+        # QgsRangeSlider fills its selected span with QPalette.Highlight, which in this theme reads
+        # as a muted/"inactive" grey next to the native QSliders (whose grooves use the accent).
+        # Force the active accent for every colour group so it renders blue like the other sliders.
+        slider_palette = self.offNadirSlider.palette()
+        accent = self.palette().color(QPalette.Active, QPalette.Highlight)
+        for group in (QPalette.Active, QPalette.Inactive, QPalette.Disabled):
+            slider_palette.setColor(group, QPalette.Highlight, accent)
+        self.offNadirSlider.setPalette(slider_palette)
         self.minOffNadirSpinBox = self._off_nadir_spinbox(self.OFF_NADIR_MIN)
         self.maxOffNadirSpinBox = self._off_nadir_spinbox(self.OFF_NADIR_MAX)
         spin_row = QHBoxLayout()
