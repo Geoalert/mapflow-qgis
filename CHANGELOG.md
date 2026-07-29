@@ -1,3 +1,30 @@
+## 3.6.0
+    - Planned processings (search templates):
+        - Create a Planned Search that runs in the background and keeps finding new imagery; you are notified when results are ready
+        - Enter a template to browse and manage its AOIs and processings without leaving QGIS (in-template navigation)
+        - Manage template AOIs as interactive on-map sessions: add from a layer, draw on the map, update geometry, rename, delete, or exclude an AOI from the search
+        - Template AOIs and their processings are grouped per AOI both on the map and in the Layers panel; processings not tied to any AOI appear in a "No AOI" group, added to the map on click
+        - Start a planned processing from selected template search images
+        - A Planned Search is offered automatically when the area of interest is too large for an immediate search
+        - Filter a template's results by the selected AOIs
+    - Imagery Search, reworked:
+        - All imagery search now goes through the Mapflow catalog; the legacy Maxar/Sentinel search was removed
+        - Sort results by clicking a column header (Provider, Sensor, Cloud %, Off-nadir, Date, Zoom, Resolution) — re-runs the search sorted server-side, for both regular and template search
+        - Instant local filtering: adjusting the date, cloud cover, off-nadir, intersection, provider or product-type filters immediately greys out non-matching rows and sorts them to the bottom, with a (!) hint when a filter is wider than the last search
+        - New Off-Nadir angle filter (two-boundary selector, 0–30°)
+        - Your own imagery ("My imagery") now appears in search as image and mosaic providers; results with missing metadata (date, cloud, angle) are handled gracefully
+        - Select several images for a single processing; per-provider minimum-area checks before starting
+    - Projects:
+        - The project list shows a combined State column — succeeded and failed processings plus the planned-processing count, with icons
+    - Reliability and fixes:
+        - AOI area limits (each AOI's lat-lon bounding box and the total processing area) are checked against your plan before starting, with a clear message; the area stays visible even when the processing is blocked by its size
+        - No longer crashes when the working directory is unavailable (e.g. an unmounted external drive) — you are prompted to pick another, and the prompt explains why a directory is needed when saving results
+        - No longer crashes when a processing produced no features (empty result)
+        - The Start button reads "Start planned processing" only for imagery-search template runs, and "Start processing" otherwise
+        - Times are shown in your local timezone (stored internally as UTC); imagery capture time stays UTC
+        - Zoom selector is available for all providers
+    - Under the hood:
+        - Static analysis (ruff + pyright) and a Docker-based test runtime
 ## 3.5.2
     - Hotfix: Imagery Search multi-image selection
         - cost and create-processing requests now include every selected image (previously only the first)
