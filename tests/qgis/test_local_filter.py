@@ -56,6 +56,9 @@ def _plugin_regular(min_intersection=50, max_cloud=50,
     plugin.dlg.metadataTo.date.return_value = date_to
     plugin.dlg.maxCloudCover.value.return_value = max_cloud
     plugin.dlg.minIntersection.value.return_value = min_intersection
+    # Off-nadir at the full 0-30 range by default = no off-nadir filtering.
+    plugin.dlg.off_nadir_range.return_value = (0, 30)
+    plugin.dlg.off_nadir_is_full_range.return_value = True
     # No provider / product-type filter by default; overridden in the relevant tests.
     plugin._allowed_provider_set = MagicMock(return_value=None)
     plugin._product_category_filter = MagicMock(return_value=None)
@@ -70,6 +73,34 @@ def _plugin_regular(min_intersection=50, max_cloud=50,
 
 
 # ---------- _unfit_local_indices / _intersection_reference ----------
+
+def _off_nadir_feature(local_index, angle):
+    return {"type": "Feature", "geometry": _square_geojson(0, 0, 10, 10),
+            "properties": {"local_index": local_index, "acquisitionDate": "2025-03-01T00:00:00Z",
+                           "cloudCover": 0, "offNadirAngle": angle}}
+
+
+def test_off_nadir_out_of_range_demoted_missing_passes():
+    plugin = _plugin_regular(min_intersection=0, max_cloud=100)
+    plugin.dlg.off_nadir_range.return_value = (0, 5)
+    plugin.dlg.off_nadir_is_full_range.return_value = False
+    features = [
+        _off_nadir_feature(0, 3),     # within [0, 5] -> fit
+        _off_nadir_feature(1, 10),    # outside -> unfit
+        _off_nadir_feature(2, None),  # missing angle -> passes (missing matches any)
+    ]
+
+    assert plugin._unfit_local_indices(features) == {1}
+
+
+def test_off_nadir_full_range_does_not_filter():
+    plugin = _plugin_regular(min_intersection=0, max_cloud=100)
+    plugin.dlg.off_nadir_range.return_value = (0, 30)
+    plugin.dlg.off_nadir_is_full_range.return_value = True
+
+    # Even an angle beyond the slider maximum passes when the range is full (= no filter).
+    assert plugin._unfit_local_indices([_off_nadir_feature(0, 45)]) == set()
+
 
 def test_unfit_indices_reject_date_cloud_and_intersection():
     plugin = _plugin_regular()
@@ -495,6 +526,7 @@ def _plugin_widen(baseline):
     plugin.dlg.metadataTo.date.return_value = QDate(2025, 6, 1)
     plugin.dlg.maxCloudCover.value.return_value = 30
     plugin.dlg.minIntersection.value.return_value = 40
+    plugin.dlg.off_nadir_range.return_value = (0, 30)
     plugin.selected_search_product_types = MagicMock(return_value=["IMAGE"])
     plugin.selected_search_providers = MagicMock(return_value=["providerA"])
     plugin.app_context = SimpleNamespace(search_baseline_filters=baseline)
