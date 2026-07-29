@@ -1977,6 +1977,11 @@ class Mapflow(QObject):
         if provider.requires_image_id:
             imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
             self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
+        # A planned (template) start only applies with the imagery-search source, so the Start
+        # button label depends on the data source: refresh it here (e.g. switching an open template
+        # to My imagery must drop the "planned" wording). Text only — the enabled state is managed
+        # by the validation above.
+        self.update_start_processing_button_text()
     
     def on_zoom_change(self):
         """ Set chosen zoom and update cost (if it depends on zoom for provider).
