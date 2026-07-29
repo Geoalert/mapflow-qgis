@@ -315,6 +315,9 @@ class Mapflow(QObject):
         # ========== 11. SETUP METADATA FILTERS ==========
         self.dlg.minIntersection.setValue(int(self.app_context.settings.value('metadataMinIntersection', 0)))
         self.dlg.maxCloudCover.setValue(int(self.app_context.settings.value('metadataMaxCloudCover', 100)))
+        self.dlg.set_off_nadir_range(
+            int(self.app_context.settings.value('metadataMinOffNadir', self.dlg.OFF_NADIR_MIN)),
+            int(self.app_context.settings.value('metadataMaxOffNadir', self.dlg.OFF_NADIR_MAX)))
         # Set default metadata dates
         today = QDate.currentDate()
         self.dlg.metadataFrom.setDate(self.app_context.settings.value('metadataFrom', today.addMonths(-6)))
@@ -392,6 +395,7 @@ class Mapflow(QObject):
         # results in place (no server request), for both regular search and templates.
         self.dlg.minIntersection.valueChanged.connect(self.apply_local_filter)
         self.dlg.maxCloudCover.valueChanged.connect(self.apply_local_filter)
+        self.dlg.offNadirSlider.rangeChanged.connect(self.apply_local_filter)
         self.dlg.metadataFrom.dateChanged.connect(self.apply_local_filter)
         self.dlg.metadataTo.dateChanged.connect(self.apply_local_filter)
         # Provider selection/availability and product type (Mosaic/Image) are local filters too;
@@ -1581,13 +1585,15 @@ class Mapflow(QObject):
 
     def _unfit_local_indices(self, features: list) -> set:
         """``local_index`` of every result (GeoJSON feature) that FAILS the active filter
-        widgets: date range, cloud cover, provider selection / availability, product type
-        (Mosaic vs Image), and (where an intersection reference exists) min intersection %. A
+        widgets: date range, cloud cover, off-nadir angle range, provider selection / availability,
+        product type (Mosaic vs Image), and (where an intersection reference exists) min intersection %. A
         per-feature parsing error never hides the row (treated as fit)."""
         from_ = self.dlg.metadataFrom.date()
         to = self.dlg.metadataTo.date()
         max_cloud_cover = self.dlg.maxCloudCover.value()
         min_intersection = self.dlg.minIntersection.value()
+        min_off_nadir, max_off_nadir = self.dlg.off_nadir_range()
+        off_nadir_filtered = not self.dlg.off_nadir_is_full_range()  # full 0-30 range = no filter
         aoi, min_area = self._intersection_reference(min_intersection)
         provider_set = self._allowed_provider_set()  # None = show all
         product_filter = self._product_category_filter()  # None = show all
@@ -1607,6 +1613,10 @@ class Mapflow(QObject):
                 # 100% = don't filter by cloud at all.
                 cloud_ok = max_cloud_cover >= 100 or self._passes_optional(
                     cloud_cover, lambda c: c <= max_cloud_cover)
+                off_nadir = self._to_float(props.get("offNadirAngle"))
+                # Full 0-30 range = don't filter; a missing angle passes the range check.
+                off_nadir_ok = not off_nadir_filtered or self._passes_optional(
+                    off_nadir, lambda a: min_off_nadir <= a <= max_off_nadir)
                 if provider_set is None:
                     provider_ok = True
                 else:
@@ -1621,7 +1631,8 @@ class Mapflow(QObject):
                     geom = self._geometry_from_geojson(feature.get("geometry"))
                     intersection_ok = (geom is not None
                                        and self._wgs84_area(aoi.intersection(geom)) >= min_area)
-                fit = date_ok and cloud_ok and provider_ok and product_ok and intersection_ok
+                fit = (date_ok and cloud_ok and off_nadir_ok and provider_ok
+                       and product_ok and intersection_ok)
             except Exception:
                 fit = True  # never hide a row because of a parsing error
             if not fit:
@@ -1793,6 +1804,13 @@ class Mapflow(QObject):
         if base_int is not None and cur_int < base_int:
             messages.append(self.tr("Min intersection {cur}% is lower than searched ({base}%)").format(
                 cur=cur_int, base=int(base_int)))
+        cur_off_lo, cur_off_hi = self.dlg.off_nadir_range()
+        base_off_lo = baseline.get("min_off_nadir")
+        base_off_hi = baseline.get("max_off_nadir")
+        if base_off_lo is not None and base_off_hi is not None \
+                and (cur_off_lo < base_off_lo or cur_off_hi > base_off_hi):
+            messages.append(self.tr("Off-nadir range {lo}-{hi}° is wider than searched ({blo}-{bhi}°)").format(
+                lo=cur_off_lo, hi=cur_off_hi, blo=int(base_off_lo), bhi=int(base_off_hi)))
         base_products = baseline.get("product_types")
         if base_products:
             extra = [p for p in (str(pt).upper() for pt in self.selected_search_product_types())
@@ -1832,11 +1850,14 @@ class Mapflow(QObject):
     def _current_filter_baseline(self) -> dict:
         """Snapshot of the filter widgets at search time, stored as the baseline the widen (!)
         indicator compares later widget edits against."""
+        off_nadir_lo, off_nadir_hi = self.dlg.off_nadir_range()
         return {
             "date_from": self.dlg.metadataFrom.date(),
             "date_to": self.dlg.metadataTo.date(),
             "max_cloud_cover": self.dlg.maxCloudCover.value(),
             "min_intersection": self.dlg.minIntersection.value(),
+            "min_off_nadir": off_nadir_lo,
+            "max_off_nadir": off_nadir_hi,
             "product_types": [str(pt).upper() for pt in self.selected_search_product_types()],
             "data_providers": self.selected_search_providers() or [],
             "hide_unavailable": self.dlg.hideUnavailableResults.isChecked(),
@@ -1855,6 +1876,8 @@ class Mapflow(QObject):
             "date_to": self._utc_date_from_iso(sp.acquisitionDateTo),
             "max_cloud_cover": sp.maxCloudCover,
             "min_intersection": sp.minAoiIntersectionPercent,
+            "min_off_nadir": sp.minOffNadirAngle,
+            "max_off_nadir": sp.maxOffNadirAngle,
             "product_types": ([str(pt).upper() for pt in sp.productTypes]
                               if sp.productTypes is not None else None),
             "data_providers": list(sp.dataProviders) if sp.dataProviders is not None else None,
@@ -1879,6 +1902,10 @@ class Mapflow(QObject):
             self.dlg.maxCloudCover.setValue(int(round(baseline["max_cloud_cover"])))
         if baseline.get("min_intersection") is not None:
             self.dlg.minIntersection.setValue(int(round(baseline["min_intersection"])))
+        base_off_lo = baseline.get("min_off_nadir")
+        base_off_hi = baseline.get("max_off_nadir")
+        if base_off_lo is not None and base_off_hi is not None:
+            self.dlg.set_off_nadir_range(int(round(base_off_lo)), int(round(base_off_hi)))
         products = baseline.get("product_types")
         if products is not None:
             self.dlg.searchMosaicCheckBox.setChecked(ProductType.mosaic.upper() in products)
@@ -2436,14 +2463,15 @@ class Mapflow(QObject):
         ``aoi_details`` is ``None`` the geometry is omitted — used to update a template's
         non-geometry search params (which the backend merges); geometry updates go through
         the per-AOI endpoints instead (the PUT template endpoint rejects geometry)."""
+        off_nadir_min, off_nadir_max = self._off_nadir_request_bounds()
         return SearchParams(
             aoiDetails=aoi_details,
             acquisitionDateFrom=self.dlg.metadataFrom.dateTime().toUTC().toString("yyyy-MM-ddTHH:mm:ss.zzz'Z'"),
             acquisitionDateTo=self.dlg.metadataTo.dateTime().toUTC().toString("yyyy-MM-ddTHH:mm:ss.zzz'Z'"),
             maxCloudCover=self.dlg.maxCloudCover.value(),
             minAoiIntersectionPercent=self.dlg.minIntersection.value(),
-            minOffNadirAngle=0,
-            maxOffNadirAngle=25,
+            minOffNadirAngle=off_nadir_min,
+            maxOffNadirAngle=off_nadir_max,
             hideUnavailable=self.dlg.hideUnavailableResults.isChecked(),
             productTypes=self.selected_search_product_types() or [],
             dataProviders=self.selected_search_providers(),
@@ -2626,6 +2654,7 @@ class Mapflow(QObject):
         hide_unavailable = self.dlg.hideUnavailableResults.isChecked()
         product_types = self.selected_search_product_types()
         search_providers = self.selected_search_providers()
+        min_off_nadir, max_off_nadir = self._off_nadir_request_bounds()
 
         # All imagery search goes through the Mapflow catalog API, which filters server-side.
         self.request_mapflow_metadata(aoi=aoi,
@@ -2635,11 +2664,20 @@ class Mapflow(QObject):
                                       offset=offset,
                                       max_cloud_cover=max_cloud_cover,
                                       min_intersection=min_intersection,
+                                      min_off_nadir_angle=min_off_nadir,
+                                      max_off_nadir_angle=max_off_nadir,
                                       hide_unavailable=hide_unavailable,
                                       product_types=product_types,
                                       search_providers=search_providers,
                                       sort_by=self._search_sort_by,
                                       sort_order=self._search_sort_order)
+
+    def _off_nadir_request_bounds(self):
+        """(min, max) off-nadir angle to send to the API, or (None, None) at the full 0-30 range
+        (no off-nadir filtering — leaving it out avoids excluding images beyond the slider)."""
+        if self.dlg.off_nadir_is_full_range():
+            return None, None
+        return self.dlg.off_nadir_range()
 
     def clear_metadata(self):
         try:
@@ -3734,6 +3772,9 @@ class Mapflow(QObject):
             self.dlg.maxCloudCover.setValue(int(round(search_params.maxCloudCover)))
         if search_params.minAoiIntersectionPercent is not None:
             self.dlg.minIntersection.setValue(int(round(search_params.minAoiIntersectionPercent)))
+        if search_params.minOffNadirAngle is not None and search_params.maxOffNadirAngle is not None:
+            self.dlg.set_off_nadir_range(int(round(search_params.minOffNadirAngle)),
+                                         int(round(search_params.maxOffNadirAngle)))
         if search_params.hideUnavailable is not None:
             self.dlg.hideUnavailableResults.setChecked(bool(search_params.hideUnavailable))
         product_types = [str(pt).upper() for pt in (search_params.productTypes or [])]
@@ -3878,6 +3919,9 @@ class Mapflow(QObject):
         del self.toolbar
         self.app_context.settings.setValue('metadataMinIntersection', self.dlg.minIntersection.value())
         self.app_context.settings.setValue('metadataMaxCloudCover', self.dlg.maxCloudCover.value())
+        off_nadir_min, off_nadir_max = self.dlg.off_nadir_range()
+        self.app_context.settings.setValue('metadataMinOffNadir', off_nadir_min)
+        self.app_context.settings.setValue('metadataMaxOffNadir', off_nadir_max)
         self.app_context.settings.setValue('metadataFrom', self.dlg.metadataFrom.date())
         self.app_context.settings.setValue('metadataTo', self.dlg.metadataTo.date())
 
