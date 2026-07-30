@@ -41,10 +41,19 @@ class ProjectService(QObject):
     def set_current_project(self, project: MapflowProject):
         self.app_context.project_id = project.id
         self.app_context.current_project = project
+        self.apply_project_aoi_area_limit(project)
         if project.shareProject:
             self.app_context.user_role = project.shareProject.get_user_role(self.app_context.username)
         else:
             self.app_context.user_role = UserRole.owner
+
+    def apply_project_aoi_area_limit(self, project: Optional[MapflowProject]):
+        """Set the AOI area limit (sq.km) from the open project's owner (``user.aoiAreaLimit``,
+        sq.m), or None when there is no project / limit. For a shared project this is the owner's
+        limit — the one that actually applies — not the logged-in user's default-project limit."""
+        user = project.user if project else None
+        limit = user.aoiAreaLimit if user else None
+        self.app_context.aoi_area_limit = limit * 1e-6 if limit is not None else None
 
     def create_project(self, project: CreateProjectSchema):
         self.api.create_project(project, self.create_project_callback)
@@ -77,6 +86,7 @@ class ProjectService(QObject):
 
     def get_project_callback(self, response: QNetworkReply):
         self.app_context.current_project = MapflowProject.from_dict(json.loads(response.readAll().data()))
+        self.apply_project_aoi_area_limit(self.app_context.current_project)
         if self.app_context.current_project:
             self.app_context.project_id = self.app_context.current_project.id
             elided_name = self.dlg.currentProjectLabel.fontMetrics().elidedText(
@@ -208,6 +218,7 @@ class ProjectService(QObject):
             return
         if selected_id is None:
             self.app_context.current_project = self.app_context.project_id = None
+            self.apply_project_aoi_area_limit(None)  # no project open -> no AOI area limit
             self.app_context.settings.setValue("project_id", None)
             self.setup_project_change_rights()
             self.dlg.setWindowTitle(helpers.generate_plugin_header(self.app_context.plugin_name,
@@ -226,8 +237,9 @@ class ProjectService(QObject):
                         self.dlg.currentProjectLabel.width() - 50)
                     self.dlg.currentProjectLabel.setText(self.tr("Project: <b>{}").format(elided_name))
             if self.app_context.current_project:
+                self.apply_project_aoi_area_limit(self.app_context.current_project)
                 self.get_project_sharing()
-                self.view.setup_workflow_defs(self.app_context.current_project.workflowDefs, 
+                self.view.setup_workflow_defs(self.app_context.current_project.workflowDefs,
                                               self.config.DEFAULT_MODEL)
             self.setup_project_change_rights()
             self.app_context.settings.setValue("project_id", self.app_context.project_id)

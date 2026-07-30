@@ -4220,7 +4220,6 @@ class Mapflow(QObject):
         default_project = MapflowProject.from_dict(response)
 
         self.update_processing_limit()
-        self.app_context.aoi_area_limit = userinfo['aoiAreaLimit'] * 1e-6
         # We have different behavior for admin as he has access to all processings
         self.is_admin = userinfo.get("role") == "ADMIN"
 
