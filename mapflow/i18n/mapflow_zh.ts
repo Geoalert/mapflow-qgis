@@ -2534,7 +2534,11 @@ Please choose another directory.</source>
         <source>A working directory is required to save the area of interest on your computer.</source>
         <translation>需要一个工作目录才能将感兴趣区保存到您的计算机。</translation>
     </message>
-</context>
+<message><source>The template has been created, but is inactive.
+
+You have reached the maximum number of active planned processings. Pause or delete another one before activating this template.</source><translation>模板已创建，但处于未激活状态。
+
+您已达到活动计划处理的最大数量。请先暂停或删除另一个，再激活此模板。</translation></message></context>
 <context>
     <name>MapflowLoginDialog</name>
     <message>
