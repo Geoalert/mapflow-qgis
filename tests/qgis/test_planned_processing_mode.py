@@ -68,6 +68,68 @@ def test_start_button_text_follows_template_to_run():
     plugin.dlg.startProcessing.setText.assert_called_with("Start processing")
 
 
+def _create_template_plugin():
+    plugin = Mapflow.__new__(Mapflow)
+    plugin.tr = lambda text: text
+    plugin.dlg = MagicMock()
+    plugin.processing_service = MagicMock()
+    # Use the real template-response parser (the schema path), not a mock.
+    plugin.processing_service._parse_template_response = ProcessingService._parse_template_response
+    return plugin
+
+
+def _response(body: bytes):
+    response = MagicMock()
+    response.readAll.return_value.data.return_value = body
+    return response
+
+
+def _template_body(is_active):
+    import json
+    return json.dumps({
+        "id": "11111111-1111-1111-1111-111111111111", "name": "T", "status": "CREATED",
+        "createdAt": "2026-01-01T00:00:00Z", "userId": "22222222-2222-2222-2222-222222222222",
+        "searchParams": {"maxCloudCover": 50}, "projectId": "33333333-3333-3333-3333-333333333333",
+        "activeUntil": "2026-06-01T00:00:00Z", "isActive": is_active,
+    }).encode()
+
+
+def test_create_template_callback_warns_when_inactive(monkeypatch):
+    alerts = []
+    monkeypatch.setattr("mapflow.mapflow.alert", lambda msg, icon=None: alerts.append(msg))
+    plugin = _create_template_plugin()
+
+    plugin.create_search_template_callback(_response(_template_body(is_active=False)))
+
+    assert "inactive" in alerts[0].lower()
+    assert "maximum number of active planned processings" in alerts[0].lower()
+    plugin.processing_service.get_processings.assert_called_once()
+
+
+def test_create_template_callback_no_warning_when_active(monkeypatch):
+    # An active template creates no inactive warning; the list refresh is the feedback.
+    alerts = []
+    monkeypatch.setattr("mapflow.mapflow.alert", lambda msg, icon=None: alerts.append(msg))
+    plugin = _create_template_plugin()
+
+    plugin.create_search_template_callback(_response(_template_body(is_active=True)))
+
+    assert alerts == []
+    plugin.processing_service.get_processings.assert_called_once()
+
+
+def test_create_template_callback_no_warning_when_response_unparseable(monkeypatch):
+    # A response that can't be parsed into a template must not raise a false "inactive" warning.
+    alerts = []
+    monkeypatch.setattr("mapflow.mapflow.alert", lambda msg, icon=None: alerts.append(msg))
+    plugin = _create_template_plugin()
+
+    plugin.create_search_template_callback(_response(b'{}'))
+
+    assert alerts == []
+    plugin.processing_service.get_processings.assert_called_once()
+
+
 def test_provider_change_refreshes_start_button_text():
     # Switching the data source (e.g. an open template -> My imagery) must re-evaluate the button
     # label, since "planned" only applies to the imagery-search source.

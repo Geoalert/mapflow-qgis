@@ -2528,8 +2528,22 @@ class Mapflow(QObject):
         )
 
     def create_search_template_callback(self, response: QNetworkReply):
+        # TODO (architecture): the create-template stack (create_search_template, this callback and
+        # its error handler) belongs in ProcessingService — reaching into its private
+        # _parse_template_response below is the tell. It stays here for now because the request
+        # builder is tightly coupled to Mapflow's imagery-search helpers (_build_search_params /
+        # _build_template_aoi_details, off-nadir + product/provider selection, report_http_error);
+        # moving it is a larger refactor.
         self.dlg.getMetadata.setEnabled(True)
-        alert(self.tr("Planned search created successfully."), QMessageBox.Information)
+        # A created template is normally active; isActive comes back False when the active-templates
+        # limit is reached (the template is created but inactivated).
+        template = self.processing_service._parse_template_response(response)
+        if template is not None and not template.isActive:
+            alert(self.tr(
+                "The template has been created, but is inactive.\n\n"
+                "You have reached the maximum number of active planned processings. "
+                "Pause or delete another one before activating this template."),
+                QMessageBox.Warning)
         self.processing_service.get_processings()
 
     def create_search_template_error_handler(self, response: QNetworkReply):
