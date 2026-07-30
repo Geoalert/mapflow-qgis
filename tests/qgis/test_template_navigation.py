@@ -137,3 +137,27 @@ def test_exit_template_view_emits_closed_signal_and_clears_state():
     assert service.active_template is None
     assert service.template_processings == {}
     assert received == [template]
+
+
+def test_processings_tab_text_truncates_long_template_name():
+    controller = _controller()
+    controller.dlg.tabWidget.findChild.return_value = object()  # processingsTab exists
+    controller.dlg.tabWidget.indexOf.return_value = 1
+    long_name = "1233333333333321 213 123 12213 2121 312 312"
+
+    controller._set_processings_tab_text(long_name)
+
+    label = controller.dlg.tabWidget.setTabText.call_args.args[1]
+    assert len(label) == ProjectProcessingController.MAX_TAB_TEXT_LENGTH
+    assert label.endswith("…")
+    controller.dlg.tabWidget.setTabToolTip.assert_called_once_with(1, long_name)  # full name kept
+
+
+def test_processings_tab_text_keeps_short_name():
+    controller = _controller()
+    controller.dlg.tabWidget.findChild.return_value = object()
+    controller.dlg.tabWidget.indexOf.return_value = 1
+
+    controller._set_processings_tab_text("Processing")
+
+    assert controller.dlg.tabWidget.setTabText.call_args.args[1] == "Processing"

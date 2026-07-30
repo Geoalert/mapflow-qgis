@@ -107,14 +107,22 @@ class ProjectProcessingController(QObject):
         self._set_processings_tab_text(self.tr("Processing"))
         self._update_nav_buttons()
 
+    MAX_TAB_TEXT_LENGTH = 15
+
     def _set_processings_tab_text(self, text: str):
-        """Set the processings tab label (used as a breadcrumb for the template name)."""
+        """Set the processings tab label (a breadcrumb for the template name). Long template names
+        are truncated with an ellipsis so the tab stays a sane width; the full name is kept as the
+        tab's tooltip."""
         processings_tab = self.dlg.tabWidget.findChild(QWidget, "processingsTab")
         if processings_tab is None:
             return
         tab_index = self.dlg.tabWidget.indexOf(processings_tab)
-        if tab_index >= 0:
-            self.dlg.tabWidget.setTabText(tab_index, text)
+        if tab_index < 0:
+            return
+        label = text if len(text) <= self.MAX_TAB_TEXT_LENGTH \
+            else text[:self.MAX_TAB_TEXT_LENGTH - 1] + "…"
+        self.dlg.tabWidget.setTabText(tab_index, label)
+        self.dlg.tabWidget.setTabToolTip(tab_index, text)
 
     def _update_nav_buttons(self, *args):
         """Enable the 'enter template' arrow only for a single-template selection.
