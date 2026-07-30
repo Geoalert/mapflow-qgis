@@ -3711,7 +3711,11 @@ Please choose another directory.</source>
         <source>A working directory is required to save the area of interest on your computer.</source>
         <translation>Для сохранения области интереса на компьютере нужна рабочая папка.</translation>
     </message>
-</context>
+<message><source>The template has been created, but is inactive.
+
+You have reached the maximum number of active planned processings. Pause or delete another one before activating this template.</source><translation>Шаблон создан, но неактивен.
+
+Достигнуто максимальное число активных запланированных обработок. Приостановите или удалите другую, прежде чем активировать этот шаблон.</translation></message></context>
 <context>
     <name>MapflowLoginDialog</name>
     <message>

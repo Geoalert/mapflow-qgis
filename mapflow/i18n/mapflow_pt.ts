@@ -2360,7 +2360,11 @@ Escolha outro diretório.</translation>
         <source>A working directory is required to save the area of interest on your computer.</source>
         <translation>É necessário um diretório de trabalho para guardar a área de interesse no seu computador.</translation>
     </message>
-</context>
+<message><source>The template has been created, but is inactive.
+
+You have reached the maximum number of active planned processings. Pause or delete another one before activating this template.</source><translation>O modelo foi criado, mas está inativo.
+
+Atingiu o número máximo de processamentos planeados ativos. Pause ou elimine outro antes de ativar este modelo.</translation></message></context>
 <context>
     <name>MapflowLoginDialog</name>
     <message>
