@@ -54,7 +54,8 @@ class AppContext:
     billing_type: Optional["BillingType"] = None
     remaining_limit: float = 0.0
     remaining_credits: float = 0.0
-    aoi_area_limit: float = 0.0
+    # None until a project is open; set from the open project's owner (user.aoiAreaLimit).
+    aoi_area_limit: Optional[float] = None
     template_area_limit: float = 0.0
     # Max AOI area (sq.km) allowed for an immediate imagery search; above it the user is
     # offered a Planned Search instead. Zero/absent disables the client-side check.

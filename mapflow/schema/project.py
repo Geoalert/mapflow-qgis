@@ -55,6 +55,23 @@ class MapflowProjectInfo(SkipDataClass):
     ownerEmail: str
 
 @dataclass
+class MapflowProjectUser(SkipDataClass):
+    """The project owner's info from a project response's ``user`` section. For a SHARED project
+    this is the owner (not the logged-in user), so ``aoiAreaLimit`` here is the limit that applies
+    while the project is open. All limits are in square metres, as reported by the backend."""
+    id: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = None
+    areaLimit: Optional[float] = None
+    aoiAreaLimit: Optional[float] = None
+    templateAreaLimit: Optional[float] = None
+    processedArea: Optional[float] = None
+    isPremium: Optional[bool] = None
+    reviewWorkflowEnabled: Optional[bool] = None
+    isCustomer: Optional[bool] = None
+
+
+@dataclass
 class MapflowProject(SkipDataClass):
     id: str
     name: str
@@ -62,6 +79,7 @@ class MapflowProject(SkipDataClass):
     description: Optional[str]
     workflowDefs: Optional[dict] = None
     shareProject: Optional[ShareProject] = None
+    user: Optional[MapflowProjectUser] = None
     updated: Optional[datetime] = None
     created: Optional[datetime] = None
     processingCounts: Optional[Dict[str, int]] = None
@@ -69,6 +87,8 @@ class MapflowProject(SkipDataClass):
     total: Optional[int] = Config.PROJECTS_PAGE_LIMIT
 
     def __post_init__(self):
+        if isinstance(self.user, dict):
+            self.user = MapflowProjectUser.from_dict(self.user)
         if self.workflowDefs:
             self.workflowDefs = {item['id']: WorkflowDef.from_dict(item) for item in self.workflowDefs}
         else:
