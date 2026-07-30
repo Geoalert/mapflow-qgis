@@ -532,7 +532,7 @@ class Mapflow(QObject):
         # In-template view: AOI add/rename/delete (only for AOI rows / empty selection;
         # a selected processing row falls through to the normal processing actions below).
         if self.processing_service.in_template_mode and not selected_processing:
-            can_edit = self.app_context.user_role.can_delete_rename_review_processing
+            can_edit = self.app_context.can_edit_template(self.processing_service.active_template)
             selected_aoi = self.processing_service.selected_aoi()
             # No AOI action can start while another edit/draw session is running.
             no_session = self._aoi_session is None
@@ -558,7 +558,8 @@ class Mapflow(QObject):
             menu.addAction(self.dlg.save_result_action)
             menu.addAction(self.dlg.see_details_action)
             # Subtract this processing's already-processed area from the template's AOIs (feature 3).
-            if self.app_context.user_role.can_delete_rename_review_processing:
+            # This edits the open template's geometry, so it follows template-edit rights.
+            if self.app_context.can_edit_template(self.processing_service.active_template):
                 menu.addAction(self.dlg.exclude_from_search_action)
             return
 
@@ -567,14 +568,16 @@ class Mapflow(QObject):
             menu.addAction(self.dlg.see_details_action)
             menu.addAction(self.dlg.see_search_results_action)
             menu.addAction(self.dlg.see_processings_action)
-            if self.app_context.user_role.can_delete_rename_review_processing:
+            # A contributor may edit/control their OWN templates; maintainer+ may edit any.
+            can_edit_template = self.app_context.can_edit_template(selected_template)
+            if can_edit_template:
                 menu.addAction(self.dlg.template_rename_action)
                 # NB: "Update search parameters" is offered only from *inside* the template
                 # (below), where the filter widgets reflect the template (populated on open).
                 # In this project-list selection they hold unrelated values, so it is not shown.
-            # Add pause/resume/restart based on template status. Controlling the template's
-            # run state is a maintainer+ action, so it is disabled for e.g. contributors.
-            can_control = self.app_context.user_role.can_pause_resume_template
+            # Add pause/resume/restart based on template status. Run-state control follows the
+            # same template-edit rights (maintainer+, or a contributor on their own template).
+            can_control = can_edit_template
             if selected_template.isActive:
                 self.dlg.template_pause_action.setEnabled(can_control)
                 menu.addAction(self.dlg.template_pause_action)
@@ -4218,6 +4221,9 @@ class Mapflow(QObject):
         # User info is stored inside user's Default project - will change it in the future API versions
         userinfo = response['user']
         default_project = MapflowProject.from_dict(response)
+        # Remember the logged-in user's id (template ownership check for contributors).
+        if default_project.user is not None:
+            self.app_context.user_id = default_project.user.id
 
         self.update_processing_limit()
         # We have different behavior for admin as he has access to all processings

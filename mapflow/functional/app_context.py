@@ -49,6 +49,9 @@ class AppContext:
     logged_in: bool = False
     username: str = ""
     password: str = ""
+    # The logged-in user's id (from the login `user` section). Used to check template
+    # ownership so a contributor can edit their OWN templates (template.userId == user_id).
+    user_id: Optional[str] = None
     
     # === Billing & Limits ===
     billing_type: Optional["BillingType"] = None
@@ -106,6 +109,24 @@ class AppContext:
     allow_enable_processing = {'aoi_loaded': True, 
                                'my_mosaic_loaded': True, 
                                'my_image_loaded': True} # all true -> startProcessing button can be enabled
+
+    def can_edit_template(self, template) -> bool:
+        """Whether the current user may edit/control ``template`` — rename, update search
+        params, manage its AOIs, exclude-from-search, and pause/resume/restart.
+
+        Maintainers and owners may edit any template in the project (unchanged). A contributor
+        may edit only their OWN templates (``template.userId`` == the logged-in ``user_id``),
+        mirroring the backend, which lets contributors manage the planned processings they
+        created. Readonly users may not edit any."""
+        role = self.user_role
+        # No shared-project role context (personal/default project, admin): full rights.
+        if role is None:
+            return True
+        if role.can_delete_rename_review_processing:
+            return True
+        if role == UserRole.contributor and self.user_id is not None:
+            return str(getattr(template, "userId", "")) == str(self.user_id)
+        return False
 
     @property
     def workflow_defs(self):
