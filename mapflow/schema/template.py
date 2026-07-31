@@ -238,9 +238,9 @@ class ProcessingTemplateDTO(Serializable, SkipDataClass):
     status: str
     createdAt: datetime
     userId: UUID
-    searchParams: SearchParams
     projectId: UUID
     activeUntil: datetime
+    searchParams: Optional[SearchParams] = None
     processingParams: Optional[Mapping[str, Any]] = None
     lastCheckedAt: Optional[datetime] = None
     newImagesCount: Optional[int] = None
