@@ -101,6 +101,7 @@ def test_on_processings_selection_changed_sets_planned_start_button_text():
 		"Select one or more images in search results to start planned processing"
 	)
 
+	plugin.app_context = SimpleNamespace(user_role=None)  # non-contributor: delete-button update is a no-op
 	plugin.on_processings_selection_changed()
 
 	plugin.dlg.startProcessing.setText.assert_called_with("Start planned processing")
@@ -119,6 +120,7 @@ def test_on_processings_selection_changed_restores_default_start_button_text_wit
 	plugin.processing_service.template_to_run.return_value = None
 	plugin.processing_service.planned_processing_selection_error.return_value = None
 
+	plugin.app_context = SimpleNamespace(user_role=None)  # non-contributor: delete-button update is a no-op
 	plugin.on_processings_selection_changed()
 
 	plugin.dlg.startProcessing.setText.assert_called_with("Start processing")
@@ -141,6 +143,7 @@ def test_on_processings_selection_changed_restores_default_when_processing_selec
 	plugin.processing_service.template_to_run.return_value = None
 	plugin.processing_service.planned_processing_selection_error.return_value = None
 
+	plugin.app_context = SimpleNamespace(user_role=None)  # non-contributor: delete-button update is a no-op
 	plugin.on_processings_selection_changed()
 
 	plugin.dlg.startProcessing.setText.assert_called_with("Start processing")
