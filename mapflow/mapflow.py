@@ -790,13 +790,20 @@ class Mapflow(QObject):
         local_created_at = template.createdAt.astimezone()
         local_active_until = template.activeUntil.astimezone()
 
-        details = (
-            f"<b>{template.name}</b><br/>"
-            f"<b>Status:</b> {template.status}<br/>"
-            f"<b>Created:</b> {local_created_at.strftime('%Y-%m-%d %H:%M')}<br/>"
-            f"<b>Active Until:</b> {local_active_until.strftime('%Y-%m-%d %H:%M')}<br/>"
-            f"<b>Linked processings:</b> {linked_count}<br/>"
-            f"<b>New images:</b> {new_images}"
+        details = self.tr(
+            "<b>{name}</b><br/>"
+            "<b>Status:</b> {status}<br/>"
+            "<b>Created:</b> {created}<br/>"
+            "<b>Active Until:</b> {active_until}<br/>"
+            "<b>Linked processings:</b> {linked}<br/>"
+            "<b>New images:</b> {new_images}"
+        ).format(
+            name=template.name,
+            status=template.status,
+            created=local_created_at.strftime('%Y-%m-%d %H:%M'),
+            active_until=local_active_until.strftime('%Y-%m-%d %H:%M'),
+            linked=linked_count,
+            new_images=new_images,
         )
 
         alert(details, QMessageBox.Information)

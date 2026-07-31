@@ -8,7 +8,7 @@ FORMS = $$FORM_DIRECTORY/error_message.ui\
         $$FORM_DIRECTORY/processing_details.ui\
         $$FORM_DIRECTORY/processing_dialog.ui\
         $$FORM_DIRECTORY/processing_start_confirmation.ui\
-        $$FORM_DIRECTORY/project_dialog.ui\ 
+        $$FORM_DIRECTORY/project_dialog.ui\
         $$FORM_DIRECTORY/provider_dialog.ui\
         $$FORM_DIRECTORY/raster_layers_dialog.ui\
         $$FORM_DIRECTORY/review_dialog.ui
@@ -27,8 +27,9 @@ SOURCES = ../mapflow.py\
           ../dialogs/project_dialog.py\
           ../dialogs/provider_dialog.py\
           ../dialogs/review_dialog.py\
+          ../dialogs/select_aoi_layers_dialog.py\
           ../dialogs/upload_raster_layer_dialog.py\
-          ../errors/api_errors.py\ 
+          ../errors/api_errors.py\
           ../errors/data_errors.py\
           ../errors/error_message_list.py\
           ../errors/errors.py\
