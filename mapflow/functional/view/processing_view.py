@@ -47,13 +47,13 @@ class ProcessingView:
     # Column index -> sort_by value mapping
     _COLUMN_SORT_MAP = {
         0: "NAME",           # name
-        1: "WORKFLOW",       # workflowDef
+        1: "SCENARIO",       # workflowDef
         2: "STATUS",         # status
         3: "PROGRESS",       # percentCompleted
         4: "AREA",           # aoiArea
         5: "COST",           # cost
         6: "CREATED",        # created
-        7: "REVIEW_UNTIL",   # reviewUntil
+        7: None,   # reviewUntil
     }
 
     def connect_header_sort(self, on_sort_changed):
