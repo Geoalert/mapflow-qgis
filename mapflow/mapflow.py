@@ -59,7 +59,7 @@ from .schema import (BillingType,
 from .schema.catalog import (MultiPreviewList,
                              PreviewType,
                              ProductType)
-from .schema.project import MapflowProject
+from .schema.project import MapflowProject, UserRole
 from .schema.template import (AOI_NAME_MAX_LENGTH,
                               AddAoisSchema,
                               AddSingleAoiSchema,
@@ -617,6 +617,20 @@ class Mapflow(QObject):
         """Refresh the Start button for the new processings-table selection (it resolves the
         selected template/processing itself)."""
         self.update_start_processing_button_state()
+        self.update_delete_button_state()
+
+    def update_delete_button_state(self):
+        """Contributor-only: the Delete button follows the selection — enabled only when every
+        selected row is a template the contributor owns (they may delete their own templates but
+        never a processing). Other roles keep the fixed, role-based state from
+        ``enable_shared_project``, so this leaves them untouched."""
+        if self.app_context.user_role != UserRole.contributor:
+            return
+        can_delete = self.processing_service.all_selected_templates_editable()
+        self.dlg.deleteProcessings.setEnabled(can_delete)
+        self.dlg.deleteProcessings.setToolTip(
+            "" if can_delete
+            else self.tr("Contributors can only delete their own planned processings"))
 
     def update_start_processing_button_text(self):
         # Mirror what the start action actually does: "Start planned processing" only when a
