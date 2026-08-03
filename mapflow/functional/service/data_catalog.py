@@ -214,6 +214,10 @@ class DataCatalogService(QObject):
         # Clear previous images details
         self.dlg.imageTable.clearSelection()
         self.dlg.imageTable.setRowCount(0)
+        # Selecting a mosaic clears the image selection, so drop the cached image too — otherwise
+        # a stale selected_image would still feed imageIds into the next processing (a mosaic run
+        # would wrongly reuse the previously processed image).
+        self.app_context.selected_image = None
         # Don't send GET requests if first selected mosaic didn't change
         selected_mosaics = self.dlg.mosaicTable.selectedIndexes()
         if len(selected_mosaics) > 1 and self.dlg.selected_mosaic_cell == selected_mosaics[0]:
@@ -570,6 +574,9 @@ class DataCatalogService(QObject):
         if image:
             self.on_image_selection(image)
         else:
+            # Keep the cached image in sync with the table: deselecting must not leave a stale
+            # selected_image that would be picked up when building processing params.
+            self.app_context.selected_image = None
             self.view.clear_image_info()
 
     def check_mosaic_selection(self):
