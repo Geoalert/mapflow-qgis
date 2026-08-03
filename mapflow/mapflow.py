@@ -511,6 +511,7 @@ class Mapflow(QObject):
         self.dlg.template_rename_action.triggered.connect(self.processing_service.update_template)
         self.dlg.template_pause_action.triggered.connect(self.processing_service.pause_template)
         self.dlg.template_resume_action.triggered.connect(self.processing_service.resume_template)
+        self.dlg.template_restart_action.triggered.connect(self.processing_service.restart_template)
         # AOI actions (in-template view)
         self.dlg.aoi_rename_action.triggered.connect(self.processing_service.rename_aoi)
         self.dlg.aoi_delete_action.triggered.connect(self.processing_service.delete_aoi)
@@ -582,9 +583,8 @@ class Mapflow(QObject):
                 self.dlg.template_pause_action.setEnabled(can_control)
                 menu.addAction(self.dlg.template_pause_action)
             elif (selected_template.status or "").upper() == "FAILED":
-                restart_action = menu.addAction(self.tr("Restart"))
-                restart_action.triggered.connect(self.processing_service.restart_template)
-                restart_action.setEnabled(can_control)
+                self.dlg.template_restart_action.setEnabled(can_control)
+                menu.addAction(self.dlg.template_restart_action)
             else:
                 self.dlg.template_resume_action.setEnabled(can_control)
                 menu.addAction(self.dlg.template_resume_action)

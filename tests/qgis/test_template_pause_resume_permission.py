@@ -93,8 +93,7 @@ def test_restart_disabled_for_contributor_on_others_template():
 
     plugin.update_processing_options_menu()
 
-    # The restart action is created inline via menu.addAction(...).
-    plugin.dlg.options_menu.addAction.return_value.setEnabled.assert_called_with(False)
+    plugin.dlg.template_restart_action.setEnabled.assert_called_once_with(False)
 
 
 def test_restart_enabled_for_contributor_on_own_template():
@@ -103,7 +102,7 @@ def test_restart_enabled_for_contributor_on_own_template():
 
     plugin.update_processing_options_menu()
 
-    plugin.dlg.options_menu.addAction.return_value.setEnabled.assert_called_with(True)
+    plugin.dlg.template_restart_action.setEnabled.assert_called_once_with(True)
 
 
 def test_rename_shown_for_contributor_on_own_template_only():

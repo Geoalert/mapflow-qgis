@@ -141,6 +141,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.template_rename_action = QAction(self.tr("Rename"))
         self.template_pause_action = QAction(self.tr("Pause"))
         self.template_resume_action = QAction(self.tr("Resume"))
+        self.template_restart_action = QAction(self.tr("Restart"))
         # AOI-specific actions (in-template view)
         self.aoi_rename_action = QAction(self.tr("Rename AOI"))
         self.aoi_delete_action = QAction(self.tr("Delete AOI"))
