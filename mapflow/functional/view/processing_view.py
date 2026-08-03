@@ -1,6 +1,6 @@
 from typing import List, Union
 from PyQt5.QtCore import Qt, QCoreApplication
-from PyQt5.QtWidgets import QAbstractItemView, QTableWidgetItem, QMessageBox, QCheckBox, QMenu
+from PyQt5.QtWidgets import QAbstractItemView, QTableWidgetItem, QMessageBox, QCheckBox
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs import icons
 from ...dialogs import colors
@@ -75,75 +75,6 @@ class ProcessingView:
         order = Qt.DescendingOrder if self._header_sort_desc else Qt.AscendingOrder
         self.dlg.processingsTable.horizontalHeader().setSortIndicator(column, order)
         on_sort_changed()
-
-    def setup_context_menu(
-        self,
-        on_open_template_details,
-        on_pause_template,
-        on_resume_template,
-        on_delete_template,
-        is_only_templates_selected,
-    ):
-        """
-        Setup context menu for the processings table.
-        
-        Args:
-            on_open_template_details: Callback for opening template details
-            on_pause_template: Callback for pause template action
-            on_resume_template: Callback for resume template action
-            on_delete_template: Callback for delete template action
-            is_only_templates_selected: Callback that returns True only for template-only selection
-        """
-        self.dlg.processingsTable.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.dlg.processingsTable.customContextMenuRequested.connect(
-            lambda pos: self._show_context_menu(
-                pos,
-                on_open_template_details,
-                on_pause_template,
-                on_resume_template,
-                on_delete_template,
-                is_only_templates_selected,
-            )
-        )
-    
-    def _show_context_menu(
-        self,
-        pos,
-        on_open_template_details,
-        on_pause_template,
-        on_resume_template,
-        on_delete_template,
-        is_only_templates_selected,
-    ):
-        """Show context menu for templates."""
-        item = self.dlg.processingsTable.itemAt(pos)
-        if not item:
-            return
-        
-        row = item.row()
-        id_column_index = config.PROCESSING_TABLE_ID_COLUMN_INDEX
-        id_item = self.dlg.processingsTable.item(row, id_column_index)
-        
-        if not id_item:
-            return
-        
-        # Keep selection in sync with right-clicked row.
-        selected_rows = {index.row() for index in self.dlg.processingsTable.selectionModel().selectedIndexes()}
-        if row not in selected_rows:
-            self.dlg.processingsTable.clearSelection()
-            self.dlg.processingsTable.selectRow(row)
-
-        if not is_only_templates_selected():
-            return
-
-        menu = QMenu(self.dlg.processingsTable)
-        menu.addAction(self.tr("Open Details")).triggered.connect(on_open_template_details)
-        menu.addSeparator()
-        menu.addAction(self.tr("Pause Template")).triggered.connect(on_pause_template)
-        menu.addAction(self.tr("Resume Template")).triggered.connect(on_resume_template)
-        menu.addSeparator()
-        menu.addAction(self.tr("Delete Template")).triggered.connect(on_delete_template)
-        menu.exec_(self.dlg.processingsTable.mapToGlobal(pos))
 
     def tr(self, message: str) -> str:
         """Translate message using QCoreApplication."""
