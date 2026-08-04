@@ -269,6 +269,12 @@ class ProcessingTemplateDTO(Serializable, SkipDataClass):
         backend's daily check, which the poll does not spin for."""
         return (self.status or "").upper() == "SEARCHING"
 
+    @property
+    def is_failed(self) -> bool:
+        """The template's search failed. Takes precedence over ``isActive`` (see
+        ``table_status``): a failed template can still be active, and offers Restart."""
+        return (self.status or "").upper() == "FAILED"
+
     def _aoi_features(self):
         """Return template AOI features from either aoiDetails or aoi shape."""
         if isinstance(self.searchParams, SearchParams):
@@ -329,10 +335,9 @@ class ProcessingTemplateDTO(Serializable, SkipDataClass):
         - ``Updated`` after the first daily check, with a ``(newImagesCount)`` tag when there
           are unseen images.
         """
-        status = (self.status or "").upper()
-        if status == "FAILED":
+        if self.is_failed:
             return _tr("Failed")
-        if status == "SEARCHING":
+        if self.is_search_in_progress:
             return _tr("Searching")
         if not self.isActive:
             return _tr("Inactive")

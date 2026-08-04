@@ -1297,7 +1297,7 @@ class ProcessingService(QObject):
         template = self.selected_template()
         if not template:
             return
-        if (template.status or "").upper() != "FAILED":
+        if not template.is_failed:
             alert(self.tr("Only failed templates can be restarted"), QMessageBox.Information)
             return
         self.api.restart_template(

@@ -579,12 +579,14 @@ class Mapflow(QObject):
             # Add pause/resume/restart based on template status. Run-state control follows the
             # same template-edit rights (maintainer+, or a contributor on their own template).
             can_control = can_edit_template
-            if selected_template.isActive:
-                self.dlg.template_pause_action.setEnabled(can_control)
-                menu.addAction(self.dlg.template_pause_action)
-            elif (selected_template.status or "").upper() == "FAILED":
+            # A FAILED template can still be isActive, so check FAILED first (mirrors
+            # ProcessingTemplateDTO.table_status precedence): it offers Restart, not Pause.
+            if selected_template.is_failed:
                 self.dlg.template_restart_action.setEnabled(can_control)
                 menu.addAction(self.dlg.template_restart_action)
+            elif selected_template.isActive:
+                self.dlg.template_pause_action.setEnabled(can_control)
+                menu.addAction(self.dlg.template_pause_action)
             else:
                 self.dlg.template_resume_action.setEnabled(can_control)
                 menu.addAction(self.dlg.template_resume_action)
