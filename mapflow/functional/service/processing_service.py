@@ -529,7 +529,7 @@ class ProcessingService(QObject):
                                text= error_summary,
                                title=self.tr('Processing creation failed'),
                                email_body=email_body).show()
-        if not False in self.app_context.allow_enable_processing.values():
+        if False not in self.app_context.allow_enable_processing.values():
             self.dlg.startProcessing.setEnabled(True)
 
     # =============  REQUEST ================= #
