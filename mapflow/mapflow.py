@@ -1455,21 +1455,6 @@ class Mapflow(QObject):
         self._selected_aois_layer_id = layer.id()
         return layer
 
-    def _union_of_selected_aoi_geometries(self) -> Optional[QgsGeometry]:
-        """Union (WGS84) of the currently selected template AOIs' geometries, or ``None`` when
-        no AOI is selected or none has a usable geometry."""
-        geometries = []
-        for aoi in self.processing_service.selected_aois():
-            geom = self._geometry_from_geojson(getattr(aoi, "geometry", None))
-            if geom is not None:
-                geometries.append(geom)
-        if not geometries:
-            return None
-        if len(geometries) == 1:
-            return geometries[0]
-        union = QgsGeometry.unaryUnion(geometries)
-        return union if (union is not None and not union.isEmpty()) else None
-
     @staticmethod
     def _geometry_from_geojson(geom_dict) -> Optional[QgsGeometry]:
         """Build a QgsGeometry from a GeoJSON geometry mapping (as carried in aoiDetails)."""
@@ -1697,7 +1682,6 @@ class Mapflow(QObject):
         min_intersection = self.dlg.minIntersection.value()
         min_off_nadir, max_off_nadir = self.dlg.off_nadir_range()
         off_nadir_filtered = not self.dlg.off_nadir_is_full_range()  # full 0-30 range = no filter
-        aoi, min_area = self._intersection_reference(min_intersection)
         provider_set = self._allowed_provider_set()  # None = show all
         product_filter = self._product_category_filter()  # None = show all
         unfit = set()
@@ -1728,12 +1712,15 @@ class Mapflow(QObject):
                                    and str(provider_name).lower() in provider_set)
                 product_ok = (product_filter is None
                               or self._product_category(props.get("productType")) in product_filter)
-                if aoi is None:
+                # Intersection % comes from the backend (aoiIntersectionPercent, computed against
+                # the searched AOI / the template's AOIs), not recomputed locally against a
+                # sub-selection. 0 = don't filter; a missing value passes (like other metadata).
+                if min_intersection <= 0:
                     intersection_ok = True
                 else:
-                    geom = self._geometry_from_geojson(feature.get("geometry"))
-                    intersection_ok = (geom is not None
-                                       and self._wgs84_area(aoi.intersection(geom)) >= min_area)
+                    aoi_intersection = self._to_float(props.get("aoiIntersectionPercent"))
+                    intersection_ok = self._passes_optional(
+                        aoi_intersection, lambda pct: pct >= min_intersection)
                 fit = (date_ok and cloud_ok and off_nadir_ok and provider_ok
                        and product_ok and intersection_ok)
             except Exception:
@@ -1777,39 +1764,6 @@ class Mapflow(QObject):
         if str(product_type).strip().lower() == ProductType.mosaic.lower():
             return ProductType.mosaic.upper()
         return ProductType.image.upper()
-
-    def _intersection_reference(self, min_intersection: int):
-        """The AOI geometry (WGS84) and the minimum intersection area (m²) used to test min
-        intersection %, or ``(None, 0)`` when intersection filtering does not apply.
-
-        Regular search: the searched AOI. Template: the union of the currently SELECTED AOIs;
-        when no AOI is selected, intersection filtering is skipped entirely.
-        #WARNING (spec 002_F): the template rule (union of selected AOIs, skip when none) is
-        provisional and may change — % of a multi-AOI union under-counts an image that fully
-        covers one small AOI."""
-        if min_intersection <= 0:
-            return None, 0
-        if getattr(self.processing_service, "in_template_mode", False):
-            aoi = self._union_of_selected_aoi_geometries()  # WGS84; None when no AOI selected
-            if aoi is None:
-                return None, 0
-        else:
-            aoi = self.app_context.metadata_aoi  # WGS84
-            if not aoi and self.dlg.polygonCombo.currentLayer():
-                layer = self.dlg.polygonCombo.currentLayer()
-                aoi = helpers.to_wgs84(layer_utils.collect_geometry_from_layer(layer), layer.crs())
-            if not aoi:
-                return None, 0
-        min_area = self._wgs84_area(aoi) * (min_intersection / 100)
-        return aoi, min_area
-
-    def _wgs84_area(self, geom: Optional[QgsGeometry]) -> float:
-        """Ellipsoidal area (m²) of a WGS84 geometry, or 0 for an empty/None geometry."""
-        if geom is None or geom.isEmpty():
-            return 0.0
-        self.calculator.setEllipsoid("WGS84")
-        self.calculator.setSourceCrs(helpers.WGS84, self.app_context.project.transformContext())
-        return self.calculator.measureArea(geom)
 
     @staticmethod
     def _to_float(value) -> Optional[float]:

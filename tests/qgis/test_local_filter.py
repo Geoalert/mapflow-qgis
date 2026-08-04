@@ -7,7 +7,7 @@ result layer. A widen (!) indicator warns when the current widgets ask for MORE 
 fetched (which local filtering cannot surface without a new Search).
 
 Templates are filtered client-side too (no server-side Filter button); min intersection uses the
-union of the SELECTED AOIs, and is skipped when none is selected (provisional rule)."""
+backend-provided per-image aoiIntersectionPercent (no local geometry / AOI-subselection math)."""
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -28,19 +28,21 @@ def _square_geojson(x0, y0, x1, y1):
         [x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]]}
 
 
-def _feature(local_index, date, cloud, geom):
-    return {"type": "Feature", "geometry": geom,
-            "properties": {"local_index": local_index, "acquisitionDate": date, "cloudCover": cloud}}
+def _feature(local_index, date, cloud, geom, intersection=None):
+    props = {"local_index": local_index, "acquisitionDate": date, "cloudCover": cloud}
+    if intersection is not None:
+        props["aoiIntersectionPercent"] = intersection
+    return {"type": "Feature", "geometry": geom, "properties": props}
 
 
 def _features():
     """GeoJSON results (same shape as fills the table): index 0 fits; 1 out of date range;
-    2 too cloudy; 3 barely overlaps the AOI (~1%)."""
+    2 too cloudy; 3 low backend AOI intersection (~1%)."""
     return [
-        _feature(0, "2025-03-01T00:00:00Z", 10, _square_geojson(0, 0, 10, 10)),
-        _feature(1, "2020-01-01T00:00:00Z", 5, _square_geojson(0, 0, 10, 10)),
-        _feature(2, "2025-03-01T00:00:00Z", 90, _square_geojson(0, 0, 10, 10)),
-        _feature(3, "2025-03-01T00:00:00Z", 10, _square_geojson(9, 9, 11, 11)),
+        _feature(0, "2025-03-01T00:00:00Z", 10, _square_geojson(0, 0, 10, 10), intersection=100),
+        _feature(1, "2020-01-01T00:00:00Z", 5, _square_geojson(0, 0, 10, 10), intersection=100),
+        _feature(2, "2025-03-01T00:00:00Z", 90, _square_geojson(0, 0, 10, 10), intersection=100),
+        _feature(3, "2025-03-01T00:00:00Z", 10, _square_geojson(9, 9, 11, 11), intersection=1),
     ]
 
 
@@ -72,7 +74,7 @@ def _plugin_regular(min_intersection=50, max_cloud=50,
     return plugin
 
 
-# ---------- _unfit_local_indices / _intersection_reference ----------
+# ---------- _unfit_local_indices ----------
 
 def _off_nadir_feature(local_index, angle):
     return {"type": "Feature", "geometry": _square_geojson(0, 0, 10, 10),
@@ -205,26 +207,32 @@ def test_passes_optional_rule():
 
 
 
-def test_template_intersection_skipped_without_selected_aoi():
+def test_intersection_uses_backend_percent():
+    # The filter compares the backend aoiIntersectionPercent to the widget; the footprint
+    # geometry is irrelevant (here index 1 fully covers the AOI but reports a low %).
     plugin = _plugin_regular(min_intersection=50)
-    plugin.processing_service.in_template_mode = True
-    plugin._union_of_selected_aoi_geometries = MagicMock(return_value=None)
+    features = [
+        _feature(0, "2025-03-01T00:00:00Z", 10, _square_geojson(9, 9, 11, 11), intersection=80),
+        _feature(1, "2025-03-01T00:00:00Z", 10, _square_geojson(0, 0, 10, 10), intersection=20),
+    ]
 
-    aoi, min_area = plugin._intersection_reference(50)
-
-    assert aoi is None and min_area == 0
-    plugin._union_of_selected_aoi_geometries.assert_called_once()
+    assert plugin._unfit_local_indices(features) == {1}
 
 
-def test_template_intersection_uses_selected_aoi_union():
+def test_missing_intersection_percent_passes():
+    # A result without a backend intersection value must not be hidden (missing matches any).
     plugin = _plugin_regular(min_intersection=50)
-    plugin.processing_service.in_template_mode = True
-    plugin._union_of_selected_aoi_geometries = MagicMock(return_value=_square(0, 0, 10, 10))
+    feature = _feature(0, "2025-03-01T00:00:00Z", 10, _square_geojson(0, 0, 10, 10))
 
-    unfit = plugin._unfit_local_indices(_features())
+    assert plugin._unfit_local_indices([feature]) == set()
 
-    # Same outcome as regular search against the same AOI: 1 (date), 2 (cloud), 3 (intersection).
-    assert unfit == {1, 2, 3}
+
+def test_template_mode_filters_by_backend_percent_same_as_regular():
+    # Template mode no longer has a special union-of-selected-AOIs path: same backend-% filter.
+    plugin = _plugin_regular(min_intersection=50)
+    plugin.processing_service = SimpleNamespace(in_template_mode=True)
+
+    assert plugin._unfit_local_indices(_features()) == {1, 2, 3}
 
 
 # ---------- provider / product-type filtering ----------
