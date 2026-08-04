@@ -996,7 +996,9 @@ class Mapflow(QObject):
                 qgs_feat = QgsFeature()
                 qgs_feat.setGeometry(qgs_geom)
                 qgs_features.append(qgs_feat)
-            except Exception:
+            except Exception as e:
+                QgsMessageLog.logMessage(f"Skipping a search feature that failed to parse: {e}",
+                                         self.plugin_name, level=Qgis.Warning)
                 continue
         if not qgs_features:
             return None
@@ -4050,7 +4052,7 @@ class Mapflow(QObject):
         try:
             self.app_context.username, self.app_context.password = b64decode(token).decode().split(':')
         except:
-            self.app_context.username = self.app_context.password = ''
+            self.app_context.username = self.app_context.password = ''  # nosec - clearing creds, not a secret
             self.dlg_login.show()
             self.alert(self.tr('Wrong token. '
                                'Visit "<a href=\"https://app.mapflow.ai/account/api\">mapflow.ai</a>" '
@@ -4392,8 +4394,9 @@ class Mapflow(QObject):
         temp_dir = Path(output_dir, "Temp")
         try:
             shutil.rmtree(temp_dir) # remove old tempdir
-        except Exception:
-            pass
+        except Exception as e:
+            QgsMessageLog.logMessage(f"Could not remove old temp dir '{temp_dir}': {e}",
+                                     self.plugin_name, level=Qgis.Warning)
         try:
             temp_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:

@@ -14,8 +14,10 @@ class ErrorMessageWidget(*uic.loadUiType(ui_path / 'error_message.ui')):
         try:
             self.setWindowIcon(QApplication.activeWindow().windowIcon())
             self.setWindowTitle(QApplication.activeWindow().windowTitle())
-        except:
-            pass
+        except Exception as e:
+            # Lazy import: this module is imported early in the chain, before the service package.
+            from ..functional.service.alert_service import log
+            log(f"Could not copy active-window icon/title for the error dialog: {e}", "info")
         self.text.setText(text)
         if title:
             self.title.setText(title)

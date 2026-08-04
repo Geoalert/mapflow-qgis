@@ -4,7 +4,7 @@ from typing import Callable, Union, Optional
 
 from PyQt5.QtCore import QBuffer, QByteArray, QObject, QTimer, QUrl, qVersion
 from PyQt5.QtNetwork import QHttpMultiPart, QNetworkReply, QNetworkRequest
-from qgis.core import QgsNetworkAccessManager, Qgis, QgsApplication, QgsAuthMethodConfig
+from qgis.core import QgsNetworkAccessManager, Qgis, QgsApplication, QgsAuthMethodConfig, QgsMessageLog
 
 from .constants import DEFAULT_HTTP_TIMEOUT_SECONDS
 from .errors import ErrorMessage, ProxyIsAlreadySet
@@ -152,9 +152,10 @@ class Http(QObject):
         request.setRawHeader(b'x-plugin-version', self.plugin_version.encode())
         try:
             request = self.authorize(request, auth)
-        except Exception:
-            # We skip the exception handling, then the request goes out unauthorized and the error response is handled
-            pass
+        except Exception as e:
+            # Send the request unauthorized; the error response is handled by the caller.
+            QgsMessageLog.logMessage(f"Request authorization failed, sending unauthorized: {e}",
+                                     "Mapflow", level=Qgis.Warning)
 
         if method == self.nam.post or method == self.nam.put:
             response = method(request, body)

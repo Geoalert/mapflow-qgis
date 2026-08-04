@@ -53,7 +53,7 @@ class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
             crs = CRS.web_mercator
             title = title
             login = ""
-            password = ""
+            password = ""  # nosec - empty init, not a secret
             save_credentials = False
 
         # Fill out the edit dialog with the current data

@@ -39,7 +39,7 @@ from ...schema.template import (
     ProcessingTemplateDTO,
     ProcessingTemplateDetails,
 )
-from ..service.alert_service import alert
+from ..service.alert_service import alert, log
 from ..app_context import AppContext
 from ...entity.provider import ImagerySearchProvider
 from ...config import Config
@@ -1036,8 +1036,8 @@ class ProcessingService(QObject):
                     processing_id=updated_template.id,
                     new_name=updated_template.name,
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            log(f"Could not apply renamed template from response: {e}")
         self.get_processings()
 
     def update_template_error_handler(self, response):
@@ -1429,8 +1429,8 @@ class ProcessingService(QObject):
             if hydrated is not None:
                 self.active_template = hydrated
                 self.templates[hydrated.id] = hydrated
-        except Exception:
-            pass
+        except Exception as e:
+            log(f"Could not hydrate template details from response: {e}")
         if self.in_template_mode and self.active_template:
             self.template_aois = {aoi.table_id: aoi for aoi in self.active_template.aoi_dtos()}
             self.view.update_processing_table(self.combined_template_rows())
