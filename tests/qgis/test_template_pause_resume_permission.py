@@ -22,6 +22,7 @@ def _plugin_with_template(user_role, is_active=True, status="READY",
     plugin.processing_service = MagicMock()
     plugin.processing_service.selected_template.return_value = SimpleNamespace(
         isActive=is_active, status=status, userId=template_user_id,
+        is_failed=(status or "").upper() == "FAILED",
     )
     plugin.processing_service.selected_processing.return_value = None
     # Selecting a template row happens in the processings list, not inside a template.
@@ -103,6 +104,20 @@ def test_restart_enabled_for_contributor_on_own_template():
     plugin.update_processing_options_menu()
 
     plugin.dlg.template_restart_action.setEnabled.assert_called_once_with(True)
+
+
+def test_failed_but_active_template_offers_restart_not_pause():
+    # A FAILED template can still be isActive; it must offer Restart (not Pause), matching
+    # table_status which prioritises FAILED over isActive.
+    plugin = _plugin_with_template(UserRole.owner, is_active=True, status="FAILED")
+
+    plugin.update_processing_options_menu()
+
+    plugin.dlg.template_restart_action.setEnabled.assert_called_once_with(True)
+    plugin.dlg.template_pause_action.setEnabled.assert_not_called()
+    actions = [c.args[0] for c in plugin.dlg.options_menu.addAction.call_args_list]
+    assert plugin.dlg.template_restart_action in actions
+    assert plugin.dlg.template_pause_action not in actions
 
 
 def test_rename_shown_for_contributor_on_own_template_only():
