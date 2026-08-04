@@ -120,15 +120,6 @@ def test_remove_selected_aois_layer_drops_it_from_project_and_aoi_layers():
     assert plugin._selected_aois_layer_id is None
 
 
-def test_union_helper_ignores_aois_without_geometry():
-    # Still used by the local search filter's min-intersection reference.
-    plugin = _plugin([_aoi("a1", None), _aoi("a2", _square(0, 0))])
-
-    union = plugin._union_of_selected_aoi_geometries()
-
-    assert round(union.area(), 6) == 1.0
-
-
 def test_geometry_from_geojson_none_for_empty():
     assert Mapflow._geometry_from_geojson(None) is None
     assert Mapflow._geometry_from_geojson({}) is None

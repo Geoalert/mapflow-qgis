@@ -81,6 +81,9 @@ class ImageSchema(Serializable, SkipDataClass):
     zoom: Optional[str] = None
     minAreaSqkm: Optional[float] = None
     isNew: Optional[bool] = None  # template search results: image is new since lastCheckedAt
+    # Backend-computed % of the searched AOI(s) this image covers. Used by the local
+    # min-intersection filter instead of recomputing intersection on the client.
+    aoiIntersectionPercent: Optional[float] = None
 
     def __post_init__(self):
         if isinstance(self.acquisitionDate, str):
