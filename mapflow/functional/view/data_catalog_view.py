@@ -12,6 +12,7 @@ from ...functional.app_context import AppContext
 from ...functional.helpers import get_readable_size
 from ...schema import MyImageryParams
 from ...schema.data_catalog import MosaicReturnSchema, ImageReturnSchema
+from ..service.alert_service import log
 
 class DataCatalogView(QObject):
     def __init__(self, dlg: MainDialog, app_context: AppContext):
@@ -307,8 +308,8 @@ class DataCatalogView(QObject):
         self.dlg.imageTableFilled.emit()
         try: # disconnect signal for selecting image in a table on toSourceButton click
             self.dlg.imageTableFilled.disconnect(self.show_source_image_connection)
-        except: # if there was no connection
-            pass
+        except Exception as e: # if there was no connection
+            log(f"No imageTableFilled connection to disconnect: {e}", "info")
 
     def rename_image_in_table(self, image: ImageReturnSchema):
         if self.mosaic_table_visible:
@@ -592,8 +593,8 @@ class DataCatalogView(QObject):
                 self.dlg.imageTable.clearSelection()
                 self.dlg.stackedLayout.setCurrentIndex(1)
                 self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
-            except:
-                pass
+            except Exception as e:
+                log(f"Could not focus the My Imagery image selection: {e}", "info")
 
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """A duplicate of alert function from mapflow.py to avoid circular import.

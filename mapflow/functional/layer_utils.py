@@ -49,7 +49,7 @@ def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
     return extent_geometry
 
 
-def generate_xyz_layer_definition(url: str,
+def generate_xyz_layer_definition(url: str,  # nosec - empty username/password defaults, not secrets
                                   source_type: PreviewType,
                                   max_zoom: Optional[int] = Config.MAX_ZOOM,
                                   username: Optional[str] = "",

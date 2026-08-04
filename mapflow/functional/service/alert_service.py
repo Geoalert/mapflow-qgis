@@ -63,6 +63,17 @@ class AlertService(QObject):
         return self.alert(message, QMessageBox.Question, blocking=True)
 
 
+def log(message: str, level: str = "warning") -> None:
+    """Record a best-effort/background failure in the QGIS log panel (under the "Mapflow" tag)
+    instead of swallowing it silently. ``level`` is one of "info"/"warning"/"critical".
+
+    qgis is imported lazily so this module stays importable without the QGIS runtime."""
+    from qgis.core import Qgis, QgsMessageLog
+    qgis_level = {"info": Qgis.Info, "warning": Qgis.Warning,
+                  "critical": Qgis.Critical}.get(level, Qgis.Warning)
+    QgsMessageLog.logMessage(message, "Mapflow", level=qgis_level)
+
+
 # Convenience functions for direct import
 def alert(message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking: bool = True) -> bool:
     """Display an alert using the singleton AlertService."""
