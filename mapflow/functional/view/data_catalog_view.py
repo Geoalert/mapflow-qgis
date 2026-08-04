@@ -344,7 +344,7 @@ class DataCatalogView(QObject):
             item = self.dlg.mosaicTable.findItems(mosaic_id, Qt.MatchExactly)[0]
             self.dlg.mosaicTable.setCurrentCell(item.row(), 1)
             self.app_context.allow_enable_processing['my_mosaic_loaded'] = True
-            if not False in self.app_context.allow_enable_processing.values():
+            if False not in self.app_context.allow_enable_processing.values():
                 self.dlg.startProcessing.setEnabled(True)
         except IndexError:
             self.alert(self.tr("No imagery collection with id '{mosaic_id}' was found").format(mosaic_id=mosaic_id))
@@ -357,7 +357,7 @@ class DataCatalogView(QObject):
             item = self.dlg.imageTable.findItems(image_id, Qt.MatchExactly)[0]
             self.dlg.imageTable.setCurrentCell(item.row(), 1)
             self.app_context.allow_enable_processing['my_image_loaded'] = True
-            if not False in self.app_context.allow_enable_processing.values():
+            if False not in self.app_context.allow_enable_processing.values():
                 self.dlg.startProcessing.setEnabled(True)
         except IndexError:
             self.alert(self.tr("No image with id '{image_id}' was found").format(image_id=image_id))

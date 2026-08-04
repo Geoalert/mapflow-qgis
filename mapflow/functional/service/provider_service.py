@@ -187,7 +187,7 @@ class ProviderService(QObject):
     def validate_provider_params(self, provider):
         error = None
         if isinstance(provider, MyImageryProvider):
-            if self.my_imagery_provider_instance.mosaic_id == self.my_imagery_provider_instance.image_ids == None:
+            if self.my_imagery_provider_instance.mosaic_id is None and self.my_imagery_provider_instance.image_ids is None:
                 error = self.tr('Choose imagery collection or image to start processing')
         elif isinstance(provider, ImagerySearchProvider):
             # `not image_ids` covers both the cleared-selection case (None) and
@@ -426,12 +426,13 @@ class ProviderService(QObject):
         imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
         self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
         # Only name, zoom and id are returned, so we map column indices to per-row value lookups
-        per_row_columns = lambda row, image_id: {
-            self.config.NAME_COLUMN_INDEX: provider.imagerySearch.dataProvider,
-            self.config.SEARCH_ID_COLUMN_INDEX: image_id,
-            self.config.ZOOM_COLUMN_INDEX: provider.imagerySearch.zoom,
-            self.config.LOCAL_INDEX_COLUMN: row,
-        }
+        def per_row_columns(row, image_id):
+            return {
+                self.config.NAME_COLUMN_INDEX: provider.imagerySearch.dataProvider,
+                self.config.SEARCH_ID_COLUMN_INDEX: image_id,
+                self.config.ZOOM_COLUMN_INDEX: provider.imagerySearch.zoom,
+                self.config.LOCAL_INDEX_COLUMN: row,
+            }
         column_indices = [self.config.NAME_COLUMN_INDEX,
                           self.config.SEARCH_ID_COLUMN_INDEX,
                           self.config.ZOOM_COLUMN_INDEX,
@@ -513,11 +514,11 @@ class ProviderService(QObject):
     def duplicate_aoi(self, provider):
         if isinstance(provider, ImagerySearchParams):
             self.duplicate_imagery_search(provider)
-        if self.app_context.allow_enable_processing['aoi_loaded'] == True: # it became true somewhere else in error handler
+        if self.app_context.allow_enable_processing['aoi_loaded'] is True: # it became true somewhere else in error handler
             return
         else: # if other two are True - enable start
             self.app_context.allow_enable_processing['aoi_loaded'] = True
-            if not False in self.app_context.allow_enable_processing.values():
+            if False not in self.app_context.allow_enable_processing.values():
                 self.dlg.startProcessing.setEnabled(True)
     
     @property
