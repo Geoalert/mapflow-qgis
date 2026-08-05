@@ -22,6 +22,20 @@ RUN python3 -m pip install --no-cache-dir \
         pytest \
         pytest-qt
 
+# Static-analysis tools, mirroring the three checks plugins.qgis.org runs
+# on plugin submission (see spec/004_stack.md). They live in this image
+# rather than a host venv so every developer and CI get identical results
+# instead of whatever each machine happened to pip-install.
+#
+# Pinned deliberately: an unpinned linter silently changes its verdict when
+# upstream adds a rule, which turns an unrelated MR red. Bump on purpose.
+# detect-secrets in particular must match the version that generated
+# .secrets.baseline, or it rejects the baseline as unreadable.
+RUN python3 -m pip install --no-cache-dir \
+        flake8==7.3.0 \
+        bandit==1.9.4 \
+        detect-secrets==1.5.0
+
 # Run Qt without an X display by default; the UI tier overrides this
 # by wrapping pytest in `xvfb-run` (provides a real X server).
 ENV QT_QPA_PLATFORM=offscreen \
