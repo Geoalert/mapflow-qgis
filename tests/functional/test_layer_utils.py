@@ -1,4 +1,4 @@
-from mapflow.functional.layer_utils import *
+from mapflow.functional.layer_utils import generate_xyz_layer_definition
 
 
 def test_xyz_no_creds():

@@ -102,7 +102,7 @@ class Config:
 
     # MISC
     SHOW_RAW_ERROR = (QgsSettings().value("variables/mapflow_raw_error", "false").lower() == "true")
-    INVALID_TOKEN_WARNING_OBJECT_NAME = 'invalidToken'  # nosec - Qt object name, not a secret
+    INVALID_TOKEN_WARNING_OBJECT_NAME = 'invalidToken'  # nosec B105  # Qt object name, not a secret
     METADATA_MORE_BUTTON_OBJECT_NAME = 'getMoreMetadata'
     MAX_ZOOM = 21
     DEFAULT_ZOOM = MAX_FREE_ZOOM

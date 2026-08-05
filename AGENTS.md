@@ -234,16 +234,27 @@ Note: `agent-make` does not accept `VAR=val` overrides. Every test target alread
 - If `agent-make` blocks with *"local files differ from origin/master"*, a watched file (`Makefile`, `Dockerfile.tests`) was edited locally — escalate to the user. Do not undo other work to satisfy the check.
 
 # STATIC ANALYSIS (LINTING)
-- `agent-make lint` runs **ruff** (config in `pyproject.toml`) then **pyright** (config in `pyrightconfig.json`).
-- Unlike tests, lint runs on the **host**, not in Docker: ruff is AST-only and pyright runs in lenient
-  `basic` mode, so neither needs the QGIS runtime. Both are installed in the project `venv`.
-- Division of labour: ruff finds unused code and real-bug patterns (pyflakes `F` + bugbear `B`); pyright
-  adds flow analysis ruff cannot do — `reportPossiblyUnbound` and `reportUndefinedVariable`. Pyright's
-  type-completeness reports are intentionally muted until the codebase is annotated (see `pyrightconfig.json`).
-- The rule set is deliberately narrow to start (`select = ["F", "B"]`); broaden it (`E`, `W`, `I`, `UP`)
-  once the baseline is clean. `F401` is ignored in `__init__.py` (intentional re-exports).
-- **Pending change (WAL 3.7.0, step 1):** the linter moves from ruff to **flake8**, adding **bandit** and
-  **detect-secrets** to match the checks qgis.org runs on plugin submissions. Update this section when that lands.
+- `agent-make lint` runs **flake8**, then **bandit**, then **detect-secrets** — the three checks
+  plugins.qgis.org runs on plugin submission, with the same invocations, so a green run here predicts
+  a clean scan there. Full rationale in `spec/004_stack.md` § Static analysis.
+- Unlike the previous ruff/pyright setup, lint runs **in the same Docker image as the tests**, not on
+  the host. Tool versions are pinned in `Dockerfile.tests` so every developer and CI get identical
+  results. There is no host `venv` step and no `pip install`.
+- Scope differs per tool on purpose: flake8 covers `mapflow/` **and** `tests/`; bandit covers `mapflow/`
+  only (it is the code that ships, and `B101` would otherwise fire on every pytest assertion);
+  detect-secrets runs against the committed `.secrets.baseline`.
+- At qgis.org, bandit and detect-secrets are **blocking** and flake8 is advisory. Locally all three
+  block — a check that cannot fail the build does not hold a line.
+- `.flake8` carries a **debt ledger** under `extend-ignore`: rule classes still outstanding from the
+  3.6.0 scan, each commented with the WAL step that removes it. **The list only shrinks.** Do not add a
+  code to it to make your MR pass — fix the finding, or escalate. Note the qgis.org scan never reads
+  `.flake8`, so everything in that list is debt still owed at submission time.
+- Use `extend-ignore`, never `ignore` — the latter *replaces* flake8's default ignore set and silently
+  re-enables rules qgis.org itself does not report. flake8 parses config with `RawConfigParser`, so
+  inline comments on value lines are a syntax error; keep comments on their own line.
+- **Known gap:** nothing in this toolchain replaces pyright's `reportPossiblyUnbound`
+  (use-before-assignment across branches). flake8's `F821` covers undefined names only. Accepted
+  deliberately for qgis.org parity; revisit after the refactor lands type annotations.
 
 # TERMINAL COMMAND BATCHING
 - Read-only commands (`agent-git status`, `agent-git diff`, `agent-git log`, `agent-git show`, etc.) are allowlisted — call them directly, don't batch.

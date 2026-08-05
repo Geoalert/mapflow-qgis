@@ -32,7 +32,7 @@ Zoom selector API for automatic zoom detection based on imagery source resolutio
 Local persistence: QgsSettings keys, QGIS Auth Manager (OAuth2), temporary files. Full key inventory derived from code.
 
 ## 004_stack.md
-Used libraries, pinned versions where important, and external system implementation choices.
+Used libraries, pinned versions where important, external system implementation choices, the test runtime, and the static-analysis toolchain.
 
 ## 005_interactions.md
 Integration boundaries: Mapflow backend, Keycloak OAuth2, QGIS application, local filesystem.
