@@ -1,4 +1,4 @@
-# Test runner for mapflow-qgis.
+# Test and lint runner for mapflow-qgis.
 #
 # All targets run inside the qgis/qgis:release-3_28 Docker image so
 # host setup is irrelevant. See spec/004_stack.md and tests/README.md
@@ -7,12 +7,6 @@
 IMAGE ?= mapflow-qgis-tests
 DOCKERFILE ?= Dockerfile.tests
 DOCKER_RUN = docker run --rm -v "$(CURDIR)":/app -w /app $(IMAGE)
-
-# Linting runs on the HOST (not in the Docker image): ruff is AST-only and
-# pyright runs in lenient/basic mode, so neither needs the QGIS runtime. Both
-# are installed in the project venv; override RUFF/PYRIGHT to point elsewhere.
-RUFF ?= venv/bin/ruff
-PYRIGHT ?= venv/bin/pyright
 
 .PHONY: help docker-build test test-functional test-qgis test-ui lint clean
 
@@ -23,7 +17,7 @@ help:
 	@echo "  test-qgis         Run QGIS-runtime tests under tests/qgis/"
 	@echo "  test-ui           Run UI tests under tests/ui/ (xvfb-run)"
 	@echo "  test              Run all three tiers"
-	@echo "  lint              Run ruff + pyright on the host (uses project venv)"
+	@echo "  lint              Run the plugins.qgis.org checks (flake8 + bandit + detect-secrets)"
 	@echo "  clean             Remove pytest cache + bytecode"
 
 docker-build:
@@ -43,12 +37,18 @@ test-ui: docker-build
 
 test: test-functional test-qgis test-ui
 
-# Static analysis. Ruff catches unused code / real-bug patterns; pyright adds
-# flow analysis (possibly-unbound, undefined names) that ruff can't do.
-# Config lives in pyproject.toml (ruff) and pyrightconfig.json (pyright).
-lint:
-	$(RUFF) check mapflow tests
-	$(PYRIGHT)
+# Static analysis mirrors the three checks plugins.qgis.org runs on plugin
+# submission, using their invocations so a green run here predicts a clean
+# scan there: default flake8 rules at line-length 120, bandit at medium-or-
+# higher severity, detect-secrets against the committed baseline.
+#
+# Scope differs per tool on purpose. flake8 covers tests too — style debt in
+# tests is still debt. bandit covers only mapflow/: it is the code that ships,
+# and B101 (assert_used) would otherwise fire on every pytest assertion.
+lint: docker-build
+	$(DOCKER_RUN) flake8 --max-line-length=120 mapflow tests
+	$(DOCKER_RUN) bandit -r mapflow -ll --quiet
+	$(DOCKER_RUN) bash -c 'detect-secrets-hook --baseline .secrets.baseline $$(find mapflow tests -type f)'
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
