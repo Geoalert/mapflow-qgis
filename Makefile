@@ -38,17 +38,32 @@ test-ui: docker-build
 test: test-functional test-qgis test-ui
 
 # Static analysis mirrors the three checks plugins.qgis.org runs on plugin
-# submission, using their invocations so a green run here predicts a clean
-# scan there: default flake8 rules at line-length 120, bandit at medium-or-
-# higher severity, detect-secrets against the committed baseline.
+# submission: default flake8 rules at line-length 120, bandit, detect-secrets.
 #
 # Scope differs per tool on purpose. flake8 covers tests too — style debt in
 # tests is still debt. bandit covers only mapflow/: it is the code that ships,
 # and B101 (assert_used) would otherwise fire on every pytest assertion.
+#
+# NO SEVERITY FLOOR ON BANDIT. An earlier version passed -ll (medium-and-above)
+# believing it matched qgis.org. It does not: qgis.org runs `-t <test-ids>` and
+# only falls back to -ll when no rules are configured, and it applies its OWN
+# per-rule severity rather than bandit's. It reports B110 (try_except_pass) as
+# critical and B101 (assert_used) as a warning — both of which bandit itself
+# rates LOW, so -ll silently dropped every finding qgis.org would block on.
+# -ll made us strictly more permissive than the scan we claim to mirror.
+#
+# detect-secrets runs WITHOUT --baseline on purpose. Passing it makes
+# detect-secrets-hook call `git diff --name-only` (pre_commit_hook.py, guarded
+# by `if output.baseline`) to check the baseline is staged — a pre-commit
+# concern that is meaningless here and hard-fails wherever the container cannot
+# read a git repo, which is exactly what happens on the CI runner. Allowlist
+# findings with an inline `# pragma: allowlist secret` comment instead — the
+# tool's own documented mechanism. .secrets.baseline stays committed because
+# the qgis.org scanner does look for it.
 lint: docker-build
 	$(DOCKER_RUN) flake8 --max-line-length=120 mapflow tests
-	$(DOCKER_RUN) bandit -r mapflow -ll --quiet
-	$(DOCKER_RUN) bash -c 'detect-secrets-hook --baseline .secrets.baseline $$(find mapflow tests -type f)'
+	$(DOCKER_RUN) bandit -r mapflow --quiet
+	$(DOCKER_RUN) bash -c 'detect-secrets-hook $$(find mapflow tests -type f)'
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
