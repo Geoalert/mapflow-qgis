@@ -4052,7 +4052,7 @@ class Mapflow(QObject):
         try:
             self.app_context.username, self.app_context.password = b64decode(token).decode().split(':')
         except:
-            self.app_context.username = self.app_context.password = ''  # nosec - clearing creds, not a secret
+            self.app_context.username = self.app_context.password = ''  # nosec B105  # clearing creds, not a secret
             self.dlg_login.show()
             self.alert(self.tr('Wrong token. '
                                'Visit "<a href=\"https://app.mapflow.ai/account/api\">mapflow.ai</a>" '

@@ -32,7 +32,7 @@ class CRS(StrEnum):
 
 
 class BasicAuth:
-    def __init__(self, login: str = "", password: str = ""):  # nosec - empty default, not a secret
+    def __init__(self, login: str = "", password: str = ""):  # nosec B107  # empty default, not a secret
         if not isinstance(login, str) or not isinstance(password, str):
             raise TypeError("Login and password must be string")
         self.login = login
