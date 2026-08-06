@@ -16,14 +16,7 @@ However, as we don't want to release an "empty" version (without any user-facing
 
 ## 1. Refactoring
 
-[ ] Bring `tests/test_imagery_search_multi.py` into a tier
-Discovered while wiring up the lint gate. The file sits at the tests root with 23 test
-functions, outside all three tiers. `make test` runs `pytest tests/functional`, `pytest
-tests/qgis`, `pytest tests/ui` with explicit paths, which override `testpaths = tests` in
-pytest.ini — so these 23 tests have **never run in CI**, and the spec's three-tier coverage
-claim is wrong by that much. Pick the tier by runtime need, not by scope (spec/004_stack.md):
-the file is heavily mocked but imports `Config`, so confirm by running rather than assuming.
-Sizing is unknown until it runs — treat the failures as the real work, not the move.
+[ready-for-review] Bring `tests/test_imagery_search_multi.py` into a tier
 
 [ ] Narrow the broad exception handlers
 The 3.6.0 security scan flagged `try/except Exception` blocks that only log. Narrow them to the
