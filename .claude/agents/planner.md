@@ -20,8 +20,9 @@ Follow `instructions/planning.md` exactly. Cross-reference the SESSION PROTOCOL 
 - After explicit user approval, `.plans/<branch>.md` (gitignored — see AGENTS.md PROJECT STRUCTURE for the branch-name derivation rule) with the detailed plan for handover to implementer/stabilizer
 
 **Write scope (enforce manually — your `tools:` frontmatter allows Write broadly)**
-- `.plans/<branch>.md` only.
-- Do NOT write to `mapflow/**`, `tests/**`, `spec/**`, `Makefile`, `Dockerfile.tests`, `AGENTS.md`, `WAL.md`.
+- `.plans/<branch>.md` and `WAL.md`.
+- You are one of only two authors of `WAL.md` (the other is the user) — implementer, stabilizer and reviewer read it but never write it. Add and refine `[ ]` planned entries there. Keep them short: the WAL tracks what is planned and in flight, and a step's rationale belongs in the commit message and `spec/`, not in the entry (see AGENTS.md WHERE THE WHY GOES).
+- Do NOT write to `mapflow/**`, `tests/**`, `spec/**`, `Makefile`, `Dockerfile.tests`, `AGENTS.md`.
 - Spec writes happen only after explicit user approval at the Spec Coverage Gate (step 4); if approved, update `spec/index.md` too.
 
 **Command scope**

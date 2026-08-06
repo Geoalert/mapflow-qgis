@@ -91,8 +91,11 @@ This is a **QGIS 3 plugin** (Python, Qt/PyQGIS). It ships as a zip to the QGIS p
   - /mapflow/schema: data schemas
   - /mapflow/errors: error types and user-facing messages
 - /tests: pytest suites, split by **runtime tier**, not by unit/integration — `functional/` (pure logic, no QGIS), `qgis/` (needs the QGIS runtime), `ui/` (Qt widgets, runs under xvfb)
-- WAL.md - persistent journal of completed steps and the WHY of each decision. Distilled, committed, survives across branches.
-- .plans/ - **gitignored** per-branch agent handover scratchpad. One file per feature branch: `.plans/<sanitized-branch-name>.md` (slashes in the branch name become dashes, e.g. `feature/foo-bar` → `.plans/feature-foo-bar.md`). Holds the detailed step plan, stabilization discoveries, push-back rounds, and Final Review Summary. Never reaches the remote; the distilled motivation lands in WAL.md at merge.
+- `WAL.md` — **lean, forward-facing** plan + in-flight tracker: holds only `[ ]` planned and `[ready-for-review]` in-flight steps. It is NOT a permanent journal. The **WHY** of completed work is preserved in (1) the change's **commit message** and (2) `spec/` files for durable decisions. When a step merges, its rationale is distilled into those places and the entry is **removed** from `WAL.md`.
+  - Authors: the **user** and the **planner**. Implementer, stabilizer and reviewer read it but never write it.
+  - Consult it when planning the next step — it should answer "what is left", not "what did we do".
+  - Corollary: never write anything into `WAL.md` that belongs in `spec/`. A decision that outlives the step is a spec change; the WAL entry only points at it.
+- .plans/ - **gitignored** per-branch agent handover scratchpad. One file per feature branch: `.plans/<sanitized-branch-name>.md` (slashes in the branch name become dashes, e.g. `feature/foo-bar` → `.plans/feature-foo-bar.md`). Holds the detailed step plan, stabilization discoveries, push-back rounds, and Final Review Summary. Never reaches the remote; its distilled insights land in the **commit message** (and `spec/`, if a durable decision changed) at merge.
 
 # SESSION PROTOCOL FOR FEATURE IMPLEMENTATION
 Execute it every time a session is initiated.
@@ -135,9 +138,10 @@ Execute it every time a session is initiated.
     - Reviewer inputs are limited to WAL.md, spec files referenced by the step, and the diff — the reviewer MUST NOT read `.plans/<branch>.md` (reading the implementer's step-by-step biases review toward plan-compliance instead of spec-compliance).
     - Reviewer appends Final Review Summary to `.plans/<branch>.md` before exit (fixed / push-backs accepted / push-backs confirmed / deferred / open questions / escalation reason if any) AND prints the summary in chat.
     - On escalation, STOP ITERATION and present the summary to user; do NOT proceed to step 12.
-12. Pre-merge WAL update (`AGENTS.md`):
-    - Update WAL step status to `[ready-for-review]` with concise motivation.
-    - Distil important insights from `.plans/<branch>.md` into the WAL.md motivation line. The `.plans/` file itself stays local — gitignored, no cleanup needed.
+12. Pre-merge distillation (`AGENTS.md`):
+    - Mark the WAL step `[ready-for-review]`. Keep the entry itself short — it is a tracker line, not a write-up.
+    - Distil the important insights from `.plans/<branch>.md` into **the commit message body** (the WHY), and into `spec/` for anything that outlives this step. The `.plans/` file stays local — gitignored, no cleanup needed.
+    - If a durable decision changed, the spec edit is part of THIS MR. Do not leave it as a WAL note to apply later.
 13. Commit, publish branch, and open Draft MR (`AGENTS.md`):
     - Commit work with a meaningful message — the subject doubles as the default MR title.
     - Publish branch and open the Draft MR in one shot:
@@ -151,28 +155,29 @@ Execute it every time a session is initiated.
     - Wait for user to confirm review outcome (`approved`, `changes requested`, or `merged`).
     - If `changes requested`: address feedback, push to the same MR, keep WAL status `[ready-for-review]`.
     - If `approved`: 
-    -- update WAL step status to `[v]`. 
-    -- create a follow-up commit for WAL update, and `agent-git push`. Then wait for user to merge.
+    -- **remove** the step's entry from `WAL.md` — its WHY is already in the commit message and, where durable, in `spec/`. Do not mark it done and leave it; the WAL only carries planned and in-flight work.
+    -- create a follow-up commit for the WAL removal, and `agent-git push`. Then wait for user to merge.
     -- `.plans/<branch>.md` is gitignored — no removal step needed; it stays on the local machine and is naturally orphaned when the branch is deleted.
-    - If `merged` (user merged directly without separate approval): update WAL step to `[v]` on `dev` (see step 15).
+    - If `merged` (user merged directly without separate approval): remove the entry on `dev` (see step 15).
 15. Post-merge finalization (`AGENTS.md`):
-    - If WAL was already updated to `[v]` in the MR (approval path): nothing to do, WAL is correct on `dev` after merge.
-    - If user merged without prior approval signal: `agent-git checkout dev && agent-git pull --ff-only`, mark WAL step `[v]`, then land it through a short-lived `chore/wal-*` branch + MR. A direct push from `dev` is blocked — `dev` carries none of the allowed branch prefixes (`feature/`, `fix/`, `chore/`, `refactor/`, `test/`, `agent/`).
+    - If the entry was already removed in the MR (approval path): nothing to do, `WAL.md` is correct on `dev` after merge.
+    - If user merged without prior approval signal: `agent-git checkout dev && agent-git pull --ff-only`, remove the step's entry, then land it through a short-lived `chore/wal-*` branch + MR. A direct push from `dev` is blocked — `dev` carries none of the allowed branch prefixes (`feature/`, `fix/`, `chore/`, `refactor/`, `test/`, `agent/`).
+    - Before removing, confirm the WHY actually survives elsewhere. If the rationale exists only in the WAL entry, it is not yet distilled — move it to `spec/` first, or the removal destroys it.
 
 # IMPLEMENTATION DEFINITION OF DONE (PRE-MERGE)
 - tests added/updated according to the feature specification
 - `agent-make test` runs successfully
 - review loop converged (0 open CRITICAL) or was explicitly escalated to user with Final Review Summary
 - branch pushed and `[Draft]` MR created
-- WAL step is updated to `[ready-for-review]` with concise motivation
+- WAL step is marked `[ready-for-review]`; the WHY is in the commit message body, and any durable decision is in `spec/`
 
 # APPROVAL DEFINITION OF DONE (PRE-MERGE)
 - user confirms `approved` in chat
-- WAL step is updated to `[v]` in the MR branch, pushed
+- the step's entry is **removed** from `WAL.md` in the MR branch, pushed
 - user merges the MR
 
 # WORKFLOW DEFINITION OF DONE (POST-MERGE)
-- MR is merged (WAL step already `[v]` from approval step)
+- MR is merged (the WAL entry was already removed at the approval step)
 - `dev` is up to date
 - if the step touched a watched file (`Makefile`, `Dockerfile.tests`), it has ALSO reached `master` — otherwise `agent-make` stays blocked for every later step (see BRANCH MODEL)
 
@@ -195,20 +200,47 @@ Execute it every time a session is initiated.
 - The main agent stays as orchestrator: it drives the session protocol above and dispatches each phase to the matching subagent.
 - In environments without subagent support (Copilot, generic agents), ignore `.claude/agents/` and execute the instruction files inline — the workflow is unchanged.
 
-# WAL MOTIVATION EXAMPLES
+# WHERE THE WHY GOES
+Three destinations, and the split is not optional — see PROJECT STRUCTURE for the WAL's scope.
+
+| content | destination | lifetime |
+|---|---|---|
+| what is planned / in flight | `WAL.md` | deleted when the step merges |
+| why this change was made | **commit message body** | forever, attached to the diff |
+| a decision that outlives the step | `spec/` | forever, findable without git |
+
+## WAL entries are tracker lines, not write-ups
+BAD — a WAL entry carrying rationale that belongs in the commit message:
+```
+[ready-for-review] Implement request to external service
+aiohttp is better than httpx for high throughput; limited connections to 20 because
+the server's DDoS protection starts rejecting around 40; retries use exponential
+backoff since the 502s are transient …
+```
+GOOD:
+```
+[ready-for-review] Implement request to external service
+```
+
+## Commit messages carry the WHY
 *Illustration — substitute your stack. The pattern (motivate the WHY, not the WHAT) is language-agnostic.*
 
-BAD EXAMPLE (describes WHAT, which is already obvious from code). Don't do this.
+BAD EXAMPLE (describes WHAT, which is already obvious from the diff). Don't do this.
 ```
-[v] Implement request to external service
+Implement request to external service
+
 Used aiohttp; set the number of connections to 20
 ```
 GOOD EXAMPLE:
 ```
-[v] Implement request to external service
+Implement request to external service
+
 aiohttp is better than httpx for high throughput
 limited connections to avoid server DDoS protection, issues can start around 40 connections
 ```
+If that rationale constrains future work — "we cap connections at 20" is a contract, not a
+one-off — it belongs in `spec/` as well. The commit message explains this change; the spec
+tells the next person what they may not break.
 
 # COMMANDS TO RUN
 All build/test invocations go through `agent-make` (raw `make` requires manual approval per call and bypasses watched-file verification).
@@ -252,6 +284,10 @@ Note: `agent-make` does not accept `VAR=val` overrides. Every test target alread
 - Use `extend-ignore`, never `ignore` — the latter *replaces* flake8's default ignore set and silently
   re-enables rules qgis.org itself does not report. flake8 parses config with `RawConfigParser`, so
   inline comments on value lines are a syntax error; keep comments on their own line.
+- Suppressing a bandit finding: the form is `# nosec B105  # reason` — test ID first, then a
+  **second `#`** before the prose. bandit captures everything after `nosec` up to the next `#` and
+  parses it as test IDs, so `# nosec - reason` makes it warn once per word, once per run. A bare
+  `# nosec` with the reason on the preceding line also parses cleanly.
 - **Known gap:** nothing in this toolchain replaces pyright's `reportPossiblyUnbound`
   (use-before-assignment across branches). flake8's `F821` covers undefined names only. Accepted
   deliberately for qgis.org parity; revisit after the refactor lands type annotations.

@@ -1,4 +1,8 @@
-# Journal for active implementation planning
+# Planned and in-flight work
+
+Forward-facing only: `[ ]` planned, `[ready-for-review]` in flight. Entries are removed when they
+merge — the WHY lives in the commit message and, for durable decisions, in `spec/`.
+See AGENTS.md § WHERE THE WHY GOES.
 
 # V 3.7.0 LTR
 
@@ -12,60 +16,30 @@ However, as we don't want to release an "empty" version (without any user-facing
 
 ## 1. Refactoring
 
-[ ] Address the security check problems
-- The 3.6.0 security scan flagged several broad `try/except Exception` blocks that only logged
-  (previously swallowed silently). Narrow them to the specific exceptions actually expected, so
-  unrelated errors surface instead of being logged and ignored.
-- [ready-for-review] Move the `assert` key-collision checks in errors/error_message_list.py
-  `update()` to a unit test (Bandit B101). Decided: the merge only combines the statically-defined
-  ProcessingErrors/DataErrors/ApiErrors dicts at import, so the invariant is a source-code property
-  — a test catches it in CI, runs even under `python -O`, and costs nothing in production.
-  **Landed in `tests/functional/`, not `tests/qgis/` as this bullet originally said.** The check is
-  pure dict-key logic and touches no QGIS state, so spec/004_stack.md's tier definition puts it in
-  the functional tier; AGENTS.md SPECIFICATION GUIDELINES rule 2 makes the spec win over this WAL
-  line. `tests/functional/test_error_message.py` already imports the same module — precedent.
-  Tests are pairwise across the three registries rather than one merged-length check, so a failure
-  names the offending pair and the colliding key instead of just reporting a count mismatch.
-  Verified by mutation: planting a duplicate key makes exactly the relevant pair fail and leaves the
-  others passing. Without that check the test could have been vacuous.
-  These two asserts were the last thing blocking a green `agent-make lint` after the bandit `-ll`
-  removal, so this bullet had to land with the lint gate rather than after it.
-- [ready-for-review] Change the linter from current **ruff** to **flake8** and add **bandit** and
-  **detect-secrets** to match the qgis.org checks.
-  Verified against the qgis.org scanner rather than assumed: it runs exactly these three, and
-  **pyright is not among them** — so pyright is dropped. That is a real coverage loss, not just
-  cleanup: `reportPossiblyUnbound` (use-before-assignment across branches) has no replacement in
-  the new toolchain — flake8's F821 catches undefined names only — and this codebase has broad
-  `except Exception` handlers that would mask exactly that class of bug. Accepted for qgis.org
-  parity; revisit when the refactor lands type annotations.
-  The old ruff config (`select = ["F","B"]`) was *narrower* than qgis.org's default rule set, which
-  is why the 3.6.0 scan surfaced E-codes local lint could never report. Matching them raised the
-  count to ~1425, of which ~811 remain in a documented `.flake8` ledger.
-  CI ran **no lint at all** before this. That is the reason the gate went in first, ahead of the
-  cleanup bullets: without a ratchet, every finding-reduction MR is a snapshot the next MR silently
-  undoes — which is how 1425 findings accumulated. Ledger entries name the step that removes them
-  and the list only shrinks.
-  Closed outright rather than deferred: W191 (539 findings, 38% of the total, all in one test file
-  with uniform tab indentation — `git diff -w` empty proves the conversion was semantics-free) and
-  F403/F405 (one star-import line). Whitespace normalisation of the ~450 residual is deliberately
-  **deferred to immediately before the refactor branch cut**: it concentrates in `mapflow.py` and
-  the service layer, which the refactoring rewrites, so doing it now means doing it twice, and it
-  would make the in-flight `feature/track-uploaded-image-status` rebase materially worse.
-  F401 outside `__init__.py` is ledgered, not fixed: `tests/functional/conftest.py` documents a
-  circular-import chain that only resolves via partial-module caching, so a nominally unused import
-  may be load-bearing.
-  `# nosec` comments were emitting a bandit warning per site per run. The fix is not an ID prefix —
-  bandit captures everything after `nosec` up to the next `#`, so prose keeps getting parsed as test
-  IDs. Correct form is `# nosec B105  # reason`, with a second `#` terminating the capture.
-
 [ ] Bring `tests/test_imagery_search_multi.py` into a tier
 Discovered while wiring up the lint gate. The file sits at the tests root with 23 test
 functions, outside all three tiers. `make test` runs `pytest tests/functional`, `pytest
 tests/qgis`, `pytest tests/ui` with explicit paths, which override `testpaths = tests` in
 pytest.ini — so these 23 tests have **never run in CI**, and the spec's three-tier coverage
-claim is wrong by that much. Decide the correct tier (likely `qgis/`, it exercises search
-against real objects), move it, and fix whatever fails once it actually runs. Sizing is
-unknown until it runs — treat the failures as the real work, not the move.
+claim is wrong by that much. Pick the tier by runtime need, not by scope (spec/004_stack.md):
+the file is heavily mocked but imports `Config`, so confirm by running rather than assuming.
+Sizing is unknown until it runs — treat the failures as the real work, not the move.
+
+[ ] Narrow the broad exception handlers
+The 3.6.0 security scan flagged `try/except Exception` blocks that only log. Narrow them to the
+exceptions actually expected, so unrelated errors surface instead of being swallowed.
+Scope: 16 bare `except:` (provider_service 5, geometry 4, mapflow 2, http 2, layer_utils 2,
+catalog 1) and 38 `except Exception` (processing_service 14, mapflow 11, 9 files with 1–2).
+Acceptance: `E722` comes out of the `.flake8` ledger, and bandit reports no `B110`.
+Sequenced after the untiered tests: those 23 tests exercise provider_service and
+processing_service, the two heaviest files here, so they are the safety net for this change.
+
+[ ] Normalise the residual whitespace findings
+Clears most of the `.flake8` ledger (~450: W291/W292/W293/W391, E501, E1xx/E2xx/E3xx).
+**Ordering constraint:** must come *after* `feature/track-uploaded-image-status` is rebased and
+landed (§3), and immediately *before* the refactor branch cut. A whole-tree whitespace diff makes
+that rebase materially worse, and the findings concentrate in `mapflow.py` and the service layer,
+which the refactoring rewrites — normalising earlier means doing the work twice.
 
 [ ] Plan the refactoring
 Address known problems, be open to push back if the proposals are wrong; 

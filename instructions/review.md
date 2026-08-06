@@ -9,7 +9,7 @@ Run a bounded, autonomous review loop over the staged diff to catch issues that 
 
 ## Inputs (read only what is needed — token-budget aware)
 - Diff vs. branch base (`agent-git diff master...HEAD`).
-- `WAL.md`: the persistent journal entry for this step — the WHY and acceptance criteria.
+- `WAL.md`: the in-flight entry for this step — scope and acceptance criteria. It is a tracker, not a write-up; the WHY lives in the commit message and in `spec/`.
 - Spec files referenced by the WAL step (do NOT re-read all of `/spec`).
 - Files touched by the diff and their immediate dependencies.
 

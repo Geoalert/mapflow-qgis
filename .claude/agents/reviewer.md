@@ -11,7 +11,7 @@ Follow `instructions/review.md` for methodology, plus the matching pack under `i
 
 **Inputs (read only what is needed — token-budget aware)**
 - `agent-git diff dev...HEAD` — the staged diff (`dev` is the integration branch; see AGENTS.md BRANCH MODEL)
-- `WAL.md` — the persistent journal entry for this step (WHY + acceptance criteria)
+- `WAL.md` — the in-flight entry for this step (scope + acceptance criteria). A tracker line, not a write-up: check the WHY against the commit message and `spec/`, not the WAL.
 - Spec files referenced by the WAL step (do NOT re-read all of `/spec`)
 - Files touched by the diff and their immediate dependencies
 
