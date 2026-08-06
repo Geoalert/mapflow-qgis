@@ -2,6 +2,12 @@
 
 Spec reference: spec/002_B_processing_api.md (ImagerySearchSchema.imageIds: List[str]).
 
+Tier: qgis. Most cases here are mock-driven and would sit happily in the functional
+tier, but ``duplicate_imagery_search`` builds a real in-memory ``QgsVectorLayer`` and
+real ``QgsFeature``s, which is real QGIS state per spec/004_stack.md. The suite is kept
+together rather than split across tiers — both run in the same image, so the split would
+buy nothing and separate tests that belong side by side.
+
 Covers:
 1. Bug #1 — get_search_images_ids returns every selected row's image ID, not just row 0.
 2. Bug #3 — duplicate_imagery_search recreates one row per imageId so the
@@ -89,11 +95,16 @@ def _make_service(rows, provider_names, product_types, zooms=None,
 def _rows_with_ids(ids):
     from mapflow.config import Config
     config = Config()
-    width = config.SEARCH_ID_COLUMN_INDEX + 1
+    # Must be wide enough for LOCAL_INDEX_COLUMN, not just the ID column:
+    # get_local_image_indices() reads the local_index cell, and a short row makes
+    # metadataTable.item() return None -> AttributeError -> the service swallows it
+    # and returns [], silently skipping every provider/zoom/min-area validation.
+    width = max(config.SEARCH_ID_COLUMN_INDEX, config.LOCAL_INDEX_COLUMN) + 1
     rows = []
-    for image_id in ids:
+    for row_index, image_id in enumerate(ids):
         row = [""] * width
         row[config.SEARCH_ID_COLUMN_INDEX] = image_id
+        row[config.LOCAL_INDEX_COLUMN] = str(row_index)
         rows.append(row)
     return rows
 
@@ -292,8 +303,13 @@ class TestDuplicateImagerySearchMultiRow:
         dlg.metadataTable.rowCount.side_effect = lambda: row_count_holder["n"]
         set_items = []
         dlg.metadataTable.setItem.side_effect = lambda r, c, item: set_items.append((r, c, item))
+        # A real QgsGeometry, not a MagicMock: duplicate_imagery_search builds a real
+        # in-memory QgsVectorLayer and calls QgsFeature.setGeometry(), which rejects
+        # anything that is not a genuine geometry. This is why the file sits in the
+        # qgis tier — see the module docstring.
+        from qgis.core import QgsGeometry
         aoi_feature = MagicMock()
-        aoi_feature.geometry.return_value = MagicMock()
+        aoi_feature.geometry.return_value = QgsGeometry.fromWkt("POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))")
         layer = MagicMock()
         layer.getFeatures.return_value = [aoi_feature]
         dlg.polygonCombo.currentLayer.return_value = layer
@@ -317,12 +333,12 @@ class TestDuplicateImagerySearchMultiRow:
         id_col = config.SEARCH_ID_COLUMN_INDEX
         id_items = [(r, item) for (r, c, item) in set_items if c == id_col]
         assert len(id_items) == 3
-        seen_ids = set()
-        for _r, item in id_items:
-            for call in item.setData.call_args_list:
-                args = call.args
-                if len(args) >= 2:
-                    seen_ids.add(args[1])
+        # Read the value off the real QTableWidgetItem rather than inspecting mock call
+        # history: the service constructs genuine items (setData(Qt.DisplayRole, value)),
+        # so there is no call_args_list — and asserting on stored state is the better
+        # check anyway, since it survives a refactor that sets the text differently.
+        from PyQt5.QtCore import Qt
+        seen_ids = {item.data(Qt.DisplayRole) for _r, item in id_items}
         assert seen_ids == set(image_ids)
         # Keys must be ints — `get_local_image_indices` casts the table text via int(),
         # so a string-keyed dict would KeyError downstream and leave the request without dataProvider.
