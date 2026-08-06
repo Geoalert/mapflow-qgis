@@ -16,12 +16,20 @@ However, as we don't want to release an "empty" version (without any user-facing
 - The 3.6.0 security scan flagged several broad `try/except Exception` blocks that only logged
   (previously swallowed silently). Narrow them to the specific exceptions actually expected, so
   unrelated errors surface instead of being logged and ignored.
-- Move the `assert` key-collision checks in errors/error_message_list.py `update()` to a unit test
-  (Bandit B101). Decided: the merge only combines the statically-defined ProcessingErrors/DataErrors/
-  ApiErrors dicts at import, so the invariant is a source-code property — a test catches it in CI,
-  runs even under `python -O`, and costs nothing in production. Delete the two asserts, add
-  tests/qgis/test_error_message_list.py asserting no key collisions (error_descriptions and
-  message_descriptions).
+- [ready-for-review] Move the `assert` key-collision checks in errors/error_message_list.py
+  `update()` to a unit test (Bandit B101). Decided: the merge only combines the statically-defined
+  ProcessingErrors/DataErrors/ApiErrors dicts at import, so the invariant is a source-code property
+  — a test catches it in CI, runs even under `python -O`, and costs nothing in production.
+  **Landed in `tests/functional/`, not `tests/qgis/` as this bullet originally said.** The check is
+  pure dict-key logic and touches no QGIS state, so spec/004_stack.md's tier definition puts it in
+  the functional tier; AGENTS.md SPECIFICATION GUIDELINES rule 2 makes the spec win over this WAL
+  line. `tests/functional/test_error_message.py` already imports the same module — precedent.
+  Tests are pairwise across the three registries rather than one merged-length check, so a failure
+  names the offending pair and the colliding key instead of just reporting a count mismatch.
+  Verified by mutation: planting a duplicate key makes exactly the relevant pair fail and leaves the
+  others passing. Without that check the test could have been vacuous.
+  These two asserts were the last thing blocking a green `agent-make lint` after the bandit `-ll`
+  removal, so this bullet had to land with the lint gate rather than after it.
 - [ready-for-review] Change the linter from current **ruff** to **flake8** and add **bandit** and
   **detect-secrets** to match the qgis.org checks.
   Verified against the qgis.org scanner rather than assumed: it runs exactly these three, and
