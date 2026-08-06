@@ -1,13 +1,16 @@
 import html
 import json
+import logging
 from typing import Callable, Union, Optional
 
 from PyQt5.QtCore import QBuffer, QByteArray, QObject, QTimer, QUrl, qVersion
 from PyQt5.QtNetwork import QHttpMultiPart, QNetworkReply, QNetworkRequest
-from qgis.core import QgsNetworkAccessManager, Qgis, QgsApplication, QgsAuthMethodConfig, QgsMessageLog
+from qgis.core import QgsNetworkAccessManager, Qgis, QgsApplication, QgsAuthMethodConfig
 
 from .constants import DEFAULT_HTTP_TIMEOUT_SECONDS
 from .errors import ErrorMessage, ProxyIsAlreadySet
+
+logger = logging.getLogger(__name__)
 
 
 class Http(QObject):
@@ -152,10 +155,9 @@ class Http(QObject):
         request.setRawHeader(b'x-plugin-version', self.plugin_version.encode())
         try:
             request = self.authorize(request, auth)
-        except Exception as e:
+        except Exception:
             # Send the request unauthorized; the error response is handled by the caller.
-            QgsMessageLog.logMessage(f"Request authorization failed, sending unauthorized: {e}",
-                                     "Mapflow", level=Qgis.Warning)
+            logger.exception("Request authorization failed, sending unauthorized")
 
         if method == self.nam.post or method == self.nam.put:
             response = method(request, body)
@@ -213,7 +215,13 @@ def api_message_parser(response_body: str) -> str:
                             parameters=error_data.get("params", {}),
                             message=error_data.get("message", "Unknown error"))
         return message.to_str()
-    except:
+    except (ValueError, AttributeError, TypeError):
+        # Not the standardized error envelope: json.loads raises ValueError
+        # (JSONDecodeError) on non-JSON, and .get() raises AttributeError when the payload
+        # parses to something other than an object. Callers treat None as "unparseable".
+        return None
+    except Exception:
+        logger.exception("Unexpected error parsing an API error payload")
         return None
 
 
@@ -228,7 +236,11 @@ def get_error_report_body(response: QNetworkReply,
     else:
         try:  # handled standardized backend exception ({"code": <int>, "message": <str>})
             show_error_text = error_message_parser(response_body=response_body)
-        except:  # unhandled error - plain text
+        except Exception:
+            # error_message_parser is caller-supplied, so there is no meaningful set of
+            # expected exceptions to narrow to — but a parser that raises is a bug worth
+            # seeing rather than silently degrading every error to 'Unknown error'.
+            logger.exception("Error message parser raised, falling back to plain text")
             show_error_text = 'Unknown error'
         send_error_text = response_body
     report = {

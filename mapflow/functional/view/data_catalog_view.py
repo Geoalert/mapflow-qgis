@@ -1,4 +1,5 @@
 from typing import Optional
+import logging
 import sys
 
 from PyQt5.QtCore import QObject, Qt
@@ -12,7 +13,9 @@ from ...functional.app_context import AppContext
 from ...functional.helpers import get_readable_size
 from ...schema import MyImageryParams
 from ...schema.data_catalog import MosaicReturnSchema, ImageReturnSchema
-from ..service.alert_service import log
+
+logger = logging.getLogger(__name__)
+
 
 class DataCatalogView(QObject):
     def __init__(self, dlg: MainDialog, app_context: AppContext):
@@ -309,7 +312,7 @@ class DataCatalogView(QObject):
         try: # disconnect signal for selecting image in a table on toSourceButton click
             self.dlg.imageTableFilled.disconnect(self.show_source_image_connection)
         except Exception as e: # if there was no connection
-            log(f"No imageTableFilled connection to disconnect: {e}", "info")
+            logger.info("No imageTableFilled connection to disconnect: %s", e)
 
     def rename_image_in_table(self, image: ImageReturnSchema):
         if self.mosaic_table_visible:
@@ -594,7 +597,7 @@ class DataCatalogView(QObject):
                 self.dlg.stackedLayout.setCurrentIndex(1)
                 self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
             except Exception as e:
-                log(f"Could not focus the My Imagery image selection: {e}", "info")
+                logger.info("Could not focus the My Imagery image selection: %s", e)
 
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """A duplicate of alert function from mapflow.py to avoid circular import.
