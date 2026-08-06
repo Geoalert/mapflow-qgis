@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from PyQt5 import uic
@@ -5,6 +6,8 @@ from PyQt5.QtWidgets import QWidget, QApplication
 
 
 ui_path = Path(__file__).parent/'static'/'ui'
+
+logger = logging.getLogger(__name__)
 
 class ErrorMessageWidget(*uic.loadUiType(ui_path / 'error_message.ui')):
     def __init__(self, parent: QWidget, text: str, title: str = None, email_body: str = '') -> None:
@@ -15,9 +18,9 @@ class ErrorMessageWidget(*uic.loadUiType(ui_path / 'error_message.ui')):
             self.setWindowIcon(QApplication.activeWindow().windowIcon())
             self.setWindowTitle(QApplication.activeWindow().windowTitle())
         except Exception as e:
-            # Lazy import: this module is imported early in the chain, before the service package.
-            from ..functional.service.alert_service import log
-            log(f"Could not copy active-window icon/title for the error dialog: {e}", "info")
+            # No lazy import needed any more: logging is stdlib, so it cannot re-enter the
+            # circular chain this module used to have to dodge.
+            logger.info("Could not copy active-window icon/title for the error dialog: %s", e)
         self.text.setText(text)
         if title:
             self.title.setText(title)

@@ -16,7 +16,6 @@ However, as we don't want to release an "empty" version (without any user-facing
 
 ## 1. Refactoring
 
-[ready-for-review] Bring `tests/test_imagery_search_multi.py` into a tier
 
 [ ] Narrow the broad exception handlers
 The 3.6.0 security scan flagged `try/except Exception` blocks that only log. Narrow them to the

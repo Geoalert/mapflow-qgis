@@ -27,10 +27,6 @@ per-file-ignores =
 # and silently re-enables rules qgis.org itself does not report.
 # --------------------------------------------------------------------------
 extend-ignore =
-# WAL 3.7.0 §1 "Address the security check problems", bullet 1 — narrow the
-# broad try/except handlers. Removing E722 from this list is the acceptance
-# criterion for that step.
-    E722,
 # Dead imports outside __init__.py. Deferred rather than fixed: this tree has
 # circular imports that survive only via partial-module caching (documented in
 # tests/functional/conftest.py), so an import flake8 calls unused may be

@@ -1,5 +1,6 @@
 from qgis.gui import QgisInterface
 
+from .log_config import configure_logging
 from .mapflow import Mapflow
 
 """
@@ -16,4 +17,7 @@ Python modules:
 
 def classFactory(iface: QgisInterface) -> Mapflow:
     """Initialize the plugin."""
+    # Wire logging before constructing the plugin, so anything that fails during
+    # construction is still recorded rather than lost.
+    configure_logging()
     return Mapflow(iface)
