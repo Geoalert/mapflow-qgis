@@ -3,11 +3,11 @@
 Modules log through the standard library — ``logging.getLogger(__name__)`` — and never
 touch QGIS directly. That matters for three reasons specific to this codebase:
 
-* **No import cycles.** ``logging`` is stdlib, so a logging call can never drag the
-  service layer into a module. The previous helper lived in
-  ``functional/service/alert_service.py``, which made it unreachable from
-  ``schema/catalog.py`` and required a lazy-import shim in ``functional/geometry.py``
-  to avoid re-entering the circular chain documented in tests/functional/conftest.py.
+* **No import cycles.** ``logging`` is stdlib, so a logging call can never drag another
+  plugin package into a module. Do not move this behind a helper in
+  ``functional/service/`` — that package sits on the circular import chain documented in
+  tests/functional/conftest.py, which would make logging unreachable from leaf modules
+  like ``schema/catalog.py`` and force lazy-import shims at every call site.
 * **Tracebacks.** ``logger.exception(...)`` records ``exc_info`` automatically. Formatting
   only ``str(e)`` loses the location, which is the entire diagnostic value of an
   *unexpected* exception.

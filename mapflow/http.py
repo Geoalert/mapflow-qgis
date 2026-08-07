@@ -267,10 +267,9 @@ def _environment_report(plugin_version: str) -> dict:
 def _format_email_body(report: dict) -> str:
     """Render a report dict into a percent-encoded mailto body.
 
-    Encoding matters: the result is interpolated into a `mailto:...&body=` href, so a raw
-    `&` or `#` in a traceback or response body would terminate the parameter and silently
-    truncate the report. quote() renders newlines as %0A, which is what the previous
-    hand-rolled join produced.
+    The result is interpolated into a `mailto:...&body=` href, so it must be
+    percent-encoded: a raw `&` or `#` in a traceback or response body would terminate the
+    body parameter and silently truncate the report.
     """
     body = '\n'.join(f'{key}: {value}' for key, value in report.items())
     return quote(body)
