@@ -84,6 +84,49 @@ recursion, because Python collapses identical repeated frames"* — not what the
 to assert or which bug prompted it. Name the bug in the test's docstring only when it
 defines the expected behaviour being locked in.
 
+## Manual Test Notes
+
+Every commit message carries a `## Manual test` section. It answers one question for the
+person testing the release build: **what should I click, and what would a regression look
+like?** That is not a changelog — a changelog says what changed, this says what to try.
+
+Two parts, either may be `none`:
+
+- **New behaviour** — scenarios that exercise what this change adds.
+- **Regression surface** — what *else* runs through the code you touched, and the symptom
+  to watch for. This is the half that gets skipped and the half that catches bugs.
+
+### What makes a note useful
+1. **Name the scenario, not the function.** "Duplicate a processing that used a My Imagery
+   mosaic" — not "test `duplicate_provider_and_model`". The tester does not read code.
+2. **Name the symptom.** "The preview layer stacks duplicates instead of replacing" beats
+   "check previews work". A tester who knows what wrong looks like will spot it.
+3. **State preconditions that are easy to miss** — account state, billing mode (credits vs
+   area), provider type, whether a processing is a template, empty vs populated tables.
+4. **Say `none` explicitly.** A missing section is ambiguous — it reads as "the author
+   forgot", and the tester re-tests everything or nothing.
+
+### Always flag these, because automation cannot catch them here
+- **Anything under `mapflow/dialogs/`.** The `test-ui` tier is an empty harness whose target
+  treats "no tests collected" as a pass, so UI changes have *zero* automated coverage.
+- **Anything OS- or version-sensitive** — file paths, `QFileDialog`, temp directories, Qt
+  behaviour differences. `spec/004_stack.md` pins CI to Linux + QGIS 3.28 LTR and states
+  that macOS, Windows and other QGIS versions are covered by manual smoke testing only.
+- **Anything needing a live backend** — real imagery, real billing, real OAuth, error
+  responses the mocks approximate.
+
+### Where these live
+In the **commit message**, not a tracked file. A shared append-only test-plan file conflicts
+on every merge in this branch flow, and its entries outlive reverts — leaving the tester
+chasing behaviour that is not in the build. Notes in the commit message stay welded to the
+diff, and only merged work contributes.
+
+At release, compile rather than maintain:
+```
+git log <last-tag>..HEAD --grep='## Manual test' --pretty=format:'%h %s%n%b'
+```
+The result is regenerable, so there is no cleanup commit to forget.
+
 ## Language Conventions
 Language-specific style, idioms, and patterns live in per-language packs under `instructions/lang/`. Consult the pack that matches the file you are editing (e.g. `lang/python.md` for `.py` files). If no pack exists for the language you need, ask the user before inventing conventions.
 
