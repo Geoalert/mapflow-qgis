@@ -26,6 +26,26 @@ Acceptance: `E722` comes out of the `.flake8` ledger, and bandit reports no `B11
 Sequenced after the untiered tests: those 23 tests exercise provider_service and
 processing_service, the two heaviest files here, so they are the safety net for this change.
 
+[ ] Deduplicate error-guard reports
+`report_unexpected_error` shows one dialog per occurrence. That is already wrong for the
+network path it is wired into: the status polls are timer-driven (`config.py` —
+PROCESSING_TABLE_REFRESH_INTERVAL 6s, TEMPLATE_TABLE_REFRESH_INTERVAL 15s,
+USER_STATUS_UPDATE_INTERVAL 30s), so one recurring bug in a poll callback spawns a dialog
+every few seconds and makes QGIS unusable — worse than the crash it replaced.
+Suppress by exception signature (type + final frame) within a window: report once, keep
+logging the rest, and say how many were suppressed when the dialog is finally shown.
+**Blocks the entry-point wrapping below** — widening the guard before this multiplies the
+failure mode rather than containing it.
+
+[ ] Wrap user interactions in error_guard
+`guard_entry_point` is written and tested but applied nowhere; only `Http.response_dispatcher`
+is guarded today. Everything entering plugin code from Qt without passing through `Http` still
+escapes to QGIS's raw unhandled-exception dialog: button clicks, combo/selection changes,
+QTimer ticks, drag-and-drop, dialog accept/reject.
+Do this **after** the dedup above, and after "Plan the refactoring" has defined what an entry
+point is — `mapflow.py`'s god object currently blurs the boundary, so picking sites now would
+mean guessing at it and re-doing the work.
+
 [ ] Normalise the residual whitespace findings
 Clears most of the `.flake8` ledger (~450: W291/W292/W293/W391, E501, E1xx/E2xx/E3xx).
 **Ordering constraint:** must come *after* `feature/track-uploaded-image-status` is rebased and
