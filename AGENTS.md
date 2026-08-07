@@ -208,6 +208,13 @@ Three destinations, and the split is not optional — see PROJECT STRUCTURE for 
 | what is planned / in flight | `WAL.md` | deleted when the step merges |
 | why this change was made | **commit message body** | forever, attached to the diff |
 | a decision that outlives the step | `spec/` | forever, findable without git |
+| why this code would otherwise look wrong | **code comment** | until the code changes |
+
+A code comment addresses the next reader of that line, who has never seen the previous
+version. It justifies what is *surprising* about the code as it stands — never that the
+code is now normal, and never by contrast with what used to be there. "We stopped doing
+the strange thing" is commit-message content. See `instructions/delivery.md` § Comments
+Describe The Code, Not Its History.
 
 ## WAL entries are tracker lines, not write-ups
 BAD — a WAL entry carrying rationale that belongs in the commit message:
