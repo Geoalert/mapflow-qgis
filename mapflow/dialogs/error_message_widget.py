@@ -18,8 +18,6 @@ class ErrorMessageWidget(*uic.loadUiType(ui_path / 'error_message.ui')):
             self.setWindowIcon(QApplication.activeWindow().windowIcon())
             self.setWindowTitle(QApplication.activeWindow().windowTitle())
         except Exception as e:
-            # No lazy import needed any more: logging is stdlib, so it cannot re-enter the
-            # circular chain this module used to have to dodge.
             logger.info("Could not copy active-window icon/title for the error dialog: %s", e)
         self.text.setText(text)
         if title:
