@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_comment": "Repo-shipped permissions for Claude Code agents. Goal: zero mid-flow permission prompts when an agent sticks to the agent-git / agent-make boundary documented in the AGENTS.md GIT and MAKE COMMAND POLICY sections. Pre-deny the raw escape hatches so an agent cannot even try them by accident.",
+  "permissions": {
+    "allow": [
+      "Bash(agent-git:*)",
+      "Bash(agent-make:*)",
+      "Read",
+      "Edit",
+      "Write",
+      "Grep",
+      "Glob",
+      "TodoWrite",
+      "Bash(mkdir:*)",
+      "Bash(ls:*)"
+    ],
+    "deny": [
+      "Bash(docker:*)",
+      "Bash(docker-compose:*)",
+      "Bash(git:*)",
+      "Bash(make:*)",
+      "Bash(sed:*)",
+      "Bash(awk:*)",
+      "Bash(cat:*)",
+      "Bash(echo:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(psql:*)",
+      "Bash(open:*)",
+      "Bash(npm:*)",
+      "Bash(pip:*)",
+      "Bash(python:*)",
+      "Bash(pytest:*)",
+      "Bash(rm:*)",
+      "Bash(mv:*)"
+    ]
+  }
+}

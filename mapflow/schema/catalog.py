@@ -94,7 +94,11 @@ class ImageSchema(Serializable, SkipDataClass):
         # rejecting the whole response (see spec 002_D "Response and missing metadata").
         try:
             self.previewType = PreviewType(self.previewType)
-        except:
+        except (ValueError, TypeError):
+            # Exhaustive for an Enum lookup by value: ValueError when the backend sends a
+            # preview type this plugin version does not know, TypeError when it is
+            # unhashable. No log guard here on purpose — this module is deliberately free
+            # of QGIS imports so it stays functional-tier testable.
             self.previewType = None
         self.previews = [MultiPreview.from_dict(preview) for preview in self.previews]
 

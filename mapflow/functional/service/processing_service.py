@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 from typing import Dict, Optional, List
@@ -39,13 +40,16 @@ from ...schema.template import (
     ProcessingTemplateDTO,
     ProcessingTemplateDetails,
 )
-from ..service.alert_service import alert, log
+from ..service.alert_service import alert
 from ..app_context import AppContext
 from ...entity.provider import ImagerySearchProvider
 from ...config import Config
 from ...functional.layer_utils import ResultsLoader, max_aoi_bbox_area
 from ...http import get_error_report_body
 from ...dialogs.error_message_widget import ErrorMessageWidget
+
+logger = logging.getLogger(__name__)
+
 
 class ProcessingService(QObject):
     """
@@ -1036,8 +1040,8 @@ class ProcessingService(QObject):
                     processing_id=updated_template.id,
                     new_name=updated_template.name,
                 )
-        except Exception as e:
-            log(f"Could not apply renamed template from response: {e}")
+        except Exception:
+            logger.exception("Could not apply renamed template from response")
         self.get_processings()
 
     def update_template_error_handler(self, response):
@@ -1429,8 +1433,8 @@ class ProcessingService(QObject):
             if hydrated is not None:
                 self.active_template = hydrated
                 self.templates[hydrated.id] = hydrated
-        except Exception as e:
-            log(f"Could not hydrate template details from response: {e}")
+        except Exception:
+            logger.exception("Could not hydrate template details from response")
         if self.in_template_mode and self.active_template:
             self.template_aois = {aoi.table_id: aoi for aoi in self.active_template.aoi_dtos()}
             self.view.update_processing_table(self.combined_template_rows())

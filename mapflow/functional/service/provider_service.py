@@ -1,4 +1,5 @@
 # provider_service.py
+import logging
 from typing import Optional
 
 from PyQt5.QtCore import Qt, QObject
@@ -23,10 +24,19 @@ from ...config import Config, ConfigColumns
 from ...errors import PluginError
 
 
+logger = logging.getLogger(__name__)
+
 # `productType` casing varies by provider — My Imagery sends 'MOSAIC'/'IMAGE', other search
 # providers send 'Mosaic'/'Image' — so the mosaic/product-type selection rules must compare
 # case-insensitively (mirrors the case-insensitive local Mosaic/Image filter).
 MOSAIC_PRODUCT_TYPES = frozenset({"MOSAIC"})
+
+# What a duplicate_* step realistically raises when a stored processing no longer matches
+# the current account or UI: a missing DTO field or absent combo entry (AttributeError),
+# a renamed key (KeyError), a None where a value was expected (TypeError), an empty
+# sequence (IndexError). Anything outside this set is a bug rather than stale data, so it
+# is logged instead of being folded into the generic "duplication failed" alert.
+DUPLICATION_FAILURES = (AttributeError, KeyError, TypeError, IndexError)
 
 
 def normalized_product_types(product_types) -> set:
@@ -152,7 +162,8 @@ class ProviderService(QObject):
         if not provider_name:
             try:
                 provider_name = provider.api_name
-            except:
+            except AttributeError:
+                # Not every provider type exposes api_name; absence is the normal case here.
                 provider_name = None
 
         provider_params, provider_meta = provider.to_processing_params(provider_name=provider_name,
@@ -314,7 +325,12 @@ class ProviderService(QObject):
             if len(set(provider_names)) > 1:
                 if normalized_product_types(product_types) != MOSAIC_PRODUCT_TYPES:
                     selection_error = self.tr("You can launch multiple image processing only if it has the same provider of mosaic type")
-        except:
+        except TypeError:
+            # provider_names is None, or holds unhashable entries, so the selection cannot
+            # be classified — return what was gathered without a selection error.
+            return image_ids, selection_error
+        except Exception:
+            logger.exception("Unexpected error classifying the search selection")
             return image_ids, selection_error
         # Require image id only for images (not mosaics)
         if image_ids:
@@ -330,7 +346,23 @@ class ProviderService(QObject):
         self.duplicate_model(processing)
         self.duplicate_model_options(processing)
     
+    def _abort_duplication(self, message: str) -> None:
+        """Report a failed duplication step and return the dialog to a usable state.
+
+        Every duplicate_* step shares this recovery: say which step failed, then re-enable
+        processing so the dialog is not left stuck. Extracted because it was copy-pasted
+        per handler and one copy had a transposed-letter typo
+        (`self.aapp_context.llow_enable_processing`) that raised AttributeError from inside
+        the error path — skipping the re-enable below and leaving exactly the stuck dialog
+        this recovery exists to prevent. One copy cannot drift.
+        """
+        alert(message)
+        for key in self.app_context.allow_enable_processing:
+            self.app_context.allow_enable_processing[key] = True
+        self.dlg.startProcessing.setEnabled(True)
+
     def duplicate_provider(self, processing: ProcessingDTO):
+        message = self.tr("Duplication failed on copying data source")
         try:
             provider = processing.params.sourceParams
             if isinstance(provider, DataProviderParams):
@@ -342,28 +374,29 @@ class ProviderService(QObject):
                 pass # duplicate imagery search after aoi is downloaded
             elif isinstance(provider, UserDefinedParams):
                 self.duplicate_user_provider(provider)
-        except:
-            alert(self.tr("Duplication failed on copying data source"))
-            for key in self.app_context.allow_enable_processing:
-                self.app_context.allow_enable_processing[key] = True
-            self.dlg.startProcessing.setEnabled(True)
-    
+        except DUPLICATION_FAILURES:
+            self._abort_duplication(message)
+        except Exception:
+            logger.exception("Unexpected error duplicating the data source")
+            self._abort_duplication(message)
+
     def duplicate_model(self, processing: ProcessingDTO):
+        message = self.tr("Duplication failed on copying model")
         try:
             if self.dlg.modelCombo.findText(processing.workflowDef.name) == -1: # index is -1, the item is not found
-                alert(self.tr("Model '{wd}' is not enabled for your account").format(wd=processing.workflowDef.name))
-                for key in self.app_context.allow_enable_processing:
-                    self.app_context.allow_enable_processing[key] = True
-                self.dlg.startProcessing.setEnabled(True)
+                self._abort_duplication(
+                    self.tr("Model '{wd}' is not enabled for your account").format(wd=processing.workflowDef.name)
+                )
             else: # item is found
                 self.dlg.modelCombo.setCurrentText(processing.workflowDef.name)
-        except:
-            alert(self.tr("Duplication failed on copying model"))
-            for key in self.app_context.allow_enable_processing:
-                self.app_context.allow_enable_processing[key] = True
-            self.dlg.startProcessing.setEnabled(True)
-    
+        except DUPLICATION_FAILURES:
+            self._abort_duplication(message)
+        except Exception:
+            logger.exception("Unexpected error duplicating the model")
+            self._abort_duplication(message)
+
     def duplicate_model_options(self, processing):
+        message = self.tr("Duplication failed on copying model options")
         try:
             model_options = []
             enabled_options = []
@@ -380,24 +413,23 @@ class ProviderService(QObject):
                     checkbox.setChecked(False) 
             deleted_options = [enabled_option for enabled_option in enabled_options if enabled_option not in model_options]
             if deleted_options:
-                alert(self.tr("The following options no longer exist, so they have not been duplicated: {}").format(', '.join(deleted_options)))
-                for key in self.app_context.allow_enable_processing:
-                    self.app_context.allow_enable_processing[key] = True
-                self.dlg.startProcessing.setEnabled(True)
-        except:
-            alert(self.tr("Duplication failed on copying model options"))
-            for key in self.app_context.allow_enable_processing:
-                self.aapp_context.llow_enable_processing[key] = True
-            self.dlg.startProcessing.setEnabled(True)
+                self._abort_duplication(
+                    self.tr("The following options no longer exist, so they have not been duplicated: {}")
+                    .format(', '.join(deleted_options))
+                )
+        except DUPLICATION_FAILURES:
+            self._abort_duplication(message)
+        except Exception:
+            logger.exception("Unexpected error duplicating the model options")
+            self._abort_duplication(message)
 
     def duplicate_data_provider(self, provider: DataProviderParams):
         provider_name = provider.dataProvider.providerName
         index = self.dlg.sourceCombo.findData(provider_name)
         if index == -1:
-            alert(self.tr("Provider '{provider}' is not enabled for your account").format(provider=provider_name))
-            for key in self.app_context.allow_enable_processing:
-                self.app_context.allow_enable_processing[key] = True
-            self.dlg.startProcessing.setEnabled(True)
+            self._abort_duplication(
+                self.tr("Provider '{provider}' is not enabled for your account").format(provider=provider_name)
+            )
         else:
             self.dlg.sourceCombo.setCurrentIndex(index)
             if provider.dataProvider.zoom:

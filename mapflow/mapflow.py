@@ -1,4 +1,5 @@
 import json
+import logging
 import os.path
 import shutil
 from base64 import b64decode
@@ -20,7 +21,7 @@ from PyQt5.QtWidgets import (
 )
 from qgis.core import (
     Qgis, QgsCoordinateReferenceSystem, QgsDistanceArea, QgsFeature, QgsGeometry,
-    QgsLayerTreeGroup, QgsLayerTreeLayer, QgsMapLayer, QgsMapLayerType, QgsMessageLog,
+    QgsLayerTreeGroup, QgsLayerTreeLayer, QgsMapLayer, QgsMapLayerType,
     QgsProject, QgsRasterLayer, QgsRectangle, QgsVectorLayer
 )
 
@@ -85,6 +86,8 @@ from .entity.provider import (create_provider,
                               MyImageryProvider,
                               ProviderInterface,
                               ProvidersList)
+
+logger = logging.getLogger(__name__)
 
 
 class Mapflow(QObject):
@@ -997,8 +1000,9 @@ class Mapflow(QObject):
                 qgs_feat.setGeometry(qgs_geom)
                 qgs_features.append(qgs_feat)
             except Exception as e:
-                QgsMessageLog.logMessage(f"Skipping a search feature that failed to parse: {e}",
-                                         self.plugin_name, level=Qgis.Warning)
+                # Per-feature, inside a loop: no traceback, or one malformed response
+                # buries the panel in near-identical stack dumps.
+                logger.warning("Skipping a search feature that failed to parse: %s", e)
                 continue
         if not qgs_features:
             return None
@@ -2875,11 +2879,17 @@ class Mapflow(QObject):
 
         # Save the current search results to load later
         provider = self.imagery_search_provider
+        save_failed_message = self.tr("<b>Results could not be loaded </b><br>Please, make sure you chose the right output folder in the Settings tab \
+                                and you have access rights to this folder")
         try:
             filename = provider.save_search_layer(self.app_context.temp_dir, geoms)
-        except:
-            self.alert(self.tr("<b>Results could not be loaded </b><br>Please, make sure you chose the right output folder in the Settings tab \
-                                and you have access rights to this folder"))
+        except OSError:
+            # The case the message describes: missing/unwritable output folder.
+            self.alert(save_failed_message)
+            return
+        except Exception:
+            logger.exception("Unexpected error saving the search layer")
+            self.alert(save_failed_message)
             return
         self.display_metadata_geojson_layer(filename, f"{provider.name} metadata")
         # Retain the raw results so the instant local filter can reorder/re-render them without
@@ -4051,8 +4061,12 @@ class Mapflow(QObject):
         # keep login/password from token
         try:
             self.app_context.username, self.app_context.password = b64decode(token).decode().split(':')
-        except:
-            self.app_context.username = self.app_context.password = ''  # nosec - clearing creds, not a secret
+        except (ValueError, TypeError):
+            # A malformed token, which is the whole point of this handler. ValueError covers
+            # all three ways it can be malformed: binascii.Error (not base64) and
+            # UnicodeDecodeError (not utf-8) both subclass it, and so does the unpack when
+            # the decoded text has no ':'. TypeError covers a non-str/bytes token.
+            self.app_context.username = self.app_context.password = ''  # nosec B105  # clearing creds, not a secret
             self.dlg_login.show()
             self.alert(self.tr('Wrong token. '
                                'Visit "<a href=\"https://app.mapflow.ai/account/api\">mapflow.ai</a>" '
@@ -4395,14 +4409,13 @@ class Mapflow(QObject):
         try:
             shutil.rmtree(temp_dir) # remove old tempdir
         except Exception as e:
-            QgsMessageLog.logMessage(f"Could not remove old temp dir '{temp_dir}': {e}",
-                                     self.plugin_name, level=Qgis.Warning)
+            # Best-effort cleanup of a stale directory; the run continues either way.
+            logger.warning("Could not remove old temp dir '%s': %s", temp_dir, e)
         try:
             temp_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
             self.app_context.temp_dir = None
-            QgsMessageLog.logMessage(f"Working directory '{output_dir}' is unavailable: {e}",
-                                     self.plugin_name, level=Qgis.Warning)
+            logger.exception("Working directory '%s' is unavailable", output_dir)
             return str(e)
         self.app_context.temp_dir = temp_dir
         return None

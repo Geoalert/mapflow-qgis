@@ -1,16 +1,121 @@
-# Journal for active implementation planning
+# Planned and in-flight work
 
-## 1. Add new zoom-selector feature
+Forward-facing only: `[ ]` planned, `[ready-for-review]` in flight. Entries are removed when they
+merge — the WHY lives in the commit message and, for durable decisions, in `spec/`.
+See AGENTS.md § WHERE THE WHY GOES.
+
+# V 3.7.0 LTR
+
+We are planning a long-term release, effectively the LAST, stable release for QGIS3, the next version will be for QGIS4,
+and this version will get only API compatibility changes and bug fixes.
+
+So, the main idea behind the release is HARDENINIG so that this support will be easier, AND transfer to QGIS4 will go smoother.
+current plugin code needs a major refactoring.
+
+However, as we don't want to release an "empty" version (without any user-facing features), we will add some improvements.
+
+## 1. Refactoring
+
+
+[ ] Narrow the broad exception handlers
+The 3.6.0 security scan flagged `try/except Exception` blocks that only log. Narrow them to the
+exceptions actually expected, so unrelated errors surface instead of being swallowed.
+Scope: 16 bare `except:` (provider_service 5, geometry 4, mapflow 2, http 2, layer_utils 2,
+catalog 1) and 38 `except Exception` (processing_service 14, mapflow 11, 9 files with 1–2).
+Acceptance: `E722` comes out of the `.flake8` ledger, and bandit reports no `B110`.
+Sequenced after the untiered tests: those 23 tests exercise provider_service and
+processing_service, the two heaviest files here, so they are the safety net for this change.
+
+[ ] Deduplicate error-guard reports
+`report_unexpected_error` shows one dialog per occurrence. That is already wrong for the
+network path it is wired into: the status polls are timer-driven (`config.py` —
+PROCESSING_TABLE_REFRESH_INTERVAL 6s, TEMPLATE_TABLE_REFRESH_INTERVAL 15s,
+USER_STATUS_UPDATE_INTERVAL 30s), so one recurring bug in a poll callback spawns a dialog
+every few seconds and makes QGIS unusable — worse than the crash it replaced.
+Suppress by exception signature (type + final frame) within a window: report once, keep
+logging the rest, and say how many were suppressed when the dialog is finally shown.
+**Blocks the entry-point wrapping below** — widening the guard before this multiplies the
+failure mode rather than containing it.
+
+[ ] Wrap user interactions in error_guard
+`guard_entry_point` is written and tested but applied nowhere; only `Http.response_dispatcher`
+is guarded today. Everything entering plugin code from Qt without passing through `Http` still
+escapes to QGIS's raw unhandled-exception dialog: button clicks, combo/selection changes,
+QTimer ticks, drag-and-drop, dialog accept/reject.
+Do this **after** the dedup above, and after "Plan the refactoring" has defined what an entry
+point is — `mapflow.py`'s god object currently blurs the boundary, so picking sites now would
+mean guessing at it and re-doing the work.
+
+[ ] Normalise the residual whitespace findings
+Clears most of the `.flake8` ledger (~450: W291/W292/W293/W391, E501, E1xx/E2xx/E3xx).
+**Ordering constraint:** must come *after* `feature/track-uploaded-image-status` is rebased and
+landed (§3), and immediately *before* the refactor branch cut. A whole-tree whitespace diff makes
+that rebase materially worse, and the findings concentrate in `mapflow.py` and the service layer,
+which the refactoring rewrites — normalising earlier means doing the work twice.
+
+[ ] Plan the refactoring
+Address known problems, be open to push back if the proposals are wrong; 
+assess the code for good/bad practices and evaluate what to improve (maximum impact, minimum effort)
+The ultimate goals are:
+- consistency of the codebase (a developer or AI agent who knows one part of functionality should easily find the corresponding parts in others)
+- industry standards (a new developer should not be surprised or turned off by the code structure or smells)
+- cheap to maintain in case of API changes
+- ready to transfer to QGIS4 (Qt6)
+
+Known problems:
+- Current code has obviously problematic god-object (in mapflow.py) which tightly couples a lot of functionality. 
+- Code/folder structure is uneven: 
+  - there are orphans like `./mapflow/requests`
+  - `./mapflow/entity` and `./mapflow/schema` don't have clear responsibilities
+  - same for `constants.py` and `config.py` 
+  - ???
+I would suggest the following:
+- minimize `mapflow.py` responsibilities
+- create a classic folder structure "api/controller/service/view", practically moving them out of `functional` to the root 
+- create services and other instances for the other parts of functionality.
+- move templates to a separate template_service (controller probably stays the same, but let's decide later)
+- refactor dialogs (ui + py dialog files). Some of them are created manually in the Qt designer,
+and some are heavily python-coded or generated, and they are inconsistent in how can you change them. We need to select a consistent way.
+- review the settings and what do we store there
+
+[ ] Improve test coverage (behavioral/e2e)
+- Document the current behavior and cover it with the tests BEFORE the refactoring
+- Factor the refactoring structure plan in to match the proposed tests to the final functionality rather than the current functions and code
+
+[ ] Implement the refactoring
+- Should follow the plan proposed before
+- Should not break the tests implemented before (behavioral/e2e), allowed to rewrite/add unit tests
+
+## 2. Add new zoom-selector feature
 [ ]
 - Use 002_E_zoom_selector_api.md
 - Add a small button near zoom selector comboBox to call zoom-selector API, active when selected source is a Mapflow data provider.
 - On button press, call API and select zoom automatically depending on response.
 - On error, show a reasonable user-facing message.
 
-## 2. Refactor try/except for more granular exception handling
+## 3. Add myImagery upload status tracking
+[ ] 
+Mainly already implemented at branch `feature/track-uploaded-image-status`
+Need to rebase on current state, or directly move the code if it's too complicated. 
+The most important part is described in the `spec` change on the branch.
+
+## 4. Update styles for both loaded geojson/gpkg layers and vector tile layers
+[ ] 
+The styles will be provided by the designer team, we need only to put it into the code
+
+## 5. Add "Search by image ID" functionality
+[ ] 
+See API in `../whitemaps-backend`
+```
+- GET /meta/{image_id} request
+- GET /meta/{image_id}?provider_name={}
+```
+
+## 6. Add "move image to other mosaic" functionality
 [ ]
-- The 3.6.0 security scan flagged several broad `try/except Exception` blocks that only logged
-  (previously swallowed silently). Narrow them to the specific exceptions actually expected, so
-  unrelated errors surface instead of being logged and ignored.
-- Also revisit the `assert` statements in errors/error_message_list.py (Bandit B101: asserts are
-  stripped under `python -O`) — turn the sanity checks into real error handling if they must run.
+See API in `../data-catalog/spec/002_api.md`
+```
+POST /rest/rasters/image/{image_id}/move/precheck
+POST /rest/rasters/image/{image_id}/move
+```
+

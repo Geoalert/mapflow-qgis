@@ -9,7 +9,7 @@ ui_path = Path(__file__).parent/'static'/'ui'
 
 
 class MapflowLoginDialog(*uic.loadUiType(ui_path / 'login_dialog.ui')):
-    def __init__(self, parent: QWidget, use_oauth: bool = False, token: str = "") -> None:  # nosec - empty default, not a secret
+    def __init__(self, parent: QWidget, use_oauth: bool = False, token: str = "") -> None:  # nosec B107  # empty default, not a secret
         """Auth dialog."""
         super().__init__(parent)
         self.setupUi(self)
@@ -25,7 +25,7 @@ class MapflowLoginDialog(*uic.loadUiType(ui_path / 'login_dialog.ui')):
         else:
             return None
 
-    def set_auth_type(self, use_oauth: bool = False, token: str = ""):  # nosec - empty default, not a secret
+    def set_auth_type(self, use_oauth: bool = False, token: str = ""):  # nosec B107  # empty default, not a secret
         self.use_oauth = use_oauth
         self.invalidToken.setVisible(False)
         if use_oauth:

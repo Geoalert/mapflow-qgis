@@ -1,13 +1,30 @@
 import html
 import json
+import logging
+import traceback
 from typing import Callable, Union, Optional
+from urllib.parse import quote
 
 from PyQt5.QtCore import QBuffer, QByteArray, QObject, QTimer, QUrl, qVersion
 from PyQt5.QtNetwork import QHttpMultiPart, QNetworkReply, QNetworkRequest
-from qgis.core import QgsNetworkAccessManager, Qgis, QgsApplication, QgsAuthMethodConfig, QgsMessageLog
+from qgis.core import QgsNetworkAccessManager, Qgis, QgsApplication, QgsAuthMethodConfig
 
 from .constants import DEFAULT_HTTP_TIMEOUT_SECONDS
 from .errors import ErrorMessage, ProxyIsAlreadySet
+
+logger = logging.getLogger(__name__)
+
+
+def _request_path(response: QNetworkReply) -> str:
+    """Endpoint path for an error report — path only, never the full URL.
+
+    Query strings can carry ids and tokens, and this string ends up in a mail body the
+    user sends to us. The path is enough to locate the call site.
+    """
+    try:
+        return response.request().url().path() or 'the server'
+    except Exception:
+        return 'the server'
 
 
 class Http(QObject):
@@ -96,15 +113,25 @@ class Http(QObject):
             error_handler_kwargs: dict,
             use_default_error_handler: bool,
     ) -> None:
-        """"""
+        """Invoke the response callback or the error handler for a finished request.
+
+        Every async response in the plugin passes through here, and it is invoked from
+        Qt's event loop via `response.finished`. An exception raised by a callback would
+        therefore escape into Qt and surface as QGIS's raw "unhandled exception" dialog,
+        which users dismiss without reporting. Guarding at this one point covers every
+        network path in the plugin rather than needing a decorator on each callback.
+        """
+        from .error_guard import call_guarded
+
         if response.error():
             if use_default_error_handler:
                 if self.default_error_handler(response):
                     return  # a general error occurred and has been handled
-            error_handler(response,
-                          **error_handler_kwargs)  # handle specific errors
+            call_guarded(error_handler, f"handling an error response from {_request_path(response)}",
+                         self.plugin_version, response, **error_handler_kwargs)
         else:
-            callback(response, **callback_kwargs)
+            call_guarded(callback, f"processing the response from {_request_path(response)}",
+                         self.plugin_version, response, **callback_kwargs)
 
     def authorize(self, request: QNetworkRequest, auth: Optional[bytes] = None):
         if auth is not None:
@@ -152,10 +179,9 @@ class Http(QObject):
         request.setRawHeader(b'x-plugin-version', self.plugin_version.encode())
         try:
             request = self.authorize(request, auth)
-        except Exception as e:
+        except Exception:
             # Send the request unauthorized; the error response is handled by the caller.
-            QgsMessageLog.logMessage(f"Request authorization failed, sending unauthorized: {e}",
-                                     "Mapflow", level=Qgis.Warning)
+            logger.exception("Request authorization failed, sending unauthorized")
 
         if method == self.nam.post or method == self.nam.put:
             response = method(request, body)
@@ -213,8 +239,40 @@ def api_message_parser(response_body: str) -> str:
                             parameters=error_data.get("params", {}),
                             message=error_data.get("message", "Unknown error"))
         return message.to_str()
-    except:
+    except (ValueError, AttributeError, TypeError):
+        # Not the standardized error envelope: json.loads raises ValueError
+        # (JSONDecodeError) on non-JSON, and .get() raises AttributeError when the payload
+        # parses to something other than an object. Callers treat None as "unparseable".
         return None
+    except Exception:
+        logger.exception("Unexpected error parsing an API error payload")
+        return None
+
+
+#: Cap on the traceback carried in a mailto body. Mail clients truncate long URLs (some
+#: around 2 KB), and a silently cut report is worse than a deliberately shortened one:
+#: the tail frames are where the failure actually happened, so keep those.
+MAX_TRACEBACK_LINES = 40
+
+
+def _environment_report(plugin_version: str) -> dict:
+    """Version fields every report carries, regardless of what failed."""
+    return {
+        'Plugin version': plugin_version,
+        'QGIS version': Qgis.QGIS_VERSION,
+        'Qt version': qVersion(),
+    }
+
+
+def _format_email_body(report: dict) -> str:
+    """Render a report dict into a percent-encoded mailto body.
+
+    The result is interpolated into a `mailto:...&body=` href, so it must be
+    percent-encoded: a raw `&` or `#` in a traceback or response body would terminate the
+    body parameter and silently truncate the report.
+    """
+    body = '\n'.join(f'{key}: {value}' for key, value in report.items())
+    return quote(body)
 
 
 def get_error_report_body(response: QNetworkReply,
@@ -228,7 +286,11 @@ def get_error_report_body(response: QNetworkReply,
     else:
         try:  # handled standardized backend exception ({"code": <int>, "message": <str>})
             show_error_text = error_message_parser(response_body=response_body)
-        except:  # unhandled error - plain text
+        except Exception:
+            # error_message_parser is caller-supplied, so there is no meaningful set of
+            # expected exceptions to narrow to — but a parser that raises is a bug worth
+            # seeing rather than silently degrading every error to 'Unknown error'.
+            logger.exception("Error message parser raised, falling back to plain text")
             show_error_text = 'Unknown error'
         send_error_text = response_body
     report = {
@@ -237,10 +299,36 @@ def get_error_report_body(response: QNetworkReply,
         'URL': response.request().url().toDisplayString(),
         'HTTP code': response.attribute(QNetworkRequest.HttpStatusCodeAttribute),
         'Qt code': response.error(),
-        'Plugin version': plugin_version,
-        'QGIS version': Qgis.QGIS_VERSION,
-        'Qt version': qVersion(),
+        **_environment_report(plugin_version),
     }
-    email_body = '%0a'.join(f'{key}: {value}' for key, value in report.items())
+    return show_error_text, _format_email_body(report)
 
-    return show_error_text, email_body
+
+def get_exception_report_body(exception: BaseException,
+                              plugin_version: str,
+                              context: str = ''):
+    """Build (user-facing text, mailto body) for an unexpected internal exception.
+
+    The counterpart of get_error_report_body for failures that never reached the network.
+    Without it, a bug in plugin code either surfaces as QGIS's raw "unhandled exception"
+    dialog — which users dismiss and never report — or is logged to a panel nobody opens.
+    Routing it here gives the same "send a report" path an HTTP 500 already has.
+
+    `context` names the operation that failed, in user-facing terms, because the exception
+    type alone rarely tells the user what they were doing when it happened.
+    """
+    summary = f'{type(exception).__name__}: {exception}'
+    traceback_lines = traceback.format_exception(type(exception), exception, exception.__traceback__)
+    traceback_text = ''.join(traceback_lines).rstrip().splitlines()
+    if len(traceback_text) > MAX_TRACEBACK_LINES:
+        omitted = len(traceback_text) - MAX_TRACEBACK_LINES
+        traceback_text = ([f'... {omitted} earlier frame(s) omitted ...']
+                          + traceback_text[-MAX_TRACEBACK_LINES:])
+
+    report = {
+        'Error summary': html.escape(summary),
+        'Operation': context or 'unspecified',
+        **_environment_report(plugin_version),
+        'Traceback': '\n' + '\n'.join(traceback_text),
+    }
+    return summary, _format_email_body(report)
