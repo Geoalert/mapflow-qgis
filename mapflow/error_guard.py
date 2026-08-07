@@ -21,6 +21,8 @@ import functools
 import logging
 from typing import Callable, Optional
 
+from .report_throttle import ReportThrottle, exception_signature
+
 logger = logging.getLogger(__name__)
 
 #: Shown above the traceback in the dialog. Deliberately plain: the user did nothing
@@ -30,6 +32,14 @@ DEFAULT_USER_TEXT = (
     "The plugin is still running — you can keep working. Sending the report below helps "
     "us fix it."
 )
+
+#: Appended when the same failure recurred while suppressed. A single dialog reads as a
+#: one-off glitch; the count is what tells the user (and us) it is systematic.
+REPEATED_USER_TEXT = "\n\nThis has happened {count} more time(s) since the last message."
+
+#: Process-wide, because the storm it prevents is process-wide: every guarded call site
+#: shares one budget. Tests substitute their own instance rather than reaching in here.
+_throttle = ReportThrottle()
 
 
 def _resolve_plugin_version(obj: object) -> str:
@@ -57,8 +67,17 @@ def report_unexpected_error(exception: BaseException,
 
     Never raises. A reporting path that can fail is worse than none: it would replace the
     original exception with its own, losing the very thing being reported.
+
+    Logging happens for every occurrence; only the *dialog* is throttled. The log is where
+    a developer reconstructs how often something fired, so thinning it would trade the one
+    complete record for nothing the user benefits from.
     """
     logger.error("Unexpected error during %s", context, exc_info=exception)
+
+    suppressed_count = _throttle.should_report(exception_signature(exception))
+    if suppressed_count is None:
+        return
+
     try:
         # Imported here, not at module scope: this module is imported early, and the
         # dialog pulls in the Qt widget tree. Keeping it lazy also means a headless
@@ -67,9 +86,13 @@ def report_unexpected_error(exception: BaseException,
         from .dialogs.error_message_widget import ErrorMessageWidget
         from .http import get_exception_report_body
 
-        summary, email_body = get_exception_report_body(exception, plugin_version, context)
+        summary, email_body = get_exception_report_body(exception, plugin_version, context,
+                                                        suppressed_count=suppressed_count)
+        text = DEFAULT_USER_TEXT
+        if suppressed_count:
+            text += REPEATED_USER_TEXT.format(count=suppressed_count)
         widget = ErrorMessageWidget(parent=parent or QApplication.activeWindow(),
-                                    text=DEFAULT_USER_TEXT,
+                                    text=text,
                                     title=summary,
                                     email_body=email_body)
         widget.show()

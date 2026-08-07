@@ -306,7 +306,8 @@ def get_error_report_body(response: QNetworkReply,
 
 def get_exception_report_body(exception: BaseException,
                               plugin_version: str,
-                              context: str = ''):
+                              context: str = '',
+                              suppressed_count: int = 0):
     """Build (user-facing text, mailto body) for an unexpected internal exception.
 
     The counterpart of get_error_report_body for failures that never reached the network.
@@ -316,6 +317,10 @@ def get_exception_report_body(exception: BaseException,
 
     `context` names the operation that failed, in user-facing terms, because the exception
     type alone rarely tells the user what they were doing when it happened.
+
+    `suppressed_count` is how many identical failures were hidden since the last report
+    (see report_throttle). It changes the triage completely — a failure that fired 200
+    times sits on a timer-driven path, which the single traceback cannot reveal.
     """
     summary = f'{type(exception).__name__}: {exception}'
     traceback_lines = traceback.format_exception(type(exception), exception, exception.__traceback__)
@@ -328,7 +333,9 @@ def get_exception_report_body(exception: BaseException,
     report = {
         'Error summary': html.escape(summary),
         'Operation': context or 'unspecified',
-        **_environment_report(plugin_version),
-        'Traceback': '\n' + '\n'.join(traceback_text),
     }
+    if suppressed_count:
+        report['Repeated'] = f'{suppressed_count} further occurrence(s) suppressed since the last report'
+    report.update(_environment_report(plugin_version))
+    report['Traceback'] = '\n' + '\n'.join(traceback_text)
     return summary, _format_email_body(report)
