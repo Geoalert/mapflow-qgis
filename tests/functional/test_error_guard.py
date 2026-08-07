@@ -12,6 +12,7 @@ import pytest
 
 from mapflow import error_guard
 from mapflow.http import MAX_TRACEBACK_LINES, get_exception_report_body
+from mapflow.report_throttle import ReportThrottle
 
 
 class Boom(Exception):
@@ -20,6 +21,17 @@ class Boom(Exception):
 
 def _raise_boom():
     raise Boom("something specific went wrong")
+
+
+@pytest.fixture(autouse=True)
+def fresh_throttle(monkeypatch):
+    """A private suppression budget per test.
+
+    The production throttle is process-wide, so without this the first test to report an
+    error would push every later one inside the global floor and silently turn its dialog
+    assertions vacuous.
+    """
+    monkeypatch.setattr(error_guard, "_throttle", ReportThrottle())
 
 
 # ---------- report_unexpected_error ----------
@@ -53,6 +65,53 @@ def test_never_raises_even_if_the_dialog_fails(caplog):
 
     # Both the original failure and the reporting failure are recorded.
     assert "doing the thing" in caplog.text
+
+
+def test_a_repeated_failure_shows_one_dialog(caplog):
+    """The whole point: a bug on a 6-second poll must not open a dialog every 6 seconds."""
+    with patch("mapflow.dialogs.error_message_widget.ErrorMessageWidget") as widget, \
+            caplog.at_level(logging.ERROR, logger="mapflow.error_guard"):
+        for _ in range(20):
+            try:
+                _raise_boom()
+            except Boom as exc:
+                error_guard.report_unexpected_error(exc, "polling for processings", "1.0")
+
+    assert widget.call_count == 1
+    # Suppression governs the dialog only — the log keeps the full record.
+    assert len(caplog.records) == 20
+
+
+class _FakeClock:
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def test_the_next_dialog_reports_how_many_were_hidden(monkeypatch):
+    clock = _FakeClock()
+    # The floor is irrelevant with a single signature; the per-signature window is the
+    # mechanism under test.
+    monkeypatch.setattr(error_guard, "_throttle",
+                        ReportThrottle(first_window=60.0, global_floor=0.0, clock=clock))
+
+    with patch("mapflow.dialogs.error_message_widget.ErrorMessageWidget") as widget:
+        for _ in range(5):
+            try:
+                _raise_boom()
+            except Boom as exc:
+                error_guard.report_unexpected_error(exc, "polling", "1.0")
+        clock.now += 61.0
+        try:
+            _raise_boom()
+        except Boom as exc:
+            error_guard.report_unexpected_error(exc, "polling", "1.0")
+
+    assert widget.call_count == 2
+    text = widget.call_args.kwargs["text"]
+    assert "4 more time(s)" in text, "the count is what proves the failure is systematic"
 
 
 # ---------- guard_entry_point ----------
@@ -167,6 +226,30 @@ def test_short_traceback_is_not_truncated():
         _summary, body = get_exception_report_body(exc, "1.0", "ctx")
 
     assert "omitted" not in unquote(body)
+
+
+def test_report_body_states_how_many_repeats_were_suppressed():
+    """A traceback that fired 41 times is a timer-driven bug; one that fired once is not."""
+    from urllib.parse import unquote
+
+    try:
+        _raise_boom()
+    except Boom as exc:
+        _summary, body = get_exception_report_body(exc, "1.0", "ctx", suppressed_count=41)
+
+    decoded = unquote(body)
+    assert "41" in decoded and "suppressed" in decoded
+
+
+def test_report_body_omits_the_repeat_line_for_a_one_off():
+    from urllib.parse import unquote
+
+    try:
+        _raise_boom()
+    except Boom as exc:
+        _summary, body = get_exception_report_body(exc, "1.0", "ctx")
+
+    assert "suppressed" not in unquote(body)
 
 
 @pytest.mark.parametrize("context", ["", None])

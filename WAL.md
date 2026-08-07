@@ -26,16 +26,16 @@ Acceptance: `E722` comes out of the `.flake8` ledger, and bandit reports no `B11
 Sequenced after the untiered tests: those 23 tests exercise provider_service and
 processing_service, the two heaviest files here, so they are the safety net for this change.
 
-[ ] Deduplicate error-guard reports
-`report_unexpected_error` shows one dialog per occurrence. That is already wrong for the
-network path it is wired into: the status polls are timer-driven (`config.py` —
-PROCESSING_TABLE_REFRESH_INTERVAL 6s, TEMPLATE_TABLE_REFRESH_INTERVAL 15s,
-USER_STATUS_UPDATE_INTERVAL 30s), so one recurring bug in a poll callback spawns a dialog
-every few seconds and makes QGIS unusable — worse than the crash it replaced.
-Suppress by exception signature (type + final frame) within a window: report once, keep
-logging the rest, and say how many were suppressed when the dialog is finally shown.
-**Blocks the entry-point wrapping below** — widening the guard before this multiplies the
-failure mode rather than containing it.
+[ready-for-review] Deduplicate error-guard reports
+
+[ ] Restore user-facing errors on the polled paths
+Three call sites opt out of the default error handler purely to avoid stacked modals:
+`mapflow.py:482` (`refresh_status`), `mapflow.py:3042`, and `processing_api.py:89`
+(`get_processings`). The cost is that a real server error on those paths is invisible to
+the user. The throttle removes the reason for the workaround, so each can go back to
+`use_default_error_handler=True` — but `report_http_error` needs its own signature (Qt
+error code + endpoint path) before that is safe. Do this after the entry-point wrapping,
+so both dialog paths land on one suppression policy rather than two.
 
 [ ] Wrap user interactions in error_guard
 `guard_entry_point` is written and tested but applied nowhere; only `Http.response_dispatcher`

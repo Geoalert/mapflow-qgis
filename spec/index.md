@@ -37,5 +37,8 @@ Used libraries, pinned versions where important, external system implementation 
 ## 005_interactions.md
 Integration boundaries: Mapflow backend, Keycloak OAuth2, QGIS application, local filesystem.
 
+## 006_error_reporting.md
+How failures reach the user: the expected/unexpected split, the three presentation tiers (log / message / report dialog), and the suppression contract that bounds dialog volume on timer-driven paths.
+
 ## etc.
-Additional documents can be added with increasing numeric prefixes (for example: `006_security.md`, `007_observability.md`).
+Additional documents can be added with increasing numeric prefixes (for example: `007_security.md`, `008_observability.md`).
