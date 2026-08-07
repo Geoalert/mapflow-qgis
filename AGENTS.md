@@ -141,6 +141,7 @@ Execute it every time a session is initiated.
 12. Pre-merge distillation (`AGENTS.md`):
     - Mark the WAL step `[ready-for-review]`. Keep the entry itself short — it is a tracker line, not a write-up.
     - Distil the important insights from `.plans/<branch>.md` into **the commit message body** (the WHY), and into `spec/` for anything that outlives this step. The `.plans/` file stays local — gitignored, no cleanup needed.
+    - Add a `## Manual test` section to the commit message: new behaviour to try, and the regression surface with the symptom to watch for. Write `none` explicitly rather than omitting it. See `instructions/delivery.md` § Manual Test Notes — the release checklist is compiled from these, so a missing one is a gap nobody notices until a user finds it.
     - If a durable decision changed, the spec edit is part of THIS MR. Do not leave it as a WAL note to apply later.
 13. Commit, publish branch, and open Draft MR (`AGENTS.md`):
     - Commit work with a meaningful message — the subject doubles as the default MR title.
@@ -170,6 +171,7 @@ Execute it every time a session is initiated.
 - review loop converged (0 open CRITICAL) or was explicitly escalated to user with Final Review Summary
 - branch pushed and `[Draft]` MR created
 - WAL step is marked `[ready-for-review]`; the WHY is in the commit message body, and any durable decision is in `spec/`
+- the commit message has a `## Manual test` section (new behaviour + regression surface, or an explicit `none`)
 
 # APPROVAL DEFINITION OF DONE (PRE-MERGE)
 - user confirms `approved` in chat
