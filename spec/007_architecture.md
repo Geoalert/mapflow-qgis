@@ -42,25 +42,40 @@ motivating failure gets "simplified away" by the next reader.
 ```
 mapflow/
   __init__.py          classFactory only
-  plugin.py            QGIS entry point: initGui/unload, menu and toolbar wiring,
+  mapflow.py           QGIS entry point: initGui/unload, menu and toolbar wiring,
                        construction of services and controllers. No domain logic.
   context.py           AppContext — shared session state
   config.py            all configuration and constants (constants.py merged in)
   helpers.py           free functions with no plugin state
   geometry.py          geometry helpers
+  styles.py            .qml style lookup for result layers
 
   api/                 one module per backend area; builds requests, parses responses
   service/             business logic and state
   controller/          signal wiring: widget signal -> service call -> view update
   view/                widget reads and writes
   dialogs/             .ui files and thin dialog classes
-  model/               domain types (former schema/ plus the live part of entity/)
+  schema/              domain types: API DTOs and the domain objects built from them
   errors/
-  infra/               http, error_guard, report_throttle, log_config, styles
+  infra/               http, error_guard, report_throttle, log_config
 ```
 
-Deleted: `requests/`, `entity/processing.py`, `entity/status.py`, `functional/` as a
-container, `constants.py`.
+Deleted: `requests/`, `entity/` (its only live package, `provider/`, moves into `schema/`),
+`functional/` as a container, `constants.py`.
+
+`mapflow.py` keeps its name. It stays the entry point; what changes is that it holds
+wiring instead of domain logic.
+
+**`schema/` holds both DTOs and behaviour-carrying domain types.** The provider classes have
+real methods (`to_processing_params` and friends), so "schema" is a loose fit for them — but
+one home for domain types beats a second package whose boundary has to be re-litigated, which
+is exactly how `entity/` became a graveyard. One package, documented scope.
+
+**Moving `entity/provider/` into `schema/` does not by itself break the import cycle** — it
+relocates both ends of it into one package. The fix is separate and must happen first or
+together: the provider primitives (`SourceType`, `CRS`, `BasicAuth`) move to a leaf module
+that imports nothing from the plugin, so `schema/processing.py` depends on the leaf rather
+than on the package that imports it back.
 
 ### Layer rules
 
@@ -69,21 +84,89 @@ below it and from `model/`, `errors/`, `infra/`, `config`, `helpers`, `geometry`
 
 | layer | may import | must never |
 |---|---|---|
-| `plugin.py` | everything | contain domain logic |
-| `controller/` | service, view, model | touch `Http`, hold domain state |
-| `view/` | model, dialogs | issue requests, contain business rules |
-| `service/` | api, model, other services | import `view/`, `dialogs/`, or touch a widget |
-| `api/` | model, infra | know about widgets or business rules |
-| `model/` | errors, config | import anything above it |
+| `mapflow.py` | everything | contain domain logic |
+| `controller/` | service, view, schema | touch `Http`, hold domain state |
+| `view/` | schema, dialogs | issue requests, contain business rules |
+| `service/` | api, schema, other services | import `view/`, `dialogs/`, or touch a widget |
+| `api/` | schema, infra | know about widgets or business rules |
+| `schema/` | errors, config | import anything above it |
 
 **The rule that does the work: `service/` may not touch a widget.** Every current
 layering violation is an instance of it, and it is mechanically checkable — a service
-module must not import `PyQt5.QtWidgets`, `dialogs`, or receive a `dlg` argument.
+module must not import `PyQt5.QtWidgets`, `dialogs`, or `view`, and must not receive a
+`dlg` argument.
 
-`model/` must import nothing from `api/`, `service/`, `view/`, `controller/` or
-`dialogs/`. This is what keeps the import cycle from coming back, and it is why
-`SourceType` and the other provider primitives belong in `model/` rather than being
-imported *from* a package that imports schemas.
+`schema/` must import nothing from `api/`, `service/`, `view/`, `controller/` or
+`dialogs/`. This is what keeps the import cycle from coming back.
+
+### Services
+
+State and business rules. Each owns one question, and nobody else answers it.
+
+| service | owns | boundary |
+|---|---|---|
+| `SessionService` | credentials, login (basic/oauth), logout, plugin-version check | knows how to authenticate; knows nothing about what the account may do |
+| `AccountService` | everything derived from `/user/status`: billing type, limits, area caps, provider min-areas | the only parser of that response. Read by many services, which is why it is separate from `SessionService` — credentials are consulted by nothing but `Http` |
+| `ProviderService` | the provider list (built-in, Mapflow, user-defined), persistence in settings, current selection | what imagery sources exist and which is chosen; not what is done with one |
+| `AoiService` | AOI geometry, AOI layers, the on-map draw/update edit sessions, the selected-AOIs layer | AOI *as geometry and layers*. Which AOIs a template has belongs to `TemplateService` |
+| `SearchService` | imagery-search requests, the result set, the footprints layer, pagination, sort | fetching and holding results |
+| `LocalFilterService` | client-side narrowing of an already-fetched result set, and the "filter is wider than what was fetched" warning | pure computation over a result set plus filter values; issues no request |
+| `TemplateService` | planned processings: CRUD, status polling, template AOIs, search params, seen/new markers, exclude-from-search, pause/resume/restart | everything scoped to a template id |
+| `ProcessingService` | processings list and polling, start/duplicate/delete/restart, cost, review and rating | loses templates to `TemplateService` |
+| `PreviewService` | preview layers (XYZ, PNG, mosaic, catalog image), their dedup and placement | preview layers only; result layers are `ResultService` |
+| `CatalogService` | My Imagery: mosaics, images, upload, storage quota | |
+| `ProjectService` | projects CRUD, sharing, roles, the current project | |
+| `ResultService` | downloading and loading processing results, applying styles | from `layer_utils.ResultsLoader` |
+| `AreaCalculatorService` | area computation and limit comparison | unchanged |
+| `AlertService` | the *message* tier of `spec/006_error_reporting.md` | unchanged |
+
+Services communicate through Qt signals, never by calling a controller. Several already do
+this (`DataCatalogService.mosaicsUpdated`); it becomes the rule. A service that needs to tell
+the UI something emits, and a controller subscribes.
+
+### Controllers
+
+One per UI region, not one per service — a region typically drives several services. A
+controller wires signals and holds no domain state.
+
+| controller | region |
+|---|---|
+| `MainController` | dialog shell: tab switching, login/logout wiring, global menus |
+| `ProcessingController` | the start-processing panel: model and options, AOI and provider selection, cost, start-button state |
+| `ProjectProcessingController` | the projects/processings table and navigation between projects, processings and a template |
+| `SearchController` | imagery-search tab: params, run, filter widgets, pagination, sort, table↔layer selection sync |
+| `TemplateController` | template view: details, AOIs, search params, template processings, seen markers |
+| `CatalogController` | My Imagery |
+| `ProviderController` | provider add/edit/remove dialogs and the provider combos |
+
+Controllers must not call each other. Cross-region effects travel as a service signal, so
+adding a second listener never means editing the first controller.
+
+### Dialogs and .ui files
+
+Qt Designer is the source of truth for structure. The current pattern is already right —
+every dialog calls `uic.loadUiType()` at runtime and **no `pyuic5` output is committed** —
+so the inconsistency to fix is the Python layered on top: `main_dialog.py` is 803 lines and
+builds static widgets programmatically in several places, which is exactly what makes those
+widgets invisible in Designer.
+
+Rules:
+
+1. **Static structure lives in the `.ui` file.** Anything with a fixed place in the layout is
+   defined in Designer, not created in Python.
+2. **Never commit generated Python.** `.ui` files are loaded at runtime with
+   `uic.loadUiType`; unreadable generated code is the reason.
+3. **Python may create a widget only when Designer cannot express it** — genuinely dynamic
+   sets (one checkbox per model option), or content that depends on runtime data. Widgets
+   created this way are added to a container that *is* defined in the `.ui`.
+4. **QGIS and custom widget classes go in through promotion**, not through Python
+   construction, so they keep their place in the Designer tree.
+5. `.ui` is XML and may be edited directly — by a human or an agent — but it must stay
+   valid and round-trippable through Designer. Structural edits are verified by opening the
+   file in Designer before merge.
+
+The test of a correct dialog: opening its `.ui` in Designer shows the whole layout, and the
+matching `.py` contains behaviour only.
 
 ### Entry points
 
@@ -120,9 +203,26 @@ covered by neither.
 ### Invariants
 
 1. A service module imports no widget and receives no dialog.
-2. `model/` imports nothing from the layers above it.
+2. `schema/` imports nothing from the layers above it.
 3. There are no import cycles. The test-tier bootstraps must not need a retry loop; when
    the cycle is gone, that workaround is deleted, and its absence is the check.
 4. One concept has one home. A type is defined once — no parallel copies across packages.
-5. `plugin.py` contains no `self.dlg.<widget>` access.
+5. `mapflow.py` contains no `self.dlg.<widget>` access.
 6. New and moved code adds nothing to the `.flake8` debt ledger. The ledger only shrinks.
+
+### Enforcement
+
+Invariants 1–3 are checked by a test, not by review. `tests/functional/test_layering.py`
+walks the import statements of each package and fails with the offending module and import
+when a rule is broken.
+
+This is deliberate, and `tests/functional/test_tier_layout.py` is the precedent: the
+stranded-test-file problem it now guards against had survived review for a long time
+precisely because nothing executed the rule. View isolation decays the same way — it is
+invisible in a diff that adds one import to one service — so the rule ships with its check
+or it does not hold.
+
+The check is written **before** the extraction starts, with the current violations recorded
+as an explicit allowlist. Each extraction MR removes entries; the list only shrinks, like
+the `.flake8` ledger. That way the invariant is enforced for all new code from day one
+instead of only after the last domain moves.

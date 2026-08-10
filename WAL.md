@@ -28,16 +28,32 @@ means the extraction MRs move less code and read as pure moves.
 `entity/status.py` is byte-identical to `schema/status.py` except one relative import, and
 nothing imports `entity/processing.py` or `entity/status.py` at all. `requests/` holds only an
 empty `__init__.py`. ~340 lines plus a package.
-Note while deleting: two `ProcessingStatus` enum classes exist at runtime today, and members of
-the two are never equal. Confirm nothing compares across them before assuming this is inert.
+**Do the duplicate-enum check first**: two `ProcessingStatus` classes exist at runtime and
+members of the two are never equal. Find whether any code compares a status originating from
+`entity` with one from `schema` before assuming the deletion is inert — if it does, that is a
+live bug and gets its own fix commit ahead of the deletion.
 
-[ ] Break the `schema` ⇄ `entity.provider` import cycle
+[ ] Break the `schema` ⇄ provider import cycle
 `schema/processing.py:12` imports `entity.provider.provider.SourceType`; importing the
 `entity.provider` package runs `basemap_provider`, which imports `schema.processing` back.
 Move the provider primitives (`SourceType`, `CRS`, `BasicAuth`) into a leaf module that imports
 nothing from the plugin.
+Do this **before or with** the move of `entity/provider/` into `schema/` — relocating both ends
+of the cycle into one package does not break it.
 Acceptance: the retry loops in `tests/functional/conftest.py` and `tests/qgis/conftest.py` are
 deleted and both tiers still pass. Their absence is the regression check.
+
+[ ] Move `entity/provider/` into `schema/`, delete `entity/`
+`schema/provider.py` (the API return schema) and the provider package collide on the name;
+resolve by making `schema/provider/` a package and moving the existing module into it. The
+`__init__` re-exports, so most import sites are unchanged.
+
+[ ] Architecture invariant test
+`tests/functional/test_layering.py` — no service imports a widget, `dialogs`, or `view`; no
+`schema` module imports a layer above it; no import cycles. Current violations go in an
+explicit allowlist that later steps only shrink.
+Written now, not after the extraction, so every new line is held to the rule from the start.
+Precedent and rationale: `tests/functional/test_tier_layout.py`.
 
 [ ] Narrow the remaining broad exception handlers
 38 `except Exception` sites (processing_service 14, mapflow 11, nine files with 1–2).
@@ -66,31 +82,37 @@ the code they pin moves; no step may leave a behaviour covered by neither.
 One domain per MR, each ending with `mapflow.py` smaller and no behaviour changed. Ordered
 leaf-first so each extraction depends only on what already moved.
 
-[ ] Extract AOI editing and AOI layers → `service/aoi_service.py` + controller
-[ ] Extract preview → `service/preview_service.py`
-[ ] Extract imagery search and the local filter → `service/search_service.py` + `view/search_view.py`
-[ ] Extract templates → `service/template_service.py` (the largest domain, ~55 methods)
+Service and controller boundaries are tabulated in `spec/007_architecture.md`.
+
+[ ] Extract AOI editing and AOI layers → `AoiService` + `ProcessingController` wiring
+[ ] Extract preview → `PreviewService`
+[ ] Extract imagery search → `SearchService` + `SearchController` + `view/search_view.py`
+[ ] Extract the local filter → `LocalFilterService` (pure computation; functional-tier tests)
+[ ] Extract templates → `TemplateService` + `TemplateController` (largest domain, ~55 methods
+    in `mapflow.py` plus the template half of `processing_service.py`)
 [ ] Extract processing lifecycle: options, start, review, rating → existing processing service/controller
-[ ] Extract session and account status → `service/session_service.py`
-[ ] Reduce what remains to `plugin.py` — initGui/unload, wiring, construction
-Acceptance for the phase: no `self.dlg.<widget>` access in `plugin.py`, and no service imports a
-widget (`spec/007_architecture.md` invariants 1 and 5).
+[ ] Split auth from account status → `SessionService` + `AccountService`
+[ ] Reduce what remains of `mapflow.py` to initGui/unload, wiring and construction
+Acceptance for the phase: no `self.dlg.<widget>` access in `mapflow.py`, and the layering test's
+allowlist is empty (`spec/007_architecture.md` invariants 1 and 5).
 
 ### Phase D — move the packages
 
 Mechanical, and cheaper here than earlier: the god object is gone, so fewer files churn.
 
 [ ] `functional/` dissolved: `api/`, `controller/`, `service/`, `view/` to the root; `app_context`
-    → `context.py`; `auth`, `geometry`, `helpers`, `layer_utils` to their layer homes
-[ ] `schema/` + the live `entity/provider/` → `model/`; `http`, `error_guard`, `report_throttle`,
-    `log_config`, `styles` → `infra/`
+    → `context.py`; `geometry`, `helpers`, `styles` to the root; `auth` → `SessionService`;
+    `layer_utils` → `ResultService` plus the layer-tree helpers in `view/`
+[ ] `http`, `error_guard`, `report_throttle`, `log_config` → `infra/`
 
 ### Phase E — UI consistency
 
-[ ] One consistent way to build a dialog
-All 13 dialogs load a `.ui` file, so the inconsistency is how much Python is layered on top —
-`main_dialog.py` is 803 lines and builds widgets programmatically in several places. Decide the
-rule, then apply it.
+[ ] Move static widgets out of Python and into the `.ui` files
+The loading pattern is already right — every dialog uses `uic.loadUiType` and no `pyuic5`
+output is committed. What breaks Designer is the Python layered on top, chiefly in
+`main_dialog.py` (803 lines), which builds statically-placed widgets in code where Designer
+cannot see them. Rules and the acceptance test in `spec/007_architecture.md` § Dialogs and
+.ui files.
 
 [ ] Review what the plugin stores in settings
 Against `spec/003_local_storage.md`; drop what is no longer read.
