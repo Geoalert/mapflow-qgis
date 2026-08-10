@@ -40,5 +40,8 @@ Integration boundaries: Mapflow backend, Keycloak OAuth2, QGIS application, loca
 ## 006_error_reporting.md
 How failures reach the user: the expected/unexpected split, the three presentation tiers (log / message / report dialog), and the suppression contract that bounds dialog volume on timer-driven paths.
 
+## 007_architecture.md
+Target module structure for the 3.7.0 refactoring: the layers (api / service / controller / view / model), what each may import, where the entry points are, and the test surfaces the refactoring is verified against.
+
 ## etc.
-Additional documents can be added with increasing numeric prefixes (for example: `007_security.md`, `008_observability.md`).
+Additional documents can be added with increasing numeric prefixes (for example: `008_security.md`, `009_observability.md`).

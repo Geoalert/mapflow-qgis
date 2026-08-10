@@ -16,89 +16,120 @@ However, as we don't want to release an "empty" version (without any user-facing
 
 ## 1. Refactoring
 
+Target structure, layer rules and invariants: **`spec/007_architecture.md`**. The steps below
+are the route there. Phases run in order; each step is one MR.
 
-[ ] Narrow the broad exception handlers
-The 3.6.0 security scan flagged `try/except Exception` blocks that only log. Narrow them to the
-exceptions actually expected, so unrelated errors surface instead of being swallowed.
-Scope: 16 bare `except:` (provider_service 5, geometry 4, mapflow 2, http 2, layer_utils 2,
-catalog 1) and 38 `except Exception` (processing_service 14, mapflow 11, 9 files with 1–2).
-Acceptance: `E722` comes out of the `.flake8` ledger, and bandit reports no `B110`.
-Sequenced after the untiered tests: those 23 tests exercise provider_service and
-processing_service, the two heaviest files here, so they are the safety net for this change.
+### Phase A — clear the ground
 
-[ready-for-review] Deduplicate error-guard reports
+Everything here is behaviour-preserving and verifiable by the current suite. Doing it first
+means the extraction MRs move less code and read as pure moves.
+
+[ ] Delete the dead modules and the empty package
+`entity/status.py` is byte-identical to `schema/status.py` except one relative import, and
+nothing imports `entity/processing.py` or `entity/status.py` at all. `requests/` holds only an
+empty `__init__.py`. ~340 lines plus a package.
+Note while deleting: two `ProcessingStatus` enum classes exist at runtime today, and members of
+the two are never equal. Confirm nothing compares across them before assuming this is inert.
+
+[ ] Break the `schema` ⇄ `entity.provider` import cycle
+`schema/processing.py:12` imports `entity.provider.provider.SourceType`; importing the
+`entity.provider` package runs `basemap_provider`, which imports `schema.processing` back.
+Move the provider primitives (`SourceType`, `CRS`, `BasicAuth`) into a leaf module that imports
+nothing from the plugin.
+Acceptance: the retry loops in `tests/functional/conftest.py` and `tests/qgis/conftest.py` are
+deleted and both tiers still pass. Their absence is the regression check.
+
+[ ] Narrow the remaining broad exception handlers
+38 `except Exception` sites (processing_service 14, mapflow 11, nine files with 1–2).
+Acceptance: `E722` out of the `.flake8` ledger, bandit reports no `B110`.
+Kept in Phase A rather than deferred with the other lint work: a handler that swallows
+everything hides a broken extraction, and Phase C moves code past these sites constantly.
+
+[ ] Merge `constants.py` into `config.py`
+Five values, no principle separating them from the other ~150 lines.
+
+### Phase B — a test surface that survives the move
+
+[ ] Behavioral test tier
+43 of 51 QGIS-tier test files build objects with `Class.__new__(Class)` and hand-set attributes,
+so they pin internal structure and break the moment a method moves. They cannot be the safety
+net for Phase C.
+Build `tests/behavioral/`: drive a user journey from a controller entry point with `Http`
+replaced by a recording fake, and assert only on the four surfaces in `spec/007_architecture.md`
+§ The test surface that survives a move — HTTP conversation, QGIS layer state, settings, and
+widget-visible state.
+Cover, at minimum, one journey per domain moved in Phase C. Existing `__new__` tests stay until
+the code they pin moves; no step may leave a behaviour covered by neither.
+
+### Phase C — dissolve the god object
+
+One domain per MR, each ending with `mapflow.py` smaller and no behaviour changed. Ordered
+leaf-first so each extraction depends only on what already moved.
+
+[ ] Extract AOI editing and AOI layers → `service/aoi_service.py` + controller
+[ ] Extract preview → `service/preview_service.py`
+[ ] Extract imagery search and the local filter → `service/search_service.py` + `view/search_view.py`
+[ ] Extract templates → `service/template_service.py` (the largest domain, ~55 methods)
+[ ] Extract processing lifecycle: options, start, review, rating → existing processing service/controller
+[ ] Extract session and account status → `service/session_service.py`
+[ ] Reduce what remains to `plugin.py` — initGui/unload, wiring, construction
+Acceptance for the phase: no `self.dlg.<widget>` access in `plugin.py`, and no service imports a
+widget (`spec/007_architecture.md` invariants 1 and 5).
+
+### Phase D — move the packages
+
+Mechanical, and cheaper here than earlier: the god object is gone, so fewer files churn.
+
+[ ] `functional/` dissolved: `api/`, `controller/`, `service/`, `view/` to the root; `app_context`
+    → `context.py`; `auth`, `geometry`, `helpers`, `layer_utils` to their layer homes
+[ ] `schema/` + the live `entity/provider/` → `model/`; `http`, `error_guard`, `report_throttle`,
+    `log_config`, `styles` → `infra/`
+
+### Phase E — UI consistency
+
+[ ] One consistent way to build a dialog
+All 13 dialogs load a `.ui` file, so the inconsistency is how much Python is layered on top —
+`main_dialog.py` is 803 lines and builds widgets programmatically in several places. Decide the
+rule, then apply it.
+
+[ ] Review what the plugin stores in settings
+Against `spec/003_local_storage.md`; drop what is no longer read.
+
+### Phase F — after the structure is settled
+
+[ ] Wrap user interactions in error_guard
+`guard_entry_point` is written and tested but applied nowhere; only `Http.response_dispatcher` is
+guarded. Everything entering plugin code from Qt without passing through `Http` still escapes to
+QGIS's raw unhandled-exception dialog: button clicks, selection changes, timer ticks,
+drag-and-drop, dialog accept/reject.
+Cheap once Phase C lands — a controller slot is the definition of an entry point
+(`spec/007_architecture.md` § Entry points), so the sites are enumerable instead of guessed.
 
 [ ] Restore user-facing errors on the polled paths
 Three call sites opt out of the default error handler purely to avoid stacked modals:
-`mapflow.py:482` (`refresh_status`), `mapflow.py:3042`, and `processing_api.py:89`
-(`get_processings`). The cost is that a real server error on those paths is invisible to
-the user. The throttle removes the reason for the workaround, so each can go back to
-`use_default_error_handler=True` — but `report_http_error` needs its own signature (Qt
-error code + endpoint path) before that is safe. Do this after the entry-point wrapping,
-so both dialog paths land on one suppression policy rather than two.
+`mapflow.py` `refresh_status`, `mapflow.py:3042`, and `processing_api.py` `get_processings`. A real
+server error on those paths is invisible to the user. The throttle removes the reason for the
+workaround, but `report_http_error` needs its own signature (Qt error code + endpoint path) first,
+so both dialog paths land on one suppression policy.
 
-[ ] Wrap user interactions in error_guard
-`guard_entry_point` is written and tested but applied nowhere; only `Http.response_dispatcher`
-is guarded today. Everything entering plugin code from Qt without passing through `Http` still
-escapes to QGIS's raw unhandled-exception dialog: button clicks, combo/selection changes,
-QTimer ticks, drag-and-drop, dialog accept/reject.
-Do this **after** the dedup above, and after "Plan the refactoring" has defined what an entry
-point is — `mapflow.py`'s god object currently blurs the boundary, so picking sites now would
-mean guessing at it and re-doing the work.
+[ ] Gate the features whose prerequisites never arrived
+Startup stops retrying `/user/status` and `/rasters/memory` instead of polling forever, which is
+right for the traffic and wrong for the UI: the prerequisites those responses carry are simply
+missing, and the affected actions currently fail late or behave as if the limits were zero.
+- no `/user/status` → no billing type, no remaining limit/credits, no area caps. Processings and
+  templates must not be launchable. Viewing them stays available.
+- no `/rasters/memory` → no storage quota. My Imagery uploads must not be startable.
+Blocked controls should not be silently disabled: show why, plus a **Retry** button that re-runs
+the request and unblocks on success.
+Needs one owner for "is this prerequisite satisfied"; today the answer is scattered across
+`app_context` fields written from inside `set_processing_limit`.
 
 [ ] Normalise the residual whitespace findings
 Clears most of the `.flake8` ledger (~450: W291/W292/W293/W391, E501, E1xx/E2xx/E3xx).
-**Ordering constraint:** must come *after* `feature/track-uploaded-image-status` is rebased and
-landed (§3), and immediately *before* the refactor branch cut. A whole-tree whitespace diff makes
-that rebase materially worse, and the findings concentrate in `mapflow.py` and the service layer,
-which the refactoring rewrites — normalising earlier means doing the work twice.
-
-[ ] Plan the refactoring
-Address known problems, be open to push back if the proposals are wrong; 
-assess the code for good/bad practices and evaluate what to improve (maximum impact, minimum effort)
-The ultimate goals are:
-- consistency of the codebase (a developer or AI agent who knows one part of functionality should easily find the corresponding parts in others)
-- industry standards (a new developer should not be surprised or turned off by the code structure or smells)
-- cheap to maintain in case of API changes
-- ready to transfer to QGIS4 (Qt6)
-
-Known problems:
-- Current code has obviously problematic god-object (in mapflow.py) which tightly couples a lot of functionality. 
-- Code/folder structure is uneven: 
-  - there are orphans like `./mapflow/requests`
-  - `./mapflow/entity` and `./mapflow/schema` don't have clear responsibilities
-  - same for `constants.py` and `config.py` 
-  - ???
-I would suggest the following:
-- minimize `mapflow.py` responsibilities
-- create a classic folder structure "api/controller/service/view", practically moving them out of `functional` to the root 
-- create services and other instances for the other parts of functionality.
-- move templates to a separate template_service (controller probably stays the same, but let's decide later)
-- refactor dialogs (ui + py dialog files). Some of them are created manually in the Qt designer,
-and some are heavily python-coded or generated, and they are inconsistent in how can you change them. We need to select a consistent way.
-- review the settings and what do we store there
-
-[ ] Improve test coverage (behavioral/e2e)
-- Document the current behavior and cover it with the tests BEFORE the refactoring
-- Factor the refactoring structure plan in to match the proposed tests to the final functionality rather than the current functions and code
-
-[ ] Implement the refactoring
-- Should follow the plan proposed before
-- Should not break the tests implemented before (behavioral/e2e), allowed to rewrite/add unit tests
-
-[ ] Gate the features whose prerequisites never arrived — AFTER the refactoring
-Startup now stops retrying `/user/status` and `/rasters/memory` instead of polling forever,
-which is right for the traffic and wrong for the UI: the prerequisites those responses carry
-are simply missing, and the affected actions currently fail late or behave as if the limits
-were zero.
-- no `/user/status` → no billing type, no remaining limit/credits, no area caps. Processings
-  and templates must not be launchable. Viewing them stays available.
-- no `/rasters/memory` → no storage quota. My Imagery uploads must not be startable.
-Blocked controls should not be silently disabled: show why, plus a **Retry** button that
-re-runs the request and unblocks on success. Deferred past the refactoring because it needs
-one owner for "is this prerequisite satisfied" — today the answer is scattered across
-`app_context` fields set from inside `set_processing_limit`, which is exactly the god-object
-coupling the refactoring removes.
+Last on purpose: the refactoring rewrites most of the offending lines anyway, and a whole-tree
+whitespace diff would collide with every in-flight branch, including
+`feature/track-uploaded-image-status` (§3).
+Until then the ledger only shrinks — new and moved code adds nothing to it.
 
 ## 2. Add new zoom-selector feature
 [ ]
