@@ -86,6 +86,20 @@ and some are heavily python-coded or generated, and they are inconsistent in how
 - Should follow the plan proposed before
 - Should not break the tests implemented before (behavioral/e2e), allowed to rewrite/add unit tests
 
+[ ] Gate the features whose prerequisites never arrived — AFTER the refactoring
+Startup now stops retrying `/user/status` and `/rasters/memory` instead of polling forever,
+which is right for the traffic and wrong for the UI: the prerequisites those responses carry
+are simply missing, and the affected actions currently fail late or behave as if the limits
+were zero.
+- no `/user/status` → no billing type, no remaining limit/credits, no area caps. Processings
+  and templates must not be launchable. Viewing them stays available.
+- no `/rasters/memory` → no storage quota. My Imagery uploads must not be startable.
+Blocked controls should not be silently disabled: show why, plus a **Retry** button that
+re-runs the request and unblocks on success. Deferred past the refactoring because it needs
+one owner for "is this prerequisite satisfied" — today the answer is scattered across
+`app_context` fields set from inside `set_processing_limit`, which is exactly the god-object
+coupling the refactoring removes.
+
 ## 2. Add new zoom-selector feature
 [ ]
 - Use 002_E_zoom_selector_api.md
