@@ -55,27 +55,50 @@ mapflow/
   controller/          signal wiring: widget signal -> service call -> view update
   view/                widget reads and writes
   dialogs/             .ui files and thin dialog classes
-  schema/              domain types: API DTOs and the domain objects built from them
+  schema/              shapes that cross the network
+  model/               types the plugin owns and persists locally
   errors/
   infra/               http, error_guard, report_throttle, log_config
 ```
 
-Deleted: `requests/`, `entity/` (its only live package, `provider/`, moves into `schema/`),
-`functional/` as a container, `constants.py`.
+Deleted: `requests/`, `entity/`, `functional/` as a container, `constants.py`.
 
 `mapflow.py` keeps its name. It stays the entry point; what changes is that it holds
 wiring instead of domain logic.
 
-**`schema/` holds both DTOs and behaviour-carrying domain types.** The provider classes have
-real methods (`to_processing_params` and friends), so "schema" is a loose fit for them — but
-one home for domain types beats a second package whose boundary has to be re-litigated, which
-is exactly how `entity/` became a graveyard. One package, documented scope.
+### schema/ versus model/
 
-**Moving `entity/provider/` into `schema/` does not by itself break the import cycle** — it
-relocates both ends of it into one package. The fix is separate and must happen first or
-together: the provider primitives (`SourceType`, `CRS`, `BasicAuth`) move to a leaf module
-that imports nothing from the plugin, so `schema/processing.py` depends on the leaf rather
-than on the package that imports it back.
+**`schema/` is what crosses the network. `model/` is what the plugin owns and persists
+locally.** "API object versus in-app DTO" is close, but has a grey zone this codebase sits
+in, so the test is the wire, not the usage.
+
+The distinction is already marked mechanically, and `schema/base.py` says so: `Serializable`
+carries `as_dict`/`as_json` and builds request bodies; `SkipDataClass` carries `from_dict` and
+exists so response parsing survives non-breaking API changes. Exactly two modules in the
+current tree inherit neither — `billing.py`, a vocabulary parsed from `/user/status`, which
+stays; and `processing_history.py`, which reads and writes `processing_history_{project_id}`
+in QgsSettings, which moves.
+
+So `model/` is small on purpose:
+
+- `model/provider/` — the provider classes. Configured by the user, persisted under
+  `mapflow_data_providers`, and carrying real behaviour (`to_processing_params`).
+- `model/processing_history.py` — the local per-project processing cache.
+
+**Do not grow `model/` by mirroring response types.** Most of what looks like an in-app DTO
+*is* the parsed API object: `MapflowProject`, `ProcessingDTO`, `MosaicReturnSchema` and
+`ImageReturnSchema` are all held directly in `AppContext`. Wrapping those in parallel domain
+classes buys nothing and costs a hand-written mapping per type, which then drifts — the same
+failure `entity/` died of. A response type earns a place in `model/` only when the plugin
+starts owning state the response does not describe.
+
+**The split makes the import cycle structurally impossible rather than fixed once.** `model/`
+may import `schema/` — a locally-owned provider legitimately produces a request shape.
+`schema/` may never import `model/`. Today's cycle is exactly a violation of that direction:
+`schema/processing.py` reaches into the provider package for `SourceType`. The fix then
+follows from the rule rather than being a one-off: the provider primitives (`SourceType`,
+`CRS`, `BasicAuth`) belong in `schema/` as a leaf module, and `model/provider/` imports them
+from there.
 
 ### Layer rules
 
@@ -85,19 +108,21 @@ below it and from `model/`, `errors/`, `infra/`, `config`, `helpers`, `geometry`
 | layer | may import | must never |
 |---|---|---|
 | `mapflow.py` | everything | contain domain logic |
-| `controller/` | service, view, schema | touch `Http`, hold domain state |
-| `view/` | schema, dialogs | issue requests, contain business rules |
-| `service/` | api, schema, other services | import `view/`, `dialogs/`, or touch a widget |
-| `api/` | schema, infra | know about widgets or business rules |
-| `schema/` | errors, config | import anything above it |
+| `controller/` | service, view, model, schema | touch `Http`, hold domain state |
+| `view/` | model, schema, dialogs | issue requests, contain business rules |
+| `service/` | api, model, schema, other services | import `view/`, `dialogs/`, or touch a widget |
+| `api/` | model, schema, infra | know about widgets or business rules |
+| `model/` | schema, errors, config | import anything above it |
+| `schema/` | errors, config | import `model/`, or anything above it |
 
 **The rule that does the work: `service/` may not touch a widget.** Every current
 layering violation is an instance of it, and it is mechanically checkable — a service
 module must not import `PyQt5.QtWidgets`, `dialogs`, or `view`, and must not receive a
 `dlg` argument.
 
-`schema/` must import nothing from `api/`, `service/`, `view/`, `controller/` or
-`dialogs/`. This is what keeps the import cycle from coming back.
+**The rule that keeps the import cycle dead: `schema/` may not import `model/`.** The
+dependency between the two runs one way only, so the cycle cannot be reintroduced by
+someone who does not know it once existed.
 
 ### Services
 
@@ -203,7 +228,7 @@ covered by neither.
 ### Invariants
 
 1. A service module imports no widget and receives no dialog.
-2. `schema/` imports nothing from the layers above it.
+2. `schema/` imports nothing from `model/` or from the layers above it.
 3. There are no import cycles. The test-tier bootstraps must not need a retry loop; when
    the cycle is gone, that workaround is deleted, and its absence is the check.
 4. One concept has one home. A type is defined once — no parallel copies across packages.
