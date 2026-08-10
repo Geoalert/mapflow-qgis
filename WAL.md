@@ -33,24 +33,19 @@ members of the two are never equal. Find whether any code compares a status orig
 `entity` with one from `schema` before assuming the deletion is inert — if it does, that is a
 live bug and gets its own fix commit ahead of the deletion.
 
-[ ] Break the `schema` ⇄ provider import cycle
-`schema/processing.py:12` imports `entity.provider.provider.SourceType`; importing the
-`entity.provider` package runs `basemap_provider`, which imports `schema.processing` back.
-Move the provider primitives (`SourceType`, `CRS`, `BasicAuth`) into a leaf module that imports
-nothing from the plugin.
-Do this **before or with** the move of `entity/provider/` into `schema/` — relocating both ends
-of the cycle into one package does not break it.
+[ ] Split `schema/` and `model/`, break the import cycle, delete `entity/`
+One step, because the cycle fix and the split are the same change seen twice
+(`spec/007_architecture.md` § schema/ versus model/).
+- provider primitives (`SourceType`, `CRS`, `BasicAuth`) → a leaf module in `schema/`
+- `entity/provider/` → `model/provider/`, importing those primitives from `schema/`
+- `schema/processing_history.py` → `model/` (it persists to QgsSettings, not to the wire)
+- everything else stays in `schema/`; `entity/` is gone
 Acceptance: the retry loops in `tests/functional/conftest.py` and `tests/qgis/conftest.py` are
 deleted and both tiers still pass. Their absence is the regression check.
 
-[ ] Move `entity/provider/` into `schema/`, delete `entity/`
-`schema/provider.py` (the API return schema) and the provider package collide on the name;
-resolve by making `schema/provider/` a package and moving the existing module into it. The
-`__init__` re-exports, so most import sites are unchanged.
-
 [ ] Architecture invariant test
-`tests/functional/test_layering.py` — no service imports a widget, `dialogs`, or `view`; no
-`schema` module imports a layer above it; no import cycles. Current violations go in an
+`tests/functional/test_layering.py` — no service imports a widget, `dialogs`, or `view`;
+`schema/` imports nothing from `model/` or above; no import cycles. Current violations go in an
 explicit allowlist that later steps only shrink.
 Written now, not after the extraction, so every new line is held to the rule from the start.
 Precedent and rationale: `tests/functional/test_tier_layout.py`.
@@ -104,6 +99,8 @@ Mechanical, and cheaper here than earlier: the god object is gone, so fewer file
     → `context.py`; `geometry`, `helpers`, `styles` to the root; `auth` → `SessionService`;
     `layer_utils` → `ResultService` plus the layer-tree helpers in `view/`
 [ ] `http`, `error_guard`, `report_throttle`, `log_config` → `infra/`
+Note: the `schema/` ⇄ `model/` split already happened in Phase A, so this phase is package
+moves only — no type is reclassified here.
 
 ### Phase E — UI consistency
 
