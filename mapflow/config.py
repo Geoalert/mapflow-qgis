@@ -107,6 +107,11 @@ class Config:
     MAX_ZOOM = 21
     DEFAULT_ZOOM = MAX_FREE_ZOOM
     USER_STATUS_UPDATE_INTERVAL = 30  # seconds
+    STARTUP_STATUS_RETRY_INTERVAL = 500  # milliseconds
+    #: How many times startup may re-ask for /user/status before giving up. The plugin cannot
+    #: configure itself without that response, so it retries rather than failing on one
+    #: hiccup — but an unreachable server must not leave it retrying for the whole session.
+    STARTUP_STATUS_MAX_ATTEMPTS = 20
 
     MAX_FILE_SIZE_PIXELS = 30_000
     MAX_FILE_SIZE_BYTES = 2*(1024**3)

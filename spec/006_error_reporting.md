@@ -68,10 +68,33 @@ introduced to replace.
   and the report body. A traceback that fired 200 times describes a different bug from one
   that fired once, and the single traceback cannot show the difference.
 
+### A guarded callback is interrupted, not completed
+
+The guard swallows the exception and returns. Everything after the raise point in that
+callback **does not run** — including work the callback owns rather than merely performs:
+stopping a timer, clearing an in-flight flag, closing a dialog, releasing a lock.
+
+So a callback that owns a state transition must perform it **before** anything that can
+raise, or in a `finally`. Placing it at the end is only correct for code that cannot fail,
+and a network callback parsing a server payload always can.
+
+This is not theoretical. `set_processing_limit` ended with the stop for the 500 ms startup
+retry timer. When the response was malformed, the callback raised on the way there, the
+guard absorbed it, the timer was never stopped, and the plugin re-issued /user/status and
+/rasters/memory twice a second for the rest of the session — while the UI looked healthy.
+The guard did not cause that loop, but by absorbing the exception it removed the only
+signal that it was running.
+
+Corollary for retry loops: a poll that retries until it succeeds needs a bound and a
+terminal state, and the terminal state must be latched rather than implied by a stopped
+timer. "It cannot fire again because we stopped the timer" is the same reasoning that
+failed above.
+
 ### Consequences for new code
 
 - Any new timer-driven or event-loop-driven entry point must route unexpected failures
   through `error_guard`, never to a raw modal, and never to a bare log-and-continue.
+- A callback reached through the guard must not leave cleanup after code that can raise.
 - A network call that opts out of user-facing error handling
   (`use_default_error_handler=False`) must say in a comment why. Opting out to dodge repeat
   alerts is superseded by the throttle and should be reconsidered rather than copied.

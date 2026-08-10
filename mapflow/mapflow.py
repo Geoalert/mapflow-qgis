@@ -205,11 +205,15 @@ class Mapflow(QObject):
         self.user_status_update_timer = QTimer(self.dlg)
         self.user_status_update_timer.setInterval(self.config.USER_STATUS_UPDATE_INTERVAL * 1000)
         self.user_status_update_timer.timeout.connect(self.refresh_status)
-        # Timer for user update at startup, in case get_processings request takes too long
-        # Stopped as soon as first /user/status request is made
+        # Retries /user/status until the response that configures the plugin arrives.
+        # A tick is skipped while a request is still in flight, so a slow or unreachable
+        # server produces one outstanding request rather than two per second.
         self.app_startup_user_update_timer = QTimer(self.dlg)
-        self.app_startup_user_update_timer.setInterval(500)
+        self.app_startup_user_update_timer.setInterval(self.config.STARTUP_STATUS_RETRY_INTERVAL)
         self.app_startup_user_update_timer.timeout.connect(self.first_status_request)
+        self._startup_status_attempts = 0
+        self._startup_status_pending = False
+        self._startup_status_given_up = False
 
         # ========== 5. SETUP TEMP DIRECTORY ==========
         # AlertService must exist before setup_tempdir: an unavailable working directory below (and
@@ -483,13 +487,52 @@ class Mapflow(QObject):
         )
 
     def first_status_request(self):
+        if self._startup_status_given_up or self._startup_status_pending:
+            return
+        if self._startup_status_attempts >= self.config.STARTUP_STATUS_MAX_ATTEMPTS:
+            # Latched rather than left to the stopped timer: giving up must be a terminal
+            # state, so a stray call cannot turn one warning into a modal per invocation.
+            self._startup_status_given_up = True
+            self.stop_startup_status_polling()
+            self.alert(self.tr('Could not load your account status from Mapflow.\n\n'
+                               'Some features stay unavailable until you reconnect and '
+                               'reopen the plugin.'),
+                       icon=QMessageBox.Warning)
+            return
+        self._startup_status_attempts += 1
+        self._startup_status_pending = True
         self.http.get(
             url=f'{self.server}/user/status',
-            callback=self.set_processing_limit,
-            callback_kwargs={'app_startup_request': True},
+            callback=self.first_status_callback,
+            error_handler=self.first_status_error_handler,
             use_default_error_handler=False
         )
+
+    def stop_startup_status_polling(self):
+        self.app_startup_user_update_timer.stop()
+        self._startup_status_pending = False
+
+    def first_status_callback(self, response: QNetworkReply) -> None:
+        """Apply the startup configuration carried by the first /user/status response.
+
+        The timer is stopped *before* the configuration runs, not after it. `set_processing_limit`
+        is invoked through the error guard, which swallows an exception and skips the rest of the
+        callback — so a stop placed after the configuration would never run on a bad response, and
+        the plugin would re-attempt the whole setup twice a second for the rest of the session.
+        See spec/006_error_reporting.md § Consequences for new code.
+        """
+        self.stop_startup_status_polling()
+        self.set_processing_limit(response, app_startup_request=True)
+        # Storage quota for My Imagery: needed once at startup, and refreshed later by
+        # mosaicsUpdated. Issuing it per retry would mean a second endpoint polled at the
+        # retry interval, with its own error dialog on every failed tick.
         self.data_catalog_service.get_user_limit()
+
+    def first_status_error_handler(self, response: QNetworkReply) -> None:
+        """Let the next tick retry, and surface the failure once the attempts run out."""
+        self._startup_status_pending = False
+        logger.warning("Startup /user/status attempt %s failed with Qt error %s",
+                       self._startup_status_attempts, response.error())
 
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.draw_aoi)
@@ -3072,7 +3115,6 @@ class Mapflow(QObject):
 
         if app_startup_request:
             self.processing_service.update_processing_cost()
-            self.app_startup_user_update_timer.stop()
             self.dlg.setup_for_billing(self.app_context.billing_type)
             self.dlg.setup_for_review(self.app_context.review_workflow_enabled)
             self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex())
@@ -4087,6 +4129,7 @@ class Mapflow(QObject):
         self.app_context.settings.setValue('token', '')
         self.processing_service.processing_fetch_timer.stop()
         self.user_status_update_timer.stop()
+        self.stop_startup_status_polling()
         self.app_context.logged_in = False
         self.http.logout()
         self.dlg.close()
@@ -4246,6 +4289,10 @@ class Mapflow(QObject):
         self.dlg.setup_for_billing(self.app_context.billing_type)
         self.dlg.show()
         self.user_status_update_timer.start()
+        # Logging in again after a failed startup must get a full budget of retries.
+        self._startup_status_attempts = 0
+        self._startup_status_pending = False
+        self._startup_status_given_up = False
         self.app_startup_user_update_timer.start()
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
