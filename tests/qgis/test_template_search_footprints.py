@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 from qgis.core import QgsProject
 
 from mapflow import mapflow as mapflow_module
-from mapflow.entity.provider.default import ImagerySearchProvider
+from mapflow.model.provider.default import ImagerySearchProvider
 from mapflow.mapflow import Mapflow
 
 PLUGIN_DIR = os.path.dirname(mapflow_module.__file__)

@@ -332,7 +332,7 @@ def test_processing_params_v2_shape_still_parses():
 def test_template_to_run_uses_active_template_in_template_mode():
     """Inside a template there is no selected template row, so the planned-start gate must
     use the active template — otherwise 'Start planned processing' never triggers."""
-    from mapflow.entity.provider import ImagerySearchProvider
+    from mapflow.model.provider import ImagerySearchProvider
     service = ProcessingService.__new__(ProcessingService)
     service.in_template_mode = True
     template = SimpleNamespace(id="t-1")
@@ -346,7 +346,7 @@ def test_template_to_run_uses_active_template_in_template_mode():
 
 
 def test_template_to_run_none_when_open_results_belong_to_other_template():
-    from mapflow.entity.provider import ImagerySearchProvider
+    from mapflow.model.provider import ImagerySearchProvider
     service = ProcessingService.__new__(ProcessingService)
     service.in_template_mode = True
     service.active_template = SimpleNamespace(id="t-1")

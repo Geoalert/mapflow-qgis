@@ -23,7 +23,8 @@ from ...errors import (BadProcessingInput,
 from ...http import Http, api_message_parser
 from ..view.processing_view import ProcessingView
 from ..api.processing_api import ProcessingApi
-from ...schema import ProcessingDTO, UpdateProcessingSchema, ProcessingStatus, BillingType, ProcessingHistory, PostProcessingSchemaV2
+from ...schema import ProcessingDTO, UpdateProcessingSchema, ProcessingStatus, BillingType, PostProcessingSchemaV2
+from ...model.processing_history import ProcessingHistory
 from ...schema.processing import (
     ProcessingsRequest,
     ProcessingsResult,
@@ -42,7 +43,7 @@ from ...schema.template import (
 )
 from ..service.alert_service import alert
 from ..app_context import AppContext
-from ...entity.provider import ImagerySearchProvider
+from ...model.provider import ImagerySearchProvider
 from ...config import Config
 from ...functional.layer_utils import ResultsLoader, max_aoi_bbox_area
 from ...http import get_error_report_body

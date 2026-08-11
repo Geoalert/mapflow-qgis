@@ -79,8 +79,8 @@ from .dialogs import (ErrorMessageWidget,
 from .dialogs.icons import plugin_icon, new_image_icon
 from .dialogs.processing_details_dialog import ProcessingDetailsDialog
 from .dialogs.select_aoi_layers_dialog import SelectAoiLayersDialog
-# Entity/providers
-from .entity.provider import (create_provider,
+# Providers
+from .model.provider import (create_provider,
                               DefaultProvider,
                               ImagerySearchProvider,
                               MyImageryProvider,

@@ -4,7 +4,7 @@ from qgis.core import QgsVectorLayer, QgsWkbTypes, QgsGeometry, QgsFeature, QgsC
 from ..app_context import AppContext
 from .. import layer_utils
 from .. import helpers
-from ...entity.provider import (ImagerySearchProvider,
+from ...model.provider import (ImagerySearchProvider,
                                 MyImageryProvider)
 from ...errors import (BadProcessingInput,
                        PluginError,

@@ -4,7 +4,8 @@ Basic, non-authentification XYZ provider
 from abc import ABC
 from typing import Optional
 
-from .provider import SourceType, UsersProvider, staticproperty
+from .provider import UsersProvider, staticproperty
+from ...schema.provider_types import SourceType
 from ...schema.processing import UserDefinedParams, UserDefinedSchema, ProcessingParams
 
 
@@ -82,4 +83,3 @@ class QuadkeyProvider(BasemapProvider):
     @property
     def meta_url(self):
         return None
-

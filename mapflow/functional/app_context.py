@@ -5,7 +5,7 @@ from qgis.core import QgsGeometry, QgsVectorLayer, QgsProject, QgsSettings
 from ..config import Config
 from ..schema.project import UserRole
 from ..schema.project import MapflowProject
-from ..entity.provider import ProviderInterface
+from ..model.provider import ProviderInterface
 
 if TYPE_CHECKING:
     # Imported only for the string annotations below; kept under TYPE_CHECKING to
