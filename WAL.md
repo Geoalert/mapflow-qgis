@@ -26,15 +26,7 @@ means the extraction MRs move less code and read as pure moves.
 
 [ready-for-review] Delete the dead modules and the empty package
 
-[ ] Split `schema/` and `model/`, break the import cycle, delete `entity/`
-One step, because the cycle fix and the split are the same change seen twice
-(`spec/007_architecture.md` § schema/ versus model/).
-- provider primitives (`SourceType`, `CRS`, `BasicAuth`) → a leaf module in `schema/`
-- `entity/provider/` → `model/provider/`, importing those primitives from `schema/`
-- `schema/processing_history.py` → `model/` (it persists to QgsSettings, not to the wire)
-- everything else stays in `schema/`; `entity/` is gone
-Acceptance: the retry loops in `tests/functional/conftest.py` and `tests/qgis/conftest.py` are
-deleted and both tiers still pass. Their absence is the regression check.
+[ready-for-review] Split `schema/` and `model/`, break the import cycle, delete `entity/`
 
 [ ] Architecture invariant test
 `tests/functional/test_layering.py` — no service imports a widget, `dialogs`, or `view`;

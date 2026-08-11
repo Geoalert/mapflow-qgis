@@ -8,8 +8,8 @@ from qgis.core import QgsVectorLayer, QgsFeature
 
 from . import DataCatalogService
 from ..app_context import AppContext
-from ...entity.provider import(ImagerySearchProvider, 
-                               MyImageryProvider, 
+from ...model.provider import(ImagerySearchProvider,
+                               MyImageryProvider,
                                UsersProvider,
                                BasicAuth,
                                ProvidersList,

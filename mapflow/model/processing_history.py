@@ -4,8 +4,8 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, List, Set
 from uuid import UUID
 
-from .status import ProcessingStatus
-from .processing import ProcessingDTO
+from ..schema.status import ProcessingStatus
+from ..schema.processing import ProcessingDTO
 
 
 @dataclass

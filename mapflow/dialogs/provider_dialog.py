@@ -4,7 +4,7 @@ from PyQt5 import uic
 from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 
 from .processing_dialog import ui_path
-from ..entity.provider import (CRS,
+from ..model.provider import (CRS,
                                BasicAuth,
                                UsersProvider,
                                XYZProvider,

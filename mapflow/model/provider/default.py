@@ -1,7 +1,7 @@
 from typing import Optional, List
 
-from .provider import BasicAuth
-from .provider import ProviderInterface, SourceType, CRS
+from .provider import ProviderInterface
+from ...schema.provider_types import BasicAuth, SourceType, CRS
 from ...constants import SEARCH_OPTION_NAME, CATALOG_OPTION_NAME
 from ...errors.plugin_errors import ImageIdRequired
 from ...schema import (DataProviderParams,
@@ -63,7 +63,7 @@ class ImagerySearchProvider(ProviderInterface):
 
 class MyImageryProvider(ProviderInterface):
     """
-    Allows to create mosaics and upload user's imagery 
+    Allows to create mosaics and upload user's imagery
     to later run a processing using it
     """
 
@@ -79,15 +79,15 @@ class MyImageryProvider(ProviderInterface):
     @property
     def is_default(self):
         return True
-    
+
     @property
     def requires_image_id(self):
         return False
-    
+
     def to_processing_params(self,
                              provider_name: Optional[str] = None,
                              zoom: Optional[str] = None):
-        return ProcessingParams(sourceParams=MyImageryParams(MyImagerySchema(imageIds=self.image_ids, 
+        return ProcessingParams(sourceParams=MyImageryParams(MyImagerySchema(imageIds=self.image_ids,
                                                                              mosaicId=self.mosaic_id))), {}
 
 class DefaultProvider(ProviderInterface):
@@ -159,5 +159,5 @@ class DefaultProvider(ProviderInterface):
     def to_processing_params(self,
                              provider_name: Optional[str] = None,
                              zoom: Optional[str] = None):
-        return ProcessingParams(sourceParams=DataProviderParams(DataProviderSchema(providerName=provider_name, 
+        return ProcessingParams(sourceParams=DataProviderParams(DataProviderSchema(providerName=provider_name,
                                                                                    zoom=zoom))), {}

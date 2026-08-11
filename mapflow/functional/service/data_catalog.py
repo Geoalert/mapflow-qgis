@@ -22,7 +22,7 @@ from ...http import Http
 from ...functional import layer_utils, helpers
 from ...functional.app_context import AppContext
 from ...config import Config
-from ...entity.provider import MyImageryProvider
+from ...model.provider import MyImageryProvider
 
 
 class DataCatalogService(QObject):

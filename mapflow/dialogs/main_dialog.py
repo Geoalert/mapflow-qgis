@@ -13,7 +13,7 @@ from qgis.gui import QgsRangeSlider
 from . import icons
 from ..config import config, ConfigColumns
 from ..schema import BillingType, UserRole
-from ..entity.provider import ProviderInterface
+from ..model.provider import ProviderInterface
 from ..functional import helpers
 
 ui_path = Path(__file__).parent/'static'/'ui'

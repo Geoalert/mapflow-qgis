@@ -174,7 +174,7 @@ class TestValidateBlocksMixedProviders:
     def test_mixed_image_providers_returns_error(self):
         """validate_provider_params must surface the mismatch so
         validate_all_processing_params propagates it and blocks the cost call."""
-        from mapflow.entity.provider import ImagerySearchProvider
+        from mapflow.model.provider import ImagerySearchProvider
         rows = _rows_with_ids(["a", "b"])
         provider_names = ["orbview_msi", "orbview_pan"]
         product_types = ["Image", "Image"]
@@ -185,7 +185,7 @@ class TestValidateBlocksMixedProviders:
         assert err is not None and err != ""
 
     def test_same_image_provider_no_error(self):
-        from mapflow.entity.provider import ImagerySearchProvider
+        from mapflow.model.provider import ImagerySearchProvider
         rows = _rows_with_ids(["a", "b"])
         provider_names = ["orbview_msi", "orbview_msi"]
         product_types = ["Image", "Image"]
@@ -195,7 +195,7 @@ class TestValidateBlocksMixedProviders:
         assert service.validate_provider_params(provider) is None
 
     def test_mixed_mosaics_no_error(self):
-        from mapflow.entity.provider import ImagerySearchProvider
+        from mapflow.model.provider import ImagerySearchProvider
         rows = _rows_with_ids(["a", "b"])
         provider_names = ["foo", "bar"]
         product_types = ["Mosaic", "Mosaic"]
@@ -210,7 +210,7 @@ class TestValidateBlocksMixedProviders:
 
 class TestMinAreaCheck:
     def test_aoi_below_min_area_errors(self):
-        from mapflow.entity.provider import ImagerySearchProvider
+        from mapflow.model.provider import ImagerySearchProvider
         rows = _rows_with_ids(["a"])
         service = _make_service(rows,
                                 provider_names=["maxar"],
@@ -223,7 +223,7 @@ class TestMinAreaCheck:
         assert err is not None and "minimum required area" in err
 
     def test_aoi_above_min_area_no_error(self):
-        from mapflow.entity.provider import ImagerySearchProvider
+        from mapflow.model.provider import ImagerySearchProvider
         rows = _rows_with_ids(["a"])
         service = _make_service(rows,
                                 provider_names=["maxar"],
@@ -235,7 +235,7 @@ class TestMinAreaCheck:
         assert service.validate_provider_params(provider) is None
 
     def test_multiple_images_use_max_min_area(self):
-        from mapflow.entity.provider import ImagerySearchProvider
+        from mapflow.model.provider import ImagerySearchProvider
         rows = _rows_with_ids(["a", "b"])
         service = _make_service(rows,
                                 provider_names=["orbview_msi", "orbview_msi"],
@@ -250,7 +250,7 @@ class TestMinAreaCheck:
     def test_missing_min_area_field_no_error(self):
         """Duplicated search layers don't carry minAreaSqkm; absence must not crash
         or block."""
-        from mapflow.entity.provider import ImagerySearchProvider
+        from mapflow.model.provider import ImagerySearchProvider
         rows = _rows_with_ids(["a"])
         service = _make_service(rows,
                                 provider_names=["maxar"],
@@ -262,7 +262,7 @@ class TestMinAreaCheck:
         assert service.validate_provider_params(provider) is None
 
     def test_no_aoi_size_no_error(self):
-        from mapflow.entity.provider import ImagerySearchProvider
+        from mapflow.model.provider import ImagerySearchProvider
         rows = _rows_with_ids(["a"])
         service = _make_service(rows,
                                 provider_names=["maxar"],
@@ -351,7 +351,7 @@ class TestDuplicateImagerySearchMultiRow:
 
 class TestSetupProviderInfoMultiImage:
     def test_multiple_rows_show_count(self):
-        from mapflow.entity.provider import ImagerySearchProvider
+        from mapflow.model.provider import ImagerySearchProvider
         rows = _rows_with_ids(["a", "b", "c"])
         service = _make_service(rows,
                                 provider_names=["orbview_msi"] * 3,
@@ -361,7 +361,7 @@ class TestSetupProviderInfoMultiImage:
         assert "3 images selected" in text
 
     def test_single_row_shows_id(self):
-        from mapflow.entity.provider import ImagerySearchProvider
+        from mapflow.model.provider import ImagerySearchProvider
         rows = _rows_with_ids(["only-one"])
         service = _make_service(rows,
                                 provider_names=["orbview_msi"],
@@ -428,7 +428,7 @@ class TestSelectionClearedResetsState:
         """When the user deselects all rows, get_provider_params must wipe the
         cached image_ids so the next /cost call isn't dispatched with a stale
         imageId and a missing dataProvider (backend 400)."""
-        from mapflow.entity.provider import ImagerySearchProvider
+        from mapflow.model.provider import ImagerySearchProvider
         service = _make_service(rows=[],
                                 provider_names=[],
                                 product_types=[])
@@ -451,7 +451,7 @@ class TestSelectionClearedResetsState:
         """get_search_images_ids writes [] (not None) when its inner branch
         runs with no rows. validate_provider_params must treat [] the same as
         None and surface the error so /cost is short-circuited."""
-        from mapflow.entity.provider import ImagerySearchProvider
+        from mapflow.model.provider import ImagerySearchProvider
         service = _make_service(rows=[],
                                 provider_names=[],
                                 product_types=[])

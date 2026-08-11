@@ -5,7 +5,7 @@ search, and that template's results are open in the search table.
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from mapflow.entity.provider.default import ImagerySearchProvider
+from mapflow.model.provider.default import ImagerySearchProvider
 from mapflow.functional.service.processing_service import ProcessingService
 from mapflow.mapflow import Mapflow
 
