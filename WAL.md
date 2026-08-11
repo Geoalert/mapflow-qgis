@@ -24,14 +24,7 @@ are the route there. Phases run in order; each step is one MR.
 Everything here is behaviour-preserving and verifiable by the current suite. Doing it first
 means the extraction MRs move less code and read as pure moves.
 
-[ ] Delete the dead modules and the empty package
-`entity/status.py` is byte-identical to `schema/status.py` except one relative import, and
-nothing imports `entity/processing.py` or `entity/status.py` at all. `requests/` holds only an
-empty `__init__.py`. ~340 lines plus a package.
-**Do the duplicate-enum check first**: two `ProcessingStatus` classes exist at runtime and
-members of the two are never equal. Find whether any code compares a status originating from
-`entity` with one from `schema` before assuming the deletion is inert — if it does, that is a
-live bug and gets its own fix commit ahead of the deletion.
+[ready-for-review] Delete the dead modules and the empty package
 
 [ ] Split `schema/` and `model/`, break the import cycle, delete `entity/`
 One step, because the cycle fix and the split are the same change seen twice
