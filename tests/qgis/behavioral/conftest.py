@@ -50,7 +50,29 @@ def network():
 
 
 @pytest.fixture
-def plugin(plugin_iface, network):
+def fresh_singletons():
+    """Forget the process-global services before building a plugin.
+
+    `ProviderService` and `AlertService` cache their instance on the class, so the second
+    plugin built in one process keeps the *first* plugin's dialog. Without this the provider
+    combo is written into a dialog that is no longer on screen, and every journey after the
+    first sees an empty one.
+
+    This compensates for plugin state, not for a test-only quirk — the same thing happens
+    when QGIS reloads the plugin (see WAL). When Phase C makes the plugin own its services,
+    this fixture becomes a no-op and should be deleted.
+    """
+    from mapflow.functional.service.alert_service import AlertService
+    from mapflow.functional.service.provider_service import ProviderService
+
+    for service in (AlertService, ProviderService):
+        service._instance = None
+        service._initialized = False
+    yield
+
+
+@pytest.fixture
+def plugin(plugin_iface, network, fresh_singletons):
     """The real plugin object, built the way QGIS builds it.
 
     Depends on `network` so the manager is already faked when the plugin builds its Http.
@@ -71,6 +93,9 @@ def logged_in(plugin, network):
     Driven through the login dialog's own widgets rather than by calling a plugin method, so
     it keeps working when that method moves.
     """
+    plugin.initGui()
+    plugin.main()
+    settle(network, rounds=2)
     log_in(plugin)
     settle(network)
     return plugin
@@ -80,6 +105,20 @@ def log_in(plugin):
     """Type a token and press Log in, exactly as a user does."""
     plugin.dlg_login.token.setText("ZGVtbzpkZW1v")  # pragma: allowlist secret
     plugin.dlg_login.logIn.click()
+
+
+def open_first_project(plugin, network):
+    """Open the first project the way a double-click does: select the row, then activate it.
+
+    Both halves are needed. A real double-click selects before it opens, and the plugin
+    depends on that ordering — the selection change is what records which project is current,
+    and opening bails out early if nothing has been recorded yet.
+    """
+    table = plugin.dlg.projectsTable
+    assert table.rowCount(), "no projects listed; the journey cannot start"
+    table.setCurrentCell(0, 1)
+    table.doubleClicked.emit(table.model().index(0, 1))
+    settle(network)
 
 
 def settle(network, rounds=8, wait_ms=120):

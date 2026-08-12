@@ -36,6 +36,11 @@ def normalise(path: str):
     return tuple("*" if _is_id(part) else part for part in clean.split("/") if part)
 
 
+def fixture(name: str):
+    """The captured body of one response, for a test that needs to route to a variant."""
+    return json.loads((RESPONSES / "{}.json".format(name)).read_text())["body"]
+
+
 class FakeReply(QObject):
     """Enough of QNetworkReply for the plugin's callbacks and error handlers."""
 
