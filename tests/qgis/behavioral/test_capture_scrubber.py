@@ -95,6 +95,14 @@ def test_the_useful_part_of_a_url_survives():
     assert "SECRETVALUE" not in url
 
 
+def test_file_hashes_are_blanked_but_keep_their_shape():
+    """Not a credential, but detect-secrets reads a long hex string as one, so a captured
+    checksum fails lint on every future capture."""
+    out = Scrubber().scrub({"checksum": "9f2a4c1e" * 8})
+    assert set(out["checksum"]) == {"0"}
+    assert len(out["checksum"]) == 64, "anything parsing the field still sees a hash shape"
+
+
 def test_a_url_without_a_query_is_untouched():
     url = "https://tiles.example.com/v4/sat/{z}/{x}/{y}.jpg"
     assert Scrubber().scrub({"url": url})["url"] == url

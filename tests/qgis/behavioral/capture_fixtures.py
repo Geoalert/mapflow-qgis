@@ -61,6 +61,12 @@ PII_KEYS = {
 SECRET_QUERY_MARKERS = ("token", "key", "secret", "signature", "password", "credential",
                         "auth", "sig", "x-amz-")
 
+#: File hashes. Not credentials, but they identify a specific upload, the tests have no use
+#: for the real value, and detect-secrets reads any long hex string as a possible secret —
+#: so a fixture carrying one fails lint on every future capture. Replaced with a value of the
+#: same length, since anything parsing it will care about the shape.
+HASH_KEYS = {"checksum", "md5", "sha", "sha1", "sha256", "hash", "etag"}
+
 #: How many entries to keep in the arrays that dominate response size. A real account returns
 #: 15 workflow defs and 98 mosaics; keeping them makes a 400 KB fixture that nobody reads and
 #: that tells the tests nothing the first few entries do not.
@@ -115,6 +121,11 @@ def _pick(items, cap):
                  if isinstance(i, dict) and i.get("name") in PREFERRED_NAMES]
     rest = [i for i in items if i not in preferred]
     return (preferred + rest)[:cap]
+
+
+def blank_hash(value: str) -> str:
+    """Same length, no entropy. Idempotent, so a re-run leaves it alone."""
+    return "0" * len(value)
 
 
 class Scrubber:
@@ -173,6 +184,8 @@ class Scrubber:
             if key in PII_KEYS:
                 self.report["pii_values"] += 1
                 return self.fake_email(node) if "@" in node else "redacted"
+            if key in HASH_KEYS:
+                return blank_hash(node)
             return self._scrub_string(self.strip_url_secrets(node))
         return node
 
@@ -461,18 +474,20 @@ def run(capture: Capture, include_create_failure: bool):
             ("processing_create_rejected", "not requested; pass --include-create-failure"))
 
 
-def strip_secrets_in_place(node, scrubber: Scrubber):
-    """Re-run only the URL-secret stripping over an already-scrubbed payload.
+def strip_secrets_in_place(node, scrubber: Scrubber, key=None):
+    """Re-run the idempotent half of scrubbing over an already-scrubbed payload.
 
-    Safe to repeat, unlike the rest of scrubbing: removing a credential-bearing query
-    parameter twice is a no-op, whereas re-running the id and email replacement would remap
-    the already-anonymised values and break the cross-file references the fixtures rely on.
+    URL parameters and hashes can be scrubbed repeatedly without changing the result. Ids and
+    emails cannot: re-running those would remap the already-anonymised values and break the
+    cross-file references the fixtures rely on.
     """
     if isinstance(node, dict):
-        return {k: strip_secrets_in_place(v, scrubber) for k, v in node.items()}
+        return {k: strip_secrets_in_place(v, scrubber, key=k) for k, v in node.items()}
     if isinstance(node, list):
-        return [strip_secrets_in_place(v, scrubber) for v in node]
+        return [strip_secrets_in_place(v, scrubber, key=key) for v in node]
     if isinstance(node, str):
+        if key in HASH_KEYS:
+            return blank_hash(node)
         return scrubber.strip_url_secrets(node)
     return node
 

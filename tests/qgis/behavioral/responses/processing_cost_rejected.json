@@ -3,7 +3,10 @@
     "method": "POST",
     "path": "processing/cost/v2",
     "body": {
-      "workflowDef": "__no_such_model__",
+      "name": "fixture-capture",
+      "description": "",
+      "projectId": "00000000-0000-4000-8000-000000000001",
+      "wdId": "00000000-0000-4000-8000-000000000439",
       "geometry": {
         "type": "Polygon",
         "coordinates": [
@@ -30,13 +33,25 @@
             ]
           ]
         ]
-      }
+      },
+      "params": {
+        "sourceParams": {
+          "dataProvider": {
+            "providerName": "Mapbox",
+            "zoom": "17"
+          }
+        }
+      },
+      "meta": {
+        "source-app": "qgis"
+      },
+      "blocks": []
     }
   },
-  "status": 400,
+  "status": 404,
   "body": {
-    "code": "BAD_REQUEST",
-    "message": "Invalid value for: body (Attempt to decode value on failed cursor at 'wdId')",
+    "code": "NOT_FOUND",
+    "message": "Entity WorkflowDef with id=00000000-0000-4000-8000-000000000439 not found.",
     "params": null
   }
 }

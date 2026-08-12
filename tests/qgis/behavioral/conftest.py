@@ -13,10 +13,13 @@ Naming anything else — a service class, a helper, a private method — makes t
 that thing moves, which is precisely the noise it is meant to filter out. Constructing objects
 with ``Class.__new__(Class)`` is banned here for the same reason.
 """
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from PyQt5.QtWidgets import QMainWindow
+from qgis.core import QgsNetworkAccessManager
+
+from fake_network import FakeNetwork
 
 
 @pytest.fixture
@@ -34,8 +37,23 @@ def plugin_iface():
 
 
 @pytest.fixture
-def plugin(plugin_iface):
-    """The real plugin object, built the way QGIS builds it."""
+def network():
+    """Replace QGIS's network manager for the whole test.
+
+    Patched on the QGIS class rather than on the name imported into a plugin module, so it
+    keeps working when `Http` moves package in Phase D.
+    """
+    fake = FakeNetwork()
+    with patch.object(QgsNetworkAccessManager, "instance", staticmethod(lambda: fake)):
+        yield fake
+
+
+@pytest.fixture
+def plugin(plugin_iface, network):
+    """The real plugin object, built the way QGIS builds it.
+
+    Depends on `network` so the manager is already faked when the plugin builds its Http.
+    """
     from mapflow.mapflow import Mapflow
 
     instance = Mapflow(plugin_iface)
@@ -43,3 +61,25 @@ def plugin(plugin_iface):
     # Timers created in __init__ keep firing into a dead object otherwise, and a stray tick
     # during a later test surfaces as an unrelated failure.
     instance.unload()
+
+
+@pytest.fixture
+def logged_in(plugin, network):
+    """A plugin past the login exchange, which is the precondition for most journeys.
+
+    Driven through the login dialog's own widgets rather than by calling a plugin method, so
+    it keeps working when that method moves.
+    """
+    log_in(plugin)
+    # Twice: the login response triggers the account-status request, whose reply is only
+    # queued once the first has been handled.
+    network.deliver()
+    network.deliver()
+    network.deliver()
+    return plugin
+
+
+def log_in(plugin):
+    """Type a token and press Log in, exactly as a user does."""
+    plugin.dlg_login.token.setText("ZGVtbzpkZW1v")  # pragma: allowlist secret
+    plugin.dlg_login.logIn.click()

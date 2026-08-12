@@ -3,7 +3,10 @@
     "method": "POST",
     "path": "processing/cost/v2",
     "body": {
-      "workflowDef": "🏠 Buildings",
+      "name": "fixture-capture",
+      "description": "",
+      "projectId": "00000000-0000-4000-8000-000000000001",
+      "wdId": "00000000-0000-4000-8000-000000000005",
       "geometry": {
         "type": "Polygon",
         "coordinates": [
@@ -31,17 +34,20 @@
           ]
         ]
       },
-      "processingParams": {
+      "params": {
         "sourceParams": {
-          "data_provider": "Mapflow"
+          "dataProvider": {
+            "providerName": "Mapbox",
+            "zoom": "17"
+          }
         }
-      }
+      },
+      "meta": {
+        "source-app": "qgis"
+      },
+      "blocks": []
     }
   },
-  "status": 400,
-  "body": {
-    "code": "BAD_REQUEST",
-    "message": "Invalid value for: body (Attempt to decode value on failed cursor at 'wdId')",
-    "params": null
-  }
+  "status": 200,
+  "body": 12
 }
