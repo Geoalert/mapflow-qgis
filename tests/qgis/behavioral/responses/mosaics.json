@@ -7,7 +7,7 @@
   "status": 200,
   "body": [
     {
-      "id": "00000000-0000-4000-8000-000000000054",
+      "id": "00000000-0000-4000-8000-000000000292",
       "rasterLayer": {
         "tileUrl": "",
         "tileJsonUrl": ""
@@ -27,13 +27,13 @@
       }
     },
     {
-      "id": "00000000-0000-4000-8000-000000000055",
+      "id": "00000000-0000-4000-8000-000000000293",
       "rasterLayer": {
-        "tileUrl": "https://whitemaps-staging.mapflow.ai/api/v0/cogs/tiles/{z}/{x}/{y}.png?scrubbed=1",
-        "tileJsonUrl": "user2@example.com"
+        "tileUrl": "https://whitemaps-staging.mapflow.ai/api/v0/cogs/tiles/{z}/{x}/{y}.png?uri=s3%3A%2F%2Fusers-data%2Fa.trekin%40geoalert.io_00000000-0000-4000-8000-000000000294%2F00000000-0000-4000-8000-000000000293%2Fcog",
+        "tileJsonUrl": "https://whitemaps-staging.mapflow.ai/api/v0/cogs/tiles.json?uri=s3%3A%2F%2Fusers-data%2Fa.trekin%40geoalert.io_00000000-0000-4000-8000-000000000294%2F00000000-0000-4000-8000-000000000293%2Fcog"
       },
       "tags": [],
-      "name": "00000000-0000-4000-8000-000000000057",
+      "name": "00000000-0000-4000-8000-000000000295",
       "created_at": "2024-04-29T16:23:32.109460Z",
       "footprint": "MULTIPOLYGON (((136.8992614746094 50.24105719351195, 136.9102478024587 50.24105719351195, 136.9102478024587 50.23403027083221, 136.8992614746094 50.23403027083221, 136.8992614746094 50.24105719351195)))",
       "sizeInBytes": 10345902,
@@ -47,13 +47,13 @@
       }
     },
     {
-      "id": "00000000-0000-4000-8000-000000000058",
+      "id": "00000000-0000-4000-8000-000000000296",
       "rasterLayer": {
-        "tileUrl": "https://whitemaps-staging.mapflow.ai/api/v0/cogs/tiles/{z}/{x}/{y}.png?scrubbed=1",
-        "tileJsonUrl": "user3@example.com"
+        "tileUrl": "https://whitemaps-staging.mapflow.ai/api/v0/cogs/tiles/{z}/{x}/{y}.png?uri=s3%3A%2F%2Fusers-data%2Fa.trekin%40geoalert.io_00000000-0000-4000-8000-000000000294%2F00000000-0000-4000-8000-000000000296%2Fcog",
+        "tileJsonUrl": "https://whitemaps-staging.mapflow.ai/api/v0/cogs/tiles.json?uri=s3%3A%2F%2Fusers-data%2Fa.trekin%40geoalert.io_00000000-0000-4000-8000-000000000294%2F00000000-0000-4000-8000-000000000296%2Fcog"
       },
       "tags": [],
-      "name": "00000000-0000-4000-8000-000000000059",
+      "name": "00000000-0000-4000-8000-000000000297",
       "created_at": "2023-02-07T07:16:33.701929Z",
       "footprint": "MULTIPOLYGON EMPTY",
       "sizeInBytes": 0,
@@ -67,13 +67,13 @@
       }
     },
     {
-      "id": "00000000-0000-4000-8000-000000000060",
+      "id": "00000000-0000-4000-8000-000000000298",
       "rasterLayer": {
         "tileUrl": "",
         "tileJsonUrl": ""
       },
       "tags": [],
-      "name": "00000000-0000-4000-8000-000000000061",
+      "name": "00000000-0000-4000-8000-000000000299",
       "created_at": "2022-12-15T14:18:24.768834Z",
       "footprint": "MULTIPOLYGON (((37.43728637657406 55.81440069755538, 37.43728637657406 55.82057315625548, 37.42218017578124 55.82057315625548, 37.42218017578124 55.81440069755538, 37.43728637657406 55.81440069755538)))",
       "sizeInBytes": 11609443,
@@ -87,13 +87,13 @@
       }
     },
     {
-      "id": "00000000-0000-4000-8000-000000000062",
+      "id": "00000000-0000-4000-8000-000000000300",
       "rasterLayer": {
-        "tileUrl": "https://whitemaps-staging.mapflow.ai/api/v0/cogs/tiles/{z}/{x}/{y}.png?scrubbed=1",
-        "tileJsonUrl": "user4@example.com"
+        "tileUrl": "https://whitemaps-staging.mapflow.ai/api/v0/cogs/tiles/{z}/{x}/{y}.png?uri=s3%3A%2F%2Fusers-data%2Fa.trekin%40geoalert.io_00000000-0000-4000-8000-000000000294%2F00000000-0000-4000-8000-000000000300%2Fcog",
+        "tileJsonUrl": "https://whitemaps-staging.mapflow.ai/api/v0/cogs/tiles.json?uri=s3%3A%2F%2Fusers-data%2Fa.trekin%40geoalert.io_00000000-0000-4000-8000-000000000294%2F00000000-0000-4000-8000-000000000300%2Fcog"
       },
       "tags": [],
-      "name": "00000000-0000-4000-8000-000000000063",
+      "name": "00000000-0000-4000-8000-000000000301",
       "created_at": "2023-05-31T10:51:47.308516Z",
       "footprint": "MULTIPOLYGON (((74.69192504838016 42.97551594539143, 74.69192504838016 43.0026385239579, 74.674072265625 43.0026385239579, 74.674072265625 42.97551594539143, 74.69192504838016 42.97551594539143)))",
       "sizeInBytes": 25283127,

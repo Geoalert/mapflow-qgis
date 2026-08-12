@@ -1,0 +1,196 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "processings/00000000-0000-4000-8000-000000000168/v2",
+    "body": null
+  },
+  "status": 200,
+  "body": {
+    "id": "00000000-0000-4000-8000-000000000168",
+    "name": "mosaic 2",
+    "description": null,
+    "projectId": "00000000-0000-4000-8000-000000000044",
+    "vectorLayer": {
+      "id": "00000000-0000-4000-8000-000000000169",
+      "name": "mosaic 2",
+      "tileJsonUrl": "https://dev.mapflow.ai/api/layers/00000000-0000-4000-8000-000000000170.json",
+      "tileUrl": "https://dev.mapflow.ai/api/layers/00000000-0000-4000-8000-000000000170/tiles/{z}/{x}/{y}.vector.pbf"
+    },
+    "currentRevision": null,
+    "rasterLayer": {
+      "id": "00000000-0000-4000-8000-000000000171",
+      "tileJsonUrl": "https://dev.mapflow.ai/api/v0/cogs/tiles.json?uri=s3%3A%2F%2Fwhite-maps-rasters%2F00000000-0000-4000-8000-000000000172",
+      "tileUrl": "https://dev.mapflow.ai/api/v0/cogs/tiles/{z}/{x}/{y}.png?uri=s3%3A%2F%2Fwhite-maps-rasters%2F00000000-0000-4000-8000-000000000172"
+    },
+    "resultRasterLayer": {
+      "id": "00000000-0000-4000-8000-000000000173",
+      "tileJsonUrl": "https://dev.mapflow.ai/api/v0/cogs/tiles.json?uri=s3%3A%2F%2Fwhite-maps-rasters%2Fresults%2F00000000-0000-4000-8000-000000000168",
+      "tileUrl": "https://dev.mapflow.ai/api/v0/cogs/tiles/{z}/{x}/{y}.png?uri=s3%3A%2F%2Fwhite-maps-rasters%2Fresults%2F00000000-0000-4000-8000-000000000168"
+    },
+    "workflowDef": {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "name": "🏠 Buildings",
+      "displayName": "🏠 Buildings",
+      "description": "Default model: segmentation of buildings",
+      "created": "2023-02-01T08:17:03.871690Z",
+      "updated": "2026-07-29T10:36:17.605306Z",
+      "pricePerSqKm": 10.0,
+      "blocks": [
+        {
+          "name": "Segmentation",
+          "displayName": "Segmentation",
+          "optional": false,
+          "price": 0.0,
+          "description": null,
+          "defaultEnabled": true
+        },
+        {
+          "name": "Postprocessing1",
+          "displayName": "",
+          "optional": false,
+          "price": 0.0,
+          "description": null,
+          "defaultEnabled": true
+        },
+        {
+          "name": "OSM",
+          "displayName": "Merge with OpenStreetMap",
+          "optional": true,
+          "price": 0.0,
+          "description": "Replaces buildings with features from OpenStreetMap, if possible, and rotates them along the roads.",
+          "defaultEnabled": false
+        },
+        {
+          "name": "Classification",
+          "displayName": "Classification",
+          "optional": true,
+          "price": 0.0,
+          "description": "Assigns every building a class: residential, private, commercial etc.",
+          "defaultEnabled": false
+        },
+        {
+          "name": "Heights",
+          "displayName": "Height estimation",
+          "optional": true,
+          "price": 10.0,
+          "description": "Estimates height of buildings.",
+          "defaultEnabled": false
+        },
+        {
+          "name": "Postprocessing2",
+          "displayName": "",
+          "optional": false,
+          "price": 0.0,
+          "description": null,
+          "defaultEnabled": true
+        }
+      ],
+      "requirements": {
+        "version": 1.0,
+        "sources": {
+          "xyz": {
+            "recommended": {
+              "min_zoom": 19,
+              "max_zoom": 19
+            },
+            "required": {
+              "min_zoom": 17
+            }
+          },
+          "tms": {
+            "recommended": {
+              "min_zoom": 19,
+              "max_zoom": 19
+            },
+            "required": {
+              "min_zoom": 17
+            }
+          },
+          "quadkey": {
+            "recommended": {
+              "min_zoom": 19,
+              "max_zoom": 19
+            },
+            "required": {
+              "min_zoom": 17
+            }
+          },
+          "local": {
+            "recommended": {
+              "min_res": 0.3,
+              "max_res": 0.6,
+              "nchannels": 3
+            },
+            "required": {
+              "max_res": 1.5,
+              "min_res": 0.07,
+              "nchannels": [
+                1,
+                3,
+                4
+              ]
+            }
+          },
+          "orbview_zip": null,
+          "roskosmos_tif": null
+        }
+      },
+      "styleName": null
+    },
+    "aoiCount": 1,
+    "aoiArea": 5519,
+    "area": 5519,
+    "cost": 10,
+    "status": "FAILED",
+    "reviewStatus": null,
+    "rating": null,
+    "percentCompleted": 0,
+    "params": {
+      "sourceParams": {
+        "imagerySearch": null,
+        "myImagery": {
+          "imageIds": [
+            "00000000-0000-4000-8000-000000000174"
+          ],
+          "mosaicId": null
+        },
+        "dataProvider": null,
+        "userDefined": null
+      },
+      "inferenceParams": null
+    },
+    "blocks": [
+      {
+        "name": "OSM",
+        "enabled": false,
+        "displayName": "Merge with OpenStreetMap"
+      },
+      {
+        "name": "Classification",
+        "enabled": false,
+        "displayName": "Classification"
+      },
+      {
+        "name": "Heights",
+        "enabled": false,
+        "displayName": "Height estimation"
+      }
+    ],
+    "meta": {
+      "source": "🖼️ my imagery",
+      "source-app": "qgis",
+      "version": "3.6.0"
+    },
+    "messages": [
+      {
+        "code": "source-validator.PixelSizeTooLow",
+        "parameters": {
+          "min_res": "0.07",
+          "actual_res": "0.005411731597672211"
+        }
+      }
+    ],
+    "created": "2026-08-03T21:43:24.293284Z",
+    "updated": "2026-08-03T21:43:26.066836Z"
+  }
+}

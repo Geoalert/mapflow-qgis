@@ -1,24 +1,37 @@
 {
   "request": {
     "method": "GET",
-    "path": "projects/00000000-0000-4000-8000-000000000031",
+    "path": "projects/00000000-0000-4000-8000-000000000043",
     "body": null
   },
   "status": 200,
   "body": {
-    "id": "00000000-0000-4000-8000-000000000031",
-    "name": "updated name",
+    "id": "00000000-0000-4000-8000-000000000043",
+    "name": "delay test + refactoring",
     "description": null,
     "progress": {
-      "status": "UNPROCESSED",
-      "percentCompleted": 0,
-      "details": [],
-      "completionDate": null,
+      "status": "OK",
+      "percentCompleted": 100,
+      "details": [
+        {
+          "status": "OK",
+          "count": 7,
+          "area": 36606695,
+          "statusUpdateDate": "2026-08-12T12:45:38.802141Z"
+        },
+        {
+          "status": "CANCELLED",
+          "count": 2,
+          "area": 2170158,
+          "statusUpdateDate": null
+        }
+      ],
+      "completionDate": "2026-08-12T12:45:38.802141Z",
       "estimate": null
     },
-    "aoiCount": 0,
-    "aoiArea": 0,
-    "area": 0,
+    "aoiCount": 9,
+    "aoiArea": 38776853,
+    "area": 38776853,
     "user": {
       "id": "00000000-0000-4000-8000-000000000002",
       "email": "user1@example.com",
@@ -36,7 +49,7 @@
     "shareProject": {
       "owners": [
         {
-          "projectId": "00000000-0000-4000-8000-000000000031",
+          "projectId": "00000000-0000-4000-8000-000000000043",
           "role": "owner",
           "userId": "00000000-0000-4000-8000-000000000002",
           "email": "user1@example.com"
@@ -46,8 +59,8 @@
       "isCustomer": true
     },
     "isDefault": false,
-    "created": "2026-08-10T11:40:36.979799Z",
-    "updated": "2026-08-10T11:40:37.174455Z",
+    "created": "2026-07-03T07:01:10.414807Z",
+    "updated": "2026-07-03T07:01:10.414807Z",
     "workflowDefs": [
       {
         "id": "00000000-0000-4000-8000-000000000005",
@@ -497,6 +510,6 @@
     "teamId": null,
     "processingCounts": null,
     "templatesCount": 0,
-    "starred": false
+    "starred": true
   }
 }

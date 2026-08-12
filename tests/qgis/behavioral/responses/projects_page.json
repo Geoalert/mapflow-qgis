@@ -3,7 +3,7 @@
     "method": "POST",
     "path": "projects/page",
     "body": {
-      "limit": 20,
+      "limit": 100,
       "offset": 0,
       "sortBy": "UPDATED",
       "sortOrder": "DESC"
