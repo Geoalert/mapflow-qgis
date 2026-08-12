@@ -1,0 +1,15 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "rasters/memory",
+    "body": null
+  },
+  "status": 200,
+  "body": {
+    "memoryLimit": 16106127360,
+    "memoryUsed": 7690997095,
+    "memoryFree": 8415130265,
+    "maxUploadFileSize": 10737418240,
+    "maxPixelCount": 65535
+  }
+}

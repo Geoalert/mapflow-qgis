@@ -1,0 +1,42 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "processing/cost/v2",
+    "body": {
+      "workflowDef": "__no_such_model__",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              0.0,
+              51.0
+            ],
+            [
+              0.01,
+              51.0
+            ],
+            [
+              0.01,
+              51.01
+            ],
+            [
+              0.0,
+              51.01
+            ],
+            [
+              0.0,
+              51.0
+            ]
+          ]
+        ]
+      }
+    }
+  },
+  "status": 400,
+  "body": {
+    "code": "BAD_REQUEST",
+    "message": "Invalid value for: body (Attempt to decode value on failed cursor at 'wdId')",
+    "params": null
+  }
+}
