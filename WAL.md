@@ -116,6 +116,20 @@ server error on those paths is invisible to the user. The throttle removes the r
 workaround, but `report_http_error` needs its own signature (Qt error code + endpoint path) first,
 so both dialog paths land on one suppression policy.
 
+[ ] Stop the services being process-global singletons
+`ProviderService` and `AlertService` cache their instance on the class (`_instance`,
+`_initialized`), so `get_instance` returns the first one ever built and ignores the arguments
+of every later call. The instance keeps `self.dlg` pointing at the dialog it was born with.
+Consequence beyond tests: after QGIS reloads the plugin — Plugin Reloader, or an in-place
+upgrade without restarting QGIS — the surviving `ProviderService` writes the imagery-source
+list into the destroyed dialog, and the new one comes up with an empty provider combo. The
+user sees a plugin that cannot start a processing until QGIS is restarted.
+Found because the behavioral suite builds a plugin per test and every journey after the first
+saw an empty combo; `tests/qgis/behavioral/conftest.py` resets both classes to compensate, and
+that fixture should be deleted as part of this step.
+Belongs to Phase C: the fix is for the plugin to construct and own its services, which is what
+the extraction does anyway.
+
 [ ] Check the startup ordering between the project fetch and the account poll
 `setup_providers` filters the imagery sources by `modelCombo.currentText()`, and the model
 list arrives with a *project's* `workflowDefs` — not with the account response. So when the
