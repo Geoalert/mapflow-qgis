@@ -141,8 +141,34 @@ class UsersProvider(ProviderInterface, ABC):
 
 
 class NoneProvider(ProviderInterface):
+    """Stands in for "no provider selected" — see ProvidersList.__getitem__.
+
+    Answers the questions the UI asks while deciding what to enable, instead of inheriting
+    the NotImplementedError versions: it is handed out precisely when the combo has no
+    selection, so a caller reaching it is on a normal path, not a broken one.
+
+    to_processing_params is deliberately left raising. Nothing can be processed without a
+    real source, and turning that into a silent default would submit a job against the wrong
+    imagery.
+    """
+
     def __init__(self):
         super().__init__(name="")
 
     def __bool__(self):
         return False
+
+    @property
+    def is_default(self):
+        return False
+
+    @property
+    def requires_image_id(self):
+        return False
+
+    @property
+    def meta_url(self):
+        return None
+
+    def preview_url(self, image_id=None):
+        return None

@@ -116,6 +116,22 @@ server error on those paths is invisible to the user. The throttle removes the r
 workaround, but `report_http_error` needs its own signature (Qt error code + endpoint path) first,
 so both dialog paths land on one suppression policy.
 
+[ ] Check the startup ordering between the project fetch and the account poll
+`setup_providers` filters the imagery sources by `modelCombo.currentText()`, and the model
+list arrives with a *project's* `workflowDefs` — not with the account response. So when the
+500 ms startup poll wins the race against `projects/{id}`, the provider combo is built from
+an empty model name.
+Found while writing the behavioral startup journey, where it surfaced as a hard failure:
+`providerIndex()` returned -1, `ProvidersList.__getitem__` handed back the `NoneProvider`
+null object, and `requires_image_id` raised `NotImplementedError` — aborting the rest of
+startup configuration, silently, because the error guard absorbed it. The null object is
+fixed; the ordering is not.
+Open question rather than a confirmed defect: on a fresh profile the user sees the projects
+table and picks a project, which populates both combos, so this may be the intended flow. What
+needs checking is the slow-network case on an account that *does* have a saved project —
+whether the provider list is left empty until something re-triggers it.
+Sequenced here because `SessionService` will own this poll after Phase C.
+
 [ ] Gate the features whose prerequisites never arrived
 Startup stops retrying `/user/status` and `/rasters/memory` instead of polling forever, which is
 right for the traffic and wrong for the UI: the prerequisites those responses carry are simply

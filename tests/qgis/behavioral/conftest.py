@@ -16,6 +16,7 @@ with ``Class.__new__(Class)`` is banned here for the same reason.
 from unittest.mock import MagicMock, patch
 
 import pytest
+from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QMainWindow
 from qgis.core import QgsNetworkAccessManager
 
@@ -71,11 +72,7 @@ def logged_in(plugin, network):
     it keeps working when that method moves.
     """
     log_in(plugin)
-    # Twice: the login response triggers the account-status request, whose reply is only
-    # queued once the first has been handled.
-    network.deliver()
-    network.deliver()
-    network.deliver()
+    settle(network)
     return plugin
 
 
@@ -83,3 +80,20 @@ def log_in(plugin):
     """Type a token and press Log in, exactly as a user does."""
     plugin.dlg_login.token.setText("ZGVtbzpkZW1v")  # pragma: allowlist secret
     plugin.dlg_login.logIn.click()
+
+
+def settle(network, rounds=8, wait_ms=120):
+    """Let the plugin finish whatever the last action started.
+
+    Real time has to pass, not just replies be delivered: most of the startup configuration
+    hangs off a 500 ms QTimer, and the account response that carries the model list, the
+    providers and the project table only arrives because that timer fires. Waiting for it
+    rather than poking the timer object keeps the helper honest — it names nothing the
+    refactoring moves, and it will still work when the timer belongs to a session service.
+
+    Each round pumps the event loop and then answers whatever was asked, so a chain of
+    request -> callback -> next request unwinds without the test knowing its length.
+    """
+    for _ in range(rounds):
+        QTest.qWait(wait_ms)
+        network.deliver()
