@@ -62,8 +62,42 @@ def test_presigned_url_signature_is_stripped():
     url = ("https://bucket.s3.amazonaws.com/tile.tif"
            "?X-Amz-Signature=deadbeefcafe&X-Amz-Credential=AKIAEXAMPLE")
     out = Scrubber().scrub({"downloadUrl": url})
-    assert "X-Amz-Signature" not in out["downloadUrl"]
+    assert "deadbeefcafe" not in out["downloadUrl"]
+    assert "AKIAEXAMPLE" not in out["downloadUrl"]
     assert out["downloadUrl"].startswith("https://bucket.s3.amazonaws.com/tile.tif")
+
+
+def test_access_token_is_stripped_whatever_key_holds_the_url():
+    """The leak this test exists for: a live Mapbox token reached a commit.
+
+    The scrubber used to strip query strings only under a list of known key names, and
+    `/user/status` returns the Mapbox tile URL under `webPreviewUrl`, which was not on it.
+    detect-secrets did not flag it either; GitHub push protection did. So the rule is now
+    about the *value* being URL-shaped, and no key list can go stale again.
+    """
+    out = Scrubber().scrub({
+        "webPreviewUrl": "https://api.tiles.mapbox.com/v4/mapbox.satellite/"
+                         "{z}/{x}/{y}.jpg?access_token=pk.eyJ1IjoiZXhhbXBsZSJ9.aGVsbG8",
+    })
+    assert "pk.eyJ1IjoiZXhhbXBsZSJ9" not in out["webPreviewUrl"]
+    assert "access_token=scrubbed" in out["webPreviewUrl"]
+
+
+def test_the_useful_part_of_a_url_survives():
+    """Over-stripping would cost the fixture its realism — the tile template must remain."""
+    out = Scrubber().scrub({
+        "webPreviewUrl": "https://tiles.example.com/v4/sat/{z}/{x}/{y}.jpg"
+                         "?access_token=SECRETVALUE&format=jpg&quality=90",
+    })
+    url = out["webPreviewUrl"]
+    assert "{z}/{x}/{y}" in url, "the XYZ template is what the provider code parses"
+    assert "format=jpg" in url and "quality=90" in url, "non-credential params are kept"
+    assert "SECRETVALUE" not in url
+
+
+def test_a_url_without_a_query_is_untouched():
+    url = "https://tiles.example.com/v4/sat/{z}/{x}/{y}.jpg"
+    assert Scrubber().scrub({"url": url})["url"] == url
 
 
 def test_ids_inside_urls_are_scrubbed_too():

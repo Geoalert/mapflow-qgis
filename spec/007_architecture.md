@@ -225,6 +225,32 @@ code they pin has moved, then are rewritten against the new owner or dropped whe
 behavioral test already covers them. A step that moves code must not leave a behaviour
 covered by neither.
 
+### What survives the refactoring, and what does not
+
+The natural assumption is that the behavioral suite is scaffolding to be removed once the
+refactoring is signed off. It is the other way round.
+
+**Permanent — the behavioral tests, their fixtures, and `capture_fixtures.py`.**
+They are the only tests in the repo that assert *user-visible* behaviour; everything else
+pins internals, and the tests written against the new structure will pin internals too. The
+`test-ui` tier is an empty harness, so without them the plugin ships with no end-to-end
+coverage at all. And the release after this one is the QGIS 4 / Qt 6 port — the single
+migration where an end-to-end net is worth the most. Deleting it on the way in would be
+throwing away the ladder while still on the roof.
+
+**Transient — the `Class.__new__(Class)` suite.** Those 43 files are the ones that shrink,
+file by file, as the code they pin moves and their coverage lands in the behavioral suite or
+in new unit tests against the new owner.
+
+**The capture tool is part of the deliverable, not a one-off.** Fixtures rot when the API
+changes, and a fixture set nobody can regenerate dies the first time the backend adds a
+required field — hand-editing fifteen JSON files is not a maintenance plan. Re-running the
+tool is how they are reset, and the diff it produces is itself the signal that the API moved.
+
+Consequently the tool must stay runnable, which is why the size caps live inside it rather
+than in a manual trimming pass: a re-capture has to reproduce the same small fixtures, not
+restore the several hundred kilobytes the raw responses carry.
+
 ### Invariants
 
 1. A service module imports no widget and receives no dialog.

@@ -1,0 +1,9 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "rasters/mosaic/00000000-0000-4000-8000-000000000054/image",
+    "body": null
+  },
+  "status": 200,
+  "body": []
+}
