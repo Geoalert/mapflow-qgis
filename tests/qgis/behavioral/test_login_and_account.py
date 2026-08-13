@@ -47,6 +47,7 @@ def test_a_successful_login_swaps_the_login_dialog_for_the_main_window(logged_in
     authenticated. That belongs to the projects journey.
     """
     network.deliver()
+    assert logged_in.dlg.isVisible(), "the main window never opened"
     assert not logged_in.dlg_login.isVisible(), "the login dialog must close on success"
 
 

@@ -10,15 +10,26 @@ The model and provider combos are deliberately not asserted here. Both are popul
 is opened — that belongs to the projects journey.
 """
 from conftest import settle
+from fake_network import fixture
 
 
 def test_the_balance_is_shown(logged_in):
-    assert logged_in.dlg.balanceLabel.text() != "", (
-        "the remaining balance is how the user knows whether they can run anything")
+    """Checks the number, not that the label is non-empty.
+
+    A label carries whatever the .ui gave it, so "not empty" passes even when nothing was
+    parsed. The balance the user acts on is the figure from the account response.
+    """
+    account = fixture("user_status")
+    expected = str(account["remainingCredits"])
+    shown = logged_in.dlg.balanceLabel.text()
+    assert expected in shown.replace(",", "").replace(" ", ""), (
+        f"balance label reads {shown!r}, account has {expected} credits")
 
 
 def test_the_main_window_replaces_the_login_dialog(logged_in):
-    assert not logged_in.dlg_login.isVisible()
+    """Both halves, because either alone is satisfied by the plugin doing nothing."""
+    assert logged_in.dlg.isVisible(), "the main window never opened"
+    assert not logged_in.dlg_login.isVisible(), "the login dialog stayed on top of it"
 
 
 def test_startup_configuration_runs_to_completion(logged_in, network):
