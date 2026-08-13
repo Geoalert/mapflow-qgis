@@ -7,6 +7,7 @@ never appears in QGIS.
 Asserted on widget object names rather than on plugin internals, because the `.ui` files are
 the contract the refactoring preserves.
 """
+from PyQt5.QtWidgets import QWidget
 
 
 def test_plugin_constructs(plugin):
@@ -34,5 +35,8 @@ def test_main_dialog_exposes_the_widgets_the_journeys_drive(plugin):
         "balanceLabel",
         "providerCombo",
     ]
-    missing = [name for name in expected if not hasattr(plugin.dlg, name)]
+    # `hasattr` is not enough: an attribute set to None still answers True, and a journey
+    # would then fail with an unhelpful AttributeError far from here.
+    missing = [name for name in expected
+               if not isinstance(getattr(plugin.dlg, name, None), QWidget)]
     assert not missing, f"main dialog is missing widget(s) the behavioral journeys drive: {missing}"

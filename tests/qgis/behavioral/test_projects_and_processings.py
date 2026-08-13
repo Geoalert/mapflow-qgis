@@ -24,26 +24,54 @@ def test_opening_a_project_asks_for_its_processings(logged_in, network):
         f"opening a project must load its processings; sent: {network.paths()}")
 
 
+def _table_text(table):
+    return [table.item(row, col).text()
+            for row in range(table.rowCount())
+            for col in range(table.columnCount())
+            if table.item(row, col)]
+
+
 def test_the_processings_of_the_opened_project_are_listed(logged_in, network):
+    """Asserts the rows carry the response's processings, not merely that rows exist.
+
+    `rowCount() > 0` is not enough: the table is given a single "Loading..." placeholder row
+    before the request goes out, so a callback that never renders anything still leaves a
+    non-empty table. This assertion has to name what the response said.
+    """
     open_first_project(logged_in, network)
-    table = logged_in.dlg.processingsTable
-    assert table.rowCount() > 0, "the processings table is empty after opening a project"
+    shown = _table_text(logged_in.dlg.processingsTable)
+
+    expected = [p["name"] for p in fixture("processings_page")["results"]]
+    missing = [name for name in expected if name not in shown]
+    assert not missing, f"processings {missing} never reached the table; it shows {shown}"
+    assert not any("Loading" in cell for cell in shown), (
+        "the loading placeholder is still there — the results never rendered")
 
 
 def test_opening_a_project_populates_the_model_list(logged_in, network):
     """Models arrive with the project, not with the account — see the startup journey."""
     open_first_project(logged_in, network)
     combo = logged_in.dlg.modelCombo
-    names = [combo.itemText(i) for i in range(combo.count())]
-    assert names, "no models after opening a project; nothing can be started"
-    assert any("Buildings" in name for name in names), f"default model missing from {names}"
+    shown = [combo.itemText(i) for i in range(combo.count())]
+
+    expected = [wd["name"] for wd in fixture("project_detail")["workflowDefs"]]
+    assert sorted(shown) == sorted(expected), (
+        f"model list is {shown}, the project's workflowDefs are {expected}")
 
 
 def test_opening_a_project_populates_the_imagery_sources(logged_in, network):
+    """The named providers must arrive, not just some entries.
+
+    Checked by display name from the account response, because that is what the user picks
+    from — an entry count would pass on a list of the two built-in sources alone.
+    """
     open_first_project(logged_in, network)
     combo = logged_in.dlg.providerCombo
-    names = [combo.itemText(i) for i in range(combo.count())]
-    assert names, "no imagery sources after opening a project"
+    shown = [combo.itemText(i) for i in range(combo.count())]
+
+    expected = [p["displayName"] for p in fixture("user_status")["dataProviders"]]
+    missing = [name for name in expected if name not in shown]
+    assert not missing, f"imagery sources {missing} missing; combo shows {shown}"
 
 
 def test_a_failed_processing_is_shown_with_its_status(logged_in, network):
@@ -52,18 +80,17 @@ def test_a_failed_processing_is_shown_with_its_status(logged_in, network):
     Routed to the captured page that actually contains a FAILED row, rather than asserting
     against whichever project the fixture set happened to record first.
     """
-    network.respond_with("projects/*/processings/v2/page", 200,
-                         fixture("processings_page_failed"))
+    page = fixture("processings_page_failed")
+    network.respond_with("projects/*/processings/v2/page", 200, page)
     open_first_project(logged_in, network)
 
-    table = logged_in.dlg.processingsTable
-    cells = [table.item(row, col).text()
-             for row in range(table.rowCount())
-             for col in range(table.columnCount())
-             if table.item(row, col)]
-    statuses = [s for s in cells if "fail" in s.lower()]
-    assert statuses, (
-        f"a FAILED processing must be visible as failed; table showed {cells}")
+    shown = _table_text(logged_in.dlg.processingsTable)
+    failed_names = [p["name"] for p in page["results"] if p["status"] == "FAILED"]
+    assert failed_names, "the fixture no longer contains a FAILED processing to check"
+    missing = [name for name in failed_names if name not in shown]
+    assert not missing, f"failed processings {missing} are not listed; table shows {shown}"
+    assert any("fail" in cell.lower() for cell in shown), (
+        f"the failure is not visible as a status anywhere in the row; table shows {shown}")
 
 
 def test_every_request_in_this_journey_has_a_fixture(logged_in, network):
