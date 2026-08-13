@@ -129,7 +129,11 @@ def plugin(plugin_iface, network, fresh_singletons, tmp_path):
 
     instance = Mapflow(plugin_iface)
     instance.dlg.outputDirectory.setText(str(tmp_path))
-    instance.app_context.temp_dir = str(tmp_path)
+    instance.app_context.settings.setValue("outputDir", str(tmp_path))
+    # A Path, not a str: the layer code builds filenames with `temp_dir / name`, which is a
+    # TypeError on a plain string — and one the error guard would swallow, leaving a preview
+    # that simply never appears.
+    instance.app_context.temp_dir = tmp_path
     yield instance
     # Timers created in __init__ keep firing into a dead object otherwise, and a stray tick
     # during a later test surfaces as an unrelated failure.
