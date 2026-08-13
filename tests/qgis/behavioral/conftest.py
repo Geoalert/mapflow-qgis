@@ -39,6 +39,47 @@ def plugin_iface():
     return iface
 
 
+@pytest.fixture(autouse=True)
+def alerts():
+    """Record what the plugin tells the user, and guarantee nothing waits for a click.
+
+    Autouse and not optional. Every one of these spins its own event loop and blocks until a
+    human answers, so a single unguarded one hangs the entire tier instead of failing a test —
+    which is exactly what happened before this existed, with no output to say where.
+
+    Two layers, because the plugin raises dialogs both ways. `AlertService.alert` is the
+    routed path and is worth recording, since the message is part of the behaviour. But
+    `QMessageBox`, `QInputDialog` and `QFileDialog` are also constructed directly in places
+    (`_prompt_plan_search`, `prompt_output_directory`, the rename prompts), and those bypass
+    the service entirely — so the Qt entry points are stopped too.
+
+    Everything answers "no": dismiss the box, cancel the prompt, pick no directory. A journey
+    that needs a different answer patches it for itself, which keeps the choice visible in the
+    test rather than hidden in a default.
+    """
+    from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox
+
+    from mapflow.functional.service.alert_service import AlertService
+
+    recorded = []
+
+    def record(self, message, icon=None, blocking=True):
+        recorded.append(message)
+        return False
+
+    def refuse_box(self, *args, **kwargs):
+        recorded.append(self.text() if hasattr(self, "text") else "")
+        return QMessageBox.Cancel
+
+    with patch.object(AlertService, "alert", record), \
+            patch.object(QMessageBox, "exec", refuse_box), \
+            patch.object(QMessageBox, "exec_", refuse_box), \
+            patch.object(QInputDialog, "getText", staticmethod(lambda *a, **k: ("", False))), \
+            patch.object(QFileDialog, "getExistingDirectory",
+                         staticmethod(lambda *a, **k: "")):
+        yield recorded
+
+
 @pytest.fixture
 def network():
     """Replace QGIS's network manager for the whole test.
@@ -74,14 +115,21 @@ def fresh_singletons():
 
 
 @pytest.fixture
-def plugin(plugin_iface, network, fresh_singletons):
+def plugin(plugin_iface, network, fresh_singletons, tmp_path):
     """The real plugin object, built the way QGIS builds it.
 
     Depends on `network` so the manager is already faked when the plugin builds its Http.
+
+    A working directory is part of a usable installation, not a detail: the plugin writes
+    search results and downloaded layers to disk, and without one it stops those actions with
+    "Please, specify an existing output directory" — which reads, in a test, as the feature
+    being broken. QGIS remembers this between sessions, so a real user sets it once.
     """
     from mapflow.mapflow import Mapflow
 
     instance = Mapflow(plugin_iface)
+    instance.dlg.outputDirectory.setText(str(tmp_path))
+    instance.app_context.temp_dir = str(tmp_path)
     yield instance
     # Timers created in __init__ keep firing into a dead object otherwise, and a stray tick
     # during a later test surfaces as an unrelated failure.
