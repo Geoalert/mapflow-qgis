@@ -73,6 +73,10 @@ class FakeReply(QObject):
     def isFinished(self):
         return self._finished
 
+    def errorString(self):
+        """Error handlers fall back to this when the payload carries no message."""
+        return "" if self._error == QNetworkReply.NoError else "network error"
+
     def abort(self):
         self._finished = True
 

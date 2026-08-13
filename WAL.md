@@ -116,6 +116,24 @@ server error on those paths is invisible to the user. The throttle removes the r
 workaround, but `report_http_error` needs its own signature (Qt error code + endpoint path) first,
 so both dialog paths land on one suppression policy.
 
+[ ] A refused price is undone by the next UI refresh
+When `/processing/cost/v2` refuses, `ProcessingService.disable_processing_start` correctly
+disables Start and formats the server's reason — and then both effects are thrown away.
+`update_start_processing_button_state` (`mapflow.py:700`) re-enables the button whenever there
+is no *planned-processing* gate error; it knows nothing about pricing. The label goes the same
+way: the user ends up reading "Set AOI to start processing" with the AOI plainly set and the
+area showing a real figure (3.12 sq.km in the behavioral run).
+Two consequences, the second serious:
+- the actual cause is invisible — in the captured case a workflow-def the backend does not
+  recognise;
+- **Start becomes clickable again for a processing the backend refused to price**, so the user
+  can submit it.
+Reproduced behaviourally: price one AOI successfully (Start enabled), then switch to an AOI
+whose pricing is refused — Start stays enabled.
+The fix is for the enable/disable decision to have one owner rather than several writers, which
+is what the Phase C extraction is for. `tests/qgis/behavioral/test_cost_estimate.py` asserts
+only that changing the AOI re-prices, and says why it stops there.
+
 [ ] Stop the services being process-global singletons
 `ProviderService` and `AlertService` cache their instance on the class (`_instance`,
 `_initialized`), so `get_instance` returns the first one ever built and ignores the arguments
