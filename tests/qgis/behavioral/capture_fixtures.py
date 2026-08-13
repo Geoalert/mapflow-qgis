@@ -356,9 +356,22 @@ def run(capture: Capture, include_create_failure: bool):
         capture.skipped.append(("project_detail", "no projects on this account"))
         return
 
-    work_project = pick_project(all_projects, lambda p: counts(p).get("total", 0) > 0)
+    # Prefer one project that has both. The plugin discards templates whose projectId is not
+    # the open project, so a fixture set where the processings and the templates come from
+    # different projects cannot describe one coherent screen.
+    both = pick_project(all_projects,
+                        lambda p: counts(p).get("total", 0) > 0
+                        and (p.get("templatesCount") or 0) > 0)
+    work_project = both or pick_project(all_projects,
+                                        lambda p: counts(p).get("total", 0) > 0)
     failed_project = pick_project(all_projects, lambda p: counts(p).get("failed", 0) > 0)
-    template_project = pick_project(all_projects, lambda p: (p.get("templatesCount") or 0) > 0)
+    template_project = both or pick_project(all_projects,
+                                            lambda p: (p.get("templatesCount") or 0) > 0)
+    if both is None and template_project is not None:
+        capture.skipped.append(
+            ("templates_by_project",
+             "captured from a different project than the processings - no project on this "
+             "account has both, so the two fixtures describe different screens"))
 
     project_id = (work_project or all_projects[0]).get("id")
     capture.get("project_detail", "projects/{}".format(project_id))
