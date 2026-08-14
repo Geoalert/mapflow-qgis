@@ -94,23 +94,34 @@ def network():
 
 @pytest.fixture
 def fresh_singletons():
-    """Forget the process-global services before building a plugin.
+    """Forget process-global plugin state before building a plugin.
 
-    `ProviderService` and `AlertService` cache their instance on the class, so the second
-    plugin built in one process keeps the *first* plugin's dialog. Without this the provider
-    combo is written into a dialog that is no longer on screen, and every journey after the
-    first sees an empty one.
+    Every item here compensates for plugin state that outlives the plugin object, not for a
+    test-only quirk — the same leaks happen when QGIS reloads the plugin (see WAL). When
+    Phase C makes the plugin own its state, this fixture becomes a no-op and should be
+    deleted.
 
-    This compensates for plugin state, not for a test-only quirk — the same thing happens
-    when QGIS reloads the plugin (see WAL). When Phase C makes the plugin own its services,
-    this fixture becomes a no-op and should be deleted.
+    * `ProviderService` and `AlertService` cache their instance on the class, so the second
+      plugin built in one process keeps the *first* plugin's dialog, and the provider combo
+      is written into a window that is no longer on screen.
+    * `AppContext.settings` is one shared `QgsSettings` for the whole process, and
+      `Mapflow.__init__` opens a settings group on it that is never closed. Each construction
+      therefore nests a level deeper — mapflow/, mapflow/mapflow/, … — so without resetting
+      it, journeys read and write different places and leak into each other.
     """
+    from qgis.core import QgsSettings
+
+    from mapflow.functional.app_context import AppContext
     from mapflow.functional.service.alert_service import AlertService
     from mapflow.functional.service.provider_service import ProviderService
 
     for service in (AlertService, ProviderService):
         service._instance = None
         service._initialized = False
+
+    while AppContext.settings.group():
+        AppContext.settings.endGroup()
+    QgsSettings().remove("mapflow")
     yield
 
 
@@ -138,9 +149,21 @@ def plugin(plugin_iface, network, fresh_singletons, tmp_path):
     # Timers created in __init__ keep firing into a dead object otherwise, and a stray tick
     # during a later test surfaces as an unrelated failure.
     instance.unload()
-    # QgsProject is process-wide: an AOI layer left behind would be offered to the next
-    # journey's layer combo and quietly change what it is testing.
-    QgsProject.instance().removeAllMapLayers()
+    # unload() closes the dialogs but leaves the plugin subscribed to QgsProject, which is
+    # process-wide. A stale instance then keeps reacting to layer changes made by the *next*
+    # journey, running its handlers against a dialog that is closed — and since its state is
+    # whatever the previous journey left, it can take a branch the new journey never would.
+    # Disconnected here rather than tolerated: a leaked subscription turns a failure in one
+    # test into a failure in an unrelated one, which is the hardest kind to read.
+    project = QgsProject.instance()
+    for signal in (project.layersAdded, project.layersRemoved, project.readProject):
+        try:
+            signal.disconnect()
+        except TypeError:
+            pass  # nothing was connected
+    # An AOI layer left behind would be offered to the next journey's layer combo and
+    # quietly change what it is testing.
+    project.removeAllMapLayers()
 
 
 def choose_imagery_source(plugin, network, name):
