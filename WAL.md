@@ -134,6 +134,18 @@ The fix is for the enable/disable decision to have one owner rather than several
 is what the Phase C extraction is for. `tests/qgis/behavioral/test_cost_estimate.py` asserts
 only that changing the AOI re-prices, and says why it stops there.
 
+[ ] Cover result styling, and fix the signature that made it awkward
+`ResultsLoader.load_result_tiles` styles the result layer with
+`layer.loadNamedStyle(get_style_name(...))`, and `loadNamedStyle` fails silently on a missing
+file. So a refactor that moves the `.qml` resources — Phase D moves `styles.py` — leaves every
+result unstyled with nothing in the log to say so.
+Left out of the behavioral suite on purpose: every way of checking it from there reaches into
+the style helpers, and a behavioral test that names internals is the thing that suite exists to
+avoid. It wants a unit test against `get_style_name` plus a check that the path resolves.
+While writing that, fix `mapflow/styles.py get_style_name(wd: str, layer, style_name=None)`:
+the annotation says `str` but the body reads `wd.name`, so the hint is actively misleading —
+which is how the first attempt at this test was written wrong.
+
 [ ] Detach the plugin from QgsProject on unload
 `unload()` closes the dialogs but never disconnects the `QgsProject` subscriptions made in
 `mapflow.py:349-350` and `:4028` (`layersAdded` ×2, `readProject`). After a QGIS plugin reload

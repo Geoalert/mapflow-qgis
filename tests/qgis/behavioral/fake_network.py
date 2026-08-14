@@ -10,6 +10,11 @@ Delivery is explicit. ``Http.send_request`` connects to ``reply.finished`` *afte
 manager returns the reply, so a fake that emitted on creation would be talking to nobody.
 Holding replies until ``deliver()`` also lets a test assert on the state between the request
 going out and the answer coming back, and lets it prove that an action issued *no* request.
+
+Scope, worth knowing before adding a journey: this intercepts what the *plugin* asks for. A
+raster or vector-tile layer handed to QGIS fetches its own tiles through the provider, which
+this never sees. So a tile URL in a fixture must at least be resolvable — an unroutable host
+stalls the run inside QGIS rather than failing a test.
 """
 import json
 from pathlib import Path
