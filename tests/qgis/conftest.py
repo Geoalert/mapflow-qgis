@@ -18,6 +18,19 @@ def pytest_configure(config):
     from qgis.testing import start_app
     start_app()
 
+    # start_app() gives QgsApplication but not the Processing framework, so `qgis.processing`
+    # resolves to a namespace package with no `run`. Any plugin code that clips or repairs
+    # geometry then raises AttributeError instead of doing the work — the AOI/footprint
+    # intersection behind My Imagery is the clearest case, and it turns into an error in
+    # whichever test happens to trigger it rather than a visible gap.
+    # Guarded: if the Processing plugin is not present the tier still runs, just without
+    # those code paths, which is what happened before this was added.
+    try:
+        from processing.core.Processing import Processing
+        Processing.initialize()
+    except Exception as error:  # pragma: no cover - environment capability probe
+        print(f"QGIS Processing unavailable, geometry operations will not run: {error}")
+
 
 @pytest.fixture()
 def iface():

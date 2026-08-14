@@ -134,6 +134,30 @@ The fix is for the enable/disable decision to have one owner rather than several
 is what the Phase C extraction is for. `tests/qgis/behavioral/test_cost_estimate.py` asserts
 only that changing the AOI re-prices, and says why it stops there.
 
+[ ] Detach the plugin from QgsProject on unload
+`unload()` closes the dialogs but never disconnects the `QgsProject` subscriptions made in
+`mapflow.py:349-350` and `:4028` (`layersAdded` ×2, `readProject`). After a QGIS plugin reload
+the previous instance is still subscribed, so adding a layer runs its handlers against a
+closed dialog — and against whatever state that instance was left in, which can take a branch
+the live instance never would.
+Found because the behavioral suite builds a plugin per test: opening a mosaic in one journey
+made a *later, unrelated* journey fail, with the traceback running through the previous
+plugin's dialog. `tests/qgis/behavioral/conftest.py` disconnects those signals at teardown to
+compensate; that should go when unload() does it properly.
+Same family as the singleton entry below — state that outlives the object that owns it.
+
+[ ] Close the settings group the plugin opens
+`Mapflow.__init__` calls `self.app_context.settings.beginGroup(plugin_name.lower())` and
+nothing ever calls `endGroup` — it is the only occurrence of either in the codebase. Worse,
+`AppContext.settings` is a plain class attribute, so one `QgsSettings` object is shared by
+every instance in the process.
+So a second construction in one QGIS session nests: keys move to `mapflow/mapflow/…`, a third
+to `mapflow/mapflow/mapflow/…`. After a plugin reload the user's token, providers, working
+directory and last project are written where nothing will read them on the next start, and
+appear lost.
+Not the cause of the test contamination above (that was the QgsProject subscriptions), but
+found alongside it and fixed the same way in the harness.
+
 [ ] Stop the services being process-global singletons
 `ProviderService` and `AlertService` cache their instance on the class (`_instance`,
 `_initialized`), so `get_instance` returns the first one ever built and ignores the arguments
