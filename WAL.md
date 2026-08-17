@@ -24,28 +24,24 @@ are the route there. Phases run in order; each step is one MR.
 Everything here is behaviour-preserving and verifiable by the current suite. Doing it first
 means the extraction MRs move less code and read as pure moves.
 
-[ ] Architecture invariant test
-`tests/functional/test_layering.py` — no service imports a widget, `dialogs`, or `view`;
-`schema/` imports nothing from `model/` or above; no import cycles. Current violations go in an
-explicit allowlist that later steps only shrink.
-Written now, not after the extraction, so every new line is held to the rule from the start.
-Precedent and rationale: `tests/functional/test_tier_layout.py`.
-
-[ ] Narrow the remaining broad exception handlers
-38 `except Exception` sites (processing_service 14, mapflow 11, nine files with 1–2).
-Acceptance: `E722` out of the `.flake8` ledger, bandit reports no `B110`.
+[ready-for-review] Every broad exception handler must surface what it caught
+A handler catching `Exception` may stay broad only if it logs a traceback, re-raises, or tells
+the user; otherwise it names the exceptions it expects. 54 broad handlers on `dev`, 31 of them
+silent.
+Acceptance: `tests/functional/test_exception_reporting.py` passes with an allowlist holding
+only the deliberate boundary guards, and that allowlist only shrinks.
+The previous acceptance (`E722` out of the ledger, no bandit `B110`) was already met by
+`93a7d65` and could no longer fail. Width of the except clause was the wrong metric anyway: a
+broad handler that logs a traceback hides nothing, while `except ValueError: pass` hides
+plenty.
 Kept in Phase A rather than deferred with the other lint work: a handler that swallows
 everything hides a broken extraction, and Phase C moves code past these sites constantly.
 
-[ ] Merge `constants.py` into `config.py`
-Five values, no principle separating them from the other ~150 lines.
-
 ### Phase B — a test surface that survives the move
 
-[ready-for-review] Behavioral test tier
-Twelve journeys under `tests/qgis/behavioral/`, one per domain Phase C moves, every test
-verified by mutating the code it covers. The existing `Class.__new__(Class)` tests stay until
-the code they pin moves; no extraction may leave a behaviour covered by neither.
+Landed: `tests/qgis/behavioral/` (twelve journeys) and `tests/qgis/test_result_styles.py`. The
+existing `Class.__new__(Class)` tests stay until the code they pin moves; no extraction may
+leave a behaviour covered by neither.
 
 ### Phase C — dissolve the god object
 
@@ -153,24 +149,6 @@ whose pricing is refused — Start stays enabled.
 The fix is for the enable/disable decision to have one owner rather than several writers, which
 is what the Phase C extraction is for. `tests/qgis/behavioral/test_cost_estimate.py` asserts
 only that changing the AOI re-prices, and says why it stops there.
-
-[ready-for-review] B12 — style files are loaded onto the layers that should get them
-Scope is the *loading*, not the rendering: which `.qml` is chosen for a given model and layer
-kind, and that applying it succeeds. Whether the result looks right on screen is a visual
-check and stays manual.
-`ResultsLoader.load_result_tiles` styles the result layer with
-`layer.loadNamedStyle(get_style_name(...))`, and `loadNamedStyle` fails silently on a missing
-file. So a refactor that moves the `.qml` resources — Phase D moves `styles.py` — leaves every
-result unstyled with nothing in the log to say so. Note there are two families of path,
-`generate_local_style_path` and `generate_tile_style_path`, so a test that only exercises one
-would miss half of it.
-Left out of the B10 behavioral journey on purpose: every way of checking it from there reaches
-into the style helpers, and a behavioral test that names internals is the thing that suite
-exists to avoid. It wants a unit test against `get_style_name` covering both path families,
-plus a check that each resolves to a file that exists.
-While writing it, fix `mapflow/styles.py get_style_name(wd: str, layer, style_name=None)`: the
-annotation says `str` but the body reads `wd.name`, so the hint is actively misleading — which
-is how the first attempt at this test was written wrong.
 
 [ ] Check whether the behavioral tier reaches the real backend
 The fake network replaces `QgsNetworkAccessManager` for everything the plugin requests through
