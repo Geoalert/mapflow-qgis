@@ -523,6 +523,9 @@ class ResultsLoader(QObject):
             try:
                 bounding_box = get_bounding_box_from_tile_json(response=response)
             except Exception:
+                # Broad on purpose — see the note in `set_raster_extent`. Logged so the cause
+                # survives the collapse into the `errors` flag.
+                logger.exception("Could not read a result layer extent from the tile JSON")
                 errors = True
             else:
                 layer.setExtent(rect=bounding_box)
@@ -763,8 +766,12 @@ class ResultsLoader(QObject):
         try:
             bounding_box = get_bounding_box_from_tile_json(response=response)
         except Exception:
+            # Broad on purpose: get_bounding_box_from_tile_json parses JSON, indexes `bounds`
+            # and reprojects through pyproj, so its failure set spans ValueError, TypeError,
+            # AttributeError, IndexError and pyproj's own errors.
             # we assume that the raster extent must be present,
             # otherwise there is some error in raster tile server, and we should not add the layer
+            logger.exception("Could not read the raster extent from the tile JSON")
             self.message_bar.pushWarning(self.tr("Results loaded"),
                                          self.tr("Extent failed to load, zoom to the layers manually"))
             self.set_raster_extent_error_handler(response, vectors)

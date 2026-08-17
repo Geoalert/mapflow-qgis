@@ -23,7 +23,9 @@ def _request_path(response: QNetworkReply) -> str:
     """
     try:
         return response.request().url().path() or 'the server'
-    except Exception:
+    except (AttributeError, RuntimeError):
+        # No reply object, or its C++ side is already gone — this runs while reporting an
+        # error, so it must not add one of its own.
         return 'the server'
 
 

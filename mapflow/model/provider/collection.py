@@ -41,7 +41,10 @@ class ProvidersList(list):
                     continue
                 try:
                     providers.update({name: create_provider(**params)})
-                except Exception:
+                except (TypeError, ValueError, KeyError):
+                    # A stored provider whose saved fields no longer match its constructor:
+                    # unexpected/missing keyword (TypeError), unusable value (ValueError), or
+                    # a lookup the factory makes on an absent key.
                     errors.append(name)
         return cls.from_dict(providers), errors
 
