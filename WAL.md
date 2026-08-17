@@ -134,17 +134,36 @@ The fix is for the enable/disable decision to have one owner rather than several
 is what the Phase C extraction is for. `tests/qgis/behavioral/test_cost_estimate.py` asserts
 only that changing the AOI re-prices, and says why it stops there.
 
-[ ] Cover result styling, and fix the signature that made it awkward
+[ ] B12 — style files are loaded onto the layers that should get them
+Scope is the *loading*, not the rendering: which `.qml` is chosen for a given model and layer
+kind, and that applying it succeeds. Whether the result looks right on screen is a visual
+check and stays manual.
 `ResultsLoader.load_result_tiles` styles the result layer with
 `layer.loadNamedStyle(get_style_name(...))`, and `loadNamedStyle` fails silently on a missing
 file. So a refactor that moves the `.qml` resources — Phase D moves `styles.py` — leaves every
-result unstyled with nothing in the log to say so.
-Left out of the behavioral suite on purpose: every way of checking it from there reaches into
-the style helpers, and a behavioral test that names internals is the thing that suite exists to
-avoid. It wants a unit test against `get_style_name` plus a check that the path resolves.
-While writing that, fix `mapflow/styles.py get_style_name(wd: str, layer, style_name=None)`:
-the annotation says `str` but the body reads `wd.name`, so the hint is actively misleading —
-which is how the first attempt at this test was written wrong.
+result unstyled with nothing in the log to say so. Note there are two families of path,
+`generate_local_style_path` and `generate_tile_style_path`, so a test that only exercises one
+would miss half of it.
+Left out of the B10 behavioral journey on purpose: every way of checking it from there reaches
+into the style helpers, and a behavioral test that names internals is the thing that suite
+exists to avoid. It wants a unit test against `get_style_name` covering both path families,
+plus a check that each resolves to a file that exists.
+While writing it, fix `mapflow/styles.py get_style_name(wd: str, layer, style_name=None)`: the
+annotation says `str` but the body reads `wd.name`, so the hint is actively misleading — which
+is how the first attempt at this test was written wrong.
+
+[ ] Check whether the behavioral tier reaches the real backend
+The fake network replaces `QgsNetworkAccessManager` for everything the plugin requests through
+`Http`, but a raster or vector-tile layer handed to QGIS is fetched by the provider, which the
+fake never sees. Fixture tile URLs point at the real staging host.
+Symptom that raised it: a mutation pointing a *raster* layer at an unroutable host stalled the
+run inside QGIS rather than failing a test, which means layer construction does something
+network-shaped rather than nothing.
+So it is worth confirming whether B10 touches the network on every run. If it does, the tier is
+quietly dependent on staging being up, and the fixture URLs should be rewritten to a host that
+resolves but serves nothing.
+No evidence of a plugin defect here — the vector-tile assertions (source and extent) pass, and
+the only stall came from a deliberately unroutable host.
 
 [ ] Detach the plugin from QgsProject on unload
 `unload()` closes the dialogs but never disconnects the `QgsProject` subscriptions made in
