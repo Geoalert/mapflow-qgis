@@ -2,7 +2,7 @@ from typing import Optional, List
 
 from .provider import ProviderInterface
 from ...schema.provider_types import BasicAuth, SourceType, CRS
-from ...constants import SEARCH_OPTION_NAME, CATALOG_OPTION_NAME
+from ...config import SEARCH_OPTION_NAME, CATALOG_OPTION_NAME
 from ...errors.plugin_errors import ImageIdRequired
 from ...schema import (DataProviderParams,
                        DataProviderSchema,
