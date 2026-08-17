@@ -731,7 +731,10 @@ class ProcessingService(QObject):
     def _template_has_aoi(template: ProcessingTemplateDTO) -> bool:
         try:
             return bool(template.aoi_dtos())
-        except Exception:
+        except (AttributeError, TypeError):
+            # `searchParams`/`aoiDetails` arriving as something other than a mapping: the
+            # accessors raise AttributeError, and a non-list `features` raises TypeError when
+            # iterated. Either way the template has no AOIs we can show.
             return False
 
     @staticmethod
@@ -743,7 +746,8 @@ class ProcessingService(QObject):
                 return ProcessingTemplateDetails.from_dict(data).template
             if isinstance(data, dict):
                 return ProcessingTemplateDTO.from_dict(data)
-        except Exception:
+        except ValueError:
+            # Not JSON, or not decodable as UTF-8 (UnicodeDecodeError is a ValueError).
             return None
         return None
 
@@ -841,7 +845,7 @@ class ProcessingService(QObject):
         """Store the template's full processings (keyed by id) and re-render the rows."""
         try:
             data = json.loads(response.readAll().data())
-        except Exception:
+        except ValueError:
             data = []
         items = data.get("results") if isinstance(data, dict) else data
         processings = {}
@@ -1027,7 +1031,7 @@ class ProcessingService(QObject):
         """Handle template update response and refresh table."""
         try:
             response_data = json.loads(response.readAll().data())
-        except Exception:
+        except ValueError:
             response_data = {}
 
         print (response_data)
@@ -1100,16 +1104,15 @@ class ProcessingService(QObject):
         """
         response_text = response.readAll().data().decode()
         if response_text is not None:
-            try:
-                message = api_message_parser(response_text)
-            except Exception:
-                message = None
+            # api_message_parser handles its own parse failures and returns None.
+            message = api_message_parser(response_text)
 
             if not message or str(message).strip().lower() in {"none", "null"}:
                 network_error = ""
                 try:
                     network_error = (response.errorString() or "").strip()
-                except Exception:
+                except (AttributeError, RuntimeError):
+                    # No reply object, or its C++ side is already gone.
                     network_error = ""
                 message = network_error or self.tr("Unknown server error")
 
@@ -1215,12 +1218,15 @@ class ProcessingService(QObject):
             alert(self.tr("Template is not active"), QMessageBox.Information)
 
     def pause_template_callback(self, response: QNetworkReply):
-        """Handle pause template response."""
-        try:
-            self.get_processings()  # Refresh to get updated template status
-            alert(self.tr("Template paused successfully"), QMessageBox.Information)
-        except Exception as e:
-            alert(self.tr("Failed to pause template: {}").format(str(e)), QMessageBox.Critical)
+        """Handle pause template response.
+
+        The server has already paused the template — a refusal would have gone to
+        ``pause_template_error_handler`` instead — so the success message is unconditional and
+        the refresh that follows it is best-effort: the poll timer calls ``get_processings``
+        again anyway.
+        """
+        alert(self.tr("Template paused successfully"), QMessageBox.Information)
+        self.get_processings()  # Refresh to get updated template status
 
     def _template_error_text(self, response) -> str:
         """Resolve a template/AOI action error response to a meaningful, translatable message.
@@ -1231,10 +1237,11 @@ class ProcessingService(QObject):
         the raw reply object (which produced an empty/garbled message box)."""
         try:
             body = response.readAll().data().decode()
-            message = api_message_parser(body)
-        except Exception:
-            message = None
-        return message or self.tr("Unknown server error")
+        except (AttributeError, RuntimeError, UnicodeDecodeError):
+            # No reply object, its C++ side is gone, or the body is not UTF-8.
+            return self.tr("Unknown server error")
+        # api_message_parser handles its own parse failures and returns None.
+        return api_message_parser(body) or self.tr("Unknown server error")
 
     def pause_template_error_handler(self, response):
         """Handle pause template error."""
@@ -1283,13 +1290,10 @@ class ProcessingService(QObject):
         )
 
     def resume_template_callback(self, response: QNetworkReply):
-        """Handle resume template response."""
-        try:
-            self._resume_template_state = {}
-            self.get_processings()  # Refresh to get updated template status
-            alert(self.tr("Template resumed successfully"), QMessageBox.Information)
-        except Exception as e:
-            alert(self.tr("Failed to resume template: {}").format(str(e)), QMessageBox.Critical)
+        """Handle resume template response. See `pause_template_callback` on the ordering."""
+        self._resume_template_state = {}
+        alert(self.tr("Template resumed successfully"), QMessageBox.Information)
+        self.get_processings()  # Refresh to get updated template status
 
     def resume_template_error_handler(self, response):
         """Handle resume template error (e.g. "maximum number of active templates")."""
@@ -1312,12 +1316,9 @@ class ProcessingService(QObject):
         )
 
     def restart_template_callback(self, response: QNetworkReply):
-        """Handle restart template response."""
-        try:
-            self.get_processings()  # Refresh to get updated template status
-            alert(self.tr("Template restarted successfully"), QMessageBox.Information)
-        except Exception as e:
-            alert(self.tr("Failed to restart template: {}").format(str(e)), QMessageBox.Critical)
+        """Handle restart template response. See `pause_template_callback` on the ordering."""
+        alert(self.tr("Template restarted successfully"), QMessageBox.Information)
+        self.get_processings()  # Refresh to get updated template status
 
     def restart_template_error_handler(self, response):
         """Handle restart template error."""
@@ -1345,12 +1346,9 @@ class ProcessingService(QObject):
                                     error_handler=self.delete_template_error_handler)
 
     def delete_template_callback(self, response: QNetworkReply):
-        """Handle delete template response."""
-        try:
-            self.get_processings()  # Refresh to remove deleted template from table
-            alert(self.tr("Template deleted successfully"), QMessageBox.Information)
-        except Exception as e:
-            alert(self.tr("Failed to delete template: {}").format(str(e)), QMessageBox.Critical)
+        """Handle delete template response. See `pause_template_callback` on the ordering."""
+        alert(self.tr("Template deleted successfully"), QMessageBox.Information)
+        self.get_processings()  # Refresh to remove deleted template from table
 
     def delete_template_error_handler(self, response):
         """Handle delete template error."""

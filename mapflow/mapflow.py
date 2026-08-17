@@ -845,7 +845,9 @@ class Mapflow(QObject):
             data = json.loads(response.readAll().data())
             items = data.get("results") if isinstance(data, dict) else data
             linked_count = len([i for i in (items or []) if isinstance(i, dict)])
-        except Exception:
+        except (ValueError, TypeError):
+            # Not JSON (ValueError, which UnicodeDecodeError subclasses), or a payload whose
+            # `results` is not iterable.
             linked_count = 0
         new_images = template.newImagesCount or 0
         local_created_at = template.createdAt.astimezone()
@@ -951,7 +953,8 @@ class Mapflow(QObject):
         # not a FeatureCollection — wrap each geometry into a feature the layer builder understands.
         try:
             aois = json.loads(response.readAll().data())
-        except Exception:
+        except ValueError:
+            # Not JSON, or not decodable as UTF-8 (UnicodeDecodeError is a ValueError).
             return
         if isinstance(aois, dict):
             aois = aois.get('aois', [])
@@ -1510,7 +1513,9 @@ class Mapflow(QObject):
             return None
         try:
             ogr_geom = ogr.CreateGeometryFromJson(json.dumps(geom_dict))
-        except Exception:
+        except (TypeError, ValueError, RuntimeError):
+            # json.dumps rejects a non-serializable mapping (TypeError/ValueError); ogr raises
+            # RuntimeError on malformed GeoJSON when GDAL exceptions are enabled.
             return None
         if not ogr_geom:
             return None
@@ -1771,7 +1776,10 @@ class Mapflow(QObject):
                         aoi_intersection, lambda pct: pct >= min_intersection)
                 fit = (date_ok and cloud_ok and off_nadir_ok and provider_ok
                        and product_ok and intersection_ok)
-            except Exception:
+            except (AttributeError, TypeError, ValueError):
+                # Metadata that is not the shape this code expects: a non-mapping `properties`
+                # raises AttributeError, a value of the wrong type raises TypeError on the
+                # comparisons, an unparseable one ValueError.
                 fit = True  # never hide a row because of a parsing error
             if not fit:
                 unfit.add(local_index)
