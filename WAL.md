@@ -87,6 +87,33 @@ Mechanical, and cheaper here than earlier: the god object is gone, so fewer file
 Note: the `schema/` ⇄ `model/` split already happened in Phase A, so this phase is package
 moves only — no type is reclassified here.
 
+[ ] Separate the technical layer styles from the result styles
+`static/styles/` currently mixes two unrelated things at one level. `file/` and `tiles/` hold
+**result** styles, chosen per model by `get_style_name`. Loose alongside them sit the
+**technical** styles for the plugin's own layers — `aoi.qml`, `metadata.qml`,
+`metadata_footprint.qml`, `aoi_template_blue.qml`, `aoi_template_processing_green.qml` — which
+are loaded by literal filename from nine call sites and can never be tile styles, because the
+layers they dress are always vector layers the plugin builds itself.
+Nothing in the layout says which is which, so the natural reading is that the loose files are
+just result styles that have not been sorted yet. Give them their own directory and the
+distinction becomes structural instead of tribal knowledge.
+While there: `static/styles/aoi_templates_processing.qml` is referenced from nowhere. Confirm
+whether it is dead or a rename that lost its caller.
+`tests/qgis/test_result_styles.py` guards both groups today and will need its paths updated.
+
+[ ] Decide whether result styles should share one name set across `file/` and `tiles/`
+The two directories diverge: `tiles/` has six styles, `file/` thirteen. The seven extra —
+`buildings_noclass`, `building_heights_class`, `forest_crowns_points`, `forest_with_heights`,
+`landuse`, `open_data_polygon`, `open_data_line` — are variants chosen from the layer's
+**fields and geometry**, which only the local path inspects; the tile path keys off the model
+name alone. So this is not a naming slip to tidy up, and matching the sets means choosing one:
+- teach the tile path to inspect vector-tile fields, and add the missing seven to `tiles/`; or
+- accept that tiled results are coarser, and say so where the split is defined.
+Worth settling because there are two independent name-derivation functions today
+(`get_tile_style_name_from_wd_name`, `get_local_style_name_from_wd_name`) that can drift apart
+silently — a model added to one and not the other renders as `default` in the other view, and
+no test can catch that while the two sets are legitimately different.
+
 ### Phase E — UI consistency
 
 [ ] Move static widgets out of Python and into the `.ui` files
