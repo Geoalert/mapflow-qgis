@@ -24,10 +24,6 @@ are the route there. Phases run in order; each step is one MR.
 Everything here is behaviour-preserving and verifiable by the current suite. Doing it first
 means the extraction MRs move less code and read as pure moves.
 
-[ready-for-review] Delete the dead modules and the empty package
-
-[ready-for-review] Split `schema/` and `model/`, break the import cycle, delete `entity/`
-
 [ ] Architecture invariant test
 `tests/functional/test_layering.py` — no service imports a widget, `dialogs`, or `view`;
 `schema/` imports nothing from `model/` or above; no import cycles. Current violations go in an
@@ -46,16 +42,10 @@ Five values, no principle separating them from the other ~150 lines.
 
 ### Phase B — a test surface that survives the move
 
-[ ] Behavioral test tier
-43 of 51 QGIS-tier test files build objects with `Class.__new__(Class)` and hand-set attributes,
-so they pin internal structure and break the moment a method moves. They cannot be the safety
-net for Phase C.
-Build `tests/behavioral/`: drive a user journey from a controller entry point with `Http`
-replaced by a recording fake, and assert only on the four surfaces in `spec/007_architecture.md`
-§ The test surface that survives a move — HTTP conversation, QGIS layer state, settings, and
-widget-visible state.
-Cover, at minimum, one journey per domain moved in Phase C. Existing `__new__` tests stay until
-the code they pin moves; no step may leave a behaviour covered by neither.
+[ready-for-review] Behavioral test tier
+Twelve journeys under `tests/qgis/behavioral/`, one per domain Phase C moves, every test
+verified by mutating the code it covers. The existing `Class.__new__(Class)` tests stay until
+the code they pin moves; no extraction may leave a behaviour covered by neither.
 
 ### Phase C — dissolve the god object
 
@@ -102,6 +92,9 @@ whether it is dead or a rename that lost its caller.
 `tests/qgis/test_result_styles.py` guards both groups today and will need its paths updated.
 
 [ ] Decide whether result styles should share one name set across `file/` and `tiles/`
+**A call for the user, and not before the structural refactoring has landed** — it changes
+what the tile path is allowed to inspect, which is easier to judge once the services own
+their own code.
 The two directories diverge: `tiles/` has six styles, `file/` thirteen. The seven extra —
 `buildings_noclass`, `building_heights_class`, `forest_crowns_points`, `forest_with_heights`,
 `landuse`, `open_data_polygon`, `open_data_line` — are variants chosen from the layer's
