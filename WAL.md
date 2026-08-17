@@ -134,7 +134,7 @@ The fix is for the enable/disable decision to have one owner rather than several
 is what the Phase C extraction is for. `tests/qgis/behavioral/test_cost_estimate.py` asserts
 only that changing the AOI re-prices, and says why it stops there.
 
-[ ] B12 — style files are loaded onto the layers that should get them
+[ready-for-review] B12 — style files are loaded onto the layers that should get them
 Scope is the *loading*, not the rendering: which `.qml` is chosen for a given model and layer
 kind, and that applying it succeeds. Whether the result looks right on screen is a visual
 check and stays manual.
