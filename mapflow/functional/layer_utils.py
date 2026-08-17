@@ -2,7 +2,7 @@ import json
 import os
 from osgeo import gdal
 from pathlib import Path
-from typing import Optional, List, Dict, Callable
+from typing import Optional, List, Dict, Callable, Tuple
 
 from PyQt5.QtCore import QObject
 from PyQt5.QtNetwork import QNetworkReply
@@ -140,28 +140,88 @@ def max_aoi_bbox_area(aoi: QgsGeometry,
         max_area = max(max_area, bbox_area)
     return max_area
 
-def count_polygons_in_layer(features: list) -> int:
-    """ Count polygon geometries in a multipolygon layer (instead of counting features).
-    :param features: A list of fetures, obtained by "list(layer.getFeatures())"
+
+def count_polygons_in_geometry(geometry: Optional[QgsGeometry]) -> int:
+    """Number of polygons in a (possibly multipart) geometry."""
+    if geometry is None or geometry.isEmpty():
+        return 0
+    if geometry.isMultipart():
+        return len(geometry.asMultiPolygon())
+    return 1
+
+
+def dissolve_geometries(geometries: List[QgsGeometry]) -> QgsGeometry:
+    """Combine polygons into one geometry with the intersections dissolved.
+
+    ``QgsGeometry.collectGeometry`` only stacks the inputs into a multipart geometry: overlapping
+    polygons remain separate parts, so ``QgsDistanceArea.measureArea`` sums the parts and counts
+    the shared area once per part. The same geometry is what the plugin submits, so the backend
+    processes (and bills) the overlap twice. A unary union merges the intersecting parts, so every
+    square meter is counted exactly once.
+
+    Falls back to a plain collection when the union yields nothing — GEOS fails on invalid input
+    (e.g. self-intersecting rings) and returning the old, over-counted AOI beats returning none.
     """
-    count = 0
-    for feature in features:
-        geom = feature.geometry()
+    parts = [QgsGeometry(geom) for geom in geometries if geom is not None and not geom.isEmpty()]
+    if not parts:
+        return QgsGeometry()
+    if len(parts) == 1 and not parts[0].isMultipart():
+        # Nothing can overlap: keep the source geometry untouched (no GEOS normalization, no Z drop).
+        return parts[0]
+    dissolved = QgsGeometry.unaryUnion(parts)
+    if dissolved is None or dissolved.isNull() or dissolved.isEmpty():
+        return parts[0] if len(parts) == 1 else QgsGeometry.collectGeometry(parts)
+    return dissolved
+
+
+def dissolve_named_polygons(
+        named_geometries: List[Tuple[QgsGeometry, Optional[str]]]
+) -> Tuple[List[Tuple[QgsGeometry, Optional[str]]], bool]:
+    """Explode into single-part polygons and dissolve the intersecting ones, keeping the names.
+
+    A merged polygon keeps the name of its sources when they agree on one (unnamed sources do not
+    count as disagreement); when two or more *different* names are merged the name is dropped,
+    since there is no non-arbitrary way to pick one. The second return value flags exactly that
+    case, so the caller can ask the user before losing the names.
+
+    Returns ``(list of (single-part polygon, name), names_lost)``.
+    """
+    sources: List[Tuple[QgsGeometry, Optional[str]]] = []
+    for geom, name in named_geometries:
         if geom is None or geom.isEmpty():
             continue
-        if geom.isMultipart():
-            count += len(geom.asMultiPolygon())
-        else:
-            count += 1
-    return count
+        for part in geom.asGeometryCollection() or [geom]:
+            if part is not None and not part.isEmpty():
+                sources.append((part, name))
+    if len(sources) < 2:  # a single polygon cannot intersect anything
+        return sources, False
+
+    dissolved = dissolve_geometries([part for part, _ in sources])
+    parts = [part for part in (dissolved.asGeometryCollection() or [dissolved])
+             if part is not None and not part.isEmpty()]
+    if len(parts) >= len(sources):
+        # Nothing was merged (or the union failed): keep the sources with their names as they are.
+        return sources, False
+
+    result = []
+    names_lost = False
+    for part in parts:
+        names = []
+        for source, name in sources:
+            if not name or name in names:
+                continue
+            overlap = part.intersection(source)
+            if overlap is not None and not overlap.isEmpty() and overlap.area() > 0:
+                names.append(name)
+        if len(names) > 1:
+            names_lost = True
+        result.append((part, names[0] if len(names) == 1 else None))
+    return result, names_lost
+
 
 def collect_geometry_from_layer(layer: QgsMapLayer) -> QgsGeometry:
     features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
-    if len(features) == 1:
-        aoi = features[0].geometry()
-    else:
-        aoi = QgsGeometry.collectGeometry([feature.geometry() for feature in features])
-    return aoi
+    return dissolve_geometries([feature.geometry() for feature in features])
 
 
 def calculate_layer_area(layer: QgsMapLayer,

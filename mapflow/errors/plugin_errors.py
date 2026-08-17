@@ -25,5 +25,15 @@ class ImageIdRequired(PluginError):
 class AoiNotIntersectsImage(PluginError):
     pass
 
+
+class AoiMergeDeclined(Exception):
+    """Raised when the user refuses to merge intersecting AOIs (which would drop their names).
+
+    Deliberately NOT a ``PluginError``: the user has already answered the question, so the
+    callers must abort silently instead of showing an error on top of the prompt.
+    """
+    pass
+
+
 class ProxyIsAlreadySet(RuntimeError):
     pass

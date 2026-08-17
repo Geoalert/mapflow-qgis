@@ -1,3 +1,7 @@
+## 3.6.1
+    - Fix: intersecting AOI polygons (in one layer, or as parts of one multipolygon) were counted twice — the shared area was added to the processing area and to the price, and the overlapping geometry was sent to the server as separate polygons. Overlaps are now merged into a single AOI, so the area shown, the area processed and the area billed all agree
+    - When merging AOIs of a Planned Search would discard their names, the plugin asks for confirmation first
+
 ## 3.6.0
     - Planned processings (search templates):
         - Create a Planned Search that runs in the background and keeps finding new imagery; you are notified when results are ready

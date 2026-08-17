@@ -46,19 +46,17 @@ class AreaCalculatorService(QObject):
             return
 
         features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
-        if QgsWkbTypes.flatType(layer.wkbType()) == QgsWkbTypes.Polygon:
-            geoms_count = len(features)
-        elif QgsWkbTypes.flatType(layer.wkbType()) == QgsWkbTypes.MultiPolygon:
-            geoms_count = layer_utils.count_polygons_in_layer(features)
-        else: # type of layer is not supported
+        if QgsWkbTypes.flatType(layer.wkbType()) not in (QgsWkbTypes.Polygon, QgsWkbTypes.MultiPolygon):
+            # type of layer is not supported
             # (but it shouldn't be the case, because point and line layers will not appear in AOI-combo,
             # and collections are devided by QGIS into separate layers with different types)
             raise ValueError("Only polygon and multipolyon layers supported for this operation")
+        # Dissolve the intersections: merely collecting the parts would count the shared area once
+        # per overlapping polygon, both in the displayed area and in the geometry we submit.
+        aoi = layer_utils.dissolve_geometries([feature.geometry() for feature in features])
+        # Count the polygons of the dissolved AOI — that is what the backend receives.
+        geoms_count = layer_utils.count_polygons_in_geometry(aoi)
         if self.app_context.max_aois_per_processing >= geoms_count:
-            if len(features) == 1:
-                aoi = features[0].geometry()
-            else:
-                aoi = QgsGeometry.collectGeometry([feature.geometry() for feature in features])
             self.calculate_aoi_area(aoi, layer.crs())
             return aoi
         else:  # self.app_context.max_aois_per_processing < number of polygons (as features and as parts of multipolygons):

@@ -198,6 +198,25 @@ later via `POST .../aoi/{aoiId}`). When the AOI does not come from a polygon lay
 image/mosaic extent), unnamed feature(s) are built from the combined AOI geometry (again one
 Polygon per part). The backend still accepts `aoi` as a fallback, but the plugin no longer sends it.
 
+### Intersecting AOIs are merged
+Before the features are built, intersecting polygons are dissolved into one, for the same reason
+as in a regular processing (see 002_B "Submitted AOI geometry"): overlapping AOIs would otherwise
+be searched — and billed — twice over the shared area. Merging applies to overlaps between
+features and between the parts of one MultiPolygon feature. The same dissolve is applied when
+AOIs are added to an existing template by drawing them on the map, and when an AOI's geometry is
+updated (`POST …/aoi/{aoiId}`).
+
+A merged AOI can carry only one name:
+
+- when the merged polygons agree on a name — one name shared by all of them, some of them
+  unnamed — the merged AOI keeps that name, and nothing is asked;
+- when they carry **two or more different names** there is no non-arbitrary choice, so the name is
+  dropped (`null`) and the user is **asked first**: *"Your AOIs will be merged and name
+  information will be lost, do you want to continue?"*. Cancelling aborts the creation (or the
+  AOI-add) silently, leaving the user to resolve the overlap in the source layer.
+
+Only the merged AOIs lose their names; AOIs that do not intersect anything keep theirs.
+
 ### Name constraints
 AOI names must not exceed **64 characters**; the plugin validates this client-side
 before issuing create/rename requests and surfaces a translatable error otherwise.

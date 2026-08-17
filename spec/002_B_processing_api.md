@@ -14,6 +14,27 @@ List processings for a project. Polled approximately every 5 seconds for status 
 ### `PUT /processings/{id}`
 Update processing name/description.
 
+## Submitted AOI geometry
+
+The AOI is taken from the selected polygon layer (its selected features, or all of them) and sent
+as a single geometry. **Intersecting polygons are dissolved (unary union) before submission**, so
+that a shared area belongs to exactly one polygon of the submitted geometry. Merely collecting the
+features into a MultiPolygon would keep the overlaps as separate parts, and the area of a
+MultiPolygon is the sum of its parts: the overlap would be measured, processed and billed once per
+overlapping polygon. This applies to overlaps *between* features and to overlapping parts *within*
+one MultiPolygon feature.
+
+Consequences of the dissolve, all intended:
+
+- the **Area** shown in the plugin equals the area the backend charges for;
+- the per-processing polygon count (`maxAoisPerProcessing`) is checked on the **dissolved**
+  geometry — the count the backend receives — so overlapping polygons that merge into one count
+  as one;
+- disjoint polygons are never merged: a multi-AOI processing stays multi-AOI.
+
+If the union fails (GEOS rejects invalid input, e.g. self-intersecting rings), the plugin falls
+back to the plain collection rather than dropping the AOI.
+
 ## AOI area limit
 
 Two ellipsoidal-area constraints apply, both against `user.aoiAreaLimit` (sq.m), reported in the

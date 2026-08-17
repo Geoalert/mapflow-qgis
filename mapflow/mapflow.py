@@ -26,7 +26,8 @@ from qgis.core import (
 
 from . import constants
 from .config import Config, ConfigColumns
-from .errors import (BadProcessingInput,
+from .errors import (AoiMergeDeclined,
+                     BadProcessingInput,
                      ErrorMessage,
                      ImageIdRequired,
                      PluginError,
@@ -1333,8 +1334,9 @@ class Mapflow(QObject):
             self.alert(self.tr("The AOI has no geometry — draw or keep at least one polygon."),
                        QMessageBox.Warning)
             return False
-        geom = (feats[0].geometry() if len(feats) == 1
-                else QgsGeometry.collectGeometry([f.geometry() for f in feats]))
+        # Dissolve intersections, so an AOI edited into overlapping parts is not measured
+        # (and billed) twice over the shared area.
+        geom = layer_utils.dissolve_geometries([f.geometry() for f in feats])
         wgs = helpers.to_wgs84(QgsGeometry(geom), layer.crs())
         if wgs is None or wgs.isEmpty():
             self.alert(self.tr("The edited AOI has no valid geometry."), QMessageBox.Warning)
@@ -1357,7 +1359,10 @@ class Mapflow(QObject):
             return False
         if layer.isEditable():
             layer.commitChanges()  # move drawn features from the edit buffer into the provider
-        features = self._aoi_features_from_layer(layer)
+        try:
+            features = self._aoi_features_from_layer(layer)
+        except AoiMergeDeclined:
+            return False  # keep the session open so the drawing is not lost
         if not features:
             self.alert(self.tr("Draw at least one polygon before saving."), QMessageBox.Warning)
             return False
@@ -2383,13 +2388,14 @@ class Mapflow(QObject):
 
         ``aoiDetails`` is always used — the legacy plain ``aoi`` field is deprecated because
         names cannot be attached to it. Returns ``None`` only when there is no AOI at all.
-        Raises ``ValueError`` if a name exceeds the limit.
+        Raises ``ValueError`` if a name exceeds the limit, ``AoiMergeDeclined`` if the user
+        refuses to merge intersecting AOIs.
         """
         features = self._aoi_features_from_layer(self.dlg.polygonCombo.currentLayer())
         # Fall back to the combined AOI (e.g. image/mosaic extent) as one unnamed feature,
         # so we still send aoiDetails rather than the deprecated plain `aoi`.
         if not features and self.app_context.aoi:
-            features.extend(self._polygon_aoi_features(self.app_context.aoi, None))
+            features.extend(self._dissolved_aoi_features([(self.app_context.aoi, None)]))
         if not features:
             return None
         return {"type": "FeatureCollection", "features": features}
@@ -2398,12 +2404,14 @@ class Mapflow(QObject):
         """Exploded single-Polygon GeoJSON AOI features from a polygon layer (selected features
         if any, else all). Each feature's ``properties.name`` comes from a ``name`` attribute
         when present. MultiPolygons are split into separate Polygon features (the create path
-        requires single-part polygons). Raises ``ValueError`` if a name exceeds the limit."""
+        requires single-part polygons), and intersecting polygons are dissolved into one.
+        Raises ``ValueError`` if a name exceeds the limit, ``AoiMergeDeclined`` if the user
+        refuses the merge."""
         if layer is None or not layer.featureCount():
             return []
         source_features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
         has_name_field = layer.fields().indexFromName("name") != -1
-        features = []
+        named_geometries = []
         for feature in source_features:
             geom = feature.geometry()
             if geom is None or geom.isEmpty():
@@ -2421,22 +2429,28 @@ class Mapflow(QObject):
                         name=name, limit=AOI_NAME_MAX_LENGTH
                     )
                 )
-            features.extend(self._polygon_aoi_features(wgs_geom, name))
-        return features
+            named_geometries.append((wgs_geom, name))
+        return self._dissolved_aoi_features(named_geometries)
 
-    @staticmethod
-    def _polygon_aoi_features(wgs_geom: QgsGeometry, name: Optional[str]) -> List[dict]:
-        """Split a (possibly multi-)polygon into one GeoJSON *Polygon* Feature per part.
+    def _dissolved_aoi_features(self,
+                                named_geometries: List[Tuple[QgsGeometry, Optional[str]]]
+                                ) -> List[dict]:
+        """One GeoJSON *Polygon* Feature per AOI part, with intersecting polygons dissolved.
 
-        The backend ignores ``MultiPolygon`` features in ``aoiDetails`` — an all-MultiPolygon
-        upload would create an empty, Failed template (feedback 10) — so mirror the web client
-        and explode each MultiPolygon into separate single-part Polygon features. Parts share
-        the source feature's ``name``. ``asGeometryCollection`` returns one element for a plain
-        Polygon and one per part for a MultiPolygon."""
+        Two reasons to explode and dissolve here. Explode: the backend ignores ``MultiPolygon``
+        features in ``aoiDetails`` — an all-MultiPolygon upload would create an empty, Failed
+        template (feedback 10) — so mirror the web client with single-part polygons. Dissolve:
+        overlapping AOIs would otherwise be searched and billed twice over the shared area.
+
+        Merging drops the names of AOIs that disagree, so ask before doing it; a refusal raises
+        ``AoiMergeDeclined`` and the caller aborts, leaving the user to fix the overlap."""
+        parts, names_lost = layer_utils.dissolve_named_polygons(named_geometries)
+        if names_lost and not self.alert(
+                self.tr("Your AOIs will be merged and name information will be lost, "
+                        "do you want to continue?"), QMessageBox.Question):
+            raise AoiMergeDeclined()
         features = []
-        for part in wgs_geom.asGeometryCollection() or [wgs_geom]:
-            if part is None or part.isEmpty():
-                continue
+        for part, name in parts:
             features.append({
                 "type": "Feature",
                 "geometry": json.loads(part.asJson()),
@@ -2476,6 +2490,8 @@ class Mapflow(QObject):
         except ValueError as e:
             self.alert(str(e), QMessageBox.Warning)
             return
+        except AoiMergeDeclined:
+            return  # the user was asked and said no: let them fix the overlapping AOIs first
         if not aoi_details:
             self.alert(self.tr('Please, select a valid area of interest'))
             return
