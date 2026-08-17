@@ -9,7 +9,7 @@ from PyQt5.QtCore import QBuffer, QByteArray, QObject, QTimer, QUrl, qVersion
 from PyQt5.QtNetwork import QHttpMultiPart, QNetworkReply, QNetworkRequest
 from qgis.core import QgsNetworkAccessManager, Qgis, QgsApplication, QgsAuthMethodConfig
 
-from .constants import DEFAULT_HTTP_TIMEOUT_SECONDS
+from .config import DEFAULT_HTTP_TIMEOUT_SECONDS
 from .errors import ErrorMessage, ProxyIsAlreadySet
 
 logger = logging.getLogger(__name__)

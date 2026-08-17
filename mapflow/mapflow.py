@@ -25,8 +25,7 @@ from qgis.core import (
     QgsProject, QgsRasterLayer, QgsRectangle, QgsVectorLayer
 )
 
-from . import constants
-from .config import Config, ConfigColumns
+from .config import OSM, Config, ConfigColumns
 from .errors import (BadProcessingInput,
                      ErrorMessage,
                      ImageIdRequired,
@@ -3445,8 +3444,7 @@ class Mapflow(QObject):
         except NotImplementedError:            
             self.alert(self.tr("Preview is unavailable for the provider {}. \nOSM layer will be added instead.").format(provider.name), QMessageBox.Information)
             # Add OSM instaed of preview, if it is unavailable (for Mapbox)
-            osm = constants.OSM
-            layer = QgsRasterLayer(osm, 'OpenStreetMap', 'wms')
+            layer = QgsRasterLayer(OSM, 'OpenStreetMap', 'wms')
             self.result_loader.add_preview_layer(preview_layer=layer)
             return
         except Exception as e:

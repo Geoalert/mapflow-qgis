@@ -7,6 +7,17 @@ from qgis.core import QgsSettings
 
 SEARCH_CAPTURE_TIMEZONE = 'UTC'
 
+#: QgsSettings key holding the user's own providers.
+PROVIDERS_KEY = 'mapflow_data_providers'
+
+OSM = 'type=xyz&url=https://tile.openstreetmap.org/{z}/{x}/{y}.png&zmax=19&zmin=0'
+
+#: Names of the two built-in imagery sources, as shown in the source combo.
+SEARCH_OPTION_NAME = "🔎 Imagery Search"
+CATALOG_OPTION_NAME = "🖼️ My imagery"
+
+DEFAULT_HTTP_TIMEOUT_SECONDS = 10
+
 @dataclass
 class ConfigColumns():
     def __init__(self):

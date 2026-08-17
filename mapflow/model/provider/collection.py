@@ -2,7 +2,7 @@ import json
 
 from .factory import create_provider, provider_options
 from .provider import NoneProvider
-from ...constants import PROVIDERS_KEY
+from ...config import PROVIDERS_KEY
 
 
 def decorate(base_name, existing_names):
