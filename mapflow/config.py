@@ -34,6 +34,22 @@ class ConfigColumns():
         ]
         self.MAX_WIDTH = 200
 
+
+# Display labels for search-result provider names that are not meant for a user's eyes. The raw
+# values are the catalog API's and stay untouched everywhere else — requests, footprint attributes,
+# provider lookups and the local filter all keep matching on them; this map is for the table only.
+PROVIDER_DISPLAY_NAMES = {
+    'my_imagery_images': QCoreApplication.translate('Config', 'My Image'),
+    'my_imagery_mosaics': QCoreApplication.translate('Config', 'My Collection'),
+}
+
+
+def provider_display_name(provider_name):
+    """The label to show for a search result's provider. A name without a mapping (and a missing
+    name) is passed through untouched, so a new provider shows up as-is rather than blank."""
+    return PROVIDER_DISPLAY_NAMES.get(provider_name, provider_name)
+
+
 @dataclass
 class Config:
     TIMEZONE = time.localtime().tm_zone

@@ -11,7 +11,7 @@ from qgis.core import QgsMapLayerProxyModel, QgsSettings
 from qgis.gui import QgsRangeSlider
 
 from . import icons
-from ..config import config, ConfigColumns
+from ..config import config, ConfigColumns, provider_display_name
 from ..schema import BillingType, UserRole
 from ..entity.provider import ProviderInterface
 from ..functional import helpers
@@ -473,6 +473,10 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
                 feature['properties']['id'] = feature.get('id') # for uniformity
             for col, attr in enumerate(ConfigColumns().METADATA_TABLE_ATTRIBUTES.values()):
                 value = feature['properties'].get(attr)  # None in case of empty/non-existent field
+                if attr == 'providerName':
+                    # Display only — the feature keeps the API's own name, which is what the
+                    # filter, the footprints and the processing request match on.
+                    value = provider_display_name(value)
                 table_item = QTableWidgetItem()
                 table_item.setData(Qt.DisplayRole, value)
                 self.metadataTable.setItem(row, col, table_item)

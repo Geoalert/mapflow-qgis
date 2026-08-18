@@ -1,5 +1,6 @@
 ## 3.6.1
     - Fix: the area of an AOI layer with intersecting polygons (separate features, or parts of one multipolygon) was overstated — the shared area was counted once per polygon, inflating the Area shown, the price estimated from it and the area-limit checks. The overlap is now counted once, as the server counts it
+    - Search results from My imagery are listed as "My Image" and "My Collection" instead of the internal provider names
 
 ## 3.6.0
     - Planned processings (search templates):
