@@ -57,5 +57,12 @@ the server-driven provider list automatically):
 
 Their `previewUrl` points at the data-catalog host (same Mapflow origin, under `/rest/rasters/…`)
 
+Those two names are internal, so the search-results **table** shows **"My Image"** and **"My
+Collection"** instead. The substitution is display-only and happens where the cell is written:
+the GeoJSON properties, the footprint layer attributes and the provider list keep the API's own
+names, and every match on them — the local provider filter, the per-provider minimum-area lookup,
+the processing request — keeps comparing raw names. A provider without a mapping is shown as it
+comes, so a new one is never blank.
+
 See also `002_F_plan_processing_api.md` for `POST /processings/template/{templateId}/images`,
 which returns a template's search results filtered server-side (a subset of the same filters).

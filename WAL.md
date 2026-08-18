@@ -35,3 +35,8 @@
   backend sees after its own union — worth revisiting if a user hits it, not worth widening a
   hotfix for.
 - Spec delta approved by user: 002_B "AOI area measurement".
+
+## 4. Show readable provider names for My Imagery search results
+[ready-for-review]
+- Ships with hotfix 3.6.1, same branch as step 3.
+- Spec delta approved by user: 002_D "My Imagery search providers".

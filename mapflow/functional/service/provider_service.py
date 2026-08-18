@@ -19,7 +19,7 @@ from ...schema import (DataProviderParams,
                        ImagerySearchParams, 
                        UserDefinedParams)
 from ...schema.processing import ProcessingDTO
-from ...config import Config, ConfigColumns
+from ...config import Config, ConfigColumns, provider_display_name
 from ...errors import PluginError
 
 
@@ -464,6 +464,10 @@ class ProviderService(QObject):
         # Fill metadata table with the returned values
         for row, image_id in enumerate(image_ids):
             for column, value in per_row_columns(row, image_id).items():
+                if column == self.config.NAME_COLUMN_INDEX:
+                    # Display only, and only here: the pseudo-footprint layer built above keeps the
+                    # API's own provider name, which the min-area lookup matches on.
+                    value = provider_display_name(value)
                 table_item = QTableWidgetItem()
                 table_item.setData(Qt.DisplayRole, value)
                 self.dlg.metadataTable.setItem(row, column, table_item)

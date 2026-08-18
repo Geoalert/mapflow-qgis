@@ -17,6 +17,7 @@ email=hello@geoalert.io
 changelog:
     3.6.1
     - Fix: an AOI with intersecting polygons no longer has its overlapping area counted twice in the displayed area, the price estimate and the area limits
+    - My imagery search results are listed as "My Image" and "My Collection"
     3.6.0
     - Planned processings: create a background "Planned Search" to be automatically notified when new images are found; browse and manage search AOIs (add from a layer, draw on the map, update geometry, exclude from search, etc.) and their processings, grouped per AOI on the map
     - Imagery Search reworked: a new Off-Nadir angle filter, all search via the Mapflow catalog (legacy Maxar/Sentinel removed), server-side sorting by clicking column headers, and "My imagery" as image/mosaic search providers
