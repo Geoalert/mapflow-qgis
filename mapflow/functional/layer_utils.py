@@ -110,12 +110,34 @@ def is_polygon_layer(layer: QgsMapLayer) -> bool:
     return layer.type() == QgsMapLayerType.VectorLayer and layer.geometryType() == QgsWkbTypes.PolygonGeometry
 
 
+def union_parts(aoi: QgsGeometry) -> QgsGeometry:
+    """Dissolve the intersecting parts of a multipart geometry into one.
+
+    An AOI layer is collected into a MultiPolygon part by part (``QgsGeometry.collectGeometry``),
+    which does not merge anything: intersecting polygons stay separate parts. Callers that measure
+    the AOI need the union instead, because the area of a MultiPolygon is the sum of its parts.
+
+    Returns the geometry unchanged when there is nothing to dissolve, and when the union fails —
+    GEOS refuses invalid input such as self-intersecting rings, and an over-counted area is still
+    better than no area at all.
+    """
+    if aoi is None or aoi.isEmpty() or not aoi.isMultipart():
+        return aoi
+    dissolved = QgsGeometry.unaryUnion([aoi])
+    if dissolved is None or dissolved.isNull() or dissolved.isEmpty():
+        return aoi
+    return dissolved
+
+
 def calculate_aoi_area(aoi: QgsGeometry,
                        project_crs: QgsCoordinateReferenceSystem) -> float:
     calculator = QgsDistanceArea()
     calculator.setEllipsoid(WGS84_ELLIPSOID)
     calculator.setSourceCrs(WGS84, project_crs)
-    aoi_size = calculator.measureArea(aoi) / 10 ** 6  # sq. m to sq.km
+    # Measure the union, not the parts: intersecting polygons would otherwise contribute their
+    # shared area once each. The backend unions the AOI before it processes and charges for it,
+    # so the sum would overstate both the area we display and the limits we pre-check against it.
+    aoi_size = calculator.measureArea(union_parts(aoi)) / 10 ** 6  # sq. m to sq.km
     return aoi_size
 
 def max_aoi_bbox_area(aoi: QgsGeometry,
