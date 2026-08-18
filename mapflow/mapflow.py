@@ -37,7 +37,10 @@ from .functional import helpers, layer_utils
 from .functional.app_context import AppContext
 from .functional.auth import get_auth_id
 from .functional.controller.data_catalog_controller import DataCatalogController
-from .functional.controller.processing_controller import ProjectProcessingController
+from .functional.controller.project_processing_controller import ProjectProcessingController
+from .functional.controller.processing_controller import ProcessingController
+from .functional.service.aoi_service import AoiService
+from .functional.view.aoi_view import AoiView
 from .functional.service import (DataCatalogService,
                                  ProcessingService,
                                  ProjectService,
@@ -291,21 +294,36 @@ class Mapflow(QObject):
         self.use_imagery_extent = QAction(self.tr("Use imagery extent"))
         self.use_imagery_extent.setEnabled(False)
         self.create_aoi_from_map_action = QAction(self.tr("Create AOI from map extent"))
-        self.aoi_layer_counter = 0
+        self.add_layer_action = QAction(u"Use as AOI in Mapflow")
+        self.add_layer_action.setIcon(plugin_icon)
+        self.remove_layer_action = QAction(u"Remove AOI from Mapflow")
+        self.remove_layer_action.setIcon(plugin_icon)
+
+        # Before setup_add_layer_menu(), which connects these actions to the controller.
+        self.aoi_service = AoiService(iface=self.iface,
+                                      app_context=self.app_context,
+                                      plugin_dir=self.plugin_dir,
+                                      result_loader=self.result_loader,
+                                      data_catalog_service=self.data_catalog_service)
+        self.aoi_view = AoiView(dlg=self.dlg)
+        self.processing_controller = ProcessingController(
+            iface=self.iface,
+            aoi_service=self.aoi_service,
+            aoi_view=self.aoi_view,
+            add_layer_action=self.add_layer_action,
+            remove_layer_action=self.remove_layer_action)
+
         self.setup_add_layer_menu()
         # Add options menu functionality
         self.setup_options_menu_connections()
         # Layer actions
-        self.add_layer_action = QAction(u"Use as AOI in Mapflow")
-        self.add_layer_action.setIcon(plugin_icon)
-        self.add_layer_action.triggered.connect(self.add_to_layers)
         iface.addCustomActionForLayerType(self.add_layer_action, None, QgsMapLayerType.VectorLayer, True)
-        self.remove_layer_action = QAction(u"Remove AOI from Mapflow")
-        self.remove_layer_action.setIcon(plugin_icon)
-        self.remove_layer_action.triggered.connect(self.remove_from_layers)
         iface.addCustomActionForLayerType(self.remove_layer_action, None, QgsMapLayerType.VectorLayer, False)
+        self.add_layer_action.triggered.connect(self.processing_controller.use_current_layer_as_aoi)
+        self.remove_layer_action.triggered.connect(
+            self.processing_controller.stop_using_current_layer_as_aoi)
         self.dlg.useAllVectorLayers.stateChanged.connect(self.toggle_all_layers)
-        self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
+        self.processing_controller.refresh_excepted_layers()
 
         # ========== 10. INITIALIZE AREA CALCULATOR SERVICE ==========
         self.area_calculator_service = AreaCalculatorService(iface=self.iface,
@@ -443,39 +461,10 @@ class Mapflow(QObject):
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
             self.iface.addCustomActionForLayer(self.add_layer_action, layer)
-        self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
-
-    def add_to_layers(self, layer=None, recompute_cost: bool = True, set_current: bool = True):
-        if not layer:
-            layer = self.iface.layerTreeView().currentLayer()
-        if layer not in self.app_context.aoi_layers:
-            self.app_context.aoi_layers.append(layer)
-            self.iface.addCustomActionForLayer(self.remove_layer_action, layer)
-        self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
-        # ``set_current=False`` for template AOI *display* layers added in bulk: they must not
-        # hijack the processing Area (the last one used to stick as the Area — feedback 8.1);
-        # the Area is driven by the AOI table selection instead.
-        if not set_current:
-            return
-        # When adding template AOI layers in bulk (recompute_cost=False), don't let each
-        # setLayer fire polygonCombo.layerChanged -> a cost request: no image is selected yet,
-        # and the user's click will compute the cost once afterwards.
-        self.dlg.polygonCombo.blockSignals(not recompute_cost)
-        self.dlg.polygonCombo.setLayer(layer)
-        self.dlg.polygonCombo.blockSignals(False)
-
-    def remove_from_layers(self, layer=None):
-        if not layer:
-            layer = self.iface.layerTreeView().currentLayer()
-        try:
-            self.app_context.aoi_layers.remove(layer)
-        except ValueError:
-            pass
-            # it can be easly already removed as I can't remove action from contextmenu of a single layer
-        self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
+        self.processing_controller.refresh_excepted_layers()
 
     def toggle_all_layers(self, state: bool):
-        self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
+        self.processing_controller.refresh_excepted_layers()
         self.app_context.settings.setValue('useAllVectorLayers', str(self.dlg.useAllVectorLayers.isChecked()))
 
     def refresh_status(self):
@@ -538,9 +527,10 @@ class Mapflow(QObject):
         self.add_layer_menu.addAction(self.use_imagery_extent)
         self.add_layer_menu.addAction(self.create_aoi_from_map_action)
         
-        self.draw_aoi.triggered.connect(self.create_editable_aoi_layer)
-        self.use_imagery_extent.triggered.connect(self.create_aoi_layer_from_imagery)
-        self.create_aoi_from_map_action.triggered.connect(self.create_aoi_layer_from_map)
+        self.draw_aoi.triggered.connect(self.processing_controller.draw_aoi)
+        self.use_imagery_extent.triggered.connect(self.processing_controller.create_aoi_from_imagery)
+        self.create_aoi_from_map_action.triggered.connect(
+            self.processing_controller.create_aoi_from_map_extent)
         self.dlg.addAoiButton.setMenu(self.add_layer_menu)
 
     def setup_options_menu_connections(self):
@@ -1074,7 +1064,7 @@ class Mapflow(QObject):
         # Template AOI layers are added in bulk on open; don't fire a cost request per layer,
         # and don't let them become the current processing Area (feedback 8.1) — the Area is
         # set from the AOI table selection (see sync_processing_area_to_selected_aois).
-        self.add_to_layers(aoi_layer, recompute_cost=False, set_current=False)
+        self.aoi_service.register_layer(aoi_layer, recompute_cost=False, set_current=False)
         return aoi_layer
 
     def _template_group_target(self,
@@ -1502,7 +1492,7 @@ class Mapflow(QObject):
         else:
             self.app_context.project.addMapLayer(layer)
         # Register it as an AOI layer so it is selectable in the combo (not excepted).
-        self.add_to_layers(layer, recompute_cost=False, set_current=False)
+        self.aoi_service.register_layer(layer, recompute_cost=False, set_current=False)
         self._selected_aois_layer_id = layer.id()
         return layer
 
@@ -1533,7 +1523,7 @@ class Mapflow(QObject):
         try:
             layer = self.app_context.project.mapLayer(layer_id)
             if layer is not None:
-                self.remove_from_layers(layer)
+                self.aoi_service.unregister_layer(layer)
             self.app_context.project.removeMapLayer(layer_id)
         except (RuntimeError, KeyError, AttributeError):
             pass
@@ -1552,73 +1542,6 @@ class Mapflow(QObject):
             self.dlg.processingsTable.scrollToItem(item)
             self.show_details()
             return
-
-    def create_aoi_layer_from_map(self, action: QAction):
-        aoi_geometry = helpers.to_wgs84(
-            QgsGeometry.fromRect(self.iface.mapCanvas().extent()),
-            self.app_context.project.crs()
-        )
-        aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326',
-                                   f'AOI_{self.aoi_layer_counter}',
-                                   'memory')
-        aoi = QgsFeature()
-        aoi.setGeometry(aoi_geometry)
-        aoi_layer.dataProvider().addFeatures([aoi])
-        aoi_layer.updateExtents()
-        aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
-        self.aoi_layer_counter += 1
-        self.result_loader.add_layer(aoi_layer)
-        self.add_to_layers(aoi_layer)
-        self.iface.setActiveLayer(aoi_layer)
-    
-    def create_aoi_layer_from_imagery(self, action: QAction):
-        image = self.data_catalog_service.selected_image()
-        mosaic = self.data_catalog_service.selected_mosaic()
-        if image:
-            aoi_geometry = QgsGeometry().fromWkt(image.footprint)
-        elif mosaic:
-            aoi_geometry = QgsGeometry().fromWkt(mosaic.footprint)
-        else:
-            self.dlg.disable_processing_start(reason=self.tr('Choose imagery collection or image to start processing'),
-                                              clear_area=True)
-            aoi_geometry = None
-            return
-        aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326',
-                                   f'AOI_{self.aoi_layer_counter}',
-                                   'memory')
-        aoi = QgsFeature()
-        aoi.setGeometry(aoi_geometry)
-        aoi_layer.dataProvider().addFeatures([aoi])
-        aoi_layer.updateExtents()
-        aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
-        self.aoi_layer_counter += 1
-        self.result_loader.add_layer(aoi_layer)
-        self.add_to_layers(aoi_layer)
-        self.iface.setActiveLayer(aoi_layer)
-
-    def create_editable_aoi_layer(self, action: QAction):
-        aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326',
-                                   f'AOI_{self.aoi_layer_counter}',
-                                   'memory')
-        aoi_layer.startEditing()
-        aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
-        self.aoi_layer_counter += 1
-        self.result_loader.add_layer(aoi_layer)
-        self.add_to_layers(aoi_layer)
-        self.iface.setActiveLayer(aoi_layer)
-        self.iface.actionAddFeature().trigger()
-
-    def filter_aoi_layers(self):
-        if self.dlg.useAllVectorLayers.isChecked():
-            # We exclude search metadata layers from AOI layers list because they are big, crowded
-            # and lead to topology errors
-            if self.app_context.search_provider:
-                return [layer for layer in self.app_context.project.mapLayers().values()
-                             if self.app_context.search_provider.name + ' metadata' == layer.name()]
-            else:
-                return []
-        else:
-            return [layer for layer in self.app_context.project.mapLayers().values() if layer not in self.app_context.aoi_layers]
 
     def on_options_change(self):
         wd_name = self.dlg.modelCombo.currentText()

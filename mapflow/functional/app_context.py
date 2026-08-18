@@ -42,8 +42,8 @@ class AppContext:
     # what is sent for processing/cost (matches the displayed area); falls back to `aoi`.
     processing_aoi: Optional[QgsGeometry] = None
     aoi_size: Optional[float] = None
-    aoi_layers: List[QgsVectorLayer] = field(default_factory=list)
-    
+    # The list of layers usable as an AOI lives on AoiService — nothing else reads it.
+
     # === User/Account State ===
     is_admin: bool = False
     logged_in: bool = False
