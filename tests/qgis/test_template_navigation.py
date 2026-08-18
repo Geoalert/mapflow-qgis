@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 from PyQt5.QtCore import QObject
 
-from mapflow.functional.controller.processing_controller import ProjectProcessingController
+from mapflow.functional.controller.project_processing_controller import ProjectProcessingController
 from mapflow.functional.service.processing_service import ProcessingService
 
 

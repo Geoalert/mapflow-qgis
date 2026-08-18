@@ -109,13 +109,13 @@ def test_missing_aoi_layer_leaves_the_area_untouched():
 def test_remove_selected_aois_layer_drops_it_from_project_and_aoi_layers():
     plugin = Mapflow.__new__(Mapflow)
     plugin._selected_aois_layer_id = "sel-1"
-    plugin.remove_from_layers = MagicMock()
+    plugin.aoi_service = MagicMock()
     plugin.app_context = SimpleNamespace(project=MagicMock())
     plugin.app_context.project.mapLayer.return_value = _layer("Selected AOIs")
 
     plugin._remove_selected_aois_layer()
 
-    plugin.remove_from_layers.assert_called_once()
+    plugin.aoi_service.unregister_layer.assert_called_once()
     plugin.app_context.project.removeMapLayer.assert_called_once_with("sel-1")
     assert plugin._selected_aois_layer_id is None
 
