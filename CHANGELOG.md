@@ -1,3 +1,6 @@
+## 3.6.1
+    - Fix: the area of an AOI layer with intersecting polygons (separate features, or parts of one multipolygon) was overstated — the shared area was counted once per polygon, inflating the Area shown, the price estimated from it and the area-limit checks. The overlap is now counted once, as the server counts it
+
 ## 3.6.0
     - Planned processings (search templates):
         - Create a Planned Search that runs in the background and keeps finding new imagery; you are notified when results are ready
