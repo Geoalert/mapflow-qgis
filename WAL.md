@@ -21,21 +21,9 @@ are the route there. Phases run in order; each step is one MR.
 
 ### Phase A — clear the ground
 
-Everything here is behaviour-preserving and verifiable by the current suite. Doing it first
-means the extraction MRs move less code and read as pure moves.
-
-[ready-for-review] Every broad exception handler must surface what it caught
-A handler catching `Exception` may stay broad only if it logs a traceback, re-raises, or tells
-the user; otherwise it names the exceptions it expects. 54 broad handlers on `dev`, 31 of them
-silent.
-Acceptance: `tests/functional/test_exception_reporting.py` passes with an allowlist holding
-only the deliberate boundary guards, and that allowlist only shrinks.
-The previous acceptance (`E722` out of the ledger, no bandit `B110`) was already met by
-`93a7d65` and could no longer fail. Width of the except clause was the wrong metric anyway: a
-broad handler that logs a traceback hides nothing, while `except ValueError: pass` hides
-plenty.
-Kept in Phase A rather than deferred with the other lint work: a handler that swallows
-everything hides a broken extraction, and Phase C moves code past these sites constantly.
+Landed: the layering test, `constants.py` merged into `config.py`, and the rule that a broad
+exception handler must surface what it caught (`tests/functional/test_exception_reporting.py`).
+Both allowlists only shrink from here.
 
 ### Phase B — a test surface that survives the move
 
@@ -50,7 +38,15 @@ leaf-first so each extraction depends only on what already moved.
 
 Service and controller boundaries are tabulated in `spec/007_architecture.md`.
 
-[ ] Extract AOI editing and AOI layers → `AoiService` + `ProcessingController` wiring
+[ ] Extract AOI editing and AOI layers → `AoiService` + `view/aoi_view.py` + `ProcessingController`
+Note on the split, decided when the step was planned: the AOI wiring spans two controller
+regions. The start-processing panel's AOI selection is `ProcessingController` (created by this
+step); the on-map edit sessions are template AOIs and belong to `TemplateController`, which the
+templates step below creates. The *logic* all moves now; the template-side connects stay in
+`mapflow.py` until that controller exists, which the spec permits — `mapflow.py` may hold
+wiring, not domain logic.
+`filter_search_by_selected_aoi` goes with `SearchService`, and the template AOI *display*
+layers (`_add_geojson_aoi_layer`, `on_template_aois_changed`) with `TemplateService`.
 [ ] Extract preview → `PreviewService`
 [ ] Extract imagery search → `SearchService` + `SearchController` + `view/search_view.py`
 [ ] Extract the local filter → `LocalFilterService` (pure computation; functional-tier tests)
