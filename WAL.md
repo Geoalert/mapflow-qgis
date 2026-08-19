@@ -52,6 +52,20 @@ layers (`_add_geojson_aoi_layer`, `on_template_aois_changed`) with `TemplateServ
 [ ] Extract the local filter → `LocalFilterService` (pure computation; functional-tier tests)
 [ ] Extract templates → `TemplateService` + `TemplateController` (largest domain, ~55 methods
     in `mapflow.py` plus the template half of `processing_service.py`)
+Decide here: `_template_group_target` is find-**or-create**, and that conflation is already
+leaking. `AoiService.select_aois_as_processing_area` has to take the group as a *callable*
+(`group_factory`) purely so the group is not materialised on every AOI selection change — a
+lambda whose only job is to defer a side effect, which is a smell pointing at the callee.
+Two ways out, to choose when this step rewrites the code anyway:
+- split it into a pure `find_template_group` and an explicit `ensure_template_group`, and pass
+  the found group (or None) eagerly; or
+- have `AoiService` emit the layer it built and let the template owner place it in the tree,
+  on the grounds that *where a layer sits in the layer tree* is a template concern, not AOI
+  geometry.
+The second is probably right but is the bigger change. Note the create-if-missing looks
+defensive rather than load-bearing: the template group already exists by the time a multi-AOI
+selection is possible, because opening the template draws its AOI display layers through the
+same function. Confirm that before removing it.
 [ ] Extract processing lifecycle: options, start, review, rating → existing processing service/controller
 [ ] Split auth from account status → `SessionService` + `AccountService`
 [ ] Reduce what remains of `mapflow.py` to initGui/unload, wiring and construction
@@ -232,15 +246,18 @@ whitespace diff would collide with every in-flight branch, including
 `feature/track-uploaded-image-status` (§3).
 Until then the ledger only shrinks — new and moved code adds nothing to it.
 
-[ ] Take `F401` out of the ledger — separately, and it can go first
+[ ] Take `F401` out of the ledger — after the Phase C/D moves have landed
 Not part of the whitespace bulk: **16 unused imports tree-wide**, not ~450, and unlike
 whitespace it is the one suppressed rule the extraction actively *creates* work for. Moving a
 method strands the imports it needed, and with `F401` suppressed nothing says so — the AOI
 extraction left nine (four in `mapflow.py`, five in `test_template_updates.py`), all found by
 hand.
-So each extraction currently has to grep the names it moved. Re-enabling `F401` replaces that
-with a check, and the one-off cost is small enough to pay whenever there is no extraction MR in
-flight to collide with.
+Scheduled after the moves rather than before (user's call): a whole-tree import cleanup while
+extraction MRs are in flight collides with all of them, and every extraction rewrites the import
+blocks it touches anyway, so doing it first would largely be redone.
+The cost of that ordering, stated so it is not a surprise: **until this lands, every extraction
+must grep the names it moved.** Lint cannot tell you. That is how the nine above were found, and
+it is the check to run before calling an extraction finished.
 
 ## 2. Add new zoom-selector feature
 [ ]

@@ -81,51 +81,6 @@ def test_update_search_params_prefers_active_template():
     assert plugin.processing_service.api.update_template.call_args.kwargs["template_id"] == "tpl-open"
 
 
-# ---------- Feature 2: saving an on-map session ----------
-#
-# The session itself is `AoiService` now (tests/qgis/test_aoi_service.py). What stays here is
-# the one part that cannot live in a service: a drawn AOI needs a name, and asking is a dialog.
-
-
-def _plugin_saving():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda t: t
-    plugin.aoi_service = MagicMock()
-    plugin.aoi_view = MagicMock()
-    return plugin
-
-
-def test_saving_a_drawn_aoi_prompts_for_a_name_and_passes_it_on():
-    plugin = _plugin_saving()
-    plugin.aoi_service.session_mode = "draw"
-    plugin.aoi_view.prompt_aoi_name.return_value = ("My AOI", True)
-
-    plugin.save_aoi_session()
-
-    plugin.aoi_service.save_session.assert_called_once_with("My AOI")
-
-
-def test_cancelling_the_name_prompt_keeps_the_session_open():
-    """Otherwise the drawing is lost the moment the user hesitates over the name."""
-    plugin = _plugin_saving()
-    plugin.aoi_service.session_mode = "draw"
-    plugin.aoi_view.prompt_aoi_name.return_value = ("", False)
-
-    plugin.save_aoi_session()
-
-    plugin.aoi_service.save_session.assert_not_called()
-
-
-def test_saving_an_edited_aoi_does_not_prompt():
-    plugin = _plugin_saving()
-    plugin.aoi_service.session_mode = "update"
-
-    plugin.save_aoi_session()
-
-    plugin.aoi_view.prompt_aoi_name.assert_not_called()
-    plugin.aoi_service.save_session.assert_called_once_with(None)
-
-
 # ---------- Feature 3: exclude from search ----------
 
 def _template_with(aois):

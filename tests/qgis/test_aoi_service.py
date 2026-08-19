@@ -184,13 +184,10 @@ def test_no_imagery_selected_builds_no_layer(service):
 # ---------- the on-map edit session ----------
 #
 # Moved here from tests/qgis/test_template_updates.py, where they drove
-# `Mapflow.__new__(Mapflow)`. One thing changed shape with the owner, and it is the layer rules
-# showing through rather than incidental: the service cannot open a dialog, so the drawn AOI's
-# name arrives as an argument. The prompt itself, and cancelling it, is
-# `Mapflow.save_aoi_session` and is tested there.
-#
-# Alerts did NOT change shape — AlertService owns the message tier and is a service, so it is
-# called directly. The `messages` fixture patches those calls; see its docstring.
+# `Mapflow.__new__(Mapflow)`. The behaviours are unchanged: the service still alerts and still
+# prompts for a name where it needs one, because both go through the message tier
+# (`alert_*`, `ask_text`), which owns the Qt types so its callers do not have to. The `messages`
+# and `prompt` fixtures patch those calls.
 
 
 def _polygon_layer(wkt="POLYGON((0 0,2 0,2 2,0 2,0 0))", name="aoi"):
@@ -286,7 +283,7 @@ def test_start_update_session_begins_when_layer_found(session_service):
 
     session_service.start_update_session()
 
-    assert session_service.session_mode == "update"
+    assert session_service._session["mode"] == "update"
     assert session_service._session["layer"] is layer
     # The panel must be told to get out of the way, and told what the user is now doing.
     assert len(started) == 1 and "A1" in started[0]
@@ -338,35 +335,61 @@ def test_selectable_layers_keeps_user_layers_hides_plugin_layers(session_service
 
 # --- draw ---
 
-def test_commit_draw_adds_with_the_given_name(session_service):
-    ok = session_service._commit_draw(_polygon_layer(), "My AOI")
+@pytest.fixture
+def prompt(monkeypatch):
+    """Stands in for the name prompt. `ask_text` belongs to the message tier (alongside
+    `alert_confirm`), so the service asks for the name where it uses it rather than being handed
+    one by a caller that can see a dialog."""
+    asked = MagicMock(return_value=("My AOI", True))
+    monkeypatch.setattr("mapflow.functional.service.aoi_service.ask_text", asked)
+    return asked
+
+
+def test_commit_draw_prompts_for_a_name_and_sends_it(session_service, prompt):
+    ok = session_service._commit_draw(_polygon_layer())
 
     assert ok is True
+    prompt.assert_called_once()
     data = session_service.processing_service.api.add_aois.call_args.kwargs["data"]
     assert data.aois[0].name == "My AOI"
 
 
-def test_commit_draw_noop_when_nothing_drawn(session_service, messages):
+def test_cancelling_the_name_prompt_keeps_the_session_open(session_service, prompt):
+    """Otherwise the drawing is lost the moment the user hesitates over the name."""
+    prompt.return_value = ("", False)
+
+    ok = session_service._commit_draw(_polygon_layer())
+
+    assert ok is False
+    session_service.processing_service.api.add_aois.assert_not_called()
+
+
+def test_commit_draw_noop_when_nothing_drawn(session_service, messages, prompt):
     empty = QgsVectorLayer("Polygon?crs=epsg:4326", "draw", "memory")
 
-    ok = session_service._commit_draw(empty, "My AOI")
+    ok = session_service._commit_draw(empty)
 
     assert ok is False
     session_service.processing_service.api.add_aois.assert_not_called()
     assert len(messages) == 1
+    prompt.assert_not_called()  # nothing to name
 
 
-def test_commit_draw_rejects_an_overlong_name(session_service, messages):
-    ok = session_service._commit_draw(_polygon_layer(), "x" * 200)
+def test_commit_draw_rejects_an_overlong_name(session_service, messages, prompt):
+    prompt.return_value = ("x" * 200, True)
+
+    ok = session_service._commit_draw(_polygon_layer())
 
     assert ok is False  # session stays open so the drawing is not lost
     session_service.processing_service.api.add_aois.assert_not_called()
     assert len(messages) == 1 and messages[0][1] == 'warning'
 
 
-def test_commit_draw_without_a_name_sends_none(session_service):
+def test_commit_draw_without_a_name_sends_none(session_service, prompt):
     """An empty prompt is not an empty name — the backend takes null."""
-    session_service._commit_draw(_polygon_layer(), "")
+    prompt.return_value = ("", True)
+
+    session_service._commit_draw(_polygon_layer())
 
     data = session_service.processing_service.api.add_aois.call_args.kwargs["data"]
     assert data.aois[0].name is None

@@ -11,7 +11,7 @@ from ..app_context import AppContext
 from ..geometry import geometry_from_geojson
 # Severity-named so the icon is chosen inside AlertService: picking a QMessageBox.Icon here
 # would mean importing QtWidgets, which a service may not do.
-from .alert_service import alert_info, alert_warning
+from .alert_service import alert_info, alert_warning, ask_text
 from ...schema.template import (AddAoisSchema,
                                 AddSingleAoiSchema,
                                 AOI_NAME_MAX_LENGTH,
@@ -25,9 +25,9 @@ class AoiService(QObject):
     things that would otherwise look roundabout:
 
     * anything the UI must do in response leaves as a signal, and a controller subscribes —
-      the service never calls a view. Messages to the user are the exception, and not really
-      one: `AlertService` owns the message tier (`spec/006_error_reporting.md`) and is itself a
-      service, so it is called directly like any other;
+      the service never calls a view. Talking *to* the user is not an exception to that:
+      `AlertService` owns the message tier (`spec/006_error_reporting.md`) and is itself a
+      service, so `alert_*` and `ask_text` are called directly like any other service;
     * inputs that live in a widget arrive as arguments. `excepted_layers` takes the
       "use all vector layers" flag rather than reading the checkbox, and the layer-creation
       methods return the layer instead of activating it, because making a layer active is an
@@ -312,12 +312,6 @@ class AoiService(QObject):
     def session_active(self) -> bool:
         return self._session is not None
 
-    @property
-    def session_mode(self) -> Optional[str]:
-        """``"draw"``, ``"update"``, or None. The controller reads it to decide whether saving
-        needs a name prompt — prompting is a dialog, so it cannot happen in here."""
-        return self._session["mode"] if self._session else None
-
     def selectable_layers(self) -> List[QgsVectorLayer]:
         """Polygon vector layers the user can add as AOIs.
 
@@ -441,17 +435,16 @@ class AoiService(QObject):
                 vertex_action().trigger()
         self.editSessionStarted.emit(message)
 
-    def save_session(self, name: Optional[str] = None) -> bool:
-        """Commit the session. ``name`` is the drawn AOI's name, collected by the controller
-        because asking for it is a dialog. Returns False to keep the session open so a
-        validation failure does not lose the user's drawing."""
+    def save_session(self) -> bool:
+        """Commit the session. Returns False to keep it open, so that neither a validation
+        failure nor a cancelled name prompt loses the user's drawing."""
         session = self._session
         if not session:
             return False
         if session["mode"] == "update":
             ok = self._commit_update(session["layer"], session["aoi"])
         else:
-            ok = self._commit_draw(session["layer"], name)
+            ok = self._commit_draw(session["layer"])
         if ok:
             self._end_session()
         return ok
@@ -517,9 +510,10 @@ class AoiService(QObject):
         )
         return True
 
-    def _commit_draw(self, layer: QgsVectorLayer, name: Optional[str]) -> bool:
-        """Add the drawn polygon(s) as AOI(s). Returns False if nothing was drawn or the name
-        is too long, so the session stays open and the drawing is not lost."""
+    def _commit_draw(self, layer: QgsVectorLayer) -> bool:
+        """Name the drawn polygon(s) and add them as AOI(s). Returns False if nothing was drawn,
+        the prompt was cancelled, or the name is too long — in every case the session stays open
+        and the drawing is not lost."""
         template = self.processing_service.active_template
         if not template:
             return False
@@ -528,6 +522,12 @@ class AoiService(QObject):
         features = self.features_from_layer(layer)
         if not features:
             alert_warning(self.tr("Draw at least one polygon before saving."))
+            return False
+        # Asked for here, where it is used, rather than upstream: `ask_text` belongs to the
+        # message tier, so wanting an answer from the user is not a reason to hand the flow to
+        # someone who can see a dialog. Same reasoning as `rename_aoi` prompting inline.
+        name, accepted = ask_text(self.tr("Name the AOI"), self.tr("AOI name:"))
+        if not accepted:
             return False
         name = (name or "").strip()
         if name and len(name) > AOI_NAME_MAX_LENGTH:
