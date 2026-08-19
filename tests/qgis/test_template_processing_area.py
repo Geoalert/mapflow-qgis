@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 
 from qgis.core import QgsVectorLayer
 
+from mapflow.functional.geometry import geometry_from_geojson
 from mapflow.mapflow import Mapflow
 
 
@@ -121,5 +122,5 @@ def test_remove_selected_aois_layer_drops_it_from_project_and_aoi_layers():
 
 
 def test_geometry_from_geojson_none_for_empty():
-    assert Mapflow._geometry_from_geojson(None) is None
-    assert Mapflow._geometry_from_geojson({}) is None
+    assert geometry_from_geojson(None) is None
+    assert geometry_from_geojson({}) is None

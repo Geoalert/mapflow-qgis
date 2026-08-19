@@ -10,6 +10,7 @@ import pytest
 from qgis.core import QgsVectorLayer, QgsFeature, QgsGeometry, QgsField
 from PyQt5.QtCore import QVariant
 
+from mapflow.functional.service.aoi_service import AoiService
 from mapflow.mapflow import Mapflow
 from mapflow.schema.template import AOI_NAME_MAX_LENGTH
 
@@ -32,11 +33,27 @@ def _layer_with(features, with_name_field=True):
     return layer
 
 
+def _aoi_service():
+    """A real service, not a mock: these tests assert the features it builds.
+
+    `_build_template_aoi_details` composes the FeatureCollection and owns the fallback to
+    `app_context.aoi`; turning a layer into named, exploded Polygon features is `AoiService`
+    (moved there with the AOI extraction). Both halves are exercised together here.
+    """
+    return AoiService(iface=MagicMock(),
+                      app_context=MagicMock(),
+                      plugin_dir="",
+                      result_loader=MagicMock(),
+                      data_catalog_service=MagicMock(),
+                      processing_service=MagicMock())
+
+
 def _plugin_with_layer(layer):
     plugin = Mapflow.__new__(Mapflow)
     plugin.tr = lambda text: text
     plugin.dlg = MagicMock()
     plugin.dlg.polygonCombo.currentLayer.return_value = layer
+    plugin.aoi_service = _aoi_service()
     return plugin
 
 
@@ -78,6 +95,7 @@ def test_no_layer_falls_back_to_aoi_as_one_unnamed_feature():
     plugin.tr = lambda text: text
     plugin.dlg = MagicMock()
     plugin.dlg.polygonCombo.currentLayer.return_value = None
+    plugin.aoi_service = _aoi_service()
     plugin.app_context = SimpleNamespace(aoi=QgsGeometry.fromWkt("POLYGON((0 0,0 1,1 1,1 0,0 0))"))
 
     fc = plugin._build_template_aoi_details()
@@ -92,6 +110,7 @@ def test_no_layer_no_aoi_returns_none():
     plugin.tr = lambda text: text
     plugin.dlg = MagicMock()
     plugin.dlg.polygonCombo.currentLayer.return_value = None
+    plugin.aoi_service = _aoi_service()
     plugin.app_context = SimpleNamespace(aoi=None)
 
     assert plugin._build_template_aoi_details() is None
@@ -130,6 +149,7 @@ def test_fallback_multipolygon_aoi_is_exploded():
     plugin.tr = lambda text: text
     plugin.dlg = MagicMock()
     plugin.dlg.polygonCombo.currentLayer.return_value = None
+    plugin.aoi_service = _aoi_service()
     plugin.app_context = SimpleNamespace(
         aoi=QgsGeometry.fromWkt(
             "MULTIPOLYGON(((0 0,0 1,1 1,1 0,0 0)),((2 2,2 3,3 3,3 2,2 2)))"
