@@ -300,7 +300,7 @@ class Mapflow(QObject):
         # not domain logic).
         self.aoi_service.editSessionStarted.connect(self.aoi_view.enter_edit_session)
         self.aoi_service.editSessionEnded.connect(self.aoi_view.leave_edit_session)
-        self.aoi_view.saveRequested.connect(self.save_aoi_session)
+        self.aoi_view.saveRequested.connect(self.aoi_service.save_session)
         self.aoi_view.cancelRequested.connect(self.aoi_service.cancel_session)
         self.processing_controller = ProcessingController(
             iface=self.iface,
@@ -1158,17 +1158,6 @@ class Mapflow(QObject):
         if not selected_ids:
             return
         self.aoi_service.add_aois_from_layers(selected_ids)
-
-    def save_aoi_session(self):
-        """Save AOI on the edit bar. A drawn AOI needs a name, and asking is a dialog, so the
-        prompt happens here and the answer goes into the service."""
-        if self.aoi_service.session_mode == "draw":
-            name, ok = self.aoi_view.prompt_aoi_name()
-            if not ok:
-                return  # keep the session open so the drawing is not lost
-        else:
-            name = None
-        self.aoi_service.save_session(name)
 
     def filter_search_by_selected_aoi(self):
         """S7: inside a template, selecting one or more AOIs filters the imagery-search

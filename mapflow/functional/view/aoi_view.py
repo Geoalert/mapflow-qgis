@@ -1,7 +1,7 @@
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 from PyQt5.QtCore import QObject, pyqtSignal
-from PyQt5.QtWidgets import (QHBoxLayout, QInputDialog, QLabel, QPushButton, QWidget)
+from PyQt5.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 from qgis.core import Qgis, QgsMapLayer, QgsVectorLayer
 
 from ...dialogs.main_dialog import MainDialog
@@ -83,12 +83,6 @@ class AoiView(QObject):
                 pass
             self._edit_bar_item = None
         self.dlg.show()
-
-    def prompt_aoi_name(self) -> Tuple[str, bool]:
-        """Ask for the drawn AOI's name. The bool is False when the user cancelled, which keeps
-        the session open so the drawing is not lost."""
-        return QInputDialog.getText(self.iface.mainWindow(),
-                                    self.tr("Name the AOI"), self.tr("AOI name:"))
 
     def pick_aoi_layers(self, layers: List[QgsVectorLayer]) -> Optional[List[str]]:
         """Multi-select dialog over ``layers``. None when the user cancelled."""
