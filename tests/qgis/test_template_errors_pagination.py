@@ -69,6 +69,7 @@ def test_on_template_closed_resets_search_pagination():
     plugin.search_page_offset = 60
     plugin.dlg = MagicMock()
     plugin._remove_template_group = MagicMock()
+    plugin.aoi_service = MagicMock()
 
     plugin.on_template_closed(None)
 
