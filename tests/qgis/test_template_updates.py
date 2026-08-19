@@ -7,9 +7,7 @@
 import json
 from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
-
-from qgis.core import QgsVectorLayer, QgsFeature, QgsGeometry, QgsProject
+from unittest.mock import MagicMock
 
 from mapflow.functional.geometry import geometry_from_geojson
 from mapflow.mapflow import Mapflow

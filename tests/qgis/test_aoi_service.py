@@ -184,13 +184,13 @@ def test_no_imagery_selected_builds_no_layer(service):
 # ---------- the on-map edit session ----------
 #
 # Moved here from tests/qgis/test_template_updates.py, where they drove
-# `Mapflow.__new__(Mapflow)`. Two things changed shape with the owner, and both are the layer
-# rules showing through rather than incidental:
+# `Mapflow.__new__(Mapflow)`. One thing changed shape with the owner, and it is the layer rules
+# showing through rather than incidental: the service cannot open a dialog, so the drawn AOI's
+# name arrives as an argument. The prompt itself, and cancelling it, is
+# `Mapflow.save_aoi_session` and is tested there.
 #
-# * the service cannot alert, so what used to assert `plugin.alert` now asserts the
-#   `userMessage` signal;
-# * the service cannot prompt, so the drawn AOI's name arrives as an argument. The prompt
-#   itself, and cancelling it, is `Mapflow.save_aoi_session` and is tested there.
+# Alerts did NOT change shape — AlertService owns the message tier and is a service, so it is
+# called directly. The `messages` fixture patches those calls; see its docstring.
 
 
 def _polygon_layer(wkt="POLYGON((0 0,2 0,2 2,0 2,0 0))", name="aoi"):
@@ -216,10 +216,18 @@ def session_service(service):
 
 
 @pytest.fixture
-def messages(session_service):
-    """Everything the service asked to be shown, as (text, is_warning)."""
+def messages(monkeypatch):
+    """Everything the service asked AlertService to show, as (text, severity).
+
+    Patched rather than connected: the service calls `alert_info`/`alert_warning` directly
+    (AlertService owns the message tier and is a service, so service->service is the normal
+    route), and those go through a process-global singleton that no unit test should raise.
+    """
     collected = []
-    session_service.userMessage.connect(lambda text, warn: collected.append((text, warn)))
+    for name in ("alert_info", "alert_warning"):
+        monkeypatch.setattr(
+            f"mapflow.functional.service.aoi_service.{name}",
+            lambda text, severity=name.removeprefix("alert_"): collected.append((text, severity)))
     return collected
 
 
@@ -244,7 +252,7 @@ def test_commit_update_rejects_empty_geometry(session_service, messages):
 
     assert ok is False
     session_service.processing_service.api.update_aoi.assert_not_called()
-    assert len(messages) == 1 and messages[0][1] is True
+    assert len(messages) == 1 and messages[0][1] == 'warning'
 
 
 def test_start_update_session_rejects_aoi_without_id(session_service, messages):
@@ -265,7 +273,7 @@ def test_start_update_session_needs_the_aoi_layer_on_map(session_service, messag
     session_service.start_update_session()
 
     assert session_service.session_active is False
-    assert len(messages) == 1 and messages[0][1] is True
+    assert len(messages) == 1 and messages[0][1] == 'warning'
 
 
 def test_start_update_session_begins_when_layer_found(session_service):
@@ -353,7 +361,7 @@ def test_commit_draw_rejects_an_overlong_name(session_service, messages):
 
     assert ok is False  # session stays open so the drawing is not lost
     session_service.processing_service.api.add_aois.assert_not_called()
-    assert len(messages) == 1 and messages[0][1] is True
+    assert len(messages) == 1 and messages[0][1] == 'warning'
 
 
 def test_commit_draw_without_a_name_sends_none(session_service):

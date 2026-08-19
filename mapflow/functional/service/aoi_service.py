@@ -9,6 +9,9 @@ from .. import helpers
 from .. import layer_utils
 from ..app_context import AppContext
 from ..geometry import geometry_from_geojson
+# Severity-named so the icon is chosen inside AlertService: picking a QMessageBox.Icon here
+# would mean importing QtWidgets, which a service may not do.
+from .alert_service import alert_info, alert_warning
 from ...schema.template import (AddAoisSchema,
                                 AddSingleAoiSchema,
                                 AOI_NAME_MAX_LENGTH,
@@ -22,7 +25,9 @@ class AoiService(QObject):
     things that would otherwise look roundabout:
 
     * anything the UI must do in response leaves as a signal, and a controller subscribes —
-      the service never calls a view;
+      the service never calls a view. Messages to the user are the exception, and not really
+      one: `AlertService` owns the message tier (`spec/006_error_reporting.md`) and is itself a
+      service, so it is called directly like any other;
     * inputs that live in a widget arrive as arguments. `excepted_layers` takes the
       "use all vector layers" flag rather than reading the checkbox, and the layer-creation
       methods return the layer instead of activating it, because making a layer active is an
@@ -43,10 +48,6 @@ class AoiService(QObject):
     editSessionStarted = pyqtSignal(str)
     #: The session ended, by save or cancel. Restore the panel and drop the bar.
     editSessionEnded = pyqtSignal()
-    #: Something to tell the user: the text, and True when it is a warning rather than a note.
-    #: A service may not import QtWidgets (`spec/007_architecture.md` § Layer rules), so the
-    #: severity travels as a bool and the controller picks the QMessageBox icon.
-    userMessage = pyqtSignal(str, bool)
 
     def __init__(self,
                  iface,
@@ -379,11 +380,10 @@ class AoiService(QObject):
                 if layer is not None:
                     features.extend(self.features_from_layer(layer))
         except ValueError as e:  # a name exceeded the limit
-            self.userMessage.emit(str(e), True)
+            alert_warning(str(e))
             return
         if not features:
-            self.userMessage.emit(
-                self.tr("The selected layer(s) have no polygon features to add."), True)
+            alert_warning(self.tr("The selected layer(s) have no polygon features to add."))
             return
         self._post_aois(template, features, name=None)
 
@@ -396,13 +396,13 @@ class AoiService(QObject):
         if not aoi or not template:
             return
         if not aoi.can_rename:  # a persisted AOI id is required to update it
-            self.userMessage.emit(self.tr("This AOI has no id yet and cannot be updated. "
-                                          "Reopen the template and try again."), False)
+            alert_info(self.tr("This AOI has no id yet and cannot be updated. "
+                               "Reopen the template and try again."))
             return
         layer = self.find_layer_for_aoi(aoi.id)
         if layer is None:
-            self.userMessage.emit(self.tr("Could not find this AOI's layer on the map. "
-                                          "Reopen the template and try again."), True)
+            alert_warning(self.tr("Could not find this AOI's layer on the map. "
+                                  "Reopen the template and try again."))
             return
         self._begin_session(
             mode="update", layer=layer, aoi=aoi, is_temp=False, tool="vertex",
@@ -498,14 +498,13 @@ class AoiService(QObject):
             return False
         feats = [f for f in layer.getFeatures() if f.geometry() and not f.geometry().isEmpty()]
         if not feats:
-            self.userMessage.emit(
-                self.tr("The AOI has no geometry — draw or keep at least one polygon."), True)
+            alert_warning(self.tr("The AOI has no geometry — draw or keep at least one polygon."))
             return False
         geom = (feats[0].geometry() if len(feats) == 1
                 else QgsGeometry.collectGeometry([f.geometry() for f in feats]))
         wgs = helpers.to_wgs84(QgsGeometry(geom), layer.crs())
         if wgs is None or wgs.isEmpty():
-            self.userMessage.emit(self.tr("The edited AOI has no valid geometry."), True)
+            alert_warning(self.tr("The edited AOI has no valid geometry."))
             return False
         if layer.isEditable():
             layer.commitChanges()  # reflect the edit on the map until the server refresh arrives
@@ -528,12 +527,12 @@ class AoiService(QObject):
             layer.commitChanges()  # move drawn features from the edit buffer into the provider
         features = self.features_from_layer(layer)
         if not features:
-            self.userMessage.emit(self.tr("Draw at least one polygon before saving."), True)
+            alert_warning(self.tr("Draw at least one polygon before saving."))
             return False
         name = (name or "").strip()
         if name and len(name) > AOI_NAME_MAX_LENGTH:
-            self.userMessage.emit(self.tr("AOI name must not exceed {limit} characters.").format(
-                limit=AOI_NAME_MAX_LENGTH), True)
+            alert_warning(self.tr("AOI name must not exceed {limit} characters.").format(
+                limit=AOI_NAME_MAX_LENGTH))
             return False
         self._post_aois(template, features, name or None)
         return True

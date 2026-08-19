@@ -232,6 +232,16 @@ whitespace diff would collide with every in-flight branch, including
 `feature/track-uploaded-image-status` (§3).
 Until then the ledger only shrinks — new and moved code adds nothing to it.
 
+[ ] Take `F401` out of the ledger — separately, and it can go first
+Not part of the whitespace bulk: **16 unused imports tree-wide**, not ~450, and unlike
+whitespace it is the one suppressed rule the extraction actively *creates* work for. Moving a
+method strands the imports it needed, and with `F401` suppressed nothing says so — the AOI
+extraction left nine (four in `mapflow.py`, five in `test_template_updates.py`), all found by
+hand.
+So each extraction currently has to grep the names it moved. Re-enabling `F401` replaces that
+with a check, and the one-off cost is small enough to pay whenever there is no extraction MR in
+flight to collide with.
+
 ## 2. Add new zoom-selector feature
 [ ]
 - Use 002_E_zoom_selector_api.md
