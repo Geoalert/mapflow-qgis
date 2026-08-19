@@ -38,7 +38,7 @@ leaf-first so each extraction depends only on what already moved.
 
 Service and controller boundaries are tabulated in `spec/007_architecture.md`.
 
-[ ] Extract AOI editing and AOI layers → `AoiService` + `view/aoi_view.py` + `ProcessingController`
+[ready-for-review] Extract AOI editing and AOI layers → `AoiService` + `view/aoi_view.py` + `ProcessingController`
 Note on the split, decided when the step was planned: the AOI wiring spans two controller
 regions. The start-processing panel's AOI selection is `ProcessingController` (created by this
 step); the on-map edit sessions are template AOIs and belong to `TemplateController`, which the

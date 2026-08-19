@@ -108,11 +108,6 @@ class Mapflow(QObject):
     _search_sort_order = "DESC"
     # Cached widen-warning messages backing the (!) indicator's click handler.
     _widen_details = None
-    # The AOI ids the processing Area is currently derived from, so a repeated selection signal
-    # doesn't rebuild it. ``_selected_aois_layer_id`` is the visible "Selected AOIs" layer built
-    # for a MULTI-AOI selection (a single selection uses that AOI's own layer).
-    _processing_area_aoi_filter = None
-    _selected_aois_layer_id = None
     # Id of the currently shown mosaic-preview boundary layer, so it can be removed when the
     # next preview is shown (its name varies by acquisition date, so name-match alone misses it).
     _mosaic_preview_footprint_id = None
@@ -1210,70 +1205,13 @@ class Mapflow(QObject):
         is selected, keeping the current Area (e.g. while a processing row is selected)."""
         if not self.processing_service.in_template_mode:
             return
-        aois = [aoi for aoi in self.processing_service.selected_aois() if aoi and aoi.id]
-        selected_ids = frozenset(str(aoi.id) for aoi in aois)
-        # Selection signals fire often; only rebuild when the set actually changes.
-        if selected_ids == (self._processing_area_aoi_filter or frozenset()):
-            return
-        layer = self._layer_for_selected_aois(aois)
-        if layer is None:
-            return
-        self._processing_area_aoi_filter = selected_ids or None
-        # layerChanged -> calculate_aoi_area_polygon_layer recomputes Area/cost from this layer.
-        self.dlg.polygonCombo.setLayer(layer)
-
-    def _layer_for_selected_aois(self, aois) -> Optional[QgsVectorLayer]:
-        """The layer the Area combo should show for the current AOI selection."""
-        if not aois:
-            return None
-        if len(aois) == 1:
-            return self._find_aoi_layer(aois[0].id)
-        geometries = [geom for geom in
-                      (geometry_from_geojson(getattr(aoi, "geometry", None)) for aoi in aois)
-                      if geom is not None]
-        return self._rebuild_selected_aois_layer(geometries) if geometries else None
-
-    def _rebuild_selected_aois_layer(self, geometries: List[QgsGeometry]) -> QgsVectorLayer:
-        """(Re)build the visible "Selected AOIs" layer in the template group — one feature per
-        selected AOI, so a processing covers exactly them and the per-processing AOI limit still
-        applies. Visible on the map and in the tree (unlike the old hidden 'Selected AOI')."""
-        self._remove_selected_aois_layer()
-        layer = QgsVectorLayer('Polygon?crs=epsg:4326', self.tr('Selected AOIs'), 'memory')
-        features = []
-        for geom in geometries:
-            feature = QgsFeature()
-            feature.setGeometry(geom)
-            features.append(feature)
-        layer.dataProvider().addFeatures(features)
-        layer.updateExtents()
-        layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
         template = self.processing_service.active_template
-        group = self._template_group_target(str(template.name)) if template else None
-        if group is not None:
-            self.app_context.project.addMapLayer(layer, addToLegend=False)
-            group.insertLayer(0, layer)
-        else:
-            self.app_context.project.addMapLayer(layer)
-        # Register it as an AOI layer so it is selectable in the combo (not excepted).
-        self.aoi_service.register_layer(layer, recompute_cost=False, set_current=False)
-        self._selected_aois_layer_id = layer.id()
-        return layer
-
-    def _remove_selected_aois_layer(self):
-        """Drop the multi-selection "Selected AOIs" layer (on a new selection or on leaving the
-        template). Single-AOI selections point at the AOI's own layer, so there is nothing to
-        clean up for them."""
-        layer_id = self._selected_aois_layer_id
-        self._selected_aois_layer_id = None
-        if not layer_id:
-            return
-        try:
-            layer = self.app_context.project.mapLayer(layer_id)
-            if layer is not None:
-                self.aoi_service.unregister_layer(layer)
-            self.app_context.project.removeMapLayer(layer_id)
-        except (RuntimeError, KeyError, AttributeError):
-            pass
+        self.aoi_service.select_aois_as_processing_area(
+            self.processing_service.selected_aois(),
+            # Lazy: resolving the group creates it when missing, and this runs on every
+            # selection change. Only a multi-AOI selection actually needs it.
+            group_factory=(lambda: self._template_group_target(str(template.name))
+                           if template else None))
 
     def select_processing_in_table(self, processing_id: str):
         """Select processing row by ID and open processing details."""
@@ -3467,8 +3405,7 @@ class Mapflow(QObject):
         self.dlg.searchWidenWarning.setVisible(False)
         self.dlg.updateTemplateSearch.setVisible(False)
         # Drop the AOI-selection processing Area so it doesn't leak to the project view.
-        self._remove_selected_aois_layer()
-        self._processing_area_aoi_filter = None
+        self.aoi_service.clear_processing_area_selection()
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
         # Clear the template search-results pagination so it is not preserved on re-open.
