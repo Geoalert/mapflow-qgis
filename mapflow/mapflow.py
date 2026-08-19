@@ -16,11 +16,11 @@ from PyQt5.QtCore import (
 from PyQt5.QtGui import QBrush, QColor, QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
 from PyQt5.QtWidgets import (
-    QAbstractItemView, QAction, QApplication, QFileDialog, QHBoxLayout,
-    QInputDialog, QLabel, QMenu, QMessageBox, QPushButton, QWidget, QToolButton
+    QAbstractItemView, QAction, QApplication, QFileDialog,
+    QMenu, QMessageBox, QPushButton, QWidget, QToolButton
 )
 from qgis.core import (
-    Qgis, QgsCoordinateReferenceSystem, QgsDistanceArea, QgsFeature, QgsGeometry,
+    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsFeature, QgsGeometry,
     QgsLayerTreeGroup, QgsLayerTreeLayer, QgsMapLayer, QgsMapLayerType,
     QgsProject, QgsRasterLayer, QgsRectangle, QgsVectorLayer
 )
@@ -300,7 +300,6 @@ class Mapflow(QObject):
         # not domain logic).
         self.aoi_service.editSessionStarted.connect(self.aoi_view.enter_edit_session)
         self.aoi_service.editSessionEnded.connect(self.aoi_view.leave_edit_session)
-        self.aoi_service.userMessage.connect(self._alert_aoi_message)
         self.aoi_view.saveRequested.connect(self.save_aoi_session)
         self.aoi_view.cancelRequested.connect(self.aoi_service.cancel_session)
         self.processing_controller = ProcessingController(
@@ -1146,11 +1145,6 @@ class Mapflow(QObject):
         self._load_template_search(template, aoi_ids=aoi_ids, offset=offset)
 
     # ==================== AOI edit/draw/add sessions ==================== #
-    def _alert_aoi_message(self, text: str, is_warning: bool) -> None:
-        """`AoiService.userMessage` -> the message tier. The service cannot pick a QMessageBox
-        icon (it may not import QtWidgets), so the severity arrives as a bool."""
-        self.alert(text, QMessageBox.Warning if is_warning else QMessageBox.Information)
-
     def add_aoi_from_layer_dialog(self):
         """Add AOI(s) from existing polygon layer(s) chosen in a multi-select dialog."""
         if not self.processing_service.active_template or self.aoi_service.session_active:
