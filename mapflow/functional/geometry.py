@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import List
+from typing import List, Optional
 
 from osgeo import ogr
 from qgis import processing as qgis_processing  # to avoid collisions
@@ -26,6 +26,27 @@ def make_distance_calculator() -> QgsDistanceArea:
     calculator.setEllipsoid("WGS84")
     calculator.setSourceCrs(wgs84, QgsProject.instance().transformContext())
     return calculator
+
+
+def geometry_from_geojson(geom_dict) -> Optional[QgsGeometry]:
+    """Build a QgsGeometry from a GeoJSON geometry mapping (as carried in ``aoiDetails``).
+
+    Lives here rather than on `AoiService` because template code converts AOI geometries too,
+    and a pure GeoJSON→geometry conversion is not a reason for the template view to depend on
+    the AOI service.
+    """
+    if not geom_dict:
+        return None
+    try:
+        ogr_geom = ogr.CreateGeometryFromJson(json.dumps(geom_dict))
+    except (TypeError, ValueError, RuntimeError):
+        # json.dumps rejects a non-serializable mapping (TypeError/ValueError); ogr raises
+        # RuntimeError on malformed GeoJSON when GDAL exceptions are enabled.
+        return None
+    if not ogr_geom:
+        return None
+    geom = QgsGeometry.fromWkt(ogr_geom.ExportToWkt())
+    return geom if not geom.isEmpty() else None
 
 
 def geojson_feature_area_sqkm(feature: dict, calculator: QgsDistanceArea) -> float:
