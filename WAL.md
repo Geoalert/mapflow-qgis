@@ -38,34 +38,24 @@ leaf-first so each extraction depends only on what already moved.
 
 Service and controller boundaries are tabulated in `spec/007_architecture.md`.
 
-[ready-for-review] Extract AOI editing and AOI layers → `AoiService` + `view/aoi_view.py` + `ProcessingController`
-Note on the split, decided when the step was planned: the AOI wiring spans two controller
-regions. The start-processing panel's AOI selection is `ProcessingController` (created by this
-step); the on-map edit sessions are template AOIs and belong to `TemplateController`, which the
-templates step below creates. The *logic* all moves now; the template-side connects stay in
-`mapflow.py` until that controller exists, which the spec permits — `mapflow.py` may hold
-wiring, not domain logic.
-`filter_search_by_selected_aoi` goes with `SearchService`, and the template AOI *display*
-layers (`_add_geojson_aoi_layer`, `on_template_aois_changed`) with `TemplateService`.
-[ ] Extract preview → `PreviewService`
+[ready-for-review] Extract preview → `PreviewService`
+Boundary: preview *layers on the map*. That includes the My Imagery map-layer previews
+(`mosaic_preview`, `get_image_preview_l`) but not `get_image_preview_s`, which paints a QImage
+into a panel widget — a thumbnail, not a layer, so it stays with the catalog.
+`ResultsLoader`'s preview helpers stay in `layer_utils` and are called from the service; Phase D
+moves that module wholesale, so moving them now would churn a file that step rewrites.
+Search-tab widget reads stay in `mapflow.py` until the next step creates `view/search_view.py`.
+Also splits `_template_group_target` into a pure `find` and an explicit `ensure` — see the
+templates step, which was carrying that decision until preview became its second caller.
 [ ] Extract imagery search → `SearchService` + `SearchController` + `view/search_view.py`
 [ ] Extract the local filter → `LocalFilterService` (pure computation; functional-tier tests)
 [ ] Extract templates → `TemplateService` + `TemplateController` (largest domain, ~55 methods
     in `mapflow.py` plus the template half of `processing_service.py`)
-Decide here: `_template_group_target` is find-**or-create**, and that conflation is already
-leaking. `AoiService.select_aois_as_processing_area` has to take the group as a *callable*
-(`group_factory`) purely so the group is not materialised on every AOI selection change — a
-lambda whose only job is to defer a side effect, which is a smell pointing at the callee.
-Two ways out, to choose when this step rewrites the code anyway:
-- split it into a pure `find_template_group` and an explicit `ensure_template_group`, and pass
-  the found group (or None) eagerly; or
-- have `AoiService` emit the layer it built and let the template owner place it in the tree,
-  on the grounds that *where a layer sits in the layer tree* is a template concern, not AOI
-  geometry.
-The second is probably right but is the bigger change. Note the create-if-missing looks
-defensive rather than load-bearing: the template group already exists by the time a multi-AOI
-selection is possible, because opening the template draws its AOI display layers through the
-same function. Confirm that before removing it.
+Still open here: whether placing a layer in the template's group belongs to the service that
+built the layer at all. `AoiService` and `PreviewService` both reach for the template group
+today; the alternative is that they emit the layer and the template owner places it, on the
+grounds that *where a layer sits in the layer tree* is a template concern. The find/ensure split
+(preview step) removed the pressure to decide, not the question.
 [ ] Extract processing lifecycle: options, start, review, rating → existing processing service/controller
 [ ] Split auth from account status → `SessionService` + `AccountService`
 [ ] Reduce what remains of `mapflow.py` to initGui/unload, wiring and construction
