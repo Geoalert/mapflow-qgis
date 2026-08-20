@@ -787,7 +787,7 @@ class Mapflow(QObject):
         # the AOI-area monitor (which reacts to layersAdded) recognizes and skips it.
         self.app_context.metadata_layer = layer
         if template_group_name:
-            target_group = self._template_group_target(template_group_name)
+            target_group = self._ensure_template_group(template_group_name)
             self.app_context.project.addMapLayer(layer, addToLegend=False)
             # Append (bottom) so the search-results footprints sit below the AOI/processing
             # subgroups rather than on top of them.
@@ -904,7 +904,7 @@ class Mapflow(QObject):
         single-clicks its row (see on_no_aoi_processing_clicked) — no bulk requests on open."""
         if not template or not self.processing_service.no_aoi_processing_ids():
             return
-        self._template_group_target(str(template.name), self._no_aoi_subgroup_name())
+        self._ensure_template_group(str(template.name), self._no_aoi_subgroup_name())
 
     def on_no_aoi_processing_clicked(self, *args) -> None:
         """Single-click on a 'No AOI' processing row: fetch that processing's AOI and add it to the
@@ -982,7 +982,7 @@ class Mapflow(QObject):
         if not layer or not service.in_template_mode or not service.active_template:
             return
         try:
-            template_group = self._template_group_target(str(service.active_template.name))
+            template_group = self._find_template_group(str(service.active_template.name))
             root = self.app_context.project.layerTreeRoot()
             node = root.findLayer(layer.id())
             if node is None or template_group is None:
@@ -1043,7 +1043,7 @@ class Mapflow(QObject):
 
         root = self.app_context.project.layerTreeRoot()
         if template_group_name:
-            target_group = self._template_group_target(template_group_name, subgroup_name)
+            target_group = self._ensure_template_group(template_group_name, subgroup_name)
             self.app_context.project.addMapLayer(aoi_layer, addToLegend=False)
             target_group.insertLayer(0, aoi_layer)
         elif reference_layer_id:
@@ -1064,11 +1064,32 @@ class Mapflow(QObject):
         self.aoi_service.register_layer(aoi_layer, recompute_cost=False, set_current=False)
         return aoi_layer
 
-    def _template_group_target(self,
+    def _find_template_group(self,
+                             template_group_name: str,
+                             subgroup_name: Optional[str] = None):
+        """The ``Mapflow > <template name> [> <subgroup>]`` layer-tree group, or None.
+
+        Creates nothing. Callers that only need to *place* a layer next to the template's other
+        layers use this: they run on selection changes and preview clicks, and a lookup that
+        materialises a group as a side effect cannot be called on a path like that without a
+        lambda to defer it.
+        """
+        root = self.app_context.project.layerTreeRoot()
+        mapflow_group_name = self.app_context.settings.value('layerGroup') or self.app_context.plugin_name
+        parent_group = root.findGroup(mapflow_group_name) or root
+        template_group = parent_group.findGroup(template_group_name)
+        if template_group is None or not subgroup_name:
+            return template_group
+        return template_group.findGroup(subgroup_name)
+
+    def _ensure_template_group(self,
                                template_group_name: str,
                                subgroup_name: Optional[str] = None):
-        """Find or create the ``Mapflow > <template name> [> <subgroup>]`` layer-tree group
-        and return the node new layers should be inserted into.
+        """Find or create that group, and return the node new layers should be inserted into.
+
+        For the callers that are *adding* the template's layers, and so legitimately bring the
+        group into being. Everything that merely places an already-built layer wants
+        ``_find_template_group`` instead.
 
         The Mapflow group is created here when missing so the template group is nested under it
         from the very first (template-open) call. Previously the open path fell back to the root
@@ -1191,10 +1212,7 @@ class Mapflow(QObject):
         template = self.processing_service.active_template
         self.aoi_service.select_aois_as_processing_area(
             self.processing_service.selected_aois(),
-            # Lazy: resolving the group creates it when missing, and this runs on every
-            # selection change. Only a multi-AOI selection actually needs it.
-            group_factory=(lambda: self._template_group_target(str(template.name))
-                           if template else None))
+            self._find_template_group(str(template.name)) if template else None)
 
     def select_processing_in_table(self, processing_id: str):
         """Select processing row by ID and open processing details."""

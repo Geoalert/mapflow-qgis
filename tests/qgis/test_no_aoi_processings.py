@@ -108,13 +108,13 @@ def test_processings_loaded_creates_no_aoi_group_only_when_unbound_exist():
     plugin = Mapflow.__new__(Mapflow)
     plugin.tr = lambda text: text
     plugin.processing_service = MagicMock()
-    plugin._template_group_target = MagicMock()
+    plugin._ensure_template_group = MagicMock()
 
     plugin.processing_service.no_aoi_processing_ids.return_value = {"p2"}
     plugin.on_template_processings_loaded(SimpleNamespace(name="T"))
-    plugin._template_group_target.assert_called_once_with("T", "No AOI")
+    plugin._ensure_template_group.assert_called_once_with("T", "No AOI")
 
-    plugin._template_group_target.reset_mock()
+    plugin._ensure_template_group.reset_mock()
     plugin.processing_service.no_aoi_processing_ids.return_value = set()
     plugin.on_template_processings_loaded(SimpleNamespace(name="T"))
-    plugin._template_group_target.assert_not_called()
+    plugin._ensure_template_group.assert_not_called()

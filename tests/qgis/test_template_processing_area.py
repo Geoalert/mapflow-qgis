@@ -106,14 +106,14 @@ def test_missing_aoi_layer_leaves_the_area_untouched(service, area_layers):
     assert service._processing_area_filter is None
 
 
-def test_the_group_is_only_resolved_for_a_multi_selection(service):
-    """Resolving the template group *creates* it when missing, and this runs on every selection
-    change — so a single-AOI selection must not touch it."""
-    group_factory = MagicMock(return_value=None)
+def test_a_single_selection_does_not_touch_the_template_group(service, area_layers):
+    """A single AOI uses its own layer, so nothing is built and nothing is placed. The group is
+    resolved by the caller now (`Mapflow._find_template_group`, which creates nothing), so this
+    no longer needs to assert on how it was passed — only that no layer is built for it."""
+    service.select_aois_as_processing_area([_aoi("a1", _square(0, 0))], group=None)
 
-    service.select_aois_as_processing_area([_aoi("a1", _square(0, 0))], group_factory)
-
-    group_factory.assert_not_called()
+    service.rebuild_selected_aois_layer.assert_not_called()
+    assert area_layers == [service.find_layer_for_aoi.return_value]
 
 
 def test_removing_the_selected_aois_layer_drops_it_from_the_project_and_the_registry(service):
