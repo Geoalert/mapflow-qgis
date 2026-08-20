@@ -110,23 +110,51 @@ def is_polygon_layer(layer: QgsMapLayer) -> bool:
     return layer.type() == QgsMapLayerType.VectorLayer and layer.geometryType() == QgsWkbTypes.PolygonGeometry
 
 
+def _unusable(geometry: Optional[QgsGeometry]) -> bool:
+    """A geometry GEOS handed back after giving up — null or empty."""
+    return geometry is None or geometry.isNull() or geometry.isEmpty()
+
+
+def _repaired_parts(aoi: QgsGeometry) -> List[QgsGeometry]:
+    """The AOI's parts, each made valid **on its own**.
+
+    Repairing part by part is not a detail: ``makeValid`` on the whole multipart geometry would
+    also resolve the *overlaps between* the parts, and a valid MultiPolygon may not have
+    overlapping components — so GEOS turns each overlap into a hole. On two AOIs that nearly
+    coincide that leaves the thin symmetric difference (0.14 of 1.29 sq.km on the reported layer)
+    instead of their union. Validate the parts, then let ``unaryUnion`` merge them.
+    """
+    parts = []
+    for part in aoi.asGeometryCollection() or [aoi]:
+        if part is None or part.isEmpty():
+            continue
+        if not part.isGeosValid():
+            repaired = part.makeValid()
+            if not _unusable(repaired):
+                part = repaired
+        parts.append(part)
+    return parts
+
+
 def union_parts(aoi: QgsGeometry) -> QgsGeometry:
-    """Dissolve the intersecting parts of a multipart geometry into one.
+    """The AOI's footprint as a geometry whose area can be measured: intersecting parts dissolved
+    into one, and self-intersecting rings repaired first so that the dissolve can happen at all.
 
     An AOI layer is collected into a MultiPolygon part by part (``QgsGeometry.collectGeometry``),
     which does not merge anything: intersecting polygons stay separate parts. Callers that measure
     the AOI need the union instead, because the area of a MultiPolygon is the sum of its parts.
 
-    Returns the geometry unchanged when there is nothing to dissolve, and when the union fails —
-    GEOS refuses invalid input such as self-intersecting rings, and an over-counted area is still
-    better than no area at all.
+    GEOS refuses to union invalid input and hands back a null geometry, so the parts are repaired
+    before they are dissolved — otherwise one self-intersecting polygon drops the whole layer back
+    to the over-counted sum. If the union fails even then, the geometry is returned unchanged: an
+    over-counted area beats no area at all.
     """
-    if aoi is None or aoi.isEmpty() or not aoi.isMultipart():
+    if aoi is None or aoi.isEmpty():
         return aoi
-    dissolved = QgsGeometry.unaryUnion([aoi])
-    if dissolved is None or dissolved.isNull() or dissolved.isEmpty():
-        return aoi
-    return dissolved
+    if not aoi.isMultipart() and aoi.isGeosValid():
+        return aoi  # nothing to dissolve and nothing to repair
+    dissolved = QgsGeometry.unaryUnion(_repaired_parts(aoi))
+    return aoi if _unusable(dissolved) else dissolved
 
 
 def calculate_aoi_area(aoi: QgsGeometry,
