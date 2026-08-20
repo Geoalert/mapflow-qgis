@@ -221,7 +221,7 @@ class AoiService(QObject):
 
     # ---------- the processing Area for a template AOI selection ----------
 
-    def select_aois_as_processing_area(self, aois, group_factory=None) -> None:
+    def select_aois_as_processing_area(self, aois, group=None) -> None:
         """Point the Area at the selected AOI(s), so the Area shown in the combo IS the one a
         processing will use — one place to look, no silent override.
 
@@ -229,23 +229,23 @@ class AoiService(QObject):
         gets a visible "Selected AOIs" layer holding one feature per AOI. No-op when no AOI is
         selected, keeping the current Area (e.g. while a processing row is selected).
 
-        ``group_factory`` is called — at most once, and only for a multi-selection — to get the
-        template's layer-tree group. It is a callable rather than a group because resolving that
-        group *creates* it when missing, and this runs on every selection change.
+        ``group`` is the template's layer-tree group, or None to leave the built layer at the
+        root. Looking it up is side-effect free (`Mapflow._find_template_group`), so it can be
+        resolved before the call rather than deferred into it.
         """
         aois = [aoi for aoi in aois if aoi and aoi.id]
         selected_ids = frozenset(str(aoi.id) for aoi in aois)
         # Selection signals fire often; only rebuild when the set actually changes.
         if selected_ids == (self._processing_area_filter or frozenset()):
             return
-        layer = self._layer_for_selected_aois(aois, group_factory)
+        layer = self._layer_for_selected_aois(aois, group)
         if layer is None:
             return
         self._processing_area_filter = selected_ids or None
         # The controller points the combo at it; layerChanged then recomputes Area and cost.
         self.currentAoiLayerChanged.emit(layer, True)
 
-    def _layer_for_selected_aois(self, aois, group_factory) -> Optional[QgsVectorLayer]:
+    def _layer_for_selected_aois(self, aois, group) -> Optional[QgsVectorLayer]:
         """The layer the Area combo should show for the current AOI selection."""
         if not aois:
             return None
@@ -256,10 +256,10 @@ class AoiService(QObject):
                       if geom is not None]
         if not geometries:
             return None
-        return self.rebuild_selected_aois_layer(geometries, group_factory)
+        return self.rebuild_selected_aois_layer(geometries, group)
 
     def rebuild_selected_aois_layer(self, geometries: List[QgsGeometry],
-                                    group_factory=None) -> QgsVectorLayer:
+                                    group=None) -> QgsVectorLayer:
         """(Re)build the visible "Selected AOIs" layer in the template group — one feature per
         selected AOI, so a processing covers exactly them and the per-processing AOI limit still
         applies. Visible on the map and in the tree (unlike the old hidden 'Selected AOI')."""
@@ -273,7 +273,6 @@ class AoiService(QObject):
         layer.dataProvider().addFeatures(features)
         layer.updateExtents()
         layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
-        group = group_factory() if group_factory is not None else None
         if group is not None:
             self.app_context.project.addMapLayer(layer, addToLegend=False)
             group.insertLayer(0, layer)

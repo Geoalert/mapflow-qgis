@@ -28,7 +28,7 @@ def test_template_group_created_under_mapflow_group_when_absent():
     root = project.layerTreeRoot()
     plugin = _plugin_for_group(project)
 
-    group = plugin._template_group_target("T1")
+    group = plugin._ensure_template_group("T1")
 
     mapflow_group = root.findGroup("Mapflow")
     assert mapflow_group is not None
@@ -42,8 +42,8 @@ def test_open_then_preview_reuse_the_same_single_group():
     root = project.layerTreeRoot()
     plugin = _plugin_for_group(project)
 
-    open_group = plugin._template_group_target("T1", subgroup_name="AOI: North")
-    preview_group = plugin._template_group_target("T1")  # later preview call
+    open_group = plugin._ensure_template_group("T1", subgroup_name="AOI: North")
+    preview_group = plugin._ensure_template_group("T1")  # later preview call
 
     mapflow_group = root.findGroup("Mapflow")
     # Exactly one "T1" group exists, under the Mapflow group.
@@ -58,10 +58,36 @@ def test_template_group_falls_back_to_root_when_user_deleted_mapflow_group():
     root = project.layerTreeRoot()
     plugin = _plugin_for_group(project, add_layers_to_group=False)
 
-    group = plugin._template_group_target("T1")
+    group = plugin._ensure_template_group("T1")
 
     assert root.findGroup("Mapflow") is None
     assert root.findGroup("T1") is group
+
+
+def test_finding_a_template_group_creates_nothing():
+    """The whole point of the find/ensure split. `_find_template_group` is called from paths
+    that fire on every AOI selection and every preview click; if it created the group as a
+    side effect, opening a template and clicking around would conjure groups the user never
+    asked for — which is why those callers previously had to defer it behind a lambda."""
+    project = QgsProject()
+    root = project.layerTreeRoot()
+    plugin = _plugin_for_group(project)
+
+    assert plugin._find_template_group("T1") is None
+    assert plugin._find_template_group("T1", subgroup_name="AOI: North") is None
+
+    assert root.findGroup("Mapflow") is None
+    assert not any(child.name() == "T1" for child in root.children())
+
+
+def test_finding_a_template_group_returns_the_one_ensure_made():
+    project = QgsProject()
+    plugin = _plugin_for_group(project)
+
+    created = plugin._ensure_template_group("T1", subgroup_name="AOI: North")
+
+    assert plugin._find_template_group("T1") is created.parent()
+    assert plugin._find_template_group("T1", subgroup_name="AOI: North") is created
 
 
 def _plugin_for_preview(in_template_mode):
