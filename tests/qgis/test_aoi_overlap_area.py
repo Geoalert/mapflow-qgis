@@ -32,6 +32,23 @@ POC_B = ("POLYGON((116.455160215366902 39.771790069375818,"
 FAR_1 = "POLYGON((0 0,0 1,1 1,1 0,0 0))"
 FAR_2 = "POLYGON((5 5,5 6,6 6,6 5,5 5))"
 
+# A second reported layer: the same overlap, but the first AOI also self-intersects (the spike at
+# its top-left corner). GEOS answers an invalid ring with a NULL union, which used to fall back to
+# the summed parts — the very number this fix removes. 1.24 + 1.21 summed, 1.29 unioned.
+BROKEN_A = ("POLYGON((116.482273015485958 40.096111205163901,"
+            "116.483421141733757 40.096040829648665,"
+            "116.482293040394737 40.096061775252693,"
+            "116.48231576177767 40.096323738956208,"
+            "116.493677906897517 40.095546101647621,"
+            "116.492770663370834 40.083708733728095,"
+            "116.481368353824024 40.085400702403398,"
+            "116.482273015485958 40.096111205163901))")
+BROKEN_B = ("POLYGON((116.48145172032369 40.095978122374611,"
+            "116.481370716437368 40.085400027371008,"
+            "116.493332290315919 40.084399966891276,"
+            "116.492727461298145 40.095848516156515,"
+            "116.48145172032369 40.095978122374611))")
+
 
 def _layer(wkts):
     layer = QgsVectorLayer("Polygon?crs=epsg:4326", "aois", "memory")
@@ -98,6 +115,27 @@ def test_submitted_geometry_keeps_the_source_polygons():
 
     assert aoi.isMultipart()
     assert len(aoi.asMultiPolygon()) == 2
+
+
+def test_an_invalid_polygon_does_not_send_the_area_back_to_the_sum():
+    """A self-intersecting AOI must not cost the user the dissolve: GEOS refuses to union invalid
+    input, and the fallback for that used to be the summed parts."""
+    overlapping = _service_for([BROKEN_A, BROKEN_B]).app_context.aoi_size
+    broken_alone = _service_for([BROKEN_A]).app_context.aoi_size
+    valid_alone = _service_for([BROKEN_B]).app_context.aoi_size
+
+    assert overlapping == pytest.approx(1.29, abs=0.01)
+    # Not the sum (2.45) that the un-dissolved parts produce...
+    assert overlapping < broken_alone + valid_alone
+    # ...and not the sliver (0.14) that repairing the whole collection would leave, because
+    # a valid MultiPolygon may not have overlapping parts and GEOS resolves that into a hole.
+    assert overlapping > valid_alone
+
+
+def test_a_lone_invalid_polygon_is_measured_by_its_footprint():
+    """The self-intersecting AOI on its own: the repair is applied whether or not anything
+    overlaps it, so the area shown is the shape the user drew."""
+    assert _service_for([BROKEN_A]).app_context.aoi_size == pytest.approx(1.24, abs=0.01)
 
 
 def test_measured_area_matches_the_union_of_the_layer():
