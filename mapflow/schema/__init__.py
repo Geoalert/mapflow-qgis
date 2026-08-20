@@ -38,4 +38,3 @@ from .workflow_def import WorkflowDef, BlockConfig
 from .status import ProcessingStatus, ProcessingReviewStatus
 from .billing import BillingType
 from .project import MapflowProject, UserRole
-from .processing_history import ProcessingHistory

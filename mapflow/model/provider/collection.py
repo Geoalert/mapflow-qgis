@@ -1,0 +1,70 @@
+import json
+
+from .factory import create_provider, provider_options
+from .provider import NoneProvider
+from ...config import PROVIDERS_KEY
+
+
+def decorate(base_name, existing_names):
+    """
+    Transform `name` -> `name (i)` with first non-occupied i
+    """
+    i = 1
+    name = base_name + f' ({i})'
+    while name in existing_names:
+        name = base_name + f' ({i})'
+        i += 1
+    return name
+
+
+class ProvidersList(list):
+
+    @classmethod
+    def from_dict(cls, providers_dict):
+        return ProvidersList(providers_dict.values())
+
+    @classmethod
+    def from_settings(cls, settings):
+        errors = []
+        providers = {}
+        providers_settings = json.loads(settings.value(PROVIDERS_KEY, "{}"))
+        if providers_settings:
+            for name, params in providers_settings.items():
+                if name in providers.keys():
+                    name = decorate(name, providers.keys())
+                    params["name"] = name
+                # Silently discard providers of a removed type (e.g. the legacy Maxar WMTS
+                # search/tile provider) instead of erroring: they are simply dropped and get
+                # purged from settings on the next `to_settings` write. Only genuinely broken
+                # providers of a still-supported type are reported as errors.
+                if params.get("option_name") not in provider_options:
+                    continue
+                try:
+                    providers.update({name: create_provider(**params)})
+                except (TypeError, ValueError, KeyError):
+                    # A stored provider whose saved fields no longer match its constructor:
+                    # unexpected/missing keyword (TypeError), unusable value (ValueError), or
+                    # a lookup the factory makes on an absent key.
+                    errors.append(name)
+        return cls.from_dict(providers), errors
+
+    def dict(self):
+        return {provider.name: provider.to_dict() for provider in self}
+
+    @property
+    def default_providers(self):
+        return ProvidersList([provider for provider in self if provider.is_default])
+
+    @property
+    def users_providers(self):
+        return ProvidersList([provider for provider in self if not provider.is_default])
+
+    def to_settings(self, settings):
+        users_providers = self.users_providers.dict()
+        settings.setValue(PROVIDERS_KEY, json.dumps(users_providers))
+
+    def __getitem__(self, i):
+        if i < 0:
+            return NoneProvider()
+        else:
+            return super().__getitem__(i)

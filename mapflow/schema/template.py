@@ -168,7 +168,10 @@ class TemplateAoiDTO(Serializable, SkipDataClass):
                 calculator,
             )
             return round(total, 4) if total else None
-        except Exception:
+        except (TypeError, ValueError, RuntimeError, AttributeError):
+            # `geometry` came back as something GDAL cannot read: json.dumps raises
+            # TypeError/ValueError on a non-serializable mapping, ogr RuntimeError on
+            # malformed GeoJSON, and a non-mapping raises AttributeError on .get.
             return None
 
     @property
@@ -323,7 +326,9 @@ class ProcessingTemplateDTO(Serializable, SkipDataClass):
             calculator = make_distance_calculator()
             total = sum(geojson_feature_area_sqkm(f, calculator) for f in features)
             return round(total, 4) if total else None
-        except Exception:
+        except (TypeError, ValueError, RuntimeError, AttributeError):
+            # Same set as `TemplateAoiDTO.aoi_area`, plus `_aoi_features` raising on a
+            # `searchParams` that is not a mapping.
             return None
 
     @property

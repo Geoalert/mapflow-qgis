@@ -1,5 +1,5 @@
-from typing import Optional
-from PyQt5.QtWidgets import QApplication, QMessageBox
+from typing import Optional, Tuple
+from PyQt5.QtWidgets import QApplication, QInputDialog, QMessageBox
 from PyQt5.QtCore import Qt, QObject
 
 
@@ -62,16 +62,15 @@ class AlertService(QObject):
         """Display a confirmation dialog. Returns True if user confirms."""
         return self.alert(message, QMessageBox.Question, blocking=True)
 
+    def ask_text(self, title: str, label: str, default: str = "") -> Tuple[str, bool]:
+        """Ask the user for a line of text. Returns (text, accepted).
 
-def log(message: str, level: str = "warning") -> None:
-    """Record a best-effort/background failure in the QGIS log panel (under the "Mapflow" tag)
-    instead of swallowing it silently. ``level`` is one of "info"/"warning"/"critical".
-
-    qgis is imported lazily so this module stays importable without the QGIS runtime."""
-    from qgis.core import Qgis, QgsMessageLog
-    qgis_level = {"info": Qgis.Info, "warning": Qgis.Warning,
-                  "critical": Qgis.Critical}.get(level, Qgis.Warning)
-    QgsMessageLog.logMessage(message, "Mapflow", level=qgis_level)
+        Here for the same reason `confirm` is: a caller that needs a synchronous answer from
+        the user should not have to import Qt to get one. `confirm` already establishes that a
+        service may drive a modal through this tier — this is the same capability with a string
+        instead of a bool, and it is what keeps `QInputDialog` out of the services that ask.
+        """
+        return QInputDialog.getText(QApplication.activeWindow(), title, label, text=default)
 
 
 # Convenience functions for direct import
@@ -90,3 +89,6 @@ def alert_error(message: str, blocking: bool = True) -> bool:
 
 def alert_confirm(message: str) -> bool:
     return AlertService.instance().confirm(message)
+
+def ask_text(title: str, label: str, default: str = "") -> Tuple[str, bool]:
+    return AlertService.instance().ask_text(title, label, default)

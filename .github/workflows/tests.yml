@@ -37,3 +37,15 @@ jobs:
         # exit-5 (no tests collected) as a pass. Real xvfb / image
         # failures still fail the job.
         run: make test-ui
+
+  lint:
+    name: Static analysis (qgis.org checks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run flake8 + bandit + detect-secrets
+        # Blocking on purpose. Without a gate, every finding-reduction MR is a
+        # snapshot the next MR can silently undo — which is how ~1400 findings
+        # accumulated in the first place. Suppressions belong in .flake8 where
+        # they are visible and attributed, not in a non-blocking job.
+        run: make lint

@@ -4,8 +4,6 @@ Tests in this directory need a real PyQGIS runtime — they import plugin
 modules that touch qgis.core / qgis.gui at module load time. Run inside
 the qgis/qgis:release-3_28 Docker image (see Dockerfile.tests + Makefile).
 """
-import importlib
-
 import pytest
 from unittest.mock import MagicMock
 
@@ -20,16 +18,18 @@ def pytest_configure(config):
     from qgis.testing import start_app
     start_app()
 
-    # Pre-warm the mapflow module tree to survive the circular import on first load.
-    # The chain mapflow.schema.processing -> entity.provider -> functional.layer_utils
-    # -> dialogs -> mapflow.schema creates a circular dependency that fails on the
-    # first attempt but succeeds on retry because partial modules are cached.
-    for _ in range(2):
-        try:
-            importlib.import_module("mapflow.schema.processing")
-            break
-        except ImportError:
-            pass
+    # start_app() gives QgsApplication but not the Processing framework, so `qgis.processing`
+    # resolves to a namespace package with no `run`. Any plugin code that clips or repairs
+    # geometry then raises AttributeError instead of doing the work — the AOI/footprint
+    # intersection behind My Imagery is the clearest case, and it turns into an error in
+    # whichever test happens to trigger it rather than a visible gap.
+    # Guarded: if the Processing plugin is not present the tier still runs, just without
+    # those code paths, which is what happened before this was added.
+    try:
+        from processing.core.Processing import Processing
+        Processing.initialize()
+    except Exception as error:  # pragma: no cover - environment capability probe
+        print(f"QGIS Processing unavailable, geometry operations will not run: {error}")
 
 
 @pytest.fixture()

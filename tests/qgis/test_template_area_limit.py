@@ -12,6 +12,7 @@ from unittest.mock import MagicMock
 from qgis.core import QgsGeometry
 
 from mapflow.functional.app_context import AppContext
+from mapflow.functional.service.aoi_service import AoiService
 from mapflow.mapflow import Mapflow
 
 
@@ -92,6 +93,12 @@ def test_create_search_template_proceeds_when_limit_is_unknown():
     plugin.iface = MagicMock()
     plugin.selected_search_product_types = MagicMock(return_value=["IMAGE"])
     plugin.processing_service = MagicMock()
+    plugin.aoi_service = AoiService(iface=MagicMock(),
+                                    app_context=MagicMock(),
+                                    plugin_dir="",
+                                    result_loader=MagicMock(),
+                                    data_catalog_service=MagicMock(),
+                                    processing_service=MagicMock())
     plugin.app_context = SimpleNamespace(
         aoi=QgsGeometry.fromWkt("POLYGON((0 0,0 1,1 1,1 0,0 0))"),
         aoi_size=10.0,

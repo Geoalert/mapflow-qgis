@@ -1,4 +1,5 @@
 import json
+import logging
 import os.path
 import shutil
 from base64 import b64decode
@@ -15,17 +16,16 @@ from PyQt5.QtCore import (
 from PyQt5.QtGui import QBrush, QColor, QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
 from PyQt5.QtWidgets import (
-    QAbstractItemView, QAction, QApplication, QFileDialog, QHBoxLayout,
-    QInputDialog, QLabel, QMenu, QMessageBox, QPushButton, QWidget, QToolButton
+    QAbstractItemView, QAction, QApplication, QFileDialog,
+    QMenu, QMessageBox, QPushButton, QWidget, QToolButton
 )
 from qgis.core import (
-    Qgis, QgsCoordinateReferenceSystem, QgsDistanceArea, QgsFeature, QgsGeometry,
-    QgsLayerTreeGroup, QgsLayerTreeLayer, QgsMapLayer, QgsMapLayerType, QgsMessageLog,
+    QgsCoordinateReferenceSystem, QgsDistanceArea, QgsFeature, QgsGeometry,
+    QgsLayerTreeGroup, QgsLayerTreeLayer, QgsMapLayer, QgsMapLayerType,
     QgsProject, QgsRasterLayer, QgsRectangle, QgsVectorLayer
 )
 
-from . import constants
-from .config import Config, ConfigColumns
+from .config import OSM, Config, ConfigColumns
 from .errors import (BadProcessingInput,
                      ErrorMessage,
                      ImageIdRequired,
@@ -34,10 +34,14 @@ from .errors import (BadProcessingInput,
                      ProxyIsAlreadySet)
 # Functional
 from .functional import helpers, layer_utils
+from .functional.geometry import geometry_from_geojson
 from .functional.app_context import AppContext
 from .functional.auth import get_auth_id
 from .functional.controller.data_catalog_controller import DataCatalogController
-from .functional.controller.processing_controller import ProjectProcessingController
+from .functional.controller.project_processing_controller import ProjectProcessingController
+from .functional.controller.processing_controller import ProcessingController
+from .functional.service.aoi_service import AoiService
+from .functional.view.aoi_view import AoiView
 from .functional.service import (DataCatalogService,
                                  ProcessingService,
                                  ProjectService,
@@ -60,10 +64,7 @@ from .schema.catalog import (MultiPreviewList,
                              PreviewType,
                              ProductType)
 from .schema.project import MapflowProject, UserRole
-from .schema.template import (AOI_NAME_MAX_LENGTH,
-                              AddAoisSchema,
-                              AddSingleAoiSchema,
-                              CreateProcessingTemplateSchema,
+from .schema.template import (CreateProcessingTemplateSchema,
                               DeleteAoisSchema,
                               SearchParams,
                               UpdateAoiSchema,
@@ -77,14 +78,15 @@ from .dialogs import (ErrorMessageWidget,
                       ReviewDialog)
 from .dialogs.icons import plugin_icon, new_image_icon
 from .dialogs.processing_details_dialog import ProcessingDetailsDialog
-from .dialogs.select_aoi_layers_dialog import SelectAoiLayersDialog
-# Entity/providers
-from .entity.provider import (create_provider,
+# Providers
+from .model.provider import (create_provider,
                               DefaultProvider,
                               ImagerySearchProvider,
                               MyImageryProvider,
                               ProviderInterface,
                               ProvidersList)
+
+logger = logging.getLogger(__name__)
 
 
 class Mapflow(QObject):
@@ -106,18 +108,9 @@ class Mapflow(QObject):
     _search_sort_order = "DESC"
     # Cached widen-warning messages backing the (!) indicator's click handler.
     _widen_details = None
-    # The AOI ids the processing Area is currently derived from, so a repeated selection signal
-    # doesn't rebuild it. ``_selected_aois_layer_id`` is the visible "Selected AOIs" layer built
-    # for a MULTI-AOI selection (a single selection uses that AOI's own layer).
-    _processing_area_aoi_filter = None
-    _selected_aois_layer_id = None
     # Id of the currently shown mosaic-preview boundary layer, so it can be removed when the
     # next preview is shown (its name varies by acquisition date, so name-match alone misses it).
     _mosaic_preview_footprint_id = None
-    # State of an in-progress on-map AOI edit/draw session (None = no session). While a session
-    # is active the plugin panel is hidden and a Save/Cancel bar is shown over the map.
-    _aoi_session = None
-    _aoi_edit_bar_item = None
 
     def __init__(self, iface) -> None:
         """Initialize the plugin.
@@ -202,11 +195,15 @@ class Mapflow(QObject):
         self.user_status_update_timer = QTimer(self.dlg)
         self.user_status_update_timer.setInterval(self.config.USER_STATUS_UPDATE_INTERVAL * 1000)
         self.user_status_update_timer.timeout.connect(self.refresh_status)
-        # Timer for user update at startup, in case get_processings request takes too long
-        # Stopped as soon as first /user/status request is made
+        # Retries /user/status until the response that configures the plugin arrives.
+        # A tick is skipped while a request is still in flight, so a slow or unreachable
+        # server produces one outstanding request rather than two per second.
         self.app_startup_user_update_timer = QTimer(self.dlg)
-        self.app_startup_user_update_timer.setInterval(500)
+        self.app_startup_user_update_timer.setInterval(self.config.STARTUP_STATUS_RETRY_INTERVAL)
         self.app_startup_user_update_timer.timeout.connect(self.first_status_request)
+        self._startup_status_attempts = 0
+        self._startup_status_pending = False
+        self._startup_status_given_up = False
 
         # ========== 5. SETUP TEMP DIRECTORY ==========
         # AlertService must exist before setup_tempdir: an unavailable working directory below (and
@@ -285,21 +282,44 @@ class Mapflow(QObject):
         self.use_imagery_extent = QAction(self.tr("Use imagery extent"))
         self.use_imagery_extent.setEnabled(False)
         self.create_aoi_from_map_action = QAction(self.tr("Create AOI from map extent"))
-        self.aoi_layer_counter = 0
+        self.add_layer_action = QAction(u"Use as AOI in Mapflow")
+        self.add_layer_action.setIcon(plugin_icon)
+        self.remove_layer_action = QAction(u"Remove AOI from Mapflow")
+        self.remove_layer_action.setIcon(plugin_icon)
+
+        # Before setup_add_layer_menu(), which connects these actions to the controller.
+        self.aoi_service = AoiService(iface=self.iface,
+                                      app_context=self.app_context,
+                                      plugin_dir=self.plugin_dir,
+                                      result_loader=self.result_loader,
+                                      data_catalog_service=self.data_catalog_service,
+                                      processing_service=self.processing_service)
+        self.aoi_view = AoiView(dlg=self.dlg, iface=self.iface)
+        # Template-AOI session wiring. It belongs to TemplateController, which the templates
+        # step creates; until then mapflow.py holds the connects (the spec allows wiring here,
+        # not domain logic).
+        self.aoi_service.editSessionStarted.connect(self.aoi_view.enter_edit_session)
+        self.aoi_service.editSessionEnded.connect(self.aoi_view.leave_edit_session)
+        self.aoi_view.saveRequested.connect(self.aoi_service.save_session)
+        self.aoi_view.cancelRequested.connect(self.aoi_service.cancel_session)
+        self.processing_controller = ProcessingController(
+            iface=self.iface,
+            aoi_service=self.aoi_service,
+            aoi_view=self.aoi_view,
+            add_layer_action=self.add_layer_action,
+            remove_layer_action=self.remove_layer_action)
+
         self.setup_add_layer_menu()
         # Add options menu functionality
         self.setup_options_menu_connections()
         # Layer actions
-        self.add_layer_action = QAction(u"Use as AOI in Mapflow")
-        self.add_layer_action.setIcon(plugin_icon)
-        self.add_layer_action.triggered.connect(self.add_to_layers)
         iface.addCustomActionForLayerType(self.add_layer_action, None, QgsMapLayerType.VectorLayer, True)
-        self.remove_layer_action = QAction(u"Remove AOI from Mapflow")
-        self.remove_layer_action.setIcon(plugin_icon)
-        self.remove_layer_action.triggered.connect(self.remove_from_layers)
         iface.addCustomActionForLayerType(self.remove_layer_action, None, QgsMapLayerType.VectorLayer, False)
+        self.add_layer_action.triggered.connect(self.processing_controller.use_current_layer_as_aoi)
+        self.remove_layer_action.triggered.connect(
+            self.processing_controller.stop_using_current_layer_as_aoi)
         self.dlg.useAllVectorLayers.stateChanged.connect(self.toggle_all_layers)
-        self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
+        self.processing_controller.refresh_excepted_layers()
 
         # ========== 10. INITIALIZE AREA CALCULATOR SERVICE ==========
         self.area_calculator_service = AreaCalculatorService(iface=self.iface,
@@ -437,39 +457,10 @@ class Mapflow(QObject):
     def setup_layers_context_menu(self, layers: List[QgsMapLayer]):
         for layer in filter(layer_utils.is_polygon_layer, layers):
             self.iface.addCustomActionForLayer(self.add_layer_action, layer)
-        self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
-
-    def add_to_layers(self, layer=None, recompute_cost: bool = True, set_current: bool = True):
-        if not layer:
-            layer = self.iface.layerTreeView().currentLayer()
-        if layer not in self.app_context.aoi_layers:
-            self.app_context.aoi_layers.append(layer)
-            self.iface.addCustomActionForLayer(self.remove_layer_action, layer)
-        self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
-        # ``set_current=False`` for template AOI *display* layers added in bulk: they must not
-        # hijack the processing Area (the last one used to stick as the Area — feedback 8.1);
-        # the Area is driven by the AOI table selection instead.
-        if not set_current:
-            return
-        # When adding template AOI layers in bulk (recompute_cost=False), don't let each
-        # setLayer fire polygonCombo.layerChanged -> a cost request: no image is selected yet,
-        # and the user's click will compute the cost once afterwards.
-        self.dlg.polygonCombo.blockSignals(not recompute_cost)
-        self.dlg.polygonCombo.setLayer(layer)
-        self.dlg.polygonCombo.blockSignals(False)
-
-    def remove_from_layers(self, layer=None):
-        if not layer:
-            layer = self.iface.layerTreeView().currentLayer()
-        try:
-            self.app_context.aoi_layers.remove(layer)
-        except ValueError:
-            pass
-            # it can be easly already removed as I can't remove action from contextmenu of a single layer
-        self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
+        self.processing_controller.refresh_excepted_layers()
 
     def toggle_all_layers(self, state: bool):
-        self.dlg.polygonCombo.setExceptedLayerList(self.filter_aoi_layers())
+        self.processing_controller.refresh_excepted_layers()
         self.app_context.settings.setValue('useAllVectorLayers', str(self.dlg.useAllVectorLayers.isChecked()))
 
     def refresh_status(self):
@@ -480,22 +471,62 @@ class Mapflow(QObject):
         )
 
     def first_status_request(self):
+        if self._startup_status_given_up or self._startup_status_pending:
+            return
+        if self._startup_status_attempts >= self.config.STARTUP_STATUS_MAX_ATTEMPTS:
+            # Latched rather than left to the stopped timer: giving up must be a terminal
+            # state, so a stray call cannot turn one warning into a modal per invocation.
+            self._startup_status_given_up = True
+            self.stop_startup_status_polling()
+            self.alert(self.tr('Could not load your account status from Mapflow.\n\n'
+                               'Some features stay unavailable until you reconnect and '
+                               'reopen the plugin.'),
+                       icon=QMessageBox.Warning)
+            return
+        self._startup_status_attempts += 1
+        self._startup_status_pending = True
         self.http.get(
             url=f'{self.server}/user/status',
-            callback=self.set_processing_limit,
-            callback_kwargs={'app_startup_request': True},
+            callback=self.first_status_callback,
+            error_handler=self.first_status_error_handler,
             use_default_error_handler=False
         )
+
+    def stop_startup_status_polling(self):
+        self.app_startup_user_update_timer.stop()
+        self._startup_status_pending = False
+
+    def first_status_callback(self, response: QNetworkReply) -> None:
+        """Apply the startup configuration carried by the first /user/status response.
+
+        The timer is stopped *before* the configuration runs, not after it. `set_processing_limit`
+        is invoked through the error guard, which swallows an exception and skips the rest of the
+        callback — so a stop placed after the configuration would never run on a bad response, and
+        the plugin would re-attempt the whole setup twice a second for the rest of the session.
+        See spec/006_error_reporting.md § Consequences for new code.
+        """
+        self.stop_startup_status_polling()
+        self.set_processing_limit(response, app_startup_request=True)
+        # Storage quota for My Imagery: needed once at startup, and refreshed later by
+        # mosaicsUpdated. Issuing it per retry would mean a second endpoint polled at the
+        # retry interval, with its own error dialog on every failed tick.
         self.data_catalog_service.get_user_limit()
+
+    def first_status_error_handler(self, response: QNetworkReply) -> None:
+        """Let the next tick retry, and surface the failure once the attempts run out."""
+        self._startup_status_pending = False
+        logger.warning("Startup /user/status attempt %s failed with Qt error %s",
+                       self._startup_status_attempts, response.error())
 
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.draw_aoi)
         self.add_layer_menu.addAction(self.use_imagery_extent)
         self.add_layer_menu.addAction(self.create_aoi_from_map_action)
         
-        self.draw_aoi.triggered.connect(self.create_editable_aoi_layer)
-        self.use_imagery_extent.triggered.connect(self.create_aoi_layer_from_imagery)
-        self.create_aoi_from_map_action.triggered.connect(self.create_aoi_layer_from_map)
+        self.draw_aoi.triggered.connect(self.processing_controller.draw_aoi)
+        self.use_imagery_extent.triggered.connect(self.processing_controller.create_aoi_from_imagery)
+        self.create_aoi_from_map_action.triggered.connect(
+            self.processing_controller.create_aoi_from_map_extent)
         self.dlg.addAoiButton.setMenu(self.add_layer_menu)
 
     def setup_options_menu_connections(self):
@@ -516,8 +547,9 @@ class Mapflow(QObject):
         self.dlg.aoi_rename_action.triggered.connect(self.processing_service.rename_aoi)
         self.dlg.aoi_delete_action.triggered.connect(self.processing_service.delete_aoi)
         self.dlg.aoi_add_action.triggered.connect(self.add_aoi_from_layer_dialog)
-        self.dlg.aoi_update_geometry_action.triggered.connect(self.start_update_aoi_session)
-        self.dlg.aoi_draw_action.triggered.connect(self.start_draw_aoi_session)
+        self.dlg.aoi_update_geometry_action.triggered.connect(
+            self.aoi_service.start_update_session)
+        self.dlg.aoi_draw_action.triggered.connect(self.aoi_service.start_draw_session)
         self.dlg.exclude_from_search_action.triggered.connect(self.exclude_processing_from_search)
         self.dlg.options_menu.aboutToShow.connect(self.update_processing_options_menu)
         self.dlg.saveOptionsButton.setMenu(self.dlg.options_menu)
@@ -536,7 +568,7 @@ class Mapflow(QObject):
             can_edit = self.app_context.can_edit_template(self.processing_service.active_template)
             selected_aoi = self.processing_service.selected_aoi()
             # No AOI action can start while another edit/draw session is running.
-            no_session = self._aoi_session is None
+            no_session = not self.aoi_service.session_active
             if selected_aoi:
                 self.dlg.aoi_rename_action.setEnabled(can_edit and selected_aoi.can_rename)
                 menu.addAction(self.dlg.aoi_rename_action)
@@ -800,7 +832,9 @@ class Mapflow(QObject):
             data = json.loads(response.readAll().data())
             items = data.get("results") if isinstance(data, dict) else data
             linked_count = len([i for i in (items or []) if isinstance(i, dict)])
-        except Exception:
+        except (ValueError, TypeError):
+            # Not JSON (ValueError, which UnicodeDecodeError subclasses), or a payload whose
+            # `results` is not iterable.
             linked_count = 0
         new_images = template.newImagesCount or 0
         local_created_at = template.createdAt.astimezone()
@@ -906,7 +940,8 @@ class Mapflow(QObject):
         # not a FeatureCollection — wrap each geometry into a feature the layer builder understands.
         try:
             aois = json.loads(response.readAll().data())
-        except Exception:
+        except ValueError:
+            # Not JSON, or not decodable as UTF-8 (UnicodeDecodeError is a ValueError).
             return
         if isinstance(aois, dict):
             aois = aois.get('aois', [])
@@ -997,8 +1032,9 @@ class Mapflow(QObject):
                 qgs_feat.setGeometry(qgs_geom)
                 qgs_features.append(qgs_feat)
             except Exception as e:
-                QgsMessageLog.logMessage(f"Skipping a search feature that failed to parse: {e}",
-                                         self.plugin_name, level=Qgis.Warning)
+                # Per-feature, inside a loop: no traceback, or one malformed response
+                # buries the panel in near-identical stack dumps.
+                logger.warning("Skipping a search feature that failed to parse: %s", e)
                 continue
         if not qgs_features:
             return None
@@ -1025,7 +1061,7 @@ class Mapflow(QObject):
         # Template AOI layers are added in bulk on open; don't fire a cost request per layer,
         # and don't let them become the current processing Area (feedback 8.1) — the Area is
         # set from the AOI table selection (see sync_processing_area_to_selected_aois).
-        self.add_to_layers(aoi_layer, recompute_cost=False, set_current=False)
+        self.aoi_service.register_layer(aoi_layer, recompute_cost=False, set_current=False)
         return aoi_layer
 
     def _template_group_target(self,
@@ -1111,273 +1147,17 @@ class Mapflow(QObject):
     # ==================== AOI edit/draw/add sessions ==================== #
     def add_aoi_from_layer_dialog(self):
         """Add AOI(s) from existing polygon layer(s) chosen in a multi-select dialog."""
-        template = self.processing_service.active_template
-        if not template or self._aoi_session is not None:
+        if not self.processing_service.active_template or self.aoi_service.session_active:
             return
-        layers = self._selectable_aoi_layers()
+        layers = self.aoi_service.selectable_layers()
         if not layers:
             self.alert(self.tr("There are no polygon layers to add as AOIs. Draw one on the map "
                                "or load a vector layer first."), QMessageBox.Information)
             return
-        dialog = SelectAoiLayersDialog(self.dlg)
-        dialog.setup(layers)
-        if not dialog.exec():
-            return
-        selected_ids = dialog.selected_layer_ids()
+        selected_ids = self.aoi_view.pick_aoi_layers(layers)
         if not selected_ids:
             return
-        try:
-            features = []
-            for layer_id in selected_ids:
-                layer = self.app_context.project.mapLayer(layer_id)
-                if layer is not None:
-                    features.extend(self._aoi_features_from_layer(layer))
-        except ValueError as e:
-            self.alert(str(e), QMessageBox.Warning)
-            return
-        if not features:
-            self.alert(self.tr("The selected layer(s) have no polygon features to add."),
-                       QMessageBox.Warning)
-            return
-        aois = [AddSingleAoiSchema(geometry=f["geometry"], name=f["properties"].get("name"))
-                for f in features]
-        self.processing_service.api.add_aois(
-            template_id=template.id,
-            data=AddAoisSchema(aois=aois),
-            callback=self.processing_service.aoi_changed_callback,
-            error_handler=self.processing_service.aoi_change_error_handler,
-        )
-
-    def _selectable_aoi_layers(self) -> List[QgsVectorLayer]:
-        """Polygon vector layers the user can add as AOIs.
-
-        Only the plugin's own *display* layers are hidden: the active template's group (the AOI
-        polygons + processing footprints + template search metadata), the current search-metadata
-        layer, preview layers, and the active draw session's temp layer. The user's own AOI layers
-        (which live directly under the Mapflow group after "Use as AOI") stay selectable — hiding
-        the whole Mapflow group is what left only the stray root layer visible before."""
-        project = self.app_context.project
-        excluded = set()
-        # Layers inside the active template's group (Mapflow > <template name> > …).
-        root = project.layerTreeRoot()
-        mapflow_group = root.findGroup(self.app_context.settings.value('layerGroup')
-                                       or self.app_context.plugin_name)
-        template = self.processing_service.active_template
-        if template is not None and mapflow_group is not None:
-            template_group = mapflow_group.findGroup(str(template.name))
-            if template_group is not None:
-                excluded |= {node.layerId() for node in template_group.findLayers()}
-        meta_layer = getattr(self.app_context, 'metadata_layer', None)
-        if meta_layer is not None:
-            try:
-                excluded.add(meta_layer.id())
-            except (RuntimeError, AttributeError):
-                pass
-        session_layer = self._aoi_session.get('layer') if self._aoi_session else None
-        if session_layer is not None:
-            excluded.add(session_layer.id())
-
-        result = []
-        for layer in project.mapLayers().values():
-            if layer.id() in excluded:
-                continue
-            name = layer.name() or ''
-            if name.endswith(' preview') or name.endswith(' metadata'):
-                continue
-            # Template AOI display layers are tagged; never offer them as sources.
-            if layer.customProperty('mapflow/aoi_id'):
-                continue
-            if isinstance(layer, QgsVectorLayer) and layer_utils.is_polygon_layer(layer):
-                result.append(layer)
-        return result
-
-    def start_update_aoi_session(self):
-        """'Update selected AOI': edit the selected AOI's polygon on the map (in place)."""
-        if self._aoi_session is not None:
-            return
-        aoi = self.processing_service.selected_aoi()
-        template = self.processing_service.active_template
-        if not aoi or not template:
-            return
-        if not aoi.can_rename:  # a persisted AOI id is required to update it
-            self.alert(self.tr("This AOI has no id yet and cannot be updated. "
-                               "Reopen the template and try again."), QMessageBox.Information)
-            return
-        layer = self._find_aoi_layer(aoi.id)
-        if layer is None:
-            self.alert(self.tr("Could not find this AOI's layer on the map. "
-                               "Reopen the template and try again."), QMessageBox.Warning)
-            return
-        self._begin_aoi_session(
-            mode="update", layer=layer, aoi=aoi, is_temp=False, tool="vertex",
-            message=self.tr("Editing AOI '{name}': move its vertices on the map, then Save AOI.")
-            .format(name=aoi.display_name))
-
-    def start_draw_aoi_session(self):
-        """'Draw AOI on the map': draw a new polygon, name it on Save, then add it as an AOI."""
-        if self._aoi_session is not None:
-            return
-        if not self.processing_service.active_template:
-            return
-        layer = QgsVectorLayer('Polygon?crs=epsg:4326', self.tr('New AOI'), 'memory')
-        layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
-        self.app_context.project.addMapLayer(layer)
-        self._begin_aoi_session(
-            mode="draw", layer=layer, aoi=None, is_temp=True, tool="add",
-            message=self.tr("Draw the AOI polygon on the map, then Save AOI."))
-
-    def _find_aoi_layer(self, aoi_id) -> Optional[QgsVectorLayer]:
-        """The on-map AOI layer tagged with ``aoi_id`` (see ``_add_geojson_aoi_layer``)."""
-        for layer in self.app_context.project.mapLayers().values():
-            if layer.customProperty('mapflow/aoi_id') == str(aoi_id):
-                return layer
-        return None
-
-    def _begin_aoi_session(self, mode: str, layer: QgsVectorLayer, aoi, is_temp: bool,
-                           tool: str, message: str):
-        """Enter an on-map AOI edit session: pause the poll, hide the panel, make ``layer``
-        active + editable with the right map tool, and show the Save/Cancel bar."""
-        self.processing_service.processing_fetch_timer.stop()
-        self._aoi_session = {"mode": mode, "layer": layer, "aoi": aoi, "is_temp": is_temp,
-                             "prev_active_layer": self.iface.activeLayer()}
-        self.dlg.hide()
-        self.iface.setActiveLayer(layer)
-        if not layer.isEditable():
-            layer.startEditing()
-        if tool == "add":
-            self.iface.actionAddFeature().trigger()
-        else:
-            vertex_action = (getattr(self.iface, "actionVertexTool", None)
-                             or getattr(self.iface, "actionNodeTool", None))
-            if vertex_action is not None:
-                vertex_action().trigger()
-        self._show_aoi_edit_bar(message)
-
-    def _show_aoi_edit_bar(self, message: str):
-        """Persistent Save AOI / Cancel bar over the map canvas (the panel is hidden)."""
-        widget = QWidget()
-        layout = QHBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(QLabel(message))
-        layout.addStretch(1)
-        save_button = QPushButton(self.tr("Save AOI"))
-        cancel_button = QPushButton(self.tr("Cancel"))
-        save_button.clicked.connect(self._save_aoi_session)
-        cancel_button.clicked.connect(self._cancel_aoi_session)
-        layout.addWidget(save_button)
-        layout.addWidget(cancel_button)
-        self._aoi_edit_bar_item = self.iface.messageBar().pushWidget(widget, Qgis.Info)
-
-    def _save_aoi_session(self):
-        session = self._aoi_session
-        if not session:
-            return
-        try:
-            if session["mode"] == "update":
-                ok = self._commit_aoi_update(session["layer"], session["aoi"])
-            else:
-                ok = self._commit_aoi_draw(session["layer"])
-        except ValueError as e:  # e.g. name too long
-            self.alert(str(e), QMessageBox.Warning)
-            return
-        if ok:  # keep the session open on validation failure so the user can fix it
-            self._end_aoi_session()
-
-    def _cancel_aoi_session(self):
-        session = self._aoi_session
-        if not session:
-            return
-        layer = session["layer"]
-        if not session["is_temp"]:
-            try:
-                if layer.isEditable():
-                    layer.rollBack()  # discard the in-place edits
-            except (RuntimeError, AttributeError):
-                pass
-        self._end_aoi_session()
-
-    def _end_aoi_session(self):
-        """Tear down a session: remove the bar, restore the panel/poll/tool; drop a temp layer."""
-        session = self._aoi_session
-        self._aoi_session = None
-        if self._aoi_edit_bar_item is not None:
-            try:
-                self.iface.messageBar().popWidget(self._aoi_edit_bar_item)
-            except (RuntimeError, AttributeError):
-                pass
-            self._aoi_edit_bar_item = None
-        self.iface.actionPan().trigger()  # leave the add-feature/vertex tool
-        if session and session.get("is_temp"):
-            try:
-                self.app_context.project.removeMapLayer(session["layer"].id())
-            except (RuntimeError, AttributeError):
-                pass
-        self.dlg.show()
-        self.processing_service.processing_fetch_timer.start()
-        prev = session.get("prev_active_layer") if session else None
-        if prev is not None:
-            try:
-                self.iface.setActiveLayer(prev)
-            except (RuntimeError, AttributeError):
-                pass
-
-    def _commit_aoi_update(self, layer: QgsVectorLayer, aoi) -> bool:
-        """POST the edited AOI geometry (as-is, single or multi-part — the per-AOI update
-        endpoint accepts a generic geometry). Returns False (keeping the session open) if the
-        edit left no usable geometry."""
-        template = self.processing_service.active_template
-        if not template or not aoi or not aoi.id:
-            return False
-        feats = [f for f in layer.getFeatures() if f.geometry() and not f.geometry().isEmpty()]
-        if not feats:
-            self.alert(self.tr("The AOI has no geometry — draw or keep at least one polygon."),
-                       QMessageBox.Warning)
-            return False
-        geom = (feats[0].geometry() if len(feats) == 1
-                else QgsGeometry.collectGeometry([f.geometry() for f in feats]))
-        wgs = helpers.to_wgs84(QgsGeometry(geom), layer.crs())
-        if wgs is None or wgs.isEmpty():
-            self.alert(self.tr("The edited AOI has no valid geometry."), QMessageBox.Warning)
-            return False
-        if layer.isEditable():
-            layer.commitChanges()  # reflect the edit on the map until the server refresh arrives
-        self.processing_service.api.update_aoi(
-            template_id=template.id,
-            aoi_id=aoi.id,
-            data=UpdateAoiSchema(geometry=json.loads(wgs.asJson())),
-            callback=self.processing_service.aoi_changed_callback,
-            error_handler=self.processing_service.aoi_change_error_handler,
-        )
-        return True
-
-    def _commit_aoi_draw(self, layer: QgsVectorLayer) -> bool:
-        """Name the drawn polygon(s) and add them as AOI(s). Returns False if nothing was drawn."""
-        template = self.processing_service.active_template
-        if not template:
-            return False
-        if layer.isEditable():
-            layer.commitChanges()  # move drawn features from the edit buffer into the provider
-        features = self._aoi_features_from_layer(layer)
-        if not features:
-            self.alert(self.tr("Draw at least one polygon before saving."), QMessageBox.Warning)
-            return False
-        name, ok = QInputDialog.getText(self.iface.mainWindow(),
-                                        self.tr("Name the AOI"), self.tr("AOI name:"))
-        if not ok:
-            return False  # keep the session open so the drawing is not lost
-        name = (name or "").strip()
-        if name and len(name) > AOI_NAME_MAX_LENGTH:
-            self.alert(self.tr("AOI name must not exceed {limit} characters.").format(
-                limit=AOI_NAME_MAX_LENGTH), QMessageBox.Warning)
-            return False
-        aois = [AddSingleAoiSchema(geometry=f["geometry"], name=(name or None)) for f in features]
-        self.processing_service.api.add_aois(
-            template_id=template.id,
-            data=AddAoisSchema(aois=aois),
-            callback=self.processing_service.aoi_changed_callback,
-            error_handler=self.processing_service.aoi_change_error_handler,
-        )
-        return True
+        self.aoi_service.add_aois_from_layers(selected_ids)
 
     def filter_search_by_selected_aoi(self):
         """S7: inside a template, selecting one or more AOIs filters the imagery-search
@@ -1408,84 +1188,13 @@ class Mapflow(QObject):
         is selected, keeping the current Area (e.g. while a processing row is selected)."""
         if not self.processing_service.in_template_mode:
             return
-        aois = [aoi for aoi in self.processing_service.selected_aois() if aoi and aoi.id]
-        selected_ids = frozenset(str(aoi.id) for aoi in aois)
-        # Selection signals fire often; only rebuild when the set actually changes.
-        if selected_ids == (self._processing_area_aoi_filter or frozenset()):
-            return
-        layer = self._layer_for_selected_aois(aois)
-        if layer is None:
-            return
-        self._processing_area_aoi_filter = selected_ids or None
-        # layerChanged -> calculate_aoi_area_polygon_layer recomputes Area/cost from this layer.
-        self.dlg.polygonCombo.setLayer(layer)
-
-    def _layer_for_selected_aois(self, aois) -> Optional[QgsVectorLayer]:
-        """The layer the Area combo should show for the current AOI selection."""
-        if not aois:
-            return None
-        if len(aois) == 1:
-            return self._find_aoi_layer(aois[0].id)
-        geometries = [geom for geom in
-                      (self._geometry_from_geojson(getattr(aoi, "geometry", None)) for aoi in aois)
-                      if geom is not None]
-        return self._rebuild_selected_aois_layer(geometries) if geometries else None
-
-    def _rebuild_selected_aois_layer(self, geometries: List[QgsGeometry]) -> QgsVectorLayer:
-        """(Re)build the visible "Selected AOIs" layer in the template group — one feature per
-        selected AOI, so a processing covers exactly them and the per-processing AOI limit still
-        applies. Visible on the map and in the tree (unlike the old hidden 'Selected AOI')."""
-        self._remove_selected_aois_layer()
-        layer = QgsVectorLayer('Polygon?crs=epsg:4326', self.tr('Selected AOIs'), 'memory')
-        features = []
-        for geom in geometries:
-            feature = QgsFeature()
-            feature.setGeometry(geom)
-            features.append(feature)
-        layer.dataProvider().addFeatures(features)
-        layer.updateExtents()
-        layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
         template = self.processing_service.active_template
-        group = self._template_group_target(str(template.name)) if template else None
-        if group is not None:
-            self.app_context.project.addMapLayer(layer, addToLegend=False)
-            group.insertLayer(0, layer)
-        else:
-            self.app_context.project.addMapLayer(layer)
-        # Register it as an AOI layer so it is selectable in the combo (not excepted).
-        self.add_to_layers(layer, recompute_cost=False, set_current=False)
-        self._selected_aois_layer_id = layer.id()
-        return layer
-
-    @staticmethod
-    def _geometry_from_geojson(geom_dict) -> Optional[QgsGeometry]:
-        """Build a QgsGeometry from a GeoJSON geometry mapping (as carried in aoiDetails)."""
-        if not geom_dict:
-            return None
-        try:
-            ogr_geom = ogr.CreateGeometryFromJson(json.dumps(geom_dict))
-        except Exception:
-            return None
-        if not ogr_geom:
-            return None
-        geom = QgsGeometry.fromWkt(ogr_geom.ExportToWkt())
-        return geom if not geom.isEmpty() else None
-
-    def _remove_selected_aois_layer(self):
-        """Drop the multi-selection "Selected AOIs" layer (on a new selection or on leaving the
-        template). Single-AOI selections point at the AOI's own layer, so there is nothing to
-        clean up for them."""
-        layer_id = self._selected_aois_layer_id
-        self._selected_aois_layer_id = None
-        if not layer_id:
-            return
-        try:
-            layer = self.app_context.project.mapLayer(layer_id)
-            if layer is not None:
-                self.remove_from_layers(layer)
-            self.app_context.project.removeMapLayer(layer_id)
-        except (RuntimeError, KeyError, AttributeError):
-            pass
+        self.aoi_service.select_aois_as_processing_area(
+            self.processing_service.selected_aois(),
+            # Lazy: resolving the group creates it when missing, and this runs on every
+            # selection change. Only a multi-AOI selection actually needs it.
+            group_factory=(lambda: self._template_group_target(str(template.name))
+                           if template else None))
 
     def select_processing_in_table(self, processing_id: str):
         """Select processing row by ID and open processing details."""
@@ -1501,73 +1210,6 @@ class Mapflow(QObject):
             self.dlg.processingsTable.scrollToItem(item)
             self.show_details()
             return
-
-    def create_aoi_layer_from_map(self, action: QAction):
-        aoi_geometry = helpers.to_wgs84(
-            QgsGeometry.fromRect(self.iface.mapCanvas().extent()),
-            self.app_context.project.crs()
-        )
-        aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326',
-                                   f'AOI_{self.aoi_layer_counter}',
-                                   'memory')
-        aoi = QgsFeature()
-        aoi.setGeometry(aoi_geometry)
-        aoi_layer.dataProvider().addFeatures([aoi])
-        aoi_layer.updateExtents()
-        aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
-        self.aoi_layer_counter += 1
-        self.result_loader.add_layer(aoi_layer)
-        self.add_to_layers(aoi_layer)
-        self.iface.setActiveLayer(aoi_layer)
-    
-    def create_aoi_layer_from_imagery(self, action: QAction):
-        image = self.data_catalog_service.selected_image()
-        mosaic = self.data_catalog_service.selected_mosaic()
-        if image:
-            aoi_geometry = QgsGeometry().fromWkt(image.footprint)
-        elif mosaic:
-            aoi_geometry = QgsGeometry().fromWkt(mosaic.footprint)
-        else:
-            self.dlg.disable_processing_start(reason=self.tr('Choose imagery collection or image to start processing'),
-                                              clear_area=True)
-            aoi_geometry = None
-            return
-        aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326',
-                                   f'AOI_{self.aoi_layer_counter}',
-                                   'memory')
-        aoi = QgsFeature()
-        aoi.setGeometry(aoi_geometry)
-        aoi_layer.dataProvider().addFeatures([aoi])
-        aoi_layer.updateExtents()
-        aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
-        self.aoi_layer_counter += 1
-        self.result_loader.add_layer(aoi_layer)
-        self.add_to_layers(aoi_layer)
-        self.iface.setActiveLayer(aoi_layer)
-
-    def create_editable_aoi_layer(self, action: QAction):
-        aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326',
-                                   f'AOI_{self.aoi_layer_counter}',
-                                   'memory')
-        aoi_layer.startEditing()
-        aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
-        self.aoi_layer_counter += 1
-        self.result_loader.add_layer(aoi_layer)
-        self.add_to_layers(aoi_layer)
-        self.iface.setActiveLayer(aoi_layer)
-        self.iface.actionAddFeature().trigger()
-
-    def filter_aoi_layers(self):
-        if self.dlg.useAllVectorLayers.isChecked():
-            # We exclude search metadata layers from AOI layers list because they are big, crowded
-            # and lead to topology errors
-            if self.app_context.search_provider:
-                return [layer for layer in self.app_context.project.mapLayers().values()
-                             if self.app_context.search_provider.name + ' metadata' == layer.name()]
-            else:
-                return []
-        else:
-            return [layer for layer in self.app_context.project.mapLayers().values() if layer not in self.app_context.aoi_layers]
 
     def on_options_change(self):
         wd_name = self.dlg.modelCombo.currentText()
@@ -1725,7 +1367,10 @@ class Mapflow(QObject):
                         aoi_intersection, lambda pct: pct >= min_intersection)
                 fit = (date_ok and cloud_ok and off_nadir_ok and provider_ok
                        and product_ok and intersection_ok)
-            except Exception:
+            except (AttributeError, TypeError, ValueError):
+                # Metadata that is not the shape this code expects: a non-mapping `properties`
+                # raises AttributeError, a value of the wrong type raises TypeError on the
+                # comparisons, an unparseable one ValueError.
                 fit = True  # never hide a row because of a parsing error
             if not fit:
                 unfit.add(local_index)
@@ -2385,64 +2030,14 @@ class Mapflow(QObject):
         names cannot be attached to it. Returns ``None`` only when there is no AOI at all.
         Raises ``ValueError`` if a name exceeds the limit.
         """
-        features = self._aoi_features_from_layer(self.dlg.polygonCombo.currentLayer())
+        features = self.aoi_service.features_from_layer(self.dlg.polygonCombo.currentLayer())
         # Fall back to the combined AOI (e.g. image/mosaic extent) as one unnamed feature,
         # so we still send aoiDetails rather than the deprecated plain `aoi`.
         if not features and self.app_context.aoi:
-            features.extend(self._polygon_aoi_features(self.app_context.aoi, None))
+            features.extend(self.aoi_service.polygon_features(self.app_context.aoi, None))
         if not features:
             return None
         return {"type": "FeatureCollection", "features": features}
-
-    def _aoi_features_from_layer(self, layer: Optional[QgsVectorLayer]) -> List[dict]:
-        """Exploded single-Polygon GeoJSON AOI features from a polygon layer (selected features
-        if any, else all). Each feature's ``properties.name`` comes from a ``name`` attribute
-        when present. MultiPolygons are split into separate Polygon features (the create path
-        requires single-part polygons). Raises ``ValueError`` if a name exceeds the limit."""
-        if layer is None or not layer.featureCount():
-            return []
-        source_features = list(layer.getSelectedFeatures()) or list(layer.getFeatures())
-        has_name_field = layer.fields().indexFromName("name") != -1
-        features = []
-        for feature in source_features:
-            geom = feature.geometry()
-            if geom is None or geom.isEmpty():
-                continue
-            wgs_geom = helpers.to_wgs84(QgsGeometry(geom), layer.crs())
-            name = None
-            if has_name_field:
-                raw = feature.attribute("name")
-                # QGIS NULL attributes are not None; normalize to a real None.
-                if raw not in (None, "") and str(raw).upper() != "NULL":
-                    name = str(raw).strip()
-            if name and len(name) > AOI_NAME_MAX_LENGTH:
-                raise ValueError(
-                    self.tr("AOI name '{name}' exceeds {limit} characters").format(
-                        name=name, limit=AOI_NAME_MAX_LENGTH
-                    )
-                )
-            features.extend(self._polygon_aoi_features(wgs_geom, name))
-        return features
-
-    @staticmethod
-    def _polygon_aoi_features(wgs_geom: QgsGeometry, name: Optional[str]) -> List[dict]:
-        """Split a (possibly multi-)polygon into one GeoJSON *Polygon* Feature per part.
-
-        The backend ignores ``MultiPolygon`` features in ``aoiDetails`` — an all-MultiPolygon
-        upload would create an empty, Failed template (feedback 10) — so mirror the web client
-        and explode each MultiPolygon into separate single-part Polygon features. Parts share
-        the source feature's ``name``. ``asGeometryCollection`` returns one element for a plain
-        Polygon and one per part for a MultiPolygon."""
-        features = []
-        for part in wgs_geom.asGeometryCollection() or [wgs_geom]:
-            if part is None or part.isEmpty():
-                continue
-            features.append({
-                "type": "Feature",
-                "geometry": json.loads(part.asJson()),
-                "properties": {"name": name},
-            })
-        return features
 
     def create_search_template(self, name_override: Optional[str] = None):
         """Create planned search template using current AOI and imagery-search filters.
@@ -2598,7 +2193,7 @@ class Mapflow(QObject):
             if not aoi.id or not aoi.geometry:
                 continue
             footprints = [
-                self._geometry_from_geojson(link.geometry)
+                geometry_from_geojson(link.geometry)
                 for link in aoi.processings
                 if str(link.processingId) == str(processing_id) and link.geometry
             ]
@@ -2620,7 +2215,7 @@ class Mapflow(QObject):
         updates = []      # (aoi_id, new_geometry_dict)
         deletions = []    # aoi_id fully consumed
         for aoi, footprints in affected:
-            aoi_geom = self._geometry_from_geojson(aoi.geometry)
+            aoi_geom = geometry_from_geojson(aoi.geometry)
             if aoi_geom is None:
                 continue
             footprint = footprints[0] if len(footprints) == 1 else QgsGeometry.unaryUnion(footprints)
@@ -2875,11 +2470,17 @@ class Mapflow(QObject):
 
         # Save the current search results to load later
         provider = self.imagery_search_provider
+        save_failed_message = self.tr("<b>Results could not be loaded </b><br>Please, make sure you chose the right output folder in the Settings tab \
+                                and you have access rights to this folder")
         try:
             filename = provider.save_search_layer(self.app_context.temp_dir, geoms)
-        except:
-            self.alert(self.tr("<b>Results could not be loaded </b><br>Please, make sure you chose the right output folder in the Settings tab \
-                                and you have access rights to this folder"))
+        except OSError:
+            # The case the message describes: missing/unwritable output folder.
+            self.alert(save_failed_message)
+            return
+        except Exception:
+            logger.exception("Unexpected error saving the search layer")
+            self.alert(save_failed_message)
             return
         self.display_metadata_geojson_layer(filename, f"{provider.name} metadata")
         # Retain the raw results so the instant local filter can reorder/re-render them without
@@ -3062,7 +2663,6 @@ class Mapflow(QObject):
 
         if app_startup_request:
             self.processing_service.update_processing_cost()
-            self.app_startup_user_update_timer.stop()
             self.dlg.setup_for_billing(self.app_context.billing_type)
             self.dlg.setup_for_review(self.app_context.review_workflow_enabled)
             self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex())
@@ -3393,8 +2993,7 @@ class Mapflow(QObject):
         except NotImplementedError:            
             self.alert(self.tr("Preview is unavailable for the provider {}. \nOSM layer will be added instead.").format(provider.name), QMessageBox.Information)
             # Add OSM instaed of preview, if it is unavailable (for Mapbox)
-            osm = constants.OSM
-            layer = QgsRasterLayer(osm, 'OpenStreetMap', 'wms')
+            layer = QgsRasterLayer(OSM, 'OpenStreetMap', 'wms')
             self.result_loader.add_preview_layer(preview_layer=layer)
             return
         except Exception as e:
@@ -3789,8 +3388,7 @@ class Mapflow(QObject):
         self.dlg.searchWidenWarning.setVisible(False)
         self.dlg.updateTemplateSearch.setVisible(False)
         # Drop the AOI-selection processing Area so it doesn't leak to the project view.
-        self._remove_selected_aois_layer()
-        self._processing_area_aoi_filter = None
+        self.aoi_service.clear_processing_area_selection()
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
         # Clear the template search-results pagination so it is not preserved on re-open.
@@ -4051,8 +3649,12 @@ class Mapflow(QObject):
         # keep login/password from token
         try:
             self.app_context.username, self.app_context.password = b64decode(token).decode().split(':')
-        except:
-            self.app_context.username = self.app_context.password = ''  # nosec - clearing creds, not a secret
+        except (ValueError, TypeError):
+            # A malformed token, which is the whole point of this handler. ValueError covers
+            # all three ways it can be malformed: binascii.Error (not base64) and
+            # UnicodeDecodeError (not utf-8) both subclass it, and so does the unpack when
+            # the decoded text has no ':'. TypeError covers a non-str/bytes token.
+            self.app_context.username = self.app_context.password = ''  # nosec B105  # clearing creds, not a secret
             self.dlg_login.show()
             self.alert(self.tr('Wrong token. '
                                'Visit "<a href=\"https://app.mapflow.ai/account/api\">mapflow.ai</a>" '
@@ -4073,6 +3675,7 @@ class Mapflow(QObject):
         self.app_context.settings.setValue('token', '')
         self.processing_service.processing_fetch_timer.stop()
         self.user_status_update_timer.stop()
+        self.stop_startup_status_polling()
         self.app_context.logged_in = False
         self.http.logout()
         self.dlg.close()
@@ -4232,6 +3835,10 @@ class Mapflow(QObject):
         self.dlg.setup_for_billing(self.app_context.billing_type)
         self.dlg.show()
         self.user_status_update_timer.start()
+        # Logging in again after a failed startup must get a full budget of retries.
+        self._startup_status_attempts = 0
+        self._startup_status_pending = False
+        self._startup_status_given_up = False
         self.app_startup_user_update_timer.start()
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
@@ -4395,14 +4002,13 @@ class Mapflow(QObject):
         try:
             shutil.rmtree(temp_dir) # remove old tempdir
         except Exception as e:
-            QgsMessageLog.logMessage(f"Could not remove old temp dir '{temp_dir}': {e}",
-                                     self.plugin_name, level=Qgis.Warning)
+            # Best-effort cleanup of a stale directory; the run continues either way.
+            logger.warning("Could not remove old temp dir '%s': %s", temp_dir, e)
         try:
             temp_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
             self.app_context.temp_dir = None
-            QgsMessageLog.logMessage(f"Working directory '{output_dir}' is unavailable: {e}",
-                                     self.plugin_name, level=Qgis.Warning)
+            logger.exception("Working directory '%s' is unavailable", output_dir)
             return str(e)
         self.app_context.temp_dir = temp_dir
         return None

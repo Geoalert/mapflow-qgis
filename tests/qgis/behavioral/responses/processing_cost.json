@@ -1,0 +1,53 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "processing/cost/v2",
+    "body": {
+      "name": "fixture-capture",
+      "description": "",
+      "projectId": "00000000-0000-4000-8000-000000000001",
+      "wdId": "00000000-0000-4000-8000-000000000005",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              0.0,
+              51.0
+            ],
+            [
+              0.01,
+              51.0
+            ],
+            [
+              0.01,
+              51.01
+            ],
+            [
+              0.0,
+              51.01
+            ],
+            [
+              0.0,
+              51.0
+            ]
+          ]
+        ]
+      },
+      "params": {
+        "sourceParams": {
+          "dataProvider": {
+            "providerName": "Mapbox",
+            "zoom": "17"
+          }
+        }
+      },
+      "meta": {
+        "source-app": "qgis"
+      },
+      "blocks": []
+    }
+  },
+  "status": 200,
+  "body": 12
+}

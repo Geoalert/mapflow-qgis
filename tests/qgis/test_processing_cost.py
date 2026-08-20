@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 from qgis.core import QgsGeometry, QgsProject
 
 from mapflow.config import Config
-from mapflow.entity.provider.default import ImagerySearchProvider, MyImageryProvider
+from mapflow.model.provider.default import ImagerySearchProvider, MyImageryProvider
 from mapflow.functional.service.processing_service import ProcessingService
 from mapflow.mapflow import Mapflow
 

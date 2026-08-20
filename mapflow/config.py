@@ -7,6 +7,17 @@ from qgis.core import QgsSettings
 
 SEARCH_CAPTURE_TIMEZONE = 'UTC'
 
+#: QgsSettings key holding the user's own providers.
+PROVIDERS_KEY = 'mapflow_data_providers'
+
+OSM = 'type=xyz&url=https://tile.openstreetmap.org/{z}/{x}/{y}.png&zmax=19&zmin=0'
+
+#: Names of the two built-in imagery sources, as shown in the source combo.
+SEARCH_OPTION_NAME = "🔎 Imagery Search"
+CATALOG_OPTION_NAME = "🖼️ My imagery"
+
+DEFAULT_HTTP_TIMEOUT_SECONDS = 10
+
 @dataclass
 class ConfigColumns():
     def __init__(self):
@@ -102,11 +113,16 @@ class Config:
 
     # MISC
     SHOW_RAW_ERROR = (QgsSettings().value("variables/mapflow_raw_error", "false").lower() == "true")
-    INVALID_TOKEN_WARNING_OBJECT_NAME = 'invalidToken'  # nosec - Qt object name, not a secret
+    INVALID_TOKEN_WARNING_OBJECT_NAME = 'invalidToken'  # nosec B105  # Qt object name, not a secret
     METADATA_MORE_BUTTON_OBJECT_NAME = 'getMoreMetadata'
     MAX_ZOOM = 21
     DEFAULT_ZOOM = MAX_FREE_ZOOM
     USER_STATUS_UPDATE_INTERVAL = 30  # seconds
+    STARTUP_STATUS_RETRY_INTERVAL = 500  # milliseconds
+    #: How many times startup may re-ask for /user/status before giving up. The plugin cannot
+    #: configure itself without that response, so it retries rather than failing on one
+    #: hiccup — but an unreachable server must not leave it retrying for the whole session.
+    STARTUP_STATUS_MAX_ATTEMPTS = 20
 
     MAX_FILE_SIZE_PIXELS = 30_000
     MAX_FILE_SIZE_BYTES = 2*(1024**3)

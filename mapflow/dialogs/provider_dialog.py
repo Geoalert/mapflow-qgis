@@ -4,7 +4,7 @@ from PyQt5 import uic
 from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 
 from .processing_dialog import ui_path
-from ..entity.provider import (CRS,
+from ..model.provider import (CRS,
                                BasicAuth,
                                UsersProvider,
                                XYZProvider,
@@ -53,7 +53,7 @@ class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
             crs = CRS.web_mercator
             title = title
             login = ""
-            password = ""  # nosec - empty init, not a secret
+            password = ""  # nosec B105  # empty init, not a secret
             save_credentials = False
 
         # Fill out the edit dialog with the current data

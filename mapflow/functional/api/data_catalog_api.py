@@ -1,3 +1,4 @@
+import logging
 from typing import Union, Callable, Optional
 from pathlib import Path
 from uuid import UUID
@@ -12,6 +13,8 @@ from ...http import Http, get_error_report_body, data_catalog_message_parser
 from ...functional import layer_utils
 from ...dialogs.error_message_widget import ErrorMessageWidget
 from ...dialogs.main_dialog import MainDialog
+
+logger = logging.getLogger(__name__)
 
 
 class DataCatalogApi(QObject):
@@ -160,6 +163,11 @@ class DataCatalogApi(QObject):
             try:
                 bounding_box = layer_utils.get_bounding_box_from_tile_json(response=response)
             except Exception:
+                # Stays broad: get_bounding_box_from_tile_json parses JSON, indexes `bounds`
+                # and reprojects through pyproj, so its failure set spans ValueError,
+                # TypeError, AttributeError, IndexError and pyproj's own errors. Logged so a
+                # tile server that changes shape is visible rather than just "errors".
+                logger.exception("Could not read the mosaic extent from the tile JSON")
                 errors = True
             else:
                 layer.setExtent(rect=bounding_box)

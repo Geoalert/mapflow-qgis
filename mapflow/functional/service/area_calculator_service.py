@@ -4,7 +4,7 @@ from qgis.core import QgsVectorLayer, QgsWkbTypes, QgsGeometry, QgsFeature, QgsC
 from ..app_context import AppContext
 from .. import layer_utils
 from .. import helpers
-from ...entity.provider import (ImagerySearchProvider,
+from ...model.provider import (ImagerySearchProvider,
                                 MyImageryProvider)
 from ...errors import (BadProcessingInput,
                        PluginError,
@@ -171,8 +171,10 @@ class AreaCalculatorService(QObject):
             # AOI is OK, but image ID is not selected,
             # in this case we should use selected AOI without cut by AOI
             real_aoi = self.app_context.aoi
-        except Exception:
-            # Could not calculate AOI size
+        except PluginError:
+            # The domain refusals get_aoi raises — bad AOI bounds, providers not initialized,
+            # an AOI that misses the selected image. Anything else is a bug and must reach the
+            # error guard rather than silently price an empty geometry.
             real_aoi = QgsGeometry()
         # The cropped AOI is what is actually processed — keep it so the request geometry
         # matches the displayed area instead of sending the whole (uncropped) AOI.
@@ -180,7 +182,8 @@ class AreaCalculatorService(QObject):
         try:
             self.app_context.aoi_size = layer_utils.calculate_aoi_area(real_aoi,
                                                                        self.app_context.project.transformContext())
-        except Exception:
+        except (TypeError, ValueError):
+            # measureArea rejects what it was handed; an unmeasurable AOI prices as zero.
             self.app_context.aoi_size = 0
 
         self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.app_context.aoi_size))

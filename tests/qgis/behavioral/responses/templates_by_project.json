@@ -1,0 +1,70 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "processings/template/project/00000000-0000-4000-8000-000000000044",
+    "body": null
+  },
+  "status": 200,
+  "body": [
+    {
+      "id": "00000000-0000-4000-8000-000000000284",
+      "name": "Mosaic 2",
+      "createdAt": "2026-06-30T10:56:35.602575Z",
+      "userId": "00000000-0000-4000-8000-000000000002",
+      "processingParams": null,
+      "status": "READY",
+      "isActive": true,
+      "lastCheckedAt": "2026-08-12T10:54:58.377735Z",
+      "projectId": "00000000-0000-4000-8000-000000000044",
+      "newImagesCount": 6,
+      "activeUntil": "2026-12-27T10:55:35Z",
+      "isArchived": false,
+      "area": 46534381
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000285",
+      "name": "test aoi names & multipolygon",
+      "createdAt": "2026-07-17T06:56:41.655257Z",
+      "userId": "00000000-0000-4000-8000-000000000002",
+      "processingParams": null,
+      "status": "READY",
+      "isActive": true,
+      "lastCheckedAt": "2026-08-12T10:55:29.873359Z",
+      "projectId": "00000000-0000-4000-8000-000000000044",
+      "newImagesCount": 6,
+      "activeUntil": "2027-01-13T06:55:41Z",
+      "isArchived": false,
+      "area": 52759004
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000286",
+      "name": "wtrerb",
+      "createdAt": "2026-06-30T11:49:50.209300Z",
+      "userId": "00000000-0000-4000-8000-000000000002",
+      "processingParams": null,
+      "status": "READY",
+      "isActive": true,
+      "lastCheckedAt": "2026-08-12T10:54:50.377906Z",
+      "projectId": "00000000-0000-4000-8000-000000000044",
+      "newImagesCount": 9,
+      "activeUntil": "2027-01-30T21:32:48Z",
+      "isArchived": false,
+      "area": 57866
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000287",
+      "name": "mosaix",
+      "createdAt": "2026-06-26T11:17:39.414416Z",
+      "userId": "00000000-0000-4000-8000-000000000002",
+      "processingParams": null,
+      "status": "READY",
+      "isActive": true,
+      "lastCheckedAt": "2026-08-12T10:54:49.198724Z",
+      "projectId": "00000000-0000-4000-8000-000000000044",
+      "newImagesCount": 6,
+      "activeUntil": "2026-12-23T11:16:39Z",
+      "isArchived": false,
+      "area": 11594674
+    }
+  ]
+}

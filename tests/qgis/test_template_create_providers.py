@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 
 from qgis.core import QgsGeometry
 
+from mapflow.functional.service.aoi_service import AoiService
 from mapflow.mapflow import Mapflow
 
 
@@ -21,6 +22,14 @@ def _plugin_ready_to_create_template(checked_providers):
     plugin.iface = MagicMock()
     plugin.selected_search_product_types = MagicMock(return_value=["IMAGE"])
     plugin.processing_service = MagicMock()
+    # Real service: aoiDetails is built from the features it produces, so a mock would make
+    # the assertions below vacuous.
+    plugin.aoi_service = AoiService(iface=MagicMock(),
+                                    app_context=MagicMock(),
+                                    plugin_dir="",
+                                    result_loader=MagicMock(),
+                                    data_catalog_service=MagicMock(),
+                                    processing_service=MagicMock())
     plugin.app_context = SimpleNamespace(
         aoi=QgsGeometry.fromWkt("POLYGON((0 0,0 1,1 1,1 0,0 0))"),
         aoi_size=10.0,

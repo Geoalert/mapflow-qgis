@@ -1,0 +1,41 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "rasters/mosaic/00000000-0000-4000-8000-000000000293/image",
+    "body": null
+  },
+  "status": 200,
+  "body": [
+    {
+      "id": "00000000-0000-4000-8000-000000000438",
+      "mosaic_id": "00000000-0000-4000-8000-000000000293",
+      "image_url": "user3@example.com",
+      "preview_url_l": "https://whitemaps-staging.mapflow.ai/rest/rasters/image/00000000-0000-4000-8000-000000000438/preview/l",
+      "preview_url_s": "https://whitemaps-staging.mapflow.ai/rest/rasters/image/00000000-0000-4000-8000-000000000438/preview/s",
+      "uploaded_at": "2024-04-29T16:23:32.603812Z",
+      "file_size": 10345902,
+      "footprint": "POLYGON ((136.8992614746094034 50.2410571935119492, 136.9102478024587128 50.2410571935119492, 136.9102478024587128 50.2340302708322071, 136.8992614746094034 50.2340302708322071, 136.8992614746094034 50.2410571935119492))",
+      "filename": "area-4676447.tif",
+      "checksum": "0000000000000000000000000000000000000000",
+      "meta_data": {
+        "crs": "EPSG:3857",
+        "count": 3,
+        "width": 2048,
+        "dtypes": [
+          "uint8",
+          "uint8",
+          "uint8"
+        ],
+        "height": 2048,
+        "nodata": null,
+        "pixel_size": [
+          0.5971642684936523,
+          0.5971642684936523
+        ]
+      },
+      "cog_link": "user4@example.com",
+      "available_for_download": false,
+      "state": "READY"
+    }
+  ]
+}
