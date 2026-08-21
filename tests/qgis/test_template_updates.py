@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from mapflow.functional.geometry import geometry_from_geojson
+from mapflow.functional.view.search_view import SearchView
 from mapflow.mapflow import Mapflow
 from mapflow.schema.template import TemplateAoiDTO, AoiProcessingLink
 
@@ -25,6 +26,7 @@ def _plugin_f1():
     plugin = Mapflow.__new__(Mapflow)
     plugin.tr = lambda t: t
     plugin.dlg = MagicMock()
+    plugin.search_view = SearchView(dlg=plugin.dlg, config=MagicMock())
     plugin.iface = MagicMock()
     plugin.app_context = SimpleNamespace(plugin_name="Mapflow")
     plugin.dlg.metadataFrom.dateTime.return_value.toUTC.return_value.toString.return_value = "2025-01-01T00:00:00.000Z"

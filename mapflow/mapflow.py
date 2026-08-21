@@ -17,7 +17,7 @@ from PyQt5.QtGui import QBrush, QColor, QIcon
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
 from PyQt5.QtWidgets import (
     QAbstractItemView, QAction, QApplication, QFileDialog,
-    QMenu, QMessageBox, QPushButton, QWidget, QToolButton
+    QMenu, QMessageBox, QWidget, QToolButton
 )
 from qgis.core import (
     QgsDistanceArea, QgsFeature, QgsGeometry,
@@ -42,6 +42,7 @@ from .functional.controller.processing_controller import ProcessingController
 from .functional.service.aoi_service import AoiService
 from .functional.service.preview_service import PreviewService
 from .functional.view.aoi_view import AoiView
+from .functional.view.search_view import SearchView
 from .functional.service import (DataCatalogService,
                                  ProcessingService,
                                  ProjectService,
@@ -302,6 +303,7 @@ class Mapflow(QObject):
         self.data_catalog_controller = DataCatalogController(self.dlg,
                                                              self.data_catalog_service,
                                                              self.preview_service)
+        self.search_view = SearchView(dlg=self.dlg, config=self.config)
         self.aoi_view = AoiView(dlg=self.dlg, iface=self.iface)
         # Template-AOI session wiring. It belongs to TemplateController, which the templates
         # step creates; until then mapflow.py holds the connects (the spec allows wiring here,
@@ -2123,7 +2125,7 @@ class Mapflow(QObject):
         ``aoi_details`` is ``None`` the geometry is omitted — used to update a template's
         non-geometry search params (which the backend merges); geometry updates go through
         the per-AOI endpoints instead (the PUT template endpoint rejects geometry)."""
-        off_nadir_min, off_nadir_max = self._off_nadir_request_bounds()
+        off_nadir_min, off_nadir_max = self.search_view.off_nadir_bounds()
         return SearchParams(
             aoiDetails=aoi_details,
             acquisitionDateFrom=self.dlg.metadataFrom.dateTime().toUTC().toString("yyyy-MM-ddTHH:mm:ss.zzz'Z'"),
@@ -2291,13 +2293,9 @@ class Mapflow(QObject):
         # A regular search replaces any template results, so a "Start" is no longer planned.
         self.app_context.open_template_results_id = None
 
-        self.dlg.metadataTable.clearContents()
-        self.dlg.metadataTable.setRowCount(0)
-        more_button = self.dlg.findChild(QPushButton, self.config.METADATA_MORE_BUTTON_OBJECT_NAME)
-        if more_button:
-            self.dlg.layoutMetadataTable.removeWidget(more_button)
-            more_button.deleteLater()
-        provider = self.provider_service.providers[self.dlg.providerIndex()]
+        self.search_view.clear_table()
+        self.search_view.remove_more_button()
+        provider = self.provider_service.providers[self.search_view.provider_index()]
         # Check if the AOI is defined
         if self.app_context.aoi:
             aoi = self.app_context.aoi
@@ -2305,39 +2303,15 @@ class Mapflow(QObject):
             self.alert(self.tr('Please, select a valid area of interest'))
             return
 
-        from_time = self.dlg.metadataFrom.dateTime().toTimeSpec(Qt.UTC).toString(Qt.ISODate)
-        to_time = self.dlg.metadataTo.dateTime().toTimeSpec(Qt.UTC).toString(Qt.ISODate)
-
-        max_cloud_cover = self.dlg.maxCloudCover.value()
-        min_intersection = self.dlg.minIntersection.value()
-
-        hide_unavailable = self.dlg.hideUnavailableResults.isChecked()
-        product_types = self.selected_search_product_types()
-        search_providers = self.selected_search_providers()
-        min_off_nadir, max_off_nadir = self._off_nadir_request_bounds()
-
         # All imagery search goes through the Mapflow catalog API, which filters server-side.
+        # Every filter widget is read once, here, so the request is built from what the widgets
+        # said when Search was pressed rather than from whatever they say by the time it is sent.
         self.request_mapflow_metadata(aoi=aoi,
                                       provider=provider,
-                                      from_=from_time,
-                                      to=to_time,
                                       offset=offset,
-                                      max_cloud_cover=max_cloud_cover,
-                                      min_intersection=min_intersection,
-                                      min_off_nadir_angle=min_off_nadir,
-                                      max_off_nadir_angle=max_off_nadir,
-                                      hide_unavailable=hide_unavailable,
-                                      product_types=product_types,
-                                      search_providers=search_providers,
                                       sort_by=self._search_sort_by,
-                                      sort_order=self._search_sort_order)
-
-    def _off_nadir_request_bounds(self):
-        """(min, max) off-nadir angle to send to the API, or (None, None) at the full 0-30 range
-        (no off-nadir filtering — leaving it out avoids excluding images beyond the slider)."""
-        if self.dlg.off_nadir_is_full_range():
-            return None, None
-        return self.dlg.off_nadir_range()
+                                      sort_order=self._search_sort_order,
+                                      **self.search_view.search_parameters())
 
     def clear_metadata(self):
         try:
@@ -2346,12 +2320,11 @@ class Mapflow(QObject):
             pass
 
         self.app_context.open_template_results_id = None
-        self.dlg.metadataTable.clearContents()
-        self.dlg.metadataTable.setRowCount(0)
+        self.search_view.clear_table()
         # Drop the retained results/baseline so a stale widen (!) indicator does not linger.
         self.app_context.search_result_geojson = None
         self.app_context.search_baseline_filters = None
-        self.dlg.searchWidenWarning.setVisible(False)
+        self.search_view.set_widen_warning_visible(False)
         #provider = self.provider_service.providers[self.dlg.providerIndex()]
         self.app_context.search_provider.clear_saved_search(self.app_context.temp_dir)
 
@@ -3642,11 +3615,9 @@ class Mapflow(QObject):
             quotient, remainder = divmod(total, limit)
             total_pages = quotient + (remainder > 0)
             page_number = int(offset / limit) + 1
-            self.dlg.enable_search_pages(True, page_number, total_pages)
-            self.dlg.searchRightButton.setEnabled(page_number != total_pages)
-            self.dlg.searchLeftButton.setEnabled(page_number != 1)
+            self.search_view.show_pages(page_number, total_pages)
         else:
-            self.dlg.enable_search_pages(False)
+            self.search_view.hide_pages()
 
     def show_search_next_page(self):
         offset = self.search_page_offset + self.search_page_limit
@@ -3663,26 +3634,12 @@ class Mapflow(QObject):
             self.get_metadata(offset=offset)
     
     def selected_search_product_types(self):
-        product_types = []
-        if self.dlg.searchMosaicCheckBox.isChecked():
-            product_types.append(ProductType.mosaic.upper())
-        if self.dlg.searchImageCheckBox.isChecked():
-            product_types.append(ProductType.image.upper())
-        if len(product_types) == 0:
-            product_types = [ProductType.mosaic.upper(), ProductType.image.upper()]
-        return product_types
+        """Kept as a forwarder: template creation reads the same widgets, and that code moves in
+        the templates step."""
+        return self.search_view.product_types()
 
     def selected_search_providers(self):
-        """Provider filter to send with a search/template request.
-
-        Only meaningful while the search is limited to available providers; when
-        "Search only through available providers" is off, the (hidden) provider selection
-        must NOT be sent — the search runs across all providers. An empty selection is
-        also omitted (None), since the backend reads ``[]`` as "search no providers".
-        """
-        if not self.dlg.hideUnavailableResults.isChecked():
-            return None
-        return self.dlg.searchProvidersCombo.checkedItemsData() or None
+        return self.search_view.search_providers()
 
     def setup_tempdir(self) -> Optional[str]:
         """Create the working ``Temp`` directory under the configured output directory.

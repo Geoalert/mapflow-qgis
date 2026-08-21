@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 from qgis.core import QgsSettings
 
 from mapflow.dialogs.main_dialog import MainDialog
-from mapflow.mapflow import Mapflow
+from mapflow.functional.view.search_view import SearchView
 
 
 def _dialog():
@@ -45,17 +45,18 @@ def test_inverted_spinboxes_are_ordered():
     assert lower <= upper
 
 
-def _plugin(full_range, bounds=(5, 20)):
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.dlg = MagicMock()
-    plugin.dlg.off_nadir_is_full_range.return_value = full_range
-    plugin.dlg.off_nadir_range.return_value = bounds
-    return plugin
+def _view(full_range, bounds=(5, 20)):
+    """The API-bounds helper is `SearchView` since the search extraction — it reads two widgets
+    and decides what the request may omit, which is a view's job."""
+    dlg = MagicMock()
+    dlg.off_nadir_is_full_range.return_value = full_range
+    dlg.off_nadir_range.return_value = bounds
+    return SearchView(dlg=dlg, config=MagicMock())
 
 
 def test_request_bounds_none_at_full_range():
-    assert _plugin(full_range=True)._off_nadir_request_bounds() == (None, None)
+    assert _view(full_range=True).off_nadir_bounds() == (None, None)
 
 
 def test_request_bounds_sends_values_when_narrowed():
-    assert _plugin(full_range=False, bounds=(5, 20))._off_nadir_request_bounds() == (5, 20)
+    assert _view(full_range=False, bounds=(5, 20)).off_nadir_bounds() == (5, 20)

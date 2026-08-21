@@ -16,6 +16,7 @@ from qgis.core import QgsProject
 
 from mapflow import mapflow as mapflow_module
 from mapflow.model.provider.default import ImagerySearchProvider
+from mapflow.functional.view.search_view import SearchView
 from mapflow.mapflow import Mapflow
 
 PLUGIN_DIR = os.path.dirname(mapflow_module.__file__)
@@ -47,6 +48,7 @@ def _plugin_with_search_provider(tmp_path, template_name="Template A"):
     plugin.tr = lambda text: text
     plugin.alert = MagicMock()
     plugin.dlg = MagicMock()
+    plugin.search_view = SearchView(dlg=plugin.dlg, config=MagicMock())
     # fill_metadata_table is mocked, so no real rows exist -> the marker pass is a no-op.
     plugin.dlg.metadataTable.rowCount.return_value = 0
     plugin.plugin_dir = PLUGIN_DIR

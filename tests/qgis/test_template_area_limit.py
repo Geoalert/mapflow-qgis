@@ -13,6 +13,7 @@ from qgis.core import QgsGeometry
 
 from mapflow.functional.app_context import AppContext
 from mapflow.functional.service.aoi_service import AoiService
+from mapflow.functional.view.search_view import SearchView
 from mapflow.mapflow import Mapflow
 
 
@@ -37,6 +38,7 @@ def test_set_processing_limit_stores_template_area_limit_in_sq_km():
     plugin.config = SimpleNamespace(MAX_AOIS_PER_PROCESSING=1)
     plugin.app_context = AppContext()
     plugin.dlg = MagicMock()
+    plugin.search_view = SearchView(dlg=plugin.dlg, config=MagicMock())
 
     plugin.set_processing_limit(_user_status_response())
 
@@ -50,6 +52,7 @@ def test_set_processing_limit_defaults_template_area_limit_to_zero_when_absent()
     plugin.config = SimpleNamespace(MAX_AOIS_PER_PROCESSING=1)
     plugin.app_context = AppContext()
     plugin.dlg = MagicMock()
+    plugin.search_view = SearchView(dlg=plugin.dlg, config=MagicMock())
 
     response = _user_status_response()
     payload = json.loads(response.readAll.return_value.data.return_value)
@@ -67,6 +70,7 @@ def test_create_search_template_blocks_when_aoi_exceeds_template_area_limit():
     plugin.replace_search_provider_index = MagicMock()
     plugin.alert = MagicMock()
     plugin.dlg = MagicMock()
+    plugin.search_view = SearchView(dlg=plugin.dlg, config=MagicMock())
     plugin.processing_service = MagicMock()
     plugin.app_context = SimpleNamespace(
         aoi=MagicMock(),  # truthy AOI
@@ -109,6 +113,7 @@ def test_create_search_template_proceeds_when_limit_is_unknown():
     )
 
     plugin.dlg = MagicMock()
+    plugin.search_view = SearchView(dlg=plugin.dlg, config=MagicMock())
     plugin.dlg.processingName.text.return_value = "My template"
     plugin.dlg.searchProvidersCombo.checkedItemsData.return_value = ["arcgis_world_imagery"]
     plugin.dlg.maxCloudCover.value.return_value = 50
