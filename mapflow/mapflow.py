@@ -106,9 +106,6 @@ class Mapflow(QObject):
     _search_sort_order = "DESC"
     # Cached widen-warning messages backing the (!) indicator's click handler.
     _widen_details = None
-    # Id of the currently shown mosaic-preview boundary layer, so it can be removed when the
-    # next preview is shown (its name varies by acquisition date, so name-match alone misses it).
-    _mosaic_preview_footprint_id = None
 
     def __init__(self, iface) -> None:
         """Initialize the plugin.
@@ -233,7 +230,9 @@ class Mapflow(QObject):
                                                     self.result_loader,
                                                     self.app_context.plugin_version,
                                                     app_context=self.app_context)
-        self.data_catalog_controller = DataCatalogController(self.dlg, self.data_catalog_service)
+        # DataCatalogController is built after PreviewService (below): its two preview buttons
+        # wire to that service, which in turn needs processing_service for the in-template
+        # placement rules.
 
         # ========== 7. INITIALIZE PROJECT AND PROCESSING SERVICES ==========
         self.project_service = ProjectService(http=self.http,
@@ -298,7 +297,11 @@ class Mapflow(QObject):
                                               plugin_dir=self.plugin_dir,
                                               config=self.config,
                                               result_loader=self.result_loader,
-                                              processing_service=self.processing_service)
+                                              processing_service=self.processing_service,
+                                              data_catalog_service=self.data_catalog_service)
+        self.data_catalog_controller = DataCatalogController(self.dlg,
+                                                             self.data_catalog_service,
+                                                             self.preview_service)
         self.aoi_view = AoiView(dlg=self.dlg, iface=self.iface)
         # Template-AOI session wiring. It belongs to TemplateController, which the templates
         # step creates; until then mapflow.py holds the connects (the spec allows wiring here,

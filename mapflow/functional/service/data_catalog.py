@@ -7,7 +7,7 @@ from PyQt5.QtCore import QObject, QUrl, pyqtSignal, Qt
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
 from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog, QAbstractItemView
-from qgis.core import QgsCoordinateReferenceSystem, QgsGeometry, QgsRasterLayer
+from qgis.core import QgsRasterLayer
 
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs.mosaic_dialog import CreateMosaicDialog, UpdateMosaicDialog
@@ -19,7 +19,7 @@ from ...schema import MyImageryParams
 from ..api.data_catalog_api import DataCatalogApi
 from ..view.data_catalog_view import DataCatalogView
 from ...http import Http
-from ...functional import layer_utils, helpers
+from ...functional import helpers
 from ...functional.app_context import AppContext
 from ...config import Config
 from ...model.provider import MyImageryProvider
@@ -228,19 +228,6 @@ class DataCatalogService(QObject):
         self.view.add_mosaic_cell_buttons()
         self.view.show_mosaic_info(mosaic.name)
 
-    def mosaic_preview(self):
-        try:
-            mosaic = self.selected_mosaic()
-            url = mosaic.rasterLayer.tileUrl
-            url_json = mosaic.rasterLayer.tileJsonUrl
-            name = mosaic.name
-            layer = layer_utils.generate_raster_layer(url, name)
-            self.api.request_mosaic_extent(url_json, layer)
-        except AttributeError:
-            message = 'Please, select imagery collection'
-            info_box = QMessageBox(QMessageBox.Information, "Mapflow", message, parent=QApplication.activeWindow())
-            return info_box.exec()
-
 
     # Images CRUD
     def upload_images_to_mosaic(self):
@@ -445,38 +432,6 @@ class DataCatalogService(QObject):
         self.view.show_preview_s(image)
         if self.view.mosaic_table_visible:
             self.view.enable_mosaic_images_preview(len(self.images), self.preview_idx)
-
-    def get_image_preview_l(self):
-        try:
-            image = self.selected_image()
-            footprint = QgsGeometry.fromWkt(image.footprint)  # already in WGS84
-            self.api.get_image_preview_l(image=image,
-                                         footprint=footprint,
-                                         callback=self.display_image_preview,
-                                         image_name=image.filename)
-        except AttributeError:
-            return
-
-    def display_image_preview(self,
-                              response: QNetworkReply,
-                              footprint: QgsGeometry,
-                              crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:4326"),
-                              image_name: str = ""):
-        """Display image preview using GCP-based georeferencing.
-
-        Uses ResultsLoader.display_preview_with_gcp() which handles rotated/skewed footprints correctly.
-        QGIS will reproject on-the-fly to match the project CRS.
-        """
-        layer = self.result_loader.display_preview_with_gcp(
-            response=response,
-            footprint=footprint,
-            crs=crs,
-            image_name=image_name,
-            add_aoi=False
-        )
-        if layer:
-            self.iface.setActiveLayer(layer)
-            self.iface.zoomToActiveLayer()
 
     def rename_image_callback(self, response: QNetworkReply):
         new_image = ImageReturnSchema.from_dict(json.loads(response.readAll().data()))
