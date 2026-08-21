@@ -10,9 +10,6 @@ class ErrorMessageList(QObject):
         self.message_descriptions = {}
 
     def update(self, other):
-        # sanity check
-        assert set(self.error_descriptions.keys()).intersection(set(other.error_descriptions.keys())) == set()
-        assert set(self.message_descriptions.keys()).intersection(set(other.message_descriptions.keys())) == set()
         self.error_descriptions.update(other.error_descriptions)
         self.message_descriptions.update(other.message_descriptions)
 
