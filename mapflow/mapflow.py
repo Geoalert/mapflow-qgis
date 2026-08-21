@@ -4200,9 +4200,16 @@ class Mapflow(QObject):
         # User info is stored inside user's Default project - will change it in the future API versions
         userinfo = response['user']
         default_project = MapflowProject.from_dict(response)
-        # Remember the logged-in user's id (template ownership check for contributors).
+        # Remember who is logged in. `/projects/default` is the user's OWN project, so this
+        # `user` section describes the logged-in user (unlike a shared project's, which
+        # describes its owner). The id is the template-ownership check for contributors; the
+        # email is what resolves the role in a shared project, and OAuth2 has no other source
+        # for it — there is no Basic token to decode, and an unknown email matches no owner
+        # and no user, leaving every shared project silently readonly.
         if default_project.user is not None:
             self.app_context.user_id = default_project.user.id
+            if default_project.user.email:
+                self.app_context.username = default_project.user.email
 
         self.update_processing_limit()
         # We have different behavior for admin as he has access to all processings

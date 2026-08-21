@@ -38,11 +38,21 @@ class ShareProject(SkipDataClass):
             self.users = [ShareProjectUser.from_dict(item) for item in self.users]
 
     def get_user_role(self, email):
+        """The logged-in user's role in this shared project, matched by email.
+
+        Case- and whitespace-insensitive: the email reaches us either from the API or from a
+        Basic auth token the user typed, and a difference in case must not quietly downgrade
+        someone to readonly. A blank email matches nobody — it means the current user is
+        unknown, not that they are an owner whose email the payload happened to omit.
+        """
+        current = (email or "").strip().lower()
+        if not current:
+            return UserRole.readonly
         for owner in self.owners or []:
-            if owner.email == email:
-                 return UserRole.owner
+            if (owner.email or "").strip().lower() == current:
+                return UserRole.owner
         for user in self.users or []:
-            if user.email == email:
+            if (user.email or "").strip().lower() == current:
                 return UserRole(user.role)
         # Shared project payload may not include the current user; default to least privilege.
         return UserRole.readonly
