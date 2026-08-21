@@ -38,19 +38,32 @@ leaf-first so each extraction depends only on what already moved.
 
 Service and controller boundaries are tabulated in `spec/007_architecture.md`.
 
-[ready-for-review] Extract preview → `PreviewService`
-Boundary: preview *layers on the map*. That includes the My Imagery map-layer previews
-(`mosaic_preview`, `get_image_preview_l`) but not `get_image_preview_s`, which paints a QImage
-into a panel widget — a thumbnail, not a layer, so it stays with the catalog.
-`ResultsLoader`'s preview helpers stay in `layer_utils` and are called from the service; Phase D
-moves that module wholesale, so moving them now would churn a file that step rewrites.
-Search-tab widget reads stay in `mapflow.py` until the next step creates `view/search_view.py`.
-Also splits `_template_group_target` into a pure `find` and an explicit `ensure` — see the
-templates step, which was carrying that decision until preview became its second caller.
-[ ] Extract imagery search → `SearchService` + `SearchController` + `view/search_view.py`
+[ready-for-review] Extract imagery search → `SearchService` + `SearchController` + `view/search_view.py`
+Boundary drawn at the gate, because most search-*named* code is not imagery search:
+in scope are the request and its results (`get_metadata`, `request_mapflow_metadata` + callback
++ error handler, `display_metadata_geojson_layer`, `clear_metadata`, `_is_search_metadata_layer`),
+the footprints layer, pagination, sort, the search-provider selection, the search-tab mode
+controls, and the four preview slots the preview step deliberately left behind
+(`preview`, `preview_search_from_cell`, `preview_or_search`, `_reconnect_cell_preview`).
+Out of scope and deferred to the two steps below: the local filter, and everything that operates
+on a *template's* search.
+`_build_search_params` turns out to be called only from template creation and template update,
+never from `get_metadata` — so it is template code despite the name. That single fact is what
+keeps this step from swallowing the two after it.
+First step with a real `view/` rather than deferring widget reads, so larger than AOI or preview.
 [ ] Extract the local filter → `LocalFilterService` (pure computation; functional-tier tests)
+Bigger than it looks: `apply_local_filter` alone has 10 widget connections and
+`tests/qgis/test_local_filter.py` has 39 tests.
 [ ] Extract templates → `TemplateService` + `TemplateController` (largest domain, ~55 methods
     in `mapflow.py` plus the template half of `processing_service.py`)
+Takes `filter_search_by_selected_aoi` with it. The AOI step assigned that to `SearchService`;
+reading it while scoping the search step showed both its collaborators are template code — it
+reads `processing_service.selected_aois()` and calls `_load_template_search`. It filters a
+*template's* results by AOI selection, so it belongs here, not with imagery search.
+Also takes `_build_search_params`, `_load_template_search(_page)`, `show_template_search_results`,
+`create_search_template*`, `update_template_search_params`, `exclude_processing_from_search`,
+`_template_filter_baseline`, `apply_search_params_to_ui`, `_store_template_search_footprints`
+and `_prompt_plan_search`.
 Still open here: whether placing a layer in the template's group belongs to the service that
 built the layer at all. `AoiService` and `PreviewService` both reach for the template group
 today; the alternative is that they emit the layer and the template owner places it, on the
