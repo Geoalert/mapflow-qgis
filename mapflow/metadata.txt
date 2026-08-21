@@ -9,12 +9,14 @@ about=Mapflow provides AI models for automatic feature extraction from satellite
         - roads
         - construction sites
     For a step-by-step user guide, go to https://docs.mapflow.ai/api/qgis_mapflow#user-interface
-version=3.6.1
+version=3.6.2
 experimental=False
 deprecated=False
 author=Geoalert
 email=hello@geoalert.io
 changelog:
+    3.6.2
+    - Fix: logging in with OAuth2 no longer leaves you as a read-only user in your own shared projects
     3.6.1
     - Fix: an AOI with intersecting polygons no longer has its overlapping area counted twice in the displayed area, the price estimate and the area limits
     - My imagery search results are listed as "My Image" and "My Collection"
