@@ -35,7 +35,8 @@ class PreviewService(QObject):
                  plugin_dir: str,
                  config,
                  result_loader,
-                 processing_service):
+                 processing_service,
+                 data_catalog_service=None):
         super().__init__()
         self.iface = iface
         self.app_context = app_context
@@ -43,6 +44,10 @@ class PreviewService(QObject):
         self.plugin_dir = plugin_dir
         self.config = config
         self.result_loader = result_loader
+        #: Consulted for *which* mosaic or image is selected in My Imagery. Which one is
+        #: selected is the catalog's business; putting the resulting raster on the map is this
+        #: service's.
+        self.data_catalog_service = data_catalog_service
         #: Consulted for the in-template placement rules only. Becomes `TemplateService` when the
         #: templates step splits it out.
         self.processing_service = processing_service
@@ -397,3 +402,57 @@ class PreviewService(QObject):
             self._mosaic_preview_footprint_id = footprint_layer.id()
             self._relocate_to_template_group(footprint_layer)
         self._add_aoi_to_preview_if_needed()
+
+    # ---------- My Imagery ----------
+    #
+    # The catalog's own previews. Separate entry points from the search ones above because they
+    # start from a selected mosaic/image rather than a metadata feature — but they end the same
+    # way, as a raster on the map, which is why they live here and the panel *thumbnail*
+    # (`DataCatalogService.get_image_preview_s`) does not.
+
+    def preview_my_imagery_mosaic(self):
+        """Add the selected mosaic's tile layer, then fit it to the extent from its tile JSON."""
+        try:
+            mosaic = self.data_catalog_service.selected_mosaic()
+            url = mosaic.rasterLayer.tileUrl
+            url_json = mosaic.rasterLayer.tileJsonUrl
+            name = mosaic.name
+        except AttributeError:
+            # Nothing selected, or a mosaic with no raster layer yet.
+            alert_info(self.tr('Please, select imagery collection'))
+            return
+        layer = layer_utils.generate_raster_layer(url, name)
+        self.data_catalog_service.api.request_mosaic_extent(url_json, layer)
+
+    def preview_my_imagery_image(self):
+        """Request the full-size preview of the selected image."""
+        try:
+            image = self.data_catalog_service.selected_image()
+            footprint = QgsGeometry.fromWkt(image.footprint)  # already in WGS84
+        except AttributeError:
+            return
+        self.data_catalog_service.api.get_image_preview_l(image=image,
+                                                          footprint=footprint,
+                                                          callback=self.display_my_imagery_image,
+                                                          image_name=image.filename)
+
+    def display_my_imagery_image(self,
+                                 response: QNetworkReply,
+                                 footprint: QgsGeometry,
+                                 crs: QgsCoordinateReferenceSystem = QgsCoordinateReferenceSystem("EPSG:4326"),
+                                 image_name: str = ""):
+        """Display image preview using GCP-based georeferencing.
+
+        Uses ResultsLoader.display_preview_with_gcp() which handles rotated/skewed footprints
+        correctly. QGIS will reproject on-the-fly to match the project CRS.
+        """
+        layer = self.result_loader.display_preview_with_gcp(
+            response=response,
+            footprint=footprint,
+            crs=crs,
+            image_name=image_name,
+            add_aoi=False
+        )
+        if layer:
+            self.iface.setActiveLayer(layer)
+            self.iface.zoomToActiveLayer()

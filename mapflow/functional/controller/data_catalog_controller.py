@@ -1,12 +1,19 @@
 from PyQt5.QtCore import QObject
 from ..service.data_catalog import DataCatalogService
+from ..service.preview_service import PreviewService
 from ...dialogs.main_dialog import MainDialog
 
 
 class DataCatalogController(QObject):
-    def __init__(self, dlg: MainDialog, data_catalog_service: DataCatalogService):
+    def __init__(self,
+                 dlg: MainDialog,
+                 data_catalog_service: DataCatalogService,
+                 preview_service: PreviewService):
         self.dlg = dlg
         self.service = data_catalog_service
+        # Which mosaic/image is selected is the catalog's; putting the raster on the map is
+        # PreviewService's, so the two preview buttons wire across.
+        self.preview_service = preview_service
         self.view = self.service.view
 
         # At first, when mosaic and image are not selected, make buttons unavailable or hidden
@@ -16,7 +23,8 @@ class DataCatalogController(QObject):
 
         # Mosaic
         self.dlg.editMosaicButton.clicked.connect(self.service.update_mosaic)
-        self.dlg.previewMosaicButton.clicked.connect(self.service.mosaic_preview)
+        self.dlg.previewMosaicButton.clicked.connect(
+            self.preview_service.preview_my_imagery_mosaic)
         self.dlg.mosaicTable.selectionModel().selectionChanged.connect(self.service.check_mosaic_selection)
         self.dlg.showImagesButton.clicked.connect(self.view.show_images_table)
         self.dlg.seeImagesButton.clicked.connect(self.view.show_images_table)
@@ -30,7 +38,8 @@ class DataCatalogController(QObject):
         self.view.choose_raster_layer.triggered.connect(self.service.choose_raster_layers)
         self.dlg.imageInfoButton.clicked.connect(self.service.image_info)
         self.dlg.renameImageButton.clicked.connect(self.service.show_rename_image_dialog)
-        self.dlg.previewImageButton.clicked.connect(self.service.get_image_preview_l)
+        self.dlg.previewImageButton.clicked.connect(
+            self.preview_service.preview_my_imagery_image)
         self.dlg.downloadImageButton.clicked.connect(self.service.download_image)
         self.dlg.imageTable.selectionModel().selectionChanged.connect(self.service.check_image_selection)
         self.dlg.seeMosaicsButton.clicked.connect(self.service.switch_to_mosaics_table)
