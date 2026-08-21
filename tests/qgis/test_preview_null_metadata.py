@@ -3,13 +3,18 @@
 A NULL ``acquisitionDate`` attribute comes back as Python ``None``, so the historic
 ``feature.attribute('acquisitionDate').toString(...)`` raised ``AttributeError`` — which the
 surrounding ``except KeyError`` (there for duplicated processings) did not catch.
+
+Owned by `PreviewService` since the preview extraction. `alert` is patched rather than mocked
+on the object: the service reaches the message tier through a module-level function, the way
+every other service does.
 """
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
 from qgis.core import QgsVectorLayer, QgsFeature
 
-from mapflow.mapflow import Mapflow
+from mapflow.functional.service.preview_service import PreviewService
 
 
 def _null_date_feature():
@@ -27,20 +32,12 @@ def _null_date_feature():
 
 
 def test_preview_catalog_handles_null_acquisition_date():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda t: t
-    plugin.iface = MagicMock()
-    plugin.metadata_feature = MagicMock(return_value=_null_date_feature())
-    plugin.metadata_footprint = MagicMock(return_value=MagicMock())
-    plugin.preview_png = MagicMock()
-    plugin._pending_preview_ids = set()
-    plugin.app_context = SimpleNamespace(project=MagicMock(), metadata_layer=MagicMock())
-    plugin.app_context.project.mapLayersByName.return_value = []
+    service = _preview_service(_null_date_feature())
 
-    plugin.preview_catalog("img-1")  # must not raise
+    service.preview_catalog("img-1")  # must not raise
 
     # The PNG branch is reached (no exception aborted it before dispatch).
-    plugin.preview_png.assert_called_once()
+    service.preview_png.assert_called_once()
 
 
 def _feature_without_acquisition_date_field(preview_type, preview_url, provider_name):
@@ -60,44 +57,56 @@ def _feature_without_acquisition_date_field(preview_type, preview_url, provider_
     return next(layer.getFeatures())
 
 
-def _preview_plugin(feature):
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda t: t
-    plugin.iface = MagicMock()
-    plugin.alert = MagicMock()
-    plugin.metadata_feature = MagicMock(return_value=feature)
-    plugin.metadata_footprint = MagicMock(return_value=MagicMock())
-    plugin.preview_png = MagicMock()
-    plugin.preview_mosaic = MagicMock()
-    plugin._pending_preview_ids = set()
-    plugin.app_context = SimpleNamespace(project=MagicMock(), metadata_layer=MagicMock())
-    plugin.app_context.project.mapLayersByName.return_value = []
-    return plugin
+def _preview_service(feature):
+    app_context = SimpleNamespace(project=MagicMock(), metadata_layer=MagicMock())
+    app_context.project.mapLayersByName.return_value = []
+    service = PreviewService(iface=MagicMock(),
+                             app_context=app_context,
+                             http=MagicMock(),
+                             plugin_dir="",
+                             config=MagicMock(),
+                             result_loader=MagicMock(),
+                             processing_service=SimpleNamespace(in_template_mode=False,
+                                                                active_template=None))
+    service.metadata_feature = MagicMock(return_value=feature)
+    service.metadata_footprint = MagicMock(return_value=MagicMock())
+    service.preview_png = MagicMock()
+    service.preview_mosaic = MagicMock()
+    return service
 
 
-def test_mosaic_previews_when_acquisition_date_field_is_absent():
+@pytest.fixture
+def alerts(monkeypatch):
+    """What the service told the user. Empty is the assertion in both tests below."""
+    shown = []
+    monkeypatch.setattr("mapflow.functional.service.preview_service.alert",
+                        lambda *args, **kwargs: shown.append(args[0] if args else ""))
+    return shown
+
+
+def test_mosaic_previews_when_acquisition_date_field_is_absent(alerts):
     # The reported bug: a mosaic (valid xyz preview) reported "Selected imagery has no preview"
     # because a KeyError on the missing acquisitionDate column blanked out preview_type.
     feature = _feature_without_acquisition_date_field(
         "xyz", "https://host/api/v0/cogs/tiles/{z}/{x}/{y}.png?uri=s3://bucket/cog",
         "my_imagery_mosaics")
-    plugin = _preview_plugin(feature)
+    service = _preview_service(feature)
 
-    plugin.preview_catalog("mosaic-1")
+    service.preview_catalog("mosaic-1")
 
-    plugin.preview_mosaic.assert_called_once()
-    plugin.preview_png.assert_not_called()
-    plugin.alert.assert_not_called()  # no "Selected imagery has no preview"
+    service.preview_mosaic.assert_called_once()
+    service.preview_png.assert_not_called()
+    assert alerts == []  # no "Selected imagery has no preview"
 
 
-def test_image_dispatches_to_png_when_acquisition_date_field_is_absent():
+def test_image_dispatches_to_png_when_acquisition_date_field_is_absent(alerts):
     # An image reaches the PNG branch too (its own failure, if any, is the broken URL download —
     # not the false "no preview").
     feature = _feature_without_acquisition_date_field(
         "png", "https://host/rest/rasters/image/x/preview/l", "my_imagery_images")
-    plugin = _preview_plugin(feature)
+    service = _preview_service(feature)
 
-    plugin.preview_catalog("img-1")
+    service.preview_catalog("img-1")
 
-    plugin.preview_png.assert_called_once()
-    plugin.alert.assert_not_called()
+    service.preview_png.assert_called_once()
+    assert alerts == []

@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 
 from qgis.core import QgsProject
 
+from mapflow.functional.service.preview_service import PreviewService
 from mapflow.mapflow import Mapflow
 
 
@@ -119,17 +120,31 @@ def test_reconnect_cell_preview_first_time_no_disconnect_error():
     plugin.dlg.metadataTable.cellClicked.connect.assert_called_once()
 
 
+def _preview_service(in_template_mode):
+    """T1 moved to `PreviewService` with the rest of the preview code; the reconnect above is
+    still `mapflow.py`, because it manages a search-table signal."""
+    return PreviewService(
+        iface=MagicMock(),
+        app_context=SimpleNamespace(project=MagicMock()),
+        http=MagicMock(),
+        plugin_dir="",
+        config=MagicMock(),
+        result_loader=MagicMock(),
+        processing_service=SimpleNamespace(in_template_mode=in_template_mode,
+                                           active_template=None))
+
+
 def test_add_aoi_to_preview_skipped_in_template_mode():
-    plugin = _plugin_for_preview(in_template_mode=True)
+    service = _preview_service(in_template_mode=True)
 
-    plugin._add_aoi_to_preview_if_needed()
+    service._add_aoi_to_preview_if_needed()
 
-    plugin.result_loader.add_aoi_to_preview.assert_not_called()
+    service.result_loader.add_aoi_to_preview.assert_not_called()
 
 
 def test_add_aoi_to_preview_runs_outside_template_mode():
-    plugin = _plugin_for_preview(in_template_mode=False)
+    service = _preview_service(in_template_mode=False)
 
-    plugin._add_aoi_to_preview_if_needed()
+    service._add_aoi_to_preview_if_needed()
 
-    plugin.result_loader.add_aoi_to_preview.assert_called_once()
+    service.result_loader.add_aoi_to_preview.assert_called_once()
