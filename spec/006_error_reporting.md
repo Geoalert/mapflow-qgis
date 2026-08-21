@@ -39,10 +39,30 @@ The log tier is unconditional and is never thinned by suppression. It is where a
 reconstructs how often something fired and in what order, which is exactly the information
 the other two tiers discard.
 
+### Where each tier lives
+
+The **message** tier is `AlertService`, a service: `alert_*`, `ask_text` and anything else that
+needs a synchronous answer from the user. It owns the Qt types so its callers do not import
+them — a service asking the user a question is not a reason to hand control to something that
+can see a dialog.
+
+The **report** tier lives in `infra/`, not in a service. Two reasons, and the second is the
+binding one:
+
+- it is reached from `Http`, which is itself infra and must not depend on a service singleton;
+- every layer may import `infra/`, so putting it there makes it reachable from services, api
+  modules and controllers alike, whereas a service-tier reporter is reachable only downward.
+
+A service that needs to report an unexpected failure imports the reporter from `infra/`. It does
+not emit a signal for someone else to report on its behalf, and it does not construct
+`ErrorMessageWidget`.
+
 ### Volume limit
 
 **Contract: no failure, however often it recurs, may produce an unbounded number of
-dialogs.**
+dialogs.** This covers *every* dialog tier — report and message alike. Both use `exec()`, so
+both stack; a modal that says "Could not refresh" on a 6-second poll locks QGIS just as
+effectively as an unthrottled crash report.
 
 This is not a nicety. Plugin modals are opened with `exec()`, which runs a nested event
 loop, so `QTimer` keeps firing while a dialog is up and dialogs *stack* rather than queue.
@@ -53,10 +73,13 @@ introduced to replace.
 
 `mapflow/report_throttle.py` implements the limit:
 
-- Failures are identified by **signature** — exception type plus the source line it was
-  raised from. Not the message (messages carry ids and would make every occurrence look
+- Failures are identified by **signature**. For an exception: its type plus the source line it
+  was raised from. Not the message (messages carry ids and would make every occurrence look
   new) and not the operation context (one broken line reached from two call paths is one
-  bug).
+  bug). For an HTTP failure, where there is no raising frame to key on: the **Qt error code
+  plus the endpoint path**, query string excluded — the same string the report body carries,
+  for the same reason, since a query carries ids and tokens that would make every occurrence
+  distinct.
 - A signature that has just been reported is suppressed for a **window**, starting at 60s —
   above the slowest poll interval — and **doubling on each further report**, capped at
   30 minutes. A persistent failure therefore still resurfaces a couple of times an hour
@@ -67,6 +90,11 @@ introduced to replace.
 - Suppressed occurrences are counted, and the count is carried into both the dialog text
   and the report body. A traceback that fired 200 times describes a different bug from one
   that fired once, and the single traceback cannot show the difference.
+
+The four numbers above are **configuration, in `config.py`, not constants in
+`report_throttle.py`.** They were derived from poll intervals rather than from watching anyone
+use the plugin, so they are a first guess that live UX testing is expected to move. Reasoning
+about them stays here; the values do not.
 
 ### A guarded callback is interrupted, not completed
 
