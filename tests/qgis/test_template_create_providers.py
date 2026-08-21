@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 from qgis.core import QgsGeometry
 
 from mapflow.functional.service.aoi_service import AoiService
+from mapflow.functional.view.search_view import SearchView
 from mapflow.mapflow import Mapflow
 
 
@@ -40,6 +41,7 @@ def _plugin_ready_to_create_template(checked_providers):
     )
 
     plugin.dlg = MagicMock()
+    plugin.search_view = SearchView(dlg=plugin.dlg, config=MagicMock())
     plugin.dlg.processingName.text.return_value = "My template"
     plugin.dlg.metadataFrom.dateTime.return_value.toUTC.return_value.toString.return_value = "2022-09-24T17:00:00.000Z"
     plugin.dlg.metadataTo.dateTime.return_value.toUTC.return_value.toString.return_value = "2026-09-24T17:00:00.000Z"
@@ -93,6 +95,7 @@ def test_providers_omitted_when_available_filter_is_off_even_if_selected():
 def test_selected_search_providers_respects_available_filter_checkbox():
     plugin = Mapflow.__new__(Mapflow)
     plugin.dlg = MagicMock()
+    plugin.search_view = SearchView(dlg=plugin.dlg, config=MagicMock())
     plugin.dlg.searchProvidersCombo.checkedItemsData.return_value = ["arcgis_world_imagery"]
 
     plugin.dlg.hideUnavailableResults.isChecked.return_value = False

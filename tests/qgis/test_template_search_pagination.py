@@ -5,12 +5,14 @@ page (preserving the AOI filter), rather than falling through to a regular searc
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from mapflow.functional.view.search_view import SearchView
 from mapflow.mapflow import Mapflow
 
 
 def _plugin(in_template_mode=True):
     plugin = Mapflow.__new__(Mapflow)
     plugin.dlg = MagicMock()
+    plugin.search_view = SearchView(dlg=plugin.dlg, config=MagicMock())
     plugin.search_page_offset = 0
     plugin.search_page_limit = 5
     plugin._template_search_aoi_filter = None
