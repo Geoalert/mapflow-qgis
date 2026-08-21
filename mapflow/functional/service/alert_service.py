@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 from PyQt5.QtWidgets import QApplication, QInputDialog, QMessageBox
 from PyQt5.QtCore import Qt, QObject
 
@@ -62,6 +62,35 @@ class AlertService(QObject):
         """Display a confirmation dialog. Returns True if user confirms."""
         return self.alert(message, QMessageBox.Question, blocking=True)
 
+    def report_http_error(self,
+                          response,
+                          plugin_version: str,
+                          title: str = None,
+                          error_message_parser: Optional[Callable] = None) -> None:
+        """The *report* tier of `spec/006_error_reporting.md`: the dialog that offers to mail us
+        the failure. Here for the same reason `alert` and `ask_text` are — a service that hits an
+        HTTP error should not have to import a dialog to say so.
+
+        `plugin_version` is passed in rather than read: this tier knows how to present a failure,
+        not where the session state lives.
+        """
+        # Imported here, not at module scope, for the reason `error_guard.report_unexpected_error`
+        # gives for the same import: the dialog pulls in the Qt widget tree, and keeping it lazy
+        # lets a headless context construct this service without one. Showing dialogs is this
+        # tier's job, so the dependency itself is not the thing being avoided.
+        from ...dialogs.error_message_widget import ErrorMessageWidget
+        from ...http import get_error_report_body
+        response_body = response.readAll().data().decode()
+        error_summary, email_body = get_error_report_body(
+            response=response,
+            response_body=response_body,
+            plugin_version=plugin_version,
+            error_message_parser=error_message_parser)
+        ErrorMessageWidget(parent=QApplication.activeWindow(),
+                           text=error_summary,
+                           title=title,
+                           email_body=email_body).show()
+
     def ask_text(self, title: str, label: str, default: str = "") -> Tuple[str, bool]:
         """Ask the user for a line of text. Returns (text, accepted).
 
@@ -92,3 +121,8 @@ def alert_confirm(message: str) -> bool:
 
 def ask_text(title: str, label: str, default: str = "") -> Tuple[str, bool]:
     return AlertService.instance().ask_text(title, label, default)
+
+def report_http_error(response, plugin_version: str, title: str = None,
+                      error_message_parser: Optional[Callable] = None) -> None:
+    return AlertService.instance().report_http_error(
+        response, plugin_version, title, error_message_parser)

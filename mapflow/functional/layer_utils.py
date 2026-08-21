@@ -106,6 +106,24 @@ def get_catalog_aoi(catalog_aoi: QgsGeometry,
     return clipped_aoi
 
 
+def find_template_group(project,
+                        mapflow_group_name: str,
+                        template_group_name: str,
+                        subgroup_name: Optional[str] = None):
+    """The ``<mapflow group> > <template> [> <subgroup>]`` layer-tree group, or None.
+
+    Creates nothing — that is `Mapflow._ensure_template_group`. Lives here because both the
+    plugin and the services that place an already-built layer need the lookup, and a service may
+    not reach back into `mapflow.py` for it.
+    """
+    root = project.layerTreeRoot()
+    parent_group = root.findGroup(mapflow_group_name) or root
+    template_group = parent_group.findGroup(template_group_name)
+    if template_group is None or not subgroup_name:
+        return template_group
+    return template_group.findGroup(subgroup_name)
+
+
 def is_polygon_layer(layer: QgsMapLayer) -> bool:
     """Determine if a layer is of vector type and has polygonal geometry.
     :param layer: A layer to test
