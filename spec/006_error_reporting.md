@@ -60,9 +60,7 @@ not emit a signal for someone else to report on its behalf, and it does not cons
 ### Volume limit
 
 **Contract: no failure, however often it recurs, may produce an unbounded number of
-dialogs.** This covers *every* dialog tier — report and message alike. Both use `exec()`, so
-both stack; a modal that says "Could not refresh" on a 6-second poll locks QGIS just as
-effectively as an unthrottled crash report.
+dialogs.** This covers *every* dialog tier — report and message alike.
 
 This is not a nicety. Plugin modals are opened with `exec()`, which runs a nested event
 loop, so `QTimer` keeps firing while a dialog is up and dialogs *stack* rather than queue.
@@ -70,6 +68,9 @@ Several plugin operations are timer-driven — processing table refresh (6s), te
 refresh (15s), user status (30s) — so an unthrottled failure on any polled path renders
 QGIS unusable. That is a worse outcome than the unhandled exception the reporting was
 introduced to replace.
+
+None of that is specific to the report dialog: a message-tier modal saying "Could not refresh"
+on a 6-second poll locks QGIS exactly as thoroughly as an unthrottled crash report.
 
 `mapflow/report_throttle.py` implements the limit:
 
