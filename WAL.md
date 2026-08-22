@@ -130,20 +130,59 @@ Against `spec/003_local_storage.md`; drop what is no longer read.
 
 ### Phase F — after the structure is settled
 
-[ ] Wrap user interactions in error_guard
+### Error reporting — one suppression policy for every dialog
+
+Planned in full and approved; **sequenced after Phase C by decision, and not to be re-raised
+unless a discovery changes that order.** Steps 1–3 are independent of the extractions and fix a
+live violation of `spec/006_error_reporting.md`; step 4 genuinely needs Phase C finished.
+
+The state that motivates it, as measured on `dev`:
+
+* two report paths do the same job with different plumbing — `report_unexpected_error`
+  (exception → `get_exception_report_body`) and `report_http_error` (response →
+  `get_error_report_body`) — and both build `ErrorMessageWidget` themselves, with different
+  wording conventions;
+* **only the exception path is throttled.** The response path can stack dialogs without bound,
+  which is exactly what the volume-limit contract forbids and why the opt-outs below exist;
+* **six request sites opt out of error handling and supply no handler**, so their server errors
+  reach nobody: `mapflow.py:475,2617,3732`, `functional/api/processing_api.py:86`,
+  `functional/api/data_catalog_api.py:97,257`. (A previous version of this entry said three; it
+  missed both data_catalog ones. A further 26 sites opt out but pass their own handler, which is
+  correct and out of scope.)
+
+[ ] 1. Signature and throttle for the HTTP path
+`response_signature(response)` = Qt error code + endpoint path; `http._request_path` already
+computes that path, query-free, because it lands in a mail body. Carry `suppressed_count` into
+the dialog text and report body the way the exception path does.
+
+[ ] 2. One reporter, in `infra/`
+Both entry points behind one module owning the throttle, the dialog and the suppressed-count
+wording. This **moves `report_http_error` out of `AlertService`**, where the preview step put it:
+a service may import `infra/`, so it never needed to be in the message tier. `AlertService` keeps
+the message tier, which is what `spec/007_architecture.md` assigns it.
+
+[ ] 3. Restore the six silent request paths
+With the throttle covering them, opting out has no remaining justification — `spec/006` already
+says so. Each site takes the default handler back, or states in a comment why not.
+
+[ ] 4. Apply `guard_entry_point` at the entry points
 `guard_entry_point` is written and tested but applied nowhere; only `Http.response_dispatcher` is
 guarded. Everything entering plugin code from Qt without passing through `Http` still escapes to
 QGIS's raw unhandled-exception dialog: button clicks, selection changes, timer ticks,
-drag-and-drop, dialog accept/reject.
-Cheap once Phase C lands — a controller slot is the definition of an entry point
-(`spec/007_architecture.md` § Entry points), so the sites are enumerable instead of guessed.
+drag-and-drop, dialog accept/reject. 203 `.connect()` sites today, 109 still in `mapflow.py` —
+which is why this waits for Phase C, where a controller slot becomes the definition of an entry
+point (`spec/007_architecture.md` § Entry points).
+The decorator is the cheap half. The expensive half is `spec/006` § "A guarded callback is
+interrupted, not completed": every slot needs checking for cleanup placed after code that can
+raise. That is the bug that polled `/user/status` twice a second for a whole session.
 
-[ ] Restore user-facing errors on the polled paths
-Three call sites opt out of the default error handler purely to avoid stacked modals:
-`mapflow.py` `refresh_status`, `mapflow.py:3042`, and `processing_api.py` `get_processings`. A real
-server error on those paths is invisible to the user. The throttle removes the reason for the
-workaround, but `report_http_error` needs its own signature (Qt error code + endpoint path) first,
-so both dialog paths land on one suppression policy.
+[ ] 5. Throttle the message tier too
+Decided with the above: the contract says *no failure* may produce unbounded dialogs, and
+`alert()` is `exec()`-modal like the report dialog. It is reachable from polled paths (the
+template callbacks hang off the 6 s processing poll), so the same storm is possible there.
+Throttle parameters move into `config.py` so they can be tuned during live UX testing without a
+code change — the current values (60 s window, ×2 backoff, 30 min cap, 10 s global floor) were
+reasoned from poll intervals, not measured against users.
 
 [ ] A refused price is undone by the next UI refresh
 When `/processing/cost/v2` refuses, `ProcessingService.disable_processing_start` correctly
