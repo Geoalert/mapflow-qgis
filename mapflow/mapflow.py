@@ -14,7 +14,7 @@ from PyQt5.QtCore import (
     QTimer, QTranslator
 )
 from PyQt5.QtGui import QBrush, QColor, QIcon
-from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
+from PyQt5.QtNetwork import QNetworkReply
 from PyQt5.QtWidgets import (
     QAbstractItemView, QAction, QApplication, QFileDialog,
     QMenu, QMessageBox, QWidget, QToolButton
@@ -41,6 +41,7 @@ from .functional.controller.project_processing_controller import ProjectProcessi
 from .functional.controller.processing_controller import ProcessingController
 from .functional.service.aoi_service import AoiService
 from .functional.service.preview_service import PreviewService
+from .functional.service.search_service import SearchService
 from .functional.view.aoi_view import AoiView
 from .functional.view.search_view import SearchView
 from .functional.service import (DataCatalogService,
@@ -55,7 +56,6 @@ from .http import (Http,
                    get_error_report_body)
 # Schema
 from .schema import (BillingType,
-                     ImageCatalogRequestSchema,
                      ImageCatalogResponseSchema,
                      ImagerySearchParams,
                      MyImageryParams,
@@ -101,10 +101,6 @@ class Mapflow(QObject):
     # Last local-filter outcome, so a slider drag that doesn't flip any image skips the re-fill.
     _last_unfit_set = None
     _last_filtered_geoms = None
-    # Server-side sort of the search results (regular search AND template results). Default:
-    # newest first by acquisition date; a header click changes/flips it and re-runs the search.
-    _search_sort_by = "ACQUISITION_DATE"
-    _search_sort_order = "DESC"
     # Cached widen-warning messages backing the (!) indicator's click handler.
     _widen_details = None
 
@@ -158,9 +154,6 @@ class Mapflow(QObject):
             self.app_context.settings.setValue('processings', {})
         # Set projects from settings if it was opened before
         self.app_context.project_id = self.app_context.settings.value("project_id")
-        # Imagery search pagination
-        self.search_page_offset = 0
-        self.search_page_limit = self.config.SEARCH_RESULTS_PAGE_LIMIT
 
         # ========== 3. INIT DIALOGS ==========
         # Init dialogs before creating timers that need them as parent
@@ -303,7 +296,23 @@ class Mapflow(QObject):
         self.data_catalog_controller = DataCatalogController(self.dlg,
                                                              self.data_catalog_service,
                                                              self.preview_service)
+        # Before SearchService, which resolves sortable columns through it. Was created further
+        # down with the provider-dialog wiring; construction order is load-bearing here.
+        self.config_search_columns = ConfigColumns()
         self.search_view = SearchView(dlg=self.dlg, config=self.config)
+        self.search_service = SearchService(iface=self.iface,
+                                            app_context=self.app_context,
+                                            http=self.http,
+                                            plugin_dir=self.plugin_dir,
+                                            config=self.config,
+                                            config_search_columns=self.config_search_columns,
+                                            result_loader=self.result_loader,
+                                            provider_service=self.provider_service)
+        # Search wiring. Moves to SearchController with the rest of the search-tab connects.
+        self.search_service.resultsReceived.connect(self._on_search_results)
+        self.search_service.metadataLayerReady.connect(self._on_metadata_layer_ready)
+        self.search_service.pagerChanged.connect(self.search_view.show_pages)
+        self.search_service.pagerHidden.connect(self.search_view.hide_pages)
         self.aoi_view = AoiView(dlg=self.dlg, iface=self.iface)
         # Template-AOI session wiring. It belongs to TemplateController, which the templates
         # step creates; until then mapflow.py holds the connects (the spec allows wiring here,
@@ -408,7 +417,6 @@ class Mapflow(QObject):
         self.dlg.editProvider.clicked.connect(self.edit_provider)
         self.dlg.removeProvider.clicked.connect(self.remove_provider)
 
-        self.config_search_columns = ConfigColumns()
         # Image ids whose preview is currently being downloaded (async). Guards against the
         # dedupe-on-map check missing duplicates, since the preview layer is only added in the
         # HTTP callback — a second click/double-click fired several downloads before the first
@@ -760,7 +768,7 @@ class Mapflow(QObject):
         # New images are flagged with an icon in the leftmost column (not by editing text).
         self._apply_new_image_markers()
         # Toggle/wire the search pager for the template results (T6).
-        self._update_search_pager(response_data.total, response_data.limit, response_data.offset)
+        self.search_service.update_pager(response_data.total, response_data.limit, response_data.offset)
 
     def _store_template_search_footprints(self,
                                           geoms: dict,
@@ -776,7 +784,7 @@ class Mapflow(QObject):
           user can preview image footprints and request imagery previews.
         """
         self.app_context.search_footprints = {}
-        provider = self.imagery_search_provider
+        provider = self.search_service.imagery_search_provider
         if not provider:
             return
         filename = provider.save_search_layer(self.app_context.temp_dir, geoms)
@@ -1110,7 +1118,7 @@ class Mapflow(QObject):
             if imagery_search_tab:
                 self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
 
-        self.search_page_offset = max(0, offset)
+        self.search_service.page_offset = max(0, offset)
         if aoi_ids is None:
             aoi_ids = self._aoi_ids_from_template(template)
         # Template results are fetched WITHOUT date/cloud server-side filters: those (and the
@@ -1120,11 +1128,11 @@ class Mapflow(QObject):
         self.processing_service.api.get_template_images(
             template_id=template.id,
             callback=lambda response: self.get_selected_template_callback(response, template),
-            limit=self.search_page_limit,
-            offset=self.search_page_offset,
+            limit=self.search_service.page_limit,
+            offset=self.search_service.page_offset,
             aoi_ids=aoi_ids or None,
-            sort_by=self._search_sort_by,
-            sort_order=self._search_sort_order,
+            sort_by=self.search_service.sort_by,
+            sort_order=self.search_service.sort_order,
         )
 
     def _load_template_search_page(self, offset: int):
@@ -1774,26 +1782,12 @@ class Mapflow(QObject):
             # The current search-results footprint layer is a polygon too, but it is NOT an
             # AOI. Wiring its selection to the area calc would recompute (and re-request) the
             # processing cost a second time on every image click — skip it.
-            if self._is_search_metadata_layer(layer):
+            if self.search_service.is_search_metadata_layer(layer):
                 continue
             layer.selectionChanged.connect(self.area_calculator_service.calculate_aoi_area_selection)
             layer.geometryChanged.connect(self.area_calculator_service.calculate_aoi_area_layer_edited)
             layer.featureAdded.connect(self.area_calculator_service.calculate_aoi_area_layer_edited)
             layer.featuresDeleted.connect(self.area_calculator_service.calculate_aoi_area_layer_edited)
-
-    def _is_search_metadata_layer(self, layer) -> bool:
-        """True if `layer` is the current imagery-search footprints layer.
-
-        Metadata-layer creators assign ``app_context.metadata_layer`` before adding the
-        layer to the project, so this is reliable at ``layersAdded`` time.
-        """
-        metadata_layer = self.app_context.metadata_layer
-        if metadata_layer is None:
-            return False
-        try:
-            return layer.id() == metadata_layer.id()
-        except RuntimeError:  # metadata layer was deleted
-            return False
 
     def toggle_imagery_search(self,
                               provider):
@@ -1820,7 +1814,7 @@ class Mapflow(QObject):
         # We store the results in a temp folder, separate file for each provider
         geoms = self.app_context.search_provider.load_search_layer(self.app_context.temp_dir)
         if geoms:
-            self.display_metadata_geojson_layer(
+            self.search_service.display_metadata_geojson_layer(
                 os.path.join(self.app_context.temp_dir, self.app_context.search_provider.metadata_layer_name),
                 f"{self.app_context.search_provider.name} metadata")
             # Keep the restored results available to the instant local filter (fill below emits
@@ -1908,7 +1902,7 @@ class Mapflow(QObject):
         except (NotImplementedError, AttributeError):
             provider_supports_search = False
         if not provider_supports_search:
-            provider = self.imagery_search_provider
+            provider = self.search_service.imagery_search_provider
             # we need to deselect table to be able to use the non-search provider
         if provider != self.app_context.search_provider:
             self.app_context.search_provider = provider
@@ -2245,17 +2239,10 @@ class Mapflow(QObject):
         template-images endpoint accepts the same sortBy/sortOrder)."""
         if self.dlg.metadataTable.rowCount() == 0:
             return  # nothing searched yet
-        attributes = tuple(self.config_search_columns.METADATA_TABLE_ATTRIBUTES.values())
-        if not 0 <= column < len(attributes):
-            return
-        sort_field = self.config.SEARCH_SORT_FIELDS.get(attributes[column])
+        sort_field = self.search_service.sort_column_field(column)
         if not sort_field:
             return  # column is not server-sortable
-        if self._search_sort_by == sort_field:
-            self._search_sort_order = "ASC" if self._search_sort_order == "DESC" else "DESC"
-        else:
-            self._search_sort_by = sort_field
-            self._search_sort_order = "DESC"
+        self.search_service.toggle_sort(sort_field)
         self._update_search_sort_indicator(column)
         # Re-request the first page with the new sort — the template-images endpoint and
         # /catalog/meta take the same sort params, so both re-sort server-side.
@@ -2267,20 +2254,16 @@ class Mapflow(QObject):
     def _update_search_sort_indicator(self, column: int) -> None:
         header = self.dlg.metadataTable.horizontalHeader()
         header.setSortIndicatorShown(True)
-        order = Qt.DescendingOrder if self._search_sort_order == "DESC" else Qt.AscendingOrder
+        order = Qt.DescendingOrder if self.search_service.sort_order == "DESC" else Qt.AscendingOrder
         header.setSortIndicator(column, order)
 
     def _restore_search_sort_indicator(self) -> None:
         """Re-show the sort arrow on the active sort column. Every table (re)fill calls
         setSortingEnabled(False), which Qt implements as hiding the sort indicator, so it must be
         restored after each fill (otherwise the arrow flashes on click and immediately vanishes)."""
-        if not self._search_sort_by:
-            return
-        attribute = next((attr for attr, token in self.config.SEARCH_SORT_FIELDS.items()
-                          if token == self._search_sort_by), None)
-        attributes = tuple(self.config_search_columns.METADATA_TABLE_ATTRIBUTES.values())
-        if attribute in attributes:
-            self._update_search_sort_indicator(attributes.index(attribute))
+        column = self.search_service.active_sort_column()
+        if column is not None:
+            self._update_search_sort_indicator(column)
 
     def get_metadata(self, _: Optional[bool] = False, offset: Optional[int] = 0) -> None:
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
@@ -2303,154 +2286,34 @@ class Mapflow(QObject):
             self.alert(self.tr('Please, select a valid area of interest'))
             return
 
+        if not self.check_if_output_directory_is_selected():
+            return  # only when outputDirectory is empty AND user closed selection dialog
         # All imagery search goes through the Mapflow catalog API, which filters server-side.
         # Every filter widget is read once, here, so the request is built from what the widgets
         # said when Search was pressed rather than from whatever they say by the time it is sent.
-        self.request_mapflow_metadata(aoi=aoi,
-                                      provider=provider,
-                                      offset=offset,
-                                      sort_by=self._search_sort_by,
-                                      sort_order=self._search_sort_order,
-                                      **self.search_view.search_parameters())
+        self.search_service.search(aoi=aoi,
+                                   provider=provider,
+                                   aoi_layer=self.aoi_view.current_layer(),
+                                   baseline_filters=self._current_filter_baseline(),
+                                   offset=offset,
+                                   **self.search_view.search_parameters())
 
     def clear_metadata(self):
-        try:
-            self.app_context.project.removeMapLayer(self.app_context.metadata_layer)
-        except (AttributeError, RuntimeError):  # metadata layer has been deleted
-            pass
-
-        self.app_context.open_template_results_id = None
+        """Drop the search results. The service owns the results and the layer; the table and the
+        widen (!) indicator are widgets, so they are cleared here until `SearchController` lands."""
+        self.search_service.clear()
         self.search_view.clear_table()
-        # Drop the retained results/baseline so a stale widen (!) indicator does not linger.
-        self.app_context.search_result_geojson = None
-        self.app_context.search_baseline_filters = None
         self.search_view.set_widen_warning_visible(False)
-        #provider = self.provider_service.providers[self.dlg.providerIndex()]
-        self.app_context.search_provider.clear_saved_search(self.app_context.temp_dir)
 
-    def request_mapflow_metadata(self,
-                                 aoi: QgsGeometry,
-                                 provider: ProviderInterface,
-                                 from_: Optional[str] = None,
-                                 to: Optional[str] = None,
-                                 min_resolution: Optional[float] = None,
-                                 max_resolution: Optional[float] = None,
-                                 max_cloud_cover: Optional[float] = None,
-                                 min_off_nadir_angle: Optional[float] = None,
-                                 max_off_nadir_angle: Optional[float] = None,
-                                 min_intersection: Optional[float] = None,
-                                 offset: Optional[int] = 0,
-                                 hide_unavailable: Optional[bool] = False,
-                                 product_types: Optional[List[ProductType]] = None,
-                                 search_providers: Optional[List[str]] = None,
-                                 sort_by: Optional[str] = None,
-                                 sort_order: Optional[str] = None):
-        if not self.check_if_output_directory_is_selected():
-            return # only when outputDirectory is empty AND user closed selection dialog
-        self.app_context.metadata_aoi = aoi
-        # Remember what this search actually asks the server for, so the widen (!) indicator can
-        # flag later widget edits that ask for MORE than was fetched (which local filtering can't
-        # surface without a fresh Search).
-        self.app_context.search_baseline_filters = self._current_filter_baseline()
-        request_payload = ImageCatalogRequestSchema(aoi=json.loads(aoi.asJson()),
-                                                    acquisitionDateFrom=from_,
-                                                    acquisitionDateTo=to,
-                                                    minResolution=min_resolution,
-                                                    maxResolution=max_resolution,
-                                                    maxCloudCover=max_cloud_cover,
-                                                    minOffNadirAngle=min_off_nadir_angle,
-                                                    maxOffNadirAngle=max_off_nadir_angle,
-                                                    minAoiIntersectionPercent=min_intersection,
-                                                    limit=self.search_page_limit,
-                                                    offset=offset,
-                                                    hideUnavailable=hide_unavailable,
-                                                    productTypes=product_types,
-                                                    dataProviders=search_providers,
-                                                    sortBy=sort_by,
-                                                    sortOrder=sort_order)
-        self.http.post(url=provider.meta_url,
-                       body=request_payload.as_json().encode(),
-                       headers={},
-                       callback=self.request_mapflow_metadata_callback,
-                       callback_kwargs={"min_intersection": min_intersection,
-                                        "max_cloud_cover": max_cloud_cover},
-                       error_handler=self.request_mapflow_metadata_error_handler,
-                       use_default_error_handler=False,
-                       timeout=60)
+    def _on_search_results(self, geoms) -> None:
+        """Built-in Qt sorting stays OFF: results already arrive in the server's sort order, and
+        a header click re-requests rather than sorting locally."""
+        self.search_view.fill_table(geoms, sort=False)
 
-    def request_mapflow_metadata_error_handler(self, response: QNetworkReply):
-        title = self.tr("We couldn't get metadata from the Mapflow Imagery Catalog")
-        error = response.attribute(QNetworkRequest.HttpStatusCodeAttribute)
-        if error is not None:
-            title += self.tr(". Error {error}").format(error=error)
-        self.report_http_error(response, title, error_message_parser=api_message_parser)
-
-    def display_metadata_geojson_layer(self, filename, layer_name):
-        try:
-            self.app_context.project.removeMapLayer(self.app_context.metadata_layer)
-        except (AttributeError, RuntimeError):  # metadata layer has been deleted
-            pass
-        # Assigned (before add_layer) so the AOI-area monitor recognizes and skips it.
-        self.app_context.metadata_layer = QgsVectorLayer(filename, layer_name, 'ogr')
-        self.app_context.metadata_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
-        # Place search results just under the AOI layer, if that layer has a legend node.
-        # (A layer added with addToLegend=False has no tree node -> findLayer returns None;
-        # fall back to a plain add instead of dereferencing a missing parent.)
-        aoi_layer = self.dlg.polygonCombo.currentLayer()
-        aoi_layer_tree = (self.app_context.project.layerTreeRoot().findLayer(aoi_layer.id())
-                          if aoi_layer else None)
-        if aoi_layer_tree is not None and aoi_layer_tree.parent() is not None:
-            index = aoi_layer_tree.parent().children().index(aoi_layer_tree)
-            self.result_loader.add_layer(layer=self.app_context.metadata_layer, order=index + 1)
-        else:
-            self.result_loader.add_layer(layer=self.app_context.metadata_layer)
-        # Connect layer with metadata table
-        self.app_context.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(
+    def _on_metadata_layer_ready(self, layer) -> None:
+        """Selecting a footprint on the map selects the matching table row (and triggers preview)."""
+        self.app_context.meta_layer_table_connection = layer.selectionChanged.connect(
             self.sync_layer_selection_with_table)
-        self.app_context.search_footprints = {
-            feature['local_index']: feature
-            for feature in self.app_context.metadata_layer.getFeatures()
-        }
-
-    def request_mapflow_metadata_callback(self, response: QNetworkReply,
-                                          min_intersection: int = 0,
-                                          max_cloud_cover: int = 90):
-        response_json = json.loads(response.readAll().data())
-        if not response_json.get("images"):
-            self.alert(
-                self.tr('No images match your criteria. Try relaxing the filters.'),
-                QMessageBox.Information
-            )
-            return
-        response_data = ImageCatalogResponseSchema(**response_json)
-        geoms = response_data.as_geojson()
-        # Add index to map table and layer
-        for position, feature in enumerate(geoms.get("features", ())):
-            feature['properties']['local_index'] = position
-
-        # Save the current search results to load later
-        provider = self.imagery_search_provider
-        save_failed_message = self.tr("<b>Results could not be loaded </b><br>Please, make sure you chose the right output folder in the Settings tab \
-                                and you have access rights to this folder")
-        try:
-            filename = provider.save_search_layer(self.app_context.temp_dir, geoms)
-        except OSError:
-            # The case the message describes: missing/unwritable output folder.
-            self.alert(save_failed_message)
-            return
-        except Exception:
-            logger.exception("Unexpected error saving the search layer")
-            self.alert(save_failed_message)
-            return
-        self.display_metadata_geojson_layer(filename, f"{provider.name} metadata")
-        # Retain the raw results so the instant local filter can reorder/re-render them without
-        # a new request (fill emits metadataTableFilled -> apply_local_filter).
-        self.app_context.search_result_geojson = geoms
-        # Built-in Qt sorting stays OFF; the results already arrive in the server sort order and
-        # header clicks re-request with sortBy/sortOrder (see on_metadata_header_clicked).
-        self.dlg.fill_metadata_table(geoms, sort=False)
-
-        self._update_search_pager(response_data.total, response_data.limit, response_data.offset)
 
     def sync_table_selection_with_image_id_and_layer(self) -> None:
         """
@@ -3065,7 +2928,7 @@ class Mapflow(QObject):
         self.dlg.metadataTable.clearContents()
         self.dlg.metadataTable.setRowCount(0)
         # Clear the template search-results pagination so it is not preserved on re-open.
-        self.search_page_offset = 0
+        self.search_service.page_offset = 0
         self.dlg.enable_search_pages(False)
 
     def on_template_aois_changed(self, template):
@@ -3605,29 +3468,16 @@ class Mapflow(QObject):
             product_types = []
         return provider_names, product_types
     
-    def _update_search_pager(self, total: int, limit: int, offset: int):
-        """Show/hide and wire the imagery-search page navigation from a search response's
-        ``total``/``limit``/``offset``. Shared by regular search and template search (T6):
-        template results used to fill the table but never toggle the pager."""
-        if limit and total > limit:
-            self.search_page_offset = offset
-            self.search_page_limit = limit
-            quotient, remainder = divmod(total, limit)
-            total_pages = quotient + (remainder > 0)
-            page_number = int(offset / limit) + 1
-            self.search_view.show_pages(page_number, total_pages)
-        else:
-            self.search_view.hide_pages()
-
     def show_search_next_page(self):
-        offset = self.search_page_offset + self.search_page_limit
-        if self.processing_service.in_template_mode:
-            self._load_template_search_page(offset)
-        else:
-            self.get_metadata(offset=offset)
+        self._show_search_page(self.search_service.next_page_offset())
 
     def show_search_previous_page(self):
-        offset = self.search_page_offset - self.search_page_limit
+        self._show_search_page(self.search_service.previous_page_offset())
+
+    def _show_search_page(self, offset: int):
+        """Which endpoint serves the page depends on where the results came from, so the branch
+        stays out of `SearchService` — it is coordination between two regions, and moves to
+        `SearchController` / `TemplateController` rather than into either service."""
         if self.processing_service.in_template_mode:
             self._load_template_search_page(offset)
         else:
@@ -3710,9 +3560,3 @@ class Mapflow(QObject):
         else:
             self.dlg_login.show()
 
-    @property
-    def imagery_search_provider(self):
-        for provider in self.provider_service.providers:
-            if isinstance(provider, ImagerySearchProvider):
-                return provider
-        return None

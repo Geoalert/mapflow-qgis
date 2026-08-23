@@ -15,7 +15,9 @@ from unittest.mock import MagicMock, patch
 from qgis.core import QgsProject
 
 from mapflow import mapflow as mapflow_module
+from mapflow.config import Config, ConfigColumns
 from mapflow.model.provider.default import ImagerySearchProvider
+from mapflow.functional.service.search_service import SearchService
 from mapflow.functional.view.search_view import SearchView
 from mapflow.mapflow import Mapflow
 
@@ -68,6 +70,16 @@ def _plugin_with_search_provider(tmp_path, template_name="Template A"):
         plugin_name="Mapflow",
         metadata_layer=None,
     )
+    # Real service: these tests assert on the footprints it stores and where it puts the layer.
+    plugin.search_service = SearchService(iface=MagicMock(),
+                                          app_context=plugin.app_context,
+                                          http=MagicMock(),
+                                          plugin_dir=PLUGIN_DIR,
+                                          config=Config,
+                                          config_search_columns=ConfigColumns(),
+                                          result_loader=plugin.result_loader,
+                                          provider_service=plugin.provider_service)
+    plugin.search_service.metadataLayerReady.connect(lambda _layer: None)
     return plugin
 
 
@@ -138,6 +150,15 @@ def test_monitor_skips_current_search_metadata_layer():
     metadata_layer = MagicMock()
     metadata_layer.id.return_value = "meta-1"
     plugin.app_context = SimpleNamespace(metadata_layer=metadata_layer)
+    # "is this the search-results layer?" is SearchService's answer since the search extraction.
+    plugin.search_service = SearchService(iface=MagicMock(),
+                                          app_context=plugin.app_context,
+                                          http=MagicMock(),
+                                          plugin_dir="",
+                                          config=Config,
+                                          config_search_columns=ConfigColumns(),
+                                          result_loader=MagicMock(),
+                                          provider_service=MagicMock())
 
     footprint_layer = MagicMock()  # same id as the current metadata layer -> skipped
     footprint_layer.id.return_value = "meta-1"

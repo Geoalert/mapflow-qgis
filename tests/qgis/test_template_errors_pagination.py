@@ -6,7 +6,22 @@ from unittest.mock import MagicMock
 
 from mapflow.functional.service import processing_service as ps_mod
 from mapflow.functional.service.processing_service import ProcessingService
+from mapflow.config import Config, ConfigColumns
+from mapflow.functional.service.search_service import SearchService
+from mapflow.functional.view.search_view import SearchView
 from mapflow.mapflow import Mapflow
+
+
+def _search_service():
+    """Real, not mocked: these tests assert on the paging state it owns."""
+    return SearchService(iface=MagicMock(),
+                         app_context=MagicMock(),
+                         http=MagicMock(),
+                         plugin_dir="",
+                         config=Config,
+                         config_search_columns=ConfigColumns(),
+                         result_loader=MagicMock(),
+                         provider_service=MagicMock())
 
 
 def _error_response(message, code="BAD_REQUEST"):
@@ -66,26 +81,29 @@ def test_on_template_closed_resets_search_pagination():
     plugin = Mapflow.__new__(Mapflow)
     plugin.app_context = SimpleNamespace(open_template_results_id="x")
     plugin._template_search_aoi_filter = "aoi-1"
-    plugin.search_page_offset = 60
     plugin.dlg = MagicMock()
+    plugin.search_view = SearchView(dlg=plugin.dlg, config=MagicMock())
+    plugin.search_service = _search_service()
+    plugin.search_service.page_offset = 60
     plugin._remove_template_group = MagicMock()
     plugin.aoi_service = MagicMock()
 
     plugin.on_template_closed(None)
 
-    assert plugin.search_page_offset == 0
+    assert plugin.search_service.page_offset == 0
     plugin.dlg.enable_search_pages.assert_called_once_with(False)
 
 
 def test_load_template_search_starts_from_first_page():
     plugin = Mapflow.__new__(Mapflow)
-    plugin.search_page_offset = 30
-    plugin.search_page_limit = 30
     plugin.dlg = MagicMock()
+    plugin.search_service = _search_service()
+    plugin.search_service.page_offset = 30
+    plugin.search_service.page_limit = 30
     plugin.processing_service = MagicMock()
     plugin._aoi_ids_from_template = MagicMock(return_value=[])
 
     plugin._load_template_search(SimpleNamespace(id="t-1"))
 
-    assert plugin.search_page_offset == 0
+    assert plugin.search_service.page_offset == 0
     assert plugin.processing_service.api.get_template_images.call_args.kwargs["offset"] == 0
