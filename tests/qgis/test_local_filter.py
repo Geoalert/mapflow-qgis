@@ -414,7 +414,7 @@ def _plugin_orchestration(unfit):
     plugin._unfit_local_indices = MagicMock(return_value=set(unfit))
     plugin._mark_unfit_rows = MagicMock()
     plugin._hide_unfit_footprints = MagicMock()
-    plugin._reconnect_cell_preview = MagicMock()
+    plugin.search_controller = MagicMock()  # apply_local_filter drives reconnect_cell_preview
     plugin._update_widen_indicator = MagicMock()
     plugin._apply_new_image_markers = MagicMock()
     plugin._restore_search_sort_indicator = MagicMock()

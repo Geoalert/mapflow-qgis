@@ -39,6 +39,7 @@ from .functional.auth import get_auth_id
 from .functional.controller.data_catalog_controller import DataCatalogController
 from .functional.controller.project_processing_controller import ProjectProcessingController
 from .functional.controller.processing_controller import ProcessingController
+from .functional.controller.search_controller import SearchController
 from .functional.service.aoi_service import AoiService
 from .functional.service.preview_service import PreviewService
 from .functional.service.search_service import SearchService
@@ -308,11 +309,19 @@ class Mapflow(QObject):
                                             config_search_columns=self.config_search_columns,
                                             result_loader=self.result_loader,
                                             provider_service=self.provider_service)
-        # Search wiring. Moves to SearchController with the rest of the search-tab connects.
+        # Search wiring. Results/pager signals stay here for now — the run and pagination
+        # handlers they end at are still mapflow.py slots (see SearchController's docstring).
         self.search_service.resultsReceived.connect(self._on_search_results)
         self.search_service.metadataLayerReady.connect(self._on_metadata_layer_ready)
         self.search_service.pagerChanged.connect(self.search_view.show_pages)
         self.search_service.pagerHidden.connect(self.search_view.hide_pages)
+        # Owns the preview-dispatch handlers (search button, cell/double click) and their wiring.
+        self.search_controller = SearchController(search_service=self.search_service,
+                                                  search_view=self.search_view,
+                                                  preview_service=self.preview_service,
+                                                  provider_service=self.provider_service,
+                                                  search_button=self.dlg.searchImageryButton,
+                                                  metadata_table=self.dlg.metadataTable)
         self.aoi_view = AoiView(dlg=self.dlg, iface=self.iface)
         # Template-AOI session wiring. It belongs to TemplateController, which the templates
         # step creates; until then mapflow.py holds the connects (the spec allows wiring here,
@@ -409,19 +418,12 @@ class Mapflow(QObject):
         self.review_dialog.accepted.connect(self.submit_review)
 
         # ========== 13. PROVIDERS ==========
-        # Search filters (intersection, cloud, dates) are applied server-side on the next
-        # Search; there is no offline re-filtering on widget change anymore.
-        self.dlg.searchImageryButton.clicked.connect(self.preview_or_search)
-
+        # searchImageryButton and the metadata table's double/cell-click previews are wired by
+        # SearchController (constructed above).
         self.dlg.addProvider.clicked.connect(self.add_provider)
         self.dlg.editProvider.clicked.connect(self.edit_provider)
         self.dlg.removeProvider.clicked.connect(self.remove_provider)
 
-        # Image ids whose preview is currently being downloaded (async). Guards against the
-        # dedupe-on-map check missing duplicates, since the preview layer is only added in the
-        # HTTP callback — a second click/double-click fired several downloads before the first
-        # landed, producing duplicate preview layers.
-        self._pending_preview_ids = set()
         # Processing ids whose 'No AOI' AOI request is in flight (guards rapid re-clicks).
         self._pending_no_aoi_ids = set()
         self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
@@ -429,7 +431,6 @@ class Mapflow(QObject):
         self.dlg.metadataTable.itemSelectionChanged.connect(self.update_start_processing_button_state)
         self.app_context.meta_layer_table_connection = None
         self.dlg.getMetadata.clicked.connect(self.handle_metadata_button_click)
-        self.dlg.metadataTable.cellDoubleClicked.connect(self.preview)
         self.dlg.metadataTable.cellClicked.connect(self.on_metadata_table_cell_clicked)
         self.dlg.metadataTable.horizontalHeader().sectionClicked.connect(self.on_metadata_header_clicked)
         self.dlg.rasterSourceChanged.connect(self.on_provider_change)
@@ -1268,7 +1269,7 @@ class Mapflow(QObject):
             return
         geoms = self.app_context.search_result_geojson
         if not geoms or not geoms.get("features"):
-            self._reconnect_cell_preview()
+            self.search_controller.reconnect_cell_preview()
             self._update_widen_indicator()
             return
         features = geoms["features"]
@@ -1307,7 +1308,7 @@ class Mapflow(QObject):
             self._apply_new_image_markers()
         self._mark_unfit_rows(unfit)
         self._hide_unfit_footprints(getattr(self.app_context, "metadata_layer", None), unfit)
-        self._reconnect_cell_preview()
+        self.search_controller.reconnect_cell_preview()
         self._update_widen_indicator()
         # The fill above hid the sort arrow (setSortingEnabled(False)); put it back so it persists.
         self._restore_search_sort_indicator()
@@ -1619,19 +1620,6 @@ class Mapflow(QObject):
         # Re-filter once against the restored widgets (some setters above may not have changed a
         # value, so their change-signal would not have fired the filter).
         self.apply_local_filter()
-
-    def _reconnect_cell_preview(self):
-        """Rewire the search table's 'Preview' cell click to a single handler.
-        ``apply_local_filter`` runs on every table refill; connecting without disconnecting
-        first stacks the connections, so one click fires the preview several times and adds
-        several preview layers at once (feedback 4.2). Disconnect the previous connection first."""
-        try:
-            self.dlg.metadataTable.disconnect(self.cell_preview_connection)
-        except (AttributeError, TypeError, RuntimeError):
-            # no previous connection, or its underlying C++ object is gone
-            pass
-        self.cell_preview_connection = self.dlg.metadataTable.cellClicked.connect(
-            self.preview_search_from_cell)
 
     def set_up_login_dialog(self) -> MapflowLoginDialog:
         """Create a login dialog, set its title and signal-slot connections."""
@@ -2267,10 +2255,9 @@ class Mapflow(QObject):
 
     def get_metadata(self, _: Optional[bool] = False, offset: Optional[int] = 0) -> None:
         """Metadata is image footprints with attributes like acquisition date or cloud cover."""
-        try: # disconnect to prevent adding mutliple previews if table was refilled (multiple searches)
-            self.dlg.metadataTable.disconnect(self.cell_preview_connection)
-        except AttributeError: # if no previous connection (first search after start)
-            pass
+        # Drop the previous Preview-cell connection so a refill does not stack it (multiple
+        # searches would otherwise fire the preview several times per click).
+        self.search_view.disconnect_cell_preview()
         # If current provider does not support search, we should select ImagerySearchProvider to be able to search
         self.replace_search_provider_index()
         # A regular search replaces any template results, so a "Start" is no longer planned.
@@ -2547,23 +2534,6 @@ class Mapflow(QObject):
             self.dlg.searchProvidersCombo.addItemWithCheckState(pr.name, Qt.Unchecked, pr.api_name)
         self.dlg.searchProvidersCombo.setDefaultText(self.tr("Show all"))
 
-    def preview(self) -> None:
-        """Display raster tiles served over the Web."""
-        selected_cells = self.dlg.metadataTable.selectedItems()
-        if not selected_cells:
-            image_id = None
-        else:
-            id_column_index = self.config.SEARCH_ID_COLUMN_INDEX
-            image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
-        provider = self.provider_service.providers[self.dlg.providerIndex()]
-        if provider.requires_image_id and not image_id:
-            self.alert(self.tr("This provider requires image ID!"), QMessageBox.Warning)
-            return
-        if isinstance(provider, ImagerySearchProvider):
-            self.preview_service.preview_catalog(image_id=image_id)
-        else:  # XYZ providers
-            self.preview_service.preview_xyz(provider=provider, image_id=image_id)
-    
     def on_metadata_table_cell_clicked(self, row: int, column: int):
         """Keep click behavior passive; marking seen is handled by Seen actions only."""
         return
@@ -2715,21 +2685,6 @@ class Mapflow(QObject):
                         )
                     status_item.setToolTip(tip)
                 break
-
-    def preview_search_from_cell (self, row, column):
-        if column == self.config.PPRVIEW_INDEX_COLUMN:
-            id_column_index = self.config.SEARCH_ID_COLUMN_INDEX
-            image_id = self.dlg.metadataTable.item(row, id_column_index).text()
-            self.preview_service.preview_catalog(image_id)
-
-    def preview_or_search(self, provider) -> None:
-        provider_index = self.dlg.providerIndex()
-        provider = self.provider_service.providers[provider_index]
-        if provider.requires_image_id:
-            imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
-            self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
-        else:
-            self.preview()
 
     def update_processing_current_rating(self) -> None:
         # reset labels:

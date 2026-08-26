@@ -1,7 +1,7 @@
 from typing import List, Optional, Tuple
 
 from PyQt5.QtCore import QObject, Qt
-from PyQt5.QtWidgets import QPushButton
+from PyQt5.QtWidgets import QPushButton, QWidget
 
 from ...dialogs.main_dialog import MainDialog
 from ...schema.catalog import ProductType
@@ -23,6 +23,8 @@ class SearchView(QObject):
         super().__init__()
         self.dlg = dlg
         self.config = config
+        #: The current cellClicked->preview connection, so it can be dropped before rewiring.
+        self._cell_preview_connection = None
 
     # ---------- what the user is asking for ----------
 
@@ -79,7 +81,43 @@ class SearchView(QObject):
     def provider_index(self) -> int:
         return self.dlg.providerIndex()
 
+    def switch_to_search_tab(self) -> None:
+        """Bring the imagery-search tab to front (its objectName is historically 'providersTab')."""
+        tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
+        if tab is not None:
+            self.dlg.tabWidget.setCurrentWidget(tab)
+
     # ---------- the results table ----------
+
+    def selected_image_id(self) -> Optional[str]:
+        """Image id of the first selected results row, or None when nothing is selected."""
+        selected = self.dlg.metadataTable.selectedItems()
+        if not selected:
+            return None
+        return self.image_id_at(selected[0].row())
+
+    def image_id_at(self, row: int) -> str:
+        return self.dlg.metadataTable.item(row, self.config.SEARCH_ID_COLUMN_INDEX).text()
+
+    def is_preview_column(self, column: int) -> bool:
+        return column == self.config.PPRVIEW_INDEX_COLUMN
+
+    def connect_cell_preview(self, handler) -> None:
+        """(Re)wire the results table's 'Preview' cell click to ``handler``.
+
+        The table is refilled on every local-filter change; connecting without disconnecting
+        first stacks the connections, so one click would fire the preview several times and add
+        several preview layers (feedback 4.2). The prior connection is dropped first.
+        """
+        self.disconnect_cell_preview()
+        self._cell_preview_connection = self.dlg.metadataTable.cellClicked.connect(handler)
+
+    def disconnect_cell_preview(self) -> None:
+        try:
+            self.dlg.metadataTable.disconnect(self._cell_preview_connection)
+        except (AttributeError, TypeError, RuntimeError):
+            # no previous connection, or its underlying C++ object is gone
+            pass
 
     def clear_table(self) -> None:
         self.dlg.metadataTable.clearContents()

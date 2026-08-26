@@ -12,6 +12,7 @@ from unittest.mock import MagicMock
 from qgis.core import QgsProject
 
 from mapflow.functional.service.preview_service import PreviewService
+from mapflow.functional.view.search_view import SearchView
 from mapflow.mapflow import Mapflow
 
 
@@ -91,33 +92,31 @@ def test_finding_a_template_group_returns_the_one_ensure_made():
     assert plugin._find_template_group("T1", subgroup_name="AOI: North") is created
 
 
-def _plugin_for_preview(in_template_mode):
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.dlg = MagicMock()
-    plugin.preview_search_from_cell = MagicMock()
-    plugin.result_loader = MagicMock()
-    plugin.processing_service = SimpleNamespace(in_template_mode=in_template_mode)
-    return plugin
+def _search_view():
+    """The Preview-cell reconnect is `SearchView.connect_cell_preview` since the search
+    extraction — the connection lifecycle it manages is the view's dlg, not the plugin's."""
+    return SearchView(dlg=MagicMock(), config=MagicMock())
 
 
 def test_reconnect_cell_preview_disconnects_previous_first():
-    plugin = _plugin_for_preview(in_template_mode=False)
-    plugin.cell_preview_connection = object()
+    view = _search_view()
+    view._cell_preview_connection = object()  # a prior connection exists
+    handler = object()
 
-    plugin._reconnect_cell_preview()
+    view.connect_cell_preview(handler)
 
-    plugin.dlg.metadataTable.disconnect.assert_called_once()
-    plugin.dlg.metadataTable.cellClicked.connect.assert_called_once_with(
-        plugin.preview_search_from_cell)
+    view.dlg.metadataTable.disconnect.assert_called_once()
+    view.dlg.metadataTable.cellClicked.connect.assert_called_once_with(handler)
 
 
 def test_reconnect_cell_preview_first_time_no_disconnect_error():
-    plugin = _plugin_for_preview(in_template_mode=False)
-    # No prior cell_preview_connection: disconnect raises, must be swallowed.
+    view = _search_view()
+    # No prior connection: disconnect raises, must be swallowed.
+    view.dlg.metadataTable.disconnect.side_effect = TypeError
 
-    plugin._reconnect_cell_preview()
+    view.connect_cell_preview(object())
 
-    plugin.dlg.metadataTable.cellClicked.connect.assert_called_once()
+    view.dlg.metadataTable.cellClicked.connect.assert_called_once()
 
 
 def _preview_service(in_template_mode):
