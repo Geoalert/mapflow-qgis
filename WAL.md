@@ -51,6 +51,11 @@ on a *template's* search.
 never from `get_metadata` — so it is template code despite the name. That single fact is what
 keeps this step from swallowing the two after it.
 First step with a real `view/` rather than deferring widget reads, so larger than AOI or preview.
+`SearchController` starts small on purpose — the three preview-dispatch handlers and their
+wiring. A controller owns a connection only when it owns the handler, and the run/sort/pagination
+handlers still call unextracted collaborators (provider selection, template loader, local
+filter); their connections stay in `mapflow.py` and the controller grows as those handlers move,
+the same way `ProcessingController` began with AOI selection alone.
 [ ] Extract the local filter → `LocalFilterService` (pure computation; functional-tier tests)
 Bigger than it looks: `apply_local_filter` alone has 10 widget connections and
 `tests/qgis/test_local_filter.py` has 39 tests.
