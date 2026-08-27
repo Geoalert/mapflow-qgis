@@ -4,7 +4,6 @@ import os.path
 import shutil
 from base64 import b64decode
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
-from datetime import datetime, timedelta  # processing creation datetime formatting
 from pathlib import Path
 from typing import List, Optional, Callable
 from osgeo import ogr
@@ -27,19 +26,20 @@ from qgis.core import (
 
 from .config import Config, ConfigColumns
 from .errors import (BadProcessingInput,
-                     ErrorMessage,
                      PluginError,
                      ProcessingInputDataMissing,
                      ProxyIsAlreadySet)
 # Functional
 from .functional import helpers, layer_utils
-from .functional.geometry import geometry_from_geojson
 from .functional.app_context import AppContext
 from .functional.auth import get_auth_id
 from .functional.controller.data_catalog_controller import DataCatalogController
 from .functional.controller.project_processing_controller import ProjectProcessingController
 from .functional.controller.processing_controller import ProcessingController
 from .functional.controller.search_controller import SearchController
+from .functional.controller.template_controller import TemplateController
+from .functional.service.template_service import TemplateService
+from .functional.view.template_view import TemplateView
 from .functional.service.aoi_service import AoiService
 from .functional.service.local_filter_service import (FilterCriteria,
                                                       LocalFilterService,
@@ -67,11 +67,7 @@ from .schema import (BillingType,
                      UserDefinedParams)
 from .schema.catalog import ProductType
 from .schema.project import MapflowProject, UserRole
-from .schema.template import (CreateProcessingTemplateSchema,
-                              DeleteAoisSchema,
-                              SearchParams,
-                              UpdateAoiSchema,
-                              UpdateProcessingTemplateSchema)
+from .schema.template import SearchParams
 from .schema.workflow_def import WorkflowDef
 # Dialogs
 from .dialogs import (ErrorMessageWidget,
@@ -341,6 +337,22 @@ class Mapflow(QObject):
             add_layer_action=self.add_layer_action,
             remove_layer_action=self.remove_layer_action)
 
+        # Templates (MR-1): create / update-search-params / exclude-from-search.
+        self.template_service = TemplateService(app_context=self.app_context,
+                                                processing_service=self.processing_service)
+        self.template_view = TemplateView(dlg=self.dlg, iface=self.iface)
+        self.template_controller = TemplateController(
+            template_service=self.template_service,
+            template_view=self.template_view,
+            search_view=self.search_view,
+            aoi_view=self.aoi_view,
+            aoi_service=self.aoi_service,
+            provider_service=self.provider_service,
+            app_context=self.app_context,
+            iface=self.iface,
+            update_search_button=self.dlg.updateTemplateSearch,
+            exclude_action=self.dlg.exclude_from_search_action)
+
         self.setup_add_layer_menu()
         # Add options menu functionality
         self.setup_options_menu_connections()
@@ -459,7 +471,6 @@ class Mapflow(QObject):
         # Repurposed Filter button: now the widen-warning (!) indicator (shown only when the
         # current filters are wider than what was fetched); clicking it explains what won't apply.
         self.dlg.searchWidenWarning.clicked.connect(self.show_widen_details)
-        self.dlg.updateTemplateSearch.clicked.connect(self.update_template_search_params)
         self.setup_metadata_search_dropdown()
         self.setup_metadata_seen_dropdown()
 
@@ -573,7 +584,6 @@ class Mapflow(QObject):
         self.dlg.aoi_update_geometry_action.triggered.connect(
             self.aoi_service.start_update_session)
         self.dlg.aoi_draw_action.triggered.connect(self.aoi_service.start_draw_session)
-        self.dlg.exclude_from_search_action.triggered.connect(self.exclude_processing_from_search)
         self.dlg.options_menu.aboutToShow.connect(self.update_processing_options_menu)
         self.dlg.saveOptionsButton.setMenu(self.dlg.options_menu)
 
@@ -1790,13 +1800,9 @@ class Mapflow(QObject):
         return provider_changed
 
     def replace_search_provider_index(self):
-        try:
-            provider_supports_search = self.provider_service.providers[self.dlg.providerIndex()].meta_url is not None
-        except (NotImplementedError, AttributeError):
-            provider_supports_search = False
-
-        if not provider_supports_search:
-            self.dlg.setProviderIndex(self.provider_service.imagery_search_provider_index)
+        # The logic moved to SearchView; get_metadata and get_selected_template_callback still
+        # call this until they move to SearchController / TemplateController.
+        self.search_view.ensure_search_provider(self.provider_service)
 
     def setup_metadata_search_dropdown(self):
         """Set Search button as dropdown with Search and Plan search modes."""
@@ -1826,290 +1832,24 @@ class Mapflow(QObject):
         self.dlg.getMetadata.setText(self.tr("Plan search") if mode == "plan" else self.tr("Search"))
         self.update_plan_search_message()
 
-    def _select_project_for_template_message(self) -> str:
-        return self.tr("Select a project to create a template")
-
     def update_plan_search_message(self) -> None:
         """A template must belong to a project. In plan mode without one, prompt the user in
         the cost/message label (the immediate search is never blocked, so the button stays usable)."""
-        message = self._select_project_for_template_message()
+        message = self.template_service.project_required_message
         if getattr(self, "metadata_search_mode", "search") == "plan" and not self.app_context.current_project:
-            self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
-            self.dlg.processingProblemsLabel.setText(message)
-        elif self.dlg.processingProblemsLabel.text() == message:
-            # Only clear our own message, never the cost / other reasons.
-            self.dlg.processingProblemsLabel.clear()
+            self.template_view.show_project_required(message)
+        else:
+            self.template_view.clear_project_required(message)
 
     def handle_metadata_button_click(self):
         if getattr(self, "metadata_search_mode", "search") == "plan":
-            self.create_search_template()
+            self.template_controller.create_search_template()
             return
         # An immediate search over a too-large AOI is offered as a Planned Search instead (T8).
-        if self._search_area_exceeds_limit():
-            self._prompt_plan_search()
+        if self.template_service.search_area_exceeds_limit():
+            self.template_controller.prompt_plan_search()
             return
         self.get_metadata()
-
-    def _search_area_exceeds_limit(self) -> bool:
-        """Whether the current AOI is too large for an immediate search (T8). Zero/unknown
-        ``searchAreaLimit`` disables the check and lets the search proceed."""
-        limit = self.app_context.search_area_limit
-        return bool(limit and self.app_context.aoi_size and self.app_context.aoi_size > limit)
-
-    def _planned_search_default_name(self) -> str:
-        """Auto-name for a Planned Search created from the too-large-AOI prompt (T8)."""
-        return self.tr("Searching {datetime}").format(
-            datetime=datetime.now().strftime("%Y-%m-%d %H:%M"))
-
-    def _prompt_plan_search(self) -> None:
-        """Offer to create a Planned Search when the AOI exceeds the immediate-search limit
-        (T8). On confirmation, create a template with an auto-generated name; the existing
-        template-area-limit check inside ``create_search_template`` still applies."""
-        box = QMessageBox(
-            QMessageBox.Question,
-            self.plugin_name,
-            self.tr("The search area is too large for immediate processing. The Planned Search "
-                    "will be created and run in the background. You will be notified when "
-                    "results are available."),
-            parent=self.main_window,
-        )
-        box.addButton(QMessageBox.Cancel)
-        plan_button = box.addButton(self.tr("Plan Search"), QMessageBox.AcceptRole)
-        box.setDefaultButton(plan_button)
-        box.exec()
-        if box.clickedButton() is not plan_button:
-            return
-        self.create_search_template(name_override=self._planned_search_default_name())
-
-    def _build_template_aoi_details(self) -> Optional[dict]:
-        """Build the ``searchParams.aoiDetails`` FeatureCollection for template creation.
-
-        Each feature carries ``properties.name`` from the layer's ``name`` attribute (when
-        present), so the backend persists named AOIs (parsed as ``InputAoiProperties``; the
-        name is optional). When the AOI does not come from a polygon layer (e.g. an
-        image/mosaic extent), a single unnamed feature is built from ``app_context.aoi``.
-
-        ``aoiDetails`` is always used — the legacy plain ``aoi`` field is deprecated because
-        names cannot be attached to it. Returns ``None`` only when there is no AOI at all.
-        Raises ``ValueError`` if a name exceeds the limit.
-        """
-        features = self.aoi_service.features_from_layer(self.dlg.polygonCombo.currentLayer())
-        # Fall back to the combined AOI (e.g. image/mosaic extent) as one unnamed feature,
-        # so we still send aoiDetails rather than the deprecated plain `aoi`.
-        if not features and self.app_context.aoi:
-            features.extend(self.aoi_service.polygon_features(self.app_context.aoi, None))
-        if not features:
-            return None
-        return {"type": "FeatureCollection", "features": features}
-
-    def create_search_template(self, name_override: Optional[str] = None):
-        """Create planned search template using current AOI and imagery-search filters.
-
-        ``name_override`` supplies the template name for the Planned Search auto-created from
-        the too-large-AOI prompt (T8); otherwise the name comes from the search name field."""
-        self.replace_search_provider_index()
-        # A template always belongs to a project — block creation (but not the immediate search)
-        # and tell the user, instead of sending a request that the backend would reject.
-        if not self.app_context.current_project:
-            self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
-            self.dlg.processingProblemsLabel.setText(self._select_project_for_template_message())
-            self.alert(self._select_project_for_template_message(), QMessageBox.Warning)
-            return
-        if not self.app_context.aoi:
-            self.alert(self.tr('Please, select a valid area of interest'))
-            return
-
-        # Forbid creation client-side when the AOI exceeds the planned-processing area cap (mirrors processing creation).
-        # A zero/unknown limit disables the check and lets the backend be the source of truth.
-        if self.app_context.template_area_limit and self.app_context.aoi_size \
-                and self.app_context.aoi_size > self.app_context.template_area_limit:
-            self.alert(ErrorMessage(
-                code="TEMPLATE_AREA_LIMIT_EXCEEDED",
-                parameters={"templateAreaLimit": round(self.app_context.template_area_limit, 2)},
-            ).to_str())
-            return
-
-        try:
-            aoi_details = self._build_template_aoi_details()
-        except ValueError as e:
-            self.alert(str(e), QMessageBox.Warning)
-            return
-        if not aoi_details:
-            self.alert(self.tr('Please, select a valid area of interest'))
-            return
-
-        # Always send aoiDetails (FeatureCollection); the plain `aoi` field is deprecated
-        # because per-AOI names cannot be attached to it.
-        search_params = self._build_search_params(aoi_details=aoi_details)
-
-        template_name = (name_override or self.dlg.processingName.text()).strip()
-        if not template_name:
-            self.alert(self.tr('Please, specify a name for your search'))
-            return
-
-        now_utc = datetime.utcnow()
-        # Backend validates activeUntil against a strict 0-6m window.
-        # Use a duration cap to avoid edge-case rejections around month-length differences.
-        active_until = now_utc + timedelta(days=180) - timedelta(minutes=1)
-
-        template_payload = CreateProcessingTemplateSchema(
-            name=template_name,
-            searchParams=search_params,
-            projectId=str(self.app_context.project_id),
-            activeUntil=active_until.strftime('%Y-%m-%dT%H:%M:%S.0Z'),
-        )
-
-        self.dlg.getMetadata.setEnabled(False)
-        self.iface.messageBar().pushInfo(self.app_context.plugin_name, self.tr('Creating planned search...'))
-        self.processing_service.api.create_template(
-            data=template_payload,
-            callback=self.create_search_template_callback,
-            error_handler=self.create_search_template_error_handler,
-        )
-
-    def create_search_template_callback(self, response: QNetworkReply):
-        # TODO (architecture): the create-template stack (create_search_template, this callback and
-        # its error handler) belongs in ProcessingService — reaching into its private
-        # _parse_template_response below is the tell. It stays here for now because the request
-        # builder is tightly coupled to Mapflow's imagery-search helpers (_build_search_params /
-        # _build_template_aoi_details, off-nadir + product/provider selection, report_http_error);
-        # moving it is a larger refactor.
-        self.dlg.getMetadata.setEnabled(True)
-        # A created template is normally active; isActive comes back False when the active-templates
-        # limit is reached (the template is created but inactivated).
-        template = self.processing_service._parse_template_response(response)
-        if template is not None and not template.isActive:
-            alert(self.tr(
-                "The template has been created, but is inactive.\n\n"
-                "You have reached the maximum number of active planned processings. "
-                "Pause or delete another one before activating this template."),
-                QMessageBox.Warning)
-        self.processing_service.get_processings()
-
-    def create_search_template_error_handler(self, response: QNetworkReply):
-        self.dlg.getMetadata.setEnabled(True)
-        self.report_http_error(
-            response,
-            self.tr("Template creation failed"),
-            error_message_parser=api_message_parser,
-        )
-
-    def _build_search_params(self, aoi_details=None) -> SearchParams:
-        """Build ``SearchParams`` from the current imagery-search filter widgets. When
-        ``aoi_details`` is ``None`` the geometry is omitted — used to update a template's
-        non-geometry search params (which the backend merges); geometry updates go through
-        the per-AOI endpoints instead (the PUT template endpoint rejects geometry)."""
-        off_nadir_min, off_nadir_max = self.search_view.off_nadir_bounds()
-        return SearchParams(
-            aoiDetails=aoi_details,
-            acquisitionDateFrom=self.dlg.metadataFrom.dateTime().toUTC().toString("yyyy-MM-ddTHH:mm:ss.zzz'Z'"),
-            acquisitionDateTo=self.dlg.metadataTo.dateTime().toUTC().toString("yyyy-MM-ddTHH:mm:ss.zzz'Z'"),
-            maxCloudCover=self.dlg.maxCloudCover.value(),
-            minAoiIntersectionPercent=self.dlg.minIntersection.value(),
-            minOffNadirAngle=off_nadir_min,
-            maxOffNadirAngle=off_nadir_max,
-            hideUnavailable=self.dlg.hideUnavailableResults.isChecked(),
-            productTypes=self.selected_search_product_types() or [],
-            dataProviders=self.selected_search_providers(),
-        )
-
-    def update_template_search_params(self):
-        """Feature 1: save the current imagery-search filter widgets to the open template's
-        stored ``searchParams`` (non-geometry params only — the backend merges them and
-        preserves the geometry). Triggered by the "Update template" button on the Imagery
-        Search tab, which is shown only while a template is open (so the widgets reflect it)."""
-        template = self.processing_service.active_template or self.processing_service.selected_template()
-        if not template:
-            return
-        # Only name + searchParams are changed. processingParams and activeUntil are omitted
-        # so the backend preserves them (sending processingParams={} would fail its required
-        # ``rest`` field; a partial update leaves the stored value untouched).
-        payload = UpdateProcessingTemplateSchema(
-            name=template.name,
-            searchParams=self._build_search_params(aoi_details=None),
-        )
-        self.iface.messageBar().pushInfo(self.app_context.plugin_name,
-                                         self.tr('Updating template search parameters...'))
-        self.processing_service.api.update_template(
-            template_id=template.id,
-            data=payload,
-            callback=self._template_updated_callback,
-            error_handler=self._template_update_error_handler,
-        )
-
-    def _template_updated_callback(self, response: QNetworkReply):
-        alert(self.tr("Template updated."), QMessageBox.Information)
-        # Re-hydrate so the open template / list reflects the new params.
-        self.processing_service.aoi_changed_callback(response)
-        self.processing_service.get_processings()
-
-    def _template_update_error_handler(self, response: QNetworkReply):
-        self.report_http_error(response, self.tr("Template update failed"),
-                               error_message_parser=api_message_parser)
-
-    def _processing_footprints_by_aoi(self, template, processing_id: str):
-        """For each of the template's AOIs, the QgsGeometry footprints of the given processing
-        that were run over it (a processing can intersect several AOIs, so it may appear under
-        more than one). Returns ``[(aoi, [footprint, ...]), ...]`` for AOIs it touches."""
-        result = []
-        for aoi in template.aoi_dtos():
-            if not aoi.id or not aoi.geometry:
-                continue
-            footprints = [
-                geometry_from_geojson(link.geometry)
-                for link in aoi.processings
-                if str(link.processingId) == str(processing_id) and link.geometry
-            ]
-            footprints = [g for g in footprints if g is not None]
-            if footprints:
-                result.append((aoi, footprints))
-        return result
-
-    def exclude_processing_from_search(self):
-        """Feature 3: 'Exclude from search' — subtract a processing's footprint from the AOIs
-        it was run over, so the template stops searching an area that was already processed.
-        A processing is linked to every AOI it intersects, so subtract from each parent AOI;
-        an AOI fully consumed by the subtraction is deleted."""
-        template = self.processing_service.active_template
-        processing = self.processing_service.selected_processing()
-        if not template or not processing:
-            return
-        affected = self._processing_footprints_by_aoi(template, str(processing.id))
-        updates = []      # (aoi_id, new_geometry_dict)
-        deletions = []    # aoi_id fully consumed
-        for aoi, footprints in affected:
-            aoi_geom = geometry_from_geojson(aoi.geometry)
-            if aoi_geom is None:
-                continue
-            footprint = footprints[0] if len(footprints) == 1 else QgsGeometry.unaryUnion(footprints)
-            new_geom = aoi_geom.difference(footprint)
-            if new_geom is None or new_geom.isEmpty() or new_geom.area() == 0:
-                deletions.append(aoi.id)
-            else:
-                updates.append((aoi.id, json.loads(new_geom.asJson())))
-        if not updates and not deletions:
-            self.alert(self.tr("This processing is not linked to any AOI geometry."),
-                       QMessageBox.Information)
-            return
-        if not self.alert(self.tr("Exclude this processing's area from the template's search? "
-                                  "The already-processed area will be removed from the AOI(s)."),
-                          QMessageBox.Question):
-            return
-        for aoi_id, geom in updates:
-            self.processing_service.api.update_aoi(
-                template_id=template.id,
-                aoi_id=aoi_id,
-                data=UpdateAoiSchema(geometry=geom),
-                callback=self.processing_service.aoi_changed_callback,
-                error_handler=self.processing_service.aoi_change_error_handler,
-            )
-        if deletions:
-            self.processing_service.api.delete_aois(
-                template_id=template.id,
-                data=DeleteAoisSchema(aoiIds=deletions),
-                callback=self.processing_service.aoi_changed_callback,
-                error_handler=self.processing_service.aoi_change_error_handler,
-            )
 
     def on_metadata_header_clicked(self, column: int) -> None:
         """Clicking a *sortable* search column header re-runs the search sorted server-side by that

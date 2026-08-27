@@ -68,14 +68,14 @@ def test_start_button_text_follows_template_to_run():
     plugin.dlg.startProcessing.setText.assert_called_with("Start processing")
 
 
-def _create_template_plugin():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.dlg = MagicMock()
-    plugin.processing_service = MagicMock()
+def _create_template_service():
+    from mapflow.functional.service.template_service import TemplateService
+    service = TemplateService.__new__(TemplateService)
+    TemplateService.__init__(service, app_context=SimpleNamespace(plugin_version="1.0"),
+                             processing_service=MagicMock())
     # Use the real template-response parser (the schema path), not a mock.
-    plugin.processing_service._parse_template_response = ProcessingService._parse_template_response
-    return plugin
+    service.processing_service._parse_template_response = ProcessingService._parse_template_response
+    return service
 
 
 def _response(body: bytes):
@@ -96,8 +96,8 @@ def _template_body(is_active):
 
 def test_create_template_callback_warns_when_inactive(monkeypatch):
     alerts = []
-    monkeypatch.setattr("mapflow.mapflow.alert", lambda msg, icon=None: alerts.append(msg))
-    plugin = _create_template_plugin()
+    monkeypatch.setattr("mapflow.functional.service.template_service.alert_warning", lambda msg, icon=None: alerts.append(msg))
+    plugin = _create_template_service()
 
     plugin.create_search_template_callback(_response(_template_body(is_active=False)))
 
@@ -109,8 +109,8 @@ def test_create_template_callback_warns_when_inactive(monkeypatch):
 def test_create_template_callback_no_warning_when_active(monkeypatch):
     # An active template creates no inactive warning; the list refresh is the feedback.
     alerts = []
-    monkeypatch.setattr("mapflow.mapflow.alert", lambda msg, icon=None: alerts.append(msg))
-    plugin = _create_template_plugin()
+    monkeypatch.setattr("mapflow.functional.service.template_service.alert_warning", lambda msg, icon=None: alerts.append(msg))
+    plugin = _create_template_service()
 
     plugin.create_search_template_callback(_response(_template_body(is_active=True)))
 
@@ -121,8 +121,8 @@ def test_create_template_callback_no_warning_when_active(monkeypatch):
 def test_create_template_callback_no_warning_when_response_unparseable(monkeypatch):
     # A response that can't be parsed into a template must not raise a false "inactive" warning.
     alerts = []
-    monkeypatch.setattr("mapflow.mapflow.alert", lambda msg, icon=None: alerts.append(msg))
-    plugin = _create_template_plugin()
+    monkeypatch.setattr("mapflow.functional.service.template_service.alert_warning", lambda msg, icon=None: alerts.append(msg))
+    plugin = _create_template_service()
 
     plugin.create_search_template_callback(_response(b'{}'))
 

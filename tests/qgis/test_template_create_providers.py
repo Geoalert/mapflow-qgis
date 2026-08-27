@@ -10,56 +10,55 @@ from unittest.mock import MagicMock
 
 from qgis.core import QgsGeometry
 
+from mapflow.functional.controller.template_controller import TemplateController
 from mapflow.functional.service.aoi_service import AoiService
+from mapflow.functional.service.template_service import TemplateService
 from mapflow.functional.view.search_view import SearchView
-from mapflow.mapflow import Mapflow
 
 
-def _plugin_ready_to_create_template(checked_providers):
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.replace_search_provider_index = MagicMock()
-    plugin.alert = MagicMock()
-    plugin.iface = MagicMock()
-    plugin.selected_search_product_types = MagicMock(return_value=["IMAGE"])
-    plugin.processing_service = MagicMock()
-    # Real service: aoiDetails is built from the features it produces, so a mock would make
-    # the assertions below vacuous.
-    plugin.aoi_service = AoiService(iface=MagicMock(),
-                                    app_context=MagicMock(),
-                                    plugin_dir="",
-                                    result_loader=MagicMock(),
-                                    data_catalog_service=MagicMock(),
-                                    processing_service=MagicMock())
-    plugin.app_context = SimpleNamespace(
+def _controller_ready_to_create_template(checked_providers):
+    """The provider serialization now runs through SearchView.template_search_params (real, over
+    a mock dlg) and the create call through TemplateService; TemplateController assembles them."""
+    dlg = MagicMock()
+    dlg.processingName.text.return_value = "My template"
+    dlg.metadataFrom.dateTime.return_value.toUTC.return_value.toString.return_value = "2022-09-24T17:00:00.000Z"
+    dlg.metadataTo.dateTime.return_value.toUTC.return_value.toString.return_value = "2026-09-24T17:00:00.000Z"
+    dlg.maxCloudCover.value.return_value = 50
+    dlg.minIntersection.value.return_value = 20
+    dlg.hideUnavailableResults.isChecked.return_value = True
+    dlg.searchProvidersCombo.checkedItemsData.return_value = checked_providers
+
+    app_context = SimpleNamespace(
         aoi=QgsGeometry.fromWkt("POLYGON((0 0,0 1,1 1,1 0,0 0))"),
-        aoi_size=10.0,
-        template_area_limit=0.0,
-        project_id="project-1",
-        current_project=SimpleNamespace(id="project-1"),
-        plugin_name="Mapflow",
-    )
+        aoi_size=10.0, template_area_limit=0.0, project_id="project-1",
+        current_project=SimpleNamespace(id="project-1"), plugin_name="Mapflow")
 
-    plugin.dlg = MagicMock()
-    plugin.search_view = SearchView(dlg=plugin.dlg, config=MagicMock())
-    plugin.dlg.processingName.text.return_value = "My template"
-    plugin.dlg.metadataFrom.dateTime.return_value.toUTC.return_value.toString.return_value = "2022-09-24T17:00:00.000Z"
-    plugin.dlg.metadataTo.dateTime.return_value.toUTC.return_value.toString.return_value = "2026-09-24T17:00:00.000Z"
-    plugin.dlg.maxCloudCover.value.return_value = 50
-    plugin.dlg.minIntersection.value.return_value = 20
-    plugin.dlg.hideUnavailableResults.isChecked.return_value = True
-    plugin.dlg.searchProvidersCombo.checkedItemsData.return_value = checked_providers
-    return plugin
+    controller = TemplateController.__new__(TemplateController)
+    controller.template_service = TemplateService(app_context=app_context,
+                                                  processing_service=MagicMock())
+    controller.template_view = MagicMock()
+    controller.template_view.template_name.return_value = "My template"
+    controller.search_view = SearchView(dlg=dlg, config=MagicMock())
+    controller.aoi_view = MagicMock()
+    controller.aoi_view.current_layer.return_value = None  # fall back to app_context.aoi
+    controller.aoi_service = AoiService(iface=MagicMock(), app_context=MagicMock(), plugin_dir="",
+                                        result_loader=MagicMock(),
+                                        data_catalog_service=MagicMock(),
+                                        processing_service=MagicMock())
+    controller.provider_service = MagicMock()  # ensure_search_provider is a no-op (meta_url set)
+    controller.app_context = app_context
+    return controller
 
 
-def _created_search_params(plugin):
-    plugin.create_search_template()
-    data = plugin.processing_service.api.create_template.call_args.kwargs["data"]
+def _created_search_params(controller):
+    controller.create_search_template()
+    api = controller.template_service.processing_service.api
+    data = api.create_template.call_args.kwargs["data"]
     return json.loads(data.as_json())["searchParams"]
 
 
 def test_no_selected_providers_omits_data_providers():
-    plugin = _plugin_ready_to_create_template(checked_providers=[])
+    plugin = _controller_ready_to_create_template(checked_providers=[])
 
     search_params = _created_search_params(plugin)
 
@@ -67,7 +66,7 @@ def test_no_selected_providers_omits_data_providers():
 
 
 def test_none_returned_providers_omits_data_providers():
-    plugin = _plugin_ready_to_create_template(checked_providers=None)
+    plugin = _controller_ready_to_create_template(checked_providers=None)
 
     search_params = _created_search_params(plugin)
 
@@ -75,7 +74,7 @@ def test_none_returned_providers_omits_data_providers():
 
 
 def test_selected_providers_are_sent():
-    plugin = _plugin_ready_to_create_template(checked_providers=["arcgis_world_imagery"])
+    plugin = _controller_ready_to_create_template(checked_providers=["arcgis_world_imagery"])
 
     search_params = _created_search_params(plugin)
 
@@ -84,25 +83,24 @@ def test_selected_providers_are_sent():
 
 def test_providers_omitted_when_available_filter_is_off_even_if_selected():
     # "Search only through available providers" OFF -> the (hidden) selection must NOT be sent.
-    plugin = _plugin_ready_to_create_template(checked_providers=["arcgis_world_imagery"])
-    plugin.dlg.hideUnavailableResults.isChecked.return_value = False
+    controller = _controller_ready_to_create_template(checked_providers=["arcgis_world_imagery"])
+    controller.search_view.dlg.hideUnavailableResults.isChecked.return_value = False
 
-    search_params = _created_search_params(plugin)
+    search_params = _created_search_params(controller)
 
     assert "dataProviders" not in search_params
 
 
 def test_selected_search_providers_respects_available_filter_checkbox():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.dlg = MagicMock()
-    plugin.search_view = SearchView(dlg=plugin.dlg, config=MagicMock())
-    plugin.dlg.searchProvidersCombo.checkedItemsData.return_value = ["arcgis_world_imagery"]
+    dlg = MagicMock()
+    view = SearchView(dlg=dlg, config=MagicMock())
+    dlg.searchProvidersCombo.checkedItemsData.return_value = ["arcgis_world_imagery"]
 
-    plugin.dlg.hideUnavailableResults.isChecked.return_value = False
-    assert plugin.selected_search_providers() is None  # filter off -> nothing sent
+    dlg.hideUnavailableResults.isChecked.return_value = False
+    assert view.search_providers() is None  # filter off -> nothing sent
 
-    plugin.dlg.hideUnavailableResults.isChecked.return_value = True
-    assert plugin.selected_search_providers() == ["arcgis_world_imagery"]
+    dlg.hideUnavailableResults.isChecked.return_value = True
+    assert view.search_providers() == ["arcgis_world_imagery"]
 
-    plugin.dlg.searchProvidersCombo.checkedItemsData.return_value = []
-    assert plugin.selected_search_providers() is None  # empty selection -> omitted
+    dlg.searchProvidersCombo.checkedItemsData.return_value = []
+    assert view.search_providers() is None  # empty selection -> omitted
