@@ -1,4 +1,5 @@
-"""Planned processings (templates): creation, search-param update, and exclude-from-search.
+"""Planned processings (templates): creation, search-param update, exclude-from-search, the
+seen-image markers, and the template's map layers.
 
 This is MR-1 of the templates extraction — the half that was tangled into `mapflow.py`. The
 lifecycle half (enter/exit/pause/resume, navigation state) is still in `ProcessingService` and is
@@ -7,17 +8,26 @@ read from there for now; MR-2 moves it here.
 Holds no widget (`spec/007_architecture.md` § Layer rules). Inputs that come from widgets — the
 template name, the assembled `SearchParams`, the AOI FeatureCollection — arrive as arguments from
 `TemplateController`; UI effects the service must cause (the busy button, the "select a project"
-label) leave as signals. `ProcessingService` is read for navigation state and reached for its
-`api`; that dependency becomes `TemplateService`'s own in MR-2.
+label) leave as signals. The map layers a template draws are QGIS layer-tree work, not widgets, so
+they live here alongside `AoiService`/`PreviewService`'s own layer building. `ProcessingService` is
+read for navigation state and reached for its `api`; that dependency becomes `TemplateService`'s
+own in MR-2.
 """
 import json
+import logging
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 
+from osgeo import ogr
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtNetwork import QNetworkReply
-from qgis.core import QgsGeometry
+from qgis.core import (QgsFeature,
+                       QgsGeometry,
+                       QgsLayerTreeGroup,
+                       QgsVectorLayer)
 
+from .. import layer_utils
 from ..app_context import AppContext
 from ..geometry import geometry_from_geojson
 from .alert_service import (alert, alert_confirm, alert_info, alert_warning,
@@ -29,6 +39,8 @@ from ...schema.template import (CreateProcessingTemplateSchema,
                                 SearchParams,
                                 UpdateAoiSchema,
                                 UpdateProcessingTemplateSchema)
+
+logger = logging.getLogger(__name__)
 
 
 class TemplateService(QObject):
@@ -48,15 +60,27 @@ class TemplateService(QObject):
 
     def __init__(self,
                  app_context: AppContext,
-                 processing_service):
+                 processing_service,
+                 plugin_dir: Optional[str] = None,
+                 aoi_service=None,
+                 result_loader=None):
         super().__init__()
         self.app_context = app_context
         #: Read for navigation state (`active_template`, `selected_template`,
         #: `selected_processing`) and reached for `api`. MR-2 gives TemplateService its own.
         self.processing_service = processing_service
+        #: For the .qml style paths of the template AOI/footprint layers (mirrors `AoiService`).
+        self.plugin_dir = plugin_dir
+        #: Reached to register a built AOI layer (area monitor / registry). Service→service.
+        self.aoi_service = aoi_service
+        #: Read for `add_layers_to_group` (whether the user keeps a Mapflow layer group at all).
+        self.result_loader = result_loader
         #: The current template-search results, keyed by image id, carrying the ``isNew`` flag
         #: the seen markers read. Set when a template's results load.
         self.template_search_images = {}
+        #: 'No AOI' processing ids whose per-processing AOI fetch is in flight, so a second click
+        #: does not fire a duplicate request before the first returns.
+        self._pending_no_aoi_ids = set()
 
     # ---------- plan-search gating ----------
 
@@ -317,3 +341,290 @@ class TemplateService(QObject):
             return
         template.newImagesCount = 0
         self.templateStatusChanged.emit(template)
+
+    # ---------- template layer-tree groups (place / find / remove) ----------
+
+    def ensure_template_group(self,
+                              template_group_name: str,
+                              subgroup_name: Optional[str] = None):
+        """Find or create the ``Mapflow > <template> [> <subgroup>]`` group, and return the node
+        new layers should be inserted into.
+
+        For the callers that are *adding* the template's layers, and so legitimately bring the
+        group into being. Everything that merely places an already-built layer wants
+        ``find_template_group`` instead.
+
+        The Mapflow group is created here when missing so the template group is nested under it
+        from the very first (template-open) call. Previously the open path fell back to the root
+        because the Mapflow group did not exist yet, and a later preview — by which point the
+        group had been created — added a SECOND template group under it (feedback 4.1). If the
+        user has deleted the Mapflow group (the result loader then adds to root), respect that
+        and place template groups at the root too, keeping a single path."""
+        root = self.app_context.project.layerTreeRoot()
+        mapflow_group_name = self.app_context.settings.value('layerGroup') or self.app_context.plugin_name
+        mapflow_group = root.findGroup(mapflow_group_name)
+        if mapflow_group is None and getattr(self.result_loader, 'add_layers_to_group', True):
+            mapflow_group = root.insertGroup(0, mapflow_group_name)
+            self.app_context.settings.setValue('layerGroup', mapflow_group_name)
+        parent_group = mapflow_group if mapflow_group else root
+        template_group = parent_group.findGroup(template_group_name)
+        if not template_group:
+            template_group = parent_group.insertGroup(0, template_group_name)
+        if subgroup_name:
+            subgroup = template_group.findGroup(subgroup_name)
+            if not subgroup:
+                subgroup = template_group.insertGroup(0, subgroup_name)
+            return subgroup
+        return template_group
+
+    def find_template_group(self,
+                            template_group_name: str,
+                            subgroup_name: Optional[str] = None):
+        """The ``Mapflow > <template name> [> <subgroup>]`` layer-tree group, or None.
+
+        Creates nothing. Callers that only need to *place* a layer next to the template's other
+        layers use this: they run on selection changes and preview clicks, and a lookup that
+        materialises a group as a side effect cannot be called on a path like that without a
+        lambda to defer it."""
+        mapflow_group_name = self.app_context.settings.value('layerGroup') or self.app_context.plugin_name
+        return layer_utils.find_template_group(self.app_context.project, mapflow_group_name,
+                                               template_group_name, subgroup_name)
+
+    def remove_template_group(self, template_group_name: str) -> None:
+        """Remove the template's layer-tree group (and its layers) from the map."""
+        if not template_group_name:
+            return
+        root = self.app_context.project.layerTreeRoot()
+        mapflow_group_name = self.app_context.settings.value('layerGroup') or self.app_context.plugin_name
+        mapflow_group = root.findGroup(mapflow_group_name)
+        parent_group = mapflow_group if mapflow_group else root
+        template_group = parent_group.findGroup(template_group_name)
+        if template_group is None:
+            return
+        for layer in template_group.findLayers():
+            layer_id = layer.layerId()
+            if layer_id:
+                try:
+                    self.app_context.project.removeMapLayer(layer_id)
+                except (RuntimeError, KeyError):
+                    pass
+        parent_group.removeChildNode(template_group)
+
+    def remove_template_aoi_subgroups(self, template_group_name: str) -> None:
+        """Remove the per-AOI subgroups (and their layers) under the template group, keeping
+        the search-results footprint layer that sits directly in the template group."""
+        if not template_group_name:
+            return
+        root = self.app_context.project.layerTreeRoot()
+        mapflow_group_name = self.app_context.settings.value('layerGroup') or self.app_context.plugin_name
+        mapflow_group = root.findGroup(mapflow_group_name)
+        parent_group = mapflow_group if mapflow_group else root
+        template_group = parent_group.findGroup(template_group_name)
+        if template_group is None:
+            return
+        for child in list(template_group.children()):
+            # AOI subgroups are groups; the search-footprints node is a layer — leave it.
+            if isinstance(child, QgsLayerTreeGroup):
+                for layer in child.findLayers():
+                    layer_id = layer.layerId()
+                    if layer_id:
+                        try:
+                            self.app_context.project.removeMapLayer(layer_id)
+                        except (RuntimeError, KeyError):
+                            pass
+                template_group.removeChildNode(child)
+
+    # ---------- building the template's AOI / footprint layers ----------
+
+    def add_geojson_aoi_layer(self,
+                              features: list,
+                              layer_name: str,
+                              style_name: str,
+                              template_group_name: Optional[str] = None,
+                              subgroup_name: Optional[str] = None,
+                              reference_layer_id: Optional[str] = None,
+                              aoi_id: Optional[str] = None) -> Optional[QgsVectorLayer]:
+        if not features:
+            return None
+        aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326', layer_name, 'memory')
+        # Tag the AOI's own polygon layer with its id so "Update selected AOI" can find and edit
+        # this exact layer in place (processing-footprint layers are left untagged).
+        if aoi_id is not None:
+            aoi_layer.setCustomProperty('mapflow/aoi_id', str(aoi_id))
+        provider = aoi_layer.dataProvider()
+        qgs_features = []
+        for feature in features:
+            geom_dict = feature.get("geometry")
+            if not geom_dict:
+                continue
+            try:
+                ogr_geom = ogr.CreateGeometryFromJson(json.dumps(geom_dict))
+                if not ogr_geom:
+                    continue
+                qgs_geom = QgsGeometry.fromWkt(ogr_geom.ExportToWkt())
+                qgs_feat = QgsFeature()
+                qgs_feat.setGeometry(qgs_geom)
+                qgs_features.append(qgs_feat)
+            except Exception as e:
+                # Per-feature, inside a loop: no traceback, or one malformed response
+                # buries the panel in near-identical stack dumps.
+                logger.warning("Skipping a search feature that failed to parse: %s", e)
+                continue
+        if not qgs_features:
+            return None
+        provider.addFeatures(qgs_features)
+        aoi_layer.updateExtents()
+
+        root = self.app_context.project.layerTreeRoot()
+        if template_group_name:
+            target_group = self.ensure_template_group(template_group_name, subgroup_name)
+            self.app_context.project.addMapLayer(aoi_layer, addToLegend=False)
+            target_group.insertLayer(0, aoi_layer)
+        elif reference_layer_id:
+            root = self.app_context.project.layerTreeRoot()
+            ref_node = root.findLayer(reference_layer_id)
+            if ref_node and ref_node.parent():
+                self.app_context.project.addMapLayer(aoi_layer, addToLegend=False)
+                ref_node.parent().insertLayer(0, aoi_layer)
+            else:
+                self.app_context.project.addMapLayer(aoi_layer)
+        else:
+            self.app_context.project.addMapLayer(aoi_layer)
+
+        aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', style_name))
+        # Template AOI layers are added in bulk on open; don't fire a cost request per layer,
+        # and don't let them become the current processing Area (feedback 8.1) — the Area is
+        # set from the AOI table selection (see sync_processing_area_to_selected_aois).
+        self.aoi_service.register_layer(aoi_layer, recompute_cost=False, set_current=False)
+        return aoi_layer
+
+    def load_template_layers(self, template) -> None:
+        """Draw, per AOI, a subgroup named after the AOI containing the AOI polygon (blue)
+        and each of its processings' footprints (green), all from the template's
+        ``aoiDetails`` (no extra requests)."""
+        if not template:
+            return
+        template_group_name = str(template.name)
+        for aoi in template.aoi_dtos():
+            subgroup_name = self.tr("AOI: {name}").format(name=aoi.display_name)
+            if aoi.geometry:
+                self.add_geojson_aoi_layer(
+                    features=[{"type": "Feature", "geometry": aoi.geometry, "properties": {}}],
+                    layer_name=aoi.display_name,
+                    style_name='aoi_template_blue.qml',
+                    template_group_name=template_group_name,
+                    subgroup_name=subgroup_name,
+                    aoi_id=aoi.id,
+                )
+            for link in aoi.processings:
+                if not link.geometry:
+                    continue
+                self.add_geojson_aoi_layer(
+                    features=[{"type": "Feature", "geometry": link.geometry, "properties": {}}],
+                    layer_name=link.processingName or str(link.processingId),
+                    style_name='aoi_template_processing_green.qml',
+                    template_group_name=template_group_name,
+                    subgroup_name=subgroup_name,
+                )
+
+    # ---------- 'No AOI' processings: lazy per-processing AOI fetch + draw ----------
+
+    def no_aoi_subgroup_name(self) -> str:
+        return self.tr("No AOI")
+
+    def no_aoi_aoi_on_map(self, pid) -> bool:
+        """Whether a 'No AOI' processing's AOI layer (tagged with its id) is already on the map."""
+        return any(layer.customProperty('mapflow/no_aoi_processing_id') == str(pid)
+                   for layer in self.app_context.project.mapLayers().values())
+
+    def load_no_aoi_processing_aoi(self, processing) -> None:
+        """Fetch a 'No AOI' processing's AOI (absent from aoiDetails) and add it to the template's
+        'No AOI' group. No-op for a bound processing, one whose AOI is already on the map, or one
+        whose request is already in flight (a second click before the first returns)."""
+        if not processing:
+            return
+        pid = str(processing.id)
+        if not self.processing_service.is_no_aoi_processing(pid):
+            return
+        if pid in self._pending_no_aoi_ids or self.no_aoi_aoi_on_map(pid):
+            return
+        self._pending_no_aoi_ids.add(pid)
+        self.processing_service.api.get_processing_aois(
+            processing_id=pid,
+            callback=self._add_no_aoi_processing_aoi_callback,
+            callback_kwargs={'pid': pid, 'name': processing.name},
+            error_handler=self._add_no_aoi_processing_aoi_error,
+            error_handler_kwargs={'pid': pid},
+        )
+
+    def _add_no_aoi_processing_aoi_callback(self, response: QNetworkReply, pid: str, name: str) -> None:
+        self._pending_no_aoi_ids.discard(pid)
+        template = self.processing_service.active_template
+        if not template or not self.processing_service.in_template_mode or self.no_aoi_aoi_on_map(pid):
+            return
+        # GET /processings/{id}/aois returns a JSON list of AOI objects (each with a `geometry`),
+        # not a FeatureCollection — wrap each geometry into a feature the layer builder understands.
+        try:
+            aois = json.loads(response.readAll().data())
+        except ValueError:
+            # Not JSON, or not decodable as UTF-8 (UnicodeDecodeError is a ValueError).
+            return
+        if isinstance(aois, dict):
+            aois = aois.get('aois', [])
+        features = [{"type": "Feature", "geometry": aoi.get("geometry"), "properties": {}}
+                    for aoi in aois if isinstance(aoi, dict) and aoi.get("geometry")]
+        if not features:
+            return
+        layer = self.add_geojson_aoi_layer(
+            features=features,
+            layer_name=name or pid,
+            style_name='aoi_template_processing_green.qml',
+            template_group_name=str(template.name),
+            subgroup_name=self.no_aoi_subgroup_name(),
+        )
+        if layer is not None:
+            layer.setCustomProperty('mapflow/no_aoi_processing_id', str(pid))
+
+    def _add_no_aoi_processing_aoi_error(self, response: QNetworkReply, pid: str = None) -> None:
+        self._pending_no_aoi_ids.discard(pid)
+
+    # ---------- template details ----------
+
+    def show_template_details(self, template) -> None:
+        """Show a template summary. The processings count is fetched from the ``/processings``
+        endpoint (aoiDetails links are not always populated)."""
+        self.processing_service.api.get_template_processings(
+            template_id=template.id,
+            callback=lambda response: self._show_template_details_callback(template, response),
+        )
+
+    def _show_template_details_callback(self, template, response: QNetworkReply) -> None:
+        try:
+            data = json.loads(response.readAll().data())
+            items = data.get("results") if isinstance(data, dict) else data
+            linked_count = len([i for i in (items or []) if isinstance(i, dict)])
+        except (ValueError, TypeError):
+            # Not JSON (ValueError, which UnicodeDecodeError subclasses), or a payload whose
+            # `results` is not iterable.
+            linked_count = 0
+        new_images = template.newImagesCount or 0
+        local_created_at = template.createdAt.astimezone()
+        local_active_until = template.activeUntil.astimezone()
+
+        details = self.tr(
+            "<b>{name}</b><br/>"
+            "<b>Status:</b> {status}<br/>"
+            "<b>Created:</b> {created}<br/>"
+            "<b>Active Until:</b> {active_until}<br/>"
+            "<b>Linked processings:</b> {linked}<br/>"
+            "<b>New images:</b> {new_images}"
+        ).format(
+            name=template.name,
+            status=template.status,
+            created=local_created_at.strftime('%Y-%m-%d %H:%M'),
+            active_until=local_active_until.strftime('%Y-%m-%d %H:%M'),
+            linked=linked_count,
+            new_images=new_images,
+        )
+
+        alert_info(details)

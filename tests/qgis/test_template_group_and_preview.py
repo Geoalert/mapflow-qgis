@@ -12,25 +12,26 @@ from unittest.mock import MagicMock
 from qgis.core import QgsProject
 
 from mapflow.functional.service.preview_service import PreviewService
+from mapflow.functional.service.template_service import TemplateService
 from mapflow.functional.view.search_view import SearchView
-from mapflow.mapflow import Mapflow
 
 
-def _plugin_for_group(project, add_layers_to_group=True):
-    plugin = Mapflow.__new__(Mapflow)
+def _service_for_group(project, add_layers_to_group=True):
     settings = MagicMock()
     settings.value.return_value = None  # no custom layerGroup -> falls back to plugin_name
-    plugin.app_context = SimpleNamespace(project=project, settings=settings, plugin_name="Mapflow")
-    plugin.result_loader = SimpleNamespace(add_layers_to_group=add_layers_to_group)
-    return plugin
+    app_context = SimpleNamespace(project=project, settings=settings, plugin_name="Mapflow")
+    return TemplateService(
+        app_context=app_context,
+        processing_service=MagicMock(),
+        result_loader=SimpleNamespace(add_layers_to_group=add_layers_to_group))
 
 
 def test_template_group_created_under_mapflow_group_when_absent():
     project = QgsProject()
     root = project.layerTreeRoot()
-    plugin = _plugin_for_group(project)
+    service = _service_for_group(project)
 
-    group = plugin._ensure_template_group("T1")
+    group = service.ensure_template_group("T1")
 
     mapflow_group = root.findGroup("Mapflow")
     assert mapflow_group is not None
@@ -42,10 +43,10 @@ def test_template_group_created_under_mapflow_group_when_absent():
 def test_open_then_preview_reuse_the_same_single_group():
     project = QgsProject()
     root = project.layerTreeRoot()
-    plugin = _plugin_for_group(project)
+    service = _service_for_group(project)
 
-    open_group = plugin._ensure_template_group("T1", subgroup_name="AOI: North")
-    preview_group = plugin._ensure_template_group("T1")  # later preview call
+    open_group = service.ensure_template_group("T1", subgroup_name="AOI: North")
+    preview_group = service.ensure_template_group("T1")  # later preview call
 
     mapflow_group = root.findGroup("Mapflow")
     # Exactly one "T1" group exists, under the Mapflow group.
@@ -58,25 +59,25 @@ def test_open_then_preview_reuse_the_same_single_group():
 def test_template_group_falls_back_to_root_when_user_deleted_mapflow_group():
     project = QgsProject()
     root = project.layerTreeRoot()
-    plugin = _plugin_for_group(project, add_layers_to_group=False)
+    service = _service_for_group(project, add_layers_to_group=False)
 
-    group = plugin._ensure_template_group("T1")
+    group = service.ensure_template_group("T1")
 
     assert root.findGroup("Mapflow") is None
     assert root.findGroup("T1") is group
 
 
 def test_finding_a_template_group_creates_nothing():
-    """The whole point of the find/ensure split. `_find_template_group` is called from paths
+    """The whole point of the find/ensure split. `find_template_group` is called from paths
     that fire on every AOI selection and every preview click; if it created the group as a
     side effect, opening a template and clicking around would conjure groups the user never
     asked for — which is why those callers previously had to defer it behind a lambda."""
     project = QgsProject()
     root = project.layerTreeRoot()
-    plugin = _plugin_for_group(project)
+    service = _service_for_group(project)
 
-    assert plugin._find_template_group("T1") is None
-    assert plugin._find_template_group("T1", subgroup_name="AOI: North") is None
+    assert service.find_template_group("T1") is None
+    assert service.find_template_group("T1", subgroup_name="AOI: North") is None
 
     assert root.findGroup("Mapflow") is None
     assert not any(child.name() == "T1" for child in root.children())
@@ -84,12 +85,12 @@ def test_finding_a_template_group_creates_nothing():
 
 def test_finding_a_template_group_returns_the_one_ensure_made():
     project = QgsProject()
-    plugin = _plugin_for_group(project)
+    service = _service_for_group(project)
 
-    created = plugin._ensure_template_group("T1", subgroup_name="AOI: North")
+    created = service.ensure_template_group("T1", subgroup_name="AOI: North")
 
-    assert plugin._find_template_group("T1") is created.parent()
-    assert plugin._find_template_group("T1", subgroup_name="AOI: North") is created
+    assert service.find_template_group("T1") is created.parent()
+    assert service.find_template_group("T1", subgroup_name="AOI: North") is created
 
 
 def _search_view():

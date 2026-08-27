@@ -6,7 +6,6 @@ from base64 import b64decode
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 from pathlib import Path
 from typing import List, Optional, Callable
-from osgeo import ogr
 
 from PyQt5.QtCore import (
     QCoreApplication, QDate, QObject, Qt,
@@ -19,8 +18,7 @@ from PyQt5.QtWidgets import (
     QMenu, QMessageBox, QWidget, QToolButton
 )
 from qgis.core import (
-    QgsDistanceArea, QgsFeature, QgsGeometry,
-    QgsLayerTreeGroup, QgsMapLayer, QgsMapLayerType,
+    QgsDistanceArea, QgsMapLayer, QgsMapLayerType,
     QgsProject, QgsVectorLayer
 )
 
@@ -339,7 +337,10 @@ class Mapflow(QObject):
 
         # Templates (MR-1): create / update-search-params / exclude-from-search.
         self.template_service = TemplateService(app_context=self.app_context,
-                                                processing_service=self.processing_service)
+                                                processing_service=self.processing_service,
+                                                plugin_dir=self.plugin_dir,
+                                                aoi_service=self.aoi_service,
+                                                result_loader=self.result_loader)
         self.template_view = TemplateView(dlg=self.dlg, iface=self.iface, config=self.config)
         self.template_controller = TemplateController(
             template_service=self.template_service,
@@ -348,10 +349,13 @@ class Mapflow(QObject):
             aoi_view=self.aoi_view,
             aoi_service=self.aoi_service,
             provider_service=self.provider_service,
+            processing_service=self.processing_service,
             app_context=self.app_context,
             iface=self.iface,
             update_search_button=self.dlg.updateTemplateSearch,
-            exclude_action=self.dlg.exclude_from_search_action)
+            exclude_action=self.dlg.exclude_from_search_action,
+            processings_table=self.dlg.processingsTable,
+            see_processings_action=self.dlg.see_processings_action)
 
         self.setup_add_layer_menu()
         # Add options menu functionality
@@ -409,13 +413,11 @@ class Mapflow(QObject):
         self.dlg.processingsTable.cellDoubleClicked.connect(self.load_results)
         self.dlg.deleteProcessings.clicked.connect(self.processing_service.confirm_delete_processings)
         self.processing_service.connect_processings_pagination()
-        # In-template navigation: map side-effects on enter/leave a template.
+        # In-template navigation: the search/filter side of entering or leaving a template. The
+        # map-layer side (aoiDetails redraw, 'No AOI' group, selected-AOI Area) is TemplateController's.
         self.processing_service.templateOpened.connect(self.on_template_opened)
         self.processing_service.templateClosed.connect(self.on_template_closed)
-        self.processing_service.templateAoisChanged.connect(self.on_template_aois_changed)
-        self.processing_service.templateProcessingsLoaded.connect(self.on_template_processings_loaded)
         self.dlg.processingsTable.itemSelectionChanged.connect(self.filter_search_by_selected_aoi)
-        self.dlg.processingsTable.itemSelectionChanged.connect(self.sync_processing_area_to_selected_aois)
         # Processings ratings
         self.dlg.processingsTable.itemSelectionChanged.connect(self.enable_feedback)
         self.dlg.processingsTable.itemSelectionChanged.connect(self.on_processings_selection_changed)
@@ -425,9 +427,6 @@ class Mapflow(QObject):
         # Processing feedback
         self.dlg.ratingComboBox.activated.connect(self.enable_feedback)
         self.dlg.processingsTable.cellClicked.connect(self.update_processing_current_rating)
-        # In a template, single-clicking a 'No AOI' processing row adds its AOI to the map
-        # (double-click still loads results).
-        self.dlg.processingsTable.cellClicked.connect(self.on_no_aoi_processing_clicked)
         # Processing review
         self.dlg.acceptButton.clicked.connect(self.accept_processing)
         self.dlg.reviewButton.clicked.connect(self.show_review_dialog)
@@ -440,8 +439,6 @@ class Mapflow(QObject):
         self.dlg.editProvider.clicked.connect(self.edit_provider)
         self.dlg.removeProvider.clicked.connect(self.remove_provider)
 
-        # Processing ids whose 'No AOI' AOI request is in flight (guards rapid re-clicks).
-        self._pending_no_aoi_ids = set()
         self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
             self.sync_table_selection_with_image_id_and_layer)
         self.dlg.metadataTable.itemSelectionChanged.connect(self.update_start_processing_button_state)
@@ -567,7 +564,6 @@ class Mapflow(QObject):
         self.dlg.save_result_action.triggered.connect(self.download_results_file)
         self.dlg.download_aoi_action.triggered.connect(self.download_aoi_file)
         self.dlg.see_details_action.triggered.connect(self.show_selected_details)
-        self.dlg.see_processings_action.triggered.connect(self.select_template_processings)
         self.dlg.see_search_results_action.triggered.connect(self.show_template_search_results)
         self.dlg.processing_update_action.triggered.connect(self.processing_service.update_processing)
         self.dlg.processing_restart_action.triggered.connect(self.processing_service.restart_processing)
@@ -676,7 +672,7 @@ class Mapflow(QObject):
         """Open details based on selected entity type."""
         template = self.processing_service.selected_template()
         if template and not self.processing_service.selected_processing():
-            self.show_template_details_and_navigation(template)
+            self.template_service.show_template_details(template)
             return
         self.show_details()
 
@@ -820,7 +816,7 @@ class Mapflow(QObject):
         # the AOI-area monitor (which reacts to layersAdded) recognizes and skips it.
         self.app_context.metadata_layer = layer
         if template_group_name:
-            target_group = self._ensure_template_group(template_group_name)
+            target_group = self.template_service.ensure_template_group(template_group_name)
             self.app_context.project.addMapLayer(layer, addToLegend=False)
             # Append (bottom) so the search-results footprints sit below the AOI/processing
             # subgroups rather than on top of them.
@@ -851,262 +847,6 @@ class Mapflow(QObject):
             if aoi_id:
                 ids.append(str(aoi_id))
         return ids
-
-    def show_template_details_and_navigation(self, template):
-        """Show template summary. The processings count is fetched from the
-        ``/processings`` endpoint (aoiDetails links are not always populated)."""
-        self.processing_service.api.get_template_processings(
-            template_id=template.id,
-            callback=lambda response: self._show_template_details_callback(template, response),
-        )
-
-    def _show_template_details_callback(self, template, response: QNetworkReply):
-        try:
-            data = json.loads(response.readAll().data())
-            items = data.get("results") if isinstance(data, dict) else data
-            linked_count = len([i for i in (items or []) if isinstance(i, dict)])
-        except (ValueError, TypeError):
-            # Not JSON (ValueError, which UnicodeDecodeError subclasses), or a payload whose
-            # `results` is not iterable.
-            linked_count = 0
-        new_images = template.newImagesCount or 0
-        local_created_at = template.createdAt.astimezone()
-        local_active_until = template.activeUntil.astimezone()
-
-        details = self.tr(
-            "<b>{name}</b><br/>"
-            "<b>Status:</b> {status}<br/>"
-            "<b>Created:</b> {created}<br/>"
-            "<b>Active Until:</b> {active_until}<br/>"
-            "<b>Linked processings:</b> {linked}<br/>"
-            "<b>New images:</b> {new_images}"
-        ).format(
-            name=template.name,
-            status=template.status,
-            created=local_created_at.strftime('%Y-%m-%d %H:%M'),
-            active_until=local_active_until.strftime('%Y-%m-%d %H:%M'),
-            linked=linked_count,
-            new_images=new_images,
-        )
-
-        alert(details, QMessageBox.Information)
-
-    def select_template_processings(self):
-        """Menu action: load AOI/processing layers for the selected template."""
-        template = self.processing_service.selected_template()
-        if not template or self.processing_service.selected_processing():
-            return
-        # Hydrate first (the list view's template omits aoiDetails), then draw layers.
-        self.processing_service.hydrate_template(template, self._load_template_layers)
-
-    def _load_template_layers(self, template):
-        """Draw, per AOI, a subgroup named after the AOI containing the AOI polygon (blue)
-        and each of its processings' footprints (green), all from the template's
-        ``aoiDetails`` (no extra requests)."""
-        if not template:
-            return
-        template_group_name = str(template.name)
-        for aoi in template.aoi_dtos():
-            subgroup_name = self.tr("AOI: {name}").format(name=aoi.display_name)
-            if aoi.geometry:
-                self._add_geojson_aoi_layer(
-                    features=[{"type": "Feature", "geometry": aoi.geometry, "properties": {}}],
-                    layer_name=aoi.display_name,
-                    style_name='aoi_template_blue.qml',
-                    template_group_name=template_group_name,
-                    subgroup_name=subgroup_name,
-                    aoi_id=aoi.id,
-                )
-            for link in aoi.processings:
-                if not link.geometry:
-                    continue
-                self._add_geojson_aoi_layer(
-                    features=[{"type": "Feature", "geometry": link.geometry, "properties": {}}],
-                    layer_name=link.processingName or str(link.processingId),
-                    style_name='aoi_template_processing_green.qml',
-                    template_group_name=template_group_name,
-                    subgroup_name=subgroup_name,
-                )
-
-    def _no_aoi_subgroup_name(self) -> str:
-        return self.tr("No AOI")
-
-    def on_template_processings_loaded(self, template) -> None:
-        """Once a template's processings load, create the (initially empty) 'No AOI' group if any
-        processing is not bound to an AOI. Each such AOI is fetched and added lazily when the user
-        single-clicks its row (see on_no_aoi_processing_clicked) — no bulk requests on open."""
-        if not template or not self.processing_service.no_aoi_processing_ids():
-            return
-        self._ensure_template_group(str(template.name), self._no_aoi_subgroup_name())
-
-    def on_no_aoi_processing_clicked(self, *args) -> None:
-        """Single-click on a 'No AOI' processing row: fetch that processing's AOI and add it to the
-        'No AOI' group. No-op outside a template, for AOI/bound-processing rows, or when the AOI is
-        already on the map or its request is already in flight (double-click still loads results)."""
-        if not self.processing_service.in_template_mode:
-            return
-        processing = self.processing_service.selected_processing()
-        if not processing:
-            return
-        pid = str(processing.id)
-        if not self.processing_service.is_no_aoi_processing(pid):
-            return
-        if pid in self._pending_no_aoi_ids or self._no_aoi_aoi_on_map(pid):
-            return
-        self._pending_no_aoi_ids.add(pid)
-        self.http.get(
-            url=f'{self.server}/processings/{pid}/aois',
-            callback=self._add_no_aoi_processing_aoi_callback,
-            callback_kwargs={'pid': pid, 'name': processing.name},
-            error_handler=self._add_no_aoi_processing_aoi_error,
-            error_handler_kwargs={'pid': pid},
-            use_default_error_handler=False,
-            timeout=30,
-        )
-
-    def _add_no_aoi_processing_aoi_callback(self, response: QNetworkReply, pid: str, name: str) -> None:
-        self._pending_no_aoi_ids.discard(pid)
-        template = self.processing_service.active_template
-        if not template or not self.processing_service.in_template_mode or self._no_aoi_aoi_on_map(pid):
-            return
-        # GET /processings/{id}/aois returns a JSON list of AOI objects (each with a `geometry`),
-        # not a FeatureCollection — wrap each geometry into a feature the layer builder understands.
-        try:
-            aois = json.loads(response.readAll().data())
-        except ValueError:
-            # Not JSON, or not decodable as UTF-8 (UnicodeDecodeError is a ValueError).
-            return
-        if isinstance(aois, dict):
-            aois = aois.get('aois', [])
-        features = [{"type": "Feature", "geometry": aoi.get("geometry"), "properties": {}}
-                    for aoi in aois if isinstance(aoi, dict) and aoi.get("geometry")]
-        if not features:
-            return
-        layer = self._add_geojson_aoi_layer(
-            features=features,
-            layer_name=name or pid,
-            style_name='aoi_template_processing_green.qml',
-            template_group_name=str(template.name),
-            subgroup_name=self._no_aoi_subgroup_name(),
-        )
-        if layer is not None:
-            layer.setCustomProperty('mapflow/no_aoi_processing_id', str(pid))
-
-    def _add_no_aoi_processing_aoi_error(self, response: QNetworkReply, pid: str = None) -> None:
-        self._pending_no_aoi_ids.discard(pid)
-
-    def _no_aoi_aoi_on_map(self, pid) -> bool:
-        """Whether a 'No AOI' processing's AOI layer (tagged with its id) is already on the map."""
-        return any(layer.customProperty('mapflow/no_aoi_processing_id') == str(pid)
-                   for layer in self.app_context.project.mapLayers().values())
-
-    def _add_geojson_aoi_layer(self,
-                               features: list,
-                               layer_name: str,
-                               style_name: str,
-                               template_group_name: Optional[str] = None,
-                               subgroup_name: Optional[str] = None,
-                               reference_layer_id: Optional[str] = None,
-                               aoi_id: Optional[str] = None) -> Optional[QgsVectorLayer]:
-        if not features:
-            return None
-        aoi_layer = QgsVectorLayer('Polygon?crs=epsg:4326', layer_name, 'memory')
-        # Tag the AOI's own polygon layer with its id so "Update selected AOI" can find and edit
-        # this exact layer in place (processing-footprint layers are left untagged).
-        if aoi_id is not None:
-            aoi_layer.setCustomProperty('mapflow/aoi_id', str(aoi_id))
-        provider = aoi_layer.dataProvider()
-        qgs_features = []
-        for feature in features:
-            geom_dict = feature.get("geometry")
-            if not geom_dict:
-                continue
-            try:
-                ogr_geom = ogr.CreateGeometryFromJson(json.dumps(geom_dict))
-                if not ogr_geom:
-                    continue
-                qgs_geom = QgsGeometry.fromWkt(ogr_geom.ExportToWkt())
-                qgs_feat = QgsFeature()
-                qgs_feat.setGeometry(qgs_geom)
-                qgs_features.append(qgs_feat)
-            except Exception as e:
-                # Per-feature, inside a loop: no traceback, or one malformed response
-                # buries the panel in near-identical stack dumps.
-                logger.warning("Skipping a search feature that failed to parse: %s", e)
-                continue
-        if not qgs_features:
-            return None
-        provider.addFeatures(qgs_features)
-        aoi_layer.updateExtents()
-
-        root = self.app_context.project.layerTreeRoot()
-        if template_group_name:
-            target_group = self._ensure_template_group(template_group_name, subgroup_name)
-            self.app_context.project.addMapLayer(aoi_layer, addToLegend=False)
-            target_group.insertLayer(0, aoi_layer)
-        elif reference_layer_id:
-            root = self.app_context.project.layerTreeRoot()
-            ref_node = root.findLayer(reference_layer_id)
-            if ref_node and ref_node.parent():
-                self.app_context.project.addMapLayer(aoi_layer, addToLegend=False)
-                ref_node.parent().insertLayer(0, aoi_layer)
-            else:
-                self.app_context.project.addMapLayer(aoi_layer)
-        else:
-            self.app_context.project.addMapLayer(aoi_layer)
-
-        aoi_layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', style_name))
-        # Template AOI layers are added in bulk on open; don't fire a cost request per layer,
-        # and don't let them become the current processing Area (feedback 8.1) — the Area is
-        # set from the AOI table selection (see sync_processing_area_to_selected_aois).
-        self.aoi_service.register_layer(aoi_layer, recompute_cost=False, set_current=False)
-        return aoi_layer
-
-    def _find_template_group(self,
-                             template_group_name: str,
-                             subgroup_name: Optional[str] = None):
-        """The ``Mapflow > <template name> [> <subgroup>]`` layer-tree group, or None.
-
-        Creates nothing. Callers that only need to *place* a layer next to the template's other
-        layers use this: they run on selection changes and preview clicks, and a lookup that
-        materialises a group as a side effect cannot be called on a path like that without a
-        lambda to defer it.
-        """
-        mapflow_group_name = self.app_context.settings.value('layerGroup') or self.app_context.plugin_name
-        return layer_utils.find_template_group(self.app_context.project, mapflow_group_name,
-                                               template_group_name, subgroup_name)
-
-    def _ensure_template_group(self,
-                               template_group_name: str,
-                               subgroup_name: Optional[str] = None):
-        """Find or create that group, and return the node new layers should be inserted into.
-
-        For the callers that are *adding* the template's layers, and so legitimately bring the
-        group into being. Everything that merely places an already-built layer wants
-        ``_find_template_group`` instead.
-
-        The Mapflow group is created here when missing so the template group is nested under it
-        from the very first (template-open) call. Previously the open path fell back to the root
-        because the Mapflow group did not exist yet, and a later preview — by which point the
-        group had been created — added a SECOND template group under it (feedback 4.1). If the
-        user has deleted the Mapflow group (the result loader then adds to root), respect that
-        and place template groups at the root too, keeping a single path."""
-        root = self.app_context.project.layerTreeRoot()
-        mapflow_group_name = self.app_context.settings.value('layerGroup') or self.app_context.plugin_name
-        mapflow_group = root.findGroup(mapflow_group_name)
-        if mapflow_group is None and getattr(self.result_loader, 'add_layers_to_group', True):
-            mapflow_group = root.insertGroup(0, mapflow_group_name)
-            self.app_context.settings.setValue('layerGroup', mapflow_group_name)
-        parent_group = mapflow_group if mapflow_group else root
-        template_group = parent_group.findGroup(template_group_name)
-        if not template_group:
-            template_group = parent_group.insertGroup(0, template_group_name)
-        if subgroup_name:
-            subgroup = template_group.findGroup(subgroup_name)
-            if not subgroup:
-                subgroup = template_group.insertGroup(0, subgroup_name)
-            return subgroup
-        return template_group
 
     def show_template_search_results(self):
         """Menu action: fill the imagery-search table with the selected template's results."""
@@ -1193,20 +933,6 @@ class Mapflow(QObject):
             return
         self._template_search_aoi_filter = selected_ids or None
         self._load_template_search(template, aoi_ids=list(selected_ids) or None)
-
-    def sync_processing_area_to_selected_aois(self):
-        """Inside a template, point the Area combo at the selected AOI(s), so the Area shown in
-        the combo IS the one a processing will use — one place to look, no silent override.
-
-        A single selection points at that AOI's own (already visible) layer; a multi-selection
-        points at a visible "Selected AOIs" layer holding one feature per AOI. No-op when no AOI
-        is selected, keeping the current Area (e.g. while a processing row is selected)."""
-        if not self.processing_service.in_template_mode:
-            return
-        template = self.processing_service.active_template
-        self.aoi_service.select_aois_as_processing_area(
-            self.processing_service.selected_aois(),
-            self._find_template_group(str(template.name)) if template else None)
 
     def select_processing_in_table(self, processing_id: str):
         """Select processing row by ID and open processing details."""
@@ -2338,7 +2064,9 @@ class Mapflow(QObject):
         self.project_processing_controller.enter_template(template)
 
     def on_template_opened(self, template):
-        """React to entering a template: fill search results and load AOI/processing layers."""
+        """React to entering a template: fill the search results and mirror its params into the
+        filter widgets. The AOI/processing map layers are drawn by TemplateController's own
+        `templateOpened` listener."""
         # Initial results are the whole template (no AOI filter applied yet).
         self._template_search_aoi_filter = None
         # Drop the previous view's results/baseline first, so the widget updates below (which
@@ -2352,12 +2080,10 @@ class Mapflow(QObject):
         self.dlg.updateTemplateSearch.setVisible(True)
         self.apply_search_params_to_ui(getattr(template, "searchParams", None))
         self._load_template_search(template)
-        self._load_template_layers(template)
 
     def on_template_closed(self, template):
-        """React to leaving a template: drop its map group and clear the search table."""
-        if template is not None:
-            self._remove_template_group(str(template.name))
+        """React to leaving a template: clear the search table and view state. The template's map
+        group is dropped by TemplateController's own `templateClosed` listener."""
         self.app_context.open_template_results_id = None
         self._template_search_aoi_filter = None
         self.app_context.search_result_geojson = None
@@ -2371,39 +2097,6 @@ class Mapflow(QObject):
         # Clear the template search-results pagination so it is not preserved on re-open.
         self.search_service.page_offset = 0
         self.dlg.enable_search_pages(False)
-
-    def on_template_aois_changed(self, template):
-        """Redraw the template's AOI/processing map layers after its AOIs change (add / rename
-        / delete / geometry update / exclude-from-search), so the layer tree stays in sync
-        without re-entering the template."""
-        if not template:
-            return
-        self._remove_template_aoi_subgroups(str(template.name))
-        self._load_template_layers(template)
-
-    def _remove_template_aoi_subgroups(self, template_group_name: str):
-        """Remove the per-AOI subgroups (and their layers) under the template group, keeping
-        the search-results footprint layer that sits directly in the template group."""
-        if not template_group_name:
-            return
-        root = self.app_context.project.layerTreeRoot()
-        mapflow_group_name = self.app_context.settings.value('layerGroup') or self.app_context.plugin_name
-        mapflow_group = root.findGroup(mapflow_group_name)
-        parent_group = mapflow_group if mapflow_group else root
-        template_group = parent_group.findGroup(template_group_name)
-        if template_group is None:
-            return
-        for child in list(template_group.children()):
-            # AOI subgroups are groups; the search-footprints node is a layer — leave it.
-            if isinstance(child, QgsLayerTreeGroup):
-                for layer in child.findLayers():
-                    layer_id = layer.layerId()
-                    if layer_id:
-                        try:
-                            self.app_context.project.removeMapLayer(layer_id)
-                        except (RuntimeError, KeyError):
-                            pass
-                template_group.removeChildNode(child)
 
     def apply_search_params_to_ui(self, search_params):
         """Populate the Imagery Search filters from a template's stored ``searchParams``
@@ -2448,26 +2141,6 @@ class Mapflow(QObject):
         for index in range(combo.count()):
             if combo.itemData(index) in wanted:
                 combo.setItemCheckState(index, Qt.Checked)
-
-    def _remove_template_group(self, template_group_name: str):
-        """Remove the template's layer-tree group (and its layers) from the map."""
-        if not template_group_name:
-            return
-        root = self.app_context.project.layerTreeRoot()
-        mapflow_group_name = self.app_context.settings.value('layerGroup') or self.app_context.plugin_name
-        mapflow_group = root.findGroup(mapflow_group_name)
-        parent_group = mapflow_group if mapflow_group else root
-        template_group = parent_group.findGroup(template_group_name)
-        if template_group is None:
-            return
-        for layer in template_group.findLayers():
-            layer_id = layer.layerId()
-            if layer_id:
-                try:
-                    self.app_context.project.removeMapLayer(layer_id)
-                except (RuntimeError, KeyError):
-                    pass
-        parent_group.removeChildNode(template_group)
 
     def load_results(self):
         # Check if it's a template first

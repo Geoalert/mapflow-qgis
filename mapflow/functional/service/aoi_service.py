@@ -230,8 +230,8 @@ class AoiService(QObject):
         selected, keeping the current Area (e.g. while a processing row is selected).
 
         ``group`` is the template's layer-tree group, or None to leave the built layer at the
-        root. Looking it up is side-effect free (`Mapflow._find_template_group`), so it can be
-        resolved before the call rather than deferred into it.
+        root. Looking it up is side-effect free (`TemplateService.find_template_group`), so it can
+        be resolved before the call rather than deferred into it.
         """
         aois = [aoi for aoi in aois if aoi and aoi.id]
         selected_ids = frozenset(str(aoi.id) for aoi in aois)

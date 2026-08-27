@@ -118,7 +118,6 @@ def test_on_template_opened_populates_search_filters():
     plugin = _plugin()
     plugin.apply_search_params_to_ui = MagicMock()
     plugin._load_template_search = MagicMock()
-    plugin._load_template_layers = MagicMock()
     search_params = _search_params()
     template = SimpleNamespace(id="tpl-1", name="T1", searchParams=search_params)
 
@@ -126,4 +125,5 @@ def test_on_template_opened_populates_search_filters():
 
     plugin.apply_search_params_to_ui.assert_called_once_with(search_params)
     plugin._load_template_search.assert_called_once_with(template)
-    plugin._load_template_layers.assert_called_once_with(template)
+    # The AOI/processing layers are drawn by TemplateController's own templateOpened listener,
+    # not by on_template_opened (which now handles only the search/filter side).

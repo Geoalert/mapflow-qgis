@@ -3,12 +3,17 @@
 Processings attached to a template but not intersecting any AOI are omitted from aoiDetails, so
 their geometry is fetched per-processing (GET /processings/{id}/aois) on a single click of the row
 and added to a 'No AOI' group — with dedup so an already-added processing is not re-fetched.
+
+Owners after the layers/navigation extraction: `TemplateController` reads the click and the
+in-template guard; `TemplateService` owns the request, the in-flight set, and the callback that
+draws the layer (`spec/007_architecture.md` § Layer rules / § Controllers).
 """
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from mapflow.functional.controller.template_controller import TemplateController
 from mapflow.functional.service.processing_service import ProcessingService
-from mapflow.mapflow import Mapflow
+from mapflow.functional.service.template_service import TemplateService
 
 
 # ---------------- service: which processings are 'No AOI' ----------------
@@ -29,92 +34,113 @@ def test_no_aoi_processing_ids_are_the_unbound_ones():
     assert service.is_no_aoi_processing("p1") is False
 
 
-# ---------------- Mapflow: create the group, click to add ----------------
+# ---------------- controller: the click reads the row, guards in-template ----------------
 
-def _plugin_click(in_template=True, is_no_aoi=True, on_map=False, processing=None):
-    if processing is None:
-        processing = SimpleNamespace(id="p2", name="proc")
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.server = "https://server"
-    plugin.http = MagicMock()
-    plugin._pending_no_aoi_ids = set()
-    plugin._no_aoi_aoi_on_map = MagicMock(return_value=on_map)
-    plugin.processing_service = MagicMock()
-    plugin.processing_service.in_template_mode = in_template
-    plugin.processing_service.selected_processing.return_value = processing
-    plugin.processing_service.is_no_aoi_processing.return_value = is_no_aoi
-    return plugin
+def _controller(in_template=True, processing=None):
+    controller = TemplateController.__new__(TemplateController)
+    controller.template_service = MagicMock()
+    controller.processing_service = MagicMock()
+    controller.processing_service.in_template_mode = in_template
+    controller.processing_service.selected_processing.return_value = processing
+    return controller
 
 
-def test_click_fetches_and_marks_in_flight_for_no_aoi_processing():
-    plugin = _plugin_click()
+def test_click_delegates_the_selected_processing_in_template():
+    processing = SimpleNamespace(id="p2", name="proc")
+    controller = _controller(processing=processing)
 
-    plugin.on_no_aoi_processing_clicked(0, 0)
+    controller.on_no_aoi_processing_clicked(0, 0)
 
-    plugin.http.get.assert_called_once()
-    assert plugin.http.get.call_args.kwargs["url"].endswith("/processings/p2/aois")
-    assert "p2" in plugin._pending_no_aoi_ids
-
-
-def test_click_ignored_for_bound_processing():
-    plugin = _plugin_click(is_no_aoi=False)
-    plugin.on_no_aoi_processing_clicked(0, 0)
-    plugin.http.get.assert_not_called()
+    controller.template_service.load_no_aoi_processing_aoi.assert_called_once_with(processing)
 
 
 def test_click_ignored_outside_template():
-    plugin = _plugin_click(in_template=False)
-    plugin.on_no_aoi_processing_clicked(0, 0)
-    plugin.http.get.assert_not_called()
+    controller = _controller(in_template=False)
+    controller.on_no_aoi_processing_clicked(0, 0)
+    controller.template_service.load_no_aoi_processing_aoi.assert_not_called()
 
 
-def test_click_ignored_when_aoi_already_on_map():
-    plugin = _plugin_click(on_map=True)
-    plugin.on_no_aoi_processing_clicked(0, 0)
-    plugin.http.get.assert_not_called()
+# ---------------- service: fetch on demand, dedup, mark in flight ----------------
+
+def _service_load(is_no_aoi=True, on_map=False, pending=None):
+    processing_service = MagicMock()
+    processing_service.is_no_aoi_processing.return_value = is_no_aoi
+    service = TemplateService(app_context=MagicMock(), processing_service=processing_service)
+    service.no_aoi_aoi_on_map = MagicMock(return_value=on_map)
+    if pending:
+        service._pending_no_aoi_ids.update(pending)
+    return service
 
 
-def test_click_ignored_when_request_in_flight():
-    plugin = _plugin_click()
-    plugin._pending_no_aoi_ids.add("p2")
-    plugin.on_no_aoi_processing_clicked(0, 0)
-    plugin.http.get.assert_not_called()
+def test_load_fetches_and_marks_in_flight_for_no_aoi_processing():
+    service = _service_load()
+
+    service.load_no_aoi_processing_aoi(SimpleNamespace(id="p2", name="proc"))
+
+    service.processing_service.api.get_processing_aois.assert_called_once()
+    assert service.processing_service.api.get_processing_aois.call_args.kwargs["processing_id"] == "p2"
+    assert "p2" in service._pending_no_aoi_ids
+
+
+def test_load_ignored_for_bound_processing():
+    service = _service_load(is_no_aoi=False)
+    service.load_no_aoi_processing_aoi(SimpleNamespace(id="p2", name="proc"))
+    service.processing_service.api.get_processing_aois.assert_not_called()
+
+
+def test_load_ignored_when_aoi_already_on_map():
+    service = _service_load(on_map=True)
+    service.load_no_aoi_processing_aoi(SimpleNamespace(id="p2", name="proc"))
+    service.processing_service.api.get_processing_aois.assert_not_called()
+
+
+def test_load_ignored_when_request_in_flight():
+    service = _service_load(pending={"p2"})
+    service.load_no_aoi_processing_aoi(SimpleNamespace(id="p2", name="proc"))
+    service.processing_service.api.get_processing_aois.assert_not_called()
+
+
+def test_load_ignored_for_no_processing():
+    service = _service_load()
+    service.load_no_aoi_processing_aoi(None)
+    service.processing_service.api.get_processing_aois.assert_not_called()
 
 
 def test_callback_draws_layer_tags_it_and_clears_in_flight():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin._pending_no_aoi_ids = {"p2"}
-    plugin.processing_service = MagicMock()
-    plugin.processing_service.in_template_mode = True
-    plugin.processing_service.active_template = SimpleNamespace(name="T")
-    plugin._no_aoi_aoi_on_map = MagicMock(return_value=False)
+    processing_service = MagicMock()
+    processing_service.in_template_mode = True
+    processing_service.active_template = SimpleNamespace(name="T")
+    service = TemplateService(app_context=MagicMock(), processing_service=processing_service)
+    service._pending_no_aoi_ids = {"p2"}
+    service.no_aoi_aoi_on_map = MagicMock(return_value=False)
     layer = MagicMock()
-    plugin._add_geojson_aoi_layer = MagicMock(return_value=layer)
+    service.add_geojson_aoi_layer = MagicMock(return_value=layer)
     response = MagicMock()
     # /processings/{id}/aois returns a JSON list of AOI objects, each with a geometry.
     response.readAll.return_value.data.return_value = (
         b'[{"id":"a1","geometry":{"type":"Polygon","coordinates":[]}}]')
 
-    plugin._add_no_aoi_processing_aoi_callback(response, pid="p2", name="proc")
+    service._add_no_aoi_processing_aoi_callback(response, pid="p2", name="proc")
 
-    plugin._add_geojson_aoi_layer.assert_called_once()
-    assert plugin._add_geojson_aoi_layer.call_args.kwargs["subgroup_name"] == "No AOI"
+    service.add_geojson_aoi_layer.assert_called_once()
+    assert service.add_geojson_aoi_layer.call_args.kwargs["subgroup_name"] == "No AOI"
     layer.setCustomProperty.assert_called_once_with("mapflow/no_aoi_processing_id", "p2")
-    assert "p2" not in plugin._pending_no_aoi_ids
+    assert "p2" not in service._pending_no_aoi_ids
 
+
+# ---------------- controller: create the 'No AOI' group only when unbound processings exist ----------------
 
 def test_processings_loaded_creates_no_aoi_group_only_when_unbound_exist():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.processing_service = MagicMock()
-    plugin._ensure_template_group = MagicMock()
+    controller = TemplateController.__new__(TemplateController)
+    controller.template_service = MagicMock()
+    controller.template_service.no_aoi_subgroup_name.return_value = "No AOI"
+    controller.processing_service = MagicMock()
 
-    plugin.processing_service.no_aoi_processing_ids.return_value = {"p2"}
-    plugin.on_template_processings_loaded(SimpleNamespace(name="T"))
-    plugin._ensure_template_group.assert_called_once_with("T", "No AOI")
+    controller.processing_service.no_aoi_processing_ids.return_value = {"p2"}
+    controller.on_template_processings_loaded(SimpleNamespace(name="T"))
+    controller.template_service.ensure_template_group.assert_called_once_with("T", "No AOI")
 
-    plugin._ensure_template_group.reset_mock()
-    plugin.processing_service.no_aoi_processing_ids.return_value = set()
-    plugin.on_template_processings_loaded(SimpleNamespace(name="T"))
-    plugin._ensure_template_group.assert_not_called()
+    controller.template_service.ensure_template_group.reset_mock()
+    controller.processing_service.no_aoi_processing_ids.return_value = set()
+    controller.on_template_processings_loaded(SimpleNamespace(name="T"))
+    controller.template_service.ensure_template_group.assert_not_called()

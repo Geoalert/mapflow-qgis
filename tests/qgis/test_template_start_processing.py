@@ -223,9 +223,8 @@ def test_load_template_layers_builds_per_aoi_subgroups_from_aoidetails():
     all from aoiDetails — no per-processing AOI requests."""
     from mapflow.schema.template import AoiProcessingLink, TemplateAoiDTO
 
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin._add_geojson_aoi_layer = MagicMock()
+    service = TemplateService(app_context=MagicMock(), processing_service=MagicMock())
+    service.add_geojson_aoi_layer = MagicMock()
 
     geom = {"type": "Polygon", "coordinates": [[[0, 0], [0, 1], [1, 1], [0, 0]]]}
     proc_geom = {"type": "Polygon", "coordinates": [[[0, 0], [0, 2], [2, 2], [0, 0]]]}
@@ -235,13 +234,13 @@ def test_load_template_layers_builds_per_aoi_subgroups_from_aoidetails():
     )
     template = SimpleNamespace(name="Template A", aoi_dtos=lambda: [aoi])
 
-    plugin._load_template_layers(template)
+    service.load_template_layers(template)
 
     # One AOI (blue) layer + one processing (green) layer, both in the AOI's subgroup.
-    assert plugin._add_geojson_aoi_layer.call_count == 2
-    styles = [c.kwargs["style_name"] for c in plugin._add_geojson_aoi_layer.call_args_list]
+    assert service.add_geojson_aoi_layer.call_count == 2
+    styles = [c.kwargs["style_name"] for c in service.add_geojson_aoi_layer.call_args_list]
     assert styles == ["aoi_template_blue.qml", "aoi_template_processing_green.qml"]
-    subgroups = {c.kwargs["subgroup_name"] for c in plugin._add_geojson_aoi_layer.call_args_list}
+    subgroups = {c.kwargs["subgroup_name"] for c in service.add_geojson_aoi_layer.call_args_list}
     assert subgroups == {"AOI: North"}
 
 

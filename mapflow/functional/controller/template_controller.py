@@ -26,10 +26,13 @@ class TemplateController(QObject):
                  aoi_view,
                  aoi_service: AoiService,
                  provider_service,
+                 processing_service,
                  app_context: AppContext,
                  iface,
                  update_search_button,
-                 exclude_action):
+                 exclude_action,
+                 processings_table,
+                 see_processings_action):
         super().__init__()
         self.template_service = template_service
         self.template_view = template_view
@@ -37,6 +40,9 @@ class TemplateController(QObject):
         self.aoi_view = aoi_view
         self.aoi_service = aoi_service
         self.provider_service = provider_service
+        #: Read for navigation state (`in_template_mode`, `active_template`,
+        #: `selected_template/processing`, `selected_aois`) and for `hydrate_template`.
+        self.processing_service = processing_service
         self.app_context = app_context
         self.iface = iface
 
@@ -44,6 +50,19 @@ class TemplateController(QObject):
         exclude_action.triggered.connect(self.template_service.exclude_processing_from_search)
         # The Seen / Seen-all actions are created later (setup_metadata_seen_dropdown), so
         # mapflow.py wires them to mark_selected_images_seen / mark_all_images_seen.
+
+        # In-template navigation: the map layers a template draws, plus the selection-driven
+        # effects that only apply while a template is open. The processings table itself is the
+        # ProjectProcessingController's region; these listeners react to it for template concerns.
+        see_processings_action.triggered.connect(self.select_template_processings)
+        processings_table.itemSelectionChanged.connect(self.sync_processing_area_to_selected_aois)
+        processings_table.cellClicked.connect(self.on_no_aoi_processing_clicked)
+        processing_service.templateAoisChanged.connect(self.on_template_aois_changed)
+        processing_service.templateProcessingsLoaded.connect(self.on_template_processings_loaded)
+        # The layer side of entering/leaving a template. A second listener on these signals — the
+        # search/filter side stays in mapflow.py — so neither edits the other (spec § Controllers).
+        processing_service.templateOpened.connect(self._on_template_opened_layers)
+        processing_service.templateClosed.connect(self._on_template_closed_layers)
 
         self.template_service.creationBusy.connect(
             lambda busy: self.template_view.set_search_enabled(not busy))
@@ -123,3 +142,63 @@ class TemplateController(QObject):
         if not features:
             return None
         return {"type": "FeatureCollection", "features": features}
+
+    # ---------- in-template navigation: draw / redraw / clean up the template's map layers ----------
+
+    def select_template_processings(self, *args) -> None:
+        """Menu action: load AOI/processing layers for the selected template."""
+        template = self.processing_service.selected_template()
+        if not template or self.processing_service.selected_processing():
+            return
+        # Hydrate first (the list view's template omits aoiDetails), then draw layers.
+        self.processing_service.hydrate_template(template, self.template_service.load_template_layers)
+
+    def on_template_processings_loaded(self, template) -> None:
+        """Once a template's processings load, create the (initially empty) 'No AOI' group if any
+        processing is not bound to an AOI. Each such AOI is fetched and added lazily when the user
+        single-clicks its row (see on_no_aoi_processing_clicked) — no bulk requests on open."""
+        if not template or not self.processing_service.no_aoi_processing_ids():
+            return
+        self.template_service.ensure_template_group(str(template.name),
+                                                    self.template_service.no_aoi_subgroup_name())
+
+    def on_no_aoi_processing_clicked(self, *args) -> None:
+        """Single-click on a 'No AOI' processing row: fetch that processing's AOI and add it to the
+        'No AOI' group. No-op outside a template; the service ignores AOI/bound-processing rows, an
+        AOI already on the map, or a request already in flight (double-click still loads results)."""
+        if not self.processing_service.in_template_mode:
+            return
+        self.template_service.load_no_aoi_processing_aoi(self.processing_service.selected_processing())
+
+    def on_template_aois_changed(self, template) -> None:
+        """Redraw the template's AOI/processing map layers after its AOIs change (add / rename
+        / delete / geometry update / exclude-from-search), so the layer tree stays in sync
+        without re-entering the template."""
+        if not template:
+            return
+        self.template_service.remove_template_aoi_subgroups(str(template.name))
+        self.template_service.load_template_layers(template)
+
+    def sync_processing_area_to_selected_aois(self, *args) -> None:
+        """Inside a template, point the Area combo at the selected AOI(s), so the Area shown in
+        the combo IS the one a processing will use — one place to look, no silent override.
+
+        A single selection points at that AOI's own (already visible) layer; a multi-selection
+        points at a visible "Selected AOIs" layer holding one feature per AOI. No-op when no AOI
+        is selected, keeping the current Area (e.g. while a processing row is selected)."""
+        if not self.processing_service.in_template_mode:
+            return
+        template = self.processing_service.active_template
+        self.aoi_service.select_aois_as_processing_area(
+            self.processing_service.selected_aois(),
+            self.template_service.find_template_group(str(template.name)) if template else None)
+
+    def _on_template_opened_layers(self, template) -> None:
+        """Layer side of entering a template: draw its AOI/processing layers. The search results
+        and filter widgets are handled by mapflow.py's own `templateOpened` listener."""
+        self.template_service.load_template_layers(template)
+
+    def _on_template_closed_layers(self, template) -> None:
+        """Layer side of leaving a template: drop its map group."""
+        if template is not None:
+            self.template_service.remove_template_group(str(template.name))
