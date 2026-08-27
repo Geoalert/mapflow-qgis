@@ -1,13 +1,12 @@
-"""QGIS-tier tests for instant local filtering of imagery-search / template results.
+"""QGIS-tier tests for the local-filter machinery that stays in `mapflow.py`: assembling a
+`FilterCriteria` from the widgets + context, and applying the result to the table and layer.
 
-The filter widgets (date range, cloud cover, min intersection %) filter the already-fetched
-results on the client on every change — no server request. Unfit rows are not removed: they are
-greyed-out, made non-selectable and sorted to the bottom, and their footprints hidden from the
-result layer. A widen (!) indicator warns when the current widgets ask for MORE than was
-fetched (which local filtering cannot surface without a new Search).
-
-Templates are filtered client-side too (no server-side Filter button); min intersection uses the
-backend-provided per-image aoiIntersectionPercent (no local geometry / AOI-subselection math)."""
+The pure computation (which results fail the filter, and the widen `(!)` comparison) moved to
+`LocalFilterService` and is tested in `tests/functional/test_local_filter.py`. What remains here
+needs the QGIS runtime and/or real widgets: the provider/product resolution that reads
+`app_context`, the `apply_local_filter` orchestration (reorder, re-entrancy guard, skip-unchanged),
+the row greying and footprint hiding, and the widen-indicator button toggle.
+"""
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -15,6 +14,7 @@ from PyQt5.QtCore import QDate, Qt
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem
 from qgis.core import QgsDistanceArea, QgsGeometry, QgsProject
 
+from mapflow.functional.service.local_filter_service import LocalFilterService
 from mapflow.mapflow import Mapflow
 
 
@@ -35,33 +35,28 @@ def _feature(local_index, date, cloud, geom, intersection=None):
     return {"type": "Feature", "geometry": geom, "properties": props}
 
 
-def _features():
-    """GeoJSON results (same shape as fills the table): index 0 fits; 1 out of date range;
-    2 too cloudy; 3 low backend AOI intersection (~1%)."""
-    return [
-        _feature(0, "2025-03-01T00:00:00Z", 10, _square_geojson(0, 0, 10, 10), intersection=100),
-        _feature(1, "2020-01-01T00:00:00Z", 5, _square_geojson(0, 0, 10, 10), intersection=100),
-        _feature(2, "2025-03-01T00:00:00Z", 90, _square_geojson(0, 0, 10, 10), intersection=100),
-        _feature(3, "2025-03-01T00:00:00Z", 10, _square_geojson(9, 9, 11, 11), intersection=1),
-    ]
+def _feature_p(local_index, provider, product_type="OPTICAL"):
+    f = _feature(local_index, "2025-03-01T00:00:00Z", 10, _square_geojson(0, 0, 10, 10))
+    f["properties"]["providerName"] = provider
+    f["properties"]["productType"] = product_type
+    return f
 
 
-def _plugin_regular(min_intersection=50, max_cloud=50,
-                    date_from=None, date_to=None):
+def _plugin_regular(min_intersection=50, max_cloud=50, date_from=None, date_to=None):
     date_from = date_from or QDate(2025, 1, 1)
     date_to = date_to or QDate(2025, 12, 31)
     plugin = Mapflow.__new__(Mapflow)
     plugin.tr = lambda t: t
-    plugin.calculator = QgsDistanceArea()
     plugin.dlg = MagicMock()
     plugin.dlg.metadataFrom.date.return_value = date_from
     plugin.dlg.metadataTo.date.return_value = date_to
     plugin.dlg.maxCloudCover.value.return_value = max_cloud
     plugin.dlg.minIntersection.value.return_value = min_intersection
-    # Off-nadir at the full 0-30 range by default = no off-nadir filtering.
     plugin.dlg.off_nadir_range.return_value = (0, 30)
     plugin.dlg.off_nadir_is_full_range.return_value = True
-    # No provider / product-type filter by default; overridden in the relevant tests.
+    # The pure computation lives in the service; these mapflow tests exercise the criteria
+    # assembly that feeds it, so a real service is wired in.
+    plugin.local_filter_service = LocalFilterService()
     plugin._allowed_provider_set = MagicMock(return_value=None)
     plugin._product_category_filter = MagicMock(return_value=None)
     plugin.processing_service = SimpleNamespace(in_template_mode=False)
@@ -74,198 +69,7 @@ def _plugin_regular(min_intersection=50, max_cloud=50,
     return plugin
 
 
-# ---------- _unfit_local_indices ----------
-
-def _off_nadir_feature(local_index, angle):
-    return {"type": "Feature", "geometry": _square_geojson(0, 0, 10, 10),
-            "properties": {"local_index": local_index, "acquisitionDate": "2025-03-01T00:00:00Z",
-                           "cloudCover": 0, "offNadirAngle": angle}}
-
-
-def test_off_nadir_out_of_range_demoted_missing_passes():
-    plugin = _plugin_regular(min_intersection=0, max_cloud=100)
-    plugin.dlg.off_nadir_range.return_value = (0, 5)
-    plugin.dlg.off_nadir_is_full_range.return_value = False
-    features = [
-        _off_nadir_feature(0, 3),     # within [0, 5] -> fit
-        _off_nadir_feature(1, 10),    # outside -> unfit
-        _off_nadir_feature(2, None),  # missing angle -> passes (missing matches any)
-    ]
-
-    assert plugin._unfit_local_indices(features) == {1}
-
-
-def test_off_nadir_full_range_does_not_filter():
-    plugin = _plugin_regular(min_intersection=0, max_cloud=100)
-    plugin.dlg.off_nadir_range.return_value = (0, 30)
-    plugin.dlg.off_nadir_is_full_range.return_value = True
-
-    # Even an angle beyond the slider maximum passes when the range is full (= no filter).
-    assert plugin._unfit_local_indices([_off_nadir_feature(0, 45)]) == set()
-
-
-def test_unfit_indices_reject_date_cloud_and_intersection():
-    plugin = _plugin_regular()
-
-    unfit = plugin._unfit_local_indices(_features())
-
-    # 0 passes; 1 (date), 2 (cloud), 3 (intersection) fail.
-    assert unfit == {1, 2, 3}
-
-
-def test_unfit_matches_displayed_cloud_value():
-    # Greying must track the exact Cloud % shown in the table: at 50% the 90-cloud image is out
-    # and the 10-cloud one stays, regardless of any layer field typing.
-    plugin = _plugin_regular(min_intersection=0, max_cloud=50)
-
-    unfit = plugin._unfit_local_indices(_features())
-
-    assert 2 in unfit and 0 not in unfit
-
-
-def test_unfit_handles_string_cloud_without_crashing():
-    # Cloud arriving as a string must not abort the whole pass (which used to freeze the greying).
-    plugin = _plugin_regular(min_intersection=0, max_cloud=50)
-    features = _features()
-    features[2]["properties"]["cloudCover"] = "90"  # string, still > 50
-
-    unfit = plugin._unfit_local_indices(features)
-
-    assert 2 in unfit
-
-
-def test_intersection_not_applied_when_min_is_zero():
-    plugin = _plugin_regular(min_intersection=0)
-
-    unfit = plugin._unfit_local_indices(_features())
-
-    # Only date (1) and cloud (2) fail; the tiny-overlap image (3) now passes.
-    assert unfit == {1, 2}
-
-
-def test_cloud_100_disables_cloud_filter():
-    plugin = _plugin_regular(min_intersection=0, max_cloud=100)
-
-    unfit = plugin._unfit_local_indices(_features())
-
-    # Cloud no longer filters (image 2 passes); only the out-of-range date (1) fails.
-    assert unfit == {1}
-
-
-# ---------- My Imagery: missing metadata matches any filter ----------
-
-def _my_imagery_feature(local_index):
-    """A My Imagery row: no acquisition date, no cloud cover, covers the AOI."""
-    return _feature(local_index, None, None, _square_geojson(0, 0, 10, 10))
-
-
-def test_missing_date_passes_date_filter():
-    # Active date range that a real date would have to fall in; the null-date row must stay fit.
-    plugin = _plugin_regular(min_intersection=0, max_cloud=100)
-
-    unfit = plugin._unfit_local_indices([_my_imagery_feature(0)])
-
-    assert unfit == set()
-
-
-def test_missing_cloud_passes_cloud_filter():
-    plugin = _plugin_regular(min_intersection=0, max_cloud=30)  # < 100, so cloud is filtered
-
-    unfit = plugin._unfit_local_indices([_my_imagery_feature(0)])
-
-    assert unfit == set()
-
-
-def test_missing_date_and_cloud_pass_with_both_filters_active():
-    plugin = _plugin_regular(min_intersection=0, max_cloud=30,
-                             date_from=QDate(2025, 1, 1), date_to=QDate(2025, 2, 1))
-
-    unfit = plugin._unfit_local_indices([_my_imagery_feature(0)])
-
-    assert unfit == set()
-
-
-def test_populated_values_still_filter_both_directions():
-    # Guard against over-correcting into "never filter": real out-of-range values must still fail.
-    plugin = _plugin_regular(min_intersection=0, max_cloud=50,
-                             date_from=QDate(2025, 1, 1), date_to=QDate(2025, 12, 31))
-    features = [
-        _feature(0, "2025-06-01T00:00:00Z", 10, _square_geojson(0, 0, 10, 10)),   # in range, clear
-        _feature(1, "2019-06-01T00:00:00Z", 10, _square_geojson(0, 0, 10, 10)),   # date too old
-        _feature(2, "2025-06-01T00:00:00Z", 80, _square_geojson(0, 0, 10, 10)),   # too cloudy
-    ]
-
-    unfit = plugin._unfit_local_indices(features)
-
-    assert unfit == {1, 2}
-
-
-def test_passes_optional_rule():
-    assert Mapflow._passes_optional(None, lambda v: False) is True   # missing -> always passes
-    assert Mapflow._passes_optional(5, lambda v: v < 10) is True
-    assert Mapflow._passes_optional(50, lambda v: v < 10) is False
-
-
-
-def test_intersection_uses_backend_percent():
-    # The filter compares the backend aoiIntersectionPercent to the widget; the footprint
-    # geometry is irrelevant (here index 1 fully covers the AOI but reports a low %).
-    plugin = _plugin_regular(min_intersection=50)
-    features = [
-        _feature(0, "2025-03-01T00:00:00Z", 10, _square_geojson(9, 9, 11, 11), intersection=80),
-        _feature(1, "2025-03-01T00:00:00Z", 10, _square_geojson(0, 0, 10, 10), intersection=20),
-    ]
-
-    assert plugin._unfit_local_indices(features) == {1}
-
-
-def test_missing_intersection_percent_passes():
-    # A result without a backend intersection value must not be hidden (missing matches any).
-    plugin = _plugin_regular(min_intersection=50)
-    feature = _feature(0, "2025-03-01T00:00:00Z", 10, _square_geojson(0, 0, 10, 10))
-
-    assert plugin._unfit_local_indices([feature]) == set()
-
-
-def test_template_mode_filters_by_backend_percent_same_as_regular():
-    # Template mode no longer has a special union-of-selected-AOIs path: same backend-% filter.
-    plugin = _plugin_regular(min_intersection=50)
-    plugin.processing_service = SimpleNamespace(in_template_mode=True)
-
-    assert plugin._unfit_local_indices(_features()) == {1, 2, 3}
-
-
-# ---------- provider / product-type filtering ----------
-
-def _feature_p(local_index, provider, product_type="OPTICAL"):
-    f = _feature(local_index, "2025-03-01T00:00:00Z", 10, _square_geojson(0, 0, 10, 10))
-    f["properties"]["providerName"] = provider
-    f["properties"]["productType"] = product_type
-    return f
-
-
-def test_provider_filter_greys_disallowed_providers():
-    plugin = _plugin_regular(min_intersection=0, max_cloud=100)
-    plugin._allowed_provider_set = MagicMock(return_value={"orbview_svn1"})
-    features = [_feature_p(0, "orbview_svn1"), _feature_p(1, "orbview_svn3")]
-
-    assert plugin._unfit_local_indices(features) == {1}  # svn3 not allowed
-
-
-def test_provider_filter_is_case_insensitive():
-    plugin = _plugin_regular(min_intersection=0, max_cloud=100)
-    plugin._allowed_provider_set = MagicMock(return_value={"orbview_svn1"})
-
-    assert plugin._unfit_local_indices([_feature_p(0, "OrbView_SVN1")]) == set()
-
-
-def test_provider_filter_off_shows_all():
-    plugin = _plugin_regular(min_intersection=0, max_cloud=100)
-    plugin._allowed_provider_set = MagicMock(return_value=None)
-    features = [_feature_p(0, "orbview_svn1"), _feature_p(1, "orbview_svn3")]
-
-    assert plugin._unfit_local_indices(features) == set()
-
+# ---------- _allowed_provider_set / _product_category_filter (criteria assembly) ----------
 
 def test_allowed_provider_set_off_when_unavailable_toggle_off():
     plugin = _plugin_regular()
@@ -296,6 +100,8 @@ def test_allowed_provider_set_falls_back_to_available_when_none_checked():
 
 
 def test_search_only_available_greys_unavailable_provider():
+    # End to end through the wrapper: real assembly + real service. A provider not available to
+    # the user is dropped from an otherwise-fit result.
     plugin = _plugin_regular(min_intersection=0, max_cloud=100)
     plugin._product_category_filter = MagicMock(return_value=None)
     plugin.dlg.hideUnavailableResults.isChecked.return_value = True
@@ -304,26 +110,7 @@ def test_search_only_available_greys_unavailable_provider():
     del plugin._allowed_provider_set  # use the real method
     features = [_feature_p(0, "orbview_svn1"), _feature_p(1, "legacy_provider")]
 
-    # legacy_provider is not available to the user -> greyed.
     assert plugin._unfit_local_indices(features) == {1}
-
-
-def test_product_type_mosaic_only_greys_images():
-    plugin = _plugin_regular(min_intersection=0, max_cloud=100)
-    plugin._product_category_filter = MagicMock(return_value={"MOSAIC"})
-    features = [_feature_p(0, "p", product_type="Mosaic"),
-                _feature_p(1, "p", product_type="OPTICAL")]
-
-    assert plugin._unfit_local_indices(features) == {1}  # OPTICAL -> Image, filtered out
-
-
-def test_product_type_image_only_greys_mosaics():
-    plugin = _plugin_regular(min_intersection=0, max_cloud=100)
-    plugin._product_category_filter = MagicMock(return_value={"IMAGE"})
-    features = [_feature_p(0, "p", product_type="Mosaic"),
-                _feature_p(1, "p", product_type="OPTICAL")]
-
-    assert plugin._unfit_local_indices(features) == {0}  # the Mosaic is filtered out
 
 
 def test_product_category_filter_none_when_both_or_neither():
@@ -336,62 +123,6 @@ def test_product_category_filter_none_when_both_or_neither():
     plugin.dlg.searchMosaicCheckBox.isChecked.return_value = True
     plugin.dlg.searchImageCheckBox.isChecked.return_value = False
     assert plugin._product_category_filter() == {"MOSAIC"}
-
-
-def test_product_category_maps_mosaic_else_image():
-    assert Mapflow._product_category("Mosaic") == "MOSAIC"
-    assert Mapflow._product_category("mosaic") == "MOSAIC"
-    assert Mapflow._product_category("OPTICAL") == "IMAGE"
-    assert Mapflow._product_category("") == "IMAGE"
-    assert Mapflow._product_category(None) == "IMAGE"
-
-
-# ---------- reset filters ----------
-
-def _plugin_reset(baseline):
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.dlg = MagicMock()
-    plugin.apply_local_filter = MagicMock()
-    plugin._apply_search_providers_to_combo = MagicMock()
-    plugin.app_context = SimpleNamespace(search_baseline_filters=baseline)
-    return plugin
-
-
-def test_reset_filters_restores_baseline_and_refilters():
-    plugin = _plugin_reset({
-        "date_from": QDate(2025, 1, 1), "date_to": QDate(2025, 6, 1),
-        "max_cloud_cover": 30, "min_intersection": 40,
-        "product_types": ["MOSAIC"], "data_providers": ["providerA"],
-        "hide_unavailable": True})
-
-    plugin.reset_filters()
-
-    plugin.dlg.metadataFrom.setDate.assert_called_once_with(QDate(2025, 1, 1))
-    plugin.dlg.maxCloudCover.setValue.assert_called_once_with(30)
-    plugin.dlg.minIntersection.setValue.assert_called_once_with(40)
-    plugin.dlg.searchMosaicCheckBox.setChecked.assert_called_once_with(True)
-    plugin.dlg.searchImageCheckBox.setChecked.assert_called_once_with(False)
-    plugin.dlg.hideUnavailableResults.setChecked.assert_called_once_with(True)
-    plugin._apply_search_providers_to_combo.assert_called_once_with(["providerA"])
-    plugin.apply_local_filter.assert_called_once()
-
-
-def test_reset_filters_leaves_params_the_template_did_not_set():
-    # None baseline fields (params the template did not carry) must not touch their widgets.
-    plugin = _plugin_reset({
-        "date_from": None, "date_to": None, "max_cloud_cover": 20,
-        "min_intersection": None, "product_types": None, "data_providers": None,
-        "hide_unavailable": None})
-
-    plugin.reset_filters()
-
-    plugin.dlg.maxCloudCover.setValue.assert_called_once_with(20)
-    plugin.dlg.minIntersection.setValue.assert_not_called()
-    plugin.dlg.metadataFrom.setDate.assert_not_called()
-    plugin.dlg.searchMosaicCheckBox.setChecked.assert_not_called()
-    plugin.dlg.hideUnavailableResults.setChecked.assert_not_called()
-    plugin._apply_search_providers_to_combo.assert_not_called()
-    plugin.apply_local_filter.assert_called_once()
 
 
 # ---------- apply_local_filter orchestration ----------
@@ -524,7 +255,7 @@ def test_mark_unfit_rows_greys_and_disables_only_unfit():
     assert not (unfit_item.flags() & Qt.ItemIsEnabled)
 
 
-# ---------- widen (!) indicator ----------
+# ---------- widen (!) indicator button ----------
 
 def _plugin_widen(baseline):
     plugin = Mapflow.__new__(Mapflow)
@@ -535,45 +266,11 @@ def _plugin_widen(baseline):
     plugin.dlg.maxCloudCover.value.return_value = 30
     plugin.dlg.minIntersection.value.return_value = 40
     plugin.dlg.off_nadir_range.return_value = (0, 30)
+    plugin.local_filter_service = LocalFilterService()
     plugin.selected_search_product_types = MagicMock(return_value=["IMAGE"])
     plugin.selected_search_providers = MagicMock(return_value=["providerA"])
     plugin.app_context = SimpleNamespace(search_baseline_filters=baseline)
     return plugin
-
-
-def test_no_widen_when_widgets_match_baseline():
-    plugin = _plugin_widen({
-        "date_from": QDate(2025, 1, 1), "date_to": QDate(2025, 6, 1),
-        "max_cloud_cover": 30, "min_intersection": 40,
-        "product_types": ["IMAGE"], "data_providers": ["providerA"]})
-
-    assert plugin._widened_filter_messages() == []
-
-
-def test_widen_detects_wider_cloud_and_earlier_date():
-    plugin = _plugin_widen({
-        "date_from": QDate(2025, 2, 1), "date_to": QDate(2025, 6, 1),
-        "max_cloud_cover": 10, "min_intersection": 40,
-        "product_types": ["IMAGE"], "data_providers": ["providerA"]})
-
-    messages = plugin._widened_filter_messages()
-
-    # Start date earlier (Jan < Feb) and cloud higher (30 > 10) are both flagged.
-    assert any("Start date" in m for m in messages)
-    assert any("cloud cover" in m for m in messages)
-    assert not any("End date" in m for m in messages)
-
-
-def test_widen_detects_lower_intersection_and_extra_provider():
-    plugin = _plugin_widen({
-        "date_from": QDate(2025, 1, 1), "date_to": QDate(2025, 6, 1),
-        "max_cloud_cover": 30, "min_intersection": 80,
-        "product_types": ["IMAGE"], "data_providers": ["providerB"]})
-
-    messages = plugin._widened_filter_messages()
-
-    assert any("intersection" in m for m in messages)      # 40 < 80
-    assert any("Provider" in m for m in messages)          # providerA not in [providerB]
 
 
 def test_update_widen_indicator_toggles_button_visibility():

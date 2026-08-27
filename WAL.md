@@ -38,27 +38,15 @@ leaf-first so each extraction depends only on what already moved.
 
 Service and controller boundaries are tabulated in `spec/007_architecture.md`.
 
-[ready-for-review] Extract imagery search → `SearchService` + `SearchController` + `view/search_view.py`
-Boundary drawn at the gate, because most search-*named* code is not imagery search:
-in scope are the request and its results (`get_metadata`, `request_mapflow_metadata` + callback
-+ error handler, `display_metadata_geojson_layer`, `clear_metadata`, `_is_search_metadata_layer`),
-the footprints layer, pagination, sort, the search-provider selection, the search-tab mode
-controls, and the four preview slots the preview step deliberately left behind
-(`preview`, `preview_search_from_cell`, `preview_or_search`, `_reconnect_cell_preview`).
-Out of scope and deferred to the two steps below: the local filter, and everything that operates
-on a *template's* search.
-`_build_search_params` turns out to be called only from template creation and template update,
-never from `get_metadata` — so it is template code despite the name. That single fact is what
-keeps this step from swallowing the two after it.
-First step with a real `view/` rather than deferring widget reads, so larger than AOI or preview.
-`SearchController` starts small on purpose — the three preview-dispatch handlers and their
-wiring. A controller owns a connection only when it owns the handler, and the run/sort/pagination
-handlers still call unextracted collaborators (provider selection, template loader, local
-filter); their connections stay in `mapflow.py` and the controller grows as those handlers move,
-the same way `ProcessingController` began with AOI selection alone.
-[ ] Extract the local filter → `LocalFilterService` (pure computation; functional-tier tests)
-Bigger than it looks: `apply_local_filter` alone has 10 widget connections and
-`tests/qgis/test_local_filter.py` has 39 tests.
+[ready-for-review] Extract the local filter → `LocalFilterService` (pure computation; functional-tier tests)
+Scope faithful to "pure computation": the per-feature filtering (`unfit_indices`), the widen
+`(!)` comparison (`widen_messages`), and the pure helpers (`product_category`, `to_float`,
+`passes_optional`, `utc_date_from_iso`) move to a widget-free, QGIS-free service tested in the
+functional tier. What stays in `mapflow.py`: the criteria assembly (`_allowed_provider_set`,
+`_product_category_filter`, the widget reads → `FilterCriteria`) because it touches `app_context`,
+and the result application (`_mark_unfit_rows`, `_hide_unfit_footprints`, `_update_widen_indicator`,
+`reset_filters`, the `apply_local_filter` orchestration) because it drives the table and layer. A
+later view pass can take the application; this step is the pure-math extraction.
 [ ] Extract templates → `TemplateService` + `TemplateController` (largest domain, ~55 methods
     in `mapflow.py` plus the template half of `processing_service.py`)
 Takes `filter_search_by_selected_aoi` with it. The AOI step assigned that to `SearchService`;

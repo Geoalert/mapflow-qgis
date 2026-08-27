@@ -10,7 +10,7 @@ from typing import List, Optional, Callable
 from osgeo import ogr
 
 from PyQt5.QtCore import (
-    QCoreApplication, QDate, QDateTime, QObject, Qt,
+    QCoreApplication, QDate, QObject, Qt,
     QTimer, QTranslator
 )
 from PyQt5.QtGui import QBrush, QColor, QIcon
@@ -41,6 +41,9 @@ from .functional.controller.project_processing_controller import ProjectProcessi
 from .functional.controller.processing_controller import ProcessingController
 from .functional.controller.search_controller import SearchController
 from .functional.service.aoi_service import AoiService
+from .functional.service.local_filter_service import (FilterCriteria,
+                                                      LocalFilterService,
+                                                      utc_date_from_iso)
 from .functional.service.preview_service import PreviewService
 from .functional.service.search_service import SearchService
 from .functional.view.aoi_view import AoiView
@@ -301,6 +304,7 @@ class Mapflow(QObject):
         # down with the provider-dialog wiring; construction order is load-bearing here.
         self.config_search_columns = ConfigColumns()
         self.search_view = SearchView(dlg=self.dlg, config=self.config)
+        self.local_filter_service = LocalFilterService()
         self.search_service = SearchService(iface=self.iface,
                                             app_context=self.app_context,
                                             http=self.http,
@@ -1314,65 +1318,25 @@ class Mapflow(QObject):
         self._restore_search_sort_indicator()
 
     def _unfit_local_indices(self, features: list) -> set:
-        """``local_index`` of every result (GeoJSON feature) that FAILS the active filter
-        widgets: date range, cloud cover, off-nadir angle range, provider selection / availability,
-        product type (Mosaic vs Image), and (where an intersection reference exists) min intersection %. A
-        per-feature parsing error never hides the row (treated as fit)."""
-        from_ = self.dlg.metadataFrom.date()
-        to = self.dlg.metadataTo.date()
-        max_cloud_cover = self.dlg.maxCloudCover.value()
-        min_intersection = self.dlg.minIntersection.value()
+        """Which results fail the current filter, computed by `LocalFilterService`. This wrapper
+        assembles the criteria from the widgets and `app_context`; the computation itself is
+        widget-free and functional-tier tested."""
+        return self.local_filter_service.unfit_indices(features, self._filter_criteria())
+
+    def _filter_criteria(self) -> FilterCriteria:
+        """The filter widgets + available-provider context, resolved to a `FilterCriteria`."""
         min_off_nadir, max_off_nadir = self.dlg.off_nadir_range()
-        off_nadir_filtered = not self.dlg.off_nadir_is_full_range()  # full 0-30 range = no filter
-        provider_set = self._allowed_provider_set()  # None = show all
-        product_filter = self._product_category_filter()  # None = show all
-        unfit = set()
-        for feature in features:
-            props = feature.get("properties", {})
-            local_index = props.get("local_index")
-            if local_index is None:
-                continue
-            try:
-                # Missing metadata matches any condition: user imagery (My Imagery search) has no
-                # acquisition date / cloud cover, and the server already treats a NULL column as
-                # satisfying every predicate — the local filter must not then demote those rows.
-                acquisition_date = self._utc_date_from_iso(props.get("acquisitionDate"))
-                date_ok = self._passes_optional(acquisition_date, lambda d: from_ <= d <= to)
-                cloud_cover = self._to_float(props.get("cloudCover"))
-                # 100% = don't filter by cloud at all.
-                cloud_ok = max_cloud_cover >= 100 or self._passes_optional(
-                    cloud_cover, lambda c: c <= max_cloud_cover)
-                off_nadir = self._to_float(props.get("offNadirAngle"))
-                # Full 0-30 range = don't filter; a missing angle passes the range check.
-                off_nadir_ok = not off_nadir_filtered or self._passes_optional(
-                    off_nadir, lambda a: min_off_nadir <= a <= max_off_nadir)
-                if provider_set is None:
-                    provider_ok = True
-                else:
-                    provider_name = props.get("providerName")
-                    provider_ok = (provider_name is not None
-                                   and str(provider_name).lower() in provider_set)
-                product_ok = (product_filter is None
-                              or self._product_category(props.get("productType")) in product_filter)
-                # Intersection % comes from the backend (aoiIntersectionPercent, computed against
-                # the searched AOI / the template's AOIs), not recomputed locally against a
-                # sub-selection. 0 = don't filter; a missing value passes (like other metadata).
-                if min_intersection <= 0:
-                    intersection_ok = True
-                else:
-                    aoi_intersection = self._to_float(props.get("aoiIntersectionPercent"))
-                    intersection_ok = self._passes_optional(
-                        aoi_intersection, lambda pct: pct >= min_intersection)
-                fit = (date_ok and cloud_ok and off_nadir_ok and provider_ok
-                       and product_ok and intersection_ok)
-            except (AttributeError, TypeError, ValueError):
-                # Metadata that is not the shape this code expects: a non-mapping `properties`
-                # raises AttributeError, a value of the wrong type raises TypeError on the
-                # comparisons, an unparseable one ValueError.
-                fit = True  # never hide a row because of a parsing error
-            if not fit:
-                unfit.add(local_index)
-        return unfit
+        return FilterCriteria(
+            date_from=self.dlg.metadataFrom.date(),
+            date_to=self.dlg.metadataTo.date(),
+            max_cloud_cover=self.dlg.maxCloudCover.value(),
+            min_intersection=self.dlg.minIntersection.value(),
+            off_nadir_filtered=not self.dlg.off_nadir_is_full_range(),  # full 0-30 = no filter
+            min_off_nadir=min_off_nadir,
+            max_off_nadir=max_off_nadir,
+            provider_set=self._allowed_provider_set(),
+            product_filter=self._product_category_filter(),
+        )
 
     def _allowed_provider_set(self) -> Optional[set]:
         """Lowercased provider api-names a result may come from for the LOCAL filter, or ``None``
@@ -1399,31 +1363,6 @@ class Mapflow(QObject):
         if mosaic == image:  # both or neither -> show all
             return None
         return {ProductType.mosaic.upper()} if mosaic else {ProductType.image.upper()}
-
-    @staticmethod
-    def _product_category(product_type) -> str:
-        """Map a result's ``productType`` to a Mosaic/Image category: 'Mosaic' -> MOSAIC, anything
-        else -> IMAGE.
-        #WARNING: ``productType`` is free text (e.g. 'OPTICAL', 'Image', ''); this
-        Mosaic-vs-everything-else split is a product decision and may misclassify some providers."""
-        if str(product_type).strip().lower() == ProductType.mosaic.lower():
-            return ProductType.mosaic.upper()
-        return ProductType.image.upper()
-
-    @staticmethod
-    def _to_float(value) -> Optional[float]:
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return None
-
-    @staticmethod
-    def _passes_optional(value, predicate) -> bool:
-        """A metadata filter clause where a missing value matches any condition: ``None`` passes,
-        otherwise the row must satisfy ``predicate``. My Imagery results carry mostly-empty
-        metadata (no date/cloud), which the server counts as matching every filter; the local
-        filter follows the same rule so user imagery is not hidden when a filter is set."""
-        return value is None or predicate(value)
 
     def _mark_unfit_rows(self, unfit: set) -> None:
         """Grey-out and disable (non-selectable) the rows whose image was filtered out; restore
@@ -1480,58 +1419,11 @@ class Mapflow(QObject):
             button.setVisible(False)
 
     def _widened_filter_messages(self) -> List[str]:
-        """Human-readable list of the ways the current filter widgets are wider than the
-        baseline that fetched the current results (empty when none / no baseline)."""
-        baseline = self.app_context.search_baseline_filters
-        if not baseline:
-            return []
-        messages = []
-        cur_from = self.dlg.metadataFrom.date()
-        cur_to = self.dlg.metadataTo.date()
-        base_from = baseline.get("date_from")
-        base_to = baseline.get("date_to")
-        if base_from is not None and cur_from < base_from:
-            messages.append(self.tr("Start date {cur} is earlier than searched ({base})").format(
-                cur=cur_from.toString("yyyy-MM-dd"), base=base_from.toString("yyyy-MM-dd")))
-        if base_to is not None and cur_to > base_to:
-            messages.append(self.tr("End date {cur} is later than searched ({base})").format(
-                cur=cur_to.toString("yyyy-MM-dd"), base=base_to.toString("yyyy-MM-dd")))
-        cur_cloud = self.dlg.maxCloudCover.value()
-        base_cloud = baseline.get("max_cloud_cover")
-        if base_cloud is not None and cur_cloud > base_cloud:
-            messages.append(self.tr("Max cloud cover {cur}% is higher than searched ({base}%)").format(
-                cur=cur_cloud, base=int(base_cloud)))
-        cur_int = self.dlg.minIntersection.value()
-        base_int = baseline.get("min_intersection")
-        if base_int is not None and cur_int < base_int:
-            messages.append(self.tr("Min intersection {cur}% is lower than searched ({base}%)").format(
-                cur=cur_int, base=int(base_int)))
-        cur_off_lo, cur_off_hi = self.dlg.off_nadir_range()
-        base_off_lo = baseline.get("min_off_nadir")
-        base_off_hi = baseline.get("max_off_nadir")
-        if base_off_lo is not None and base_off_hi is not None \
-                and (cur_off_lo < base_off_lo or cur_off_hi > base_off_hi):
-            messages.append(self.tr("Off-nadir range {lo}-{hi}° is wider than searched ({blo}-{bhi}°)").format(
-                lo=cur_off_lo, hi=cur_off_hi, blo=int(base_off_lo), bhi=int(base_off_hi)))
-        base_products = baseline.get("product_types")
-        if base_products:
-            extra = [p for p in (str(pt).upper() for pt in self.selected_search_product_types())
-                     if p not in base_products]
-            if extra:
-                messages.append(self.tr("Product type(s) not searched: {extra}").format(
-                    extra=", ".join(extra)))
-        base_providers = baseline.get("data_providers")
-        if base_providers:
-            cur_providers = self.selected_search_providers() or []
-            if not cur_providers:
-                messages.append(self.tr("Showing all providers, but search was limited to: {base}").format(
-                    base=", ".join(base_providers)))
-            else:
-                extra = [p for p in cur_providers if p not in base_providers]
-                if extra:
-                    messages.append(self.tr("Provider(s) not searched: {extra}").format(
-                        extra=", ".join(extra)))
-        return messages
+        """The ways the current filter widgets are wider than the baseline that fetched the
+        current results. The comparison is `LocalFilterService`; this passes the current widget
+        values (as a baseline snapshot) and the fetched baseline."""
+        return self.local_filter_service.widen_messages(
+            self._current_filter_baseline(), self.app_context.search_baseline_filters)
 
     @staticmethod
     def _format_widen_message(messages: List[str]) -> str:
@@ -1574,8 +1466,8 @@ class Mapflow(QObject):
         if isinstance(sp, dict):
             sp = SearchParams.from_dict(sp)
         return {
-            "date_from": self._utc_date_from_iso(sp.acquisitionDateFrom),
-            "date_to": self._utc_date_from_iso(sp.acquisitionDateTo),
+            "date_from": utc_date_from_iso(sp.acquisitionDateFrom),
+            "date_to": utc_date_from_iso(sp.acquisitionDateTo),
             "max_cloud_cover": sp.maxCloudCover,
             "min_intersection": sp.minAoiIntersectionPercent,
             "min_off_nadir": sp.minOffNadirAngle,
@@ -2929,10 +2821,10 @@ class Mapflow(QObject):
         if isinstance(search_params, dict):
             search_params = SearchParams.from_dict(search_params)
 
-        date_from = self._utc_date_from_iso(search_params.acquisitionDateFrom)
+        date_from = utc_date_from_iso(search_params.acquisitionDateFrom)
         if date_from is not None:
             self.dlg.metadataFrom.setDate(date_from)
-        date_to = self._utc_date_from_iso(search_params.acquisitionDateTo)
+        date_to = utc_date_from_iso(search_params.acquisitionDateTo)
         if date_to is not None:
             self.dlg.metadataTo.setDate(date_to)
         if search_params.maxCloudCover is not None:
@@ -2949,16 +2841,6 @@ class Mapflow(QObject):
             self.dlg.searchMosaicCheckBox.setChecked(ProductType.mosaic.upper() in product_types)
             self.dlg.searchImageCheckBox.setChecked(ProductType.image.upper() in product_types)
         self._apply_search_providers_to_combo(search_params.dataProviders)
-
-    @staticmethod
-    def _utc_date_from_iso(value: Optional[str]) -> Optional[QDate]:
-        """Parse an ISO-8601 timestamp (as stored in ``searchParams``) into a UTC QDate."""
-        if not value:
-            return None
-        parsed = QDateTime.fromString(value, Qt.ISODateWithMs)
-        if not parsed.isValid():
-            parsed = QDateTime.fromString(value, Qt.ISODate)
-        return parsed.toUTC().date() if parsed.isValid() else None
 
     def _apply_search_providers_to_combo(self, data_providers: Optional[List[str]]):
         """Mirror ``selected_search_providers``: check the combo items whose api-name is in
