@@ -82,6 +82,23 @@ class ProcessingApi(QObject):
                          use_default_error_handler=True,
                          timeout=5)
 
+    def get_processing_aois(self,
+                            processing_id: Union[UUID, str],
+                            callback: Callable,
+                            error_handler: Callable,
+                            callback_kwargs: Optional[dict] = None,
+                            error_handler_kwargs: Optional[dict] = None) -> None:
+        """A processing's own AOI geometries (a JSON list of AOI objects). Used to draw a
+        'No AOI' template processing lazily on click — its geometry is absent from the
+        template's aoiDetails, so it is fetched per processing."""
+        self.http.get(path=f"processings/{processing_id}/aois",
+                      callback=callback,
+                      callback_kwargs=callback_kwargs or {},
+                      error_handler=error_handler,
+                      error_handler_kwargs=error_handler_kwargs or {},
+                      use_default_error_handler=False,
+                      timeout=30)
+
     def get_processings(self, project_id: Union[UUID, str], request_body: ProcessingsRequest, callback: Callable):
         self.http.post(path=f"projects/{project_id}/processings/v2/page",
                        body=request_body.as_json().encode(),

@@ -16,9 +16,9 @@ from unittest.mock import MagicMock
 import pytest
 from qgis.core import QgsVectorLayer
 
+from mapflow.functional.controller.template_controller import TemplateController
 from mapflow.functional.geometry import geometry_from_geojson
 from mapflow.functional.service.aoi_service import AoiService
-from mapflow.mapflow import Mapflow
 
 
 def _square(x0, y0, size=1.0):
@@ -108,7 +108,7 @@ def test_missing_aoi_layer_leaves_the_area_untouched(service, area_layers):
 
 def test_a_single_selection_does_not_touch_the_template_group(service, area_layers):
     """A single AOI uses its own layer, so nothing is built and nothing is placed. The group is
-    resolved by the caller now (`Mapflow._find_template_group`, which creates nothing), so this
+    resolved by the caller now (`TemplateService.find_template_group`, which creates nothing), so this
     no longer needs to assert on how it was passed — only that no layer is built for it."""
     service.select_aois_as_processing_area([_aoi("a1", _square(0, 0))], group=None)
 
@@ -142,14 +142,16 @@ def test_leaving_the_template_forgets_the_selection(service, area_layers):
 
 
 def test_not_in_template_mode_is_noop():
-    """The in-template check stays with the caller: `AoiService` has no view of navigation."""
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.aoi_service = MagicMock()
-    plugin.processing_service = SimpleNamespace(in_template_mode=False)
+    """The in-template check stays with the caller (now `TemplateController`): `AoiService` has
+    no view of navigation."""
+    controller = TemplateController.__new__(TemplateController)
+    controller.aoi_service = MagicMock()
+    controller.template_service = MagicMock()
+    controller.processing_service = SimpleNamespace(in_template_mode=False)
 
-    plugin.sync_processing_area_to_selected_aois()
+    controller.sync_processing_area_to_selected_aois()
 
-    plugin.aoi_service.select_aois_as_processing_area.assert_not_called()
+    controller.aoi_service.select_aois_as_processing_area.assert_not_called()
 
 
 def test_geometry_from_geojson_none_for_empty():

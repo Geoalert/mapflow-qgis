@@ -13,7 +13,6 @@ from mapflow.functional.controller.template_controller import TemplateController
 from mapflow.functional.geometry import geometry_from_geojson
 from mapflow.functional.service.template_service import TemplateService
 from mapflow.functional.view.search_view import SearchView
-from mapflow.mapflow import Mapflow
 from mapflow.schema.template import TemplateAoiDTO, AoiProcessingLink
 
 
@@ -160,27 +159,26 @@ def test_exclude_noop_when_processing_not_linked(monkeypatch):
     service.processing_service.api.delete_aois.assert_not_called()
 
 
-# ---------- Item 1: redraw template layers on AOI change ----------
+# ---------- Item 1: redraw template layers on AOI change (TemplateController -> TemplateService) ----------
 
 def test_on_template_aois_changed_redraws_layers():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin._remove_template_aoi_subgroups = MagicMock()
-    plugin._load_template_layers = MagicMock()
+    controller = TemplateController.__new__(TemplateController)
+    controller.template_service = MagicMock()
     template = SimpleNamespace(name="T1")
 
-    plugin.on_template_aois_changed(template)
+    controller.on_template_aois_changed(template)
 
-    plugin._remove_template_aoi_subgroups.assert_called_once_with("T1")
-    plugin._load_template_layers.assert_called_once_with(template)
+    controller.template_service.remove_template_aoi_subgroups.assert_called_once_with("T1")
+    controller.template_service.load_template_layers.assert_called_once_with(template)
 
 
 def test_on_template_aois_changed_noop_without_template():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin._load_template_layers = MagicMock()
+    controller = TemplateController.__new__(TemplateController)
+    controller.template_service = MagicMock()
 
-    plugin.on_template_aois_changed(None)
+    controller.on_template_aois_changed(None)
 
-    plugin._load_template_layers.assert_not_called()
+    controller.template_service.load_template_layers.assert_not_called()
 
 
 def test_reopen_template_callback_emits_aois_changed():

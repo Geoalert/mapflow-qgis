@@ -112,9 +112,9 @@ def find_template_group(project,
                         subgroup_name: Optional[str] = None):
     """The ``<mapflow group> > <template> [> <subgroup>]`` layer-tree group, or None.
 
-    Creates nothing — that is `Mapflow._ensure_template_group`. Lives here because both the
-    plugin and the services that place an already-built layer need the lookup, and a service may
-    not reach back into `mapflow.py` for it.
+    Creates nothing — that is `TemplateService.ensure_template_group`. Lives here because several
+    services that place an already-built layer need the lookup, and a service may not reach into
+    another service for it.
     """
     root = project.layerTreeRoot()
     parent_group = root.findGroup(mapflow_group_name) or root

@@ -44,25 +44,27 @@ state (`in_template_mode` 13×, `active_template` 16×) through `processing_serv
 services. Split into two MRs so the high-blast-radius part is reviewable on its own.
 
 MR-1 (de-god `mapflow.py`) is being done as several small MRs. Landed: create/update-search-params/
-exclude + plan-search gating (`TemplateService`+`TemplateController`+`TemplateView` created;
-`SearchView.template_search_params`/`ensure_search_provider`). `TemplateService` reads navigation
-state from `processing_service` for now (service→service); ownership moves in MR-2.
+exclude + plan-search gating; the seen-markers cluster. `TemplateService` reads navigation state
+from `processing_service` for now (service→service); ownership moves in MR-2.
 
-[ ] Templates: seen-markers cluster → `TemplateService` + `TemplateView`
-`_seen_template_id`, `mark_selected/all_template_images_seen`, `_mark_template_image_seen_by_row`,
-`_template_image_at_row`, `_on_template_image_seen`, `_on_all_template_images_seen`,
-`_apply_new_image_markers`, `_set_new_image_marker`, `_new_image_marker_column`, `_find_template`,
-`_decrement/_reset_template_new_images_count`, `_refresh_template_status_cell`, and the
-`template_search_images` DTO map. Spans two tables (metadata results + processings) with async
-callbacks — service owns the DTO state + api orchestration + emits marker/status signals; view
-owns the table icons and the status cell; controller loops rows.
+[ready-for-review] Templates layers + layer-related navigation → `TemplateService` + `TemplateController`
+Area A of the layers+navigation step (sliced in two; Area B/C is the entry below). Moves the
+template's map-layer building/placement and the layer-related navigation slots out of `mapflow.py`:
+`ensure/find/remove_template_group`, `remove_template_aoi_subgroups`, `add_geojson_aoi_layer`,
+`load_template_layers`, the `no_aoi_*` lazy-fetch + `show_template_details` (service); the
+`on_template_aois_changed/processings_loaded/no_aoi_processing_clicked`, `select_template_processings`,
+`sync_processing_area_to_selected_aois`, and the layer side of `templateOpened/Closed` (controller).
+`ensure_template_group` moved now (only mapflow.py called it) — a down payment on MR-2's group-placement
+decision; the read-only `layer_utils.find_template_group` stays shared until MR-2 repoints AoiService/
+PreviewService.
 
-[ ] Templates: layers + navigation + `filter_search_by_selected_aoi` + `apply_search_params_to_ui`
+[ ] Templates search render + filter + params-to-UI (Area B/C of layers+navigation)
 Remaining `mapflow.py` template half: `_load_template_search(_page)`, `show_template_search_results`,
-`_template_filter_baseline`, `apply_search_params_to_ui`, `_store_template_search_footprints`, the
-template AOI display layers (`_add_geojson_aoi_layer`, `on_template_aois_changed`, `_no_aoi_*`),
-the in-template navigation slots, and `filter_search_by_selected_aoi` (confirmed transfer — it
-reads `processing_service.selected_aois()` and calls `_load_template_search`, both template).
+`get_selected_template_callback`, `_store_template_search_footprints`, `_aoi_ids_from_template`,
+`_template_single_data_provider`, `_template_filter_baseline`, `apply_search_params_to_ui`, and
+`filter_search_by_selected_aoi` (reads `processing_service.selected_aois()` and calls
+`_load_template_search`, both template). Needs the service→widget view split for the metadata table
+and the search filter widgets.
 
 [ ] Extract templates MR-2 → carve the template half out of `processing_service`
 Move `enter/exit/refresh_template_view`, `pause/resume/restart/delete_template`, `update_template`,
