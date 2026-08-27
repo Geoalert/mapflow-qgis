@@ -38,30 +38,35 @@ leaf-first so each extraction depends only on what already moved.
 
 Service and controller boundaries are tabulated in `spec/007_architecture.md`.
 
-[ready-for-review] Extract the local filter → `LocalFilterService` (pure computation; functional-tier tests)
-Scope faithful to "pure computation": the per-feature filtering (`unfit_indices`), the widen
-`(!)` comparison (`widen_messages`), and the pure helpers (`product_category`, `to_float`,
-`passes_optional`, `utc_date_from_iso`) move to a widget-free, QGIS-free service tested in the
-functional tier. What stays in `mapflow.py`: the criteria assembly (`_allowed_provider_set`,
-`_product_category_filter`, the widget reads → `FilterCriteria`) because it touches `app_context`,
-and the result application (`_mark_unfit_rows`, `_hide_unfit_footprints`, `_update_widen_indicator`,
-`reset_filters`, the `apply_local_filter` orchestration) because it drives the table and layer. A
-later view pass can take the application; this step is the pure-math extraction.
-[ ] Extract templates → `TemplateService` + `TemplateController` (largest domain, ~55 methods
-    in `mapflow.py` plus the template half of `processing_service.py`)
-Takes `filter_search_by_selected_aoi` with it. The AOI step assigned that to `SearchService`;
-reading it while scoping the search step showed both its collaborators are template code — it
-reads `processing_service.selected_aois()` and calls `_load_template_search`. It filters a
-*template's* results by AOI selection, so it belongs here, not with imagery search.
-Also takes `_build_search_params`, `_load_template_search(_page)`, `show_template_search_results`,
-`create_search_template*`, `update_template_search_params`, `exclude_processing_from_search`,
-`_template_filter_baseline`, `apply_search_params_to_ui`, `_store_template_search_footprints`
-and `_prompt_plan_search`.
-Still open here: whether placing a layer in the template's group belongs to the service that
-built the layer at all. `AoiService` and `PreviewService` both reach for the template group
-today; the alternative is that they emit the layer and the template owner places it, on the
-grounds that *where a layer sits in the layer tree* is a template concern. The find/ensure split
-(preview step) removed the pressure to decide, not the question.
+The templates domain is the phase's largest and spans two files — ~50 methods in `mapflow.py`
+plus the template half of `processing_service.py` — and ~50 references reach template navigation
+state (`in_template_mode` 13×, `active_template` 16×) through `processing_service` from the other
+services. Split into two MRs so the high-blast-radius part is reviewable on its own.
+
+[ ] Extract templates MR-1 → `TemplateService` + `TemplateController` (`mapflow.py` half)
+Move the ~50 template methods OUT of `mapflow.py`: `create_search_template*`,
+`_build_search_params`, `_load_template_search(_page)`, `show_template_search_results`,
+`update_template_search_params`, `exclude_processing_from_search`, `_template_filter_baseline`,
+`apply_search_params_to_ui`, `_store_template_search_footprints`, `_prompt_plan_search`, the
+seen-markers cluster, the template AOI display layers (`_add_geojson_aoi_layer`,
+`on_template_aois_changed`, `_no_aoi_*`), and the in-template navigation slots.
+Takes `filter_search_by_selected_aoi` (confirmed): the AOI step assigned it to `SearchService`,
+but it reads `processing_service.selected_aois()` and calls `_load_template_search` — template
+code. `TemplateService` reads navigation state from `processing_service` for now (service→service);
+ownership moves in MR-2. Directly serves the phase acceptance (de-god `mapflow.py`), which the
+`processing_service` half does not block since it is already out of the god object.
+
+[ ] Extract templates MR-2 → carve the template half out of `processing_service`
+Move `enter/exit/refresh_template_view`, `pause/resume/restart/delete_template`, `update_template`,
+`combined_template_rows`, `selected_aois`, and the navigation state (`in_template_mode`,
+`active_template`) into `TemplateService`; repoint the ~50 cross-service references. This is the
+high-blast-radius part, on its own branch.
+Also here (decided): **template-group layer placement moves to `TemplateService`.** `AoiService`
+and `PreviewService` stop reaching for the template group; they emit the built layer and
+`TemplateService` places it in the tree (where a layer sits is a template concern). The
+find/ensure split (preview step) already removed the side-effect hazard; this removes the
+question.
+
 [ ] Extract processing lifecycle: options, start, review, rating → existing processing service/controller
 [ ] Split auth from account status → `SessionService` + `AccountService`
 [ ] Reduce what remains of `mapflow.py` to initGui/unload, wiring and construction
