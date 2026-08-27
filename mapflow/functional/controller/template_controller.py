@@ -42,12 +42,18 @@ class TemplateController(QObject):
 
         update_search_button.clicked.connect(self.update_template_search_params)
         exclude_action.triggered.connect(self.template_service.exclude_processing_from_search)
+        # The Seen / Seen-all actions are created later (setup_metadata_seen_dropdown), so
+        # mapflow.py wires them to mark_selected_images_seen / mark_all_images_seen.
 
         self.template_service.creationBusy.connect(
             lambda busy: self.template_view.set_search_enabled(not busy))
         self.template_service.projectRequired.connect(self.template_view.show_project_required)
         self.template_service.statusMessage.connect(
             lambda message: self.iface.messageBar().pushInfo(self.app_context.plugin_name, message))
+        self.template_service.templateStatusChanged.connect(
+            self.template_view.refresh_template_status_cell)
+        self.template_service.warningMessage.connect(
+            lambda message: self.iface.messageBar().pushWarning(self.app_context.plugin_name, message))
 
     def create_search_template(self, name_override: str = None) -> None:
         """Assemble the request from the widgets and hand it to the service. Called by the
@@ -74,6 +80,37 @@ class TemplateController(QObject):
         # geometry; the backend merges the rest and preserves the AOIs).
         search_params = self.search_view.template_search_params(aoi_details=None)
         self.template_service.update_template_search_params(search_params)
+
+    # ---------- seen markers: read rows here, DTO state + api in the service, icons in the view ----------
+
+    def mark_selected_images_seen(self, *args) -> None:
+        template_id = self.template_service.seen_template_id()
+        if not template_id:
+            return
+        for row in self.template_view.selected_metadata_rows():
+            image_id = self.template_view.image_id_at(row)
+            self.template_service.mark_image_seen(
+                template_id, image_id,
+                on_success=lambda r=row: self.template_view.set_new_image_marker(r, False))
+
+    def mark_all_images_seen(self, *args) -> None:
+        template_id = self.template_service.seen_template_id()
+        if not template_id:
+            return
+        # Snapshot the rows that are new BEFORE the request: the service clears every DTO's
+        # isNew on success, so afterwards there is no way to tell which rows to un-mark.
+        new_rows = [row for row in range(self.template_view.metadata_row_count())
+                    if self.template_service.image_is_new(self.template_view.image_id_at(row))]
+        self.template_service.mark_all_seen(
+            template_id,
+            on_success=lambda: [self.template_view.set_new_image_marker(r, False) for r in new_rows])
+
+    def apply_new_image_markers(self) -> None:
+        """Show the 'new image' icon on every row whose image DTO is still new. Called after a
+        template's results (re)fill."""
+        for row in range(self.template_view.metadata_row_count()):
+            image_id = self.template_view.image_id_at(row)
+            self.template_view.set_new_image_marker(row, self.template_service.image_is_new(image_id))
 
     def _build_template_aoi_details(self):
         """The ``searchParams.aoiDetails`` FeatureCollection for template creation: named features
