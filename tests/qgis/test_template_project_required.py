@@ -27,7 +27,7 @@ def _plugin(mode, current_project):
     plugin = Mapflow.__new__(Mapflow)
     plugin.metadata_search_mode = mode
     plugin.dlg = MagicMock()
-    plugin.template_view = TemplateView(dlg=plugin.dlg, iface=MagicMock())
+    plugin.template_view = TemplateView(dlg=plugin.dlg, iface=MagicMock(), config=MagicMock())
     plugin.template_service = _service(current_project)
     plugin.app_context = SimpleNamespace(current_project=current_project)
     return plugin

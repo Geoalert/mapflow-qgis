@@ -40,6 +40,11 @@ class TemplateService(QObject):
     projectRequired = pyqtSignal(str)
     #: A short "creating…/updating…" status for the message bar.
     statusMessage = pyqtSignal(str)
+    #: A template's new-images count changed; the controller refreshes its status cell. Carries
+    #: the template DTO (a schema type, which a view may read).
+    templateStatusChanged = pyqtSignal(object)
+    #: A non-modal warning for the message bar (a seen request failed).
+    warningMessage = pyqtSignal(str)
 
     def __init__(self,
                  app_context: AppContext,
@@ -49,6 +54,9 @@ class TemplateService(QObject):
         #: Read for navigation state (`active_template`, `selected_template`,
         #: `selected_processing`) and reached for `api`. MR-2 gives TemplateService its own.
         self.processing_service = processing_service
+        #: The current template-search results, keyed by image id, carrying the ``isNew`` flag
+        #: the seen markers read. Set when a template's results load.
+        self.template_search_images = {}
 
     # ---------- plan-search gating ----------
 
@@ -229,3 +237,83 @@ class TemplateService(QObject):
             if footprints:
                 result.append((aoi, footprints))
         return result
+
+    # ---------- seen markers (DTO state + api; the table effects are the view's) ----------
+
+    def store_template_images(self, images) -> None:
+        """The template-search results, so the seen flow can find each image's DTO by id."""
+        self.template_search_images = {str(image.id): image for image in images}
+
+    def seen_template_id(self) -> Optional[str]:
+        """Id of the template whose search results are currently shown.
+
+        NOT from the processings-table selection: inside the in-template view the selected rows
+        are AOIs/processings, so a selection-derived id is None there and both Seen actions
+        silently sent no request. ``open_template_results_id`` is set whenever template results
+        load (entering a template and "See search results" alike)."""
+        open_id = getattr(self.app_context, "open_template_results_id", None)
+        if open_id:
+            return str(open_id)
+        template = self.processing_service.active_template
+        return str(template.id) if template else None
+
+    def image_is_new(self, image_id: Optional[str]) -> bool:
+        image = self.template_search_images.get(image_id)
+        return bool(image is not None and image.isNew)
+
+    def mark_image_seen(self, template_id: str, image_id: str, on_success) -> None:
+        """Request 'seen' for one image, only if its DTO is still new. On success the DTO's
+        ``isNew`` is cleared and the counter decremented (never optimistically); ``on_success``
+        — bound by the controller to the row — clears that row's marker."""
+        image = self.template_search_images.get(image_id)
+        if image is None or not image.isNew:
+            return
+        self.processing_service.api.mark_template_image_seen(
+            template_id=template_id,
+            image_id=str(image_id),
+            callback=lambda _response, img=image, tid=template_id: (
+                self._on_image_seen(img, tid), on_success()),
+            error_handler=self._seen_error_handler,
+        )
+
+    def mark_all_seen(self, template_id: str, on_success) -> None:
+        """Mark every image of the shown template as seen with a single request."""
+        self.processing_service.api.mark_all_template_images_seen(
+            template_id=template_id,
+            callback=lambda _response, tid=template_id: (self._on_all_seen(tid), on_success()),
+            error_handler=self._seen_error_handler,
+        )
+
+    def _on_image_seen(self, image, template_id: str) -> None:
+        image.isNew = False
+        self._decrement_new_images_count(template_id)
+
+    def _on_all_seen(self, template_id: str) -> None:
+        for image in self.template_search_images.values():
+            image.isNew = False
+        self._reset_new_images_count(template_id)
+
+    def _seen_error_handler(self, response: QNetworkReply) -> None:
+        self.warningMessage.emit(self.tr("Could not mark image(s) as seen, please try again."))
+
+    def _find_template(self, template_id: str):
+        template_map = getattr(self.processing_service, "templates", {}) or {}
+        for key, value in template_map.items():
+            if str(key) == str(template_id):
+                return value
+        return None
+
+    def _decrement_new_images_count(self, template_id: str) -> None:
+        template = self._find_template(template_id)
+        if template is None:
+            return
+        if template.newImagesCount and template.newImagesCount > 0:
+            template.newImagesCount -= 1
+        self.templateStatusChanged.emit(template)
+
+    def _reset_new_images_count(self, template_id: str) -> None:
+        template = self._find_template(template_id)
+        if template is None:
+            return
+        template.newImagesCount = 0
+        self.templateStatusChanged.emit(template)

@@ -18,6 +18,7 @@ from mapflow import mapflow as mapflow_module
 from mapflow.config import Config, ConfigColumns
 from mapflow.model.provider.default import ImagerySearchProvider
 from mapflow.functional.service.search_service import SearchService
+from mapflow.functional.service.template_service import TemplateService
 from mapflow.functional.view.search_view import SearchView
 from mapflow.mapflow import Mapflow
 
@@ -80,6 +81,10 @@ def _plugin_with_search_provider(tmp_path, template_name="Template A"):
                                           result_loader=plugin.result_loader,
                                           provider_service=plugin.provider_service)
     plugin.search_service.metadataLayerReady.connect(lambda _layer: None)
+    # The image DTO map moved to TemplateService; the marker refresh to TemplateController.
+    plugin.template_service = TemplateService(app_context=plugin.app_context,
+                                              processing_service=MagicMock())
+    plugin.template_controller = MagicMock()
     return plugin
 
 
@@ -140,8 +145,8 @@ def test_template_callback_keeps_product_type_text_clean_and_stores_new_flag(tmp
     # The "new" state is shown with an icon now, so the product-type text stays clean.
     assert [f["properties"]["productType"] for f in geoms["features"]] == ["Image", "Image"]
     # Image DTOs are stored by id and carry the authoritative isNew flag for mark-seen.
-    assert plugin.template_search_images["img-new"].isNew is True
-    assert plugin.template_search_images["img-seen"].isNew is False
+    assert plugin.template_service.template_search_images["img-new"].isNew is True
+    assert plugin.template_service.template_search_images["img-seen"].isNew is False
 
 
 def test_monitor_skips_current_search_metadata_layer():
