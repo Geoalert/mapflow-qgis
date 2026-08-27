@@ -10,8 +10,8 @@ import pytest
 from qgis.core import QgsVectorLayer, QgsFeature, QgsGeometry, QgsField
 from PyQt5.QtCore import QVariant
 
+from mapflow.functional.controller.template_controller import TemplateController
 from mapflow.functional.service.aoi_service import AoiService
-from mapflow.mapflow import Mapflow
 from mapflow.schema.template import AOI_NAME_MAX_LENGTH
 
 
@@ -48,13 +48,20 @@ def _aoi_service():
                       processing_service=MagicMock())
 
 
+def _controller(layer, aoi=None):
+    """`_build_template_aoi_details` moved to TemplateController: it reads the current polygon
+    layer through `aoi_view`, explodes it into named features via `aoi_service`, and falls back
+    to `app_context.aoi`."""
+    controller = TemplateController.__new__(TemplateController)
+    controller.aoi_view = MagicMock()
+    controller.aoi_view.current_layer.return_value = layer
+    controller.aoi_service = _aoi_service()
+    controller.app_context = SimpleNamespace(aoi=aoi)
+    return controller
+
+
 def _plugin_with_layer(layer):
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.dlg = MagicMock()
-    plugin.dlg.polygonCombo.currentLayer.return_value = layer
-    plugin.aoi_service = _aoi_service()
-    return plugin
+    return _controller(layer)
 
 
 def test_aoi_details_carry_names_from_layer_attribute():
@@ -91,12 +98,7 @@ def test_aoi_details_rejects_overlong_name():
 def test_no_layer_falls_back_to_aoi_as_one_unnamed_feature():
     """Without a polygon layer (e.g. an image extent) aoiDetails is still built from the
     combined AOI as a single unnamed feature — the deprecated plain `aoi` is never sent."""
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.dlg = MagicMock()
-    plugin.dlg.polygonCombo.currentLayer.return_value = None
-    plugin.aoi_service = _aoi_service()
-    plugin.app_context = SimpleNamespace(aoi=QgsGeometry.fromWkt("POLYGON((0 0,0 1,1 1,1 0,0 0))"))
+    plugin = _controller(None, aoi=QgsGeometry.fromWkt("POLYGON((0 0,0 1,1 1,1 0,0 0))"))
 
     fc = plugin._build_template_aoi_details()
 
@@ -106,12 +108,7 @@ def test_no_layer_falls_back_to_aoi_as_one_unnamed_feature():
 
 
 def test_no_layer_no_aoi_returns_none():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.dlg = MagicMock()
-    plugin.dlg.polygonCombo.currentLayer.return_value = None
-    plugin.aoi_service = _aoi_service()
-    plugin.app_context = SimpleNamespace(aoi=None)
+    plugin = _controller(None, aoi=None)
 
     assert plugin._build_template_aoi_details() is None
 
@@ -145,16 +142,8 @@ def test_mixed_polygon_and_multipolygon_features_all_become_polygons():
 
 
 def test_fallback_multipolygon_aoi_is_exploded():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.dlg = MagicMock()
-    plugin.dlg.polygonCombo.currentLayer.return_value = None
-    plugin.aoi_service = _aoi_service()
-    plugin.app_context = SimpleNamespace(
-        aoi=QgsGeometry.fromWkt(
-            "MULTIPOLYGON(((0 0,0 1,1 1,1 0,0 0)),((2 2,2 3,3 3,3 2,2 2)))"
-        )
-    )
+    plugin = _controller(None, aoi=QgsGeometry.fromWkt(
+        "MULTIPOLYGON(((0 0,0 1,1 1,1 0,0 0)),((2 2,2 3,3 3,3 2,2 2)))"))
 
     fc = plugin._build_template_aoi_details()
 

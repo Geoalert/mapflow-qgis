@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import QPushButton, QWidget
 
 from ...dialogs.main_dialog import MainDialog
 from ...schema.catalog import ProductType
+from ...schema.template import SearchParams
 
 
 class SearchView(QObject):
@@ -80,6 +81,40 @@ class SearchView(QObject):
 
     def provider_index(self) -> int:
         return self.dlg.providerIndex()
+
+    def ensure_search_provider(self, provider_service) -> None:
+        """If the selected provider cannot search, switch the combo to the Mapflow imagery-search
+        provider. Run before a search or a template create so the request goes to a searchable
+        source."""
+        try:
+            supports_search = provider_service.providers[self.dlg.providerIndex()].meta_url is not None
+        except (NotImplementedError, AttributeError):
+            supports_search = False
+        if not supports_search:
+            self.dlg.setProviderIndex(provider_service.imagery_search_provider_index)
+
+    def template_search_params(self, aoi_details=None) -> SearchParams:
+        """The search filter widgets as a `SearchParams` schema, for creating/updating a template.
+
+        Lives here because it reads the same search-tab widgets `search_parameters()` does, only
+        shaped for the template endpoints (ISO date strings, the `SearchParams` dataclass). When
+        ``aoi_details`` is None the geometry is omitted — a template's non-geometry params are
+        updated that way (the PUT template endpoint rejects geometry).
+        """
+        off_nadir_min, off_nadir_max = self.off_nadir_bounds()
+        iso = "yyyy-MM-ddTHH:mm:ss.zzz'Z'"
+        return SearchParams(
+            aoiDetails=aoi_details,
+            acquisitionDateFrom=self.dlg.metadataFrom.dateTime().toUTC().toString(iso),
+            acquisitionDateTo=self.dlg.metadataTo.dateTime().toUTC().toString(iso),
+            maxCloudCover=self.dlg.maxCloudCover.value(),
+            minAoiIntersectionPercent=self.dlg.minIntersection.value(),
+            minOffNadirAngle=off_nadir_min,
+            maxOffNadirAngle=off_nadir_max,
+            hideUnavailable=self.dlg.hideUnavailableResults.isChecked(),
+            productTypes=self.product_types() or [],
+            dataProviders=self.search_providers(),
+        )
 
     def switch_to_search_tab(self) -> None:
         """Bring the imagery-search tab to front (its objectName is historically 'providersTab')."""

@@ -1,0 +1,231 @@
+"""Planned processings (templates): creation, search-param update, and exclude-from-search.
+
+This is MR-1 of the templates extraction — the half that was tangled into `mapflow.py`. The
+lifecycle half (enter/exit/pause/resume, navigation state) is still in `ProcessingService` and is
+read from there for now; MR-2 moves it here.
+
+Holds no widget (`spec/007_architecture.md` § Layer rules). Inputs that come from widgets — the
+template name, the assembled `SearchParams`, the AOI FeatureCollection — arrive as arguments from
+`TemplateController`; UI effects the service must cause (the busy button, the "select a project"
+label) leave as signals. `ProcessingService` is read for navigation state and reached for its
+`api`; that dependency becomes `TemplateService`'s own in MR-2.
+"""
+import json
+from datetime import datetime, timedelta
+from typing import Optional
+
+from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtNetwork import QNetworkReply
+from qgis.core import QgsGeometry
+
+from ..app_context import AppContext
+from ..geometry import geometry_from_geojson
+from .alert_service import (alert, alert_confirm, alert_info, alert_warning,
+                            report_http_error)
+from ...errors import ErrorMessage
+from ...http import api_message_parser
+from ...schema.template import (CreateProcessingTemplateSchema,
+                                DeleteAoisSchema,
+                                SearchParams,
+                                UpdateAoiSchema,
+                                UpdateProcessingTemplateSchema)
+
+
+class TemplateService(QObject):
+
+    #: True while a create request is in flight; the controller disables the Search button.
+    creationBusy = pyqtSignal(bool)
+    #: A template needs a project and none is open; the argument is the message for the panel
+    #: label. The service also alerts — the label is the persistent reminder, the alert the nudge.
+    projectRequired = pyqtSignal(str)
+    #: A short "creating…/updating…" status for the message bar.
+    statusMessage = pyqtSignal(str)
+
+    def __init__(self,
+                 app_context: AppContext,
+                 processing_service):
+        super().__init__()
+        self.app_context = app_context
+        #: Read for navigation state (`active_template`, `selected_template`,
+        #: `selected_processing`) and reached for `api`. MR-2 gives TemplateService its own.
+        self.processing_service = processing_service
+
+    # ---------- plan-search gating ----------
+
+    def search_area_exceeds_limit(self) -> bool:
+        """Whether the current AOI is too large for an immediate search (T8). Zero/unknown
+        ``searchAreaLimit`` disables the check and lets the search proceed."""
+        limit = self.app_context.search_area_limit
+        return bool(limit and self.app_context.aoi_size and self.app_context.aoi_size > limit)
+
+    @property
+    def project_required_message(self) -> str:
+        return self.tr("Select a project to create a template")
+
+    def planned_search_default_name(self) -> str:
+        """Auto-name for a Planned Search created from the too-large-AOI prompt (T8)."""
+        return self.tr("Searching {datetime}").format(
+            datetime=datetime.now().strftime("%Y-%m-%d %H:%M"))
+
+    # ---------- create ----------
+
+    def create_search_template(self, name: str, aoi_details: Optional[dict],
+                               search_params: SearchParams) -> None:
+        """Create a planned search template. ``name``, ``aoi_details`` and ``search_params`` are
+        assembled by the controller from the widgets; validation against the account limits and
+        the request itself are here."""
+        # A template always belongs to a project — block creation (but not the immediate search)
+        # and tell the user, instead of sending a request the backend would reject.
+        if not self.app_context.current_project:
+            self.projectRequired.emit(self.project_required_message)
+            alert_warning(self.project_required_message)
+            return
+        if not self.app_context.aoi:
+            alert(self.tr('Please, select a valid area of interest'))
+            return
+        # Forbid creation client-side when the AOI exceeds the planned-processing area cap
+        # (mirrors processing creation). Zero/unknown limit lets the backend be the source of truth.
+        if self.app_context.template_area_limit and self.app_context.aoi_size \
+                and self.app_context.aoi_size > self.app_context.template_area_limit:
+            alert(ErrorMessage(
+                code="TEMPLATE_AREA_LIMIT_EXCEEDED",
+                parameters={"templateAreaLimit": round(self.app_context.template_area_limit, 2)},
+            ).to_str())
+            return
+        if not aoi_details:
+            alert(self.tr('Please, select a valid area of interest'))
+            return
+        if not name:
+            alert(self.tr('Please, specify a name for your search'))
+            return
+
+        # Backend validates activeUntil against a strict 0-6m window; a duration cap avoids
+        # edge-case rejections around month-length differences.
+        active_until = datetime.utcnow() + timedelta(days=180) - timedelta(minutes=1)
+        payload = CreateProcessingTemplateSchema(
+            name=name,
+            searchParams=search_params,
+            projectId=str(self.app_context.project_id),
+            activeUntil=active_until.strftime('%Y-%m-%dT%H:%M:%S.0Z'),
+        )
+        self.creationBusy.emit(True)
+        self.statusMessage.emit(self.tr('Creating planned search...'))
+        self.processing_service.api.create_template(
+            data=payload,
+            callback=self.create_search_template_callback,
+            error_handler=self.create_search_template_error_handler,
+        )
+
+    def create_search_template_callback(self, response: QNetworkReply):
+        self.creationBusy.emit(False)
+        # A created template is normally active; isActive comes back False when the
+        # active-templates limit is reached (created but inactivated).
+        template = self.processing_service._parse_template_response(response)
+        if template is not None and not template.isActive:
+            alert_warning(self.tr(
+                "The template has been created, but is inactive.\n\n"
+                "You have reached the maximum number of active planned processings. "
+                "Pause or delete another one before activating this template."))
+        self.processing_service.get_processings()
+
+    def create_search_template_error_handler(self, response: QNetworkReply):
+        self.creationBusy.emit(False)
+        report_http_error(response,
+                          plugin_version=self.app_context.plugin_version,
+                          title=self.tr("Template creation failed"),
+                          error_message_parser=api_message_parser)
+
+    # ---------- update stored search params ----------
+
+    def update_template_search_params(self, search_params: SearchParams) -> None:
+        """Save the current imagery-search filter widgets to the open template's stored
+        ``searchParams`` (non-geometry params only — the backend merges them and preserves the
+        geometry). ``search_params`` is built with ``aoi_details=None`` by the controller."""
+        template = (self.processing_service.active_template
+                    or self.processing_service.selected_template())
+        if not template:
+            return
+        # Only name + searchParams change; processingParams and activeUntil are omitted so the
+        # backend preserves them (sending processingParams={} would fail its required `rest`).
+        payload = UpdateProcessingTemplateSchema(name=template.name, searchParams=search_params)
+        self.statusMessage.emit(self.tr('Updating template search parameters...'))
+        self.processing_service.api.update_template(
+            template_id=template.id,
+            data=payload,
+            callback=self._template_updated_callback,
+            error_handler=self._template_update_error_handler,
+        )
+
+    def _template_updated_callback(self, response: QNetworkReply):
+        alert_info(self.tr("Template updated."))
+        # Re-hydrate so the open template / list reflects the new params.
+        self.processing_service.aoi_changed_callback(response)
+        self.processing_service.get_processings()
+
+    def _template_update_error_handler(self, response: QNetworkReply):
+        report_http_error(response,
+                          plugin_version=self.app_context.plugin_version,
+                          title=self.tr("Template update failed"),
+                          error_message_parser=api_message_parser)
+
+    # ---------- exclude a processing's area from the search ----------
+
+    def exclude_processing_from_search(self) -> None:
+        """'Exclude from search' — subtract a processing's footprint from the AOIs it was run
+        over, so the template stops searching an already-processed area. A processing links to
+        every AOI it intersects, so subtract from each; an AOI fully consumed is deleted."""
+        template = self.processing_service.active_template
+        processing = self.processing_service.selected_processing()
+        if not template or not processing:
+            return
+        affected = self._processing_footprints_by_aoi(template, str(processing.id))
+        updates = []      # (aoi_id, new_geometry_dict)
+        deletions = []    # aoi_id fully consumed
+        for aoi, footprints in affected:
+            aoi_geom = geometry_from_geojson(aoi.geometry)
+            if aoi_geom is None:
+                continue
+            footprint = footprints[0] if len(footprints) == 1 else QgsGeometry.unaryUnion(footprints)
+            new_geom = aoi_geom.difference(footprint)
+            if new_geom is None or new_geom.isEmpty() or new_geom.area() == 0:
+                deletions.append(aoi.id)
+            else:
+                updates.append((aoi.id, json.loads(new_geom.asJson())))
+        if not updates and not deletions:
+            alert_info(self.tr("This processing is not linked to any AOI geometry."))
+            return
+        if not alert_confirm(self.tr("Exclude this processing's area from the template's search? "
+                                     "The already-processed area will be removed from the AOI(s).")):
+            return
+        for aoi_id, geom in updates:
+            self.processing_service.api.update_aoi(
+                template_id=template.id,
+                aoi_id=aoi_id,
+                data=UpdateAoiSchema(geometry=geom),
+                callback=self.processing_service.aoi_changed_callback,
+                error_handler=self.processing_service.aoi_change_error_handler,
+            )
+        if deletions:
+            self.processing_service.api.delete_aois(
+                template_id=template.id,
+                data=DeleteAoisSchema(aoiIds=deletions),
+                callback=self.processing_service.aoi_changed_callback,
+                error_handler=self.processing_service.aoi_change_error_handler,
+            )
+
+    def _processing_footprints_by_aoi(self, template, processing_id: str):
+        """For each of the template's AOIs, the QgsGeometry footprints of ``processing_id`` that
+        were run over it. Returns ``[(aoi, [footprint, ...]), ...]`` for AOIs it touches."""
+        result = []
+        for aoi in template.aoi_dtos():
+            if not aoi.id or not aoi.geometry:
+                continue
+            footprints = [
+                geometry_from_geojson(link.geometry)
+                for link in aoi.processings
+                if str(link.processingId) == str(processing_id) and link.geometry
+            ]
+            footprints = [g for g in footprints if g is not None]
+            if footprints:
+                result.append((aoi, footprints))
+        return result

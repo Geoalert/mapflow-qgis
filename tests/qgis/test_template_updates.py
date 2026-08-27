@@ -9,7 +9,9 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from mapflow.functional.controller.template_controller import TemplateController
 from mapflow.functional.geometry import geometry_from_geojson
+from mapflow.functional.service.template_service import TemplateService
 from mapflow.functional.view.search_view import SearchView
 from mapflow.mapflow import Mapflow
 from mapflow.schema.template import TemplateAoiDTO, AoiProcessingLink
@@ -20,84 +22,88 @@ def _square(x0, y0, x1, y1):
         [x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]]}
 
 
-# ---------- Feature 1: update search params ----------
+# ---------- Feature 1: update search params (TemplateController assembles, TemplateService PUTs) ----------
 
-def _plugin_f1():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda t: t
-    plugin.dlg = MagicMock()
-    plugin.search_view = SearchView(dlg=plugin.dlg, config=MagicMock())
-    plugin.iface = MagicMock()
-    plugin.app_context = SimpleNamespace(plugin_name="Mapflow")
-    plugin.dlg.metadataFrom.dateTime.return_value.toUTC.return_value.toString.return_value = "2025-01-01T00:00:00.000Z"
-    plugin.dlg.metadataTo.dateTime.return_value.toUTC.return_value.toString.return_value = "2025-06-01T00:00:00.000Z"
-    plugin.dlg.maxCloudCover.value.return_value = 40
-    plugin.dlg.minIntersection.value.return_value = 20
-    plugin.dlg.hideUnavailableResults.isChecked.return_value = True
-    plugin.selected_search_product_types = MagicMock(return_value=["IMAGE"])
-    plugin.selected_search_providers = MagicMock(return_value=["providerA"])
+def _controller_f1():
+    dlg = MagicMock()
+    dlg.metadataFrom.dateTime.return_value.toUTC.return_value.toString.return_value = "2025-01-01T00:00:00.000Z"
+    dlg.metadataTo.dateTime.return_value.toUTC.return_value.toString.return_value = "2025-06-01T00:00:00.000Z"
+    dlg.maxCloudCover.value.return_value = 40
+    dlg.minIntersection.value.return_value = 20
+    dlg.hideUnavailableResults.isChecked.return_value = True
+    # Product/provider widgets must return serializable values (real search_view over mock dlg).
+    dlg.searchMosaicCheckBox.isChecked.return_value = False
+    dlg.searchImageCheckBox.isChecked.return_value = True
+    dlg.searchProvidersCombo.checkedItemsData.return_value = ["providerA"]
+    dlg.off_nadir_is_full_range.return_value = True
     template = SimpleNamespace(id="tpl-1", name="T1", processingParams={"a": 1},
                                activeUntil=datetime(2026, 3, 1))
-    plugin.processing_service = SimpleNamespace(
-        selected_template=lambda: template, active_template=None, api=MagicMock())
-    return plugin, template
+    processing_service = SimpleNamespace(
+        selected_template=lambda: template, active_template=None, api=MagicMock(),
+        aoi_changed_callback=MagicMock(), get_processings=MagicMock())
+    controller = TemplateController.__new__(TemplateController)
+    controller.search_view = SearchView(dlg=dlg, config=MagicMock())
+    controller.template_service = TemplateService(
+        app_context=SimpleNamespace(plugin_name="Mapflow", plugin_version="1.0"),
+        processing_service=processing_service)
+    return controller, processing_service
 
 
 def test_update_search_params_sends_filters_without_geometry():
-    plugin, _ = _plugin_f1()
+    controller, processing_service = _controller_f1()
 
-    plugin.update_template_search_params()
+    controller.update_template_search_params()
 
-    data = plugin.processing_service.api.update_template.call_args.kwargs["data"]
+    data = processing_service.api.update_template.call_args.kwargs["data"]
     payload = json.loads(data.as_json())
     assert payload["name"] == "T1"
     sp = payload["searchParams"]
     assert sp["maxCloudCover"] == 40
     assert sp["minAoiIntersectionPercent"] == 20
     assert sp.get("aoiDetails") is None  # geometry is never sent on the PUT endpoint
-    # processingParams and activeUntil are omitted so the backend preserves them (sending
-    # processingParams={} would fail its required `rest` field).
+    # processingParams and activeUntil are omitted so the backend preserves them.
     assert "processingParams" not in payload
     assert "activeUntil" not in payload
 
 
 def test_update_search_params_noop_without_template():
-    plugin, _ = _plugin_f1()
-    plugin.processing_service.selected_template = lambda: None
-    plugin.processing_service.active_template = None
+    controller, processing_service = _controller_f1()
+    processing_service.selected_template = lambda: None
+    processing_service.active_template = None
 
-    plugin.update_template_search_params()
+    controller.update_template_search_params()
 
-    plugin.processing_service.api.update_template.assert_not_called()
+    processing_service.api.update_template.assert_not_called()
 
 
 def test_update_search_params_prefers_active_template():
-    plugin, _ = _plugin_f1()
-    plugin.processing_service.selected_template = lambda: None
-    open_template = SimpleNamespace(id="tpl-open", name="Open", processingParams=None,
-                                    activeUntil=datetime(2026, 3, 1))
-    plugin.processing_service.active_template = open_template
+    controller, processing_service = _controller_f1()
+    processing_service.selected_template = lambda: None
+    processing_service.active_template = SimpleNamespace(
+        id="tpl-open", name="Open", processingParams=None, activeUntil=datetime(2026, 3, 1))
 
-    plugin.update_template_search_params()
+    controller.update_template_search_params()
 
-    assert plugin.processing_service.api.update_template.call_args.kwargs["template_id"] == "tpl-open"
+    assert processing_service.api.update_template.call_args.kwargs["template_id"] == "tpl-open"
 
 
-# ---------- Feature 3: exclude from search ----------
+# ---------- Feature 3: exclude from search (TemplateService) ----------
 
 def _template_with(aois):
     return SimpleNamespace(id="tpl-1", aoi_dtos=lambda: aois)
 
 
-def _plugin_f3(template, processing):
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda t: t
-    plugin.alert = MagicMock(return_value=True)  # confirm dialog -> Ok
-    plugin.processing_service = SimpleNamespace(
+def _service_f3(template, processing, monkeypatch):
+    monkeypatch.setattr("mapflow.functional.service.template_service.alert_confirm",
+                        lambda *a, **k: True)  # confirm dialog -> Ok
+    monkeypatch.setattr("mapflow.functional.service.template_service.alert_info",
+                        lambda *a, **k: None)  # the "not linked" notice
+    processing_service = SimpleNamespace(
         active_template=template,
         selected_processing=lambda: processing,
         api=MagicMock(), aoi_changed_callback=MagicMock(), aoi_change_error_handler=MagicMock())
-    return plugin
+    return TemplateService(app_context=SimpleNamespace(plugin_version="1.0"),
+                           processing_service=processing_service)
 
 
 def _aoi(aoi_id, geom, links):
@@ -106,52 +112,52 @@ def _aoi(aoi_id, geom, links):
                                        for pid, g in links])
 
 
-def test_exclude_subtracts_footprint_from_parent_aoi():
+def test_exclude_subtracts_footprint_from_parent_aoi(monkeypatch):
     # AOI [0,0]-[2,2]; processing footprint = left half [0,0]-[1,2] -> remainder right half.
     aoi = _aoi("aoi-1", _square(0, 0, 2, 2), [("p-1", _square(0, 0, 1, 2))])
-    plugin = _plugin_f3(_template_with([aoi]), SimpleNamespace(id="p-1"))
+    service = _service_f3(_template_with([aoi]), SimpleNamespace(id="p-1"), monkeypatch)
 
-    plugin.exclude_processing_from_search()
+    service.exclude_processing_from_search()
 
-    kwargs = plugin.processing_service.api.update_aoi.call_args.kwargs
+    kwargs = service.processing_service.api.update_aoi.call_args.kwargs
     assert kwargs["aoi_id"] == "aoi-1"
     remainder = geometry_from_geojson(kwargs["data"].geometry)
     assert round(remainder.area(), 6) == 2.0  # right half, area 1x2
-    plugin.processing_service.api.delete_aois.assert_not_called()
+    service.processing_service.api.delete_aois.assert_not_called()
 
 
-def test_exclude_deletes_aoi_fully_consumed():
+def test_exclude_deletes_aoi_fully_consumed(monkeypatch):
     # Footprint == whole AOI -> difference empty -> delete the AOI.
     aoi = _aoi("aoi-1", _square(0, 0, 2, 2), [("p-1", _square(0, 0, 2, 2))])
-    plugin = _plugin_f3(_template_with([aoi]), SimpleNamespace(id="p-1"))
+    service = _service_f3(_template_with([aoi]), SimpleNamespace(id="p-1"), monkeypatch)
 
-    plugin.exclude_processing_from_search()
+    service.exclude_processing_from_search()
 
-    plugin.processing_service.api.update_aoi.assert_not_called()
-    assert plugin.processing_service.api.delete_aois.call_args.kwargs["data"].aoiIds == ["aoi-1"]
+    service.processing_service.api.update_aoi.assert_not_called()
+    assert service.processing_service.api.delete_aois.call_args.kwargs["data"].aoiIds == ["aoi-1"]
 
 
-def test_exclude_subtracts_from_all_parent_aois():
+def test_exclude_subtracts_from_all_parent_aois(monkeypatch):
     # The processing intersects two AOIs -> subtract from each.
     a1 = _aoi("aoi-1", _square(0, 0, 2, 2), [("p-1", _square(0, 0, 1, 2))])
     a2 = _aoi("aoi-2", _square(3, 0, 5, 2), [("p-1", _square(3, 0, 4, 2))])
     a3 = _aoi("aoi-3", _square(6, 0, 7, 1), [("p-9", _square(6, 0, 7, 1))])  # different processing
-    plugin = _plugin_f3(_template_with([a1, a2, a3]), SimpleNamespace(id="p-1"))
+    service = _service_f3(_template_with([a1, a2, a3]), SimpleNamespace(id="p-1"), monkeypatch)
 
-    plugin.exclude_processing_from_search()
+    service.exclude_processing_from_search()
 
-    updated_ids = {c.kwargs["aoi_id"] for c in plugin.processing_service.api.update_aoi.call_args_list}
+    updated_ids = {c.kwargs["aoi_id"] for c in service.processing_service.api.update_aoi.call_args_list}
     assert updated_ids == {"aoi-1", "aoi-2"}  # aoi-3 untouched
 
 
-def test_exclude_noop_when_processing_not_linked():
+def test_exclude_noop_when_processing_not_linked(monkeypatch):
     aoi = _aoi("aoi-1", _square(0, 0, 2, 2), [("p-other", _square(0, 0, 1, 2))])
-    plugin = _plugin_f3(_template_with([aoi]), SimpleNamespace(id="p-1"))
+    service = _service_f3(_template_with([aoi]), SimpleNamespace(id="p-1"), monkeypatch)
 
-    plugin.exclude_processing_from_search()
+    service.exclude_processing_from_search()
 
-    plugin.processing_service.api.update_aoi.assert_not_called()
-    plugin.processing_service.api.delete_aois.assert_not_called()
+    service.processing_service.api.update_aoi.assert_not_called()
+    service.processing_service.api.delete_aois.assert_not_called()
 
 
 # ---------- Item 1: redraw template layers on AOI change ----------
