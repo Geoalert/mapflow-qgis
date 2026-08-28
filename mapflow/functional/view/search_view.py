@@ -3,6 +3,7 @@ from typing import List, Optional, Tuple
 from PyQt5.QtCore import QObject, Qt
 from PyQt5.QtWidgets import QPushButton, QWidget
 
+from ..helpers import utc_date_from_iso
 from ...dialogs.main_dialog import MainDialog
 from ...schema.catalog import ProductType
 from ...schema.template import SearchParams
@@ -121,6 +122,58 @@ class SearchView(QObject):
         tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
         if tab is not None:
             self.dlg.tabWidget.setCurrentWidget(tab)
+
+    # ---------- showing what a template searches for ----------
+
+    def apply_search_params(self, search_params) -> None:
+        """Populate the filter widgets from a template's stored ``searchParams`` (web parity: the
+        user can see what the template searches for). The widgets stay editable — changing them
+        affects the current search view only, never the template. Fields the template does not
+        carry leave the corresponding widgets untouched.
+
+        Deliberately not the same as `apply_baseline`, which restores the *fetched* parameters:
+        this one skips an empty ``productTypes`` (a template that names none is not a template
+        that wants neither box ticked) and always rewrites the provider combo, where the baseline
+        leaves an absent provider list alone.
+        """
+        if not search_params:
+            return
+        if isinstance(search_params, dict):
+            search_params = SearchParams.from_dict(search_params)
+
+        date_from = utc_date_from_iso(search_params.acquisitionDateFrom)
+        if date_from is not None:
+            self.dlg.metadataFrom.setDate(date_from)
+        date_to = utc_date_from_iso(search_params.acquisitionDateTo)
+        if date_to is not None:
+            self.dlg.metadataTo.setDate(date_to)
+        if search_params.maxCloudCover is not None:
+            self.dlg.maxCloudCover.setValue(int(round(search_params.maxCloudCover)))
+        if search_params.minAoiIntersectionPercent is not None:
+            self.dlg.minIntersection.setValue(int(round(search_params.minAoiIntersectionPercent)))
+        if search_params.minOffNadirAngle is not None and search_params.maxOffNadirAngle is not None:
+            self.dlg.set_off_nadir_range(int(round(search_params.minOffNadirAngle)),
+                                         int(round(search_params.maxOffNadirAngle)))
+        if search_params.hideUnavailable is not None:
+            self.dlg.hideUnavailableResults.setChecked(bool(search_params.hideUnavailable))
+        product_types = [str(pt).upper() for pt in (search_params.productTypes or [])]
+        if product_types:
+            self.dlg.searchMosaicCheckBox.setChecked(ProductType.mosaic.upper() in product_types)
+            self.dlg.searchImageCheckBox.setChecked(ProductType.image.upper() in product_types)
+        self.apply_providers_to_combo(search_params.dataProviders)
+
+    def apply_providers_to_combo(self, data_providers: Optional[List[str]]) -> None:
+        """Mirror ``search_providers()``: check the combo items whose api-name is in
+        ``data_providers``; ``None``/empty means all providers were searched, shown as no checked
+        items ("Show all")."""
+        combo = self.dlg.searchProvidersCombo
+        combo.deselectAllOptions()
+        if not data_providers:
+            return
+        wanted = set(data_providers)
+        for index in range(combo.count()):
+            if combo.itemData(index) in wanted:
+                combo.setItemCheckState(index, Qt.Checked)
 
     # ---------- the results table ----------
 

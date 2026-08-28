@@ -7,9 +7,10 @@ from unittest.mock import MagicMock
 from mapflow.functional.service import processing_service as ps_mod
 from mapflow.functional.service.processing_service import ProcessingService
 from mapflow.config import Config, ConfigColumns
+from mapflow.functional.controller.template_controller import TemplateController
 from mapflow.functional.service.search_service import SearchService
+from mapflow.functional.service.template_service import TemplateService
 from mapflow.functional.view.search_view import SearchView
-from mapflow.mapflow import Mapflow
 
 
 def _search_service():
@@ -77,32 +78,41 @@ def test_template_error_text_falls_back_to_unknown_on_bad_body():
     assert service._template_error_text(response) == "Unknown server error"
 
 
+def _template_service(page_offset=0, page_limit=30):
+    search_service = _search_service()
+    search_service.page_offset = page_offset
+    search_service.page_limit = page_limit
+    return TemplateService(app_context=SimpleNamespace(open_template_results_id="x",
+                                                       search_result_geojson={},
+                                                       search_baseline_filters={}),
+                           processing_service=MagicMock(),
+                           search_service=search_service)
+
+
 def test_on_template_closed_resets_search_pagination():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.app_context = SimpleNamespace(open_template_results_id="x")
-    plugin._template_search_aoi_filter = "aoi-1"
-    plugin.dlg = MagicMock()
-    plugin.search_view = SearchView(dlg=plugin.dlg, config=MagicMock())
-    plugin.search_service = _search_service()
-    plugin.search_service.page_offset = 60
-    plugin.aoi_service = MagicMock()
+    service = _template_service(page_offset=60)
+    service.search_aoi_filter = "aoi-1"
+    dlg = MagicMock()
+    controller = TemplateController.__new__(TemplateController)
+    controller.template_service = service
+    controller.template_view = MagicMock()
+    controller.search_view = SearchView(dlg=dlg, config=MagicMock())
+    controller.aoi_service = MagicMock()
 
-    plugin.on_template_closed(None)
+    controller.on_template_closed(None)
 
-    assert plugin.search_service.page_offset == 0
-    plugin.dlg.enable_search_pages.assert_called_once_with(False)
+    assert service.search_service.page_offset == 0
+    assert service.search_aoi_filter is None
+    assert service.app_context.open_template_results_id is None
+    dlg.enable_search_pages.assert_called_once_with(False)
 
 
-def test_load_template_search_starts_from_first_page():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.dlg = MagicMock()
-    plugin.search_service = _search_service()
-    plugin.search_service.page_offset = 30
-    plugin.search_service.page_limit = 30
-    plugin.processing_service = MagicMock()
-    plugin._aoi_ids_from_template = MagicMock(return_value=[])
+def test_load_search_starts_from_first_page():
+    service = _template_service(page_offset=30, page_limit=30)
+    service._aoi_ids_from_template = MagicMock(return_value=[])
 
-    plugin._load_template_search(SimpleNamespace(id="t-1"))
+    service.load_search(SimpleNamespace(id="t-1"))
 
-    assert plugin.search_service.page_offset == 0
-    assert plugin.processing_service.api.get_template_images.call_args.kwargs["offset"] == 0
+    assert service.search_service.page_offset == 0
+    kwargs = service.processing_service.api.get_template_images.call_args.kwargs
+    assert kwargs["offset"] == 0

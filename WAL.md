@@ -48,13 +48,13 @@ exclude + plan-search gating; the seen-markers cluster; the template map layers 
 layer-related navigation slots. `TemplateService` reads navigation state from `processing_service`
 for now (service→service); ownership moves in MR-2.
 
-[ ] Templates search render + filter + params-to-UI (Area B/C of layers+navigation)
-Remaining `mapflow.py` template half: `_load_template_search(_page)`, `show_template_search_results`,
-`get_selected_template_callback`, `_store_template_search_footprints`, `_aoi_ids_from_template`,
-`_template_single_data_provider`, `_template_filter_baseline`, `apply_search_params_to_ui`, and
-`filter_search_by_selected_aoi` (reads `processing_service.selected_aois()` and calls
-`_load_template_search`, both template). Needs the service→widget view split for the metadata table
-and the search filter widgets.
+[ready-for-review] Templates search render + filter + params-to-UI (Area B/C of layers+navigation)
+The template's search request, its result rendering and footprints layer, the selected-AOI scoping
+and the "template searchParams → filter widgets" mirroring leave `mapflow.py`: the requests and the
+result state to `TemplateService` (reaching `SearchService` for the page size, sort and pager), the
+widget writes to `SearchView`/`TemplateView`, the slots to `TemplateController` — which now owns
+`templateOpened`/`templateClosed` outright. The template footprints builder moved as-is; unifying it
+with `SearchService.display_metadata_geojson_layer` is deferred to the MR-2 item below.
 
 [ ] Extract templates MR-2 → carve the template half out of `processing_service`
 Move `enter/exit/refresh_template_view`, `pause/resume/restart/delete_template`, `update_template`,
@@ -68,6 +68,14 @@ only `mapflow.py` called it. What remains is the shared read-only lookup: `AoiSe
 the built layer and let `TemplateService` place it in the tree (where a layer sits is a template
 concern). The find/ensure split (preview step) already removed the side-effect hazard; this removes
 the question.
+Same item, same reason (user's call when the search render moved): **there are two footprint-layer
+builders** — `TemplateService.store_search_footprints` and
+`SearchService.display_metadata_geojson_layer`. They differ only in where the layer is placed
+(template group vs. beside the AOI layer), how a failed save is reported, and how selection-sync is
+wired. `spec/007_architecture.md` gives "the footprints layer" to `SearchService`, so the merge is
+one shared builder that hands the layer back for placement. Kept out of the search-render MR
+deliberately: unifying them touches the working regular-search path, which is a behaviour risk that
+deserves its own review rather than riding along with the extraction.
 
 [ ] Extract processing lifecycle: options, start, review, rating → existing processing service/controller
 [ ] Split auth from account status → `SessionService` + `AccountService`

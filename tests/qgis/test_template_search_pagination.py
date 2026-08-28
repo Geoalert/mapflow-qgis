@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 
 from mapflow.config import Config, ConfigColumns
 from mapflow.functional.service.search_service import SearchService
+from mapflow.functional.service.template_service import TemplateService
 from mapflow.functional.view.search_view import SearchView
 from mapflow.mapflow import Mapflow
 
@@ -30,7 +31,6 @@ def _plugin(in_template_mode=True):
     plugin.dlg = MagicMock()
     plugin.search_view = SearchView(dlg=plugin.dlg, config=MagicMock())
     plugin.search_service = _service()
-    plugin._template_search_aoi_filter = None
     plugin.processing_service = SimpleNamespace(in_template_mode=in_template_mode, active_template=None)
     return plugin
 
@@ -88,61 +88,69 @@ def test_pager_hidden_when_results_exactly_fill_one_page():
     plugin.dlg.enable_search_pages.assert_called_once_with(False)
 
 
+# Which endpoint serves the page depends on where the results came from. That branch stays in
+# `mapflow.py` until the regular search moves too, so it is still asserted on the plugin — but the
+# template half now goes through `TemplateController`.
+
 def test_next_page_in_template_mode_refetches_template_page():
     plugin = _plugin(in_template_mode=True)
-    plugin._load_template_search_page = MagicMock()
+    plugin.template_controller = MagicMock()
     plugin.get_metadata = MagicMock()
     plugin.search_service.page_offset = 0
 
     plugin.show_search_next_page()
 
-    plugin._load_template_search_page.assert_called_once_with(5)
+    plugin.template_controller.load_search_page.assert_called_once_with(5)
     plugin.get_metadata.assert_not_called()
 
 
 def test_prev_page_in_template_mode_refetches_template_page():
     plugin = _plugin(in_template_mode=True)
-    plugin._load_template_search_page = MagicMock()
+    plugin.template_controller = MagicMock()
     plugin.get_metadata = MagicMock()
     plugin.search_service.page_offset = 10
 
     plugin.show_search_previous_page()
 
-    plugin._load_template_search_page.assert_called_once_with(5)
+    plugin.template_controller.load_search_page.assert_called_once_with(5)
 
 
 def test_next_page_outside_template_mode_uses_regular_search():
     plugin = _plugin(in_template_mode=False)
-    plugin._load_template_search_page = MagicMock()
+    plugin.template_controller = MagicMock()
     plugin.get_metadata = MagicMock()
     plugin.search_service.page_offset = 5
 
     plugin.show_search_next_page()
 
     plugin.get_metadata.assert_called_once_with(offset=10)
-    plugin._load_template_search_page.assert_not_called()
+    plugin.template_controller.load_search_page.assert_not_called()
 
 
-def test_load_template_search_page_preserves_aoi_filter_and_offset():
-    plugin = _plugin(in_template_mode=True)
-    template = SimpleNamespace(id="tpl-1")
-    plugin.processing_service.active_template = template
-    plugin._template_search_aoi_filter = frozenset({"a1", "a2"})
-    plugin._load_template_search = MagicMock()
+def _template_service(active_template=None, aoi_filter=None):
+    service = TemplateService(
+        app_context=MagicMock(),
+        processing_service=SimpleNamespace(active_template=active_template))
+    service.search_aoi_filter = aoi_filter
+    service.load_search = MagicMock()
+    return service
 
-    plugin._load_template_search_page(offset=10)
 
-    plugin._load_template_search.assert_called_once()
-    _, kwargs = plugin._load_template_search.call_args
+def test_load_search_page_preserves_aoi_filter_and_offset():
+    service = _template_service(active_template=SimpleNamespace(id="tpl-1"),
+                                aoi_filter=frozenset({"a1", "a2"}))
+
+    service.load_search_page(offset=10)
+
+    service.load_search.assert_called_once()
+    _, kwargs = service.load_search.call_args
     assert set(kwargs["aoi_ids"]) == {"a1", "a2"}
     assert kwargs["offset"] == 10
 
 
-def test_load_template_search_page_noop_without_active_template():
-    plugin = _plugin(in_template_mode=True)
-    plugin.processing_service.active_template = None
-    plugin._load_template_search = MagicMock()
+def test_load_search_page_noop_without_active_template():
+    service = _template_service(active_template=None)
 
-    plugin._load_template_search_page(offset=5)
+    service.load_search_page(offset=5)
 
-    plugin._load_template_search.assert_not_called()
+    service.load_search.assert_not_called()
