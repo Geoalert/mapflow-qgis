@@ -31,6 +31,12 @@ class TemplateView(QObject):
         """The 'Search / Plan search' button — disabled while a create request is in flight."""
         self.dlg.getMetadata.setEnabled(enabled)
 
+    def set_update_template_visible(self, visible: bool) -> None:
+        """The 'Update template' button. It sits on the search tab but is the template's own
+        control — saving the current filters into the open template only means anything while one
+        is open, so it is shown on enter and hidden on leave."""
+        self.dlg.updateTemplateSearch.setVisible(visible)
+
     def show_project_required(self, message: str) -> None:
         self.dlg.processingProblemsLabel.setPalette(self.dlg.alert_palette)
         self.dlg.processingProblemsLabel.setText(message)

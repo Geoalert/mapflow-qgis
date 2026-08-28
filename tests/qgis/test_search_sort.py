@@ -47,7 +47,7 @@ def _plugin(sort_by="ACQUISITION_DATE", sort_order="DESC", in_template=False, ro
     plugin.dlg.metadataTable.rowCount.return_value = rows
     plugin._update_search_sort_indicator = MagicMock()
     plugin.get_metadata = MagicMock()
-    plugin._load_template_search_page = MagicMock()
+    plugin.template_controller = MagicMock()
     return plugin
 
 
@@ -97,7 +97,7 @@ def test_template_mode_reloads_template_search_with_new_sort():
 
     # Template results re-fetch (first page) with the updated sort; the regular search is untouched.
     assert plugin.search_service.sort_by == "CLOUD_COVER"
-    plugin._load_template_search_page.assert_called_once_with(0)
+    plugin.template_controller.load_search_page.assert_called_once_with(0)
     plugin.get_metadata.assert_not_called()
 
 
@@ -107,7 +107,7 @@ def test_regular_mode_does_not_reload_template():
     plugin.on_metadata_header_clicked(_column("cloudCover"))
 
     plugin.get_metadata.assert_called_once()
-    plugin._load_template_search_page.assert_not_called()
+    plugin.template_controller.load_search_page.assert_not_called()
 
 
 def test_no_results_yet_does_not_search():

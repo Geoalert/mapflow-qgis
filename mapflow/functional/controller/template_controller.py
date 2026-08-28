@@ -10,13 +10,14 @@ from ..view.template_view import TemplateView
 
 
 class TemplateController(QObject):
-    """Planned-processing (template) create / update-search-params / exclude-from-search.
+    """Planned processings: create / update-search-params / exclude-from-search, the in-template
+    navigation, and the template's imagery-search results.
 
     MR-1 of the templates extraction: the operations that were tangled into `mapflow.py`. It is
     the one place that sees both the template/search views and `TemplateService`, so it assembles
     the request inputs from the widgets (name, the `SearchParams` schema, the AOI
-    FeatureCollection) and drives the view from the service's signals. The in-template navigation
-    and lifecycle still live in `ProcessingService`; MR-2 brings them here.
+    FeatureCollection) and drives the view from the service's signals. The template lifecycle
+    (enter/exit, navigation state) still lives in `ProcessingService`; MR-2 brings it here.
     """
 
     def __init__(self,
@@ -32,7 +33,9 @@ class TemplateController(QObject):
                  update_search_button,
                  exclude_action,
                  processings_table,
-                 see_processings_action):
+                 see_processings_action,
+                 see_search_results_action,
+                 selection_sync):
         super().__init__()
         self.template_service = template_service
         self.template_view = template_view
@@ -45,6 +48,10 @@ class TemplateController(QObject):
         self.processing_service = processing_service
         self.app_context = app_context
         self.iface = iface
+        #: Wires a rebuilt footprints layer's selection to the results table. Still owned by
+        #: `mapflow.py` (it serves the regular search too), so it arrives as a callable — the
+        #: same indirection `provider_service.selection_sync_callback` already uses.
+        self.selection_sync = selection_sync
 
         update_search_button.clicked.connect(self.update_template_search_params)
         exclude_action.triggered.connect(self.template_service.exclude_processing_from_search)
@@ -55,14 +62,14 @@ class TemplateController(QObject):
         # effects that only apply while a template is open. The processings table itself is the
         # ProjectProcessingController's region; these listeners react to it for template concerns.
         see_processings_action.triggered.connect(self.select_template_processings)
+        see_search_results_action.triggered.connect(self.show_template_search_results)
         processings_table.itemSelectionChanged.connect(self.sync_processing_area_to_selected_aois)
+        processings_table.itemSelectionChanged.connect(self.filter_search_by_selected_aoi)
         processings_table.cellClicked.connect(self.on_no_aoi_processing_clicked)
         processing_service.templateAoisChanged.connect(self.on_template_aois_changed)
         processing_service.templateProcessingsLoaded.connect(self.on_template_processings_loaded)
-        # The layer side of entering/leaving a template. A second listener on these signals — the
-        # search/filter side stays in mapflow.py — so neither edits the other (spec § Controllers).
-        processing_service.templateOpened.connect(self._on_template_opened_layers)
-        processing_service.templateClosed.connect(self._on_template_closed_layers)
+        processing_service.templateOpened.connect(self.on_template_opened)
+        processing_service.templateClosed.connect(self.on_template_closed)
 
         self.template_service.creationBusy.connect(
             lambda busy: self.template_view.set_search_enabled(not busy))
@@ -73,6 +80,9 @@ class TemplateController(QObject):
             self.template_view.refresh_template_status_cell)
         self.template_service.warningMessage.connect(
             lambda message: self.iface.messageBar().pushWarning(self.app_context.plugin_name, message))
+        self.template_service.searchResultsReady.connect(self.show_search_results)
+        self.template_service.searchResultsEmpty.connect(self.search_view.clear_table)
+        self.template_service.metadataLayerReady.connect(self.bind_metadata_layer_selection)
 
     def create_search_template(self, name_override: str = None) -> None:
         """Assemble the request from the widgets and hand it to the service. Called by the
@@ -193,12 +203,71 @@ class TemplateController(QObject):
             self.processing_service.selected_aois(),
             self.template_service.find_template_group(str(template.name)) if template else None)
 
-    def _on_template_opened_layers(self, template) -> None:
-        """Layer side of entering a template: draw its AOI/processing layers. The search results
-        and filter widgets are handled by mapflow.py's own `templateOpened` listener."""
+    def on_template_opened(self, template) -> None:
+        """Entering a template: draw its AOI/processing layers, mirror its stored search params
+        into the filter widgets, and load its search results."""
         self.template_service.load_template_layers(template)
+        # Drop the previous view's results/baseline first, so the widget updates below (which
+        # fire the local filter) don't briefly compare against a stale baseline. The template's
+        # own results + baseline are set when its search response arrives.
+        self.template_service.clear_search_state()
+        # "Update template" (save the current filters into the template) only makes sense while
+        # viewing a template. The widen (!) indicator manages its own visibility. Template
+        # results are filtered client-side now (no server-side Filter button).
+        self.template_view.set_update_template_visible(True)
+        self.search_view.apply_search_params(getattr(template, "searchParams", None))
+        self.template_service.load_search(template)
 
-    def _on_template_closed_layers(self, template) -> None:
-        """Layer side of leaving a template: drop its map group."""
+    def on_template_closed(self, template) -> None:
+        """Leaving a template: drop its map group, its results and the view state they drove."""
         if template is not None:
             self.template_service.remove_template_group(str(template.name))
+        self.template_service.clear_search_state()
+        self.search_view.set_widen_warning_visible(False)
+        self.template_view.set_update_template_visible(False)
+        # Drop the AOI-selection processing Area so it doesn't leak to the project view.
+        self.aoi_service.clear_processing_area_selection()
+        self.search_view.clear_table()
+        self.search_view.hide_pages()
+
+    # ---------- the template's search results ----------
+
+    def show_template_search_results(self, *args) -> None:
+        """Menu action: fill the imagery-search table with the selected template's results.
+
+        The explicit action is the only path that brings the search tab to front — entering a
+        template or filtering by AOI must not steal focus from the processings tab.
+        """
+        template = self.processing_service.selected_template()
+        if not template or self.processing_service.selected_processing():
+            return
+        self.search_view.switch_to_search_tab()
+        self.template_service.load_search(template)
+
+    def load_search_page(self, offset: int) -> None:
+        """The pager and a header re-sort inside a template. Public because `mapflow.py` still
+        owns the branch that picks between a regular and a template search."""
+        self.template_service.load_search_page(offset)
+
+    def filter_search_by_selected_aoi(self, *args) -> None:
+        """S7: selecting AOI rows scopes the search results to them. No-op outside a template;
+        the service ignores a selection that does not change the effective filter."""
+        if not self.processing_service.in_template_mode:
+            return
+        self.template_service.filter_search_by_selected_aois()
+
+    def show_search_results(self, geoms) -> None:
+        """Render a page of template results: fill the table, then re-draw the new-image markers
+        the fill dropped."""
+        # Built-in Qt column sorting stays OFF: search order is server-driven (regular search) or
+        # local-filter-driven (templates); only SEARCH_SORT_FIELDS headers re-sort, server-side.
+        # Filling the table emits `metadataTableFilled`, which is what runs the local filter —
+        # do not call it here as well, or every page would be filtered twice.
+        self.search_view.fill_table(geoms, sort=False)
+        # New images are flagged with an icon in the leftmost column (not by editing text).
+        self.apply_new_image_markers()
+
+    def bind_metadata_layer_selection(self, layer) -> None:
+        """Selecting a footprint on the map selects the matching table row (and triggers preview)."""
+        self.app_context.meta_layer_table_connection = layer.selectionChanged.connect(
+            self.selection_sync)

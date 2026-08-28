@@ -39,9 +39,7 @@ from .functional.controller.template_controller import TemplateController
 from .functional.service.template_service import TemplateService
 from .functional.view.template_view import TemplateView
 from .functional.service.aoi_service import AoiService
-from .functional.service.local_filter_service import (FilterCriteria,
-                                                      LocalFilterService,
-                                                      utc_date_from_iso)
+from .functional.service.local_filter_service import FilterCriteria, LocalFilterService
 from .functional.service.preview_service import PreviewService
 from .functional.service.search_service import SearchService
 from .functional.view.aoi_view import AoiView
@@ -58,14 +56,12 @@ from .http import (Http,
                    get_error_report_body)
 # Schema
 from .schema import (BillingType,
-                     ImageCatalogResponseSchema,
                      ImagerySearchParams,
                      MyImageryParams,
                      ProviderReturnSchema,
                      UserDefinedParams)
 from .schema.catalog import ProductType
 from .schema.project import MapflowProject, UserRole
-from .schema.template import SearchParams
 from .schema.workflow_def import WorkflowDef
 # Dialogs
 from .dialogs import (ErrorMessageWidget,
@@ -89,9 +85,6 @@ logger = logging.getLogger(__name__)
 class Mapflow(QObject):
     """This class represents the plugin. It is instantiated by QGIS."""
 
-    # The AOI id the in-template search results are currently filtered by (None = all).
-    # Class-level default so the check is safe before on_template_opened sets it.
-    _template_search_aoi_filter = None
     # Guards against the ``metadataTableFilled`` -> ``apply_local_filter`` -> ``fill_metadata_table``
     # -> ``metadataTableFilled`` re-entrancy: the local filter re-fills the table itself, so the
     # nested fill must not trigger another filter pass.
@@ -340,7 +333,8 @@ class Mapflow(QObject):
                                                 processing_service=self.processing_service,
                                                 plugin_dir=self.plugin_dir,
                                                 aoi_service=self.aoi_service,
-                                                result_loader=self.result_loader)
+                                                result_loader=self.result_loader,
+                                                search_service=self.search_service)
         self.template_view = TemplateView(dlg=self.dlg, iface=self.iface, config=self.config)
         self.template_controller = TemplateController(
             template_service=self.template_service,
@@ -355,7 +349,9 @@ class Mapflow(QObject):
             update_search_button=self.dlg.updateTemplateSearch,
             exclude_action=self.dlg.exclude_from_search_action,
             processings_table=self.dlg.processingsTable,
-            see_processings_action=self.dlg.see_processings_action)
+            see_processings_action=self.dlg.see_processings_action,
+            see_search_results_action=self.dlg.see_search_results_action,
+            selection_sync=self.sync_layer_selection_with_table)
 
         self.setup_add_layer_menu()
         # Add options menu functionality
@@ -413,11 +409,8 @@ class Mapflow(QObject):
         self.dlg.processingsTable.cellDoubleClicked.connect(self.load_results)
         self.dlg.deleteProcessings.clicked.connect(self.processing_service.confirm_delete_processings)
         self.processing_service.connect_processings_pagination()
-        # In-template navigation: the search/filter side of entering or leaving a template. The
-        # map-layer side (aoiDetails redraw, 'No AOI' group, selected-AOI Area) is TemplateController's.
-        self.processing_service.templateOpened.connect(self.on_template_opened)
-        self.processing_service.templateClosed.connect(self.on_template_closed)
-        self.dlg.processingsTable.itemSelectionChanged.connect(self.filter_search_by_selected_aoi)
+        # Entering and leaving a template is TemplateController's entirely — it owns the layers,
+        # the search results and the view state they drive.
         # Processings ratings
         self.dlg.processingsTable.itemSelectionChanged.connect(self.enable_feedback)
         self.dlg.processingsTable.itemSelectionChanged.connect(self.on_processings_selection_changed)
@@ -564,7 +557,6 @@ class Mapflow(QObject):
         self.dlg.save_result_action.triggered.connect(self.download_results_file)
         self.dlg.download_aoi_action.triggered.connect(self.download_aoi_file)
         self.dlg.see_details_action.triggered.connect(self.show_selected_details)
-        self.dlg.see_search_results_action.triggered.connect(self.show_template_search_results)
         self.dlg.processing_update_action.triggered.connect(self.processing_service.update_processing)
         self.dlg.processing_restart_action.triggered.connect(self.processing_service.restart_processing)
         self.dlg.processing_duplicate_action.triggered.connect(self.check_dir_and_duplicate_processing)
@@ -717,188 +709,6 @@ class Mapflow(QObject):
         if self.dlg.processingProblemsLabel.text() == planned_reason:
             self.dlg.processingProblemsLabel.clear()
 
-    def _template_single_data_provider(self, template) -> Optional[str]:
-        """The template's sole search data provider, used to backfill an image's providerName
-        when the backend returns it null. ``None`` when the template searches zero or several
-        providers (then we cannot attribute an image to one)."""
-        if not template:
-            return None
-        search_params = getattr(template, "searchParams", None)
-        if isinstance(search_params, SearchParams):
-            providers = search_params.dataProviders
-        elif isinstance(search_params, dict):
-            providers = search_params.get("dataProviders")
-        else:
-            providers = None
-        providers = [p for p in (providers or []) if p]
-        return providers[0] if len(providers) == 1 else None
-
-    def get_selected_template_callback(self, response: QNetworkReply, template=None):
-        """Render a template's search results in the search table.
-
-        ``template`` is passed explicitly because inside the in-template view the table
-        selection points at AOIs/processings, not the template row.
-        """
-        response_json = json.loads(response.readAll().data())
-        if not response_json.get("images"):
-            self.dlg.metadataTable.clearContents()
-            self.dlg.metadataTable.setRowCount(0)
-            self.app_context.open_template_results_id = None
-            self.alert(self.tr("No images was found"), QMessageBox.Information)
-            return
-        if template is None:
-            template = self.processing_service.selected_template()
-        template_group_name = str(template.name) if template else None
-        # Mark these results as belonging to this template, so a "Start" runs a planned processing.
-        self.app_context.open_template_results_id = str(template.id) if template else None
-        response_data = ImageCatalogResponseSchema(**response_json)
-        images = response_data.images
-        geoms = response_data.as_geojson()
-        # Template search images may omit per-image providerName; without it a planned
-        # processing (and its cost) cannot resolve `dataProvider` and the backend rejects the
-        # request. Backfill from the template's own searchParams.dataProviders when it searches
-        # a single provider (multi-provider templates rely on the backend providing it).
-        template_provider = self._template_single_data_provider(template)
-        for position, feature in enumerate(geoms.get("features", ())):
-            props = feature.setdefault("properties", {})
-            props["local_index"] = position
-            if not props.get("providerName") and template_provider:
-                props["providerName"] = template_provider
-        # Footprints must keep the real providerName/productType so that a planned
-        # processing started from these results can resolve its source params (dataProvider).
-        self._store_template_search_footprints(geoms, template_group_name=template_group_name)
-        # Retain the raw results (for the instant local filter) and the template's own params as
-        # the widen (!) baseline; template results are filtered client-side, not server-side.
-        self.app_context.search_result_geojson = geoms
-        self.app_context.search_baseline_filters = self._template_filter_baseline(template)
-        # Built-in Qt column sorting stays OFF: search order is server-driven (regular search) or
-        # local-filter-driven (templates); only SEARCH_SORT_FIELDS headers re-sort, server-side.
-        self.dlg.fill_metadata_table(geoms, sort=False)
-        # Keep the image DTOs (they carry isNew) keyed by id so mark-seen reads truth.
-        self.template_service.store_template_images(images)
-        # New images are flagged with an icon in the leftmost column (not by editing text).
-        self.template_controller.apply_new_image_markers()
-        # Toggle/wire the search pager for the template results (T6).
-        self.search_service.update_pager(response_data.total, response_data.limit, response_data.offset)
-
-    def _store_template_search_footprints(self,
-                                          geoms: dict,
-                                          template_group_name: Optional[str] = None) -> None:
-        """Build the template search-results footprint layer.
-
-        Two responsibilities, mirroring a regular imagery search:
-        * populate ``app_context.search_footprints`` (QgsFeatures keyed by ``local_index``)
-          so a planned processing started from these results resolves its source params
-          (``dataProvider`` comes from the footprint ``providerName``; otherwise the
-          backend rejects creation with HTTP 400);
-        * add the styled footprint layer to the map under the template's group so the
-          user can preview image footprints and request imagery previews.
-        """
-        self.app_context.search_footprints = {}
-        provider = self.search_service.imagery_search_provider
-        if not provider:
-            return
-        filename = provider.save_search_layer(self.app_context.temp_dir, geoms)
-        if not filename:
-            return
-        # Drop the previous footprint layer so repeated searches don't stack duplicates.
-        if getattr(self.app_context, 'metadata_layer', None) is not None:
-            try:
-                self.app_context.project.removeMapLayer(self.app_context.metadata_layer)
-            except (AttributeError, RuntimeError):
-                pass
-        layer = QgsVectorLayer(filename, f"{provider.name} metadata", "ogr")
-        if not layer.isValid():
-            self.app_context.metadata_layer = None
-            return
-        layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
-        # Register as the current search-metadata layer BEFORE adding it to the project, so
-        # the AOI-area monitor (which reacts to layersAdded) recognizes and skips it.
-        self.app_context.metadata_layer = layer
-        if template_group_name:
-            target_group = self.template_service.ensure_template_group(template_group_name)
-            self.app_context.project.addMapLayer(layer, addToLegend=False)
-            # Append (bottom) so the search-results footprints sit below the AOI/processing
-            # subgroups rather than on top of them.
-            target_group.addLayer(layer)
-        else:
-            self.result_loader.add_layer(layer=layer)
-        # Selecting a footprint on the map selects the matching table row (and triggers preview).
-        self.app_context.meta_layer_table_connection = layer.selectionChanged.connect(
-            self.sync_layer_selection_with_table)
-        self.app_context.search_footprints = {
-            feature["local_index"]: feature for feature in layer.getFeatures()
-        }
-
-    def _aoi_ids_from_template(self, template) -> List[str]:
-        """Extract AOI IDs from template searchParams.aoiDetails features."""
-        search_params = template.searchParams or {}
-        if isinstance(search_params, dict):
-            aoi_details = search_params.get("aoiDetails", {})
-        else:
-            aoi_details = search_params.aoiDetails
-
-        if not aoi_details:
-            return []
-
-        ids = []
-        for feature in aoi_details.get("features", []):
-            aoi_id = feature.get("id") or feature.get("properties", {}).get("id")
-            if aoi_id:
-                ids.append(str(aoi_id))
-        return ids
-
-    def show_template_search_results(self):
-        """Menu action: fill the imagery-search table with the selected template's results."""
-        template = self.processing_service.selected_template()
-        if not template or self.processing_service.selected_processing():
-            return
-        # Explicit "See search results" action: bring the imagery-search tab to front.
-        self._load_template_search(template, switch_tab=True)
-
-    def _load_template_search(self, template, aoi_ids=None, switch_tab=False, offset=0):
-        """Fill the imagery-search table with the template's search results.
-
-        ``aoi_ids`` restricts the results to specific AOIs (S7: filter by selected AOI);
-        when ``None`` all of the template's AOIs are used. ``switch_tab`` brings the
-        imagery-search tab to front — only the explicit menu action does so; entering a
-        template or filtering by AOI must not steal focus from the processings tab.
-        ``offset`` selects the results page: entering a template or changing the AOI filter
-        resets to the first page (offset 0); the search pager passes a page offset (T6).
-        """
-        if not template:
-            return
-        if switch_tab:
-            imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
-            if imagery_search_tab:
-                self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
-
-        self.search_service.page_offset = max(0, offset)
-        if aoi_ids is None:
-            aoi_ids = self._aoi_ids_from_template(template)
-        # Template results are fetched WITHOUT date/cloud server-side filters: those (and the
-        # intersection %) are applied instantly on the client (apply_local_filter). Persisting
-        # them to the template is done separately via the "Update template" button. Only the
-        # selected-AOI scoping (aoi_ids) stays server-side (it decides which AOIs to search).
-        self.processing_service.api.get_template_images(
-            template_id=template.id,
-            callback=lambda response: self.get_selected_template_callback(response, template),
-            limit=self.search_service.page_limit,
-            offset=self.search_service.page_offset,
-            aoi_ids=aoi_ids or None,
-            sort_by=self.search_service.sort_by,
-            sort_order=self.search_service.sort_order,
-        )
-
-    def _load_template_search_page(self, offset: int):
-        """Re-fetch the active template's search results at ``offset``, preserving the current
-        AOI filter — the search pager's next/prev inside a template (T6)."""
-        template = self.processing_service.active_template
-        if not template:
-            return
-        aoi_ids = list(self._template_search_aoi_filter) if self._template_search_aoi_filter else None
-        self._load_template_search(template, aoi_ids=aoi_ids, offset=offset)
-
     # ==================== AOI edit/draw/add sessions ==================== #
     def add_aoi_from_layer_dialog(self):
         """Add AOI(s) from existing polygon layer(s) chosen in a multi-select dialog."""
@@ -913,26 +723,6 @@ class Mapflow(QObject):
         if not selected_ids:
             return
         self.aoi_service.add_aois_from_layers(selected_ids)
-
-    def filter_search_by_selected_aoi(self):
-        """S7: inside a template, selecting one or more AOIs filters the imagery-search
-        results (table and footprint layer) to images intersecting any of the selected AOIs;
-        de-selecting all AOIs (or selecting a processing) restores all of the template's
-        results."""
-        if not self.processing_service.in_template_mode:
-            return
-        template = self.processing_service.active_template
-        if not template:
-            return
-        selected_ids = frozenset(
-            str(aoi.id) for aoi in self.processing_service.selected_aois() if aoi and aoi.id
-        )
-        # Only reload when the effective filter actually changes (selection fires often).
-        current = self._template_search_aoi_filter or frozenset()
-        if selected_ids == current:
-            return
-        self._template_search_aoi_filter = selected_ids or None
-        self._load_template_search(template, aoi_ids=list(selected_ids) or None)
 
     def select_processing_in_table(self, processing_id: str):
         """Select processing row by ID and open processing details."""
@@ -1193,27 +983,6 @@ class Mapflow(QObject):
             "hide_unavailable": self.dlg.hideUnavailableResults.isChecked(),
         }
 
-    def _template_filter_baseline(self, template) -> Optional[dict]:
-        """Baseline (widen indicator + Reset filters) from a template's stored searchParams. A
-        field the template does not carry stays ``None`` so Reset leaves that widget untouched."""
-        sp = getattr(template, "searchParams", None)
-        if not sp:
-            return None
-        if isinstance(sp, dict):
-            sp = SearchParams.from_dict(sp)
-        return {
-            "date_from": utc_date_from_iso(sp.acquisitionDateFrom),
-            "date_to": utc_date_from_iso(sp.acquisitionDateTo),
-            "max_cloud_cover": sp.maxCloudCover,
-            "min_intersection": sp.minAoiIntersectionPercent,
-            "min_off_nadir": sp.minOffNadirAngle,
-            "max_off_nadir": sp.maxOffNadirAngle,
-            "product_types": ([str(pt).upper() for pt in sp.productTypes]
-                              if sp.productTypes is not None else None),
-            "data_providers": list(sp.dataProviders) if sp.dataProviders is not None else None,
-            "hide_unavailable": sp.hideUnavailable,
-        }
-
     def reset_filters(self):
         """Reset the filter widgets to the parameters the current results were fetched with — a
         regular search's request params, or the open template's search params. Only params that
@@ -1244,7 +1013,7 @@ class Mapflow(QObject):
             self.dlg.hideUnavailableResults.setChecked(bool(baseline["hide_unavailable"]))
         providers = baseline.get("data_providers")
         if providers is not None:
-            self._apply_search_providers_to_combo(providers)
+            self.search_view.apply_providers_to_combo(providers)
         # Re-filter once against the restored widgets (some setters above may not have changed a
         # value, so their change-signal would not have fired the filter).
         self.apply_local_filter()
@@ -1526,8 +1295,8 @@ class Mapflow(QObject):
         return provider_changed
 
     def replace_search_provider_index(self):
-        # The logic moved to SearchView; get_metadata and get_selected_template_callback still
-        # call this until they move to SearchController / TemplateController.
+        # The logic moved to SearchView; the regular-search paths still call this until they move
+        # to SearchController.
         self.search_view.ensure_search_provider(self.provider_service)
 
     def setup_metadata_search_dropdown(self):
@@ -1595,7 +1364,7 @@ class Mapflow(QObject):
         # Re-request the first page with the new sort — the template-images endpoint and
         # /catalog/meta take the same sort params, so both re-sort server-side.
         if self.processing_service.in_template_mode:
-            self._load_template_search_page(0)
+            self.template_controller.load_search_page(0)
         else:
             self.get_metadata()
 
@@ -2059,88 +1828,10 @@ class Mapflow(QObject):
         """Navigate into a template ('one step right').
 
         The actual hydration (the poll omits ``searchParams``) and state switch happen in
-        the service; map side-effects are handled by ``on_template_opened`` via signal.
+        the service; the layers, results and view state follow from ``templateOpened``, which
+        `TemplateController` listens to.
         """
         self.project_processing_controller.enter_template(template)
-
-    def on_template_opened(self, template):
-        """React to entering a template: fill the search results and mirror its params into the
-        filter widgets. The AOI/processing map layers are drawn by TemplateController's own
-        `templateOpened` listener."""
-        # Initial results are the whole template (no AOI filter applied yet).
-        self._template_search_aoi_filter = None
-        # Drop the previous view's results/baseline first, so the widget updates below (which
-        # fire the local filter) don't briefly compare against a stale baseline. The template's
-        # own results + baseline are set when its search response arrives.
-        self.app_context.search_result_geojson = None
-        self.app_context.search_baseline_filters = None
-        # "Update template" (save the current filters into the template) only makes sense while
-        # viewing a template. The widen (!) indicator manages its own visibility. Template
-        # results are filtered client-side now (no server-side Filter button).
-        self.dlg.updateTemplateSearch.setVisible(True)
-        self.apply_search_params_to_ui(getattr(template, "searchParams", None))
-        self._load_template_search(template)
-
-    def on_template_closed(self, template):
-        """React to leaving a template: clear the search table and view state. The template's map
-        group is dropped by TemplateController's own `templateClosed` listener."""
-        self.app_context.open_template_results_id = None
-        self._template_search_aoi_filter = None
-        self.app_context.search_result_geojson = None
-        self.app_context.search_baseline_filters = None
-        self.dlg.searchWidenWarning.setVisible(False)
-        self.dlg.updateTemplateSearch.setVisible(False)
-        # Drop the AOI-selection processing Area so it doesn't leak to the project view.
-        self.aoi_service.clear_processing_area_selection()
-        self.dlg.metadataTable.clearContents()
-        self.dlg.metadataTable.setRowCount(0)
-        # Clear the template search-results pagination so it is not preserved on re-open.
-        self.search_service.page_offset = 0
-        self.dlg.enable_search_pages(False)
-
-    def apply_search_params_to_ui(self, search_params):
-        """Populate the Imagery Search filters from a template's stored ``searchParams``
-        (web parity: the user can see what the template searches for). The widgets stay
-        editable — changing them affects the current search view only, never the template.
-        Fields the template does not carry leave the corresponding widgets untouched."""
-        if not search_params:
-            return
-        if isinstance(search_params, dict):
-            search_params = SearchParams.from_dict(search_params)
-
-        date_from = utc_date_from_iso(search_params.acquisitionDateFrom)
-        if date_from is not None:
-            self.dlg.metadataFrom.setDate(date_from)
-        date_to = utc_date_from_iso(search_params.acquisitionDateTo)
-        if date_to is not None:
-            self.dlg.metadataTo.setDate(date_to)
-        if search_params.maxCloudCover is not None:
-            self.dlg.maxCloudCover.setValue(int(round(search_params.maxCloudCover)))
-        if search_params.minAoiIntersectionPercent is not None:
-            self.dlg.minIntersection.setValue(int(round(search_params.minAoiIntersectionPercent)))
-        if search_params.minOffNadirAngle is not None and search_params.maxOffNadirAngle is not None:
-            self.dlg.set_off_nadir_range(int(round(search_params.minOffNadirAngle)),
-                                         int(round(search_params.maxOffNadirAngle)))
-        if search_params.hideUnavailable is not None:
-            self.dlg.hideUnavailableResults.setChecked(bool(search_params.hideUnavailable))
-        product_types = [str(pt).upper() for pt in (search_params.productTypes or [])]
-        if product_types:
-            self.dlg.searchMosaicCheckBox.setChecked(ProductType.mosaic.upper() in product_types)
-            self.dlg.searchImageCheckBox.setChecked(ProductType.image.upper() in product_types)
-        self._apply_search_providers_to_combo(search_params.dataProviders)
-
-    def _apply_search_providers_to_combo(self, data_providers: Optional[List[str]]):
-        """Mirror ``selected_search_providers``: check the combo items whose api-name is in
-        the template's ``dataProviders``; ``None``/empty means the template searched all
-        providers, shown as no checked items ("Show all")."""
-        combo = self.dlg.searchProvidersCombo
-        combo.deselectAllOptions()
-        if not data_providers:
-            return
-        wanted = set(data_providers)
-        for index in range(combo.count()):
-            if combo.itemData(index) in wanted:
-                combo.setItemCheckState(index, Qt.Checked)
 
     def load_results(self):
         # Check if it's a template first
@@ -2583,7 +2274,7 @@ class Mapflow(QObject):
         stays out of `SearchService` — it is coordination between two regions, and moves to
         `SearchController` / `TemplateController` rather than into either service."""
         if self.processing_service.in_template_mode:
-            self._load_template_search_page(offset)
+            self.template_controller.load_search_page(offset)
         else:
             self.get_metadata(offset=offset)
     

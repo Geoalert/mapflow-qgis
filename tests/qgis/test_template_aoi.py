@@ -3,9 +3,10 @@ the in-template table rows, AOI rename, and AOI-filtered search (spec 002_F)."""
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from mapflow.functional.controller.template_controller import TemplateController
 from mapflow.functional.service import processing_service as ps_mod
 from mapflow.functional.service.processing_service import ProcessingService
-from mapflow.mapflow import Mapflow
+from mapflow.functional.service.template_service import TemplateService
 from mapflow.schema.processing import ProcessingParams
 from mapflow.schema.template import (
     AOI_NAME_MAX_LENGTH,
@@ -18,15 +19,15 @@ from mapflow.schema.template import (
 
 def test_template_single_data_provider_backfill_source():
     """providerName backfill source: the template's sole search data provider, else None."""
-    plugin = Mapflow.__new__(Mapflow)
+    service = TemplateService(app_context=MagicMock(), processing_service=MagicMock())
     single = SimpleNamespace(searchParams=SearchParams(dataProviders=["arcgis_world_imagery"]))
-    assert plugin._template_single_data_provider(single) == "arcgis_world_imagery"
+    assert service._single_data_provider(single) == "arcgis_world_imagery"
     several = SimpleNamespace(searchParams=SearchParams(dataProviders=["a", "b"]))
-    assert plugin._template_single_data_provider(several) is None
+    assert service._single_data_provider(several) is None
     none = SimpleNamespace(searchParams=SearchParams(dataProviders=None))
-    assert plugin._template_single_data_provider(none) is None
+    assert service._single_data_provider(none) is None
     as_dict = SimpleNamespace(searchParams={"dataProviders": ["mapbox"]})
-    assert plugin._template_single_data_provider(as_dict) == "mapbox"
+    assert service._single_data_provider(as_dict) == "mapbox"
 
 
 def test_refresh_template_view_polls_only_processings():
@@ -231,52 +232,46 @@ def test_rename_aoi_rejects_overlong_name(monkeypatch):
     assert alerts  # user was warned
 
 
+def _filter_service(selected_aois, aoi_filter=None, template=SimpleNamespace(id="t-1")):
+    processing_service = MagicMock()
+    processing_service.in_template_mode = True
+    processing_service.active_template = template
+    processing_service.selected_aois.return_value = selected_aois
+    service = TemplateService(app_context=MagicMock(), processing_service=processing_service)
+    service.search_aoi_filter = aoi_filter
+    service.load_search = MagicMock()
+    return service
+
+
 def test_filter_search_by_selected_aoi_passes_selected_aoi_ids():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.processing_service = MagicMock()
-    plugin.processing_service.in_template_mode = True
-    plugin._template_search_aoi_filter = None
     template = SimpleNamespace(id="t-1")
-    plugin.processing_service.active_template = template
-    plugin.processing_service.selected_aois.return_value = [SimpleNamespace(id="aoi-1")]
-    plugin._load_template_search = MagicMock()
+    service = _filter_service([SimpleNamespace(id="aoi-1")], template=template)
 
-    plugin.filter_search_by_selected_aoi()
+    service.filter_search_by_selected_aois()
 
-    plugin._load_template_search.assert_called_once_with(template, aoi_ids=["aoi-1"])
-    assert plugin._template_search_aoi_filter == frozenset({"aoi-1"})
+    service.load_search.assert_called_once_with(template, aoi_ids=["aoi-1"])
+    assert service.search_aoi_filter == frozenset({"aoi-1"})
 
 
 def test_filter_search_resets_to_all_when_aoi_deselected():
     """De-selecting all AOIs (or selecting a processing) restores the full template results."""
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.processing_service = MagicMock()
-    plugin.processing_service.in_template_mode = True
     template = SimpleNamespace(id="t-1")
-    plugin.processing_service.active_template = template
-    plugin.processing_service.selected_aois.return_value = []
-    plugin._template_search_aoi_filter = frozenset({"aoi-1"})  # previously filtered by an AOI
-    plugin._load_template_search = MagicMock()
+    # Previously filtered by an AOI.
+    service = _filter_service([], aoi_filter=frozenset({"aoi-1"}), template=template)
 
-    plugin.filter_search_by_selected_aoi()
+    service.filter_search_by_selected_aois()
 
-    plugin._load_template_search.assert_called_once_with(template, aoi_ids=None)
-    assert plugin._template_search_aoi_filter is None
+    service.load_search.assert_called_once_with(template, aoi_ids=None)
+    assert service.search_aoi_filter is None
 
 
 def test_filter_search_noop_when_filter_unchanged():
     """Selection churn that doesn't change the effective AOI filter must not reload."""
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.processing_service = MagicMock()
-    plugin.processing_service.in_template_mode = True
-    plugin.processing_service.active_template = SimpleNamespace(id="t-1")
-    plugin.processing_service.selected_aois.return_value = []
-    plugin._template_search_aoi_filter = None  # already showing all results
-    plugin._load_template_search = MagicMock()
+    service = _filter_service([], aoi_filter=None)  # already showing all results
 
-    plugin.filter_search_by_selected_aoi()
+    service.filter_search_by_selected_aois()
 
-    plugin._load_template_search.assert_not_called()
+    service.load_search.assert_not_called()
 
 
 def test_aoi_status_aggregates_processing_statuses():
@@ -359,11 +354,11 @@ def test_template_to_run_none_when_open_results_belong_to_other_template():
 
 
 def test_filter_search_by_selected_aoi_noop_outside_template_mode():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.processing_service = MagicMock()
-    plugin.processing_service.in_template_mode = False
-    plugin._load_template_search = MagicMock()
+    """The in-template check stays with the caller: the service has no view of navigation."""
+    controller = TemplateController.__new__(TemplateController)
+    controller.template_service = MagicMock()
+    controller.processing_service = SimpleNamespace(in_template_mode=False)
 
-    plugin.filter_search_by_selected_aoi()
+    controller.filter_search_by_selected_aoi()
 
-    plugin._load_template_search.assert_not_called()
+    controller.template_service.filter_search_by_selected_aois.assert_not_called()

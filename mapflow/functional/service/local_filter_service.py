@@ -12,25 +12,10 @@ already-fetched result set, and the 'filter is wider than what was fetched' warn
 from dataclasses import dataclass
 from typing import Callable, List, Optional, Set
 
-from PyQt5.QtCore import QDate, QDateTime, QObject, Qt
+from PyQt5.QtCore import QDate, QObject
 
+from ..helpers import utc_date_from_iso
 from ...schema.catalog import ProductType
-
-
-def utc_date_from_iso(value: Optional[str]) -> Optional[QDate]:
-    """Parse an ISO-8601 timestamp (as stored in ``searchParams`` or a result's
-    ``acquisitionDate``) into a UTC QDate, or None when absent/unparseable.
-
-    A free function, not a method: the template baseline (`mapflow.py`, → TemplateService) needs
-    the same parse, and a pure date conversion is no reason for template code to depend on the
-    filter service.
-    """
-    if not value:
-        return None
-    parsed = QDateTime.fromString(value, Qt.ISODateWithMs)
-    if not parsed.isValid():
-        parsed = QDateTime.fromString(value, Qt.ISODate)
-    return parsed.toUTC().date() if parsed.isValid() else None
 
 
 @dataclass

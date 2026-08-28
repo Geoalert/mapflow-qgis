@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 from typing import Tuple, Union, Optional
 
-from PyQt5.QtCore import QUrl, QCoreApplication
+from PyQt5.QtCore import QDate, QDateTime, Qt, QUrl, QCoreApplication
 from PyQt5.QtGui import QDesktopServices
 from qgis.core import (
     QgsGeometry, QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
@@ -22,6 +22,23 @@ URL_PATTERN = r'https?://(www\.)?([-\w]{1,256}\.)+[a-zA-Z0-9]{1,6}'  # schema + 
 URL_REGEX = re.compile(URL_PATTERN)
 XYZ_REGEX = re.compile(URL_PATTERN + r'(.*\{[xyz]\}){3}.*', re.I)
 QUAD_KEY_REGEX = re.compile(URL_PATTERN + r'(.*\{q\}).*', re.I)
+
+
+def utc_date_from_iso(value: Optional[str]) -> Optional[QDate]:
+    """Parse an ISO-8601 timestamp (as stored in ``searchParams`` or a result's
+    ``acquisitionDate``) into a UTC QDate, or None when absent/unparseable.
+
+    Here rather than beside either caller because both the local filter (a service) and the
+    search tab's filter widgets (a view) need this same parse, and a view may not import a
+    service (`spec/007_architecture.md` § Layer rules). A pure date conversion with no plugin
+    state is what this module is for.
+    """
+    if not value:
+        return None
+    parsed = QDateTime.fromString(value, Qt.ISODateWithMs)
+    if not parsed.isValid():
+        parsed = QDateTime.fromString(value, Qt.ISODate)
+    return parsed.toUTC().date() if parsed.isValid() else None
 
 
 def to_wgs84(geometry: QgsGeometry, source_crs: QgsCoordinateReferenceSystem) -> QgsGeometry:
