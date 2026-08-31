@@ -43,18 +43,23 @@ plus the template half of `processing_service.py` — and ~50 references reach t
 state (`in_template_mode` 13×, `active_template` 16×) through `processing_service` from the other
 services. Split into two MRs so the high-blast-radius part is reviewable on its own.
 
-MR-1 (de-god `mapflow.py`) is being done as several small MRs. Landed: create/update-search-params/
-exclude + plan-search gating; the seen-markers cluster; the template map layers + their
-layer-related navigation slots. `TemplateService` reads navigation state from `processing_service`
-for now (service→service); ownership moves in MR-2.
+MR-1 (de-god `mapflow.py`) has landed as several small MRs: create/update-search-params/exclude +
+plan-search gating; the seen-markers cluster; the template map layers and their layer-related
+navigation slots; the search request, results, footprints, AOI scoping and params-to-widgets
+mirroring. `TemplateService` still reads navigation state from `processing_service`
+(service→service); ownership moves in MR-2, below.
 
-[ready-for-review] Templates search render + filter + params-to-UI (Area B/C of layers+navigation)
-The template's search request, its result rendering and footprints layer, the selected-AOI scoping
-and the "template searchParams → filter widgets" mirroring leave `mapflow.py`: the requests and the
-result state to `TemplateService` (reaching `SearchService` for the page size, sort and pager), the
-widget writes to `SearchView`/`TemplateView`, the slots to `TemplateController` — which now owns
-`templateOpened`/`templateClosed` outright. The template footprints builder moved as-is; unifying it
-with `SearchService.display_metadata_geojson_layer` is deferred to the MR-2 item below.
+What is still template-shaped in `mapflow.py` is there *because* it depends on the half MR-2 moves,
+so it comes out with it rather than needing its own step:
+* the processings-table **context menu** (~`mapflow.py:563-645`) — the rename/pause/resume/restart
+  actions and their `can_edit_template` / `is_failed` / `isActive` gating, all reading
+  `processing_service`;
+* the branches in shared paths — `load_results`/`_open_template`, `show_selected_details`,
+  `update_delete_button_state`, `add_aoi_from_layer_dialog`, the plan-mode branch of the Search
+  button, and the `in_template_mode` forks in `apply_local_filter`, the header sort and the pager.
+The forks in shared search paths are the ones to watch: they are coordination between two regions,
+so they belong in a controller, not inside either service (`SearchService` says as much in its own
+docstring).
 
 [ ] Extract templates MR-2 → carve the template half out of `processing_service`
 Move `enter/exit/refresh_template_view`, `pause/resume/restart/delete_template`, `update_template`,
