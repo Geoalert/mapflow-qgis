@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, call, patch
 
 from mapflow.functional.controller.template_controller import TemplateController
 from mapflow.functional.service import processing_service as processing_service_module
+from mapflow.functional.service import template_service as template_service_module
 from mapflow.functional.service.processing_service import ProcessingService
 from mapflow.functional.service.template_service import TemplateService
 from mapflow.functional.view.template_view import TemplateView
@@ -476,28 +477,29 @@ def test_disable_processing_start_uses_fallback_when_api_message_is_none():
     )
 
 
-def test_update_template_uses_update_template_api_with_renamed_name():
-    service = ProcessingService.__new__(ProcessingService)
-    service.tr = lambda text: text
-    service.dlg = MagicMock()
-    service.api = MagicMock()
-    service.get_processings = MagicMock()
-    service.view = MagicMock()
-
+def _rename_service(name="Old template"):
     template = SimpleNamespace(
         id="tpl-1",
-        name="Old template",
+        name=name,
         searchParams=SimpleNamespace(as_dict=lambda skip_none=True: {"limit": 100}),
         processingParams={"params": {"sourceParams": {}}},
         activeUntil=datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc),
     )
-    service.selected_template = MagicMock(return_value=template)
+    processing_service = SimpleNamespace(
+        selected_template=lambda: template, api=MagicMock(),
+        get_processings=MagicMock(), templates={})
+    return TemplateService(app_context=MagicMock(), processing_service=processing_service)
 
-    with patch.object(processing_service_module.QInputDialog, "getText", return_value=("New template", True)):
-        service.update_template()
 
-    service.api.update_template.assert_called_once()
-    kwargs = service.api.update_template.call_args.kwargs
+def test_rename_template_uses_update_template_api_with_renamed_name(monkeypatch):
+    service = _rename_service()
+    monkeypatch.setattr(template_service_module, "ask_text",
+                        lambda *a, **k: ("New template", True))
+
+    service.rename_template()
+
+    service.processing_service.api.update_template.assert_called_once()
+    kwargs = service.processing_service.api.update_template.call_args.kwargs
     assert kwargs["template_id"] == "tpl-1"
     assert kwargs["data"].name == "New template"
     assert kwargs["data"].searchParams is None
@@ -505,11 +507,190 @@ def test_update_template_uses_update_template_api_with_renamed_name():
     assert kwargs["data"].activeUntil is None
 
 
+def test_rename_template_asks_through_the_message_tier_not_a_dialog(monkeypatch):
+    """The service holds no widget, so the name is asked for through AlertService."""
+    service = _rename_service()
+    asked = []
+    monkeypatch.setattr(template_service_module, "ask_text",
+                        lambda *a, **k: (asked.append((a, k)), ("New", True))[1])
+
+    service.rename_template()
+
+    assert asked, "the new name must come from the message tier"
+    assert asked[0][1]["default"] == "Old template"  # pre-filled with the current name
+
+
+def test_rename_template_cancelled_sends_nothing(monkeypatch):
+    service = _rename_service()
+    monkeypatch.setattr(template_service_module, "ask_text", lambda *a, **k: ("Whatever", False))
+
+    service.rename_template()
+
+    service.processing_service.api.update_template.assert_not_called()
+
+
+def test_rename_template_rejects_a_blank_name(monkeypatch):
+    service = _rename_service()
+    monkeypatch.setattr(template_service_module, "ask_text", lambda *a, **k: ("   ", True))
+    warnings = []
+    monkeypatch.setattr(template_service_module, "alert_warning", warnings.append)
+
+    service.rename_template()
+
+    service.processing_service.api.update_template.assert_not_called()
+    assert warnings
+
+
+def test_rename_template_unchanged_name_sends_nothing(monkeypatch):
+    service = _rename_service()
+    monkeypatch.setattr(template_service_module, "ask_text", lambda *a, **k: ("Old template", True))
+
+    service.rename_template()
+
+    service.processing_service.api.update_template.assert_not_called()
+
+
+def _renamed_template_payload(name="New template"):
+    return {
+        "id": "tpl-1",
+        "name": name,
+        "status": "READY",
+        "createdAt": "2025-09-26T06:25:55.820336Z",
+        "userId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "projectId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "activeUntil": "2026-03-15T17:00:00Z",
+    }
+
+
+def test_rename_callback_shows_the_new_name_before_the_list_refreshes():
+    """The renamed row is updated straight away; the controller drives the view from this."""
+    service = _rename_service()
+    renamed = []
+    service.templateRenamed.connect(lambda tid, name: renamed.append((tid, name)))
+    response = MagicMock()
+    response.readAll.return_value.data.return_value = json.dumps(
+        _renamed_template_payload()).encode()
+
+    service.rename_template_callback(response)
+
+    assert renamed == [("tpl-1", "New template")]
+    assert service.processing_service.templates["tpl-1"].name == "New template"
+    service.processing_service.get_processings.assert_called_once()
+
+
+def test_rename_callback_accepts_the_wrapped_template_shape():
+    """The endpoint may answer either bare or wrapped in a `template` key."""
+    service = _rename_service()
+    renamed = []
+    service.templateRenamed.connect(lambda tid, name: renamed.append((tid, name)))
+    response = MagicMock()
+    response.readAll.return_value.data.return_value = json.dumps(
+        {"template": _renamed_template_payload("Wrapped")}).encode()
+
+    service.rename_template_callback(response)
+
+    assert renamed == [("tpl-1", "Wrapped")]
+
+
+def test_rename_callback_survives_a_body_that_is_not_json():
+    service = _rename_service()
+    renamed = []
+    service.templateRenamed.connect(lambda tid, name: renamed.append((tid, name)))
+    response = MagicMock()
+    response.readAll.return_value.data.return_value = b"not json"
+
+    service.rename_template_callback(response)
+
+    assert renamed == []
+    service.processing_service.get_processings.assert_called_once()  # still refreshes
+
+
+# ---------- pause / resume / restart ----------
+
+def _run_state_service(is_active=True, is_failed=False):
+    template = SimpleNamespace(id="tpl-1", name="T", isActive=is_active, is_failed=is_failed)
+    processing_service = SimpleNamespace(
+        selected_template=lambda: template, api=MagicMock(),
+        get_processings=MagicMock(), templates={},
+        _template_error_text=lambda response: "boom")
+    return TemplateService(app_context=MagicMock(), processing_service=processing_service)
+
+
+def test_pause_stops_an_active_template():
+    service = _run_state_service(is_active=True)
+
+    service.pause_template()
+
+    assert service.processing_service.api.stop_template.call_args.kwargs["template_id"] == "tpl-1"
+
+
+def test_pause_refuses_an_inactive_template(monkeypatch):
+    service = _run_state_service(is_active=False)
+    monkeypatch.setattr(template_service_module, "alert_info", lambda *a, **k: None)
+
+    service.pause_template()
+
+    service.processing_service.api.stop_template.assert_not_called()
+
+
+def test_resume_extends_active_until_after_the_resume_succeeds():
+    """Resume is a two-step: POST /resume, then a PUT that pushes activeUntil out 6 months."""
+    service = _run_state_service(is_active=False)
+
+    service.resume_template()
+    assert service.processing_service.api.resume_template.call_args.kwargs["template_id"] == "tpl-1"
+
+    service.resume_template_update_active_until(MagicMock())
+
+    kwargs = service.processing_service.api.update_template.call_args.kwargs
+    assert kwargs["template_id"] == "tpl-1"
+    assert kwargs["data"].name == "T"  # the name is carried across, the POST returns none
+    assert kwargs["data"].activeUntil is not None
+
+
+def test_resume_refuses_an_active_template(monkeypatch):
+    service = _run_state_service(is_active=True)
+    monkeypatch.setattr(template_service_module, "alert_info", lambda *a, **k: None)
+
+    service.resume_template()
+
+    service.processing_service.api.resume_template.assert_not_called()
+
+
+def test_resume_forgets_its_state_once_it_finishes(monkeypatch):
+    """Otherwise a later resume that fails to record state would extend the wrong template."""
+    service = _run_state_service(is_active=False)
+    monkeypatch.setattr(template_service_module, "alert_info", lambda *a, **k: None)
+    service.resume_template()
+
+    service.resume_template_callback(MagicMock())
+
+    assert service._resume_template_state == {}
+
+
+def test_restart_only_applies_to_a_failed_template(monkeypatch):
+    monkeypatch.setattr(template_service_module, "alert_info", lambda *a, **k: None)
+    failed = _run_state_service(is_failed=True)
+    failed.restart_template()
+    assert failed.processing_service.api.restart_template.call_args.kwargs["template_id"] == "tpl-1"
+
+    healthy = _run_state_service(is_failed=False)
+    healthy.restart_template()
+    healthy.processing_service.api.restart_template.assert_not_called()
+
+
+def test_a_failed_action_reports_the_servers_reason(monkeypatch):
+    service = _run_state_service()
+    alerts = []
+    monkeypatch.setattr(template_service_module, "alert", lambda message, *a, **k: alerts.append(message))
+
+    service.pause_template_error_handler(MagicMock())
+
+    assert alerts == ["Error pausing template: boom"]
+
+
 def test_resume_template_updates_active_until_to_six_months_from_resume_time():
-    service = ProcessingService.__new__(ProcessingService)
-    service.tr = lambda text: text
-    service.dlg = MagicMock()
-    service.api = MagicMock()
+    service = _run_state_service(is_active=False)
     service._resume_template_state = {
         "template_id": "tpl-1",
         "template_name": "Template A",
@@ -518,12 +699,13 @@ def test_resume_template_updates_active_until_to_six_months_from_resume_time():
     response = MagicMock()
     fixed_now = datetime(2026, 5, 6, 10, 30, 0)
 
-    with patch.object(processing_service_module, "datetime") as mock_datetime:
+    with patch.object(template_service_module, "datetime") as mock_datetime:
         mock_datetime.utcnow.return_value = fixed_now
         service.resume_template_update_active_until(response)
 
-    service.api.update_template.assert_called_once()
-    kwargs = service.api.update_template.call_args.kwargs
+    api = service.processing_service.api
+    api.update_template.assert_called_once()
+    kwargs = api.update_template.call_args.kwargs
     assert kwargs["template_id"] == "tpl-1"
     assert kwargs["data"].name == "Template A"
     assert kwargs["data"].searchParams is None

@@ -35,11 +35,19 @@ class TemplateController(QObject):
                  processings_table,
                  see_processings_action,
                  see_search_results_action,
-                 selection_sync):
+                 selection_sync,
+                 processing_view,
+                 rename_action,
+                 pause_action,
+                 resume_action,
+                 restart_action):
         super().__init__()
         self.template_service = template_service
         self.template_view = template_view
         self.search_view = search_view
+        #: A template row lives in the processings table, so renaming one is the same row-name
+        #: write a processing gets — reused rather than duplicated onto `TemplateView`.
+        self.processing_view = processing_view
         self.aoi_view = aoi_view
         self.aoi_service = aoi_service
         self.provider_service = provider_service
@@ -55,6 +63,12 @@ class TemplateController(QObject):
 
         update_search_button.clicked.connect(self.update_template_search_params)
         exclude_action.triggered.connect(self.template_service.exclude_processing_from_search)
+        # Run-state actions on the selected template. Which of them the context menu offers is
+        # still decided in `mapflow.py`, because that decision reads the navigation state.
+        rename_action.triggered.connect(self.template_service.rename_template)
+        pause_action.triggered.connect(self.template_service.pause_template)
+        resume_action.triggered.connect(self.template_service.resume_template)
+        restart_action.triggered.connect(self.template_service.restart_template)
         # The Seen / Seen-all actions are created later (setup_metadata_seen_dropdown), so
         # mapflow.py wires them to mark_selected_images_seen / mark_all_images_seen.
 
@@ -83,6 +97,7 @@ class TemplateController(QObject):
         self.template_service.searchResultsReady.connect(self.show_search_results)
         self.template_service.searchResultsEmpty.connect(self.search_view.clear_table)
         self.template_service.metadataLayerReady.connect(self.bind_metadata_layer_selection)
+        self.template_service.templateRenamed.connect(self.show_renamed_template)
 
     def create_search_template(self, name_override: str = None) -> None:
         """Assemble the request from the widgets and hand it to the service. Called by the
@@ -271,3 +286,7 @@ class TemplateController(QObject):
         """Selecting a footprint on the map selects the matching table row (and triggers preview)."""
         self.app_context.meta_layer_table_connection = layer.selectionChanged.connect(
             self.selection_sync)
+
+    def show_renamed_template(self, template_id: str, new_name: str) -> None:
+        """Put the new name in the template's row without waiting for the refreshed list."""
+        self.processing_view.update_processing_name(processing_id=template_id, new_name=new_name)

@@ -32,12 +32,13 @@ from ..app_context import AppContext
 from ..geometry import geometry_from_geojson
 from ..helpers import utc_date_from_iso
 from .alert_service import (alert, alert_confirm, alert_info, alert_warning,
-                            report_http_error)
+                            ask_text, report_http_error)
 from ...errors import ErrorMessage
 from ...http import api_message_parser
 from ...schema import ImageCatalogResponseSchema
 from ...schema.template import (CreateProcessingTemplateSchema,
                                 DeleteAoisSchema,
+                                ProcessingTemplateDTO,
                                 SearchParams,
                                 UpdateAoiSchema,
                                 UpdateProcessingTemplateSchema)
@@ -66,6 +67,9 @@ class TemplateService(QObject):
     #: The search-results footprints layer was (re)built; the controller wires its selection to
     #: the table.
     metadataLayerReady = pyqtSignal(object)
+    #: A template was renamed: (template id, new name). The controller updates its row's name
+    #: cell straight away, so the rename shows before the refreshed list arrives.
+    templateRenamed = pyqtSignal(str, str)
 
     def __init__(self,
                  app_context: AppContext,
@@ -644,6 +648,159 @@ class TemplateService(QObject):
         )
 
         alert_info(details)
+
+    # ---------- run-state actions on the selected template ----------
+    #
+    # Each is the same shape: take the selected template, call the endpoint, say what happened and
+    # refresh the list. The refresh is best-effort — the 6 s processing poll calls
+    # `get_processings` again anyway — and the success message is unconditional because a refusal
+    # would have gone to the error handler instead.
+
+    def rename_template(self) -> None:
+        """Rename the selected template. The new name is asked for through the message tier, so
+        this holds no dialog of its own (`spec/007_architecture.md` § Layer rules)."""
+        template = self.processing_service.selected_template()
+        if not template:
+            return
+        new_name, ok = ask_text(self.tr("Rename template"),
+                                self.tr("Template name:"),
+                                default=str(template.name or ""))
+        if not ok:
+            return
+        new_name = (new_name or "").strip()
+        if not new_name:
+            alert_warning(self.tr("Please, specify template name"))
+            return
+        if new_name == template.name:
+            return
+        payload = UpdateProcessingTemplateSchema(
+            name=new_name,
+            # Rename-only flow: do not send searchParams to avoid geometry update rejection.
+            searchParams=None,
+            # Keep processing params unchanged on backend; omit field to avoid decoding issues
+            processingParams=None,
+            activeUntil=None,
+        )
+        self.processing_service.api.update_template(
+            template_id=template.id,
+            data=payload,
+            callback=self.rename_template_callback,
+            error_handler=self.rename_template_error_handler,
+        )
+
+    def rename_template_callback(self, response: QNetworkReply) -> None:
+        try:
+            response_data = json.loads(response.readAll().data())
+        except ValueError:
+            # Not JSON, or not decodable as UTF-8 (UnicodeDecodeError is a ValueError).
+            response_data = {}
+        template_data = response_data.get("template", response_data)
+        try:
+            if isinstance(template_data, dict) and template_data.get("id"):
+                updated_template = ProcessingTemplateDTO.from_dict(template_data)
+                self.processing_service.templates[updated_template.id] = updated_template
+                self.templateRenamed.emit(str(updated_template.id), str(updated_template.name))
+        except Exception:
+            logger.exception("Could not apply renamed template from response")
+        self.processing_service.get_processings()
+
+    def rename_template_error_handler(self, response: QNetworkReply) -> None:
+        alert(self.tr("Error renaming template: {}").format(self._error_text(response)))
+
+    def pause_template(self) -> None:
+        template = self.processing_service.selected_template()
+        if not template:
+            return
+        if not template.isActive:
+            alert_info(self.tr("Template is not active"))
+            return
+        self.processing_service.api.stop_template(
+            template_id=template.id,
+            callback=self.pause_template_callback,
+            error_handler=self.pause_template_error_handler)
+
+    def pause_template_callback(self, response: QNetworkReply) -> None:
+        alert_info(self.tr("Template paused successfully"))
+        self.processing_service.get_processings()
+
+    def pause_template_error_handler(self, response: QNetworkReply) -> None:
+        alert(self.tr("Error pausing template: {}").format(self._error_text(response)))
+
+    def resume_template(self) -> None:
+        template = self.processing_service.selected_template()
+        if not template:
+            return
+        if template.isActive:
+            alert_info(self.tr("Template is already active"))
+            return
+        # Held across the two requests: resuming is a POST that carries no body, so the follow-up
+        # PUT that extends activeUntil needs the name from before.
+        self._resume_template_state = {
+            'template_id': template.id,
+            'template_name': template.name,
+        }
+        self.processing_service.api.resume_template(
+            template_id=template.id,
+            callback=self.resume_template_update_active_until,
+            error_handler=self.resume_template_error_handler)
+
+    def resume_template_update_active_until(self, response: QNetworkReply) -> None:
+        """After resume succeeds, extend activeUntil to 6 months from now."""
+        state = getattr(self, '_resume_template_state', {}) or {}
+        template_id = state.get('template_id')
+        template_name = state.get('template_name')
+        if not template_id or not template_name:
+            self.resume_template_callback(response)
+            return
+        active_until = datetime.utcnow() + timedelta(days=180) - timedelta(minutes=1)
+        payload = UpdateProcessingTemplateSchema(
+            name=template_name,
+            searchParams=None,
+            processingParams=None,
+            activeUntil=active_until.strftime('%Y-%m-%dT%H:%M:%S.0Z'),
+        )
+        self.processing_service.api.update_template(
+            template_id=template_id,
+            data=payload,
+            callback=self.resume_template_callback,
+            error_handler=self.resume_template_error_handler,
+        )
+
+    def resume_template_callback(self, response: QNetworkReply) -> None:
+        self._resume_template_state = {}
+        alert_info(self.tr("Template resumed successfully"))
+        self.processing_service.get_processings()
+
+    def resume_template_error_handler(self, response: QNetworkReply) -> None:
+        """e.g. "maximum number of active templates"."""
+        self._resume_template_state = {}
+        alert(self.tr("Error resuming template: {}").format(self._error_text(response)))
+
+    def restart_template(self) -> None:
+        template = self.processing_service.selected_template()
+        if not template:
+            return
+        if not template.is_failed:
+            alert_info(self.tr("Only failed templates can be restarted"))
+            return
+        self.processing_service.api.restart_template(
+            template_id=template.id,
+            callback=self.restart_template_callback,
+            error_handler=self.restart_template_error_handler,
+        )
+
+    def restart_template_callback(self, response: QNetworkReply) -> None:
+        alert_info(self.tr("Template restarted successfully"))
+        self.processing_service.get_processings()
+
+    def restart_template_error_handler(self, response: QNetworkReply) -> None:
+        alert(self.tr("Error restarting template: {}").format(self._error_text(response)))
+
+    def _error_text(self, response) -> str:
+        """The user-facing message for a failed template action. Still `ProcessingService`'s,
+        because its AOI error handler needs the same parse; it comes here with the AOI actions
+        in MR-2."""
+        return self.processing_service._template_error_text(response)
 
     # ---------- the template's imagery-search results ----------
 

@@ -61,11 +61,24 @@ The forks in shared search paths are the ones to watch: they are coordination be
 so they belong in a controller, not inside either service (`SearchService` says as much in its own
 docstring).
 
-[ ] Extract templates MR-2 → carve the template half out of `processing_service`
-Move `enter/exit/refresh_template_view`, `pause/resume/restart/delete_template`, `update_template`,
-`combined_template_rows`, `selected_aois`, and the navigation state (`in_template_mode`,
-`active_template`) into `TemplateService`; repoint the ~50 cross-service references. This is the
-high-blast-radius part, on its own branch.
+MR-2 is split in two, because moving all ~35 template methods out of `processing_service` at once
+puts the mechanical half and the high-blast-radius half in front of one reviewer together.
+
+[ready-for-review] MR-2a: the template run-state actions → `TemplateService`
+`rename` (was `update_template`), `pause`, `resume` (with its two-step `activeUntil` extension) and
+`restart`, each with its callbacks; their action wiring moves to `TemplateController`. They separate
+cleanly because each is only "take the selected template → call the endpoint → say what happened →
+refresh", needing no navigation state. `_parse_template_response` and `_template_error_text` stay in
+`ProcessingService` for now — `hydrate_template` and the AOI error handler still use them — and come
+across with MR-2b.
+
+[ ] MR-2b: the navigation core → `TemplateService`
+The rest, and the part the earlier steps were sequenced to make safe: `enter/exit/refresh_template_view`,
+`hydrate_template`, `combined_template_rows`, `selected_aois` and the other selection queries, the
+navigation state (`in_template_mode`, `active_template`), the two helpers MR-2a left behind, and the
+`mapflow.py` context menu (its branches read that state). Repoint the ~50 cross-service references.
+Note the shared-path forks called out above (`apply_local_filter`, the header sort, the pager,
+`load_results`) — those belong in a controller, not in either service.
 Also here (decided): **template-group layer placement moves to `TemplateService`.** The creating
 half already landed with the layers step — `ensure_template_group` is on `TemplateService`, since
 only `mapflow.py` called it. What remains is the shared read-only lookup: `AoiService` and

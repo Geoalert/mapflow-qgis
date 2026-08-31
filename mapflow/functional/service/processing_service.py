@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from uuid import UUID
 from typing import Dict, Optional, List
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
@@ -37,7 +37,6 @@ from ...schema.template import (
     TemplateAoiDTO,
     TemplateProcessingSchema,
     UpdateAoiSchema,
-    UpdateProcessingTemplateSchema,
     ProcessingTemplateDTO,
     ProcessingTemplateDetails,
 )
@@ -988,72 +987,6 @@ class ProcessingService(QObject):
         self.view.update_processing_name(processing_id=processing.id, new_name=processing.name)
         self.processings[processing.id] = processing
 
-    def update_template(self):
-        """Rename selected template using update-template API."""
-        template = self.selected_template()
-        print (template.id)
-        if not template:
-            return
-
-        new_name, ok = QInputDialog.getText(
-            self.dlg,
-            self.tr("Rename template"),
-            self.tr("Template name:"),
-            text=str(template.name or ""),
-        )
-        if not ok:
-            return
-
-        new_name = (new_name or "").strip()
-        if not new_name:
-            alert(self.tr("Please, specify template name"), QMessageBox.Warning)
-            return
-        if new_name == template.name:
-            return
-
-        payload = UpdateProcessingTemplateSchema(
-            name=new_name,
-            # Rename-only flow: do not send searchParams to avoid geometry update rejection.
-            searchParams=None,
-            # Keep processing params unchanged on backend; omit field to avoid decoding issues
-            processingParams=None,
-            activeUntil=None,
-        )
-
-        self.api.update_template(
-            template_id=template.id,
-            data=payload,
-            callback=self.update_template_callback,
-            error_handler=self.update_template_error_handler,
-        )
-
-    def update_template_callback(self, response: QNetworkReply):
-        """Handle template update response and refresh table."""
-        try:
-            response_data = json.loads(response.readAll().data())
-        except ValueError:
-            response_data = {}
-
-        print (response_data)
-
-        template_data = response_data.get("template", response_data)
-        try:
-            if isinstance(template_data, dict) and template_data.get("id"):
-                updated_template = ProcessingTemplateDTO.from_dict(template_data)
-                self.templates[updated_template.id] = updated_template
-                self.view.update_processing_name(
-                    processing_id=updated_template.id,
-                    new_name=updated_template.name,
-                )
-        except Exception:
-            logger.exception("Could not apply renamed template from response")
-        self.get_processings()
-
-    def update_template_error_handler(self, response):
-        """Handle template update error."""
-        alert(self.tr("Error renaming template: {}").format(self._template_error_text(response)),
-              QMessageBox.Critical)
-
     # Processing cost
     def update_processing_cost(self):
         """Update the processing cost based on current AOI and workflow.
@@ -1202,34 +1135,11 @@ class ProcessingService(QObject):
             failed=list(state['failed']) + [state['deleted'][-1]]
         )
 
-    # ============ TEMPLATE ACTIONS ============ #
-
-    def pause_template(self):
-        """Pause the selected template."""
-        template = self.selected_template()
-        if not template:
-            return
-        if template.isActive:
-            template_id = template.id
-            self.api.stop_template(template_id=template_id,
-                                  callback=self.pause_template_callback,
-                                  error_handler=self.pause_template_error_handler)
-        else:
-            alert(self.tr("Template is not active"), QMessageBox.Information)
-
-    def pause_template_callback(self, response: QNetworkReply):
-        """Handle pause template response.
-
-        The server has already paused the template — a refusal would have gone to
-        ``pause_template_error_handler`` instead — so the success message is unconditional and
-        the refresh that follows it is best-effort: the poll timer calls ``get_processings``
-        again anyway.
-        """
-        alert(self.tr("Template paused successfully"), QMessageBox.Information)
-        self.get_processings()  # Refresh to get updated template status
-
     def _template_error_text(self, response) -> str:
         """Resolve a template/AOI action error response to a meaningful, translatable message.
+
+        Shared with `TemplateService`, which owns the template run-state actions now: the AOI
+        error handler below needs the same parse, so this stays until the AOI actions move too.
 
         The error handlers receive a ``QNetworkReply``; parse its body through the central
         error registry (e.g. a generic ``BAD_REQUEST`` with "You have reached the maximum
@@ -1242,119 +1152,6 @@ class ProcessingService(QObject):
             return self.tr("Unknown server error")
         # api_message_parser handles its own parse failures and returns None.
         return api_message_parser(body) or self.tr("Unknown server error")
-
-    def pause_template_error_handler(self, response):
-        """Handle pause template error."""
-        alert(self.tr("Error pausing template: {}").format(self._template_error_text(response)),
-              QMessageBox.Critical)
-
-    def resume_template(self):
-        """Resume the selected template."""
-        template = self.selected_template()
-        if not template:
-            return
-        if not template.isActive:
-            self._resume_template_state = {
-                'template_id': template.id,
-                'template_name': template.name,
-            }
-            template_id = template.id
-            self.api.resume_template(template_id=template_id,
-                                    callback=self.resume_template_update_active_until,
-                                    error_handler=self.resume_template_error_handler)
-        else:
-            alert(self.tr("Template is already active"), QMessageBox.Information)
-
-    def resume_template_update_active_until(self, response: QNetworkReply):
-        """After resume succeeds, extend activeUntil to 6 months from now."""
-        state = getattr(self, '_resume_template_state', {}) or {}
-        template_id = state.get('template_id')
-        template_name = state.get('template_name')
-        if not template_id or not template_name:
-            self.resume_template_callback(response)
-            return
-
-        active_until = datetime.utcnow() + timedelta(days=180) - timedelta(minutes=1)
-        payload = UpdateProcessingTemplateSchema(
-            name=template_name,
-            searchParams=None,
-            processingParams=None,
-            activeUntil=active_until.strftime('%Y-%m-%dT%H:%M:%S.0Z'),
-        )
-
-        self.api.update_template(
-            template_id=template_id,
-            data=payload,
-            callback=self.resume_template_callback,
-            error_handler=self.resume_template_error_handler,
-        )
-
-    def resume_template_callback(self, response: QNetworkReply):
-        """Handle resume template response. See `pause_template_callback` on the ordering."""
-        self._resume_template_state = {}
-        alert(self.tr("Template resumed successfully"), QMessageBox.Information)
-        self.get_processings()  # Refresh to get updated template status
-
-    def resume_template_error_handler(self, response):
-        """Handle resume template error (e.g. "maximum number of active templates")."""
-        self._resume_template_state = {}
-        alert(self.tr("Error resuming template: {}").format(self._template_error_text(response)),
-              QMessageBox.Critical)
-
-    def restart_template(self):
-        """Restart the selected failed template."""
-        template = self.selected_template()
-        if not template:
-            return
-        if not template.is_failed:
-            alert(self.tr("Only failed templates can be restarted"), QMessageBox.Information)
-            return
-        self.api.restart_template(
-            template_id=template.id,
-            callback=self.restart_template_callback,
-            error_handler=self.restart_template_error_handler,
-        )
-
-    def restart_template_callback(self, response: QNetworkReply):
-        """Handle restart template response. See `pause_template_callback` on the ordering."""
-        alert(self.tr("Template restarted successfully"), QMessageBox.Information)
-        self.get_processings()  # Refresh to get updated template status
-
-    def restart_template_error_handler(self, response):
-        """Handle restart template error."""
-        alert(self.tr("Error restarting template: {}").format(self._template_error_text(response)),
-              QMessageBox.Critical)
-
-    def delete_template(self):
-        """Delete the selected template after confirmation."""
-        template = self.selected_template()
-        if not template:
-            return
-
-        reply = QMessageBox.question(
-            self.dlg,
-            self.tr("Delete Template"),
-            self.tr("Are you sure you want to delete the template '{}'?").format(template.name),
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if reply == QMessageBox.Yes:
-            template_id = template.id
-            self.api.delete_template(template_id=template_id,
-                                    callback=self.delete_template_callback,
-                                    error_handler=self.delete_template_error_handler)
-
-    def delete_template_callback(self, response: QNetworkReply):
-        """Handle delete template response. See `pause_template_callback` on the ordering."""
-        alert(self.tr("Template deleted successfully"), QMessageBox.Information)
-        self.get_processings()  # Refresh to remove deleted template from table
-
-    def delete_template_error_handler(self, response):
-        """Handle delete template error."""
-        alert(self.tr("Error deleting template: {}").format(self._template_error_text(response)),
-              QMessageBox.Critical)
-
     # ============ AOI ACTIONS (in-template view) ============ #
 
     def rename_aoi(self):
