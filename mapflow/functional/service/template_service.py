@@ -70,6 +70,10 @@ class TemplateService(QObject):
     #: A template was renamed: (template id, new name). The controller updates its row's name
     #: cell straight away, so the rename shows before the refreshed list arrives.
     templateRenamed = pyqtSignal(str, str)
+    #: "Re-fetch whatever the processings table is showing", after an action that changed it.
+    #: Which view that is depends on navigation state, so the controller decides — see
+    #: `ProcessingService.refreshRequested`, which carries the same meaning from the other side.
+    refreshRequested = pyqtSignal()
 
     def __init__(self,
                  app_context: AppContext,
@@ -178,7 +182,7 @@ class TemplateService(QObject):
                 "The template has been created, but is inactive.\n\n"
                 "You have reached the maximum number of active planned processings. "
                 "Pause or delete another one before activating this template."))
-        self.processing_service.get_processings()
+        self.refreshRequested.emit()
 
     def create_search_template_error_handler(self, response: QNetworkReply):
         self.creationBusy.emit(False)
@@ -212,7 +216,7 @@ class TemplateService(QObject):
         alert_info(self.tr("Template updated."))
         # Re-hydrate so the open template / list reflects the new params.
         self.processing_service.aoi_changed_callback(response)
-        self.processing_service.get_processings()
+        self.refreshRequested.emit()
 
     def _template_update_error_handler(self, response: QNetworkReply):
         report_http_error(response,
@@ -702,7 +706,7 @@ class TemplateService(QObject):
                 self.templateRenamed.emit(str(updated_template.id), str(updated_template.name))
         except Exception:
             logger.exception("Could not apply renamed template from response")
-        self.processing_service.get_processings()
+        self.refreshRequested.emit()
 
     def rename_template_error_handler(self, response: QNetworkReply) -> None:
         alert(self.tr("Error renaming template: {}").format(self._error_text(response)))
@@ -721,7 +725,7 @@ class TemplateService(QObject):
 
     def pause_template_callback(self, response: QNetworkReply) -> None:
         alert_info(self.tr("Template paused successfully"))
-        self.processing_service.get_processings()
+        self.refreshRequested.emit()
 
     def pause_template_error_handler(self, response: QNetworkReply) -> None:
         alert(self.tr("Error pausing template: {}").format(self._error_text(response)))
@@ -769,7 +773,7 @@ class TemplateService(QObject):
     def resume_template_callback(self, response: QNetworkReply) -> None:
         self._resume_template_state = {}
         alert_info(self.tr("Template resumed successfully"))
-        self.processing_service.get_processings()
+        self.refreshRequested.emit()
 
     def resume_template_error_handler(self, response: QNetworkReply) -> None:
         """e.g. "maximum number of active templates"."""
@@ -791,7 +795,7 @@ class TemplateService(QObject):
 
     def restart_template_callback(self, response: QNetworkReply) -> None:
         alert_info(self.tr("Template restarted successfully"))
-        self.processing_service.get_processings()
+        self.refreshRequested.emit()
 
     def restart_template_error_handler(self, response: QNetworkReply) -> None:
         alert(self.tr("Error restarting template: {}").format(self._error_text(response)))

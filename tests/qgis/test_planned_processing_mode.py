@@ -78,6 +78,13 @@ def _create_template_service():
     return service
 
 
+def _refresh_requests(service):
+    """The service asks for the table to be refreshed; the controller decides which view."""
+    asked = []
+    service.refreshRequested.connect(lambda: asked.append(True))
+    return asked
+
+
 def _response(body: bytes):
     response = MagicMock()
     response.readAll.return_value.data.return_value = body
@@ -98,12 +105,13 @@ def test_create_template_callback_warns_when_inactive(monkeypatch):
     alerts = []
     monkeypatch.setattr("mapflow.functional.service.template_service.alert_warning", lambda msg, icon=None: alerts.append(msg))
     plugin = _create_template_service()
+    asked = _refresh_requests(plugin)
 
     plugin.create_search_template_callback(_response(_template_body(is_active=False)))
 
     assert "inactive" in alerts[0].lower()
     assert "maximum number of active planned processings" in alerts[0].lower()
-    plugin.processing_service.get_processings.assert_called_once()
+    assert asked == [True]
 
 
 def test_create_template_callback_no_warning_when_active(monkeypatch):
@@ -111,11 +119,12 @@ def test_create_template_callback_no_warning_when_active(monkeypatch):
     alerts = []
     monkeypatch.setattr("mapflow.functional.service.template_service.alert_warning", lambda msg, icon=None: alerts.append(msg))
     plugin = _create_template_service()
+    asked = _refresh_requests(plugin)
 
     plugin.create_search_template_callback(_response(_template_body(is_active=True)))
 
     assert alerts == []
-    plugin.processing_service.get_processings.assert_called_once()
+    assert asked == [True]
 
 
 def test_create_template_callback_no_warning_when_response_unparseable(monkeypatch):
@@ -123,11 +132,12 @@ def test_create_template_callback_no_warning_when_response_unparseable(monkeypat
     alerts = []
     monkeypatch.setattr("mapflow.functional.service.template_service.alert_warning", lambda msg, icon=None: alerts.append(msg))
     plugin = _create_template_service()
+    asked = _refresh_requests(plugin)
 
     plugin.create_search_template_callback(_response(b'{}'))
 
     assert alerts == []
-    plugin.processing_service.get_processings.assert_called_once()
+    assert asked == [True]
 
 
 def test_provider_change_refreshes_start_button_text():

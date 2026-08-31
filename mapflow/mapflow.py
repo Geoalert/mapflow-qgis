@@ -239,11 +239,6 @@ class Mapflow(QObject):
                                                     app_context=self.app_context,
                                                     timer_interval=self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
         
-        self.project_processing_controller = ProjectProcessingController(dlg=self.dlg,
-                                                                        processing_service=self.processing_service,
-                                                                        project_service=self.project_service,
-                                                                        app_context=self.app_context)
-        
         # ========== 8. LOAD PROVIDERS FROM SETTINGS ==========
         # load providers from settings before initializing area calculator service
         errors = []
@@ -357,6 +352,15 @@ class Mapflow(QObject):
             pause_action=self.dlg.template_pause_action,
             resume_action=self.dlg.template_resume_action,
             restart_action=self.dlg.template_restart_action)
+
+        # After TemplateService: this controller owns the choice between the project list and the
+        # in-template view, so it subscribes to both services' refresh signals.
+        self.project_processing_controller = ProjectProcessingController(
+            dlg=self.dlg,
+            processing_service=self.processing_service,
+            project_service=self.project_service,
+            template_service=self.template_service,
+            app_context=self.app_context)
 
         self.setup_add_layer_menu()
         # Add options menu functionality
@@ -1738,7 +1742,7 @@ class Mapflow(QObject):
         # Clear successfully uploaded review
         self.review_dialog.reviewComment.setText("")
         self.processing_service.processing_fetch_timer.start()
-        self.processing_service.get_processings()
+        self.project_processing_controller.refresh_table()
 
     def show_review_dialog(self):
         processing = self.processing_service.selected_processing()
